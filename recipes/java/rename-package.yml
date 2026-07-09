@@ -1,0 +1,13 @@
+id: java.rename-package
+name: Rename Java package
+language: java
+parameters:
+  oldPackage: string
+  newPackage: string
+steps:
+  - type: movePackage
+    from: "{{ oldPackage }}"
+    to: "{{ newPackage }}"
+  - type: organizeImports
+  - type: runDiagnostics
+  - type: summarizePatch

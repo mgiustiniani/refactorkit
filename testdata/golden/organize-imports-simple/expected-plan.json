@@ -1,0 +1,6 @@
+{
+  "operation": "organizeImports",
+  "status": "preview",
+  "summary": "Organize imports in 1 file",
+  "minAffectedFiles": "1"
+}

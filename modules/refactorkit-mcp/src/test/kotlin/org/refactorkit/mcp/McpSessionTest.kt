@@ -1,0 +1,284 @@
+package org.refactorkit.mcp
+
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import java.nio.file.Files
+import kotlin.io.path.writeText
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class McpSessionTest {
+
+    private fun createProject(vararg files: Pair<String, String>): String {
+        val root = Files.createTempDirectory("rk-mcp-test")
+        for ((rel, content) in files) {
+            val file = root.resolve(rel)
+            Files.createDirectories(file.parent)
+            file.writeText(content)
+        }
+        return root.toString()
+    }
+
+    @Test
+    fun initializeReturnsProtocolVersion() {
+        val session = McpSession()
+        val result = session.dispatch("initialize", null) as JsonObject
+        assertEquals("2024-11-05", result["protocolVersion"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun toolsListContainsExpectedTools() {
+        val session = McpSession()
+        val result = session.dispatch("tools/list", null) as JsonObject
+        val tools = result["tools"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }
+        assertTrue(tools.contains("project_scan"))
+        assertTrue(tools.contains("preview_refactoring"))
+        assertTrue(tools.contains("apply_refactoring"))
+        assertTrue(tools.contains("rollback_refactoring"))
+        assertTrue(tools.contains("generate_context_bundle"))
+    }
+
+    @Test
+    fun toolCallProjectScanReturnsFileCount() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = McpSession()
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Files: 1"))
+    }
+
+    @Test
+    fun toolCallPreviewRenameReturnsPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "renameClass")
+                put("symbol", "com.example.UserManager")
+                put("arguments", buildJsonObject { put("newName", "AccountManager") })
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Plan ID"))
+        assertTrue(text.contains("PREVIEW"))
+        assertEquals(false, result["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+    }
+
+    @Test
+    fun toolCallPreviewExtractMethodReturnsPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/App.java" to """
+                package com.example;
+                public class App {
+                    public void run() {
+                        System.out.println("a");
+                    }
+                }
+            """.trimIndent() + "\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "extractMethod")
+                put("arguments", buildJsonObject {
+                    put("file", "src/main/java/com/example/App.java")
+                    put("startLine", "4")
+                    put("endLine", "4")
+                    put("methodName", "printA")
+                })
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Plan ID"))
+        assertTrue(text.contains("extract") || text.contains("Extract"))
+    }
+
+    @Test
+    fun toolCallPreviewRenameParameterReturnsPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                public class UserService {
+                    public String findName(String id) { return id; }
+                }
+            """.trimIndent() + "\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "changeSignature.renameParameter")
+                put("symbol", "com.example.UserService#findName")
+                put("arguments", buildJsonObject {
+                    put("oldName", "id")
+                    put("newName", "userId")
+                })
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Plan ID"))
+        assertTrue(text.contains("userId"))
+    }
+
+    @Test
+    fun toolCallPreviewStructuralChangeSignatureReturnsPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                class UserService {
+                    String findName(String id, boolean unused) { return id; }
+                    String local() { return findName("a", true); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "changeSignature.removeParameter")
+                put("symbol", "com.example.UserService#findName")
+                put("arguments", buildJsonObject { put("name", "unused") })
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Plan ID"), text)
+        assertTrue(text.contains("remove"), text)
+    }
+
+    @Test
+    fun resourcesListContainsStandardResources() {
+        val session = McpSession()
+        val result = session.dispatch("resources/list", null) as JsonObject
+        val uris = result["resources"]!!.jsonArray.map { it.jsonObject["uri"]!!.jsonPrimitive.content }
+        assertTrue(uris.contains("project://summary"))
+        assertTrue(uris.contains("diagnostics://latest"))
+    }
+
+    @Test
+    fun promptsListContainsRefactorSafely() {
+        val session = McpSession()
+        val result = session.dispatch("prompts/list", null) as JsonObject
+        val names = result["prompts"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }
+        assertTrue(names.contains("refactor_safely"))
+        assertTrue(names.contains("generate_tests_for_refactor"))
+    }
+
+    @Test
+    fun resourcesListIncludesSymbolAndDependencyResourcesAfterScan() {
+        val root = createProject(
+            "build.gradle.kts" to "plugins { java }\n",
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+
+        val result = session.dispatch("resources/list", null) as JsonObject
+        val uris = result["resources"]!!.jsonArray.map { it.jsonObject["uri"]!!.jsonPrimitive.content }
+
+        assertTrue(uris.contains("project://dependencies"))
+        assertTrue(uris.contains("symbol://com.example.Foo"))
+        assertTrue(uris.any { it.startsWith("file://") && it.endsWith("Foo.java") })
+    }
+
+    @Test
+    fun symbolResourceReturnsDefinitionAndReferences() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+            "src/main/java/com/example/UseFoo.java" to "package com.example;\npublic class UseFoo { Foo foo; }\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+
+        val result = session.dispatch("resources/read", buildJsonObject {
+            put("uri", "symbol://com.example.Foo")
+        }) as JsonObject
+        val text = result["contents"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+
+        assertTrue(text.contains("CLASS com.example.Foo"))
+        assertTrue(text.contains("Definition:"))
+        assertTrue(text.contains("References:"))
+    }
+
+    @Test
+    fun fileResourceRejectsPathOutsideWorkspace() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val outside = Files.createTempFile("rk-outside", ".txt")
+        outside.writeText("secret")
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+
+        val result = session.dispatch("resources/read", buildJsonObject {
+            put("uri", outside.toUri().toString())
+        }) as JsonObject
+        val text = result["contents"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+
+        assertTrue(text.contains("Access denied"))
+    }
+
+    @Test
+    fun contextBundleIncludesSnippetsAndBuildFiles() {
+        val root = createProject(
+            "build.gradle.kts" to "plugins { java }\n",
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "generate_context_bundle")
+            put("arguments", buildJsonObject {
+                put("query", "Foo")
+                put("maxSymbols", "1")
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+
+        assertTrue(text.contains("Build files: build.gradle.kts"))
+        assertTrue(text.contains("```java"))
+    }
+}

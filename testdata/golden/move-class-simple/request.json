@@ -1,0 +1,7 @@
+{
+  "operation": "moveClass",
+  "symbol": "com.example.UserService",
+  "arguments": {
+    "to": "com.example.account"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "operation": "organizeImports",
+  "arguments": {
+    "file": "src/main/java/com/example/App.java"
+  }
+}

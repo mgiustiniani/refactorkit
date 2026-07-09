@@ -1,0 +1,29 @@
+project:
+  root: .
+  defaultLanguage: java
+
+java:
+  sourceCompatibility: 8
+  maxSupportedSource: 25
+  sourceRoots:
+    - src/main/java
+    - src/test/java
+  buildSystem: auto
+  formatter: project
+  organizeImports: true
+
+safety:
+  requirePreview: true
+  requireCleanGit: false
+  blockUnknownLicenseImports: false
+  runDiagnosticsBeforeApply: true
+  runTestsBeforeApply: false
+
+ai:
+  contextBudgetTokens: 12000
+  exposeMcp: true
+  exposeHttp: true
+
+daemon:
+  transport: stdio
+  logLevel: info

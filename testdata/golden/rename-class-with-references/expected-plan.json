@@ -1,0 +1,6 @@
+{
+  "operation": "renameClass",
+  "status": "preview",
+  "summary": "AccountManager",
+  "minAffectedFiles": 2
+}

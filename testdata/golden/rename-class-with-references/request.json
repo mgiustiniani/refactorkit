@@ -1,0 +1,7 @@
+{
+  "operation": "renameClass",
+  "symbol": "com.example.UserManager",
+  "arguments": {
+    "newName": "AccountManager"
+  }
+}

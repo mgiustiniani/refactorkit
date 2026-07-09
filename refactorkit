@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT="$0"
+if command -v readlink >/dev/null 2>&1; then
+  RESOLVED="$(readlink -f "$SCRIPT" 2>/dev/null || true)"
+  if [ -n "$RESOLVED" ]; then
+    SCRIPT="$RESOLVED"
+  fi
+fi
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$SCRIPT")" && pwd)"
+ARGS="$*"
+
+if [ -x "$ROOT/gradlew" ]; then
+  exec "$ROOT/gradlew" -q -p "$ROOT" :modules:refactorkit-cli:run --args="$ARGS"
+fi
+
+if command -v gradle >/dev/null 2>&1; then
+  exec gradle -q -p "$ROOT" :modules:refactorkit-cli:run --args="$ARGS"
+fi
+
+cat >&2 <<'MSG'
+RefactorKit has not been built and no Gradle executable was found.
+Install or generate a Gradle wrapper, then run:
+  ./gradlew :modules:refactorkit-cli:run --args="--help"
+MSG
+exit 127
