@@ -1,0 +1,95 @@
+= 8. Cross-cutting Concepts
+:toc:
+:sectnums:
+
+Status: implementation-informed with explicit gaps.
+
+== Patch Safety
+
+All mutating operations are represented as `PatchPlan`s containing operation name, status, snapshot hash, confidence, required approval flag, summary, affected files, `WorkspaceEdit`, diagnostics, warnings, and risk level.
+
+`PatchEngine` validates that:
+
+* only preview plans can be applied;
+* current snapshot hash matches the preview hash;
+* edit paths stay inside the workspace root;
+* text edits do not overlap;
+* create/rename operations do not overwrite existing files by default.
+
+Status: implementation-informed.
+
+== Rollback and Traceability
+
+Applied patch plans create `Transaction` metadata with a transaction id, original plan id, applied timestamp, snapshot hash before apply, and rollback edit. Transaction logs are stored under `.refactorkit/transactions`.
+
+Recipe apply mode rolls back previously applied steps in reverse order where possible if a later step refuses or fails.
+
+Status: implementation-informed; multi-step rollback remains best-effort if the workspace is externally modified.
+
+== Diagnostics Model
+
+Diagnostics use structured severity (`INFO`, `WARNING`, `ERROR`), optional source location, and optional code. Java diagnostics currently include duplicate symbol detection, package/path mismatch warnings, and public type/file-name mismatch errors.
+
+Status: implementation-informed.
+
+== Risk Model
+
+Refactorings classify risk as `LOW`, `MEDIUM`, or `HIGH`. Examples:
+
+* low risk: simple class/member rename where references are understood;
+* medium risk: move class, safe delete, limited extract method, limited change signature;
+* high risk: framework-managed types or external/import/license uncertainty.
+
+Status: implementation-informed.
+
+== Java Analysis and Refactoring
+
+The Java adapter provides lexical/source-level scanning, symbols, references, diagnostics, and planners. Conservative planners refuse ambiguous cases instead of guessing, especially extract method and structural change-signature operations.
+
+Known limitations include lack of full compiler-backed type resolution and limited handling of reflection, generated code, external configuration, framework strings, and unknown external callers.
+
+Status: implementation-informed.
+
+== Framework Awareness
+
+`JavaFrameworkDetector` recognizes selected Spring, JPA/Jakarta Persistence, and Jackson annotations without requiring those frameworks on the classpath. Findings escalate risk and add operation-specific warnings for rename, move, and safe-delete operations.
+
+Status: implementation-informed.
+
+== External Code Provenance and License Risk
+
+External Java class import records provenance warnings, detects common license indicators, warns for unknown license risk, rewrites packages, refuses naming conflicts, and creates preview-only patch plans.
+
+Status: implementation-informed.
+
+== Agent and MCP Safety
+
+MCP exposes deterministic tools, resources, and prompts. File resources are scoped to the scanned workspace snapshot and arbitrary filesystem access is refused. Agent workflow expects project scan, focused context, preview, inspection, apply, diagnostics, and rollback.
+
+Status: implementation-informed.
+
+== Configuration
+
+`refactorkit.yml` defines project, Java, safety, AI, and daemon configuration concepts, including preview requirements, diagnostics before apply, test-before-apply toggles, and MCP/HTTP exposure flags.
+
+Status: implementation-informed for config file presence; needs-review for complete runtime enforcement coverage.
+
+== Observability
+
+Current evidence includes structured diagnostics and command outputs. No dedicated logging, metrics, tracing, or telemetry architecture was found beyond module-specific protocol behavior.
+
+Status: needs-review.
+
+== Security and Trust Boundaries
+
+RefactorKit operates locally on user workspaces. Main trust boundaries are:
+
+* external code sources for importer inputs;
+* local LLM agents/MCP clients;
+* editor/LSP clients;
+* target workspace filesystem;
+* optional external language servers.
+
+Security controls currently visible in the repository are workspace path validation, MCP resource scoping, provenance/license warnings, and overwrite refusals.
+
+Status: implementation-informed, needs-review for broader threat model.

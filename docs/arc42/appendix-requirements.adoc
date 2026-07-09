@@ -1,0 +1,346 @@
+= Appendix: Requirements
+:toc:
+:sectnums:
+
+Status: implementation-informed, needs-review. No Gherkin `.feature` files were found in the repository during this baseline. This appendix therefore records requirements/use cases from repository documentation, module evidence, samples, recipes, golden tests, and CI. It does not claim Gherkin coverage where none exists.
+
+== Requirement Sources
+
+[cols="1,3,1",options="header"]
+|===
+|Source |Use |Status
+
+|`AGENTS.md`
+|Authoritative mission, scope, module responsibilities, safety workflow, roadmap, and definition of done.
+|implementation-informed
+
+|`README.md`
+|Project overview, usage modes, build and CLI examples.
+|implementation-informed
+
+|`docs/*.md`
+|Subsystem behavior and limitations.
+|implementation-informed
+
+|`modules/*`
+|Implementation and test evidence.
+|implementation-informed
+
+|`samples/*`
+|Sample Maven, Gradle, Spring, JPA, and multi-module projects.
+|implementation-informed
+
+|`recipes/java/rename-package.yml`
+|Recipe workflow example.
+|implementation-informed
+
+|`testdata/golden/*`
+|Golden use-case validation examples.
+|implementation-informed
+
+|`.github/workflows/ci.yml`
+|Build/test/package/smoke validation pipeline.
+|implementation-informed
+
+|Gherkin `.feature` files
+|Executable BDD requirements.
+|not found
+|===
+
+== Use-case Overview Diagram
+
+[source,plantuml]
+----
+@startuml
+left to right direction
+actor Developer
+actor "Automation / CI" as CI
+actor "Editor / IDE User" as IDEUser
+actor "Local LLM Agent" as Agent
+actor "Embedding JVM App" as App
+rectangle RefactorKit {
+  usecase "Scan Workspace" as UC_SCAN
+  usecase "Build Symbol Index" as UC_SYMBOLS
+  usecase "Run Diagnostics" as UC_DIAG
+  usecase "Preview Refactoring" as UC_PREVIEW
+  usecase "Apply Patch Plan" as UC_APPLY
+  usecase "Rollback Transaction" as UC_ROLLBACK
+  usecase "Run Java Refactoring" as UC_JAVA
+  usecase "Run Recipe" as UC_RECIPE
+  usecase "Import External Java Class" as UC_IMPORT
+  usecase "Serve JSON-RPC Daemon" as UC_DAEMON
+  usecase "Serve LSP" as UC_LSP
+  usecase "Serve MCP Tools" as UC_MCP
+  usecase "Generate Agent Context Bundle" as UC_CONTEXT
+  usecase "Package Self-contained CLI" as UC_PACKAGE
+  usecase "Run Golden Tests" as UC_GOLDEN
+  usecase "Run Structural Multi-language Tools" as UC_STRUCT
+}
+Developer --> UC_SCAN
+Developer --> UC_PREVIEW
+Developer --> UC_APPLY
+Developer --> UC_ROLLBACK
+Developer --> UC_JAVA
+Developer --> UC_RECIPE
+Developer --> UC_IMPORT
+Developer --> UC_STRUCT
+CI --> UC_SCAN
+CI --> UC_DIAG
+CI --> UC_PACKAGE
+CI --> UC_GOLDEN
+IDEUser --> UC_LSP
+Agent --> UC_MCP
+Agent --> UC_CONTEXT
+Agent --> UC_IMPORT
+App --> UC_PREVIEW
+App --> UC_APPLY
+UC_JAVA ..> UC_PREVIEW : includes
+UC_RECIPE ..> UC_PREVIEW : includes
+UC_IMPORT ..> UC_PREVIEW : includes
+UC_APPLY ..> UC_ROLLBACK : creates rollback data
+@enduml
+----
+
+== Use-case Catalogue
+
+[cols="1,2,2,3,2,1",options="header"]
+|===
+|ID |Name |Actor |Description |Validation mode |Observed status
+
+|UC-SCAN
+|Scan workspace
+|Developer, CI, Agent
+|Discover workspace files, Java source roots, Maven/Gradle structure, and project snapshot data.
+|CLI examples, Java scanner tests, CI smoke scan.
+|implementation-informed
+
+|UC-SYMBOLS
+|Build/search symbols
+|Developer, Agent, Editor
+|Expose Java symbols, definitions, and references for focused code intelligence.
+|CLI docs, adapter tests, MCP/LSP docs.
+|implementation-informed
+
+|UC-DIAGNOSTICS
+|Run diagnostics
+|Developer, CI, Agent, Editor
+|Report structured warnings/errors such as duplicate symbols, package/path mismatch, or file-name mismatch.
+|Java adapter tests, integration docs.
+|implementation-informed
+
+|UC-PREVIEW-REFACTOR
+|Preview refactoring
+|Developer, Agent, Editor/App
+|Generate `PatchPlan` previews before applying mutating operations.
+|Core/Java tests, golden tests, AGENTS safety rules.
+|implementation-informed
+
+|UC-APPLY-PATCH
+|Apply patch plan
+|Developer, Agent/App
+|Validate current snapshot and edit safety before writing workspace changes.
+|`PatchEngine`, tests.
+|implementation-informed
+
+|UC-ROLLBACK
+|Rollback transaction
+|Developer, Agent/App
+|Restore files from transaction rollback metadata after an applied patch.
+|Core tests, testkit agent simulation.
+|implementation-informed
+
+|UC-JAVA-RENAME-CLASS
+|Rename Java class
+|Developer, Agent, Editor
+|Rename class declaration, file, imports, references, and constructors where supported.
+|Golden tests, planner tests, CLI docs.
+|implementation-informed
+
+|UC-JAVA-RENAME-MEMBER
+|Rename Java method or field
+|Developer, Agent, Editor
+|Rename scoped Java member occurrences while avoiding unrelated same-name members where possible.
+|Planner tests, integration docs.
+|implementation-informed
+
+|UC-JAVA-MOVE-CLASS
+|Move Java class
+|Developer, Agent
+|Move class file, update package declaration/imports/FQN references where supported.
+|Golden test, planner tests.
+|implementation-informed
+
+|UC-JAVA-ORGANIZE-IMPORTS
+|Organize Java imports
+|Developer, Agent
+|Sort/deduplicate imports and remove same-package imports; unused removal remains limited.
+|Golden test, docs/testing limitation.
+|implementation-informed
+
+|UC-JAVA-SAFE-DELETE
+|Safe delete Java symbol
+|Developer, Agent
+|Refuse deletion when references are found unless explicitly overridden by supported workflow.
+|Golden refused case, planner tests.
+|implementation-informed
+
+|UC-JAVA-EXTRACT-METHOD
+|Extract Java method MVP
+|Developer, Agent/Editor
+|Extract complete selected lines into no-argument `private void` method for conservative safe cases.
+|Extract-method docs and tests.
+|implementation-informed
+
+|UC-JAVA-CHANGE-SIGNATURE
+|Change Java method signature MVP+
+|Developer, Agent/Editor
+|Rename/add/reorder/remove parameters for conservative non-overloaded cases.
+|Change-signature docs and tests.
+|implementation-informed
+
+|UC-RECIPE-RUN
+|Run recipe
+|Developer, CI, Agent
+|Execute YAML-defined Java refactoring workflows with dry-run preview and rollback behavior.
+|`docs/recipe-engine.md`, recipe engine tests, sample recipe.
+|implementation-informed
+
+|UC-IMPORT-EXTERNAL-JAVA
+|Import external Java class
+|Developer, Agent
+|Assimilate Java source from clipboard/file/URL/snippet/LLM response with provenance/license/conflict checks and preview-only plan.
+|Importer docs and tests.
+|implementation-informed
+
+|UC-DAEMON
+|Serve JSON-RPC daemon
+|Developer/App/Tool
+|Provide long-running local JSON-RPC operations over stdio.
+|Daemon module and tests, integration docs.
+|implementation-informed
+
+|UC-LSP
+|Serve LSP
+|Editor / IDE
+|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics.
+|LSP module/tests, integration docs.
+|implementation-informed
+
+|UC-MCP
+|Serve MCP tools/resources/prompts
+|Local LLM Agent
+|Expose deterministic project, symbol, diagnostics, preview/apply/rollback/import/context-bundle tools.
+|MCP module/tests, integration docs.
+|implementation-informed
+
+|UC-CONTEXT-BUNDLE
+|Generate AI context bundle
+|Local LLM Agent
+|Return focused project/symbol/snippet/diagnostic context for safe AI workflows.
+|MCP docs.
+|implementation-informed
+
+|UC-STRUCTURAL-TOOLS
+|Run structural multi-language tools
+|Developer, Agent
+|Outline/search/local-rename supported languages using structural/lexical mechanisms.
+|Multi-language docs and tests.
+|implementation-informed
+
+|UC-PACKAGE-CLI
+|Package self-contained CLI
+|Maintainer, CI
+|Build runtime distribution with embedded Java runtime and smoke-test it.
+|Packaging docs, Gradle tasks, CI.
+|implementation-informed
+
+|UC-GOLDEN-TESTS
+|Run golden tests
+|Maintainer, CI
+|Validate before/after/request/expected-plan cases for refactoring behavior.
+|Testkit docs, CI.
+|implementation-informed
+|===
+
+== Use-case-to-Evidence Mapping
+
+[cols="1,2,3",options="header"]
+|===
+|Use case |Requirement / source ID |Evidence
+
+|UC-SCAN
+|REQ-SCAN-001
+|README CLI example; `JavaProjectScanner`; CI packaged CLI smoke scan.
+
+|UC-PREVIEW-REFACTOR
+|REQ-SAFE-001
+|`PatchPlan`, Java planners, MCP/LSP/daemon preview contracts.
+
+|UC-APPLY-PATCH
+|REQ-SAFE-002
+|`PatchEngine.apply`, snapshot hash validation, overlap/path validation.
+
+|UC-ROLLBACK
+|REQ-SAFE-003
+|`Transaction`, `TransactionLog`, agent simulation tests.
+
+|UC-IMPORT-EXTERNAL-JAVA
+|REQ-IMPORT-001
+|`ExternalJavaClassImporter`, license/provenance/conflict docs.
+
+|UC-MCP
+|REQ-AI-001
+|`docs/ai-workflow.md`, `docs/integration-contracts.md`, MCP module.
+
+|UC-PACKAGE-CLI
+|REQ-PACKAGE-001
+|Gradle jlink tasks, packaging docs, CI.
+|===
+
+== Gherkin Scenario Listing
+
+No `.feature` files were found. Therefore there are no Gherkin scenarios to list or map in this baseline.
+
+== Validation Modes
+
+[cols="1,3",options="header"]
+|===
+|Mode |Meaning
+
+|Documentation evidence
+|Behavior is described in repository docs or `AGENTS.md`.
+
+|Source evidence
+|Behavior appears in module source files.
+
+|Unit test evidence
+|Behavior has module tests.
+
+|Golden test evidence
+|Behavior has a `testdata/golden` case.
+
+|CI evidence
+|Behavior is exercised by `.github/workflows/ci.yml`.
+
+|Needs executable requirement
+|No Gherkin or equivalent executable requirement was found.
+|===
+
+== Open Requirements Gaps
+
+[cols="1,3,1",options="header"]
+|===
+|Gap |Impact |Status
+
+|No Gherkin feature files
+|Requirements are not currently expressed as BDD scenarios.
+|needs-review
+
+|No explicit use-case metadata files
+|Use-case IDs in this appendix are derived from documentation and module evidence.
+|needs-review
+
+|No confirmed stakeholder/business priorities
+|Functional catalogue may not reflect product priorities.
+|needs-review
+|===

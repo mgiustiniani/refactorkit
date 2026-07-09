@@ -18,6 +18,11 @@ RefactorKit is designed to be used as:
 
 The MVP focuses on safe deterministic Java refactoring with patch preview, diagnostics, rollback, a CLI, and integration points for daemon/LSP/MCP consumers.
 
+## Architecture documentation
+
+- ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
+- C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
+
 ## Build
 
 ```bash

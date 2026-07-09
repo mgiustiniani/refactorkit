@@ -1,0 +1,111 @@
+= 2. Architecture Constraints
+:toc:
+:sectnums:
+
+Status: implementation-informed, needs-review for priority and completeness.
+
+== Technical Constraints
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Constraint |Evidence |Status
+
+|C-TECH-001
+|The main implementation language is Kotlin/JVM.
+|Gradle Kotlin modules and source layout.
+|implementation-informed
+
+|C-TECH-002
+|Java bytecode compatibility is configured for Java 8 where possible.
+|Root `build.gradle.kts` configures Java compile release 8 and Kotlin JVM target 1.8.
+|implementation-informed
+
+|C-TECH-003
+|The build itself uses a JDK 21 toolchain for Kotlin/JVM modules and CI.
+|Module build scripts use `jvmToolchain(21)`; CI uses Temurin 21.
+|implementation-informed
+
+|C-TECH-004
+|Core engine must stay language-independent and must not depend on Java-specific logic.
+|`refactorkit-core` contains `LanguageAdapter`; Java-specific planners live in `refactorkit-java`.
+|implementation-informed
+
+|C-TECH-005
+|Every mutating operation must produce a previewable `PatchPlan` before application.
+|`AGENTS.md`; patch model and planner classes.
+|implementation-informed
+
+|C-TECH-006
+|Patch application must reject stale snapshot hashes, overlapping edits, and paths outside the workspace root.
+|`PatchEngine.validate` and `PatchEngine.validateEdits`.
+|implementation-informed
+
+|C-TECH-007
+|Rollback metadata is stored as transaction logs under the target workspace.
+|C4 model and `TransactionLog`/`.refactorkit/transactions` references.
+|implementation-informed
+
+|C-TECH-008
+|External Java class imports must remain preview-based, warn about unknown license/provenance, and avoid overwriting by default.
+|`docs/external-class-importer.md`, `ExternalJavaClassImporter`.
+|implementation-informed
+
+|C-TECH-009
+|The CLI distribution must be able to include an embedded Java runtime created with `jlink`.
+|`docs/packaging.md`, CLI Gradle packaging tasks.
+|implementation-informed
+|===
+
+== Architectural Boundary Constraints
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Constraint |Evidence |Status
+
+|C-BOUND-001
+|Frontend/UI technologies are out of scope for this repository.
+|`AGENTS.md` scope and non-goals.
+|implementation-informed
+
+|C-BOUND-002
+|LSP is for editor-native features; advanced AI workflows use JSON-RPC or MCP instead of overloading LSP.
+|`AGENTS.md`, `docs/integration-contracts.md`.
+|implementation-informed
+
+|C-BOUND-003
+|MCP must expose deterministic tools and focused resources, not arbitrary filesystem access.
+|`docs/integration-contracts.md`, `docs/ai-workflow.md`.
+|implementation-informed
+
+|C-BOUND-004
+|C2 containers in the C4 model represent runtime entry points or intentionally separable building blocks; current library modules are not necessarily standalone deployables.
+|`docs/c4/workspace.dsl`.
+|implementation-informed
+|===
+
+== Process and Quality Constraints
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Constraint |Evidence |Status
+
+|C-PROC-001
+|CI must run Gradle build, golden tests, self-contained CLI packaging, and a packaged CLI smoke test.
+|`.github/workflows/ci.yml`.
+|implementation-informed
+
+|C-PROC-002
+|Features are done only with tests, preview support, rollback when writing files, diagnostics, and documentation.
+|`AGENTS.md` Definition of Done.
+|planned, needs-review for enforcement coverage
+
+|C-PROC-003
+|Semantic Java refactoring must not be implemented as global search-and-replace.
+|`AGENTS.md` hard rules.
+|implementation-informed as design constraint; needs ongoing review
+
+|C-PROC-004
+|ADRs, if added later, must be stored separately and chapter 9 must remain an index rather than rewriting ADR bodies.
+|Installed arc42 agent rule.
+|planned
+|===

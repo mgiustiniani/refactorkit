@@ -1,0 +1,111 @@
+= 6. Runtime View
+:toc:
+:sectnums:
+
+Status: implementation-informed for documented flows; no C4 dynamic diagrams yet.
+
+== Runtime Scenario: Safe Java Refactoring through CLI
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|Developer runs a CLI command such as `rename`, `move-class`, `organize-imports`, `safe-delete`, `extract-method`, or `change-signature`.
+
+|2
+|CLI scans or loads the target workspace and builds a `ProjectSnapshot`.
+
+|3
+|CLI delegates Java-specific analysis to `JavaLanguageAdapter` / planner classes.
+
+|4
+|Planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, and risk level.
+
+|5
+|User reviews the preview. If applying, `PatchEngine` validates the current snapshot hash, checks edit safety, applies the workspace edit, and creates rollback metadata.
+
+|6
+|Diagnostics/tests may be run after apply. Rollback uses the recorded `Transaction` if needed.
+|===
+
+Status: implementation-informed from CLI, Java adapter, patch engine, and testkit docs.
+
+== Runtime Scenario: AI-assisted Refactoring through MCP
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|Local LLM agent calls `project_scan` for a workspace root.
+
+|2
+|Agent asks for `project_summary`, symbol resources, definitions, references, diagnostics, or `generate_context_bundle`.
+
+|3
+|Agent calls `preview_refactoring` or `import_external_java_class` instead of editing files directly.
+
+|4
+|MCP server delegates to core, Java adapter, and/or web importer to produce a preview.
+
+|5
+|Agent/user inspects affected files, warnings, and diagnostics.
+
+|6
+|Agent calls `apply_refactoring` only after approval; rollback remains available through `rollback_refactoring`.
+|===
+
+Status: implementation-informed from `docs/ai-workflow.md` and `docs/integration-contracts.md`.
+
+== Runtime Scenario: Editor Operation through LSP
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|External editor starts `refactorkit-lsp` over stdio.
+
+|2
+|Editor sends LSP requests such as definition, references, prepareRename, rename, codeAction, documentSymbol, semanticTokens, or diagnostics.
+
+|3
+|LSP server maps requests to Java/core model operations.
+
+|4
+|For workspace edits, the server returns standard LSP edit structures, including `changes` and `documentChanges` where applicable.
+
+|5
+|For advanced patch commands, editor can use advertised `workspace/executeCommand` hooks.
+|===
+
+Status: implementation-informed from `docs/integration-contracts.md`.
+
+== Runtime Scenario: External Java Class Import Preview
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|User or agent provides Java source from clipboard, file, URL, snippet, or LLM response.
+
+|2
+|Importer strips Markdown fences and records provenance/license warnings.
+
+|3
+|Importer validates target package, detects top-level public types, splits multiple public types when needed, rewrites package declaration, and organizes imports.
+
+|4
+|Importer checks naming conflicts in the scanned snapshot or filesystem.
+
+|5
+|Importer returns a preview-only `PatchPlan`; apply is delegated to the patch engine after user approval.
+|===
+
+Status: implementation-informed from `docs/external-class-importer.md`.
+
+== Runtime Diagrams
+
+No runtime/dynamic C4 diagrams were added in this baseline. This is an actionable documentation gap if scenario visualization becomes necessary.

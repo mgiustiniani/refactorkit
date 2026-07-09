@@ -1,0 +1,95 @@
+= 11. Risks and Technical Debt
+:toc:
+:sectnums:
+
+Status: implementation-informed, needs human review for prioritization.
+
+[cols="1,3,2,2,1",options="header"]
+|===
+|ID |Risk / debt |Impact |Mitigation / next action |Status
+
+|R-001
+|Java analysis is still mostly lexical rather than fully compiler/type-resolution-backed.
+|Refactorings may miss reflection, generated code, annotation processors, external callers, and some framework/string references.
+|Keep conservative refusal/warning behavior; consider compiler-backed engine ADR before stable release.
+|known risk
+
+|R-002
+|`organize-imports` sorts/deduplicates imports but does not fully remove unused imports due to lack of type analysis.
+|Users may expect IDE-equivalent import cleanup.
+|Document limitation; add type-aware analysis before claiming full organize-import behavior.
+|known limitation
+
+|R-003
+|`extract-method` MVP only supports no-argument `private void` extraction and refuses many cases.
+|Limited usefulness for real-world extraction scenarios.
+|Keep refusals explicit; expand only with robust variable/control-flow analysis.
+|known limitation
+
+|R-004
+|Change-signature is conservative and refuses hierarchy/public/protected/generated/method-reference cases.
+|Limited support for public API evolution.
+|Add compiler-backed hierarchy/call-site analysis or document as alpha limitation.
+|known limitation
+
+|R-005
+|Safe delete does not inspect build files, generated code, reflection, external config, or all framework references.
+|Possible unsafe delete if non-source references exist.
+|Maintain warnings; add build/config/framework analysis before lowering risk.
+|known risk
+
+|R-006
+|External importer license detection is heuristic.
+|Unknown or incompatible code could be imported if user ignores warnings.
+|Keep preview-only unknown-license behavior; consider policy enforcement and SPDX scanning.
+|known risk
+
+|R-007
+|External LSP-backed multi-language support is currently stub/future work.
+|Users may overestimate non-Java semantic refactoring capability.
+|Keep docs explicit; expose only structural/local operations as MVP.
+|implementation-informed
+
+|R-008
+|No ADRs exist for major architecture decisions.
+|Decision rationale may be lost or hard to review.
+|Create ADRs for core decisions; keep chapter 9 as index.
+|actionable
+
+|R-009
+|Public library API stability is not documented.
+|Embedding applications may depend on unstable internals.
+|Define public API/versioning policy before beta/stable release.
+|needs-review
+
+|R-010
+|No formal deployment/release artifact matrix.
+|Packaging expectations across OSes and artifact repositories may be unclear.
+|Clarify release process, OS targets, checksums/signing.
+|needs-review
+
+|R-011
+|Security threat model is incomplete.
+|Trust boundaries around MCP clients, external code sources, external language servers, and filesystem edits need review.
+|Create threat model and security ADR/quality scenarios.
+|needs-review
+
+|R-012
+|Runtime/dynamic and C3 diagrams are missing.
+|Architecture documentation may be less useful for maintainers working on internal interactions.
+|Add scenario-driven dynamic views and C3 component views when needed.
+|actionable
+|===
+
+== Technical Debt from Release Plan
+
+The release plan identifies additional hardening items before alpha/beta/stable releases:
+
+* expand golden tests for all existing Java operations;
+* verify rollback in agent simulation tests for each mutating operation;
+* add daemon/LSP/MCP contract tests for preview/apply/rollback error cases;
+* publish zipped self-contained CLI artifacts from CI;
+* define semantic versioning and deprecation rules;
+* add artifact signing/checksums.
+
+Status: implementation-informed from `docs/release-plan.md`.

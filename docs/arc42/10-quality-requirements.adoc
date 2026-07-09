@@ -1,0 +1,132 @@
+= 10. Quality Requirements
+:toc:
+:sectnums:
+
+Status: implementation-informed, needs-review for priorities and measurable targets.
+
+== Quality Tree
+
+* Safety
+** Preview before apply
+** Reject stale or unsafe edits
+** Rollback after apply
+** Warnings for high-risk Java/framework/import cases
+* Correctness
+** Symbol-aware Java operations where supported
+** Conservative refusal instead of guessing
+** Diagnostics before/after preview where supported
+* Extensibility
+** Language-independent core
+** Language adapter contract
+** Structural multi-language foundation and optional future LSP-backed adapters
+* Usability
+** CLI, daemon, LSP, MCP, and library integration modes
+** Focused MCP resources and prompts for agents
+* Portability
+** Java 8-compatible bytecode where configured
+** Self-contained CLI package with embedded runtime
+* Testability
+** Unit tests, golden tests, sample projects, agent simulation tests, CI
+
+== Quality Scenarios
+
+[cols="1,1,3,2,1",options="header"]
+|===
+|ID |Quality |Scenario |Evidence / validation |Status
+
+|QS-SAFE-001
+|Safety
+|When a user applies a preview after the workspace has changed, RefactorKit refuses apply and asks for plan regeneration.
+|`PatchEngine.validate` checks snapshot hash mismatch.
+|implementation-informed
+
+|QS-SAFE-002
+|Safety
+|When a patch contains overlapping text edits, RefactorKit refuses apply.
+|`PatchEngine.validateNoOverlaps`; core tests.
+|implementation-informed
+
+|QS-SAFE-003
+|Safety
+|When a patch attempts to edit outside the workspace root, RefactorKit refuses it.
+|`PatchEngine.validateInsideWorkspace`.
+|implementation-informed
+
+|QS-SAFE-004
+|Safety
+|When an external Java class import would overwrite an existing class/file, the importer refuses by default.
+|`docs/external-class-importer.md`, importer tests.
+|implementation-informed
+
+|QS-CORR-001
+|Correctness
+|When safe delete finds source references, it returns a refused plan and lists references instead of deleting.
+|Golden test `safe-delete-refused`, Java planner.
+|implementation-informed
+
+|QS-CORR-002
+|Correctness
+|When extract-method selection has control-flow or variable-dependency ambiguity, planner refuses rather than guessing parameters/returns.
+|`docs/extract-method.md`, tests.
+|implementation-informed
+
+|QS-CORR-003
+|Correctness
+|When change-signature would affect overloaded, generated, method-reference, public/protected hierarchy, or unsafe cases, planner refuses or escalates risk.
+|`docs/change-signature.md`, tests.
+|implementation-informed
+
+|QS-AI-001
+|AI safety
+|A local LLM can get focused context through MCP without arbitrary filesystem access and request preview/refactoring tools.
+|`docs/ai-workflow.md`, `docs/integration-contracts.md`.
+|implementation-informed
+
+|QS-PORT-001
+|Portability
+|A packaged CLI can run with its embedded runtime and scan a sample project without relying on `PATH` Java.
+|CI smoke test and packaging docs.
+|implementation-informed
+
+|QS-TEST-001
+|Testability
+|CI runs Gradle build, golden tests, self-contained package build, and packaged CLI smoke test.
+|`.github/workflows/ci.yml`.
+|implementation-informed
+|===
+
+== Validation Commands
+
+Current repository validation commands include:
+
+[source,bash]
+----
+./gradlew build
+./refactorkit test-golden
+./gradlew packageCliRuntime
+modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
+modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/java-maven-simple
+----
+
+== Open Quality Gaps
+
+[cols="1,3,1",options="header"]
+|===
+|Gap |Impact |Status
+
+|No confirmed quality-goal priorities
+|Chapter 1 quality goals may not reflect business priorities.
+|needs-review
+
+|Java analysis is mostly lexical
+|False positives/negatives may remain for complex Java, reflection, generated code, and framework configuration.
+|known risk
+
+|No explicit performance targets
+|Indexing and large-workspace behavior need measurable targets.
+|needs-review
+
+|No full threat model
+|Security properties for MCP/importer/external language-server boundaries need formal review.
+|needs-review
+|===

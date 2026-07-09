@@ -1,0 +1,56 @@
+= 9. Architecture Decisions
+:toc:
+:sectnums:
+
+Status: needs-review. This chapter is an ADR index only. ADR bodies are not created or rewritten here.
+
+== ADR Search Result
+
+No ADR files were found in the repository during this baseline creation.
+
+Search patterns checked included files/directories containing `adr`, `ADR`, `adrs`, or `docs/adr`.
+
+== ADR Index
+
+[cols="1,2,2,1",options="header"]
+|===
+|ADR |Title |Location |Status
+
+|—
+|No ADRs found
+|—
+|needs-review
+|===
+
+== Decision Candidates Requiring ADRs
+
+The following topics appear architecturally significant and may deserve ADRs, but this chapter does not create ADR bodies:
+
+[cols="1,3,1",options="header"]
+|===
+|Candidate |Reason |Status
+
+|Kotlin/JVM and Java 8 bytecode target
+|Foundational technology and compatibility decision.
+|needs-review
+
+|PatchPlan / PatchEngine safety model
+|Central safety and rollback architecture.
+|needs-review
+
+|Java lexical MVP before compiler-backed analysis
+|Important correctness and risk trade-off.
+|needs-review
+
+|CLI / daemon / LSP / MCP integration split
+|Defines external API surfaces and workflow boundaries.
+|needs-review
+
+|jlink self-contained CLI packaging
+|Deployment and runtime-dependency decision.
+|needs-review
+
+|MCP resource scoping and no arbitrary filesystem access
+|Security/trust-boundary decision for agent integrations.
+|needs-review
+|===

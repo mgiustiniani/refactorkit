@@ -1,0 +1,103 @@
+= 1. Introduction and Goals
+:toc:
+:sectnums:
+
+Status: draft, needs-review. This chapter must be explicitly confirmed by the user before it is treated as final.
+
+== Requirements Overview
+
+RefactorKit is a deterministic refactoring and code-intelligence engine for safe, previewable, rollbackable code transformations.
+
+The first supported language is Java. The Java adapter is intended to work with Java 8-era projects while understanding Java language/source constructs and type forms through Java 25. The architecture is adapter-based so that later language support can be added without coupling language-specific logic into the core engine.
+
+RefactorKit is intended to replace fragile direct text edits, especially in AI-assisted development workflows, with deterministic semantic operations and patch previews.
+
+Evidence: `README.md`, `AGENTS.md`, `docs/architecture.md`.
+
+== Quality Goals
+
+[cols="1,2,2,1",options="header"]
+|===
+|Quality goal |Meaning for RefactorKit |Evidence |Status
+
+|Safety
+|Every code modification is previewable, validated, traceable, and rollbackable.
+|`AGENTS.md` safety model; `modules/refactorkit-core` patch and transaction classes.
+|implementation-informed
+
+|Determinism
+|Refactorings are represented as structured patch plans instead of ad-hoc text replacement.
+|`PatchPlan`, `WorkspaceEdit`, `PatchEngine`, Java planner classes.
+|implementation-informed
+
+|Extensibility
+|Core is language-independent and language capabilities are provided through adapters.
+|`LanguageAdapter` contract; Java adapter and tree-sitter foundation modules.
+|implementation-informed
+
+|AI assistance without uncontrolled edits
+|Local LLM agents should request focused context and deterministic tools rather than arbitrary rewrites.
+|MCP documentation and `docs/ai-workflow.md`.
+|implementation-informed
+
+|Usability across integration modes
+|RefactorKit is usable as a library, CLI, daemon, LSP server, and MCP server.
+|README, module layout, integration docs.
+|implementation-informed
+
+|Runtime portability
+|The CLI can be packaged with an embedded Java runtime so end users do not need a globally installed Java runtime.
+|`docs/packaging.md`, Gradle jlink tasks.
+|implementation-informed
+|===
+
+== Stakeholders
+
+[cols="1,2,2,1",options="header"]
+|===
+|Stakeholder |Expectation |Current support |Status
+
+|Java developer
+|Run safe Java refactorings with preview, diagnostics, apply, and rollback.
+|CLI, Java adapter, patch engine, samples, tests.
+|implementation-informed
+
+|Automation / CI user
+|Run scans, diagnostics, recipes, golden tests, and packaging smoke tests.
+|CLI commands and GitHub Actions CI.
+|implementation-informed
+
+|Editor / IDE user
+|Use RefactorKit through editor-native LSP operations.
+|`refactorkit-lsp` exposes LSP MVP capabilities.
+|implementation-informed
+
+|Local LLM agent / MCP client
+|Use deterministic tools, focused resources, and prompts without arbitrary filesystem access.
+|`refactorkit-mcp`, `docs/ai-workflow.md`.
+|implementation-informed
+
+|Embedding JVM application
+|Use RefactorKit as an in-process Kotlin/JVM library.
+|Published module structure supports library use; stable public API policy still needs review.
+|planned, needs-review
+
+|Maintainer
+|Keep implementation, tests, docs, and release process coherent.
+|Gradle multi-module build, CI, docs, release plan.
+|implementation-informed
+|===
+
+== Non-Goals and Scope Boundaries
+
+The repository is not intended to implement a custom IDE, Tauri frontend, cloud service, collaborative editing platform, VS Code extension, JetBrains plugin, or web dashboard. Such tools may consume RefactorKit through CLI, JSON-RPC daemon, LSP, MCP, or library APIs, but must not drive core engine design unless they expose stable requirements.
+
+Status: implementation-informed from `AGENTS.md`.
+
+== Open Confirmation Items
+
+The following items require explicit user confirmation before this chapter is finalized:
+
+* Whether the listed stakeholder expectations are complete.
+* Whether the quality goal priorities are correct.
+* Whether the described business objective captures the intended product direction.

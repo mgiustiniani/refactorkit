@@ -1,0 +1,135 @@
+= 12. Glossary
+:toc:
+:sectnums:
+
+Status: implementation-informed. Terms are sourced from repository docs and source names.
+
+[cols="1,3,2,2",options="header"]
+|===
+|Term |Definition |Scope |Evidence
+
+|RefactorKit
+|Deterministic refactoring and code-intelligence engine for safe, previewable, rollbackable code transformations.
+|System
+|README, AGENTS
+
+|PatchPlan
+|Structured preview/apply plan for a code modification, including operation, snapshot hash, affected files, workspace edit, diagnostics, warnings, risk, and confidence.
+|Core
+|`Models.kt`
+
+|WorkspaceEdit
+|Collection of file edits to modify, create, delete, or rename files in a workspace.
+|Core
+|`Models.kt`
+
+|TextEdit
+|A replacement over a source range.
+|Core
+|`Models.kt`, `TextEdits.kt`
+
+|PatchEngine
+|Core service that validates and applies preview plans and rollbacks transactions.
+|Core
+|`PatchEngine.kt`
+
+|Transaction
+|Rollback metadata created after applying a patch plan.
+|Core
+|`Models.kt`
+
+|Transaction Log
+|Stored rollback metadata under `.refactorkit/transactions`.
+|Core / workspace
+|`TransactionLog`, recipe/test docs
+
+|ProjectSnapshot
+|Immutable snapshot of workspace modules and source files with a content hash.
+|Core
+|`Models.kt`
+
+|LanguageAdapter
+|Contract implemented by language-specific adapters for parse, symbols, references, diagnostics, and refactoring application.
+|Core / adapters
+|`Models.kt`
+
+|Java Language Adapter
+|Java-specific implementation providing source scanning, symbols, references, diagnostics, and refactoring planners.
+|Java module
+|`JavaLanguageAdapter.kt`
+
+|Symbol
+|Named code element such as class, interface, enum, record, method, field, constructor, package, or unknown.
+|Core / Java
+|`Models.kt`
+
+|Reference
+|Source location that references a symbol.
+|Core / Java
+|`Models.kt`
+
+|Diagnostic
+|Structured message with severity and optional location/code.
+|Core
+|`Models.kt`
+
+|RiskLevel
+|Risk classification for a patch or refactoring: LOW, MEDIUM, HIGH.
+|Core / safety
+|`Models.kt`
+
+|CLI
+|Command-line RefactorKit application.
+|Integration
+|`refactorkit-cli`
+
+|JSON-RPC Daemon
+|Long-running local stdio JSON-RPC process for project sessions and preview/apply/rollback operations.
+|Integration
+|`refactorkit-daemon`, integration docs
+
+|LSP Server
+|Language Server Protocol integration for editor-native operations.
+|Integration
+|`refactorkit-lsp`
+
+|MCP Server
+|Model Context Protocol interface exposing deterministic tools/resources/prompts to local LLM agents.
+|Integration
+|`refactorkit-mcp`
+
+|External Java Class Importer
+|External code assimilation module that creates preview plans for imported Java classes with provenance/license/conflict checks.
+|Web importer
+|`refactorkit-web-importer`, importer docs
+
+|Recipe
+|YAML-defined multi-step deterministic refactoring workflow with dry-run/preview and rollback behavior.
+|Java / CLI
+|`docs/recipe-engine.md`, `recipes/java/rename-package.yml`
+
+|Golden Test
+|Test case with before/after trees, request JSON, and expected plan metadata.
+|Testkit
+|`docs/testing.md`, `testdata/golden`
+
+|Agent Simulation Test
+|Test that simulates local LLM agent workflow: scan, preview, inspect, apply, verify, rollback.
+|Testkit
+|`docs/testing.md`
+
+|Tree-sitter Foundation
+|Current structural multi-language foundation with regex-backed scanner and extension point for real Tree-sitter/native support.
+|Multi-language
+|`refactorkit-tree-sitter`, multi-language docs
+
+|ExternalLspAdapter
+|Adapter intended to launch external language servers and bridge future LSP-backed language support.
+|Multi-language
+|`docs/multi-language.md`
+
+|Framework-aware Risk Detection
+|Lexical detection of Spring, JPA/Jakarta Persistence, and Jackson annotations to raise warnings/risk during selected Java refactorings.
+|Java
+|`docs/framework-awareness.md`
+|===

@@ -1,0 +1,69 @@
+= 7. Deployment View
+:toc:
+:sectnums:
+
+Status: implementation-informed for local runtime/package facts; planned/needs-review for formal deployment decisions.
+
+== Deployment Overview
+
+RefactorKit is a local tool/library, not a hosted service. Current repository evidence supports local process deployment through CLI, daemon, LSP, and MCP applications, plus in-process library consumption by JVM applications.
+
+== Deployment Nodes
+
+[cols="1,2,3,1",options="header"]
+|===
+|Node |Deployed artifacts |Notes |Status
+
+|Developer / CI machine
+|Gradle build, tests, CLI, daemon, LSP, MCP, sample projects, recipes.
+|Primary execution environment during development, CI, local automation, and smoke testing.
+|implementation-informed
+
+|Packaged CLI distribution
+|`bin/refactorkit`, `bin/refactorkit.bat`, module jars under `lib/`, embedded runtime under `runtime/`.
+|Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`.
+|implementation-informed
+
+|Editor host process
+|`refactorkit-lsp` process launched by an external editor/IDE.
+|Communicates over stdio with LSP `Content-Length` framing.
+|implementation-informed
+
+|Local agent host
+|`refactorkit-mcp` process launched by a local MCP client or LLM agent.
+|Communicates over newline-delimited JSON-RPC/MCP.
+|implementation-informed
+
+|Long-running local tool session
+|`refactorkit-daemon` process.
+|JSON-RPC over stdio for warm project session behavior.
+|implementation-informed
+
+|Embedding JVM application
+|RefactorKit library jars.
+|In-process use; stable public API and packaging policy need review.
+|planned, needs-review
+|===
+
+== Runtime Dependencies
+
+* Build-time JDK is required for Gradle and `jlink` packaging.
+* The packaged CLI is intended not to require a globally installed Java runtime because it contains an embedded runtime.
+* Maven/Gradle projects are scanned from local workspace files.
+* Optional external language servers are outside the current deployment and treated as future/optional integrations.
+
+== Missing Deployment Decisions
+
+No evidence was found for:
+
+* cloud/server deployment;
+* Docker image or Kubernetes deployment;
+* remote daemon exposure over HTTP/WebSocket;
+* published artifact repository coordinates and compatibility policy;
+* OS-specific release matrix beyond the jlink packaging notes.
+
+Status: blocked/unknown until deployment and release decisions are made.
+
+== C4 Deployment View
+
+No C4 deployment view was generated in this baseline because deployment decisions are limited to local process/package facts. Owner: `arc42` with `c4model` once deployment nodes and artifact release policy are confirmed.

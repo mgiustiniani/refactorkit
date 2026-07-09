@@ -1,0 +1,116 @@
+= 5. Building Block View
+:toc:
+:sectnums:
+
+Status: implementation-informed. C2 model delegated to `c4model` and stored in `docs/c4/workspace.dsl`.
+
+== Overview
+
+The C2 container/building-block view is maintained in:
+
+[source,text]
+----
+docs/c4/workspace.dsl
+----
+
+View key: `ContainerAndBuildingBlockView`.
+
+Because several modules are libraries rather than independently deployed processes, the C4 model tags them as runtime or test building blocks instead of implying standalone deployment.
+
+== Level 1: RefactorKit System
+
+RefactorKit provides deterministic code-intelligence and refactoring capabilities with preview, validation, apply, and rollback semantics. It exposes those capabilities through CLI, daemon, LSP, MCP, and library integration modes.
+
+== Level 2: Containers and Building Blocks
+
+[cols="1,2,3,2,1",options="header"]
+|===
+|Building block |Type |Responsibility |Evidence |Status
+
+|CLI Application
+|Kotlin/JVM application
+|Command-line entry point for scan, Java symbols/refactorings, recipes, patch apply/rollback, outline/search/local rename, golden tests, packaging workflows, and external import preview.
+|`modules/refactorkit-cli`, README examples.
+|implementation-informed
+
+|JSON-RPC Daemon
+|Kotlin/JVM application
+|Long-running stdio JSON-RPC session for project open/summary, symbols, diagnostics, refactor preview/apply, and rollback.
+|`modules/refactorkit-daemon`, `docs/integration-contracts.md`.
+|implementation-informed
+
+|LSP Server
+|Kotlin/JVM application
+|Editor-facing Language Server Protocol implementation for navigation, references, rename, code actions, symbols, semantic tokens, diagnostics, and executeCommand hooks.
+|`modules/refactorkit-lsp`, `docs/integration-contracts.md`.
+|implementation-informed
+
+|MCP Server
+|Kotlin/JVM application
+|Local LLM/MCP interface exposing deterministic project, symbol, diagnostics, refactoring, import, rollback, resources, and prompts.
+|`modules/refactorkit-mcp`, `docs/ai-workflow.md`.
+|implementation-informed
+
+|Embedded Library Runtime
+|Kotlin/JVM library integration mode
+|In-process use by external JVM applications.
+|Module structure and README usage modes.
+|planned, needs public API review
+
+|Core Patch and Model Engine
+|Kotlin/JVM library
+|Workspace/project/source models, symbols, references, diagnostics, text/file/workspace edits, patch plans, preview/apply/rollback engine, transaction log, JSON-RPC primitives, and language adapter contract.
+|`modules/refactorkit-core`.
+|implementation-informed
+
+|Java Language Adapter
+|Kotlin/JVM library
+|Java scan/symbol/reference/diagnostic/refactoring capability: rename class/member, move class, organize imports, safe delete, extract method MVP, change signature MVP, recipes, framework-aware risk detection.
+|`modules/refactorkit-java`, Java docs.
+|implementation-informed
+
+|External Java Class Importer
+|Kotlin/JVM library
+|Preview-only external Java class import with provenance/license warnings, package rewriting, public type splitting, conflict detection, and PatchPlan output.
+|`modules/refactorkit-web-importer`, `docs/external-class-importer.md`.
+|implementation-informed
+
+|Multi-language Structural Foundation
+|Kotlin/JVM library
+|Regex-backed outline/search/local rename, generic scanner, comment/literal filtering, TreeSitterAdapter facade, native binding extension point, and ExternalLspAdapter stub.
+|`modules/refactorkit-tree-sitter`, `docs/multi-language.md`.
+|implementation-informed / planned for full semantic LSP-backed support
+
+|Test Harness
+|Kotlin/JVM library
+|Golden test loader/runner and agent simulation scenarios covering preview/apply/rollback/refusal workflows.
+|`modules/refactorkit-testkit`, `docs/testing.md`.
+|implementation-informed
+
+|Transaction Log Store
+|Local file storage
+|Rollback metadata under `.refactorkit/transactions`.
+|Patch engine/testkit/recipe docs.
+|implementation-informed
+|===
+
+== Key Dependencies
+
+* CLI depends on core, Java adapter, web importer, tree-sitter foundation, and testkit.
+* Daemon and LSP depend on core and Java adapter.
+* MCP depends on core, Java adapter, and web importer.
+* Java adapter, web importer, tree-sitter foundation, and testkit depend on core.
+* Web importer reuses Java source-root/package/import knowledge.
+
+Status: implementation-informed from Gradle module build files and C4 model.
+
+== Level 3: Components
+
+C3 component diagrams were not generated in this baseline. Source code already exposes candidate components, for example:
+
+* `PatchEngine`, `TextEdits`, `TransactionLog` in core;
+* `JavaProjectScanner`, `JavaLanguageAdapter`, and individual Java planner classes;
+* `ExternalJavaClassImporter`, `JavaClassSplitter`, `LicenseDetector`;
+* `GenericOutline`, `GenericStructuralSearch`, `GenericLocalRenamePlanner`, `ExternalLspAdapter`.
+
+Status: actionable documentation gap; owner `arc42` with `c4model` when a deeper component view is needed.

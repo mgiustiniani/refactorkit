@@ -1,0 +1,53 @@
+= RefactorKit Architecture Documentation (arc42)
+:toc:
+:sectnums:
+:icons: font
+
+Status: implementation-informed documentation baseline, needs-review.
+
+This directory contains the arc42 documentation for RefactorKit, the deterministic refactoring and code-intelligence engine in this repository.
+
+== Chapters
+
+* xref:01-introduction-and-goals.adoc[1. Introduction and Goals]
+* xref:02-architecture-constraints.adoc[2. Architecture Constraints]
+* xref:03-system-scope-and-context.adoc[3. System Scope and Context]
+* xref:04-solution-strategy.adoc[4. Solution Strategy]
+* xref:05-building-block-view.adoc[5. Building Block View]
+* xref:06-runtime-view.adoc[6. Runtime View]
+* xref:07-deployment-view.adoc[7. Deployment View]
+* xref:08-crosscutting-concepts.adoc[8. Cross-cutting Concepts]
+* xref:09-architecture-decisions.adoc[9. Architecture Decisions]
+* xref:10-quality-requirements.adoc[10. Quality Requirements]
+* xref:11-risks-and-technical-debt.adoc[11. Risks and Technical Debt]
+* xref:12-glossary.adoc[12. Glossary]
+* xref:appendix-requirements.adoc[Appendix: Requirements]
+
+== C4 Model
+
+The C4 model is maintained in xref:../c4/workspace.dsl[docs/c4/workspace.dsl]. It currently contains:
+
+* C1 System Context view (`SystemContext`)
+* C2 Container / building-block view (`ContainerAndBuildingBlockView`)
+
+== Evidence Base
+
+The current baseline was created from repository evidence:
+
+* `README.md`
+* `AGENTS.md`
+* `docs/*.md`
+* Gradle module descriptors and source files under `modules/`
+* `samples/`
+* `recipes/`
+* `testdata/golden/`
+* `.github/workflows/ci.yml`
+
+== Status Conventions
+
+* `draft` — proposed and not yet confirmed.
+* `confirmed` — explicitly confirmed by user or ADR.
+* `planned` — documented architectural intent not fully implemented.
+* `implementation-informed` — backed by repository files, tests, or build evidence.
+* `needs-review` — requires human review.
+* `stale` — known to lag behind implementation.

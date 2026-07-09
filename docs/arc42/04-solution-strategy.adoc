@@ -1,0 +1,108 @@
+= 4. Solution Strategy
+:toc:
+:sectnums:
+
+Status: implementation-informed with planned items explicitly marked.
+
+== Strategy Summary
+
+RefactorKit is structured as a local, deterministic refactoring engine around a language-independent patch core and pluggable language/integration adapters. The primary strategy is to make every change previewable, diagnosable, rollbackable, and consumable by humans, CI, editors, and local AI agents.
+
+== Fundamental Decisions
+
+[cols="1,3,2,1",options="header"]
+|===
+|Topic |Strategy |Evidence |Status
+
+|Patch-first architecture
+|All mutating operations produce `PatchPlan` / `WorkspaceEdit` previews and are applied by the core patch engine.
+|`modules/refactorkit-core`, `docs/patch-engine.md`, `AGENTS.md`.
+|implementation-informed
+
+|Language adapter boundary
+|The core owns generic models and safety mechanics; language-specific intelligence lives behind `LanguageAdapter` implementations.
+|`LanguageAdapter`, `JavaLanguageAdapter`, tree-sitter foundation.
+|implementation-informed
+
+|Java-first MVP
+|Java is the first semantic language target, with scanner, symbols, references, diagnostics, and Java refactoring planners.
+|`refactorkit-java`, Java docs.
+|implementation-informed
+
+|Multiple local integration modes
+|Expose the same deterministic capabilities through CLI, JSON-RPC daemon, LSP, MCP, and library use.
+|Module layout, README, integration docs.
+|implementation-informed
+
+|AI-safe workflow
+|Local agents should use symbol/context/refactoring tools and review previews rather than directly editing source files.
+|`docs/ai-workflow.md`, `refactorkit-mcp`.
+|implementation-informed
+
+|Conservative lexical MVP
+|Several Java refactorings use lexical/source-level analysis and refuse ambiguous/high-risk operations rather than guessing.
+|Extract method, change signature, framework-aware docs.
+|implementation-informed
+
+|Framework risk awareness
+|Spring, JPA/Jakarta Persistence, and Jackson annotations raise risk and warnings for selected Java refactorings.
+|`JavaFrameworkDetector`, `docs/framework-awareness.md`.
+|implementation-informed
+
+|Multi-language path
+|Provide structural, regex-backed multi-language outline/search/local rename now; leave full semantic support to native bindings or external LSP-backed adapters later.
+|`docs/multi-language.md`, `refactorkit-tree-sitter`.
+|implementation-informed / planned
+|===
+
+== Bounded Contexts / Building Blocks
+
+RefactorKit is not documented as domain-driven business bounded contexts, but its architecture has clear technical bounded contexts:
+
+* Core Patch and Model Engine
+* Java Language Adapter
+* CLI Application
+* JSON-RPC Daemon
+* LSP Server
+* MCP Server
+* External Java Class Importer
+* Multi-language Structural Foundation
+* Test Harness
+
+These are shown as containers/building blocks in `docs/c4/workspace.dsl`.
+
+== Technology Strategy
+
+[cols="1,2,2,1",options="header"]
+|===
+|Area |Choice |Reason |Status
+
+|Implementation language
+|Kotlin/JVM
+|Good fit for JVM-native Java tooling and immutable/sealed model types.
+|implementation-informed
+
+|Build system
+|Gradle Kotlin DSL multi-module project
+|Coordinates modules, tests, applications, and jlink packaging.
+|implementation-informed
+
+|Serialization
+|kotlinx.serialization JSON in daemon/LSP/MCP modules
+|Structured protocol handling.
+|implementation-informed
+
+|Packaging
+|jlink-generated embedded runtime for the CLI distribution
+|Avoid requiring users to install Java globally at runtime.
+|implementation-informed
+
+|Architecture model
+|Structurizr DSL C4 model
+|Docs-as-code architecture model suitable for system/context and container views.
+|implementation-informed
+|===
+
+== Links to Decisions
+
+No ADR files were found in the repository at the time this baseline was created. Chapter 9 therefore records an empty ADR index and open documentation gap instead of inventing ADR bodies.
