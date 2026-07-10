@@ -32,7 +32,11 @@ Beta P6 hardening evidence:
   warnings, single-file helper preservation, multi-public-type splitting with
   package/import preservation, and non-Java Markdown fence stripping;
 - CLI, daemon JSON-RPC, and MCP tests now assert that importer preview output
-  exposes the stable provenance/license fields.
+  exposes the stable provenance/license fields;
+- refusal-message tests now cover unknown-license blocking and naming-conflict
+  refusals with guidance that no files were written, reviewers should check
+  provenance/license policy/naming conflicts, and RefactorKit never overwrites
+  existing files by default.
 
 ## Provenance/license output contract
 
@@ -77,7 +81,10 @@ Success conditions for a preview:
 Refusal conditions include invalid target packages, no importable Java type,
 naming conflicts, overwrite risk, and license-policy blocks such as
 `block-unknown` for unknown licenses. A refused import must not be replaced by
-silently writing files into the project.
+silently writing files into the project. Its warning guidance should state that
+no files were written, point reviewers to provenance, license policy, or naming
+conflicts as applicable, and remind them that RefactorKit never overwrites
+existing files by default.
 
 Warnings require manual review for unknown or risky licenses, source provenance,
 unresolved external imports, copied helper types, multiple public-type splitting,
@@ -94,5 +101,4 @@ Remaining gaps:
 - dependency resolution is warning-only;
 - import unusedness is not type-resolved;
 - class renaming/merge conflict workflows are not implemented yet;
-- refusal wording should continue to emphasize user review instead of overwrite;
 - applying the preview is still delegated to `PatchEngine`/CLI/MCP after user approval.

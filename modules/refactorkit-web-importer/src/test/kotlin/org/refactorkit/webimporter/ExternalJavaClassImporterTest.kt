@@ -139,6 +139,7 @@ class ExternalJavaClassImporterTest {
         val code = "public class Foo {}"
         val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example", licensePolicy = LicensePolicy.BLOCK_UNKNOWN))
         assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.warnings.any { it.contains("Review provenance") && it.contains("never overwrites") })
     }
 
     @Test
@@ -280,6 +281,7 @@ class ExternalJavaClassImporterTest {
 
         assertEquals(PatchStatus.REFUSED, plan.status)
         assertTrue(plan.summary.contains("Naming conflict"))
+        assertTrue(plan.warnings.any { it.contains("Review provenance") && it.contains("never overwrites") })
     }
 
     @Test

@@ -345,6 +345,7 @@ class ExternalJavaClassImporter {
         warnings = listOf(
             reason,
             provenanceWarning(provenance),
+            "No files were written. Review provenance, license policy, and naming conflicts before trying a new import; RefactorKit never overwrites existing files by default.",
         ),
         riskLevel = RiskLevel.HIGH,
     )

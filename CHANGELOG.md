@@ -39,6 +39,10 @@ tagged.
   daemon JSON-RPC `java.importExternalClass`, and MCP
   `import_external_java_class` expose stable provenance/license fields in
   warnings or output text.
+- Added importer refusal guidance coverage for unknown-license policy blocks and
+  naming conflicts; refused plans state that no files were written, point
+  reviewers to provenance/license/naming-conflict review, and reiterate that
+  RefactorKit never overwrites existing files by default.
 - Verified P7 runtime artifact workflow progress: CI builds the self-contained
   runtime zip and checksum, verifies the checksum, smoke-tests the packaged
   launcher with `JAVA_HOME` unset across representative samples, and release tag
