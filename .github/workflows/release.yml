@@ -42,11 +42,18 @@ jobs:
           sha256sum "refactorkit-runtime-${version}-linux-x86_64.zip" \
             > "refactorkit-runtime-${version}-linux-x86_64.zip.sha256"
 
+          release_notes=".github/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$release_notes" ]; then
+            cp "$release_notes" RELEASE_NOTES.md
+          else
+            cp .github/RELEASE_TEMPLATE.md RELEASE_NOTES.md
+          fi
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
-          body_path: .github/RELEASE_TEMPLATE.md
+          body_path: RELEASE_NOTES.md
           files: |
             refactorkit-runtime-*-linux-x86_64.zip
             refactorkit-runtime-*-linux-x86_64.zip.sha256
