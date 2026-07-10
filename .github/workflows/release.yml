@@ -41,6 +41,7 @@ jobs:
             "refactorkit-runtime-${version}-linux-x86_64.zip"
           sha256sum "refactorkit-runtime-${version}-linux-x86_64.zip" \
             > "refactorkit-runtime-${version}-linux-x86_64.zip.sha256"
+          sha256sum -c "refactorkit-runtime-${version}-linux-x86_64.zip.sha256"
 
           release_notes=".github/releases/${GITHUB_REF_NAME}.md"
           if [ -f "$release_notes" ]; then
@@ -48,6 +49,15 @@ jobs:
           else
             cp .github/RELEASE_TEMPLATE.md RELEASE_NOTES.md
           fi
+
+      - name: Smoke release runtime zip
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          rm -rf release-smoke
+          mkdir release-smoke
+          unzip -q "refactorkit-runtime-${version}-linux-x86_64.zip" -d release-smoke
+          env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit --help
+          env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit scan samples/java-maven-simple
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

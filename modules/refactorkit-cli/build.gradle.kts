@@ -1,7 +1,6 @@
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.jvm.application.tasks.CreateStartScripts
 import java.io.File
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 plugins {
     kotlin("jvm")
@@ -148,30 +147,36 @@ tasks.register("refactorkitRuntimeDist") {
     }
 }
 
-tasks.register("refactorkitRuntimeZip") {
+tasks.register<Zip>("refactorkitRuntimeZip") {
     group = "distribution"
     description = "Zip the self-contained RefactorKit CLI runtime distribution."
     dependsOn("refactorkitRuntimeDist")
 
-    val zipFile = layout.buildDirectory.file("distributions/refactorkit-runtime.zip")
-    inputs.dir(packageDir)
-    outputs.file(zipFile)
+    archiveFileName.set("refactorkit-runtime.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    from(packageDir) {
+        into("refactorkit")
+    }
 
-    doLast {
-        val source = packageDir.get().asFile
-        val target = zipFile.get().asFile
-        target.parentFile.mkdirs()
-        if (target.exists()) target.delete()
-        ZipOutputStream(target.outputStream().buffered()).use { zip ->
-            source.walkTopDown().filter { it.isFile }.forEach { file ->
-                val relative = source.toPath().relativize(file.toPath()).toString().replace(File.separatorChar, '/')
-                val entry = ZipEntry("refactorkit/$relative")
-                entry.time = file.lastModified()
-                zip.putNextEntry(entry)
-                file.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
+    dirPermissions {
+        unix("rwxr-xr-x")
+    }
+    filePermissions {
+        unix("rw-r--r--")
+    }
+    eachFile {
+        if (path == "refactorkit/bin/refactorkit" ||
+            path.startsWith("refactorkit/runtime/bin/") ||
+            path == "refactorkit/runtime/lib/jexec" ||
+            path == "refactorkit/runtime/lib/jspawnhelper"
+        ) {
+            permissions {
+                unix("rwxr-xr-x")
             }
         }
-        println("Self-contained RefactorKit CLI zip: ${target.absolutePath}")
+    }
+
+    doLast {
+        println("Self-contained RefactorKit CLI zip: ${archiveFile.get().asFile.absolutePath}")
     }
 }

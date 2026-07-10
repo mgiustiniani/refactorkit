@@ -3,9 +3,9 @@
 See AGENTS.md §18 for the authoritative testing rules.
 
 Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests,
-initial P3/P4 safety/contract tests, and focused P6 external-importer hardening
-coverage. The current golden suite contains 21 cases covering shipped
-patch-producing operations.
+initial P3/P4 safety/contract tests, focused P6 external-importer hardening, and
+P7 packaging/release-verification progress. The current golden suite contains 21
+cases covering shipped patch-producing operations.
 
 ## Unit tests
 
@@ -108,6 +108,22 @@ external-importer checks:
   multi-public-type splitting with package/import preservation, and non-Java
   Markdown fence stripping.
 
+## Packaged CLI and release verification smoke tests
+
+P7 packaging verification now covers the self-contained runtime artifact:
+
+- CI builds `refactorkit-runtime.zip` and writes
+  `refactorkit-runtime.zip.sha256`.
+- CI verifies the checksum with `sha256sum -c` before uploading artifacts.
+- CI runs the packaged launcher with `JAVA_HOME` unset.
+- CI scans Maven, Gradle, Spring, JPA, and multi-module samples using the
+  packaged launcher.
+- Release tag builds verify the tag-named checksum, unzip the runtime zip, and
+  smoke-test the extracted launcher with `JAVA_HOME` unset before publishing.
+
+The packaged runtime smoke tests are release verification checks, not a
+substitute for golden, unit, protocol, or rollback tests.
+
 ## Remaining beta coverage gaps
 
 The current suite covers the P1/P2 beta additions, initial P3/P4 safety and
@@ -127,7 +143,10 @@ should focus on gaps not yet represented by golden, unit, or protocol tests:
 - broader LSP contracts for definition, references, prepareRename, rename,
   codeAction, documentSymbol, diagnostics, and successful command workflows;
 - broader MCP contracts for external import, context bundles, and remaining
-  scoped resources.
+  scoped resources;
+- final tag-specific release notes, changelog, and installation/smoke-test
+  instructions recording the verified artifact names, checksums, source tag,
+  release commit, and verification commands.
 
 ## Agent simulation tests
 

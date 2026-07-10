@@ -41,11 +41,32 @@ Zip package:
 modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip
 ```
 
+CI also writes and uploads the matching checksum:
+
+```text
+modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
+```
+
+Tag builds rename the release asset to:
+
+```text
+refactorkit-runtime-<version>-linux-x86_64.zip
+refactorkit-runtime-<version>-linux-x86_64.zip.sha256
+```
+
 ## Run packaged CLI
 
 ```bash
 modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
 modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/java-maven-simple
+```
+
+To verify that the package uses its bundled runtime instead of a global Java
+installation, run the smoke command with `JAVA_HOME` unset:
+
+```bash
+env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
+env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/java-maven-simple
 ```
 
 The launcher resolves its runtime relative to the package directory:
@@ -75,9 +96,27 @@ Override if needed:
   -Prefactorkit.runtime.modules=java.base,java.logging,java.xml,jdk.unsupported
 ```
 
+## Verification
+
+CI packaging verification currently checks:
+
+- `refactorkit-runtime.zip` is built;
+- `refactorkit-runtime.zip.sha256` is generated and verified with
+  `sha256sum -c`;
+- the packaged launcher runs with `JAVA_HOME` unset;
+- packaged `scan` succeeds for Maven, Gradle, Spring, JPA, and multi-module
+  samples;
+- both the zip and checksum are uploaded as the `refactorkit-runtime` artifact.
+
+Release tag builds additionally verify the tag-named checksum before publishing,
+unzip the runtime zip, and smoke-test the extracted launcher with `JAVA_HOME`
+unset before creating the GitHub release.
+
 ## Notes
 
 - The application bytecode still targets Java 8 where configured by the root build.
 - The embedded runtime is built from the JDK used to run Gradle.
 - `jlink` requires a JDK, not a JRE, at build time.
 - The runtime package is OS-specific; build one package per target platform.
+- The runtime zip preserves executable permissions for `bin/refactorkit`,
+  `runtime/bin/*`, `runtime/lib/jexec`, and `runtime/lib/jspawnhelper`.

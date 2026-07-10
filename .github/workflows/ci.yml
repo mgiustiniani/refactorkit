@@ -41,14 +41,30 @@ jobs:
       - name: Package self-contained CLI
         run: ./gradlew packageCliRuntime distCliRuntimeZip
 
+      - name: Verify CLI runtime distribution
+        run: |
+          sha256sum modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
+            > modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
+          sha256sum -c modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
+
       - name: Smoke packaged CLI
         run: |
-          modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
-          modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/java-maven-simple
+          env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
+          for sample in \
+            samples/java-maven-simple \
+            samples/java-gradle-simple \
+            samples/java-spring-simple \
+            samples/java-jpa-simple \
+            samples/java-multimodule
+          do
+            env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan "$sample"
+          done
 
       - name: Upload CLI runtime distribution
         uses: actions/upload-artifact@v4
         with:
           name: refactorkit-runtime
-          path: modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip
+          path: |
+            modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip
+            modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
           if-no-files-found: error
