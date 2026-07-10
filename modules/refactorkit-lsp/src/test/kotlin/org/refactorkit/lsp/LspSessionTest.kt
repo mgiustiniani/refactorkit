@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.RefactorKitVersion
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.writeText
@@ -49,7 +50,10 @@ class LspSessionTest {
         val session = LspSession()
         val result = session.dispatch("initialize", initializeParams(root)) as JsonObject
         val capabilities = result["capabilities"]!!.jsonObject
+        val serverInfo = result["serverInfo"]!!.jsonObject
 
+        assertEquals(RefactorKitVersion.NAME, serverInfo["name"]!!.jsonPrimitive.content)
+        assertEquals(RefactorKitVersion.VERSION, serverInfo["version"]!!.jsonPrimitive.content)
         assertEquals("true", capabilities["codeActionProvider"]!!.jsonPrimitive.content)
         assertTrue(capabilities["semanticTokensProvider"]!!.jsonObject["legend"]!!.jsonObject["tokenTypes"]!!.jsonArray.isNotEmpty())
         assertEquals("refactorkit", capabilities["diagnosticProvider"]!!.jsonObject["identifier"]!!.jsonPrimitive.content)

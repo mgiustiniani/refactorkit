@@ -1,5 +1,6 @@
 package org.refactorkit.cli
 
+import org.refactorkit.core.RefactorKitVersion
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
@@ -13,12 +14,23 @@ import kotlin.test.assertTrue
 class RefactorKitCliTest {
 
     @Test
-    fun helpListsJavaImportClassAndRecipeCommands() {
+    fun helpListsJavaImportClassRecipeAndVersionCommands() {
         val result = captureStdout { RefactorKitCli().run(listOf("--help")) }
 
         assertEquals(0, result.code)
+        assertTrue(result.stdout.contains("RefactorKit ${RefactorKitVersion.VERSION}"))
+        assertTrue(result.stdout.contains("refactorkit --version"))
         assertTrue(result.stdout.contains("refactorkit java import-class"))
         assertTrue(result.stdout.contains("refactorkit recipe run"))
+    }
+
+    @Test
+    fun versionPrintsPublicVersionAndApiVersion() {
+        val result = captureStdout { RefactorKitCli().run(listOf("--version")) }
+
+        assertEquals(0, result.code)
+        assertTrue(result.stdout.contains(RefactorKitVersion.VERSION))
+        assertTrue(result.stdout.contains("API ${RefactorKitVersion.API_VERSION}"))
     }
 
     @Test

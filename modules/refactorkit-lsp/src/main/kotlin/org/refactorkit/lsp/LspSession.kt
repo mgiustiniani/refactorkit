@@ -20,6 +20,7 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -129,8 +130,8 @@ class LspSession {
                 })
             })
             put("serverInfo", buildJsonObject {
-                put("name", "RefactorKit")
-                put("version", "0.1.0")
+                put("name", RefactorKitVersion.NAME)
+                put("version", RefactorKitVersion.VERSION)
             })
         }
     }

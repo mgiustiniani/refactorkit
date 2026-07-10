@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.RefactorKitVersion
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.writeText
@@ -31,6 +32,16 @@ class DaemonSessionTest {
 
     private fun params(vararg pairs: Pair<String, String>): JsonObject =
         buildJsonObject { pairs.forEach { (k, v) -> put(k, v) } }
+
+    @Test
+    fun serverVersionReturnsPublicVersionAndApiVersion() {
+        val session = DaemonSession()
+        val result = session.dispatch("server.version", null) as JsonObject
+
+        assertEquals(RefactorKitVersion.NAME, result["name"]!!.jsonPrimitive.content)
+        assertEquals(RefactorKitVersion.VERSION, result["version"]!!.jsonPrimitive.content)
+        assertEquals(RefactorKitVersion.API_VERSION, result["apiVersion"]!!.jsonPrimitive.content)
+    }
 
     @Test
     fun projectOpenReturnsFileCount() {

@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.refactorkit.core.RefactorKitVersion
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.writeText
@@ -34,10 +35,11 @@ class McpSessionTest {
         text.lineSequence().first { it.trimStart().startsWith(prefix) }.substringAfter(prefix).trim()
 
     @Test
-    fun initializeReturnsProtocolVersion() {
+    fun initializeReturnsProtocolVersionAndServerVersion() {
         val session = McpSession()
         val result = session.dispatch("initialize", null) as JsonObject
         assertEquals("2024-11-05", result["protocolVersion"]!!.jsonPrimitive.content)
+        assertEquals(RefactorKitVersion.VERSION, result["serverInfo"]!!.jsonObject["version"]!!.jsonPrimitive.content)
     }
 
     @Test

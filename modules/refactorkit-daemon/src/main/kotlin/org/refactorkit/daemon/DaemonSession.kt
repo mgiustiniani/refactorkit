@@ -16,6 +16,7 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.SymbolId
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
@@ -55,6 +56,7 @@ class DaemonSession {
     // ── public dispatcher ─────────────────────────────────────────────────────
 
     fun dispatch(method: String, params: JsonObject?): JsonElement = when (method) {
+        "server.version"    -> serverVersion()
         "project.open"      -> projectOpen(params)
         "project.summary"   -> projectSummary()
         "symbol.search"     -> symbolSearch(params)
@@ -69,6 +71,12 @@ class DaemonSession {
     }
 
     // ── methods ───────────────────────────────────────────────────────────────
+
+    private fun serverVersion(): JsonElement = buildJsonObject {
+        put("name", RefactorKitVersion.NAME)
+        put("version", RefactorKitVersion.VERSION)
+        put("apiVersion", RefactorKitVersion.API_VERSION)
+    }
 
     private fun projectOpen(params: JsonObject?): JsonElement {
         val root = params?.string("root") ?: missing("root")

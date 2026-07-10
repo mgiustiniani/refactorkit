@@ -2,9 +2,16 @@
 
 See AGENTS.md for the authoritative initial architecture and implementation rules.
 
-Status: implementation-informed P0 baseline for `v0.2.0-beta`. The beta is
-not a `v1.0.0` API freeze, but documented beta-contract surfaces require
-contract tests and migration notes for later breaking changes.
+Status: implementation-informed P0 baseline for `v0.2.0-beta` plus the
+post-beta `0.3.0-SNAPSHOT` version/API metadata slice. The beta is not a
+`v1.0.0` API freeze, but documented beta-contract surfaces require contract
+tests and migration notes for later breaking changes.
+
+Current mainline metadata after `v0.2.0-beta`:
+
+- implementation name: `RefactorKit`;
+- implementation version: `0.3.0-SNAPSHOT`;
+- beta contract API version: `0.2`.
 
 ## Stability labels
 
@@ -35,8 +42,15 @@ surfaces should map it to a stable exit-code category and human-readable message
 The command names below are the documented CLI surface for `v0.2.0-beta`.
 `--apply` remains opt-in for mutating operations; preview is the default.
 
+`refactorkit --version` and `refactorkit version` are read-only beta-contract
+metadata surfaces. On main after the beta release they should report the
+implementation version `0.3.0-SNAPSHOT` and API version `0.2`; automation should
+check the API version when deciding whether a beta-contract integration is
+compatible.
+
 | CLI command | Status | Contract notes |
 |-------------|--------|----------------|
+| `refactorkit --version` / `refactorkit version` | `beta-contract` | Read-only implementation/API metadata; current main reports version `0.3.0-SNAPSHOT` and API version `0.2`. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
@@ -67,6 +81,7 @@ of the beta baseline for documented methods.
 
 | Method | Status | Request category |
 |--------|--------|------------------|
+| `server.version` | `beta-contract` | Read-only implementation/API metadata; does not require an opened project. |
 | `project.open` | `beta-contract` | Workspace lifecycle; requires `root`. |
 | `project.summary` | `beta-contract` | Read-only project metadata. |
 | `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
@@ -78,6 +93,27 @@ of the beta baseline for documented methods.
 | `patch.rollback` | `beta-contract` | Requires `transactionId`; must stay inside workspace root. |
 | `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |
+
+### `server.version` contract
+
+`server.version` is a read-only beta-contract method for compatibility checks.
+It does not open, scan, or modify a workspace.
+
+Request parameters: none.
+
+Current mainline response after `v0.2.0-beta`:
+
+```json
+{
+  "name": "RefactorKit",
+  "version": "0.3.0-SNAPSHOT",
+  "apiVersion": "0.2"
+}
+```
+
+Clients should use `apiVersion` for beta-contract compatibility decisions. The
+implementation `version` may advance on main and across prereleases while the API
+contract baseline remains `0.2`.
 
 ### `java.importExternalClass` preview contract
 
@@ -136,6 +172,10 @@ show the refusal, warnings, affected files when present, and next action.
 `Content-Length` framing. Workspace edits include legacy `changes` for text edits
 and `documentChanges` for file create/delete/rename operations.
 
+The LSP initialize response `serverInfo.version` is read-only metadata and should
+use the centralized implementation version. On main after `v0.2.0-beta`, it
+reports `0.3.0-SNAPSHOT`.
+
 | Capability or command | Status | Notes |
 |-----------------------|--------|-------|
 | `textDocument/definition`, `references`, `documentSymbol`, `diagnostic` | `beta-contract` | Read-only editor integration. |
@@ -189,6 +229,10 @@ Rollback refusal semantics:
 `modules/refactorkit-mcp` exposes JSON-RPC 2.0 over newline-delimited stdio for
 local LLM/MCP clients. It intentionally does not expose arbitrary filesystem
 access.
+
+The MCP initialize response `serverInfo.version` is read-only metadata and should
+use the centralized implementation version. On main after `v0.2.0-beta`, it
+reports `0.3.0-SNAPSHOT`.
 
 ### Tools
 

@@ -9,6 +9,7 @@ users and local AI agents can safely rely on.
 |---------|------|-------------------|
 | `v0.1.0-alpha` | First public CLI/library preview | APIs may change; patch engine and Java MVP are usable with review |
 | `v0.2.0-beta` | Broader Java refactoring validation | CLI/JSON-RPC contracts mostly stable; migration notes required for breaking changes |
+| `v0.3.0` | Post-beta contract and analysis planning slice | Version/API metadata is explicit; SemVer/deprecation and compiler-backed analysis plans are drafted |
 | `v1.0.0` | Stable local deterministic refactoring engine | Core patch model, CLI, daemon API, and rollback semantics are stable |
 
 ## Phase 1 — Alpha hardening (`v0.1.0-alpha`)
@@ -44,6 +45,11 @@ Work items:
 6. Tag `v0.1.0-alpha` only after a clean CI run.
 
 ## Phase 2 — Beta readiness (`v0.2.0-beta`)
+
+Status note (2026-07-10): completed and published as `v0.2.0-beta`. The tag,
+GitHub prerelease, runtime zip, checksum, release-body metadata, and local
+post-publication smoke verification are complete. Remaining beta limitations now
+feed the post-beta and `v1.0.0` planning work below.
 
 Detailed plan: [docs/releases/v0.2.0-beta-plan.md](releases/v0.2.0-beta-plan.md).
 
@@ -93,6 +99,29 @@ Priority workstreams:
 7. Verify CI artifact publication, checksums, and packaged CLI smoke tests.
 8. Update changelog, release notes, migration notes, and acceptance checklist.
 
+## Phase 2.5 — Post-beta next-development slice (`0.3.0-SNAPSHOT` toward `v0.3.0`)
+
+Draft plan: [docs/releases/v0.3.0-plan.md](releases/v0.3.0-plan.md).
+
+Objective: make version/API metadata explicit on all integration surfaces and
+prepare the contract policy and Java analysis path needed before `v1.0.0`.
+
+Initial work items:
+
+1. Keep the root project version on main at `0.3.0-SNAPSHOT` after the published
+   `v0.2.0-beta` release while preserving `apiVersion=0.2` as the current beta
+   contract baseline.
+2. Document and test version surfaces for CLI `--version`/`version`, daemon
+   JSON-RPC `server.version`, and LSP/MCP `serverInfo.version`.
+3. Draft the semantic versioning and deprecation policy for beta-contract
+   commands, JSON-RPC methods, LSP commands, MCP tools/resources, and structured
+   error categories.
+4. Decide and prototype the compiler-backed Java analysis direction for symbol
+   resolution, reference search, diagnostics, and framework-risk detection before
+   `v1.0.0`.
+5. Broaden protocol-contract documentation for read-only metadata and capability
+   discovery without weakening the existing preview/apply/rollback safety model.
+
 ## Phase 3 — Stable release (`v1.0.0`)
 
 Exit criteria:
@@ -107,7 +136,7 @@ Exit criteria:
 Work items:
 
 1. Define semantic versioning policy and deprecation rules.
-2. Add a machine-readable API/version endpoint for daemon/MCP consumers.
+2. Finalize machine-readable API/version metadata for daemon, LSP, MCP, and CLI consumers.
 3. Add CI artifact signing/checksums.
 4. Add stress tests for large workspaces and overlapping edit plans.
 5. Decide whether Java type resolution remains lexical-MVP or moves to a
@@ -123,7 +152,7 @@ Work items:
   external configuration.
 - `extract-method` and `change-signature` are conservative MVP implementations.
 
-These risks were accepted for alpha when visible in previews, documentation,
-and release notes. The beta plan keeps them visible and adds verification,
-contract tests, documentation updates, and a lexical-vs-compiler decision before
-`v0.2.0-beta` is tagged.
+These risks were accepted for alpha and beta when visible in previews,
+documentation, and release notes. The post-beta plan keeps them visible while
+adding explicit version/API metadata, compatibility policy, and the
+compiler-backed Java analysis decision needed before `v1.0.0`.

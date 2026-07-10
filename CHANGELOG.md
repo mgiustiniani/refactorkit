@@ -7,7 +7,15 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-_No changes yet._
+### Next development (`0.3.0-SNAPSHOT`)
+
+- Advanced the main development version to `0.3.0-SNAPSHOT` after the published
+  `v0.2.0-beta` release.
+- Added centralized version/API metadata: implementation name `RefactorKit`,
+  implementation version `0.3.0-SNAPSHOT`, and beta contract API version `0.2`.
+- Exposed version metadata through `refactorkit --version`, `refactorkit version`,
+  CLI help text, daemon JSON-RPC `server.version`, and LSP/MCP `serverInfo`.
+- Added CLI, daemon, LSP, and MCP tests for the version/API metadata surfaces.
 
 ## v0.2.0-beta - 2026-07-10
 

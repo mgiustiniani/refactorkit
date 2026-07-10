@@ -5,6 +5,7 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPreviewRenderer
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -46,6 +47,9 @@ class RefactorKitCli(
     fun run(args: List<String>): Int {
         if (args.isEmpty() || args.first() in listOf("--help", "-h", "help")) {
             printHelp(); return 0
+        }
+        if (args.first() in listOf("--version", "-v", "version")) {
+            printVersion(); return 0
         }
         return when (args.first()) {
             "scan"            -> cmdScan(args.drop(1))
@@ -571,11 +575,14 @@ class RefactorKitCli(
         return if (failed > 0) 1 else 0
     }
 
+    private fun printVersion() = println("${RefactorKitVersion.NAME} ${RefactorKitVersion.VERSION} (API ${RefactorKitVersion.API_VERSION})")
+
     private fun printHelp() = println("""
-        RefactorKit  deterministic refactoring engine
+        RefactorKit ${RefactorKitVersion.VERSION}  deterministic refactoring engine
 
         Usage:
           refactorkit --help
+          refactorkit --version
           refactorkit scan              <path>
           refactorkit symbols           <path>
           refactorkit diagnostics       <path>
