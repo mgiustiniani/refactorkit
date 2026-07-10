@@ -32,6 +32,33 @@ Beta P6 hardening evidence:
   warnings, single-file helper preservation, multi-public-type splitting with
   package/import preservation, and non-Java Markdown fence stripping.
 
+## Operation safety summary
+
+Success conditions for a preview:
+
+- source code is acquired from the declared source kind and cleaned of Markdown
+  fences when needed;
+- the target package is valid;
+- top-level Java types can be detected and mapped to target files;
+- package declarations are rewritten and imports are organized;
+- no target naming conflict is found in the snapshot or on disk;
+- provenance and license-risk warnings are visible to the reviewer.
+
+Refusal conditions include invalid target packages, no importable Java type,
+naming conflicts, overwrite risk, and license-policy blocks such as
+`block-unknown` for unknown licenses. A refused import must not be replaced by
+silently writing files into the project.
+
+Warnings require manual review for unknown or risky licenses, source provenance,
+unresolved external imports, copied helper types, multiple public-type splitting,
+and any dependency that would need to be added separately. External import is
+code assimilation, not a semantic refactoring.
+
+Rollback expectations: if an approved preview is applied through `PatchEngine`,
+created files and edits are transaction-backed and can be rolled back. Rollback
+does not remove legal/provenance obligations, undo dependency additions made
+outside the plan, or repair manual edits after apply.
+
 Remaining gaps:
 
 - dependency resolution is warning-only;

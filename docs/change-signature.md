@@ -8,6 +8,14 @@ Implemented in:
 modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/JavaChangeSignaturePlanner.kt
 ```
 
+## Success conditions
+
+A change-signature preview is safe enough to review only when the target method
+is non-overloaded, the requested operation fits one of the supported MVP shapes,
+and all affected declaration/body/call-site edits are listed in the patch plan.
+Structural changes must avoid hierarchy/public API cases that require
+compiler-backed analysis.
+
 ## Supported operations
 
 ### Rename parameter
@@ -128,7 +136,17 @@ callers, framework configuration, dependency injection, serialization frameworks
 and annotation processors may need manual review.
 
 Call-site updates are limited to files that appear to reference the owner type
-via imports, FQN usage, static imports, or the owner simple name.
+via imports, FQN usage, static imports, or the owner simple name. Refused plans
+must not be bypassed with global text replacement; change the request, gather
+more semantic evidence, or perform a separately reviewed manual change.
+
+## Rollback expectations
+
+Applied change-signature plans are transaction-backed and can be rolled back with
+`refactorkit patch rollback <transaction-id> --root <root>`. Rollback restores
+workspace files tracked by the transaction, but it cannot repair external
+callers, generated code, build caches, or manual edits made after apply. Run
+compiler diagnostics and relevant tests after apply and rollback.
 
 ## Adapter integration
 

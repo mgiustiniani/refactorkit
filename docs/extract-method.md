@@ -28,6 +28,17 @@ refactorkit extract-method \
 
 Line numbers are **1-based and inclusive**.
 
+## Success conditions
+
+A successful preview is limited to a simple Java statement extraction. It is safe
+enough to review when:
+
+- the file is in the scanned workspace;
+- line numbers are 1-based, inclusive, and select complete statements;
+- the method name is a valid Java identifier and does not already exist;
+- the selected code can become a no-argument `private void` method;
+- the preview warnings have been reviewed.
+
 ## Supported MVP shape
 
 The planner extracts complete selected lines into:
@@ -62,7 +73,7 @@ The MVP refuses extraction when it detects:
 
 These refusals avoid guessing parameters, return values, exceptions, or control flow.
 
-## Risk model
+## Risk model and warnings
 
 Successful extract-method previews use:
 
@@ -72,7 +83,19 @@ confidence = 0.70
 requiresUserApproval = true
 ```
 
-Warnings explicitly state that this is a no-argument `private void` MVP.
+Warnings explicitly state that this is a no-argument `private void` MVP. The
+operation does not infer parameters, return values, checked exceptions, complex
+control flow, visibility, or static/instance context beyond the supported shape.
+A refused plan must not be replaced with manual cut-and-paste extraction unless a
+human accepts the risk and reviews the resulting patch.
+
+## Rollback expectations
+
+Applied extract-method changes are transaction-backed and can be rolled back with
+`refactorkit patch rollback <transaction-id> --root <root>`. Rollback restores
+the file edits recorded by the transaction, but it does not undo manual edits,
+formatter runs, or behavior changes outside the workspace. Run diagnostics and
+relevant tests after apply and rollback.
 
 ## Adapter integration
 
