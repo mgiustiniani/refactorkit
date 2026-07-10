@@ -303,7 +303,7 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
-    fun jdtParseEvidenceFindsInterfacesAndEnums() {
+    fun jdtParseEvidenceFindsInterfacesEnumsAndRecords() {
         val root = Files.createTempDirectory("rk-jdt-kind-test")
         root.resolve("src/main/java/com/acme/Types.java").apply {
             Files.createDirectories(parent)
@@ -311,14 +311,21 @@ class JdtJavaSemanticAnalyzerTest {
                 package com.acme;
                 interface Named {}
                 enum Status { ACTIVE }
+                record UserRecord(String name) implements Named {}
             """.trimIndent() + "\n")
         }
         val snapshot = JavaProjectScanner().scan(root)
 
-        val symbols = JdtJavaSemanticAnalyzer().analyze(snapshot).symbols.associateBy { it.qualifiedName }
+        val result = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        val symbols = result.symbols.associateBy { it.qualifiedName }
 
         assertEquals(JdtJavaSemanticSymbolKind.INTERFACE, symbols["com.acme.Named"]?.kind)
         assertEquals(JdtJavaSemanticSymbolKind.ENUM, symbols["com.acme.Status"]?.kind)
+        assertEquals(JdtJavaSemanticSymbolKind.RECORD, symbols["com.acme.UserRecord"]?.kind)
+        assertTrue(result.references.any {
+            it.symbolQualifiedName == "com.acme.Named" &&
+                it.path.toString().endsWith("Types.java")
+        }, "expected record implements interface reference, got ${result.references}")
     }
 
     private fun repoRoot(): Path {

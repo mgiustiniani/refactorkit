@@ -22,15 +22,16 @@ review safety boundaries before applying refactorings.
   Java analysis prototype candidate while keeping lexical planners as safety
   fallback.
 - Expanded the JDT semantic analyzer prototype with `ProjectSnapshot` source-root
-  configuration, signed method/constructor identities, nested member ownership,
-  constructor reference resolution, binding-key matched references with
-  `symbolSignature`, declaration/reference `sourceRange` evidence using JDT's
-  zero-based columns, source-visible override relation evidence, and `JDT_PARSE`
-  unresolved-type warnings; tests now cover selected-member identity/reference
-  evidence, overload disambiguation, constructor identity/references,
-  same-simple-name import disambiguation, child/base method override detection,
-  interface implementation override detection, and representative Maven/Gradle
-  sample source-root validation with type and method discovery.
+  configuration, record type discovery, signed method/constructor identities,
+  nested member ownership, constructor reference resolution, binding-key matched
+  references with `symbolSignature`, declaration/reference `sourceRange` evidence
+  using JDT's zero-based columns, source-visible override relation evidence, and
+  `JDT_PARSE` unresolved-type warnings; tests now cover selected-member
+  identity/reference evidence, overload disambiguation, constructor
+  identity/references, same-simple-name import disambiguation, interface/enum/
+  record discovery, child/base method override detection, interface implementation
+  override detection, and representative Maven/Gradle sample source-root
+  validation with type and method discovery.
 - Advanced `renameMember` JDT integration from warning-only evidence to exact
   signed method overload selection for the proven slice plus conservative
   inheritance safety: signed selectors such as

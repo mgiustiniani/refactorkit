@@ -252,6 +252,7 @@ class JavaLanguageAdapter : LanguageAdapter {
             JdtJavaSemanticSymbolKind.CLASS -> Symbol.Kind.CLASS
             JdtJavaSemanticSymbolKind.INTERFACE -> Symbol.Kind.INTERFACE
             JdtJavaSemanticSymbolKind.ENUM -> Symbol.Kind.ENUM
+            JdtJavaSemanticSymbolKind.RECORD -> Symbol.Kind.RECORD
             JdtJavaSemanticSymbolKind.METHOD -> Symbol.Kind.METHOD
             JdtJavaSemanticSymbolKind.FIELD -> Symbol.Kind.FIELD
             JdtJavaSemanticSymbolKind.CONSTRUCTOR -> Symbol.Kind.CONSTRUCTOR

@@ -12,6 +12,7 @@ import org.eclipse.jdt.core.dom.IMethodBinding
 import org.eclipse.jdt.core.dom.SimpleName
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration
 import org.eclipse.jdt.core.dom.MethodDeclaration
+import org.eclipse.jdt.core.dom.RecordDeclaration
 import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
 import org.refactorkit.core.ProjectSnapshot
@@ -121,6 +122,30 @@ class JdtJavaSemanticAnalyzer {
             }
 
             override fun endVisit(node: EnumDeclaration) {
+                if (ownerStack.isNotEmpty()) ownerStack.removeAt(ownerStack.lastIndex)
+            }
+
+            override fun visit(node: RecordDeclaration): Boolean {
+                val binding = node.resolveBinding()
+                val recordSymbol = symbol(
+                    file = file,
+                    compilationUnit = compilationUnit,
+                    packageName = packageName,
+                    ownerQualifiedName = ownerStack.lastOrNull(),
+                    simpleName = node.name.identifier,
+                    kind = JdtJavaSemanticSymbolKind.RECORD,
+                    startPosition = node.name.startPosition,
+                    bindingQualifiedName = binding?.qualifiedName,
+                    bindingKey = binding?.key,
+                    memberSignature = null,
+                )
+                symbols += recordSymbol
+                inheritances += recordInheritanceRecords(node, packageName, recordSymbol.qualifiedName)
+                ownerStack += recordSymbol.qualifiedName
+                return true
+            }
+
+            override fun endVisit(node: RecordDeclaration) {
                 if (ownerStack.isNotEmpty()) ownerStack.removeAt(ownerStack.lastIndex)
             }
 
@@ -278,6 +303,22 @@ class JdtJavaSemanticAnalyzer {
         }
     }
 
+    private fun recordInheritanceRecords(
+        node: RecordDeclaration,
+        packageName: String,
+        subtypeQualifiedName: String,
+    ): List<TypeInheritanceRecord> {
+        val superTypes = mutableListOf<String>()
+        node.superInterfaceTypes().forEach { rawType ->
+            val type = rawType as? org.eclipse.jdt.core.dom.Type ?: return@forEach
+            superTypes += type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
+                ?: qualifyTypeName(packageName, type.toString())
+        }
+        return superTypes.distinct().map { supertype ->
+            TypeInheritanceRecord(subtypeQualifiedName, supertype)
+        }
+    }
+
     private fun qualifyTypeName(packageName: String, name: String): String =
         if (name.contains('.')) name else JavaPackageUtil.fqn(packageName, name)
 
@@ -359,6 +400,7 @@ class JdtJavaSemanticAnalyzer {
         return when (parent) {
             is TypeDeclaration -> parent.name === this
             is EnumDeclaration -> parent.name === this
+            is RecordDeclaration -> parent.name === this
             is MethodDeclaration -> parent.name === this
             is VariableDeclarationFragment -> parent.name === this
             is SingleVariableDeclaration -> parent.name === this
@@ -444,6 +486,7 @@ enum class JdtJavaSemanticSymbolKind {
     CLASS,
     INTERFACE,
     ENUM,
+    RECORD,
     METHOD,
     FIELD,
     CONSTRUCTOR,
