@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
@@ -83,6 +84,39 @@ class DaemonSessionTest {
 
         assertEquals("com.example.UserManager", result["id"]!!.jsonPrimitive.content)
         assertEquals("src/main/java/com/example/UserManager.java", result["file"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun symbolDefinitionAndReferencesSupportSignedMemberSelectors() {
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/LookupClient.java" to """
+                package com.example;
+                public class LookupClient {
+                    String text(Lookup lookup) { return lookup.find("abc"); }
+                    String number(Lookup lookup) { return lookup.find(7); }
+                }
+            """.trimIndent(),
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val symbol = "com.example.Lookup#find(java.lang.String)"
+
+        val definition = session.dispatch("symbol.definition", params("symbol" to symbol)) as JsonObject
+        val references = session.dispatch("symbol.references", params("symbol" to symbol)).jsonArray
+
+        assertEquals(symbol, definition["id"]!!.jsonPrimitive.content)
+        assertEquals("src/main/java/com/example/Lookup.java", definition["file"]!!.jsonPrimitive.content)
+        assertEquals(1, references.size)
+        val reference = references.single().jsonObject
+        assertEquals("src/main/java/com/example/LookupClient.java", reference["file"]!!.jsonPrimitive.content)
+        assertEquals("3", reference["line"]!!.jsonPrimitive.content)
     }
 
     @Test

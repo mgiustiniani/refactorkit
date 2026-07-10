@@ -130,7 +130,7 @@ class DaemonSession {
     private fun symbolDefinition(params: JsonObject?): JsonElement {
         val symbolId = params?.string("symbol") ?: missing("symbol")
         val snap = requireSnapshot()
-        val symbol = adapter.buildSymbols(snap).symbols.find { it.id.value == symbolId }
+        val symbol = adapter.findSymbol(snap, SymbolId(symbolId))
             ?: throw JsonRpcException(JsonRpcErrorCodes.SYMBOL_NOT_FOUND, "Symbol not found: $symbolId")
         return buildJsonObject {
             put("id", symbol.id.value)

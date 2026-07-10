@@ -99,8 +99,16 @@ class JavaLanguageAdapter : LanguageAdapter {
     override fun findReferences(symbolId: SymbolId): List<Reference> =
         lastSnapshot?.let { findReferences(it, symbolId) } ?: emptyList()
 
+    fun findSymbol(project: ProjectSnapshot, symbolId: SymbolId): Symbol? {
+        lastSnapshot = project
+        val lexicalSymbol = buildSymbols(project).symbols.find { it.id == symbolId }
+        if (lexicalSymbol != null) return lexicalSymbol
+        return findJdtSignedSymbol(project, symbolId)
+    }
+
     fun findReferences(project: ProjectSnapshot, symbolId: SymbolId): List<Reference> {
         lastSnapshot = project
+        findJdtSignedReferences(project, symbolId)?.let { return it }
         val index = buildSymbols(project)
         val symbol = index.symbols.find { it.id == symbolId } ?: return emptyList()
         val simpleName = symbol.name
@@ -161,6 +169,48 @@ class JavaLanguageAdapter : LanguageAdapter {
             .thenBy { it.location.range.start.line }
             .thenBy { it.location.range.start.character })
     }
+
+    private fun findJdtSignedSymbol(project: ProjectSnapshot, symbolId: SymbolId): Symbol? {
+        if (!symbolId.value.isSignedMemberId()) return null
+        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        if (analysis.warnings.isNotEmpty()) return null
+        val semanticSymbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value } ?: return null
+        if (semanticSymbol.bindingKey.isNullOrBlank()) return null
+        return semanticSymbol.toCoreSymbol()
+    }
+
+    private fun findJdtSignedReferences(project: ProjectSnapshot, symbolId: SymbolId): List<Reference>? {
+        if (!symbolId.value.isSignedMemberId()) return null
+        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        if (analysis.warnings.isNotEmpty()) return null
+        val semanticSymbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value } ?: return null
+        val bindingKey = semanticSymbol.bindingKey ?: return null
+        return analysis.references
+            .filter { it.bindingKey == bindingKey }
+            .map { Reference(SymbolId(semanticSymbol.qualifiedName), SourceLocation(it.path, it.sourceRange)) }
+            .distinctBy {
+                "${it.location.path}:${it.location.range.start.line}:${it.location.range.start.character}:${it.location.range.end.character}"
+            }.sortedWith(compareBy<Reference> { it.location.path.toString() }
+                .thenBy { it.location.range.start.line }
+                .thenBy { it.location.range.start.character })
+    }
+
+    private fun String.isSignedMemberId(): Boolean = contains('#') && contains('(') && endsWith(')')
+
+    private fun JdtJavaSemanticSymbol.toCoreSymbol(): Symbol = Symbol(
+        id = SymbolId(qualifiedName),
+        name = simpleName,
+        kind = when (kind) {
+            JdtJavaSemanticSymbolKind.CLASS -> Symbol.Kind.CLASS
+            JdtJavaSemanticSymbolKind.INTERFACE -> Symbol.Kind.INTERFACE
+            JdtJavaSemanticSymbolKind.ENUM -> Symbol.Kind.ENUM
+            JdtJavaSemanticSymbolKind.METHOD -> Symbol.Kind.METHOD
+            JdtJavaSemanticSymbolKind.FIELD -> Symbol.Kind.FIELD
+            JdtJavaSemanticSymbolKind.CONSTRUCTOR -> Symbol.Kind.CONSTRUCTOR
+        },
+        location = SourceLocation(path, sourceRange),
+        languageId = "java",
+    )
 
     override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> {
         lastSnapshot = project

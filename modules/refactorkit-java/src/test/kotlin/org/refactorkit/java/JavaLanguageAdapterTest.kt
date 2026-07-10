@@ -9,6 +9,8 @@ import java.nio.file.Files
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class JavaLanguageAdapterTest {
@@ -114,6 +116,43 @@ class JavaLanguageAdapterTest {
 
         val methodResolution = adapter.resolveSymbol(snap, location("src/main/java/com/other/Client.java", 4, 45))
         assertEquals("com.example.UserManager#displayName", methodResolution.symbol?.id?.value)
+    }
+
+    @Test
+    fun signedMemberDefinitionAndReferencesUseJdtBindingEvidence() {
+        val root = createTempProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/LookupClient.java" to """
+                package com.example;
+                public class LookupClient {
+                    String text(Lookup lookup) { return lookup.find("abc"); }
+                    String number(Lookup lookup) { return lookup.find(7); }
+                }
+            """.trimIndent(),
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val adapter = JavaLanguageAdapter()
+        val symbolId = SymbolId("com.example.Lookup#find(java.lang.String)")
+
+        val symbol = adapter.findSymbol(snap, symbolId)
+        val references = adapter.findReferences(snap, symbolId)
+
+        assertNotNull(symbol)
+        assertEquals(symbolId, symbol.id)
+        assertEquals(org.refactorkit.core.Symbol.Kind.METHOD, symbol.kind)
+        assertTrue(symbol.location.path.toString().endsWith("Lookup.java"))
+        assertEquals(1, references.size, "expected only the String overload call site, got $references")
+        assertTrue(references.single().location.path.toString().endsWith("LookupClient.java"))
+        val clientContent = snap.files.single { it.path.toString().endsWith("LookupClient.java") }.content
+        val referencedLine = clientContent.lines()[references.single().location.range.start.line]
+        assertTrue(referencedLine.contains("find(\"abc\")"), "expected String overload reference line, got $referencedLine")
+        assertFalse(referencedLine.contains("find(7)"), "int overload must not be reported for signed String selector")
     }
 
     @Test

@@ -208,7 +208,7 @@ class McpSession {
     private fun toolSymbolDefinition(args: JsonObject): String {
         val symbolId = args.string("symbol") ?: missing("symbol")
         val snap = requireSnapshot()
-        val sym = adapter.buildSymbols(snap).symbols.find { it.id.value == symbolId }
+        val sym = adapter.findSymbol(snap, org.refactorkit.core.SymbolId(symbolId))
             ?: return "Symbol not found: $symbolId"
         return "${sym.kind} ${sym.id.value}\nFile: ${sym.location.path}:${sym.location.range.start.line + 1}"
     }
@@ -484,7 +484,7 @@ class McpSession {
     private fun readSymbolResource(uri: String): String {
         val snap = requireSnapshot()
         val symbolId = URLDecoder.decode(uri.removePrefix("symbol://"), "UTF-8")
-        val sym = adapter.buildSymbols(snap).symbols.find { it.id.value == symbolId }
+        val sym = adapter.findSymbol(snap, org.refactorkit.core.SymbolId(symbolId))
             ?: return "Symbol not found: $symbolId"
         val refs = adapter.findReferences(snap, sym.id)
         return buildString {

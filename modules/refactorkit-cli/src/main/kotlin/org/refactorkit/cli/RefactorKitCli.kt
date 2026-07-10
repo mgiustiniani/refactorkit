@@ -130,8 +130,7 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val symbol = parsed.options["symbol"] ?: run { System.err.println("--symbol required"); return 2 }
         val snap = scanFrom(parsed.positionals.firstOrNull() ?: ".") ?: return 1
-        val index = javaAdapter.buildSymbols(snap)
-        val sym = index.symbols.find { it.id.value == symbol }
+        val sym = javaAdapter.findSymbol(snap, org.refactorkit.core.SymbolId(symbol))
         if (sym == null) { println("Symbol not found: $symbol"); return 1 }
         println("${sym.location.path}:${sym.location.range.start.line + 1}")
         return 0

@@ -69,6 +69,46 @@ class McpSessionTest {
     }
 
     @Test
+    fun symbolToolsSupportSignedMemberSelectors() {
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/LookupClient.java" to """
+                package com.example;
+                public class LookupClient {
+                    String text(Lookup lookup) { return lookup.find("abc"); }
+                    String number(Lookup lookup) { return lookup.find(7); }
+                }
+            """.trimIndent(),
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val symbol = "com.example.Lookup#find(java.lang.String)"
+
+        val definition = session.dispatch("tools/call", buildJsonObject {
+            put("name", "symbol_definition")
+            put("arguments", buildJsonObject { put("symbol", symbol) })
+        }) as JsonObject
+        val references = session.dispatch("tools/call", buildJsonObject {
+            put("name", "symbol_references")
+            put("arguments", buildJsonObject { put("symbol", symbol) })
+        }) as JsonObject
+
+        assertTrue(contentText(definition).contains("METHOD $symbol"), contentText(definition))
+        assertTrue(contentText(definition).contains("Lookup.java:3"), contentText(definition))
+        assertTrue(contentText(references).contains("LookupClient.java:3"), contentText(references))
+        assertFalse(contentText(references).contains("LookupClient.java:4"), contentText(references))
+    }
+
+    @Test
     fun toolCallPreviewRenameReturnsPlanId() {
         val root = createProject(
             "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",

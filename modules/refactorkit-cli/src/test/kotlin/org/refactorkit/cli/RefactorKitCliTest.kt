@@ -44,6 +44,36 @@ class RefactorKitCliTest {
     }
 
     @Test
+    fun definitionAndReferencesSupportSignedMemberSelectors() {
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/LookupClient.java" to """
+                package com.example;
+                public class LookupClient {
+                    String text(Lookup lookup) { return lookup.find("abc"); }
+                    String number(Lookup lookup) { return lookup.find(7); }
+                }
+            """.trimIndent(),
+        )
+        val symbol = "com.example.Lookup#find(java.lang.String)"
+
+        val definition = captureStdout { RefactorKitCli().run(listOf("definition", "--symbol", symbol, root.toString())) }
+        val references = captureStdout { RefactorKitCli().run(listOf("references", "--symbol", symbol, root.toString())) }
+
+        assertEquals(0, definition.code, definition.stdout)
+        assertTrue(definition.stdout.contains("Lookup.java:3"), definition.stdout)
+        assertEquals(0, references.code, references.stdout)
+        assertTrue(references.stdout.contains("LookupClient.java:3"), references.stdout)
+        assertTrue(!references.stdout.contains("LookupClient.java:4"), references.stdout)
+    }
+
+    @Test
     fun javaImportClassOutputIncludesProvenanceAndLicenseFields() {
         val root = Files.createTempDirectory("rk-cli-import-test")
         val source = Files.createTempFile("Imported", ".java")
@@ -99,6 +129,16 @@ class RefactorKitCliTest {
         } finally {
             System.setOut(originalOut)
         }
+    }
+
+    private fun createProject(vararg entries: Pair<String, String>): Path {
+        val root = Files.createTempDirectory("rk-cli-test")
+        for ((rel, content) in entries) {
+            val file = root.resolve(rel)
+            Files.createDirectories(file.parent)
+            file.toFile().writeText(content)
+        }
+        return root
     }
 
     private fun repoRoot(): Path {
