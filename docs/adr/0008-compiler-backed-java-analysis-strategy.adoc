@@ -22,6 +22,12 @@ Keep OpenRewrite as an optional future recipe and transformation backend, not as
 
 Do not promise full `v1.0.0` semantic coverage until implementation and tests prove the supported cases.
 
+== Implementation Evidence
+
+The first `v0.3.0` P2 JDT prototype adds dependency `org.eclipse.jdt:org.eclipse.jdt.core:3.37.0` in `modules/refactorkit-java` and introduces `JdtJavaSemanticAnalyzer`. The analyzer parses Java files with Eclipse JDT at Java 21 compliance and currently collects class, interface, and enum declarations with qualified names, source path and line, optional binding key, and evidence labels `JDT_BINDING`, `JDT_PARSE`, or `LEXICAL_FALLBACK`.
+
+Prototype tests cover the same simple class name in different packages plus interface and enum parsing. Existing lexical planners are not yet wired to this evidence or prototype.
+
 == Consequences
 
 * The Java adapter can prototype compiler-backed identity and reference search without changing the PatchPlan safety model.

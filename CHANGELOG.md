@@ -21,6 +21,9 @@ review safety boundaries before applying refactorings.
 - Added ADR 0008, selecting Eclipse JDT as the primary `v0.3.0` compiler-backed
   Java analysis prototype candidate while keeping lexical planners as safety
   fallback.
+- Added the first JDT semantic analyzer prototype and tests for type declaration
+  evidence, same simple class names in different packages, and interface/enum
+  parsing; existing planners still use lexical fallback behavior.
 
 ## v0.2.0-beta - 2026-07-10
 
