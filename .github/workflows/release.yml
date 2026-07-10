@@ -39,9 +39,12 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           cp modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
             "refactorkit-runtime-${version}-linux-x86_64.zip"
-          sha256sum "refactorkit-runtime-${version}-linux-x86_64.zip" \
-            > "refactorkit-runtime-${version}-linux-x86_64.zip.sha256"
-          sha256sum -c "refactorkit-runtime-${version}-linux-x86_64.zip.sha256"
+          asset="refactorkit-runtime-${version}-linux-x86_64.zip"
+          checksum_file="${asset}.sha256"
+          sha256sum "$asset" > "$checksum_file"
+          sha256sum -c "$checksum_file"
+          checksum="$(awk '{print $1}' "$checksum_file")"
+          asset_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${asset}"
 
           release_notes=".github/releases/${GITHUB_REF_NAME}.md"
           if [ -f "$release_notes" ]; then
@@ -49,6 +52,17 @@ jobs:
           else
             cp .github/RELEASE_TEMPLATE.md RELEASE_NOTES.md
           fi
+
+          python3 - <<PY
+          from pathlib import Path
+          path = Path("RELEASE_NOTES.md")
+          text = path.read_text()
+          text = text.replace("Source tag: _TBD before release_", "Source tag: ${GITHUB_REF_NAME}")
+          text = text.replace("Release commit: _TBD before release_", "Release commit: ${GITHUB_SHA}")
+          text = text.replace("Final URL: _TBD after release artifact is published_", "Final URL: ${asset_url}")
+          text = text.replace("Final SHA-256: _TBD after release artifact is built_", "Final SHA-256: ${checksum}")
+          path.write_text(text)
+          PY
 
       - name: Smoke release runtime zip
         run: |

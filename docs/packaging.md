@@ -54,6 +54,10 @@ refactorkit-runtime-<version>-linux-x86_64.zip
 refactorkit-runtime-<version>-linux-x86_64.zip.sha256
 ```
 
+During a tag release, the workflow computes the final checksum and asset URL and
+injects the source tag, release commit, asset URL, and SHA-256 into the published
+GitHub Release notes.
+
 ## Install and smoke-test a downloaded release asset
 
 For `v0.2.0-beta`, the expected Linux x86_64 release assets are:
@@ -99,8 +103,9 @@ export PATH=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin:$PATH
 refactorkit --help
 ```
 
-Final release notes must record the final artifact URL, checksum, source tag,
-and release commit before tagging.
+The release-note source may keep metadata placeholders before tagging. The tag
+release workflow replaces them in the published GitHub Release body with the
+final artifact URL, checksum, source tag, and release commit.
 
 ## Run packaged CLI
 
@@ -157,8 +162,9 @@ CI packaging verification currently checks:
 - both the zip and checksum are uploaded as the `refactorkit-runtime` artifact.
 
 Release tag builds additionally verify the tag-named checksum before publishing,
-unzip the runtime zip, and smoke-test the extracted launcher with `JAVA_HOME`
-unset before creating the GitHub release.
+unzip the runtime zip, smoke-test the extracted launcher with `JAVA_HOME` unset,
+and create the GitHub release with final artifact metadata injected into the
+published release body.
 
 ## Notes
 
