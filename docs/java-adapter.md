@@ -12,6 +12,6 @@ The JDT prototype must prove source-root/classpath discovery, binding-aware clas
 
 ## Current prototype status
 
-The first `v0.3.0` P2 prototype adds Eclipse JDT parsing in `refactorkit-java`. `JdtJavaSemanticAnalyzer` parses Java source at Java 21 compliance and currently collects class, interface, and enum declarations with qualified names, source path and line, optional binding keys, and evidence labels such as `JDT_BINDING`, `JDT_PARSE`, and `LEXICAL_FALLBACK`.
+The first `v0.3.0` P2 prototype adds Eclipse JDT parsing in `refactorkit-java`. `JdtJavaSemanticAnalyzer` parses Java source at Java 21 compliance, configures source roots from the scanned `ProjectSnapshot`, and currently collects class, interface, enum, method, field, and constructor declarations with qualified names, source path and line, optional binding keys, and evidence labels such as `JDT_BINDING`, `JDT_PARSE`, and `LEXICAL_FALLBACK`.
 
-Current tests show that the analyzer distinguishes the same simple class name in different packages and recognizes interface and enum declarations. This is implementation evidence only: the existing lexical refactoring planners are not yet wired to the JDT analyzer.
+The analyzer now returns `JdtJavaSemanticReference` entries for references whose JDT binding keys match collected symbols. Current tests show method/field identity and reference evidence, distinguish same-simple-name imports such as `com.acme.right.Service` versus `com.acme.left.Service`, and still cover interface and enum declarations. This is implementation evidence only: the existing lexical refactoring planners are not yet wired to the JDT analyzer.
