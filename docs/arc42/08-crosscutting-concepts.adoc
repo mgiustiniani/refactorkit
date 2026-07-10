@@ -44,9 +44,9 @@ Status: implementation-informed.
 
 == Java Analysis and Refactoring
 
-The Java adapter provides lexical/source-level scanning, symbols, references, diagnostics, and planners. Conservative planners refuse ambiguous cases instead of guessing, especially extract method and structural change-signature operations.
+The Java adapter combines lexical/source-level scanning with an Eclipse JDT-backed semantic-analysis slice. Signed `renameMember` uses JDT binding keys to rename transitive source-visible class/interface override families, including their scanned declarations and binding-matched call sites. Static and private methods do not form override relations, and a family containing an external declaration is refused. Other conservative planners refuse ambiguous cases instead of guessing, especially extract method and structural change-signature operations.
 
-Known limitations include lack of full compiler-backed type resolution and limited handling of reflection, generated code, external configuration, framework strings, and unknown external callers.
+Known limitations include incomplete compiler-backed coverage outside the supported signed-member slice and limited handling of reflection, generated code, external configuration, framework strings, annotation-processor output, and unknown external callers.
 
 Status: implementation-informed.
 

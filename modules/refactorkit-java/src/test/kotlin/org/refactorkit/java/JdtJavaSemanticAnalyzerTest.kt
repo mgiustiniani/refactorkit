@@ -251,6 +251,66 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun jdtAnalyzerDoesNotTreatStaticMethodHidingAsOverride() {
+        val root = Files.createTempDirectory("rk-jdt-static-hiding-test")
+        root.resolve("src/main/java/com/acme/Base.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class Base {
+                    public static String find(String key) { return key; }
+                }
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/com/acme/Child.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class Child extends Base {
+                    public static String find(String key) { return key.toUpperCase(); }
+                }
+            """.trimIndent() + "\n")
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+
+        assertTrue(result.overrideRelations.none {
+            it.overridingSymbolQualifiedName.contains("#find(") || it.overriddenSymbolQualifiedName.contains("#find(")
+        }, "static method hiding must not be treated as override: ${result.overrideRelations}")
+    }
+
+    @Test
+    fun jdtAnalyzerDoesNotTreatCrossPackagePackagePrivateMethodAsOverride() {
+        val root = Files.createTempDirectory("rk-jdt-package-private-test")
+        root.resolve("src/main/java/com/acme/base/Base.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme.base;
+                public class Base {
+                    String find(String key) { return key; }
+                }
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/com/acme/child/Child.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme.child;
+                import com.acme.base.Base;
+                public class Child extends Base {
+                    public String find(String key) { return key.toUpperCase(); }
+                }
+            """.trimIndent() + "\n")
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+
+        assertTrue(result.overrideRelations.none {
+            it.overridingSymbolQualifiedName == "com.acme.child.Child#find(java.lang.String)" &&
+                it.overriddenSymbolQualifiedName == "com.acme.base.Base#find(java.lang.String)"
+        }, "package-private cross-package method must not be treated as override: ${result.overrideRelations}")
+    }
+
+    @Test
     fun jdtAnalyzerReportsInterfaceImplementationOverrideRelations() {
         val root = Files.createTempDirectory("rk-jdt-interface-override-test")
         root.resolve("src/main/java/com/acme/LookupApi.java").apply {

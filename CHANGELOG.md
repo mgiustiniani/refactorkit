@@ -37,15 +37,15 @@ review safety boundaries before applying refactorings.
   project-local `lib`/`libs` JAR entries, and generated dependency lists from
   `.refactorkit/classpath`, `target/classpath.txt`, or `build/classpath.txt`.
 - Advanced `renameMember` JDT integration from warning-only evidence to exact
-  signed method overload selection for the proven slice plus conservative
-  inheritance safety: signed selectors such as
+  signed method overload selection plus source-visible override-family
+  propagation. Signed selectors such as
   `com.example.Lookup#find(java.lang.String)` use binding-key matched
-  declaration/reference ranges so only that overload is renamed, while the signed
-  flow refuses parse/classpath warnings, non-unique JDT candidates, missing
-  binding keys, or selected methods that participate in class/interface
-  override/inheritance relations, including signed interface method selectors,
-  until override-aware propagation is implemented. Unsigned member rename remains
-  a lexical fallback with overload warnings.
+  declaration/reference ranges; class and interface override families propagate
+  transitively across all scanned source declarations and call sites. The signed
+  flow still refuses parse/classpath warnings, non-unique candidates, missing
+  binding keys, or override families containing declarations outside the scanned
+  source workspace. Unsigned member rename remains a lexical fallback with
+  overload warnings.
 - Added read-only JDT-backed signed member search/lookup/reference support for
   exact member IDs such as `com.example.Lookup#find(java.lang.String)` across
   the Java adapter, daemon `symbol.search`/`symbol.definition`/

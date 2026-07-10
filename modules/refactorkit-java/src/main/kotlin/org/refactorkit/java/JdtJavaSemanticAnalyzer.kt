@@ -9,9 +9,11 @@ import org.eclipse.jdt.core.dom.CompilationUnit
 import org.eclipse.jdt.core.dom.EnumDeclaration
 import org.eclipse.jdt.core.dom.FieldDeclaration
 import org.eclipse.jdt.core.dom.IMethodBinding
+import org.eclipse.jdt.core.dom.ITypeBinding
 import org.eclipse.jdt.core.dom.SimpleName
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration
 import org.eclipse.jdt.core.dom.MethodDeclaration
+import org.eclipse.jdt.core.dom.Modifier
 import org.eclipse.jdt.core.dom.RecordDeclaration
 import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
@@ -261,8 +263,9 @@ class JdtJavaSemanticAnalyzer {
         val seen = mutableSetOf<String>()
         val relations = mutableListOf<JdtJavaSemanticOverrideRelation>()
         for (sub in methods) {
+            if (!sub.binding.isOverrideCandidate()) continue
             for (superMethod in methods) {
-                if (sub === superMethod) continue
+                if (sub === superMethod || !superMethod.binding.isOverrideCandidate()) continue
                 val subKey = sub.symbol.bindingKey ?: continue
                 val superKey = superMethod.symbol.bindingKey ?: continue
                 if (subKey == superKey) continue
@@ -273,9 +276,11 @@ class JdtJavaSemanticAnalyzer {
                         subType != null && superType != null &&
                             subType.qualifiedName != superType.qualifiedName &&
                             subType.isSubTypeCompatible(superType) &&
+                            superMethod.binding.isInheritedBy(subType) &&
                             sub.binding.isSubsignature(superMethod.binding)
                     }.getOrDefault(false) ||
                     (inheritsFrom(sub.symbol.ownerQualifiedName, superMethod.symbol.ownerQualifiedName) &&
+                        superMethod.binding.isInheritedBy(sub.binding.declaringClass) &&
                         sub.symbol.memberSignature == superMethod.symbol.memberSignature)
                 if (!overrides) continue
                 val relationKey = "$subKey->$superKey"
@@ -289,7 +294,67 @@ class JdtJavaSemanticAnalyzer {
                 )
             }
         }
+
+        val sourceBindingKeys = methods.mapNotNull { it.symbol.bindingKey }.toSet()
+        for (sub in methods) {
+            if (!sub.binding.isOverrideCandidate()) continue
+            val subKey = sub.symbol.bindingKey ?: continue
+            inheritedTypes(sub.binding.declaringClass).forEach { inheritedType ->
+                inheritedType.declaredMethods
+                    .filter { it.isOverrideCandidate() && it.key !in sourceBindingKeys }
+                    .filter { inheritedMethod ->
+                        runCatching { sub.binding.overrides(inheritedMethod) }.getOrDefault(false)
+                    }
+                    .forEach { inheritedMethod ->
+                        val inheritedKey = inheritedMethod.key ?: return@forEach
+                        val relationKey = "$subKey->$inheritedKey"
+                        if (!seen.add(relationKey)) return@forEach
+                        relations += JdtJavaSemanticOverrideRelation(
+                            overridingSymbolQualifiedName = sub.symbol.qualifiedName,
+                            overriddenSymbolQualifiedName = inheritedMethod.qualifiedName(),
+                            overridingBindingKey = subKey,
+                            overriddenBindingKey = inheritedKey,
+                            evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                        )
+                    }
+            }
+        }
         return relations
+    }
+
+    private fun inheritedTypes(type: ITypeBinding?): List<ITypeBinding> {
+        if (type == null) return emptyList()
+        val result = mutableListOf<ITypeBinding>()
+        val visited = mutableSetOf<String>()
+        val queue = ArrayDeque<ITypeBinding>()
+        type.superclass?.let(queue::add)
+        type.interfaces.forEach(queue::add)
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            val key = current.key ?: current.qualifiedName
+            if (!visited.add(key)) continue
+            result += current
+            current.superclass?.let(queue::add)
+            current.interfaces.forEach(queue::add)
+        }
+        return result
+    }
+
+    private fun IMethodBinding.qualifiedName(): String {
+        val owner = declaringClass?.qualifiedName.orEmpty()
+        val signature = "$name(${parameterTypes.joinToString(",") { it.qualifiedName.takeIf(String::isNotBlank) ?: it.name }})"
+        return "$owner#$signature"
+    }
+
+    private fun IMethodBinding.isOverrideCandidate(): Boolean =
+        !Modifier.isStatic(modifiers) && !Modifier.isPrivate(modifiers)
+
+    private fun IMethodBinding.isInheritedBy(subType: ITypeBinding?): Boolean {
+        if (subType == null) return false
+        if (Modifier.isPublic(modifiers) || Modifier.isProtected(modifiers)) return true
+        val ownerPackage = declaringClass?.`package`?.name
+        val subtypePackage = subType.`package`?.name
+        return ownerPackage != null && ownerPackage == subtypePackage
     }
 
     private fun typeInheritanceRecords(
@@ -307,26 +372,18 @@ class JdtJavaSemanticAnalyzer {
             superTypes += type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
                 ?: qualifyTypeName(packageName, type.toString())
         }
-        return superTypes.distinct().map { supertype ->
-            TypeInheritanceRecord(subtypeQualifiedName, supertype)
-        }
+        return superTypes.distinct().map { TypeInheritanceRecord(subtypeQualifiedName, it) }
     }
 
     private fun recordInheritanceRecords(
         node: RecordDeclaration,
         packageName: String,
         subtypeQualifiedName: String,
-    ): List<TypeInheritanceRecord> {
-        val superTypes = mutableListOf<String>()
-        node.superInterfaceTypes().forEach { rawType ->
-            val type = rawType as? org.eclipse.jdt.core.dom.Type ?: return@forEach
-            superTypes += type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
-                ?: qualifyTypeName(packageName, type.toString())
-        }
-        return superTypes.distinct().map { supertype ->
-            TypeInheritanceRecord(subtypeQualifiedName, supertype)
-        }
-    }
+    ): List<TypeInheritanceRecord> = node.superInterfaceTypes().mapNotNull { rawType ->
+        val type = rawType as? org.eclipse.jdt.core.dom.Type ?: return@mapNotNull null
+        type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
+            ?: qualifyTypeName(packageName, type.toString())
+    }.distinct().map { TypeInheritanceRecord(subtypeQualifiedName, it) }
 
     private fun qualifyTypeName(packageName: String, name: String): String =
         if (name.contains('.')) name else JavaPackageUtil.fqn(packageName, name)

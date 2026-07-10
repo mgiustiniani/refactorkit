@@ -192,14 +192,27 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             "renameMember",
             "Signed member selector $ownerFqn#$memberSelector has no JDT binding key; exact overload rename refused.",
         )
-        val overrideRelation = analysis.overrideRelations.firstOrNull {
-            it.overridingBindingKey == bindingKey || it.overriddenBindingKey == bindingKey
+        val familyBindingKeys = linkedSetOf(bindingKey)
+        var expanded: Boolean
+        do {
+            expanded = false
+            analysis.overrideRelations.forEach { relation ->
+                when {
+                    relation.overridingBindingKey in familyBindingKeys ->
+                        expanded = familyBindingKeys.add(relation.overriddenBindingKey) || expanded
+                    relation.overriddenBindingKey in familyBindingKeys ->
+                        expanded = familyBindingKeys.add(relation.overridingBindingKey) || expanded
+                }
+            }
+        } while (expanded)
+        val familySymbols = analysis.symbols.filter { symbol ->
+            symbol.kind == JdtJavaSemanticSymbolKind.METHOD && symbol.bindingKey in familyBindingKeys
         }
-        if (overrideRelation != null) {
+        if (familySymbols.mapNotNull { it.bindingKey }.toSet() != familyBindingKeys) {
             return refused(
                 snapshot,
                 "renameMember",
-                "Signed member selector $ownerFqn#$memberSelector participates in an inheritance/override relation (${overrideRelation.overridingSymbolQualifiedName} overrides ${overrideRelation.overriddenSymbolQualifiedName}); exact JDT rename is refused until override-aware propagation is implemented.",
+                "Signed member selector $ownerFqn#$memberSelector belongs to an override family containing declarations outside the scanned source workspace; source-only propagation is unsafe.",
             )
         }
 
@@ -207,9 +220,9 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         fun addEdit(path: Path, range: org.refactorkit.core.SourceRange) {
             editsByPath.getOrPut(path) { mutableListOf() } += TextEdit(range, newMemberName)
         }
-        addEdit(candidate.path, candidate.sourceRange)
+        familySymbols.forEach { symbol -> addEdit(symbol.path, symbol.sourceRange) }
         analysis.references
-            .filter { it.bindingKey == bindingKey && it.symbolKind == JdtJavaSemanticSymbolKind.METHOD }
+            .filter { it.bindingKey in familyBindingKeys && it.symbolKind == JdtJavaSemanticSymbolKind.METHOD }
             .forEach { reference -> addEdit(reference.path, reference.sourceRange) }
 
         val edits = editsByPath.map { (path, textEdits) ->
@@ -219,21 +232,28 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
                     .sortedWith(compareBy({ it.range.start.line }, { it.range.start.character })),
             )
         }
-        val warnings = listOf(
-            "JDT binding selected exact member signature $ownerFqn#$memberSelector; edits were generated from JDT declaration/reference ranges.",
-            "Reflection, Spring event/listener names, Jackson property names, and annotation-processor output are NOT updated. Review manually.",
-        )
+        val warnings = buildList {
+            add("JDT binding selected exact member signature $ownerFqn#$memberSelector; edits were generated from JDT declaration/reference ranges.")
+            if (familySymbols.size > 1) {
+                add("Override-aware propagation selected ${familySymbols.size} source declarations and their binding-matched call sites across the inheritance hierarchy.")
+            }
+            add("Reflection, Spring event/listener names, Jackson property names, and annotation-processor output are NOT updated. Review manually.")
+        }
         return PatchPlan(
             operation = "renameMember",
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 0.93,
+            confidence = if (familySymbols.size > 1) 0.91 else 0.93,
             requiresUserApproval = true,
-            summary = "Rename method '$memberSelector' \u2192 '$newMemberName' in $ownerFqn using JDT binding evidence. ${editsByPath.size} file(s) affected.",
+            summary = if (familySymbols.size > 1) {
+                "Rename override family '$memberSelector' \u2192 '$newMemberName' from $ownerFqn using JDT binding evidence. ${familySymbols.size} declaration(s), ${editsByPath.size} file(s) affected."
+            } else {
+                "Rename method '$memberSelector' \u2192 '$newMemberName' in $ownerFqn using JDT binding evidence. ${editsByPath.size} file(s) affected."
+            },
             affectedFiles = editsByPath.keys,
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
-            riskLevel = RiskLevel.LOW,
+            riskLevel = if (familySymbols.size > 1) RiskLevel.MEDIUM else RiskLevel.LOW,
         )
     }
 

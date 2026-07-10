@@ -118,7 +118,7 @@ class JavaRenameMemberPlannerTest {
     }
 
     @Test
-    fun signedMemberSelectorRefusesOverrideRelationUntilPropagationExists() {
+    fun signedMemberSelectorPropagatesAcrossClassOverrideFamily() {
         val root = createTempProject(
             "src/main/java/com/example/Base.java" to """
                 package com.example;
@@ -126,23 +126,48 @@ class JavaRenameMemberPlannerTest {
                     public String find(String key) { return key; }
                 }
             """.trimIndent(),
+            "src/main/java/com/example/Mid.java" to """
+                package com.example;
+                public class Mid extends Base {
+                    @Override public String find(String key) { return key.toLowerCase(); }
+                }
+            """.trimIndent(),
             "src/main/java/com/example/Child.java" to """
                 package com.example;
-                public class Child extends Base {
+                public class Child extends Mid {
                     @Override public String find(String key) { return key.toUpperCase(); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/Clients.java" to """
+                package com.example;
+                class Clients {
+                    String base(Base value) { return value.find("base"); }
+                    String child(Child value) { return value.find("child"); }
+                }
+                class Unrelated {
+                    String find(String key) { return key; }
                 }
             """.trimIndent(),
         )
         val snap = JavaProjectScanner().scan(root)
         val plan = planner.preview(snap, "com.example.Base#find(java.lang.String)", "lookup")
 
-        assertEquals(PatchStatus.REFUSED, plan.status)
-        assertTrue(plan.summary.contains("inheritance/override relation"))
-        assertTrue(plan.summary.contains("override-aware propagation"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.warnings.any { it.contains("Override-aware propagation selected 3 source declarations") })
+        val result = PatchEngine(root).apply(plan, snap.hash)
+        assertIs<ApplyResult.Applied>(result)
+
+        assertTrue(root.resolve("src/main/java/com/example/Base.java").readText().contains("String lookup(String key)"))
+        assertTrue(root.resolve("src/main/java/com/example/Mid.java").readText().contains("String lookup(String key)"))
+        assertTrue(root.resolve("src/main/java/com/example/Child.java").readText().contains("String lookup(String key)"))
+        val clients = root.resolve("src/main/java/com/example/Clients.java").readText()
+        assertTrue(clients.contains("value.lookup(\"base\")"), clients)
+        assertTrue(clients.contains("value.lookup(\"child\")"), clients)
+        assertTrue(clients.contains("String find(String key)"), "unrelated method must remain unchanged: $clients")
     }
 
     @Test
-    fun signedMemberSelectorRefusesInterfaceImplementationUntilPropagationExists() {
+    fun signedMemberSelectorPropagatesAcrossInterfaceImplementationFamily() {
         val root = createTempProject(
             "src/main/java/com/example/LookupApi.java" to """
                 package com.example;
@@ -156,13 +181,44 @@ class JavaRenameMemberPlannerTest {
                     @Override public String find(String key) { return key; }
                 }
             """.trimIndent(),
+            "src/main/java/com/example/LookupClient.java" to """
+                package com.example;
+                class LookupClient {
+                    String api(LookupApi value) { return value.find("api"); }
+                    String implementation(DefaultLookup value) { return value.find("implementation"); }
+                }
+            """.trimIndent(),
         )
         val snap = JavaProjectScanner().scan(root)
         val plan = planner.preview(snap, "com.example.LookupApi#find(java.lang.String)", "lookup")
 
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val result = PatchEngine(root).apply(plan, snap.hash)
+        assertIs<ApplyResult.Applied>(result)
+        assertTrue(root.resolve("src/main/java/com/example/LookupApi.java").readText().contains("String lookup(String key)"))
+        assertTrue(root.resolve("src/main/java/com/example/DefaultLookup.java").readText().contains("String lookup(String key)"))
+        val client = root.resolve("src/main/java/com/example/LookupClient.java").readText()
+        assertTrue(client.contains("value.lookup(\"api\")"), client)
+        assertTrue(client.contains("value.lookup(\"implementation\")"), client)
+    }
+
+    @Test
+    fun signedMemberSelectorRefusesOverrideFamilyOutsideSourceWorkspace() {
+        val root = createTempProject(
+            "src/main/java/com/example/Label.java" to """
+                package com.example;
+                public class Label {
+                    @Override
+                    public String toString() { return "label"; }
+                }
+            """.trimIndent(),
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.preview(snap, "com.example.Label#toString()", "render")
+
         assertEquals(PatchStatus.REFUSED, plan.status)
-        assertTrue(plan.summary.contains("inheritance/override relation"))
-        assertTrue(plan.summary.contains("DefaultLookup#find"))
+        assertTrue(plan.summary.contains("outside the scanned source workspace"), plan.summary)
     }
 
     @Test

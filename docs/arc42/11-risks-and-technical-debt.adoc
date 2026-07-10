@@ -9,9 +9,9 @@ Status: implementation-informed, needs human review for prioritization.
 |ID |Risk / debt |Impact |Mitigation / next action |Status
 
 |R-001
-|Java analysis is still mostly lexical rather than fully compiler/type-resolution-backed.
-|Refactorings may miss reflection, generated code, annotation processors, external callers, and some framework/string references.
-|Keep conservative refusal/warning behavior; consider compiler-backed engine ADR before stable release.
+|Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations still rely on lexical or structural evidence.
+|Refactorings outside the supported signed `renameMember` slice may miss reflection, generated code, annotation processors, external callers, and some framework/string references.
+|Follow ADR 0008; retain conservative refusal/warning behavior, extend representative JDT-backed coverage, and refuse signed member rename when an override family includes external declarations.
 |known risk
 
 |R-002
