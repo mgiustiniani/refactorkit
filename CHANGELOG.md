@@ -7,13 +7,15 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-### v0.2.0-beta - in progress
+_No changes yet._
 
-Draft beta release preparation is in progress. This section records completed
-beta progress so far and does not imply that `v0.2.0-beta` has been released or
-tagged.
+## v0.2.0-beta - 2026-07-10
 
-#### Completed beta progress so far
+Second public beta release candidate for RefactorKit. This entry records the
+completed beta scope and safety evidence prepared for the `v0.2.0-beta` tag.
+Final release publication metadata is injected by the release workflow.
+
+### Beta scope and release-candidate evidence
 
 - Established the `v0.2.0-beta` compatibility baseline for documented CLI and
   daemon JSON-RPC workflows, with LSP and MCP surfaces labelled for beta or
@@ -27,9 +29,9 @@ tagged.
 - Added P3 patch safety coverage for stale snapshots, unsafe paths, overlapping
   edits, and rollback restoration for modify, create, rename, and delete edits.
 - Added P4 contract coverage for selected daemon JSON-RPC and MCP
-  preview/apply/rollback and refusal/error flows; LSP command coverage now
-  verifies preview metadata, pending-plan apply, transaction-backed rollback,
-  unknown transaction refusal, and `safeDelete` `PLAN_REFUSED` behavior.
+  preview/apply/rollback and refusal/error flows; LSP command coverage verifies
+  preview metadata, pending-plan apply, transaction-backed rollback, unknown
+  transaction refusal, and `safeDelete` `PLAN_REFUSED` behavior.
 - Updated P5 operation documentation for rename class/member, move class,
   organize imports, safe delete, extract method, change signature, and external
   import success conditions, refusal behavior, warnings, and rollback
@@ -39,22 +41,18 @@ tagged.
   limits, conservative refusals, provenance/license warnings, and overwrite
   refusal.
 - Hardened P6 external Java importer coverage for provenance warnings, GPL
-  high-risk handling, helper-type preservation, multi-public-type splitting, and
-  non-Java Markdown fence stripping.
-- Advanced importer output-contract coverage and docs so CLI `java import-class`,
-  daemon JSON-RPC `java.importExternalClass`, and MCP
-  `import_external_java_class` expose stable provenance/license fields in
-  warnings or output text.
-- Added importer refusal guidance coverage for unknown-license policy blocks and
-  naming conflicts; refused plans state that no files were written, point
-  reviewers to provenance/license/naming-conflict review, and reiterate that
-  RefactorKit never overwrites existing files by default.
+  high-risk handling, helper-type preservation, multi-public-type splitting,
+  non-Java Markdown fence stripping, stable provenance/license output fields,
+  unknown-license policy blocks, and naming-conflict refusal guidance.
 - Verified P7 runtime artifact workflow progress: CI builds the self-contained
   runtime zip and checksum, verifies the checksum, smoke-tests the packaged
   launcher with `JAVA_HOME` unset across representative samples, and release tag
   builds verify/unzip-smoke the tag-named runtime asset before publication.
+- Expected runtime artifact names are
+  `refactorkit-runtime-0.2.0-beta-linux-x86_64.zip` and
+  `refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256`.
 
-#### Current known beta limitations
+### Known beta limitations
 
 - Java analysis remains lexical/structural in beta and is not yet a full
   compiler-backed type-resolution engine.
@@ -68,9 +66,9 @@ tagged.
   experimental areas before `v1.0.0`; importer provenance/license output fields
   are documented for beta review.
 
-#### Migration notes from v0.1.0-alpha so far
+### Migration notes from v0.1.0-alpha
 
-- Documented CLI and daemon JSON-RPC workflows are being promoted to beta
+- Documented CLI and daemon JSON-RPC workflows are promoted to beta
   compatibility contracts; breaking changes after beta require changelog entries
   and migration notes.
 - LSP pilots can rely on documented preview metadata fields for covered
@@ -80,7 +78,8 @@ tagged.
   should apply the same labelled-surface rule.
 - Consumers must keep preview review, diagnostics, apply, and rollback checks in
   automation; beta does not remove the alpha safety workflow.
-- No final beta artifact, checksum, source tag, or release commit exists yet.
+- Release automation injects the final source tag, release commit, asset URL, and
+  SHA-256 into the published GitHub Release body.
 
 ## v0.1.0-alpha - 2026-07-10 (released, current alpha)
 
