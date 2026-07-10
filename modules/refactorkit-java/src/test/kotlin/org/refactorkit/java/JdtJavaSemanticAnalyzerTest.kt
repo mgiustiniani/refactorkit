@@ -219,6 +219,37 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun jdtAnalyzerReportsOverrideRelations() {
+        val root = Files.createTempDirectory("rk-jdt-override-test")
+        root.resolve("src/main/java/com/acme/Base.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class Base {
+                    public String find(String key) { return key; }
+                }
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/com/acme/Child.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class Child extends Base {
+                    @Override public String find(String key) { return key.toUpperCase(); }
+                }
+            """.trimIndent() + "\n")
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+
+        assertTrue(result.overrideRelations.any {
+            it.overridingSymbolQualifiedName == "com.acme.Child#find(java.lang.String)" &&
+                it.overriddenSymbolQualifiedName == "com.acme.Base#find(java.lang.String)" &&
+                it.evidence == JdtJavaSemanticEvidence.JDT_BINDING
+        }, "expected override relation, got ${result.overrideRelations}")
+    }
+
+    @Test
     fun jdtWarningsReportUnresolvedTypesWithoutClaimingBindingCertainty() {
         val root = Files.createTempDirectory("rk-jdt-unresolved-test")
         root.resolve("src/main/java/com/acme/NeedsDependency.java").apply {

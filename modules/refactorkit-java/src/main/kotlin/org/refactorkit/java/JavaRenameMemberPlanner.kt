@@ -192,6 +192,16 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             "renameMember",
             "Signed member selector $ownerFqn#$memberSelector has no JDT binding key; exact overload rename refused.",
         )
+        val overrideRelation = analysis.overrideRelations.firstOrNull {
+            it.overridingBindingKey == bindingKey || it.overriddenBindingKey == bindingKey
+        }
+        if (overrideRelation != null) {
+            return refused(
+                snapshot,
+                "renameMember",
+                "Signed member selector $ownerFqn#$memberSelector participates in an inheritance/override relation (${overrideRelation.overridingSymbolQualifiedName} overrides ${overrideRelation.overriddenSymbolQualifiedName}); exact JDT rename is refused until override-aware propagation is implemented.",
+            )
+        }
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         fun addEdit(path: Path, range: org.refactorkit.core.SourceRange) {

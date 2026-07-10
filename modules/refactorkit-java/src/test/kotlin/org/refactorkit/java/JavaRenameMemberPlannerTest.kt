@@ -87,6 +87,30 @@ class JavaRenameMemberPlannerTest {
     }
 
     @Test
+    fun signedMemberSelectorRefusesOverrideRelationUntilPropagationExists() {
+        val root = createTempProject(
+            "src/main/java/com/example/Base.java" to """
+                package com.example;
+                public class Base {
+                    public String find(String key) { return key; }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/Child.java" to """
+                package com.example;
+                public class Child extends Base {
+                    @Override public String find(String key) { return key.toUpperCase(); }
+                }
+            """.trimIndent(),
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.preview(snap, "com.example.Base#find(java.lang.String)", "lookup")
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("inheritance/override relation"))
+        assertTrue(plan.summary.contains("override-aware propagation"))
+    }
+
+    @Test
     fun signedMemberSelectorRefusesWhenJdtReportsParseWarnings() {
         val root = createTempProject(
             "src/main/java/com/example/Lookup.java" to """

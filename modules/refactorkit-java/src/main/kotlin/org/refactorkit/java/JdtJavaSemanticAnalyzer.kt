@@ -56,18 +56,24 @@ class JdtJavaSemanticAnalyzer {
             }
         }
         val warnings = fileAnalyses.flatMap { it.warnings }
-        return JdtJavaSemanticAnalysisResult(symbols, references, warnings)
+        val overrideRelations = buildOverrideRelations(
+            fileAnalyses.flatMap { it.methodBindings },
+            fileAnalyses.flatMap { it.inheritances },
+        )
+        return JdtJavaSemanticAnalysisResult(symbols, references, warnings, overrideRelations)
     }
 
     fun analyzeFile(file: SourceFile): List<JdtJavaSemanticSymbol> =
         analyzeFileWithReferences(file, emptyArray()).symbols
 
     private fun analyzeFileWithReferences(file: SourceFile, sourceRoots: Array<String>): FileAnalysis {
-        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList())
+        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         val compilationUnit = parse(file, sourceRoots)
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
         val rawReferences = mutableListOf<RawReference>()
+        val methodBindings = mutableListOf<MethodBindingRecord>()
+        val inheritances = mutableListOf<TypeInheritanceRecord>()
         val ownerStack = mutableListOf<String>()
 
         compilationUnit.accept(object : ASTVisitor() {
@@ -86,6 +92,7 @@ class JdtJavaSemanticAnalyzer {
                     memberSignature = null,
                 )
                 symbols += typeSymbol
+                inheritances += typeInheritanceRecords(node, packageName, typeSymbol.qualifiedName)
                 ownerStack += typeSymbol.qualifiedName
                 return true
             }
@@ -121,7 +128,7 @@ class JdtJavaSemanticAnalyzer {
                 val owner = ownerStack.lastOrNull() ?: JavaPackageUtil.fqn(packageName, file.path.fileName.toString().removeSuffix(".java"))
                 val binding = node.resolveBinding()
                 val signature = methodSignature(node, binding)
-                symbols += symbol(
+                val methodSymbol = symbol(
                     file = file,
                     compilationUnit = compilationUnit,
                     packageName = packageName,
@@ -133,6 +140,10 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = binding?.key,
                     memberSignature = signature,
                 )
+                symbols += methodSymbol
+                if (binding != null && !node.isConstructor) {
+                    methodBindings += MethodBindingRecord(methodSymbol, binding)
+                }
                 return true
             }
 
@@ -191,8 +202,84 @@ class JdtJavaSemanticAnalyzer {
                     evidence = JdtJavaSemanticEvidence.JDT_PARSE,
                 )
             }
-        return FileAnalysis(symbols, rawReferences, warnings)
+        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances)
     }
+
+    private fun buildOverrideRelations(
+        methods: List<MethodBindingRecord>,
+        inheritances: List<TypeInheritanceRecord>,
+    ): List<JdtJavaSemanticOverrideRelation> {
+        val parentsBySubtype = inheritances.groupBy { it.subtypeQualifiedName }
+            .mapValues { entry -> entry.value.map { it.supertypeQualifiedName }.toSet() }
+        fun inheritsFrom(subtype: String?, supertype: String?): Boolean {
+            if (subtype == null || supertype == null || subtype == supertype) return false
+            val visited = mutableSetOf<String>()
+            val queue = ArrayDeque<String>()
+            parentsBySubtype[subtype].orEmpty().forEach(queue::add)
+            while (queue.isNotEmpty()) {
+                val current = queue.removeFirst()
+                if (!visited.add(current)) continue
+                if (current == supertype) return true
+                parentsBySubtype[current].orEmpty().forEach(queue::add)
+            }
+            return false
+        }
+        val seen = mutableSetOf<String>()
+        val relations = mutableListOf<JdtJavaSemanticOverrideRelation>()
+        for (sub in methods) {
+            for (superMethod in methods) {
+                if (sub === superMethod) continue
+                val subKey = sub.symbol.bindingKey ?: continue
+                val superKey = superMethod.symbol.bindingKey ?: continue
+                if (subKey == superKey) continue
+                val overrides = runCatching { sub.binding.overrides(superMethod.binding) }.getOrDefault(false) ||
+                    runCatching {
+                        val subType = sub.binding.declaringClass
+                        val superType = superMethod.binding.declaringClass
+                        subType != null && superType != null &&
+                            subType.qualifiedName != superType.qualifiedName &&
+                            subType.isSubTypeCompatible(superType) &&
+                            sub.binding.isSubsignature(superMethod.binding)
+                    }.getOrDefault(false) ||
+                    (inheritsFrom(sub.symbol.ownerQualifiedName, superMethod.symbol.ownerQualifiedName) &&
+                        sub.symbol.memberSignature == superMethod.symbol.memberSignature)
+                if (!overrides) continue
+                val relationKey = "$subKey->$superKey"
+                if (!seen.add(relationKey)) continue
+                relations += JdtJavaSemanticOverrideRelation(
+                    overridingSymbolQualifiedName = sub.symbol.qualifiedName,
+                    overriddenSymbolQualifiedName = superMethod.symbol.qualifiedName,
+                    overridingBindingKey = subKey,
+                    overriddenBindingKey = superKey,
+                    evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                )
+            }
+        }
+        return relations
+    }
+
+    private fun typeInheritanceRecords(
+        node: TypeDeclaration,
+        packageName: String,
+        subtypeQualifiedName: String,
+    ): List<TypeInheritanceRecord> {
+        val superTypes = mutableListOf<String>()
+        node.superclassType?.let { type ->
+            superTypes += type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
+                ?: qualifyTypeName(packageName, type.toString())
+        }
+        node.superInterfaceTypes().forEach { rawType ->
+            val type = rawType as? org.eclipse.jdt.core.dom.Type ?: return@forEach
+            superTypes += type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
+                ?: qualifyTypeName(packageName, type.toString())
+        }
+        return superTypes.distinct().map { supertype ->
+            TypeInheritanceRecord(subtypeQualifiedName, supertype)
+        }
+    }
+
+    private fun qualifyTypeName(packageName: String, name: String): String =
+        if (name.contains('.')) name else JavaPackageUtil.fqn(packageName, name)
 
     private fun parse(file: SourceFile, sourceRoots: Array<String>): CompilationUnit {
         val parser = ASTParser.newParser(AST.JLS21)
@@ -283,6 +370,18 @@ class JdtJavaSemanticAnalyzer {
         val symbols: List<JdtJavaSemanticSymbol>,
         val rawReferences: List<RawReference>,
         val warnings: List<JdtJavaSemanticWarning>,
+        val methodBindings: List<MethodBindingRecord>,
+        val inheritances: List<TypeInheritanceRecord>,
+    )
+
+    private data class MethodBindingRecord(
+        val symbol: JdtJavaSemanticSymbol,
+        val binding: IMethodBinding,
+    )
+
+    private data class TypeInheritanceRecord(
+        val subtypeQualifiedName: String,
+        val supertypeQualifiedName: String,
     )
 
     private data class RawReference(
@@ -298,6 +397,7 @@ data class JdtJavaSemanticAnalysisResult(
     val symbols: List<JdtJavaSemanticSymbol>,
     val references: List<JdtJavaSemanticReference> = emptyList(),
     val warnings: List<JdtJavaSemanticWarning> = emptyList(),
+    val overrideRelations: List<JdtJavaSemanticOverrideRelation> = emptyList(),
 )
 
 data class JdtJavaSemanticSymbol(
@@ -329,6 +429,14 @@ data class JdtJavaSemanticWarning(
     val path: Path,
     val line: Int,
     val message: String,
+    val evidence: JdtJavaSemanticEvidence,
+)
+
+data class JdtJavaSemanticOverrideRelation(
+    val overridingSymbolQualifiedName: String,
+    val overriddenSymbolQualifiedName: String,
+    val overridingBindingKey: String,
+    val overriddenBindingKey: String,
     val evidence: JdtJavaSemanticEvidence,
 )
 

@@ -25,18 +25,21 @@ review safety boundaries before applying refactorings.
   configuration, signed method/constructor identities, nested member ownership,
   constructor reference resolution, binding-key matched references with
   `symbolSignature`, declaration/reference `sourceRange` evidence using JDT's
-  zero-based columns, and `JDT_PARSE` unresolved-type warnings; tests now cover
-  selected-member identity/reference evidence, overload disambiguation,
-  constructor identity/references, same-simple-name import disambiguation, and
-  representative Maven/Gradle sample source-root validation with type and method
-  discovery.
+  zero-based columns, source-visible override relation evidence, and `JDT_PARSE`
+  unresolved-type warnings; tests now cover selected-member identity/reference
+  evidence, overload disambiguation, constructor identity/references,
+  same-simple-name import disambiguation, child/base method override detection,
+  and representative Maven/Gradle sample source-root validation with type and
+  method discovery.
 - Advanced `renameMember` JDT integration from warning-only evidence to exact
-  signed method overload selection for the proven slice: signed selectors such as
+  signed method overload selection for the proven slice plus conservative
+  inheritance safety: signed selectors such as
   `com.example.Lookup#find(java.lang.String)` use binding-key matched
   declaration/reference ranges so only that overload is renamed, while the signed
-  flow refuses parse/classpath warnings, non-unique JDT candidates, or missing
-  binding keys. Unsigned member rename remains a lexical fallback with overload
-  warnings.
+  flow refuses parse/classpath warnings, non-unique JDT candidates, missing
+  binding keys, or selected methods that participate in override/inheritance
+  relations until override-aware propagation is implemented. Unsigned member
+  rename remains a lexical fallback with overload warnings.
 
 ## v0.2.0-beta - 2026-07-10
 
