@@ -33,6 +33,12 @@ class GoldenTestRunnerTest {
         assertTrue("change-signature-remove-parameter" in names, "Expected change-signature-remove-parameter in $names")
         assertTrue("external-class-import-preview" in names, "Expected external-class-import-preview in $names")
         assertTrue("external-class-import-conflict" in names, "Expected external-class-import-conflict in $names")
+        assertTrue("rename-class-invalid-identifier" in names, "Expected rename-class-invalid-identifier in $names")
+        assertTrue("rename-member-constructor-refusal" in names, "Expected rename-member-constructor-refusal in $names")
+        assertTrue("move-class-same-package-refusal" in names, "Expected move-class-same-package-refusal in $names")
+        assertTrue("organize-imports-already-clean" in names, "Expected organize-imports-already-clean in $names")
+        assertTrue("safe-delete-forced-with-references" in names, "Expected safe-delete-forced-with-references in $names")
+        assertTrue("external-class-import-license-block-unknown" in names, "Expected external-class-import-license-block-unknown in $names")
     }
 
     @Test
@@ -120,6 +126,37 @@ class GoldenTestRunnerTest {
 
     @Test
     fun externalClassImportConflictPasses() = assertRefusedCasePlanValid("external-class-import-conflict")
+
+    @Test
+    fun renameClassInvalidIdentifierPasses() = assertRefusedCasePlanValid("rename-class-invalid-identifier")
+
+    @Test
+    fun renameMemberConstructorRefusalPasses() = assertRefusedCasePlanValid("rename-member-constructor-refusal")
+
+    @Test
+    fun moveClassSamePackageRefusalPasses() = assertRefusedCasePlanValid("move-class-same-package-refusal")
+
+    @Test
+    fun organizeImportsAlreadyCleanNoOpPasses() {
+        val tc = GoldenTestLoader.loadNamed("organize-imports-already-clean", goldenDir)
+        val result = runner.run(tc)
+        assertTrue(result.passed, "Golden test failed:\n${result.errors.joinToString("\n")}")
+        assertEquals(PatchStatus.PREVIEW, result.plan?.status)
+        assertTrue(result.plan?.affectedFiles?.isEmpty() == true)
+    }
+
+    @Test
+    fun safeDeleteForcedWithReferencesPasses() {
+        val tc = GoldenTestLoader.loadNamed("safe-delete-forced-with-references", goldenDir)
+        val result = runner.run(tc)
+        assertTrue(result.passed, "Golden test failed:\n${result.errors.joinToString("\n")}")
+        assertEquals(PatchStatus.PREVIEW, result.plan?.status)
+        assertTrue(result.plan?.warnings?.any { it.contains("Forced delete") } == true)
+    }
+
+    @Test
+    fun externalClassImportLicenseBlockUnknownPasses() =
+        assertRefusedCasePlanValid("external-class-import-license-block-unknown")
 
     // ── rename-class-with-references ──────────────────────────────────────────
 

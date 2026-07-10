@@ -30,6 +30,30 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("CLASS\tcom.example.UserManager"))
     }
 
+    @Test
+    fun scanRepresentativeSampleProjectsFindsJavaSymbols() {
+        val samples = listOf(
+            "java-maven-simple",
+            "java-gradle-simple",
+            "java-spring-simple",
+            "java-jpa-simple",
+            "java-multimodule",
+        )
+
+        samples.forEach { sampleName ->
+            val sample = repoRoot().resolve("samples").resolve(sampleName).toString()
+
+            val scan = captureStdout { RefactorKitCli().run(listOf("scan", sample)) }
+            assertEquals(0, scan.code, "scan failed for $sampleName")
+            assertTrue(scan.stdout.contains("Files   : "), "scan did not report files for $sampleName")
+            assertTrue(!scan.stdout.contains("Files   : 0"), "scan found no Java files for $sampleName")
+
+            val symbols = captureStdout { RefactorKitCli().run(listOf("symbols", sample)) }
+            assertEquals(0, symbols.code, "symbols failed for $sampleName")
+            assertTrue(symbols.stdout.contains("com.example."), "symbols found no sample Java symbols for $sampleName")
+        }
+    }
+
     private fun captureStdout(block: () -> Int): CapturedResult {
         val originalOut = System.out
         val buffer = ByteArrayOutputStream()

@@ -1,0 +1,40 @@
+= ADR 0007: Lexical Java MVP vs Compiler-Backed Analysis Before v1.0.0
+:toc:
+:sectnums:
+
+Date: 2026-07-10
+
+Status: Accepted for beta; requires v1.0.0 follow-up
+
+== Context
+
+ADR 0003 accepted lexical and structural Java analysis for the alpha so that RefactorKit could prove the preview-apply-rollback workflow before full binding-aware Java analysis was available.
+
+The beta keeps that useful MVP, but integration consumers need to know which behavior remains heuristic and which capabilities must become compiler-backed before RefactorKit can claim v1.0.0-level semantic guarantees.
+
+== Decision
+
+For `v0.2.0-beta`, RefactorKit may continue to use lexical and structural Java analysis for documented previews when planners are conservative, warnings are visible, and ambiguous operations are refused instead of guessed.
+
+Before `v1.0.0`, Java refactoring guarantees that depend on semantic meaning must be backed by compiler/classpath-aware analysis. This includes overload resolution, inheritance and interface dispatch, generated-code and annotation-processor effects, framework/string references, classpath-aware type resolution, and robust import or unused-import handling.
+
+== Consequences
+
+* Beta consumers can test CLI, daemon, LSP, and MCP workflows without waiting for the full compiler-backed adapter.
+* Preview output and release notes must keep lexical limitations explicit.
+* Planners must prefer refused plans or risk warnings over unsafe confidence.
+* Framework, reflection, generated-code, overload, and external-configuration risks remain beta limitations.
+* The PatchPlan safety model remains valid when compiler-backed analysis replaces or augments lexical detection.
+
+== v1.0.0 Follow-up
+
+Before `v1.0.0`, RefactorKit must decide and document the compiler-backed Java analysis strategy, for example Eclipse JDT, javac APIs, OpenRewrite, or a combination.
+
+The follow-up must define at least:
+
+* classpath and source-root discovery requirements;
+* binding-aware symbol identity and reference search;
+* overload, inheritance, interface, and constructor handling;
+* framework and annotation-processing risk boundaries;
+* migration behavior for existing CLI, daemon, LSP, and MCP contracts;
+* tests that prove semantic guarantees beyond lexical matching.

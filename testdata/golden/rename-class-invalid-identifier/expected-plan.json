@@ -1,0 +1,5 @@
+{
+  "operation": "renameClass",
+  "status": "refused",
+  "summary": "Invalid Java identifier"
+}

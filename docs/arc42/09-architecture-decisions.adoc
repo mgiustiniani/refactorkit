@@ -43,8 +43,13 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |Scope MCP Tools and Resources Without Arbitrary Filesystem Access
 |link:../adr/0006-mcp-scoped-tools-and-resources.adoc[docs/adr/0006-mcp-scoped-tools-and-resources.adoc]
 |Accepted for alpha
+
+|ADR 0007
+|Lexical Java MVP vs Compiler-Backed Analysis Before v1.0.0
+|link:../adr/0007-lexical-java-mvp-vs-compiler-analysis.adoc[docs/adr/0007-lexical-java-mvp-vs-compiler-analysis.adoc]
+|Accepted for beta; requires v1.0.0 follow-up
 |===
 
 == Decision Candidate Coverage
 
-The baseline decision candidates previously listed in this chapter now have corresponding ADRs. Future architecture-significant decisions should be added as new ADR files and indexed here.
+The baseline alpha decision candidates have corresponding ADRs. ADR 0007 adds the beta lexical-versus-compiler-backed analysis baseline and keeps the v1.0.0 semantic-analysis follow-up visible. Future architecture-significant decisions should be added as new ADR files and indexed here.

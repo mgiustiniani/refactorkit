@@ -2,117 +2,159 @@
 
 See AGENTS.md for the authoritative initial architecture and implementation rules.
 
-## LSP server MVP
+Status: implementation-informed P0 baseline for `v0.2.0-beta`. The beta is
+not a `v1.0.0` API freeze, but documented beta-contract surfaces require
+contract tests and migration notes for later breaking changes.
+
+## Stability labels
+
+| Label | Meaning for `v0.2.0-beta` |
+|-------|----------------------------|
+| `beta-contract` | Name, required parameters, response envelope, error category, and preview/apply/rollback safety semantics should remain stable through beta patch releases. |
+| `experimental` | Available for pilots, but behavior, parameters, and output fields may change before `v1.0.0`; breaking changes still need release notes. |
+| `internal` | Not intended for external consumers; may change without migration support. |
+
+## Structured error categories
+
+All integration surfaces should map failures to one of these categories. JSON-RPC
+surfaces should expose the category in structured error data when available; CLI
+surfaces should map it to a stable exit-code category and human-readable message.
+
+| Category | Typical cause | Current JSON-RPC mapping |
+|----------|---------------|--------------------------|
+| `refused-plan` | Planner intentionally refuses an unsafe or ambiguous operation. | `PLAN_REFUSED` (`-32001`) |
+| `invalid-input` | Missing/invalid parameter, unknown plan id, unknown tool/command shape. | `INVALID_PARAMS` (`-32602`) |
+| `stale-snapshot-or-plan` | Workspace changed after preview or plan no longer matches current snapshot. | `SNAPSHOT_CHANGED` (`-32002`) |
+| `diagnostics-failure` | Apply/rollback diagnostics report failure or post-apply validation fails. | `INTERNAL_ERROR` until specialized code exists |
+| `unsupported-operation` | Method, command, operation, language, or refactoring is not supported. | `METHOD_NOT_FOUND` or `INVALID_PARAMS` |
+| `unsafe-path` | Path escapes the workspace root or was not part of the scanned snapshot. | `INVALID_PARAMS` |
+| `conflict-or-license-policy` | Naming conflict, overwrite refusal, unknown/risky license, or license policy block. | `PLAN_REFUSED` or `INVALID_PARAMS` |
+
+## CLI compatibility baseline
+
+The command names below are the documented CLI surface for `v0.2.0-beta`.
+`--apply` remains opt-in for mutating operations; preview is the default.
+
+| CLI command | Status | Contract notes |
+|-------------|--------|----------------|
+| `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
+| `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
+| `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
+| `refactorkit diagnostics <path>` / `refactorkit java diagnostics <path>` | `beta-contract` | Diagnostic severity/file/line fields are contract fields. |
+| `refactorkit definition --symbol <fqcn> [path]` / `java definition` | `beta-contract` | Read-only lookup. |
+| `refactorkit references --symbol <fqcn> [path]` / `java references` | `beta-contract` | Read-only reference listing; still lexical for beta. |
+| `refactorkit rename --symbol <fqcn> --to <name> [--apply] [path]` | `beta-contract` | Java class rename preview/apply/rollback safety semantics. |
+| `refactorkit rename-member --symbol <FQN#member> --to <name> [--apply] [path]` | `beta-contract` | Limited lexical member rename; refuses constructors and ambiguous cases. |
+| `refactorkit move-class --symbol <fqcn> --to-package <pkg> [--apply] [path]` | `beta-contract` | Java class move preview; warnings remain required for framework/string risks. |
+| `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; full unused-import removal is not promised while lexical. |
+| `refactorkit safe-delete --symbol <fqcn> [--force] [--apply] [path]` | `beta-contract` | Refuses referenced symbols by default; forced behavior requires explicit risk note. |
+| `refactorkit patch rollback <transaction-id> --root <path>` | `beta-contract` | Rollback transaction lookup and workspace-root safety. |
+| `refactorkit test-golden [case] [--golden-dir <path>]` | `beta-contract` | CI/test harness command for documented golden fixtures. |
+| `refactorkit extract-method ...` | `experimental` | Limited MVP; success/refusal coverage expands during beta. |
+| `refactorkit change-signature ...` | `experimental` | Limited rename/add/reorder/remove parameter support; conservative refusal expected. |
+| `refactorkit java import-class ...` | `experimental` | External code assimilation; provenance, conflict, and license-policy behavior may change before `v1.0.0`. |
+| `refactorkit recipe run ...` | `experimental` | Recipe schema is not yet a beta contract. |
+| `refactorkit outline`, `search`, `local-rename` | `experimental` | Multi-language structural features, not semantic Java refactoring contracts. |
+| Any unlisted/debug subcommand | `internal` | Not supported for external automation. |
+
+## Daemon JSON-RPC compatibility baseline
+
+`modules/refactorkit-daemon` exposes JSON-RPC 2.0 over newline-delimited stdio.
+Request/response envelopes, method names, and the error categories above are part
+of the beta baseline for documented methods.
+
+### Method classification
+
+| Method | Status | Request category |
+|--------|--------|------------------|
+| `project.open` | `beta-contract` | Workspace lifecycle; requires `root`. |
+| `project.summary` | `beta-contract` | Read-only project metadata. |
+| `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
+| `symbol.definition` | `beta-contract` | Read-only lookup; requires `symbol`. |
+| `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |
+| `diagnostics` | `beta-contract` | Read-only diagnostics query. |
+| `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
+| `refactor.apply` | `beta-contract` | Requires `planId`; must reject stale snapshots/plans. |
+| `patch.rollback` | `beta-contract` | Requires `transactionId`; must stay inside workspace root. |
+| Any unlisted method | `internal` | Treat as unsupported. |
+
+### `refactor.preview` operation classification
+
+| Operation | Status | Required arguments |
+|-----------|--------|--------------------|
+| `renameClass` | `beta-contract` | `symbol`, `arguments.newName` |
+| `renameMember` | `beta-contract` | `symbol`, `arguments.newName` |
+| `moveClass` | `beta-contract` | `symbol`, `arguments.targetPackage` |
+| `organizeImports` | `beta-contract` | `arguments.file` or `symbol` as file path |
+| `safeDelete` | `beta-contract` | `symbol`, optional `arguments.force` |
+| `extractMethod` | `experimental` | `arguments.file`, `startLine`, `endLine`, `methodName` |
+| `changeSignature.renameParameter` / `renameParameter` | `experimental` | `symbol`, `oldName`, `newName` |
+| `changeSignature.addParameter` / `addParameter` | `experimental` | `symbol`, `type`, `name`, `default` |
+| `changeSignature.reorderParameters` / `reorderParameters` | `experimental` | `symbol`, `order` |
+| `changeSignature.removeParameter` / `removeParameter` | `experimental` | `symbol`, `name` |
+
+A refused preview must not silently fall back to text replacement. Clients should
+show the refusal, warnings, affected files when present, and next action.
+
+## LSP server baseline
 
 `modules/refactorkit-lsp` exposes a JSON-RPC/LSP server over stdio using standard
-`Content-Length` framing.
+`Content-Length` framing. Workspace edits include legacy `changes` for text edits
+and `documentChanges` for file create/delete/rename operations.
 
-Current capabilities:
+| Capability or command | Status | Notes |
+|-----------------------|--------|-------|
+| `textDocument/definition`, `references`, `documentSymbol`, `diagnostic` | `beta-contract` | Read-only editor integration. |
+| `textDocument/prepareRename`, `textDocument/rename` | `beta-contract` | Must use RefactorKit previews and refusal handling. |
+| `textDocument/codeAction`, `workspace/executeCommand` envelope | `beta-contract` | Command transport and refusal categories are baseline. |
+| `textDocument/semanticTokens/full` | `experimental` | Token shape may change. |
+| `refactorkit.renameClass`, `refactorkit.renameMember`, `refactorkit.moveClass`, `refactorkit.organizeImports`, `refactorkit.safeDelete`, `refactorkit.applyPlan`, `refactorkit.rollback` | `beta-contract` | Command names and safety semantics are stable for beta pilots. |
+| `refactorkit.extractMethod` | `experimental` | Limited MVP. |
+| `refactorkit.changeSignature.renameParameter`, `refactorkit.changeSignature.addParameter`, `refactorkit.changeSignature.reorderParameters`, `refactorkit.changeSignature.removeParameter` | `experimental` | Limited MVP. |
+| Alias `refactorkit.renameParameter` | `experimental` | Compatibility alias, not preferred for new clients. |
 
-- `textDocument/definition`
-- `textDocument/references`
-- `textDocument/prepareRename`
-- `textDocument/rename`
-- `textDocument/codeAction`
-- `textDocument/documentSymbol`
-- `textDocument/semanticTokens/full`
-- `textDocument/diagnostic`
-- `textDocument/publishDiagnostics` notifications after workspace refresh
-- `workspace/executeCommand` for RefactorKit preview/apply-oriented commands
-
-Workspace edits include both legacy `changes` entries for text edits and
-`documentChanges` entries for file create, delete, and rename operations.
-
-Advertised `workspace/executeCommand` commands:
-
-- `refactorkit.renameClass`
-- `refactorkit.renameMember`
-- `refactorkit.extractMethod`
-- `refactorkit.changeSignature.renameParameter`
-- `refactorkit.moveClass`
-- `refactorkit.organizeImports`
-- `refactorkit.safeDelete`
-- `refactorkit.applyPlan`
-- `refactorkit.rollback`
-
-## Daemon JSON-RPC MVP
-
-`refactor.preview` supports:
-
-- `renameClass`
-- `renameMember`
-- `extractMethod`
-- `changeSignature.renameParameter` / `renameParameter`
-- `moveClass`
-- `organizeImports`
-- `safeDelete`
-
-`extractMethod` arguments:
-
-```json
-{
-  "file": "src/main/java/com/example/App.java",
-  "startLine": "12",
-  "endLine": "14",
-  "methodName": "extractedLogic"
-}
-```
-
-`changeSignature.renameParameter` arguments:
-
-```json
-{
-  "oldName": "id",
-  "newName": "userId"
-}
-```
-
-## MCP server MVP
+## MCP server baseline
 
 `modules/refactorkit-mcp` exposes JSON-RPC 2.0 over newline-delimited stdio for
-local LLM/MCP clients.
+local LLM/MCP clients. It intentionally does not expose arbitrary filesystem
+access.
 
-Current tools:
+### Tools
 
-- `project_scan`
-- `project_summary`
-- `symbol_search`
-- `symbol_definition`
-- `symbol_references`
-- `diagnostics`
-- `available_refactorings`
-- `preview_refactoring`
-- `apply_refactoring`
-- `rollback_refactoring`
-- `import_external_java_class`
-- `generate_context_bundle`
+| Tool | Status | Notes |
+|------|--------|-------|
+| `project_scan`, `project_summary` | `beta-contract` | Workspace lifecycle and project metadata. |
+| `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries. |
+| `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; experimental operations keep their label. |
+| `available_refactorings` | `experimental` | Descriptor shape may change. |
+| `import_external_java_class` | `experimental` | Conflict/license/provenance behavior is still hardening. |
+| `generate_context_bundle` | `experimental` | Bundle shape may change with agent needs. |
 
-Current resources:
+`preview_refactoring` beta operations are `renameClass`, `renameMember`,
+`moveClass`, `organizeImports`, and `safeDelete`. `extractMethod` and all
+`changeSignature.*` operations are experimental.
 
-- `project://summary`
-- `project://symbols`
-- `project://dependencies`
-- `diagnostics://latest`
-- `symbol://{fullyQualifiedName}`
-- `file://...` for files inside the currently scanned workspace snapshot only
+### Resources and prompts
 
-`preview_refactoring` supports:
+| Resource or prompt | Status | Notes |
+|--------------------|--------|-------|
+| `project://summary`, `project://symbols`, `diagnostics://latest` | `beta-contract` | Read-only snapshot resources. |
+| `symbol://{fullyQualifiedName}` | `beta-contract` | Symbol resource template. |
+| `file://...` inside the scanned workspace snapshot | `beta-contract` | Must refuse paths outside the workspace or outside the last scan. |
+| `project://dependencies` | `experimental` | Build/dependency summary may change. |
+| Prompts `refactor_safely`, `import_external_class_safely`, `explain_patch`, `generate_tests_for_refactor` | `experimental` | Prompt wording is guidance, not a stable API. |
 
-- `renameClass`
-- `renameMember`
-- `extractMethod`
-- `changeSignature.renameParameter` / `renameParameter`
-- `moveClass`
-- `organizeImports`
-- `safeDelete`
+## Migration-note requirements
 
-The MCP server intentionally does not expose arbitrary filesystem access. File
-resources are refused unless the requested file is inside the workspace root and
-was part of the last scanned snapshot.
+Any breaking change after `v0.2.0-beta` to a `beta-contract` command, method,
+operation, resource, request field, response envelope, or error category must add
+migration notes before release. Each note must include:
 
-Current prompts:
-
-- `refactor_safely`
-- `import_external_class_safely`
-- `explain_patch`
-- `generate_tests_for_refactor`
+1. old surface and first affected release;
+2. replacement surface or explicit removal reason;
+3. compatibility impact for CLI scripts, JSON-RPC clients, LSP clients, or MCP
+   clients;
+4. detection strategy, such as version check, error category, or deprecation
+   warning;
+5. example before/after request or command when practical;
+6. rollback or mitigation guidance when the change affects patch application.

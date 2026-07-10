@@ -2,6 +2,9 @@
 
 See AGENTS.md §18 for the authoritative testing rules.
 
+Status: implementation-informed after `v0.2.0-beta` P1/P2 tests. The current
+golden suite contains 21 cases covering shipped patch-producing operations.
+
 ## Unit tests
 
 Each module contains its own unit tests. Run with:
@@ -14,23 +17,30 @@ Each module contains its own unit tests. Run with:
 
 Golden tests live in `testdata/golden/`. Each subdirectory is one test case:
 
-```
+```text
 testdata/golden/
   <case-name>/
-    before/          ← source tree before the operation
-    after/           ← expected source tree after apply (omit for REFUSED cases)
-    request.json     ← { "operation", "symbol"?, "arguments"? }
-    expected-plan.json ← { "status"?, "operation"?, "summary"?, "minAffectedFiles"? }
+    before/             ← source tree before the operation
+    after/              ← expected source tree after apply; omit for REFUSED cases
+    request.json        ← { "operation", "symbol"?, "arguments"? }
+    expected-plan.json  ← { "status"?, "operation"?, "summary"?, "minAffectedFiles"? }
 ```
 
-### Supported operations in request.json
+### Supported operations in `request.json`
 
-| `operation`       | Required fields in `arguments`      |
-|-------------------|-------------------------------------|
-| `renameClass`     | `newName`                           |
-| `moveClass`       | `to` (target package)               |
-| `organizeImports` | `file` (relative path)              |
-| `safeDelete`      | `force` (optional boolean)          |
+| `operation` | Required or common fields |
+|-------------|---------------------------|
+| `renameClass` | `symbol`, `arguments.newName` |
+| `renameMember` | `symbol` as `<FQN#member>`, `arguments.newName` |
+| `moveClass` | `symbol`, `arguments.to` target package |
+| `organizeImports` | `arguments.file` relative path |
+| `safeDelete` | `symbol`, optional `arguments.force` |
+| `extractMethod` | `arguments.file`, `startLine`, `endLine`, `methodName` |
+| `changeSignature.renameParameter` | `symbol`, `arguments.oldParameterName`, `newParameterName` |
+| `changeSignature.addParameter` | `symbol`, `arguments.parameterType`, `parameterName`, `defaultExpression` |
+| `changeSignature.reorderParameters` | `symbol`, `arguments.newOrder` |
+| `changeSignature.removeParameter` | `symbol`, `arguments.parameterName` |
+| `importExternalJavaClass` | `arguments.code`, `targetPackage`, `sourceKind`, `licensePolicy` |
 
 ### Run from CLI
 
@@ -51,37 +61,71 @@ refactorkit test-golden --golden-dir path/to/golden
 ./gradlew :modules:refactorkit-testkit:test
 ```
 
-### Current cases
+### Current 21 golden cases
 
-| Case name                       | Operation          | Status   |
-|---------------------------------|--------------------|----------|
-| `rename-class-user-manager`     | renameClass        | PREVIEW  |
-| `rename-class-with-references`  | renameClass (2 files) | PREVIEW |
-| `move-class-simple`             | moveClass          | PREVIEW  |
-| `organize-imports-simple`       | organizeImports    | PREVIEW  |
-| `safe-delete-refused`           | safeDelete         | REFUSED  |
+| Case name | Operation | Status | Coverage focus |
+|-----------|-----------|--------|----------------|
+| `rename-class-user-manager` | `renameClass` | PREVIEW | Simple class rename. |
+| `rename-class-with-references` | `renameClass` | PREVIEW | Cross-file references. |
+| `rename-class-invalid-identifier` | `renameClass` | REFUSED | Invalid Java identifier refusal. |
+| `rename-member-method` | `renameMember` | PREVIEW | Method/member rename. |
+| `rename-member-constructor-refusal` | `renameMember` | REFUSED | Constructor rename refused; use class rename. |
+| `move-class-simple` | `moveClass` | PREVIEW | Package declaration and path move. |
+| `move-class-same-package-refusal` | `moveClass` | REFUSED | Same-package move refused. |
+| `organize-imports-simple` | `organizeImports` | PREVIEW | Import sorting/deduplication. |
+| `organize-imports-already-clean` | `organizeImports` | PREVIEW | Already-clean no-op preview. |
+| `safe-delete-refused` | `safeDelete` | REFUSED | Referenced class deletion refused. |
+| `safe-delete-forced-with-references` | `safeDelete` | PREVIEW | Forced delete with references remains explicit. |
+| `safe-delete-unused-class` | `safeDelete` | PREVIEW | Unreferenced class deletion. |
+| `extract-method-success` | `extractMethod` | PREVIEW | Limited no-argument private void extraction. |
+| `extract-method-refusal` | `extractMethod` | REFUSED | Parameter/control-flow limitation refusal. |
+| `change-signature-rename-parameter` | `changeSignature.renameParameter` | PREVIEW | Parameter rename and call-site update. |
+| `change-signature-add-parameter` | `changeSignature.addParameter` | PREVIEW | Add parameter with default expression. |
+| `change-signature-reorder-parameters` | `changeSignature.reorderParameters` | PREVIEW | Parameter order update. |
+| `change-signature-remove-parameter` | `changeSignature.removeParameter` | PREVIEW | Remove unused parameter. |
+| `external-class-import-preview` | `importExternalJavaClass` | PREVIEW | External class preview with package rewrite. |
+| `external-class-import-conflict` | `importExternalJavaClass` | REFUSED | Naming conflict refusal. |
+| `external-class-import-license-block-unknown` | `importExternalJavaClass` | REFUSED | Unknown-license import blocked. |
+
+## Remaining beta coverage gaps
+
+The current suite covers the P1/P2 beta additions. Remaining expansion should focus
+on gaps not yet represented by golden cases:
+
+- framework strings, generated code, unresolved-symbol, and public API risk paths;
+- `organizeImports` documented limitations beyond the clean no-op case;
+- `safeDelete` generated-code and external-configuration limits;
+- `extractMethod` additional conservative refusal paths;
+- `changeSignature.*` refusal coverage for overloads, method references,
+  generated code, hierarchy/public API risk, and unsafe defaults;
+- `importExternalJavaClass` provenance, multiple public type, and package rewrite
+  edge cases;
+- recipe/orchestration cases only for operations advertised as shipped.
 
 ## Agent simulation tests
 
 `AgentSimulationTest` in `refactorkit-testkit` simulates full AI-agent workflows:
 
-| Scenario                                            | Module          |
-|-----------------------------------------------------|-----------------|
-| Rename class + rollback                             | java            |
-| Move class to new package + rollback                | java            |
-| Safe delete refused (references exist)              | java            |
-| Organize imports (deduplication)                    | java            |
-| Import external class with unknown license          | web-importer    |
-| Import external class with naming conflict          | web-importer    |
+| Scenario | Module |
+|----------|--------|
+| Rename class + rollback | java |
+| Rename member + rollback | java |
+| Move class to new package + rollback | java |
+| Safe delete refused because references exist | java |
+| Organize imports with deduplication | java |
+| Import external class with unknown license | web-importer |
+| Import external class with naming conflict | web-importer |
 
 Each scenario follows the standard workflow from AGENTS.md §14:
 scan → find symbol → preview → inspect → apply → verify → rollback → verify restored.
 
 ## Integration test notes
 
-- `JavaOrganizeImportsPlanner` sorts and deduplicates imports but does **not** remove
-  unused imports (no type analysis available at Level 1).
-- `local-rename` tests use `CommentLiteralFilter` (heuristic); native binding bypasses it.
-- Golden tests copy `before/` into a temp dir; temp dirs are cleaned up after each run.
-- `GoldenTestRunner` ignores `.refactorkit/` transaction-log directories when comparing
-  actual output against `after/`.
+- `JavaOrganizeImportsPlanner` sorts and deduplicates imports but does **not**
+  fully remove unused imports without type analysis.
+- `local-rename` tests use `CommentLiteralFilter` heuristics; native binding
+  analysis can bypass it later.
+- Golden tests copy `before/` into a temp dir; temp dirs are cleaned up after each
+  run.
+- `GoldenTestRunner` ignores `.refactorkit/` transaction-log directories when
+  comparing actual output against `after/`.

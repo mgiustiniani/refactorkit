@@ -1,0 +1,7 @@
+{
+  "operation": "safeDelete",
+  "symbol": "com.example.UserManager",
+  "arguments": {
+    "force": "true"
+  }
+}

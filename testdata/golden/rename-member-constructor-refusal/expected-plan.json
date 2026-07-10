@@ -1,0 +1,5 @@
+{
+  "operation": "renameMember",
+  "status": "refused",
+  "summary": "Constructor rename follows class rename"
+}

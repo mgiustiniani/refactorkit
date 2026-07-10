@@ -1,0 +1,5 @@
+{
+  "operation": "moveClass",
+  "status": "refused",
+  "summary": "Source and target packages are the same"
+}

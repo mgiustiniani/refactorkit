@@ -1,0 +1,9 @@
+{
+  "operation": "importExternalJavaClass",
+  "arguments": {
+    "code": "public class ImportedTool { public String value() { return \"ok\"; } }",
+    "targetPackage": "com.example.tools",
+    "sourceKind": "clipboard",
+    "licensePolicy": "block-unknown"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "operation": "safeDelete",
+  "status": "preview",
+  "summary": "Delete com.example.UserManager",
+  "minAffectedFiles": "1"
+}

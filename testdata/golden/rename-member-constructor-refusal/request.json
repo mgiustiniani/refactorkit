@@ -1,0 +1,7 @@
+{
+  "operation": "renameMember",
+  "symbol": "com.example.UserManager#<init>",
+  "arguments": {
+    "newName": "create"
+  }
+}
