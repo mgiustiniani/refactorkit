@@ -33,8 +33,9 @@ review safety boundaries before applying refactorings.
   override detection, interface implementation override detection, representative
   Maven/Gradle sample source-root validation, cross-module Gradle sourcepath
   resolution with interface reference/override evidence, and conventional
-  compiled classpath resolution for Maven/Gradle output directories and
-  project-local `lib`/`libs` JAR entries.
+  compiled classpath resolution for Maven/Gradle output directories,
+  project-local `lib`/`libs` JAR entries, and generated dependency lists from
+  `.refactorkit/classpath`, `target/classpath.txt`, or `build/classpath.txt`.
 - Advanced `renameMember` JDT integration from warning-only evidence to exact
   signed method overload selection for the proven slice plus conservative
   inheritance safety: signed selectors such as

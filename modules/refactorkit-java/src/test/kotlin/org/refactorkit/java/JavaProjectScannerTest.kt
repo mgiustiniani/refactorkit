@@ -29,6 +29,8 @@ class JavaProjectScannerTest {
         Files.createDirectories(root.resolve("build/classes/java/main"))
         Files.createDirectories(root.resolve("libs"))
         Files.write(root.resolve("libs/local.jar"), byteArrayOf())
+        Files.createDirectories(root.resolve("dependency-cache"))
+        Files.writeString(root.resolve("target/classpath.txt"), "# generated dependency classpath\ndependency-cache\nmissing.jar\n")
 
         val module = JavaProjectScanner().scan(root).modules.single()
         val classpath = module.classpathEntries.map { it.toString().replace('\\', '/') }.toSet()
@@ -36,6 +38,8 @@ class JavaProjectScannerTest {
         assertTrue("target/classes" in classpath)
         assertTrue("build/classes/java/main" in classpath)
         assertTrue("libs/local.jar" in classpath)
+        assertTrue("dependency-cache" in classpath)
+        assertTrue("missing.jar" !in classpath)
     }
 
     @Test

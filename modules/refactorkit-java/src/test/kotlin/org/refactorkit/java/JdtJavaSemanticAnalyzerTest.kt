@@ -335,15 +335,19 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
-    fun jdtAnalyzerUsesDiscoveredMavenCompiledClasspath() {
-        val root = Files.createTempDirectory("rk-jdt-compiled-classpath-test")
+    fun jdtAnalyzerUsesGeneratedMavenDependencyClasspathFile() {
+        val root = Files.createTempDirectory("rk-jdt-generated-classpath-test")
         val dependencySource = root.resolve("dependency-src/external/Dependency.java").apply {
             Files.createDirectories(parent)
             writeText("package external; public class Dependency {}\n")
         }
-        val output = root.resolve("target/classes").also { Files.createDirectories(it) }
+        val output = root.resolve("dependency-cache").also { Files.createDirectories(it) }
         val compiler = ToolProvider.getSystemJavaCompiler() ?: error("JDK compiler is required for this test")
         assertEquals(0, compiler.run(null, null, null, "-d", output.toString(), dependencySource.toString()))
+        root.resolve("target/classpath.txt").apply {
+            Files.createDirectories(parent)
+            writeText(output.toString() + "\n")
+        }
         root.resolve("src/main/java/com/acme/UsesDependency.java").apply {
             Files.createDirectories(parent)
             writeText("""
@@ -358,8 +362,10 @@ class JdtJavaSemanticAnalyzerTest {
         val snapshot = JavaProjectScanner().scan(root)
         val result = JdtJavaSemanticAnalyzer().analyze(snapshot)
 
-        assertTrue(snapshot.modules.single().classpathEntries.any { it.toString().replace('\\', '/') == "target/classes" })
-        assertTrue(result.warnings.isEmpty(), "expected target/classes to resolve external.Dependency, got ${result.warnings}")
+        assertTrue(snapshot.modules.single().classpathEntries.any {
+            snapshot.workspace.root.resolve(it).normalize() == output.normalize()
+        })
+        assertTrue(result.warnings.isEmpty(), "expected target/classpath.txt to resolve external.Dependency, got ${result.warnings}")
         assertTrue(result.symbols.any {
             it.qualifiedName == "com.acme.UsesDependency#dependency" &&
                 it.evidence == JdtJavaSemanticEvidence.JDT_BINDING

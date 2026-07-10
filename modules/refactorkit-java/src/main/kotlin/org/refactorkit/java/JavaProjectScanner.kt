@@ -4,6 +4,7 @@ import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.Workspace
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -96,8 +97,34 @@ class JavaProjectScanner {
                         .collect(Collectors.toList())
                 }
             }
-        return (outputDirectories + localJars).distinct().sortedBy { it.toString() }
+        return (outputDirectories + localJars + declaredClasspathEntries(root))
+            .distinct()
+            .sortedBy { it.toString() }
     }
+
+    private fun declaredClasspathEntries(root: Path): List<Path> = listOf(
+        root.resolve(".refactorkit/classpath"),
+        root.resolve("target/classpath.txt"),
+        root.resolve("build/classpath.txt"),
+    ).filter { it.exists() && Files.isRegularFile(it) }
+        .flatMap { classpathFile ->
+            runCatching {
+                classpathFile.readText().lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith('#') }
+                    .flatMap { it.split(File.pathSeparatorChar).asSequence() }
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .map { entry ->
+                        val path = Path.of(entry)
+                        if (path.isAbsolute) path.normalize() else root.resolve(path).normalize()
+                    }
+                    .filter { path ->
+                        path.exists() && (path.isDirectory() || path.fileName.toString().endsWith(".jar"))
+                    }
+                    .toList()
+            }.getOrDefault(emptyList())
+        }
 
     private fun moduleName(workspaceRoot: Path, moduleRoot: Path): String {
         val relative = workspaceRoot.relativize(moduleRoot)
