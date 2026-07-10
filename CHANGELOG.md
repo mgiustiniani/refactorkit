@@ -16,6 +16,8 @@ review safety boundaries before applying refactorings.
 - Exposed version metadata through `refactorkit --version`, `refactorkit version`,
   CLI help text, daemon JSON-RPC `server.version`, and LSP/MCP `serverInfo`.
 - Added CLI, daemon, LSP, and MCP tests for the version/API metadata surfaces.
+- Drafted the compatibility and deprecation policy for beta-contract,
+  experimental, and internal integration surfaces.
 
 ## v0.2.0-beta - 2026-07-10
 

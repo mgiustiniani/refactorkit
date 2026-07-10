@@ -4,8 +4,9 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 
 Status: implementation-informed P0 baseline for `v0.2.0-beta` plus the
 post-beta `0.3.0-SNAPSHOT` version/API metadata slice. The beta is not a
-`v1.0.0` API freeze, but documented beta-contract surfaces require contract
-tests and migration notes for later breaking changes.
+`v1.0.0` API freeze. Compatibility labels, API-version expectations, and
+breaking-change migration-note rules are defined in
+[Compatibility and deprecation policy](compatibility-policy.md).
 
 Current mainline metadata after `v0.2.0-beta`:
 
@@ -13,13 +14,12 @@ Current mainline metadata after `v0.2.0-beta`:
 - implementation version: `0.3.0-SNAPSHOT`;
 - beta contract API version: `0.2`.
 
-## Stability labels
+## Compatibility policy
 
-| Label | Meaning for `v0.2.0-beta` |
-|-------|----------------------------|
-| `beta-contract` | Name, required parameters, response envelope, error category, and preview/apply/rollback safety semantics should remain stable through beta patch releases. |
-| `experimental` | Available for pilots, but behavior, parameters, and output fields may change before `v1.0.0`; breaking changes still need release notes. |
-| `internal` | Not intended for external consumers; may change without migration support. |
+This document lists the current integration surfaces and their stability labels.
+See [Compatibility and deprecation policy](compatibility-policy.md) for the
+normative meaning of `beta-contract`, `experimental`, and `internal`, the
+implementation-version vs API-version distinction, and deprecation rules.
 
 ## Structured error categories
 
@@ -268,15 +268,6 @@ the same provenance/license warning line as the daemon importer contract under
 
 ## Migration-note requirements
 
-Any breaking change after `v0.2.0-beta` to a `beta-contract` command, method,
-operation, resource, request field, response envelope, or error category must add
-migration notes before release. Each note must include:
-
-1. old surface and first affected release;
-2. replacement surface or explicit removal reason;
-3. compatibility impact for CLI scripts, JSON-RPC clients, LSP clients, or MCP
-   clients;
-4. detection strategy, such as version check, error category, or deprecation
-   warning;
-5. example before/after request or command when practical;
-6. rollback or mitigation guidance when the change affects patch application.
+Breaking changes to `beta-contract` surfaces must include migration notes before
+release. The required content is defined in
+[Compatibility and deprecation policy](compatibility-policy.md#breaking-change-migration-notes).

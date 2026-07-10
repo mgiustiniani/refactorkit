@@ -115,7 +115,9 @@ Initial work items:
    JSON-RPC `server.version`, and LSP/MCP `serverInfo.version`.
 3. Draft the semantic versioning and deprecation policy for beta-contract
    commands, JSON-RPC methods, LSP commands, MCP tools/resources, and structured
-   error categories.
+   error categories. Progress: P1 draft published in
+   [docs/compatibility-policy.md](compatibility-policy.md); integration-contract
+   docs now link to it instead of duplicating the policy.
 4. Decide and prototype the compiler-backed Java analysis direction for symbol
    resolution, reference search, diagnostics, and framework-risk detection before
    `v1.0.0`.
