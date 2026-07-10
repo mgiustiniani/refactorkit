@@ -40,7 +40,8 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             return refused(snapshot, "renameMember", "Symbol must be in the form <FQN>#<member> — got: $symbolFqnWithMember")
         }
         val ownerFqn = symbolFqnWithMember.substring(0, hashIdx)
-        val oldMemberName = symbolFqnWithMember.substring(hashIdx + 1)
+        val memberSelector = symbolFqnWithMember.substring(hashIdx + 1)
+        val oldMemberName = memberSelector.substringBefore('(')
 
         if (oldMemberName == "<init>") {
             return refused(snapshot, "renameMember", "Constructor rename follows class rename. Use renameClass instead.")
@@ -72,6 +73,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         if (members.size > 1) {
             warnings += "Multiple overloads of '$oldMemberName' detected in $ownerFqn. All overloads will be renamed."
         }
+        warnings += jdtEvidenceWarnings(snapshot, ownerFqn, oldMemberName)
 
         // ── build edits ──────────────────────────────────────────────────────
         val ownerPkg = JavaPackageUtil.packageOf(ownerFqn)
@@ -154,8 +156,40 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         return name.all { JavaLexer.isIdentChar(it) }
     }
 
+    private fun jdtEvidenceWarnings(
+        snapshot: ProjectSnapshot,
+        ownerFqn: String,
+        oldMemberName: String,
+    ): List<String> {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        val candidates = analysis.symbols.filter { symbol ->
+            symbol.ownerQualifiedName == ownerFqn &&
+                symbol.simpleName == oldMemberName &&
+                symbol.kind in JDT_MEMBER_KINDS
+        }
+        val warnings = mutableListOf<String>()
+        if (candidates.isNotEmpty()) {
+            val candidateKeys = candidates.mapNotNull { it.bindingKey }.toSet()
+            val matchedReferences = analysis.references.count { it.bindingKey != null && it.bindingKey in candidateKeys }
+            val signatures = candidates.mapNotNull { it.memberSignature }.distinct().sorted()
+            warnings += "Experimental JDT evidence matched ${candidates.size} member candidate(s) and $matchedReferences reference(s) for $ownerFqn#$oldMemberName; lexical planner still determines preview edits."
+            if (signatures.size > 1) {
+                warnings += "Experimental JDT evidence distinguished overload signatures for $ownerFqn#$oldMemberName: ${signatures.joinToString(", ")}."
+            }
+        }
+        if (analysis.warnings.isNotEmpty()) {
+            warnings += "Experimental JDT semantic analysis reported ${analysis.warnings.size} parse/classpath warning(s); review preview carefully before apply."
+        }
+        return warnings
+    }
+
     companion object {
         private val TYPE_KINDS = setOf(Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.ENUM, Symbol.Kind.RECORD)
         private val MEMBER_KINDS = setOf(Symbol.Kind.METHOD, Symbol.Kind.FIELD, Symbol.Kind.CONSTRUCTOR)
+        private val JDT_MEMBER_KINDS = setOf(
+            JdtJavaSemanticSymbolKind.METHOD,
+            JdtJavaSemanticSymbolKind.FIELD,
+            JdtJavaSemanticSymbolKind.CONSTRUCTOR,
+        )
     }
 }

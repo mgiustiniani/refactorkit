@@ -44,11 +44,37 @@ class JavaRenameMemberPlannerTest {
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.summary.contains("getDisplayName"))
+        assertTrue(plan.warnings.any { it.contains("Experimental JDT evidence matched") })
         val affected = plan.affectedFiles.map { it.toString() }
         assertTrue(affected.any { it.endsWith("UserManager.java") })
         assertTrue(affected.any { it.endsWith("Client.java") })
         // Unrelated.java is in a different package with no import → not in scope
         assertTrue(affected.none { it.endsWith("Unrelated.java") })
+    }
+
+    @Test
+    fun signedMemberSelectorProducesPreviewWithOverloadEvidence() {
+        val root = createTempProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/LookupClient.java" to """
+                package com.example;
+                public class LookupClient {
+                    String run(Lookup lookup) { return lookup.find("ada") + lookup.find(7); }
+                }
+            """.trimIndent(),
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.preview(snap, "com.example.Lookup#find(java.lang.String)", "lookup")
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.warnings.any { it.contains("Multiple overloads of 'find'") })
+        assertTrue(plan.warnings.any { it.contains("find(int)") && it.contains("find(java.lang.String)") })
     }
 
     @Test

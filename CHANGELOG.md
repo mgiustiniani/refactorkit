@@ -28,7 +28,12 @@ review safety boundaries before applying refactorings.
   selected-member identity/reference evidence, overload disambiguation,
   constructor identity/references, same-simple-name import disambiguation, and
   representative Maven/Gradle sample source-root validation with type and method
-  discovery, while existing planners still use lexical fallback behavior.
+  discovery.
+- Added first preview-level JDT evidence warnings to `renameMember`: signed
+  selectors such as `com.example.Lookup#find(java.lang.String)` are accepted for
+  current lexical rename behavior, and previews report matched JDT member
+  candidates, references, overload signatures, and parse/classpath warning
+  counts while stating that lexical planning still determines edits.
 
 ## v0.2.0-beta - 2026-07-10
 
