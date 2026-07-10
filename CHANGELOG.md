@@ -34,6 +34,10 @@ tagged.
   organize imports, safe delete, extract method, change signature, and external
   import success conditions, refusal behavior, warnings, and rollback
   expectations.
+- Reviewed runtime preview-warning wording against operation docs for the major
+  shipped and experimental beta operations, including lexical/string/framework
+  limits, conservative refusals, provenance/license warnings, and overwrite
+  refusal.
 - Hardened P6 external Java importer coverage for provenance warnings, GPL
   high-risk handling, helper-type preservation, multi-public-type splitting, and
   non-Java Markdown fence stripping.
