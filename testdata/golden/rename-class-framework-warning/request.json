@@ -1,0 +1,7 @@
+{
+  "operation": "renameClass",
+  "symbol": "com.example.domain.UserEntity",
+  "arguments": {
+    "newName": "AccountEntity"
+  }
+}

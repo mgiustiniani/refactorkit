@@ -1,0 +1,7 @@
+{
+  "status": "preview",
+  "operation": "renameClass",
+  "summary": "Rename UserEntity",
+  "minAffectedFiles": "2",
+  "warningContains": "default JPA entity names derive from class names"
+}

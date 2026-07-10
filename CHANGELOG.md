@@ -21,8 +21,9 @@ tagged.
 - Accepted ADR 0007, documenting which Java behavior remains lexical/structural
   for beta and which semantic guarantees require compiler-backed analysis before
   `v1.0.0`.
-- Expanded golden coverage from 15 alpha cases to 21 cases covering shipped
-  patch-producing operation progress and sample coverage.
+- Expanded golden coverage from 15 alpha cases to 22 cases covering shipped
+  patch-producing operation progress, sample coverage, and framework-warning
+  assertions.
 - Added P3 patch safety coverage for stale snapshots, unsafe paths, overlapping
   edits, and rollback restoration for modify, create, rename, and delete edits.
 - Added P4 contract coverage for selected daemon JSON-RPC, MCP, and LSP

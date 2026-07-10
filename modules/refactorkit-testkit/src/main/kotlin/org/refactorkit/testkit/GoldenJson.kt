@@ -29,6 +29,7 @@ internal object GoldenJson {
             operation = fields["operation"],
             summaryContains = fields["summary"],
             minAffectedFiles = minFiles,
+            warningContains = fields["warningContains"],
         )
     }
 

@@ -4,7 +4,7 @@ See AGENTS.md §18 for the authoritative testing rules.
 
 Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests,
 initial P3/P4 safety/contract tests, focused P6 external-importer hardening, and
-P7 packaging/release-verification progress. The current golden suite contains 21
+P7 packaging/release-verification progress. The current golden suite contains 22
 cases covering shipped patch-producing operations.
 
 ## Unit tests
@@ -25,7 +25,7 @@ testdata/golden/
     before/             ← source tree before the operation
     after/              ← expected source tree after apply; omit for REFUSED cases
     request.json        ← { "operation", "symbol"?, "arguments"? }
-    expected-plan.json  ← { "status"?, "operation"?, "summary"?, "minAffectedFiles"? }
+    expected-plan.json  ← { "status"?, "operation"?, "summary"?, "minAffectedFiles"?, "warningContains"? }
 ```
 
 ### Supported operations in `request.json`
@@ -63,13 +63,14 @@ refactorkit test-golden --golden-dir path/to/golden
 ./gradlew :modules:refactorkit-testkit:test
 ```
 
-### Current 21 golden cases
+### Current 22 golden cases
 
 | Case name | Operation | Status | Coverage focus |
 |-----------|-----------|--------|----------------|
 | `rename-class-user-manager` | `renameClass` | PREVIEW | Simple class rename. |
 | `rename-class-with-references` | `renameClass` | PREVIEW | Cross-file references. |
 | `rename-class-invalid-identifier` | `renameClass` | REFUSED | Invalid Java identifier refusal. |
+| `rename-class-framework-warning` | `renameClass` | PREVIEW | JPA/framework risk warning assertion. |
 | `rename-member-method` | `renameMember` | PREVIEW | Method/member rename. |
 | `rename-member-constructor-refusal` | `renameMember` | REFUSED | Constructor rename refused; use class rename. |
 | `move-class-simple` | `moveClass` | PREVIEW | Package declaration and path move. |

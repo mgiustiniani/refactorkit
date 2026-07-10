@@ -201,6 +201,11 @@ class GoldenTestRunner(
         if (plan.affectedFiles.size < expected.minAffectedFiles) {
             errors += "Expected at least ${expected.minAffectedFiles} affected files but got ${plan.affectedFiles.size}"
         }
+        expected.warningContains?.let { sub ->
+            if (plan.warnings.none { it.contains(sub, ignoreCase = true) }) {
+                errors += "Expected at least one plan warning to contain '$sub' but got: ${plan.warnings}"
+            }
+        }
         return errors
     }
 

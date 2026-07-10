@@ -14,4 +14,6 @@ data class GoldenExpectedPlan(
     val summaryContains: String? = null,
     /** Minimum number of files that must be in [PatchPlan.affectedFiles]. */
     val minAffectedFiles: Int = 0,
+    /** If set, at least one plan warning must contain this string (case-insensitive). */
+    val warningContains: String? = null,
 )
