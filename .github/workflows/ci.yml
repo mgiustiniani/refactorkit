@@ -39,9 +39,16 @@ jobs:
           grep -qi 'Status: confirmed' docs/arc42/01-introduction-and-goals.adoc
 
       - name: Package self-contained CLI
-        run: ./gradlew packageCliRuntime
+        run: ./gradlew packageCliRuntime distCliRuntimeZip
 
       - name: Smoke packaged CLI
         run: |
           modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
           modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/java-maven-simple
+
+      - name: Upload CLI runtime distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: refactorkit-runtime
+          path: modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip
+          if-no-files-found: error

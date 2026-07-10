@@ -38,14 +38,220 @@ gradle wrapper
 ./gradlew build
 ```
 
-## CLI examples
+## CLI examples for alpha hardening
+
+The examples below use the packaged binary name `refactorkit`. During development, run the same command through Gradle:
 
 ```bash
-./gradlew :modules:refactorkit-cli:run --args="--help"
-./gradlew :modules:refactorkit-cli:run --args="scan samples/java-maven-simple"
-./gradlew :modules:refactorkit-cli:run --args="java symbols samples/java-maven-simple"
-./gradlew :modules:refactorkit-cli:run --args="recipe run recipes/java/rename-package.yml --root samples/java-maven-simple --param.oldPackage com.example --param.newPackage com.acme"
+./gradlew :modules:refactorkit-cli:run --args="<command and options>"
 ```
+
+For example:
+
+```bash
+./gradlew :modules:refactorkit-cli:run --args="scan samples/java-maven-simple"
+```
+
+### Project inspection
+
+```bash
+# Show global CLI help.
+refactorkit --help
+
+# Scan a project and print the workspace summary and snapshot hash.
+refactorkit scan samples/java-maven-simple
+
+# `index` is an alias for scan.
+refactorkit index samples/java-maven-simple
+
+# List Java symbols discovered by the default Java scanner.
+refactorkit symbols samples/java-maven-simple
+
+# Java namespace aliases for inspection commands.
+refactorkit java scan samples/java-maven-simple
+refactorkit java symbols samples/java-maven-simple
+refactorkit java diagnostics samples/java-maven-simple
+
+# Report Java diagnostics such as duplicate symbols or package/path mismatches.
+refactorkit diagnostics samples/java-maven-simple
+
+# Locate a symbol definition and references.
+refactorkit definition --symbol com.example.UserManager samples/java-maven-simple
+refactorkit references --symbol com.example.UserManager samples/java-maven-simple
+refactorkit java definition --symbol com.example.UserManager samples/java-maven-simple
+refactorkit java references --symbol com.example.UserManager samples/java-maven-simple
+```
+
+### Java refactoring previews
+
+Mutating Java commands are preview-first. Omit `--apply` to inspect the patch plan and warnings without writing files.
+
+```bash
+# Rename a Java type and update same-project references.
+refactorkit rename \
+  --symbol com.example.UserManager \
+  --to AccountManager \
+  samples/java-maven-simple
+
+# Rename a method or field by owner/member symbol.
+refactorkit rename-member \
+  --symbol 'com.example.UserManager#displayName' \
+  --to labelFor \
+  samples/java-maven-simple
+
+# Move a class to another package and update package/import/FQN references.
+refactorkit move-class \
+  --symbol com.example.UserManager \
+  --to-package com.example.account \
+  samples/java-maven-simple
+
+# Sort/deduplicate imports for one or more files.
+refactorkit organize-imports \
+  samples/java-maven-simple/src/main/java/com/example/UserManager.java \
+  --root samples/java-maven-simple
+
+# Refuse deletion when source references are found; use --force only after manual review.
+refactorkit safe-delete \
+  --symbol com.example.UserManager \
+  samples/java-maven-simple
+```
+
+### Limited transformations
+
+These commands are intentionally conservative in the MVP and may return a refused plan when the selection or signature is unsafe.
+
+```bash
+# Extract a selected line range to a private no-argument void method.
+# Adjust the file and 1-based line numbers to a real, supported selection.
+refactorkit extract-method \
+  --file src/main/java/com/example/UserManager.java \
+  --start-line 10 \
+  --end-line 14 \
+  --method-name validateUser \
+  --root samples/java-maven-simple
+
+# Rename a method parameter.
+refactorkit change-signature \
+  --symbol 'com.example.UserManager#displayName' \
+  --old-name username \
+  --new-name userName \
+  samples/java-maven-simple
+
+# Add a parameter with a default expression at call sites.
+refactorkit change-signature \
+  --operation add-parameter \
+  --symbol 'com.example.UserManager#displayName' \
+  --type String \
+  --name prefix \
+  --default '"User"' \
+  samples/java-maven-simple
+
+# Reorder or remove parameters when the planner can prove the change is safe.
+refactorkit change-signature \
+  --operation reorder-parameters \
+  --symbol 'com.example.UserManager#displayName' \
+  --order userName,prefix \
+  samples/java-maven-simple
+refactorkit change-signature \
+  --operation remove-parameter \
+  --symbol 'com.example.UserManager#displayName' \
+  --name prefix \
+  samples/java-maven-simple
+```
+
+### Apply and rollback workflow
+
+```bash
+# 1. Preview first and inspect the rendered patch, diagnostics, warnings, and risk level.
+refactorkit rename --symbol com.example.UserManager --to AccountManager samples/java-maven-simple
+
+# 2. Apply only after review. The CLI prints a transaction ID on success.
+refactorkit rename --symbol com.example.UserManager --to AccountManager --apply samples/java-maven-simple
+
+# 3. Verify after apply.
+refactorkit diagnostics samples/java-maven-simple
+
+# 4. Roll back by transaction ID if verification fails or the change is no longer wanted.
+refactorkit patch rollback <transaction-id> --root samples/java-maven-simple
+```
+
+### External Java class import
+
+External imports are treated as code assimilation, not plain refactoring. Keep provenance and license risk visible in the preview.
+
+```bash
+# Preview an import from stdin. Unknown licenses warn by default.
+printf 'public class Slugifier { public String slug(String s) { return s.toLowerCase(); } }\n' | \
+  refactorkit java import-class \
+    --target-package com.example.util \
+    --source-url https://example.invalid/snippets/Slugifier.java \
+    --stdin \
+    samples/java-maven-simple
+
+# Refuse unknown-license imports instead of warning.
+refactorkit java import-class \
+  --target-package com.example.util \
+  --file /path/to/ExternalUtil.java \
+  --license-policy block-unknown \
+  samples/java-maven-simple
+```
+
+### Recipes
+
+```bash
+# Preview a parameterized recipe.
+refactorkit recipe run recipes/java/rename-package.yml \
+  --root samples/java-maven-simple \
+  --param.oldPackage com.example \
+  --param.newPackage com.acme
+
+# Apply the same recipe only after reviewing the preview.
+refactorkit recipe run recipes/java/rename-package.yml \
+  --root samples/java-maven-simple \
+  --param.oldPackage com.example \
+  --param.newPackage com.acme \
+  --apply
+```
+
+### Structural tools
+
+Structural tools are lightweight, language-agnostic helpers. They are useful for inspection and local edits, but they are not a substitute for semantic Java refactorings.
+
+```bash
+# Show a file outline using the generic/tree-sitter adapter path.
+refactorkit outline samples/java-maven-simple/src/main/java/com/example/UserManager.java --language java
+
+# Search a single file structurally/textually with whole-word matching.
+refactorkit search samples/java-maven-simple/src/main/java/com/example/UserManager.java \
+  --pattern UserManager \
+  --language java \
+  --whole-word
+
+# Preview a file-local identifier rename.
+refactorkit local-rename samples/java-maven-simple/src/main/java/com/example/UserManager.java \
+  --from username \
+  --to userName \
+  --root samples/java-maven-simple
+```
+
+### Golden tests
+
+```bash
+# Run all golden test cases.
+refactorkit test-golden
+
+# Run one golden test case.
+refactorkit test-golden rename-class-user-manager
+
+# Use a non-default golden test directory.
+refactorkit test-golden --golden-dir testdata/golden
+```
+
+## Preview, apply, rollback safety model
+
+The alpha workflow is: scan the project, generate a preview, inspect affected files/diagnostics/warnings, apply only with `--apply`, verify with diagnostics or tests, and roll back by transaction ID if the result is not acceptable. Patch application validates the snapshot hash and records rollback metadata under the workspace.
+
+MVP limitations remain visible: Java analysis is still mostly lexical, `organize-imports` does not fully remove unused imports, `safe-delete` does not inspect every non-source reference, external importer license detection is heuristic, and extract-method/change-signature support is conservative. See [`docs/release-plan.md`](docs/release-plan.md) and ARC42 risks in [`docs/arc42/11-risks-and-technical-debt.adoc`](docs/arc42/11-risks-and-technical-debt.adoc).
 
 ## Self-contained CLI package
 
