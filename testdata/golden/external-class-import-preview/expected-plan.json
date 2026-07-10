@@ -1,0 +1,6 @@
+{
+  "operation": "importExternalJavaClass",
+  "status": "preview",
+  "summary": "ImportedTool",
+  "minAffectedFiles": "1"
+}

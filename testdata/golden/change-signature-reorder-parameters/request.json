@@ -1,0 +1,7 @@
+{
+  "operation": "changeSignature.reorderParameters",
+  "symbol": "com.example.Formatter#pair",
+  "arguments": {
+    "newOrder": "right,left"
+  }
+}

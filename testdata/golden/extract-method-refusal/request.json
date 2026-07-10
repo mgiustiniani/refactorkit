@@ -1,0 +1,9 @@
+{
+  "operation": "extractMethod",
+  "arguments": {
+    "file": "src/main/java/com/example/Worker.java",
+    "startLine": "5",
+    "endLine": "5",
+    "methodName": "printName"
+  }
+}

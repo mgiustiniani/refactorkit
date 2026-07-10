@@ -1,0 +1,6 @@
+{
+  "operation": "changeSignature.removeParameter",
+  "status": "preview",
+  "summary": "unused",
+  "minAffectedFiles": "2"
+}

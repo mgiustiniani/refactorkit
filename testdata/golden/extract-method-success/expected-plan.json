@@ -1,0 +1,6 @@
+{
+  "operation": "extractMethod",
+  "status": "preview",
+  "summary": "logSteps",
+  "minAffectedFiles": "1"
+}

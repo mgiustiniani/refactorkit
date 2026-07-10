@@ -1,0 +1,6 @@
+{
+  "operation": "changeSignature.renameParameter",
+  "status": "preview",
+  "summary": "suffix",
+  "minAffectedFiles": "1"
+}

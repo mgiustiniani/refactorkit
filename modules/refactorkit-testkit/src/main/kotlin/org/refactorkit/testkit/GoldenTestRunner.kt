@@ -4,6 +4,8 @@ import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.java.JavaChangeSignaturePlanner
+import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -11,6 +13,10 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.webimporter.ExternalJavaClassImporter
+import org.refactorkit.webimporter.ImportRequest
+import org.refactorkit.webimporter.LicensePolicy
+import org.refactorkit.webimporter.SourceKind
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -121,11 +127,57 @@ class GoldenTestRunner(
                 val force = request.arguments["force"]?.toBoolean() ?: false
                 JavaSafeDeletePlanner(adapter).preview(snap, requireSymbol(request), force)
             }
+            "extractMethod" -> {
+                val file = requireArgument(request, "file")
+                val filePath = Paths.get(file.trim()).let { if (it.isAbsolute) root.relativize(it) else it }
+                JavaExtractMethodPlanner().preview(
+                    snap,
+                    filePath,
+                    requireArgument(request, "startLine").toInt(),
+                    requireArgument(request, "endLine").toInt(),
+                    requireArgument(request, "methodName"),
+                )
+            }
+            "changeSignature.renameParameter" -> JavaChangeSignaturePlanner(adapter).previewRenameParameter(
+                snap,
+                requireSymbol(request),
+                requireArgument(request, "oldParameterName"),
+                requireArgument(request, "newParameterName"),
+            )
+            "changeSignature.addParameter" -> JavaChangeSignaturePlanner(adapter).previewAddParameter(
+                snap,
+                requireSymbol(request),
+                requireArgument(request, "parameterType"),
+                requireArgument(request, "parameterName"),
+                requireArgument(request, "defaultExpression"),
+            )
+            "changeSignature.reorderParameters" -> JavaChangeSignaturePlanner(adapter).previewReorderParameters(
+                snap,
+                requireSymbol(request),
+                requireArgument(request, "newOrder").split(',').map { it.trim() }.filter { it.isNotEmpty() },
+            )
+            "changeSignature.removeParameter" -> JavaChangeSignaturePlanner(adapter).previewRemoveParameter(
+                snap,
+                requireSymbol(request),
+                requireArgument(request, "parameterName"),
+            )
+            "importExternalJavaClass" -> ExternalJavaClassImporter().preview(ImportRequest(
+                code = requireArgument(request, "code"),
+                targetPackage = requireArgument(request, "targetPackage"),
+                targetModule = request.arguments["targetModule"],
+                sourceUrl = request.arguments["sourceUrl"],
+                sourceKind = request.arguments["sourceKind"]?.let { SourceKind.valueOf(it.uppercase()) } ?: SourceKind.SNIPPET,
+                licensePolicy = request.arguments["licensePolicy"]?.let { LicensePolicy.valueOf(it.uppercase().replace('-', '_')) } ?: LicensePolicy.WARN,
+                snapshot = snap,
+            ))
             else -> error("Unknown operation: '${request.operation}'")
         }
 
     private fun requireSymbol(request: GoldenRequest): String =
         request.symbol ?: error("Operation '${request.operation}' requires 'symbol' in request.json")
+
+    private fun requireArgument(request: GoldenRequest, name: String): String =
+        request.arguments[name] ?: error("${request.operation} needs '$name' in arguments")
 
     // ── plan validation ───────────────────────────────────────────────────────
 

@@ -1,0 +1,6 @@
+{
+  "operation": "changeSignature.reorderParameters",
+  "status": "preview",
+  "summary": "right, left",
+  "minAffectedFiles": "2"
+}

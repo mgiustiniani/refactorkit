@@ -1,0 +1,8 @@
+{
+  "operation": "changeSignature.renameParameter",
+  "symbol": "com.example.Calculator#join",
+  "arguments": {
+    "oldParameterName": "right",
+    "newParameterName": "suffix"
+  }
+}

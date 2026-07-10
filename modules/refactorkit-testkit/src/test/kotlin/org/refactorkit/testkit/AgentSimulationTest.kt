@@ -4,11 +4,14 @@ import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.java.JavaChangeSignaturePlanner
+import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
+import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
 import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
@@ -54,6 +57,122 @@ class AgentSimulationTest {
         }
         return root
     }
+
+    private fun fileTree(root: Path): Map<String, String> = root.toFile().walkTopDown()
+        .filter { it.isFile }
+        .associate { file -> root.relativize(file.toPath()).toString().replace('\\', '/') to file.readText() }
+
+    private fun assertPreviewApplyRollbackRestores(caseName: String, root: Path, plan: org.refactorkit.core.PatchPlan, snapshotHash: String) {
+        assertEquals(PatchStatus.PREVIEW, plan.status, "$caseName should produce a preview plan: ${plan.summary}")
+        assertFalse(plan.diagnosticsAfterPreview.any { it.severity == Diagnostic.Severity.ERROR })
+        val before = fileTree(root)
+        val applyResult = PatchEngine(root).apply(plan, snapshotHash)
+        assertIs<ApplyResult.Applied>(applyResult)
+        assertTrue(fileTree(root) != before, "Apply should mutate the workspace")
+        val rollbackResult = PatchEngine(root).rollback(applyResult.transaction)
+        assertIs<ApplyResult.Applied>(rollbackResult)
+        assertEquals(before, fileTree(root), "Rollback should restore the exact before-state")
+    }
+
+    // ── rollback coverage for release-plan mutating operations ────────────────
+
+    @Test
+    fun scenarioRepresentativeMutatingOperationsRollbackToBeforeState() {
+        val cases = listOf(
+            rollbackCase("renameMember") {
+                val root = project(
+                    "src/main/java/com/example/UserManager.java" to
+                        "package com.example;\npublic class UserManager { String displayName(String userName) { return userName; } }\n",
+                    "src/main/java/com/example/UserClient.java" to
+                        "package com.example;\npublic class UserClient { String show(UserManager manager) { return manager.displayName(\"Ada\"); } }\n",
+                )
+                val snap = scanner.scan(root)
+                Triple(root, JavaRenameMemberPlanner(adapter).preview(snap, "com.example.UserManager#displayName", "renderName"), snap.hash)
+            },
+            rollbackCase("safeDelete") {
+                val root = project(
+                    "src/main/java/com/example/UnusedTool.java" to "package com.example;\npublic class UnusedTool {}\n",
+                )
+                val snap = scanner.scan(root)
+                Triple(root, JavaSafeDeletePlanner(adapter).preview(snap, "com.example.UnusedTool"), snap.hash)
+            },
+            rollbackCase("extractMethod") {
+                val root = project(
+                    "src/main/java/com/example/Worker.java" to
+                        "package com.example;\n\npublic class Worker {\n    public void run() {\n        System.out.println(\"start\");\n        System.out.println(\"done\");\n    }\n}\n",
+                )
+                val snap = scanner.scan(root)
+                Triple(root, JavaExtractMethodPlanner().preview(snap, java.nio.file.Paths.get("src/main/java/com/example/Worker.java"), 5, 6, "logSteps"), snap.hash)
+            },
+            rollbackCase("changeSignature.renameParameter") {
+                val root = project(
+                    "src/main/java/com/example/Calculator.java" to
+                        "package com.example;\npublic class Calculator { String join(String left, String right) { return left + right; } }\n",
+                )
+                val snap = scanner.scan(root)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewRenameParameter(snap, "com.example.Calculator#join", "right", "suffix"), snap.hash)
+            },
+            rollbackCase("changeSignature.addParameter") {
+                val root = project(
+                    "src/main/java/com/example/Formatter.java" to
+                        "package com.example;\npublic class Formatter {\n    String label(String name) { return name; }\n}\n",
+                    "src/main/java/com/example/Client.java" to
+                        "package com.example;\npublic class Client {\n    String render(Formatter formatter) { return formatter.label(\"Ada\"); }\n}\n",
+                )
+                val snap = scanner.scan(root)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewAddParameter(snap, "com.example.Formatter#label", "String", "prefix", "\"user\""), snap.hash)
+            },
+            rollbackCase("changeSignature.reorderParameters") {
+                val root = project(
+                    "src/main/java/com/example/Formatter.java" to
+                        "package com.example;\npublic class Formatter {\n    String pair(String left, String right) { return left + right; }\n}\n",
+                    "src/main/java/com/example/Client.java" to
+                        "package com.example;\npublic class Client {\n    String render(Formatter formatter) { return formatter.pair(\"A\", \"B\"); }\n}\n",
+                )
+                val snap = scanner.scan(root)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewReorderParameters(snap, "com.example.Formatter#pair", listOf("right", "left")), snap.hash)
+            },
+            rollbackCase("changeSignature.removeParameter") {
+                val root = project(
+                    "src/main/java/com/example/Formatter.java" to
+                        "package com.example;\npublic class Formatter {\n    String name(String first, String unused) { return first; }\n}\n",
+                    "src/main/java/com/example/Client.java" to
+                        "package com.example;\npublic class Client {\n    String render(Formatter formatter) { return formatter.name(\"Ada\", \"ignored\"); }\n}\n",
+                )
+                val snap = scanner.scan(root)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewRemoveParameter(snap, "com.example.Formatter#name", "unused"), snap.hash)
+            },
+            rollbackCase("importExternalJavaClass") {
+                val root = project(
+                    "src/main/java/com/example/App.java" to "package com.example;\npublic class App {}\n",
+                )
+                val snap = scanner.scan(root)
+                val plan = ExternalJavaClassImporter().preview(ImportRequest(
+                    code = "public class ImportedTool { public String value() { return \"ok\"; } }",
+                    targetPackage = "com.example.tools",
+                    sourceKind = SourceKind.CLIPBOARD,
+                    licensePolicy = LicensePolicy.WARN,
+                    snapshot = snap,
+                ))
+                Triple(root, plan, snap.hash)
+            },
+        )
+
+        cases.forEach { case ->
+            val (root, plan, snapshotHash) = case.create()
+            assertPreviewApplyRollbackRestores(case.name, root, plan, snapshotHash)
+        }
+    }
+
+    private data class RollbackCase(
+        val name: String,
+        val create: () -> Triple<Path, org.refactorkit.core.PatchPlan, String>,
+    )
+
+    private fun rollbackCase(
+        name: String,
+        create: () -> Triple<Path, org.refactorkit.core.PatchPlan, String>,
+    ): RollbackCase = RollbackCase(name, create)
 
     // ── scenario 1: rename class ──────────────────────────────────────────────
 

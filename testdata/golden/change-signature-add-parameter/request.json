@@ -1,0 +1,9 @@
+{
+  "operation": "changeSignature.addParameter",
+  "symbol": "com.example.Formatter#label",
+  "arguments": {
+    "parameterType": "String",
+    "parameterName": "prefix",
+    "defaultExpression": "\"user\""
+  }
+}

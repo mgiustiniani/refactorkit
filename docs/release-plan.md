@@ -13,6 +13,13 @@ users and local AI agents can safely rely on.
 
 ## Phase 1 — Alpha hardening (`v0.1.0-alpha`)
 
+Status note (2026-07-10): completed for `v0.1.0-alpha`. The alpha exit
+criteria and work items are satisfied, including green CI/build validation, 15
+golden cases, rollback agent simulations, ADR coverage, and the release workflow
+that publishes the bundled runtime zip plus checksum. The current open risk
+limitations below remain accepted for alpha and must stay visible in release
+notes and previews.
+
 Exit criteria:
 
 - CI is required and green on `main`.

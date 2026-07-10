@@ -2,25 +2,19 @@
 
 All notable changes to RefactorKit are tracked here.
 
-This project uses planned alpha entries before the first public tag so release
-scope and limitations stay visible during hardening.
+This project records released scope and known limitations so alpha users can
+review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-### Added
+No unreleased changes yet.
 
-- GitHub Actions CI badge in `README.md` for the `ci.yml` workflow.
-- Release notes template at `.github/RELEASE_TEMPLATE.md` for alpha and later releases.
+## v0.1.0-alpha - 2026-07-10 (released, current alpha)
 
-### Planned
-
-- Keep `v0.1.0-alpha` gated by green CI, golden tests, packaged CLI smoke checks,
-  and visible MVP limitations as described in `docs/release-plan.md`.
-
-## v0.1.0-alpha - planned
-
-Initial public alpha preview for the RefactorKit MVP. The tag has not been cut yet;
-APIs and CLI details may still change before a stable release.
+Initial public alpha preview for the RefactorKit MVP. The `v0.1.0-alpha` tag is
+being finalized on the release commit that includes ADRs, expanded golden
+coverage, and alpha release automation. APIs and CLI details may still change
+before a stable release.
 
 ### Initial MVP scope
 
@@ -43,9 +37,15 @@ APIs and CLI details may still change before a stable release.
   paths for risky imports.
 - Self-contained CLI packaging with an embedded Java runtime via the Gradle
   packaging tasks.
-- Sample Java projects, golden tests, agent simulation tests, ARC42/C4 architecture
-  documentation, and a GitHub Actions CI workflow for build, golden tests,
-  architecture documentation checks, packaging, and CLI smoke tests.
+- Release workflow for `v*` tags that builds/tests the project, runs golden tests,
+  packages `refactorkit-runtime-0.1.0-alpha-linux-x86_64.zip`, and publishes a
+  matching `.sha256` checksum asset.
+- Six ADRs covering Kotlin/JVM bytecode, patch safety, lexical Java MVP analysis,
+  CLI/daemon/LSP/MCP split, jlink packaging, and MCP scoped tools/resources.
+- Sample Java projects, 15 golden test cases, rollback-focused agent simulation
+  tests, ARC42/C4 architecture documentation, and a GitHub Actions CI workflow
+  for build, golden tests, architecture documentation checks, packaging, and CLI
+  smoke tests.
 
 ### Known alpha limitations
 

@@ -1,0 +1,6 @@
+{
+  "operation": "changeSignature.addParameter",
+  "status": "preview",
+  "summary": "prefix",
+  "minAffectedFiles": "2"
+}

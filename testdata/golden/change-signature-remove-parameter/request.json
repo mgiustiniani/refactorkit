@@ -1,0 +1,7 @@
+{
+  "operation": "changeSignature.removeParameter",
+  "symbol": "com.example.Formatter#name",
+  "arguments": {
+    "parameterName": "unused"
+  }
+}
