@@ -111,6 +111,30 @@ class JavaRenameMemberPlannerTest {
     }
 
     @Test
+    fun signedMemberSelectorRefusesInterfaceImplementationUntilPropagationExists() {
+        val root = createTempProject(
+            "src/main/java/com/example/LookupApi.java" to """
+                package com.example;
+                public interface LookupApi {
+                    String find(String key);
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/DefaultLookup.java" to """
+                package com.example;
+                public class DefaultLookup implements LookupApi {
+                    @Override public String find(String key) { return key; }
+                }
+            """.trimIndent(),
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.preview(snap, "com.example.LookupApi#find(java.lang.String)", "lookup")
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("inheritance/override relation"))
+        assertTrue(plan.summary.contains("DefaultLookup#find"))
+    }
+
+    @Test
     fun signedMemberSelectorRefusesWhenJdtReportsParseWarnings() {
         val root = createTempProject(
             "src/main/java/com/example/Lookup.java" to """

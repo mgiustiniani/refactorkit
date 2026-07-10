@@ -29,17 +29,18 @@ review safety boundaries before applying refactorings.
   unresolved-type warnings; tests now cover selected-member identity/reference
   evidence, overload disambiguation, constructor identity/references,
   same-simple-name import disambiguation, child/base method override detection,
-  and representative Maven/Gradle sample source-root validation with type and
-  method discovery.
+  interface implementation override detection, and representative Maven/Gradle
+  sample source-root validation with type and method discovery.
 - Advanced `renameMember` JDT integration from warning-only evidence to exact
   signed method overload selection for the proven slice plus conservative
   inheritance safety: signed selectors such as
   `com.example.Lookup#find(java.lang.String)` use binding-key matched
   declaration/reference ranges so only that overload is renamed, while the signed
   flow refuses parse/classpath warnings, non-unique JDT candidates, missing
-  binding keys, or selected methods that participate in override/inheritance
-  relations until override-aware propagation is implemented. Unsigned member
-  rename remains a lexical fallback with overload warnings.
+  binding keys, or selected methods that participate in class/interface
+  override/inheritance relations, including signed interface method selectors,
+  until override-aware propagation is implemented. Unsigned member rename remains
+  a lexical fallback with overload warnings.
 
 ## v0.2.0-beta - 2026-07-10
 

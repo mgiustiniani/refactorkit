@@ -250,6 +250,37 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun jdtAnalyzerReportsInterfaceImplementationOverrideRelations() {
+        val root = Files.createTempDirectory("rk-jdt-interface-override-test")
+        root.resolve("src/main/java/com/acme/LookupApi.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public interface LookupApi {
+                    String find(String key);
+                }
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/com/acme/DefaultLookup.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class DefaultLookup implements LookupApi {
+                    @Override public String find(String key) { return key; }
+                }
+            """.trimIndent() + "\n")
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+
+        assertTrue(result.overrideRelations.any {
+            it.overridingSymbolQualifiedName == "com.acme.DefaultLookup#find(java.lang.String)" &&
+                it.overriddenSymbolQualifiedName == "com.acme.LookupApi#find(java.lang.String)" &&
+                it.evidence == JdtJavaSemanticEvidence.JDT_BINDING
+        }, "expected interface implementation relation, got ${result.overrideRelations}")
+    }
+
+    @Test
     fun jdtWarningsReportUnresolvedTypesWithoutClaimingBindingCertainty() {
         val root = Files.createTempDirectory("rk-jdt-unresolved-test")
         root.resolve("src/main/java/com/acme/NeedsDependency.java").apply {
