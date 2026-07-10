@@ -45,24 +45,53 @@ Work items:
 
 ## Phase 2 — Beta readiness (`v0.2.0-beta`)
 
-Exit criteria:
+Detailed plan: [docs/releases/v0.2.0-beta-plan.md](releases/v0.2.0-beta-plan.md).
 
-- CLI command names and JSON-RPC method names are treated as compatibility
-  contracts.
-- Golden tests cover representative success and refusal paths for all shipped
-  operations.
-- Sample projects exercise Maven, Gradle, Spring, JPA, and multi-module scans.
-- Patch plans include clear warnings for every lexical/heuristic operation.
+Release objective: move from the completed `v0.1.0-alpha` foundation to a beta
+that integration consumers can repeatedly test through the full safety workflow:
+preview, inspect diagnostics, apply, diagnose again, and rollback. The beta plan
+builds on the alpha evidence of 15 golden cases, ADR coverage, runtime release
+asset publication with checksum, and rollback-focused agent simulations.
 
-Work items:
+Stability promise:
 
-1. Expand sample projects with cross-file references and framework annotations.
-2. Add integration tests that apply, diagnose, rollback, and verify hash restore.
-3. Add daemon/LSP/MCP contract tests for preview/apply/rollback error cases.
-4. Improve `safe-delete` documentation around build-file and reflection limits.
-5. Add external importer tests for multiple public types, license policies, and
-   naming conflicts.
-6. Publish zipped self-contained CLI artifacts from CI.
+- CLI command names/options and daemon JSON-RPC method names/request shapes used
+  by documented workflows become beta compatibility contracts.
+- LSP and MCP remain beta/experimental surfaces, but their documented commands,
+  tools, resources, and refusal paths require contract tests.
+- Breaking changes after beta require changelog entries and migration notes.
+- Lexical/heuristic Java behavior remains acceptable only when it is explicit in
+  previews, documentation, release notes, and the lexical-vs-compiler decision.
+
+Exit criteria summary:
+
+- CI and `./gradlew build` are green on the release candidate.
+- `./refactorkit test-golden` passes with representative success and refusal
+  coverage for every shipped patch-producing operation.
+- Maven, Gradle, Spring, JPA, and multi-module samples are covered by scan,
+  diagnostics, symbol, and safe preview smoke workflows.
+- Integration tests cover apply, diagnostics, rollback, hash restoration, stale
+  snapshots, overlapping edits, and unsafe paths.
+- Daemon JSON-RPC, LSP, and MCP contract tests cover preview/apply/rollback,
+  diagnostics, invalid input, stale plans, and refused operations.
+- Safe-delete and external-import documentation and tests expose the beta limits
+  around build files, generated code, reflection, framework configuration,
+  provenance, license policy, and naming conflicts.
+- CI publishes and verifies the self-contained runtime artifact and checksum for
+  release tags.
+- The project records what remains lexical MVP and what must become
+  compiler-backed before `v1.0.0`.
+
+Priority workstreams:
+
+1. Freeze release scope and CLI/JSON-RPC compatibility baseline.
+2. Expand golden coverage for all shipped operations.
+3. Add representative Maven, Gradle, Spring, JPA, and multi-module samples.
+4. Add apply/diagnose/rollback integration safety tests.
+5. Add daemon, LSP, and MCP contract tests.
+6. Harden safe-delete documentation and external importer tests.
+7. Verify CI artifact publication, checksums, and packaged CLI smoke tests.
+8. Update changelog, release notes, migration notes, and acceptance checklist.
 
 ## Phase 3 — Stable release (`v1.0.0`)
 
@@ -94,5 +123,7 @@ Work items:
   external configuration.
 - `extract-method` and `change-signature` are conservative MVP implementations.
 
-These risks are acceptable for alpha if they remain visible in previews,
-documentation, and release notes.
+These risks were accepted for alpha when visible in previews, documentation,
+and release notes. The beta plan keeps them visible and adds verification,
+contract tests, documentation updates, and a lexical-vs-compiler decision before
+`v0.2.0-beta` is tagged.
