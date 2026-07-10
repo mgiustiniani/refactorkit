@@ -69,6 +69,32 @@ class McpSessionTest {
     }
 
     @Test
+    fun symbolSearchIncludesSignedMemberSelectors() {
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+
+        val search = session.dispatch("tools/call", buildJsonObject {
+            put("name", "symbol_search")
+            put("arguments", buildJsonObject { put("query", "find(java.lang.String)") })
+        }) as JsonObject
+
+        assertTrue(contentText(search).contains("METHOD com.example.Lookup#find(java.lang.String)"), contentText(search))
+        assertFalse(contentText(search).contains("com.example.Lookup#find(int)"), contentText(search))
+    }
+
+    @Test
     fun symbolToolsSupportSignedMemberSelectors() {
         val root = createProject(
             "src/main/java/com/example/Lookup.java" to """

@@ -112,8 +112,7 @@ class DaemonSession {
     private fun symbolSearch(params: JsonObject?): JsonElement {
         val query = params?.string("query") ?: ""
         val snap = requireSnapshot()
-        val index = adapter.buildSymbols(snap)
-        val results = if (query.isBlank()) index.symbols else index.search(query)
+        val results = adapter.searchSymbols(snap, query)
         return buildJsonArray {
             results.take(200).forEach { sym ->
                 add(buildJsonObject {

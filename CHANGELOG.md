@@ -41,11 +41,12 @@ review safety boundaries before applying refactorings.
   override/inheritance relations, including signed interface method selectors,
   until override-aware propagation is implemented. Unsigned member rename remains
   a lexical fallback with overload warnings.
-- Added read-only JDT-backed signed member lookup/reference support for exact
-  member IDs such as `com.example.Lookup#find(java.lang.String)` across the Java
-  adapter, CLI `definition`/`references`, daemon `symbol.definition`/
-  `symbol.references`, and MCP symbol definition/resource paths, while keeping
-  lexical lookup as the fallback for existing unsigned symbols.
+- Added read-only JDT-backed signed member search/lookup/reference support for
+  exact member IDs such as `com.example.Lookup#find(java.lang.String)` across
+  the Java adapter, daemon `symbol.search`/`symbol.definition`/
+  `symbol.references`, MCP `symbol_search`/symbol definition/resource paths, and
+  CLI `definition`/`references`, while keeping lexical lookup as the fallback
+  for existing unsigned symbols.
 
 ## v0.2.0-beta - 2026-07-10
 

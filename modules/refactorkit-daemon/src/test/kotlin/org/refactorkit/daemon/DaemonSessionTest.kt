@@ -87,6 +87,26 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun symbolSearchIncludesSignedMemberSelectors() {
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val results = session.dispatch("symbol.search", params("query" to "find(java.lang.String)")).jsonArray
+
+        assertEquals(1, results.size)
+        assertEquals("com.example.Lookup#find(java.lang.String)", results.single().jsonObject["id"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun symbolDefinitionAndReferencesSupportSignedMemberSelectors() {
         val root = createProject(
             "src/main/java/com/example/Lookup.java" to """

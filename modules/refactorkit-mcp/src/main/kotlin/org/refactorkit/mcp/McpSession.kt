@@ -200,7 +200,7 @@ class McpSession {
     private fun toolSymbolSearch(args: JsonObject): String {
         val query = args.string("query") ?: ""
         val snap = requireSnapshot()
-        val results = adapter.buildSymbols(snap).search(query)
+        val results = adapter.searchSymbols(snap, query)
         if (results.isEmpty()) return "No symbols found for query: $query"
         return results.take(100).joinToString("\n") { "${it.kind} ${it.id.value} at ${it.location.path}:${it.location.range.start.line + 1}" }
     }

@@ -99,6 +99,20 @@ class JavaLanguageAdapter : LanguageAdapter {
     override fun findReferences(symbolId: SymbolId): List<Reference> =
         lastSnapshot?.let { findReferences(it, symbolId) } ?: emptyList()
 
+    fun searchSymbols(project: ProjectSnapshot, query: String): List<Symbol> {
+        lastSnapshot = project
+        val combined = (buildSymbols(project).symbols + signedJdtMemberSymbols(project))
+            .distinctBy { it.id.value }
+        return if (query.isBlank()) {
+            combined
+        } else {
+            combined.filter { symbol ->
+                symbol.name.contains(query, ignoreCase = true) ||
+                    symbol.id.value.contains(query, ignoreCase = true)
+            }
+        }
+    }
+
     fun findSymbol(project: ProjectSnapshot, symbolId: SymbolId): Symbol? {
         lastSnapshot = project
         val lexicalSymbol = buildSymbols(project).symbols.find { it.id == symbolId }
@@ -177,6 +191,18 @@ class JavaLanguageAdapter : LanguageAdapter {
         val semanticSymbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value } ?: return null
         if (semanticSymbol.bindingKey.isNullOrBlank()) return null
         return semanticSymbol.toCoreSymbol()
+    }
+
+    private fun signedJdtMemberSymbols(project: ProjectSnapshot): List<Symbol> {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        if (analysis.warnings.isNotEmpty()) return emptyList()
+        return analysis.symbols
+            .filter { symbol ->
+                symbol.kind in setOf(JdtJavaSemanticSymbolKind.METHOD, JdtJavaSemanticSymbolKind.CONSTRUCTOR) &&
+                    !symbol.bindingKey.isNullOrBlank() &&
+                    symbol.memberSignature?.contains('(') == true
+            }
+            .map { it.toCoreSymbol() }
     }
 
     private fun findJdtSignedReferences(project: ProjectSnapshot, symbolId: SymbolId): List<Reference>? {

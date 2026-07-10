@@ -156,6 +156,23 @@ class JavaLanguageAdapterTest {
     }
 
     @Test
+    fun symbolSearchIncludesSignedJdtMemberSelectors() {
+        val root = createTempProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+        )
+        val results = JavaLanguageAdapter().searchSymbols(JavaProjectScanner().scan(root), "find(java.lang.String)")
+
+        assertTrue(results.any { it.id.value == "com.example.Lookup#find(java.lang.String)" }, "expected signed selector in $results")
+        assertFalse(results.any { it.id.value == "com.example.Lookup#find(int)" }, "query should not match unrelated overload: $results")
+    }
+
+    @Test
     fun symbolLocationSelectsTypeNameNotLineStart() {
         val root = createTempProject(
             "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}",
