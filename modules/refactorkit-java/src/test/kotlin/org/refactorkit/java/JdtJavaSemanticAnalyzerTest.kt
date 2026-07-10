@@ -77,9 +77,10 @@ class JdtJavaSemanticAnalyzerTest {
         val symbols = result.symbols.associateBy { it.qualifiedName }
 
         assertEquals(JdtJavaSemanticSymbolKind.FIELD, symbols["com.acme.User#name"]?.kind)
-        assertEquals(JdtJavaSemanticSymbolKind.METHOD, symbols["com.acme.User#displayName"]?.kind)
+        assertEquals(JdtJavaSemanticSymbolKind.METHOD, symbols["com.acme.User#displayName()"]?.kind)
         assertTrue(result.references.any {
-            it.symbolQualifiedName == "com.acme.User#displayName" &&
+            it.symbolQualifiedName == "com.acme.User#displayName()" &&
+                it.symbolSignature == "displayName()" &&
                 it.path.toString().endsWith("UserPrinter.java") &&
                 it.evidence == JdtJavaSemanticEvidence.JDT_BINDING
         }, "expected JDT-backed method reference, got ${result.references}")
@@ -88,6 +89,103 @@ class JdtJavaSemanticAnalyzerTest {
                 it.path.toString().endsWith("User.java") &&
                 it.evidence == JdtJavaSemanticEvidence.JDT_BINDING
         }, "expected JDT-backed field reference, got ${result.references}")
+    }
+
+    @Test
+    fun jdtAnalyzerKeepsNestedTypeAndMemberOwnership() {
+        val root = Files.createTempDirectory("rk-jdt-nested-test")
+        root.resolve("src/main/java/com/acme/Outer.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class Outer {
+                    public static class Inner {
+                        public String touch() { return "ok"; }
+                    }
+                }
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/com/acme/NestedClient.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class NestedClient {
+                    String run() { return new Outer.Inner().touch(); }
+                }
+            """.trimIndent() + "\n")
+        }
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+        val symbols = result.symbols.associateBy { it.qualifiedName }
+
+        assertEquals(JdtJavaSemanticSymbolKind.CLASS, symbols["com.acme.Outer"]?.kind)
+        assertEquals(JdtJavaSemanticSymbolKind.CLASS, symbols["com.acme.Outer.Inner"]?.kind)
+        assertEquals("com.acme.Outer", symbols["com.acme.Outer.Inner"]?.ownerQualifiedName)
+        assertEquals(JdtJavaSemanticSymbolKind.METHOD, symbols["com.acme.Outer.Inner#touch()"]?.kind)
+        assertEquals("com.acme.Outer.Inner", symbols["com.acme.Outer.Inner#touch()"]?.ownerQualifiedName)
+        assertTrue(result.references.any {
+            it.symbolQualifiedName == "com.acme.Outer.Inner#touch()" &&
+                it.path.toString().endsWith("NestedClient.java")
+        }, "expected nested method reference, got ${result.references}")
+    }
+
+    @Test
+    fun jdtReferencesDistinguishOverloadedMethodsAndConstructors() {
+        val root = Files.createTempDirectory("rk-jdt-overload-test")
+        root.resolve("src/main/java/com/acme/Lookup.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class Lookup {
+                    public Lookup() {}
+                    public Lookup(String seed) {}
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/com/acme/LookupClient.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class LookupClient {
+                    String text() { return new Lookup("seed").find("abc"); }
+                    String number() { return new Lookup().find(7); }
+                }
+            """.trimIndent() + "\n")
+        }
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+        val symbols = result.symbols.associateBy { it.qualifiedName }
+
+        val stringFind = symbols["com.acme.Lookup#find(java.lang.String)"]
+        val intFind = symbols["com.acme.Lookup#find(int)"]
+        val noArgConstructor = symbols["com.acme.Lookup#<init>()"]
+        val stringConstructor = symbols["com.acme.Lookup#<init>(java.lang.String)"]
+
+        assertEquals(JdtJavaSemanticSymbolKind.METHOD, stringFind?.kind)
+        assertEquals(JdtJavaSemanticSymbolKind.METHOD, intFind?.kind)
+        assertEquals(JdtJavaSemanticSymbolKind.CONSTRUCTOR, noArgConstructor?.kind)
+        assertEquals(JdtJavaSemanticSymbolKind.CONSTRUCTOR, stringConstructor?.kind)
+        assertTrue(listOf(stringFind, intFind, noArgConstructor, stringConstructor).mapNotNull { it?.bindingKey }.toSet().size == 4)
+        assertTrue(result.references.any {
+            it.symbolQualifiedName == "com.acme.Lookup#find(java.lang.String)" &&
+                it.symbolSignature == "find(java.lang.String)" &&
+                it.path.toString().endsWith("LookupClient.java")
+        }, "expected String overload reference, got ${result.references}")
+        assertTrue(result.references.any {
+            it.symbolQualifiedName == "com.acme.Lookup#find(int)" &&
+                it.symbolSignature == "find(int)" &&
+                it.path.toString().endsWith("LookupClient.java")
+        }, "expected int overload reference, got ${result.references}")
+        assertTrue(result.references.any {
+            it.symbolQualifiedName == "com.acme.Lookup#<init>(java.lang.String)" &&
+                it.symbolSignature == "<init>(java.lang.String)" &&
+                it.path.toString().endsWith("LookupClient.java")
+        }, "expected String constructor reference, got ${result.references}")
+        assertTrue(result.references.any {
+            it.symbolQualifiedName == "com.acme.Lookup#<init>()" &&
+                it.symbolSignature == "<init>()" &&
+                it.path.toString().endsWith("LookupClient.java")
+        }, "expected no-arg constructor reference, got ${result.references}")
     }
 
     @Test
@@ -118,6 +216,28 @@ class JdtJavaSemanticAnalyzerTest {
 
         assertTrue(references.any { it.symbolQualifiedName == "com.acme.right.Service" }, "expected right.Service reference, got $references")
         assertTrue(references.none { it.symbolQualifiedName == "com.acme.left.Service" }, "did not expect left.Service reference, got $references")
+    }
+
+    @Test
+    fun jdtWarningsReportUnresolvedTypesWithoutClaimingBindingCertainty() {
+        val root = Files.createTempDirectory("rk-jdt-unresolved-test")
+        root.resolve("src/main/java/com/acme/NeedsDependency.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class NeedsDependency {
+                    private MissingDependency dependency;
+                }
+            """.trimIndent() + "\n")
+        }
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+
+        assertTrue(result.symbols.any { it.qualifiedName == "com.acme.NeedsDependency" })
+        assertTrue(result.warnings.any {
+            it.path.toString().endsWith("NeedsDependency.java") &&
+                it.message.contains("MissingDependency") &&
+                it.evidence == JdtJavaSemanticEvidence.JDT_PARSE
+        }, "expected unresolved type warning, got ${result.warnings}")
     }
 
     @Test

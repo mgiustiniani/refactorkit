@@ -22,11 +22,13 @@ review safety boundaries before applying refactorings.
   Java analysis prototype candidate while keeping lexical planners as safety
   fallback.
 - Expanded the JDT semantic analyzer prototype with `ProjectSnapshot` source-root
-  configuration, method/field/constructor declaration evidence, and binding-key
-  matched references; tests now cover selected-member identity/reference evidence,
-  same-simple-name import disambiguation, and representative Maven/Gradle sample
-  source-root validation with type and method discovery, while existing planners
-  still use lexical fallback behavior.
+  configuration, signed method/constructor identities, nested member ownership,
+  constructor reference resolution, binding-key matched references with
+  `symbolSignature`, and `JDT_PARSE` unresolved-type warnings; tests now cover
+  selected-member identity/reference evidence, overload disambiguation,
+  constructor identity/references, same-simple-name import disambiguation, and
+  representative Maven/Gradle sample source-root validation with type and method
+  discovery, while existing planners still use lexical fallback behavior.
 
 ## v0.2.0-beta - 2026-07-10
 
