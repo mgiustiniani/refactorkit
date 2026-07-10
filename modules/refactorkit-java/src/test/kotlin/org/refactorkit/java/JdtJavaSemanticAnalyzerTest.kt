@@ -1,12 +1,32 @@
 package org.refactorkit.java
 
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import kotlin.io.path.exists
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class JdtJavaSemanticAnalyzerTest {
+
+    @Test
+    fun jdtAnalyzerReadsRepresentativeMavenAndGradleSourceRoots() {
+        val samples = mapOf(
+            "java-maven-simple" to "com.example.UserManager",
+            "java-gradle-simple" to "com.example.UserService",
+        )
+
+        samples.forEach { (sample, expectedType) ->
+            val root = repoRoot().resolve("samples").resolve(sample)
+            val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+
+            assertTrue(result.symbols.any { it.qualifiedName == expectedType }, "missing $expectedType in $sample: ${result.symbols}")
+            assertTrue(result.symbols.any { it.kind == JdtJavaSemanticSymbolKind.METHOD }, "missing method symbols in $sample")
+            assertTrue(result.symbols.any { it.evidence in setOf(JdtJavaSemanticEvidence.JDT_BINDING, JdtJavaSemanticEvidence.JDT_PARSE) })
+        }
+    }
 
     @Test
     fun jdtParseEvidenceDistinguishesSameSimpleNameInDifferentPackages() {
@@ -117,5 +137,13 @@ class JdtJavaSemanticAnalyzerTest {
 
         assertEquals(JdtJavaSemanticSymbolKind.INTERFACE, symbols["com.acme.Named"]?.kind)
         assertEquals(JdtJavaSemanticSymbolKind.ENUM, symbols["com.acme.Status"]?.kind)
+    }
+
+    private fun repoRoot(): Path {
+        var current = Paths.get("").toAbsolutePath().normalize()
+        while (true) {
+            if (current.resolve("settings.gradle.kts").exists() && current.resolve("samples").exists()) return current
+            current = current.parent ?: error("Could not locate repository root from ${Paths.get("").toAbsolutePath()}")
+        }
     }
 }
