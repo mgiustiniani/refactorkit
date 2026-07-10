@@ -53,7 +53,7 @@ class JavaRenameMemberPlannerTest {
     }
 
     @Test
-    fun signedMemberSelectorProducesPreviewWithOverloadEvidence() {
+    fun signedMemberSelectorRenamesExactOverloadWithJdtEvidence() {
         val root = createTempProject(
             "src/main/java/com/example/Lookup.java" to """
                 package com.example;
@@ -73,8 +73,35 @@ class JavaRenameMemberPlannerTest {
         val plan = planner.preview(snap, "com.example.Lookup#find(java.lang.String)", "lookup")
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
-        assertTrue(plan.warnings.any { it.contains("Multiple overloads of 'find'") })
-        assertTrue(plan.warnings.any { it.contains("find(int)") && it.contains("find(java.lang.String)") })
+        assertTrue(plan.warnings.any { it.contains("JDT binding selected exact member signature") })
+
+        val result = PatchEngine(root).apply(plan, snap.hash)
+        assertIs<ApplyResult.Applied>(result)
+
+        val declaration = root.resolve("src/main/java/com/example/Lookup.java").readText()
+        val client = root.resolve("src/main/java/com/example/LookupClient.java").readText()
+        assertTrue(declaration.contains("String lookup(String key)"), "String overload declaration renamed")
+        assertTrue(declaration.contains("String find(int id)"), "int overload declaration remains unchanged")
+        assertTrue(client.contains("lookup.lookup(\"ada\")"), "String overload call renamed")
+        assertTrue(client.contains("lookup.find(7)"), "int overload call remains unchanged")
+    }
+
+    @Test
+    fun signedMemberSelectorRefusesWhenJdtReportsParseWarnings() {
+        val root = createTempProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    private MissingDependency dependency;
+                    public String find(String key) { return key; }
+                }
+            """.trimIndent(),
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.preview(snap, "com.example.Lookup#find(java.lang.String)", "lookup")
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("requires clean JDT semantic evidence"))
     }
 
     @Test

@@ -16,6 +16,8 @@ import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
 import java.nio.file.Path
 
 /**
@@ -47,6 +49,7 @@ class JdtJavaSemanticAnalyzer {
                     symbolSignature = target.memberSignature,
                     path = raw.path,
                     line = raw.line,
+                    sourceRange = raw.sourceRange,
                     bindingKey = raw.bindingKey,
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                 )
@@ -77,7 +80,7 @@ class JdtJavaSemanticAnalyzer {
                     ownerQualifiedName = ownerStack.lastOrNull(),
                     simpleName = node.name.identifier,
                     kind = if (node.isInterface) JdtJavaSemanticSymbolKind.INTERFACE else JdtJavaSemanticSymbolKind.CLASS,
-                    startPosition = node.startPosition,
+                    startPosition = node.name.startPosition,
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
                     memberSignature = null,
@@ -100,7 +103,7 @@ class JdtJavaSemanticAnalyzer {
                     ownerQualifiedName = ownerStack.lastOrNull(),
                     simpleName = node.name.identifier,
                     kind = JdtJavaSemanticSymbolKind.ENUM,
-                    startPosition = node.startPosition,
+                    startPosition = node.name.startPosition,
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
                     memberSignature = null,
@@ -125,7 +128,7 @@ class JdtJavaSemanticAnalyzer {
                     ownerQualifiedName = owner,
                     simpleName = node.name.identifier,
                     kind = if (node.isConstructor) JdtJavaSemanticSymbolKind.CONSTRUCTOR else JdtJavaSemanticSymbolKind.METHOD,
-                    startPosition = node.startPosition,
+                    startPosition = node.name.startPosition,
                     bindingQualifiedName = null,
                     bindingKey = binding?.key,
                     memberSignature = signature,
@@ -144,7 +147,7 @@ class JdtJavaSemanticAnalyzer {
                         ownerQualifiedName = owner,
                         simpleName = fragment.name.identifier,
                         kind = JdtJavaSemanticSymbolKind.FIELD,
-                        startPosition = fragment.startPosition,
+                        startPosition = fragment.name.startPosition,
                         bindingQualifiedName = null,
                         bindingKey = binding?.key,
                         memberSignature = null,
@@ -159,6 +162,7 @@ class JdtJavaSemanticAnalyzer {
                     simpleName = binding.declaringClass?.name ?: node.type.toString(),
                     path = file.path,
                     line = (compilationUnit.getLineNumber(node.startPosition) - 1).coerceAtLeast(0),
+                    sourceRange = rangeFor(compilationUnit, node.type.startPosition, node.type.length),
                     bindingKey = binding.key,
                 )
                 return true
@@ -170,6 +174,7 @@ class JdtJavaSemanticAnalyzer {
                     simpleName = node.identifier,
                     path = file.path,
                     line = (compilationUnit.getLineNumber(node.startPosition) - 1).coerceAtLeast(0),
+                    sourceRange = rangeFor(compilationUnit, node.startPosition, node.length),
                     bindingKey = node.resolveBinding()?.key,
                 )
                 return true
@@ -232,12 +237,25 @@ class JdtJavaSemanticAnalyzer {
             line = (compilationUnit.getLineNumber(startPosition) - 1).coerceAtLeast(0),
             ownerQualifiedName = ownerQualifiedName,
             memberSignature = memberSignature,
+            sourceRange = rangeFor(compilationUnit, startPosition, simpleName.length),
             bindingKey = bindingKey,
             evidence = if (bindingKey.isNullOrBlank()) {
                 JdtJavaSemanticEvidence.JDT_PARSE
             } else {
                 JdtJavaSemanticEvidence.JDT_BINDING
             },
+        )
+    }
+
+    private fun rangeFor(compilationUnit: CompilationUnit, startPosition: Int, length: Int): SourceRange {
+        val startLine = (compilationUnit.getLineNumber(startPosition) - 1).coerceAtLeast(0)
+        val startColumn = compilationUnit.getColumnNumber(startPosition).coerceAtLeast(0)
+        val endPosition = startPosition + length
+        val endLine = (compilationUnit.getLineNumber(endPosition) - 1).coerceAtLeast(startLine)
+        val endColumn = compilationUnit.getColumnNumber(endPosition).coerceAtLeast(0)
+        return SourceRange(
+            SourcePosition(startLine, startColumn),
+            SourcePosition(endLine, endColumn),
         )
     }
 
@@ -271,6 +289,7 @@ class JdtJavaSemanticAnalyzer {
         val simpleName: String,
         val path: Path,
         val line: Int,
+        val sourceRange: SourceRange,
         val bindingKey: String?,
     )
 }
@@ -289,6 +308,7 @@ data class JdtJavaSemanticSymbol(
     val line: Int,
     val ownerQualifiedName: String?,
     val memberSignature: String?,
+    val sourceRange: SourceRange,
     val bindingKey: String?,
     val evidence: JdtJavaSemanticEvidence,
 )
@@ -300,6 +320,7 @@ data class JdtJavaSemanticReference(
     val symbolSignature: String?,
     val path: Path,
     val line: Int,
+    val sourceRange: SourceRange,
     val bindingKey: String?,
     val evidence: JdtJavaSemanticEvidence,
 )

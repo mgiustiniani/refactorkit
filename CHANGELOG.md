@@ -24,16 +24,19 @@ review safety boundaries before applying refactorings.
 - Expanded the JDT semantic analyzer prototype with `ProjectSnapshot` source-root
   configuration, signed method/constructor identities, nested member ownership,
   constructor reference resolution, binding-key matched references with
-  `symbolSignature`, and `JDT_PARSE` unresolved-type warnings; tests now cover
+  `symbolSignature`, declaration/reference `sourceRange` evidence using JDT's
+  zero-based columns, and `JDT_PARSE` unresolved-type warnings; tests now cover
   selected-member identity/reference evidence, overload disambiguation,
   constructor identity/references, same-simple-name import disambiguation, and
   representative Maven/Gradle sample source-root validation with type and method
   discovery.
-- Added first preview-level JDT evidence warnings to `renameMember`: signed
-  selectors such as `com.example.Lookup#find(java.lang.String)` are accepted for
-  current lexical rename behavior, and previews report matched JDT member
-  candidates, references, overload signatures, and parse/classpath warning
-  counts while stating that lexical planning still determines edits.
+- Advanced `renameMember` JDT integration from warning-only evidence to exact
+  signed method overload selection for the proven slice: signed selectors such as
+  `com.example.Lookup#find(java.lang.String)` use binding-key matched
+  declaration/reference ranges so only that overload is renamed, while the signed
+  flow refuses parse/classpath warnings, non-unique JDT candidates, or missing
+  binding keys. Unsigned member rename remains a lexical fallback with overload
+  warnings.
 
 ## v0.2.0-beta - 2026-07-10
 

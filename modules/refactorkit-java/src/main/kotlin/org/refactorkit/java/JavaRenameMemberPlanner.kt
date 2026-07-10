@@ -23,8 +23,10 @@ import java.nio.file.Path
  * Limitations (MVP):
  * - Reflection, Spring @EventListener parameter types, Jackson annotations,
  *   and annotation-processor-generated code are NOT updated.
- * - Overloaded methods: all overloads with the same simple name are renamed.
- *   A warning is emitted when more than one overload is detected.
+ * - Unsigned overloaded methods: all overloads with the same simple name are
+ *   renamed and a warning is emitted.
+ * - Signed method selectors use JDT binding evidence for the currently proven
+ *   exact-overload slice and refuse when semantic evidence is not clean.
  * - Constructor rename follows class rename (not a standalone member rename).
  */
 class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
@@ -67,6 +69,10 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         }
         if (members.isEmpty()) {
             return refused(snapshot, "renameMember", "Member '$oldMemberName' not found in $ownerFqn")
+        }
+
+        if (memberSelector.contains('(')) {
+            return previewSignedJdtRename(snapshot, ownerFqn, memberSelector, oldMemberName, newMemberName)
         }
 
         val warnings = mutableListOf<String>()
@@ -154,6 +160,71 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         if (name.isEmpty()) return false
         if (!name[0].isLetter() && name[0] != '_' && name[0] != '$') return false
         return name.all { JavaLexer.isIdentChar(it) }
+    }
+
+    private fun previewSignedJdtRename(
+        snapshot: ProjectSnapshot,
+        ownerFqn: String,
+        memberSelector: String,
+        oldMemberName: String,
+        newMemberName: String,
+    ): PatchPlan {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        if (analysis.warnings.isNotEmpty()) {
+            return refused(
+                snapshot,
+                "renameMember",
+                "Signed member rename for $ownerFqn#$memberSelector requires clean JDT semantic evidence; ${analysis.warnings.size} parse/classpath warning(s) were reported.",
+            )
+        }
+        val candidates = analysis.symbols.filter { symbol ->
+            symbol.ownerQualifiedName == ownerFqn &&
+                symbol.memberSignature == memberSelector &&
+                symbol.kind == JdtJavaSemanticSymbolKind.METHOD
+        }
+        val candidate = candidates.singleOrNull() ?: return refused(
+            snapshot,
+            "renameMember",
+            "Signed member selector $ownerFqn#$memberSelector did not resolve to exactly one JDT method candidate; found ${candidates.size}.",
+        )
+        val bindingKey = candidate.bindingKey ?: return refused(
+            snapshot,
+            "renameMember",
+            "Signed member selector $ownerFqn#$memberSelector has no JDT binding key; exact overload rename refused.",
+        )
+
+        val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
+        fun addEdit(path: Path, range: org.refactorkit.core.SourceRange) {
+            editsByPath.getOrPut(path) { mutableListOf() } += TextEdit(range, newMemberName)
+        }
+        addEdit(candidate.path, candidate.sourceRange)
+        analysis.references
+            .filter { it.bindingKey == bindingKey && it.symbolKind == JdtJavaSemanticSymbolKind.METHOD }
+            .forEach { reference -> addEdit(reference.path, reference.sourceRange) }
+
+        val edits = editsByPath.map { (path, textEdits) ->
+            FileEdit.Modify(
+                path,
+                textEdits.distinctBy { "${it.range.start.line}:${it.range.start.character}:${it.range.end.line}:${it.range.end.character}" }
+                    .sortedWith(compareBy({ it.range.start.line }, { it.range.start.character })),
+            )
+        }
+        val warnings = listOf(
+            "JDT binding selected exact member signature $ownerFqn#$memberSelector; edits were generated from JDT declaration/reference ranges.",
+            "Reflection, Spring event/listener names, Jackson property names, and annotation-processor output are NOT updated. Review manually.",
+        )
+        return PatchPlan(
+            operation = "renameMember",
+            status = PatchStatus.PREVIEW,
+            snapshotHash = snapshot.hash,
+            confidence = 0.93,
+            requiresUserApproval = true,
+            summary = "Rename method '$memberSelector' \u2192 '$newMemberName' in $ownerFqn using JDT binding evidence. ${editsByPath.size} file(s) affected.",
+            affectedFiles = editsByPath.keys,
+            workspaceEdit = WorkspaceEdit(edits),
+            warnings = warnings,
+            riskLevel = RiskLevel.LOW,
+        )
     }
 
     private fun jdtEvidenceWarnings(
