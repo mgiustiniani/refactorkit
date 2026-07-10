@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: draft, needs-review. This chapter must be explicitly confirmed by the user before it is treated as final.
+Status: confirmed. This chapter was explicitly approved by the user on 2026-07-10.
 
 == Requirements Overview
 
@@ -94,10 +94,6 @@ The repository is not intended to implement a custom IDE, Tauri frontend, cloud 
 
 Status: implementation-informed from `AGENTS.md`.
 
-== Open Confirmation Items
+== Confirmation Record
 
-The following items require explicit user confirmation before this chapter is finalized:
-
-* Whether the listed stakeholder expectations are complete.
-* Whether the quality goal priorities are correct.
-* Whether the described business objective captures the intended product direction.
+The user explicitly approved this chapter proposal on 2026-07-10, including the stated product direction, stakeholder expectations, quality goals, and scope boundaries.

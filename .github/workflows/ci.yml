@@ -36,7 +36,7 @@ jobs:
           test -f docs/arc42/12-glossary.adoc
           test -f docs/arc42/appendix-requirements.adoc
           test -f docs/c4/workspace.dsl
-          grep -qi 'needs-review' docs/arc42/01-introduction-and-goals.adoc
+          grep -qi 'Status: confirmed' docs/arc42/01-introduction-and-goals.adoc
 
       - name: Package self-contained CLI
         run: ./gradlew packageCliRuntime
