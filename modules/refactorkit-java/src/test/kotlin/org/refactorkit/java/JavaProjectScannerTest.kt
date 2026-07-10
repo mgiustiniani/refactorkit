@@ -21,6 +21,24 @@ class JavaProjectScannerTest {
     }
 
     @Test
+    fun discoversConventionalCompiledOutputsAndLocalJars() {
+        val root = Files.createTempDirectory("refactorkit-java-classpath-scan")
+        Files.createDirectories(root.resolve("src/main/java/com/example"))
+        Files.writeString(root.resolve("src/main/java/com/example/App.java"), "package com.example; public class App {}\n")
+        Files.createDirectories(root.resolve("target/classes"))
+        Files.createDirectories(root.resolve("build/classes/java/main"))
+        Files.createDirectories(root.resolve("libs"))
+        Files.write(root.resolve("libs/local.jar"), byteArrayOf())
+
+        val module = JavaProjectScanner().scan(root).modules.single()
+        val classpath = module.classpathEntries.map { it.toString().replace('\\', '/') }.toSet()
+
+        assertTrue("target/classes" in classpath)
+        assertTrue("build/classes/java/main" in classpath)
+        assertTrue("libs/local.jar" in classpath)
+    }
+
+    @Test
     fun detectsMultiModuleSourceRoots() {
         val root = Files.createTempDirectory("refactorkit-java-multimodule-scan")
         val apiDir = root.resolve("api/src/main/java/com/example/api")

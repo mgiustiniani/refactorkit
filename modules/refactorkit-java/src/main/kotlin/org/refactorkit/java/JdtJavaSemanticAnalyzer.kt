@@ -35,9 +35,14 @@ class JdtJavaSemanticAnalyzer {
             .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
             .distinct()
             .toTypedArray()
+        val classpathEntries = snapshot.modules
+            .flatMap { it.classpathEntries }
+            .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
+            .distinct()
+            .toTypedArray()
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
-            .map { analyzeFileWithReferences(it, sourceRoots) }
+            .map { analyzeFileWithReferences(it, sourceRoots, classpathEntries) }
         val symbols = fileAnalyses.flatMap { it.symbols }
         val symbolsByKey = symbols.mapNotNull { symbol -> symbol.bindingKey?.let { it to symbol } }.toMap()
         val references = fileAnalyses.flatMap { analysis ->
@@ -65,11 +70,15 @@ class JdtJavaSemanticAnalyzer {
     }
 
     fun analyzeFile(file: SourceFile): List<JdtJavaSemanticSymbol> =
-        analyzeFileWithReferences(file, emptyArray()).symbols
+        analyzeFileWithReferences(file, emptyArray(), emptyArray()).symbols
 
-    private fun analyzeFileWithReferences(file: SourceFile, sourceRoots: Array<String>): FileAnalysis {
+    private fun analyzeFileWithReferences(
+        file: SourceFile,
+        sourceRoots: Array<String>,
+        classpathEntries: Array<String>,
+    ): FileAnalysis {
         if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
-        val compilationUnit = parse(file, sourceRoots)
+        val compilationUnit = parse(file, sourceRoots, classpathEntries)
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
         val rawReferences = mutableListOf<RawReference>()
@@ -322,14 +331,18 @@ class JdtJavaSemanticAnalyzer {
     private fun qualifyTypeName(packageName: String, name: String): String =
         if (name.contains('.')) name else JavaPackageUtil.fqn(packageName, name)
 
-    private fun parse(file: SourceFile, sourceRoots: Array<String>): CompilationUnit {
+    private fun parse(
+        file: SourceFile,
+        sourceRoots: Array<String>,
+        classpathEntries: Array<String>,
+    ): CompilationUnit {
         val parser = ASTParser.newParser(AST.JLS21)
         parser.setKind(ASTParser.K_COMPILATION_UNIT)
         parser.setSource(file.content.toCharArray())
         parser.setUnitName(file.path.toString().replace('\\', '/'))
         parser.setCompilerOptions(JavaCore.getOptions().also { JavaCore.setComplianceOptions(JavaCore.VERSION_21, it) })
-        if (sourceRoots.isNotEmpty()) {
-            parser.setEnvironment(emptyArray(), sourceRoots, null, true)
+        if (sourceRoots.isNotEmpty() || classpathEntries.isNotEmpty()) {
+            parser.setEnvironment(classpathEntries, sourceRoots, null, true)
         }
         parser.setResolveBindings(true)
         parser.setBindingsRecovery(true)

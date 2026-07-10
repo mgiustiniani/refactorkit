@@ -31,8 +31,10 @@ review safety boundaries before applying refactorings.
   identity/references, same-simple-name import disambiguation, static method
   import/call references, interface/enum/record discovery, child/base method
   override detection, interface implementation override detection, representative
-  Maven/Gradle sample source-root validation, and cross-module Gradle sourcepath
-  resolution with interface reference/override evidence.
+  Maven/Gradle sample source-root validation, cross-module Gradle sourcepath
+  resolution with interface reference/override evidence, and conventional
+  compiled classpath resolution for Maven/Gradle output directories and
+  project-local `lib`/`libs` JAR entries.
 - Advanced `renameMember` JDT integration from warning-only evidence to exact
   signed method overload selection for the proven slice plus conservative
   inheritance safety: signed selectors such as

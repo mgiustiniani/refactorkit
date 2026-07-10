@@ -3,6 +3,7 @@ package org.refactorkit.java
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import javax.tools.ToolProvider
 import kotlin.io.path.exists
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -331,6 +332,38 @@ class JdtJavaSemanticAnalyzerTest {
         assertTrue(result.warnings.isEmpty(), "expected clean static import evidence, got ${result.warnings}")
         assertEquals(2, references.size, "expected static import and invocation references, got $references")
         assertTrue(references.all { it.evidence == JdtJavaSemanticEvidence.JDT_BINDING })
+    }
+
+    @Test
+    fun jdtAnalyzerUsesDiscoveredMavenCompiledClasspath() {
+        val root = Files.createTempDirectory("rk-jdt-compiled-classpath-test")
+        val dependencySource = root.resolve("dependency-src/external/Dependency.java").apply {
+            Files.createDirectories(parent)
+            writeText("package external; public class Dependency {}\n")
+        }
+        val output = root.resolve("target/classes").also { Files.createDirectories(it) }
+        val compiler = ToolProvider.getSystemJavaCompiler() ?: error("JDK compiler is required for this test")
+        assertEquals(0, compiler.run(null, null, null, "-d", output.toString(), dependencySource.toString()))
+        root.resolve("src/main/java/com/acme/UsesDependency.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                import external.Dependency;
+                public class UsesDependency {
+                    private Dependency dependency;
+                }
+            """.trimIndent() + "\n")
+        }
+
+        val snapshot = JavaProjectScanner().scan(root)
+        val result = JdtJavaSemanticAnalyzer().analyze(snapshot)
+
+        assertTrue(snapshot.modules.single().classpathEntries.any { it.toString().replace('\\', '/') == "target/classes" })
+        assertTrue(result.warnings.isEmpty(), "expected target/classes to resolve external.Dependency, got ${result.warnings}")
+        assertTrue(result.symbols.any {
+            it.qualifiedName == "com.acme.UsesDependency#dependency" &&
+                it.evidence == JdtJavaSemanticEvidence.JDT_BINDING
+        })
     }
 
     @Test

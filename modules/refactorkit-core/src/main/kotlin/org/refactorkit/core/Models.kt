@@ -30,6 +30,7 @@ data class Module(
     val name: String,
     val root: Path,
     val sourceRoots: List<Path> = emptyList(),
+    val classpathEntries: List<Path> = emptyList(),
 )
 
 data class SourceFile(

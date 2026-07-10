@@ -21,9 +21,15 @@ class JavaProjectScanner {
                 name = moduleName(normalizedRoot, moduleRoot),
                 root = moduleRoot,
                 sourceRoots = sourceRoots.map(normalizedRoot::relativize),
+                classpathEntries = conventionalClasspathEntries(moduleRoot).map(normalizedRoot::relativize),
             )
         }.ifEmpty {
-            listOf(Module(name = normalizedRoot.fileName?.toString() ?: "root", root = normalizedRoot, sourceRoots = emptyList()))
+            listOf(Module(
+                name = normalizedRoot.fileName?.toString() ?: "root",
+                root = normalizedRoot,
+                sourceRoots = emptyList(),
+                classpathEntries = conventionalClasspathEntries(normalizedRoot).map(normalizedRoot::relativize),
+            ))
         }
 
         val sourceRoots = modules.flatMap { module -> module.sourceRoots.map(normalizedRoot::resolve) }.distinct()
@@ -74,6 +80,24 @@ class JavaProjectScanner {
         root.resolve("src/main/java"),
         root.resolve("src/test/java"),
     ).filter { it.exists() && it.isDirectory() }
+
+    private fun conventionalClasspathEntries(root: Path): List<Path> {
+        val outputDirectories = listOf(
+            root.resolve("target/classes"),
+            root.resolve("target/test-classes"),
+            root.resolve("build/classes/java/main"),
+            root.resolve("build/classes/java/test"),
+        ).filter { it.exists() && it.isDirectory() }
+        val localJars = listOf(root.resolve("lib"), root.resolve("libs"))
+            .filter { it.exists() && it.isDirectory() }
+            .flatMap { directory ->
+                Files.walk(directory).use { stream ->
+                    stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".jar") }
+                        .collect(Collectors.toList())
+                }
+            }
+        return (outputDirectories + localJars).distinct().sortedBy { it.toString() }
+    }
 
     private fun moduleName(workspaceRoot: Path, moduleRoot: Path): String {
         val relative = workspaceRoot.relativize(moduleRoot)
