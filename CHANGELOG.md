@@ -7,7 +7,61 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-No unreleased changes yet.
+### v0.2.0-beta - in progress
+
+Draft beta release preparation is in progress. This section records completed
+beta progress so far and does not imply that `v0.2.0-beta` has been released or
+tagged.
+
+#### Completed beta progress so far
+
+- Established the `v0.2.0-beta` compatibility baseline for documented CLI and
+  daemon JSON-RPC workflows, with LSP and MCP surfaces labelled for beta or
+  experimental use.
+- Accepted ADR 0007, documenting which Java behavior remains lexical/structural
+  for beta and which semantic guarantees require compiler-backed analysis before
+  `v1.0.0`.
+- Expanded golden coverage from 15 alpha cases to 21 cases covering shipped
+  patch-producing operation progress and sample coverage.
+- Added P3 patch safety coverage for stale snapshots, unsafe paths, overlapping
+  edits, and rollback restoration for modify, create, rename, and delete edits.
+- Added P4 contract coverage for selected daemon JSON-RPC, MCP, and LSP
+  preview/apply/rollback and refusal/error flows.
+- Updated P5 operation documentation for rename class/member, move class,
+  organize imports, safe delete, extract method, change signature, and external
+  import success conditions, refusal behavior, warnings, and rollback
+  expectations.
+- Hardened P6 external Java importer coverage for provenance warnings, GPL
+  high-risk handling, helper-type preservation, multi-public-type splitting, and
+  non-Java Markdown fence stripping.
+- Verified P7 runtime artifact workflow progress: CI builds the self-contained
+  runtime zip and checksum, verifies the checksum, smoke-tests the packaged
+  launcher with `JAVA_HOME` unset across representative samples, and release tag
+  builds verify/unzip-smoke the tag-named runtime asset before publication.
+
+#### Current known beta limitations
+
+- Java analysis remains lexical/structural in beta and is not yet a full
+  compiler-backed type-resolution engine.
+- Framework configuration, reflection, generated code, external configuration,
+  and unknown downstream consumers still require manual review.
+- `organize-imports` does not promise full unused-import removal while analysis
+  remains lexical.
+- `safe-delete`, limited `extract-method`, and limited `change-signature` remain
+  conservative and may refuse ambiguous plans.
+- LSP, MCP, recipe, and external importer surfaces still include experimental
+  areas before `v1.0.0`.
+
+#### Migration notes from v0.1.0-alpha so far
+
+- Documented CLI and daemon JSON-RPC workflows are being promoted to beta
+  compatibility contracts; breaking changes after beta require changelog entries
+  and migration notes.
+- LSP and MCP pilots should treat documented commands/tools as beta-covered where
+  labelled, but still expect experimental behavior outside that baseline.
+- Consumers must keep preview review, diagnostics, apply, and rollback checks in
+  automation; beta does not remove the alpha safety workflow.
+- No final beta artifact, checksum, source tag, or release commit exists yet.
 
 ## v0.1.0-alpha - 2026-07-10 (released, current alpha)
 
