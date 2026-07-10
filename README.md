@@ -1,5 +1,7 @@
 # RefactorKit
 
+[![CI](https://github.com/mgiustiniani/refactorkit/actions/workflows/ci.yml/badge.svg)](https://github.com/mgiustiniani/refactorkit/actions/workflows/ci.yml)
+
 RefactorKit is a deterministic refactoring and code-intelligence engine for safe, previewable, rollbackable code transformations.
 
 The first supported language is **Java**. RefactorKit must work with Java 8-era projects while understanding Java language/source constructs and type forms through Java 25. The architecture is adapter-based so future languages can be added without coupling language-specific logic into the core engine.
