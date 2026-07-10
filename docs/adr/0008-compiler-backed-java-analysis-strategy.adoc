@@ -1,0 +1,64 @@
+= ADR 0008: Compiler-Backed Java Analysis Strategy
+:toc:
+:sectnums:
+
+Date: 2026-07-10
+
+Status: Accepted for v0.3.0 prototype; v1.0.0 semantic guarantees require test evidence
+
+== Context
+
+ADR 0007 kept the beta Java adapter lexical/structural where conservative and visible, but required a compiler-backed follow-up before RefactorKit can claim v1.0.0-level semantic guarantees.
+
+`v0.3.0` is the next post-beta slice for deciding and prototyping that direction. The prototype must improve parsing, binding-aware symbol identity, and reference precision without weakening the existing preview/apply/rollback safety model.
+
+== Decision
+
+Use Eclipse JDT as the primary compiler-backed Java analysis candidate for the `v0.3.0` prototype. JDT is the first candidate for Java parsing, project/classpath-aware bindings, symbol identity, and reference search precision.
+
+Keep the current lexical planners as a safety fallback while JDT coverage is incomplete. Fallback behavior must remain explicit in previews and diagnostics, and ambiguous semantic cases must still warn or refuse instead of guessing.
+
+Keep OpenRewrite as an optional future recipe and transformation backend, not as the first source of symbol identity for the prototype.
+
+Do not promise full `v1.0.0` semantic coverage until implementation and tests prove the supported cases.
+
+== Consequences
+
+* The Java adapter can prototype compiler-backed identity and reference search without changing the PatchPlan safety model.
+* Documentation and previews must distinguish JDT-backed evidence from lexical fallback evidence.
+* OpenRewrite remains available for future large-scale recipes or transformations, but JDT drives the first compiler-backed identity experiment.
+* `v0.3.0` may deliver prototype evidence and remaining gaps; it must not overstate `v1.0.0` readiness.
+* Build, classpath, annotation-processing, framework-string, reflection, and generated-code boundaries remain explicit risks until tested.
+
+== Alternatives Considered
+
+=== Eclipse JDT
+
+Chosen as the primary prototype candidate because it provides mature Java parsing, bindings, and reference-oriented infrastructure suitable for IDE-like analysis on JVM projects.
+
+=== javac APIs
+
+Useful for compiler-faithful parsing and diagnostics, but less convenient as the first refactoring-oriented symbol/reference API. It remains a possible supplement for diagnostics or source-level checks.
+
+=== OpenRewrite
+
+Strong candidate for future recipe execution and transformations. Not chosen as the first symbol identity source because the prototype needs binding-aware lookup and reference precision before broad recipe execution.
+
+=== Spoon
+
+Useful for Java model analysis and transformation experiments, but not selected as the first candidate because JDT better matches the immediate IDE-like binding/reference goals.
+
+=== Lexical-only
+
+Rejected as the long-term strategy. Lexical planners remain useful as conservative fallback, but ADR 0007 already records that semantic guarantees before `v1.0.0` require compiler/classpath-aware analysis.
+
+== Prototype Acceptance Criteria
+
+The `v0.3.0` prototype is acceptable when it demonstrates, with tests or documented evidence:
+
+* source-root and classpath discovery sufficient for representative Maven and Gradle samples;
+* JDT-backed symbol identity for classes and selected members without relying on plain text matches;
+* reference search that distinguishes at least same-name symbols in different packages or scopes;
+* preview output that labels whether evidence is JDT-backed or lexical fallback;
+* conservative warnings or refusals for unsupported overload, inheritance, framework, generated-code, or classpath cases;
+* no regression of preview/apply/rollback, affected-file reporting, diagnostics, and transaction safety requirements.

@@ -18,6 +18,9 @@ review safety boundaries before applying refactorings.
 - Added CLI, daemon, LSP, and MCP tests for the version/API metadata surfaces.
 - Drafted the compatibility and deprecation policy for beta-contract,
   experimental, and internal integration surfaces.
+- Added ADR 0008, selecting Eclipse JDT as the primary `v0.3.0` compiler-backed
+  Java analysis prototype candidate while keeping lexical planners as safety
+  fallback.
 
 ## v0.2.0-beta - 2026-07-10
 
