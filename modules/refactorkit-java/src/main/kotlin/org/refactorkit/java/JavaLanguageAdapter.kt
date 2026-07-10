@@ -61,6 +61,7 @@ class JavaLanguageAdapter : LanguageAdapter {
                 code = "java.fileNotInSnapshot",
             )),
         )
+        findJdtSymbolAtLocation(project, location)?.let { return SymbolResolution(it) }
         val word = wordAt(file.content, location.range.start.line, location.range.start.character)
             ?: return SymbolResolution(symbol = null)
         val symbols = buildSymbols(project).symbols
@@ -193,6 +194,25 @@ class JavaLanguageAdapter : LanguageAdapter {
         return semanticSymbol.toCoreSymbol()
     }
 
+    private fun findJdtSymbolAtLocation(project: ProjectSnapshot, location: SourceLocation): Symbol? {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        if (analysis.warnings.isNotEmpty()) return null
+        analysis.symbols.firstOrNull { symbol ->
+            symbol.path == location.path &&
+                !symbol.bindingKey.isNullOrBlank() &&
+                symbol.sourceRange.contains(location.range.start)
+        }?.let { return it.toCoreSymbol() }
+
+        val reference = analysis.references.firstOrNull { reference ->
+            reference.path == location.path &&
+                !reference.bindingKey.isNullOrBlank() &&
+                reference.sourceRange.contains(location.range.start)
+        } ?: return null
+        val target = analysis.symbols.singleOrNull { it.bindingKey == reference.bindingKey } ?: return null
+        if (target.bindingKey.isNullOrBlank()) return null
+        return target.toCoreSymbol()
+    }
+
     private fun signedJdtMemberSymbols(project: ProjectSnapshot): List<Symbol> {
         val analysis = JdtJavaSemanticAnalyzer().analyze(project)
         if (analysis.warnings.isNotEmpty()) return emptyList()
@@ -222,6 +242,8 @@ class JavaLanguageAdapter : LanguageAdapter {
     }
 
     private fun String.isSignedMemberId(): Boolean = contains('#') && contains('(') && endsWith(')')
+
+    private fun SourceRange.contains(position: SourcePosition): Boolean = start <= position && position < end
 
     private fun JdtJavaSemanticSymbol.toCoreSymbol(): Symbol = Symbol(
         id = SymbolId(qualifiedName),

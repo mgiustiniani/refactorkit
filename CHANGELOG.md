@@ -46,7 +46,10 @@ review safety boundaries before applying refactorings.
   the Java adapter, daemon `symbol.search`/`symbol.definition`/
   `symbol.references`, MCP `symbol_search`/symbol definition/resource paths, and
   CLI `definition`/`references`, while keeping lexical lookup as the fallback
-  for existing unsigned symbols.
+  for existing unsigned symbols. LSP definition/reference/rename-position
+  resolution now uses the same clean JDT binding evidence for overloaded member
+  call sites, and limited change-signature accepts signed selectors for
+  single-method cases while preserving overload refusals.
 
 ## v0.2.0-beta - 2026-07-10
 

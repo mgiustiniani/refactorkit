@@ -115,7 +115,7 @@ class JavaLanguageAdapterTest {
         assertEquals("com.example.UserManager", typeResolution.symbol?.id?.value)
 
         val methodResolution = adapter.resolveSymbol(snap, location("src/main/java/com/other/Client.java", 4, 45))
-        assertEquals("com.example.UserManager#displayName", methodResolution.symbol?.id?.value)
+        assertEquals("com.example.UserManager#displayName(java.lang.String)", methodResolution.symbol?.id?.value)
     }
 
     @Test
@@ -153,6 +153,36 @@ class JavaLanguageAdapterTest {
         val referencedLine = clientContent.lines()[references.single().location.range.start.line]
         assertTrue(referencedLine.contains("find(\"abc\")"), "expected String overload reference line, got $referencedLine")
         assertFalse(referencedLine.contains("find(7)"), "int overload must not be reported for signed String selector")
+    }
+
+    @Test
+    fun resolveSymbolAtOverloadedCallUsesJdtBindingEvidence() {
+        val client = """
+            package com.example;
+            public class LookupClient {
+                String text(Lookup lookup) { return lookup.find("abc"); }
+                String number(Lookup lookup) { return lookup.find(7); }
+            }
+        """.trimIndent()
+        val root = createTempProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public class Lookup {
+                    public String find(String key) { return key; }
+                    public String find(int id) { return String.valueOf(id); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/LookupClient.java" to client,
+        )
+        val line = client.lines().indexOfFirst { it.contains("find(\"abc\")") }
+        val character = client.lines()[line].indexOf("find")
+
+        val resolution = JavaLanguageAdapter().resolveSymbol(
+            JavaProjectScanner().scan(root),
+            location("src/main/java/com/example/LookupClient.java", line, character),
+        )
+
+        assertEquals("com.example.Lookup#find(java.lang.String)", resolution.symbol?.id?.value)
     }
 
     @Test

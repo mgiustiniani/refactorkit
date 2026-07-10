@@ -56,9 +56,9 @@ compatible.
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
 | `refactorkit diagnostics <path>` / `refactorkit java diagnostics <path>` | `beta-contract` | Diagnostic severity/file/line fields are contract fields. |
 | `refactorkit definition --symbol <fqcn> [path]` / `java definition` | `beta-contract` | Read-only lookup. |
-| `refactorkit references --symbol <fqcn> [path]` / `java references` | `beta-contract` | Read-only reference listing; still lexical for beta. |
+| `refactorkit references --symbol <fqcn> [path]` / `java references` | `beta-contract` | Read-only reference listing; exact signed member selectors may use JDT binding evidence when analysis is clean, otherwise lexical fallback remains. |
 | `refactorkit rename --symbol <fqcn> --to <name> [--apply] [path]` | `beta-contract` | Java class rename preview/apply/rollback safety semantics. |
-| `refactorkit rename-member --symbol <FQN#member> --to <name> [--apply] [path]` | `beta-contract` | Limited lexical member rename; refuses constructors and ambiguous cases. |
+| `refactorkit rename-member --symbol <FQN#member> --to <name> [--apply] [path]` | `beta-contract` | Signed method selectors use the proven JDT exact-overload slice; unsigned member rename remains lexical and constructors/ambiguous cases are refused. |
 | `refactorkit move-class --symbol <fqcn> --to-package <pkg> [--apply] [path]` | `beta-contract` | Java class move preview; warnings remain required for framework/string risks. |
 | `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; full unused-import removal is not promised while lexical. |
 | `refactorkit safe-delete --symbol <fqcn> [--force] [--apply] [path]` | `beta-contract` | Refuses referenced symbols by default; forced behavior requires explicit risk note. |
@@ -178,8 +178,8 @@ reports `0.3.0-SNAPSHOT`.
 
 | Capability or command | Status | Notes |
 |-----------------------|--------|-------|
-| `textDocument/definition`, `references`, `documentSymbol`, `diagnostic` | `beta-contract` | Read-only editor integration. |
-| `textDocument/prepareRename`, `textDocument/rename` | `beta-contract` | Must use RefactorKit previews and refusal handling. |
+| `textDocument/definition`, `references`, `documentSymbol`, `diagnostic` | `beta-contract` | Read-only editor integration; definition/references may use JDT binding evidence for clean exact overloaded member call sites. |
+| `textDocument/prepareRename`, `textDocument/rename` | `beta-contract` | Must use RefactorKit previews and refusal handling; rename-position resolution may produce signed method selectors for the proven JDT exact-overload slice. |
 | `textDocument/codeAction`, `workspace/executeCommand` envelope | `beta-contract` | Command transport and refusal categories are baseline. |
 | `textDocument/semanticTokens/full` | `experimental` | Token shape may change. |
 | `refactorkit.renameClass`, `refactorkit.renameMember`, `refactorkit.moveClass`, `refactorkit.organizeImports`, `refactorkit.safeDelete`, `refactorkit.applyPlan`, `refactorkit.rollback` | `beta-contract` | Command names, preview metadata, and safety semantics are stable for beta pilots. |

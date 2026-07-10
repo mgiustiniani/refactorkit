@@ -21,6 +21,9 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.SourceLocation
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -141,10 +144,7 @@ class LspSession {
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
-        val word = wordAt(file.content, line, char) ?: return JsonNull
-        val index = adapter.buildSymbols(snap)
-        val symbol = index.symbols.find { it.name == word || it.id.value.endsWith(".$word") }
-            ?: return JsonNull
+        val symbol = adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol ?: return JsonNull
         val absPath = snap.workspace.root.resolve(symbol.location.path).toAbsolutePath()
         return buildJsonObject {
             put("uri", absPath.toUri().toString())
@@ -158,10 +158,7 @@ class LspSession {
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
-        val word = wordAt(file.content, line, char) ?: return JsonNull
-        val index = adapter.buildSymbols(snap)
-        val symbol = index.symbols.find { it.name == word || it.id.value.endsWith(".$word") }
-            ?: return JsonNull
+        val symbol = adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol ?: return JsonNull
         val refs = adapter.findReferences(snap, symbol.id)
         return buildJsonArray {
             refs.forEach { ref ->
@@ -184,9 +181,7 @@ class LspSession {
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
-        val word = wordAt(file.content, line, char) ?: return JsonNull
-        val index = adapter.buildSymbols(snap)
-        val symbol = index.symbols.find { it.name == word } ?: return JsonNull
+        val symbol = adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol ?: return JsonNull
         return buildJsonObject {
             put("range", rangeJson(
                 symbol.location.range.start.line, symbol.location.range.start.character,
@@ -202,11 +197,7 @@ class LspSession {
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
-        val word = wordAt(file.content, line, char) ?: return JsonNull
-        val symbols = adapter.buildSymbols(snap).symbols
-        val symbol = symbols.firstOrNull { it.location.path == file.path && it.name == word }
-            ?: symbols.firstOrNull { it.name == word }
-            ?: return JsonNull
+        val symbol = adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol ?: return JsonNull
         val plan = when (symbol.kind) {
             org.refactorkit.core.Symbol.Kind.METHOD,
             org.refactorkit.core.Symbol.Kind.FIELD ->
@@ -239,11 +230,12 @@ class LspSession {
         val range = params?.obj("range")
         val line = range?.obj("start")?.get("line")?.jsonPrimitive?.content?.toIntOrNull()
         val char = range?.obj("start")?.get("character")?.jsonPrimitive?.content?.toIntOrNull()
-        val word = if (line != null && char != null) wordAt(file.content, line, char) else null
-        if (word != null) {
-            val symbol = adapter.buildSymbols(snap).symbols.find { it.location.path == file.path && it.name == word }
-                ?: adapter.buildSymbols(snap).symbols.find { it.name == word }
-            if (symbol != null) {
+        val symbol = if (line != null && char != null) {
+            adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol
+        } else {
+            null
+        }
+        if (symbol != null) {
                 val renameCommand = when (symbol.kind) {
                     org.refactorkit.core.Symbol.Kind.METHOD,
                     org.refactorkit.core.Symbol.Kind.FIELD -> "refactorkit.renameMember"
@@ -313,7 +305,6 @@ class LspSession {
                         put("symbol", symbol.id.value)
                     }))
                 }
-            }
         }
 
         return JsonArray(actions)
@@ -545,6 +536,11 @@ class LspSession {
         val line = pos["line"]?.jsonPrimitive?.content?.toIntOrNull() ?: return null
         val char = pos["character"]?.jsonPrimitive?.content?.toIntOrNull() ?: return null
         return Triple(fileUri, line, char)
+    }
+
+    private fun pointLocation(path: Path, line: Int, character: Int): SourceLocation {
+        val position = SourcePosition(line, character)
+        return SourceLocation(path, SourceRange(position, position))
     }
 
     private fun wordAt(content: String, line: Int, character: Int): String? {

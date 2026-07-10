@@ -47,6 +47,24 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun acceptsSignedMethodSelectorForSingleMethodChangeSignature() {
+        val root = tempProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                public class UserService {
+                    String findName(String id) { return id.trim(); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewRenameParameter(snap, "com.example.UserService#findName(java.lang.String)", "id", "userId")
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.summary.contains("userId"), plan.summary)
+    }
+
+    @Test
     fun doesNotRenameStringLiteralOrComment() {
         val root = tempProject(
             "src/main/java/com/example/UserService.java" to """

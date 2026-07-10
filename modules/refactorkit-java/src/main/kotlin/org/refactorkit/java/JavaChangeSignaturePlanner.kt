@@ -802,7 +802,8 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
     private fun parseMemberSymbol(symbol: String): Pair<String, String>? {
         val hash = symbol.indexOf('#')
         if (hash < 0) return null
-        return symbol.substring(0, hash) to symbol.substring(hash + 1)
+        val selector = symbol.substring(hash + 1)
+        return symbol.substring(0, hash) to selector.substringBefore('(')
     }
 
     private fun refused(snapshot: ProjectSnapshot, operation: String, reason: String) = PatchPlan(

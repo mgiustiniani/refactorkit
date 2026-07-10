@@ -115,6 +115,46 @@ class LspSessionTest {
     }
 
     @Test
+    fun definitionAndReferencesUseJdtForOverloadedMethodCalls() {
+        val lookup = """
+            package com.example;
+            public class Lookup {
+                public String find(String key) { return key; }
+                public String find(int id) { return String.valueOf(id); }
+            }
+        """.trimIndent() + "\n"
+        val client = """
+            package com.example;
+            public class LookupClient {
+                String text(Lookup lookup) { return lookup.find("abc"); }
+                String number(Lookup lookup) { return lookup.find(7); }
+            }
+        """.trimIndent() + "\n"
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to lookup,
+            "src/main/java/com/example/LookupClient.java" to client,
+        )
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+        val line = client.lines().indexOfFirst { it.contains("find(\"abc\")") }
+        val character = client.lines()[line].indexOf("find")
+        val params = buildJsonObject {
+            put("textDocument", textDocumentParams(root, "src/main/java/com/example/LookupClient.java")["textDocument"]!!)
+            put("position", buildJsonObject { put("line", line); put("character", character) })
+        }
+
+        val definition = session.dispatch("textDocument/definition", params) as JsonObject
+        val references = session.dispatch("textDocument/references", params) as JsonArray
+
+        assertTrue(definition["uri"]!!.jsonPrimitive.content.endsWith("/src/main/java/com/example/Lookup.java"), definition.toString())
+        assertEquals(lookup.lines().indexOfFirst { it.contains("find(String key)") }.toString(), definition["range"]!!.jsonObject["start"]!!.jsonObject["line"]!!.jsonPrimitive.content)
+        assertEquals(1, references.size)
+        val reference = references.single().jsonObject
+        assertTrue(reference["uri"]!!.jsonPrimitive.content.endsWith("/src/main/java/com/example/LookupClient.java"), reference.toString())
+        assertEquals(line.toString(), reference["range"]!!.jsonObject["start"]!!.jsonObject["line"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun executeCommandChangeSignatureRemoveParameterReturnsDiff() {
         val root = createProject(
             "src/main/java/com/example/UserService.java" to """
