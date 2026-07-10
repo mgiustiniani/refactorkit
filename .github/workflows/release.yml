@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Build and test
+        run: ./gradlew build
+
+      - name: Run golden tests
+        run: ./refactorkit test-golden
+
+      - name: Build self-contained CLI runtime
+        run: ./gradlew packageCliRuntime distCliRuntimeZip
+
+      - name: Prepare release assets
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
+            "refactorkit-runtime-${version}-linux-x86_64.zip"
+          sha256sum "refactorkit-runtime-${version}-linux-x86_64.zip" \
+            > "refactorkit-runtime-${version}-linux-x86_64.zip.sha256"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          body_path: .github/RELEASE_TEMPLATE.md
+          files: |
+            refactorkit-runtime-*-linux-x86_64.zip
+            refactorkit-runtime-*-linux-x86_64.zip.sha256
