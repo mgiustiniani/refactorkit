@@ -32,13 +32,14 @@ The beta release publishes a self-contained Linux x86_64 runtime zip. It include
 `refactorkit/runtime/bin/java`, so users do not need a globally installed Java
 runtime to run the CLI.
 
-Final release metadata is filled in only after the release commit is known:
+Published release metadata:
 
 ```text
-Release URL: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
-Checksum URL: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
-Expected SHA-256: <TBD after release artifact is built>
-Source commit: <TBD before tagging>
+Release page: https://github.com/mgiustiniani/refactorkit/releases/tag/v0.2.0-beta
+Runtime asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
+Checksum asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
+Source tag: v0.2.0-beta
+Release commit: 62166e88957ffe84a38e5dc21a923e2f2a521ab3
 ```
 
 Download, verify, and unpack the runtime asset:
@@ -86,7 +87,7 @@ gradle wrapper
 ./gradlew build
 ```
 
-## CLI examples for alpha hardening
+## CLI examples
 
 The examples below use the packaged binary name `refactorkit`. During development, run the same command through Gradle:
 
@@ -297,7 +298,7 @@ refactorkit test-golden --golden-dir testdata/golden
 
 ## Preview, apply, rollback safety model
 
-The alpha workflow is: scan the project, generate a preview, inspect affected files/diagnostics/warnings, apply only with `--apply`, verify with diagnostics or tests, and roll back by transaction ID if the result is not acceptable. Patch application validates the snapshot hash and records rollback metadata under the workspace.
+The beta workflow is: scan the project, generate a preview, inspect affected files/diagnostics/warnings, apply only with `--apply`, verify with diagnostics or tests, and roll back by transaction ID if the result is not acceptable. Patch application validates the snapshot hash and records rollback metadata under the workspace.
 
 MVP limitations remain visible: Java analysis is still mostly lexical, `organize-imports` does not fully remove unused imports, `safe-delete` does not inspect every non-source reference, external importer license detection is heuristic, and extract-method/change-signature support is conservative. See [`docs/release-plan.md`](docs/release-plan.md) and ARC42 risks in [`docs/arc42/11-risks-and-technical-debt.adoc`](docs/arc42/11-risks-and-technical-debt.adoc).
 

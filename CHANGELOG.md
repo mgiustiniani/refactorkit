@@ -11,11 +11,13 @@ _No changes yet._
 
 ## v0.2.0-beta - 2026-07-10
 
-Second public beta release candidate for RefactorKit. This entry records the
-completed beta scope and safety evidence prepared for the `v0.2.0-beta` tag.
-Final release publication metadata is injected by the release workflow.
+Second public beta release for RefactorKit. This entry records the completed
+beta scope, safety evidence, and published runtime assets for the
+`v0.2.0-beta` prerelease.
 
-### Beta scope and release-candidate evidence
+Release page: https://github.com/mgiustiniani/refactorkit/releases/tag/v0.2.0-beta
+
+### Beta scope and release evidence
 
 - Established the `v0.2.0-beta` compatibility baseline for documented CLI and
   daemon JSON-RPC workflows, with LSP and MCP surfaces labelled for beta or
@@ -44,11 +46,11 @@ Final release publication metadata is injected by the release workflow.
   high-risk handling, helper-type preservation, multi-public-type splitting,
   non-Java Markdown fence stripping, stable provenance/license output fields,
   unknown-license policy blocks, and naming-conflict refusal guidance.
-- Verified P7 runtime artifact workflow progress: CI builds the self-contained
-  runtime zip and checksum, verifies the checksum, smoke-tests the packaged
-  launcher with `JAVA_HOME` unset across representative samples, and release tag
-  builds verify/unzip-smoke the tag-named runtime asset before publication.
-- Expected runtime artifact names are
+- Published and verified the P7 runtime artifacts: CI built the self-contained
+  runtime zip and checksum, verified the checksum, smoke-tested the packaged
+  launcher with `JAVA_HOME` unset across representative samples, and the release
+  tag build verified/unzip-smoked the tag-named runtime asset.
+- Published runtime asset names are
   `refactorkit-runtime-0.2.0-beta-linux-x86_64.zip` and
   `refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256`.
 
@@ -78,15 +80,15 @@ Final release publication metadata is injected by the release workflow.
   should apply the same labelled-surface rule.
 - Consumers must keep preview review, diagnostics, apply, and rollback checks in
   automation; beta does not remove the alpha safety workflow.
-- Release automation injects the final source tag, release commit, asset URL, and
-  SHA-256 into the published GitHub Release body.
+- Release automation injected the final source tag, release commit, asset URL,
+  and SHA-256 into the published GitHub Release body; downloaded assets were
+  verified with `sha256sum -c`.
 
-## v0.1.0-alpha - 2026-07-10 (released, current alpha)
+## v0.1.0-alpha - 2026-07-10 (released)
 
-Initial public alpha preview for the RefactorKit MVP. The `v0.1.0-alpha` tag is
-being finalized on the release commit that includes ADRs, expanded golden
-coverage, and alpha release automation. APIs and CLI details may still change
-before a stable release.
+Initial public alpha preview for the RefactorKit MVP. The `v0.1.0-alpha` tag was
+published with ADRs, expanded golden coverage, and alpha release automation.
+APIs and CLI details may still change before a stable release.
 
 ### Initial MVP scope
 
