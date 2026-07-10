@@ -142,10 +142,47 @@ and `documentChanges` for file create/delete/rename operations.
 | `textDocument/prepareRename`, `textDocument/rename` | `beta-contract` | Must use RefactorKit previews and refusal handling. |
 | `textDocument/codeAction`, `workspace/executeCommand` envelope | `beta-contract` | Command transport and refusal categories are baseline. |
 | `textDocument/semanticTokens/full` | `experimental` | Token shape may change. |
-| `refactorkit.renameClass`, `refactorkit.renameMember`, `refactorkit.moveClass`, `refactorkit.organizeImports`, `refactorkit.safeDelete`, `refactorkit.applyPlan`, `refactorkit.rollback` | `beta-contract` | Command names and safety semantics are stable for beta pilots. |
+| `refactorkit.renameClass`, `refactorkit.renameMember`, `refactorkit.moveClass`, `refactorkit.organizeImports`, `refactorkit.safeDelete`, `refactorkit.applyPlan`, `refactorkit.rollback` | `beta-contract` | Command names, preview metadata, and safety semantics are stable for beta pilots. |
 | `refactorkit.extractMethod` | `experimental` | Limited MVP. |
 | `refactorkit.changeSignature.renameParameter`, `refactorkit.changeSignature.addParameter`, `refactorkit.changeSignature.reorderParameters`, `refactorkit.changeSignature.removeParameter` | `experimental` | Limited MVP. |
 | Alias `refactorkit.renameParameter` | `experimental` | Compatibility alias, not preferred for new clients. |
+
+### LSP `workspace/executeCommand` preview and rollback contract
+
+Preview commands such as `refactorkit.renameClass`, `refactorkit.renameMember`,
+`refactorkit.moveClass`, `refactorkit.organizeImports`, and
+`refactorkit.safeDelete` return a WorkspaceEdit-compatible object with beta
+RefactorKit metadata:
+
+- `refactorkitPlanId`: pending plan id to pass to `refactorkit.applyPlan`;
+- `operation`, `status`, `summary`, `riskLevel`, and `warnings`;
+- legacy `changes` for text edits;
+- `documentChanges` for text edits plus create, delete, and rename file edits.
+
+Clients should preserve `refactorkitPlanId` from the preview result. The LSP
+server also stores pending plans internally so `refactorkit.applyPlan` can apply
+the exact previewed plan. `refactorkit.applyPlan` returns `{ "transactionId":
+"..." }`, writes transaction metadata, removes the pending plan, refreshes the
+workspace snapshot, and republishes diagnostics.
+
+`refactorkit.rollback` requires `{ "transactionId": "..." }`. On success it
+loads transaction metadata, rolls the workspace back, deletes the transaction-log
+entry, refreshes the snapshot, republishes diagnostics, and returns:
+
+```json
+{ "status": "rolledBack", "transactionId": "..." }
+```
+
+Rollback refusal semantics:
+
+- missing or unknown transaction ids are `INVALID_PARAMS` and must not expose a
+  stack trace;
+- rollback engine refusal currently maps to `INTERNAL_ERROR` with a concise
+  `Rollback refused: ...` message;
+- refused preview plans, including referenced `safeDelete`, use `PLAN_REFUSED`
+  and do not create a pending plan or workspace edit;
+- unknown LSP commands and unknown plan ids are `INVALID_PARAMS` and must not
+  leak internal exceptions.
 
 ## MCP server baseline
 

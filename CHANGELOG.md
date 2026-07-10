@@ -26,8 +26,10 @@ tagged.
   assertions.
 - Added P3 patch safety coverage for stale snapshots, unsafe paths, overlapping
   edits, and rollback restoration for modify, create, rename, and delete edits.
-- Added P4 contract coverage for selected daemon JSON-RPC, MCP, and LSP
-  preview/apply/rollback and refusal/error flows.
+- Added P4 contract coverage for selected daemon JSON-RPC and MCP
+  preview/apply/rollback and refusal/error flows; LSP command coverage now
+  verifies preview metadata, pending-plan apply, transaction-backed rollback,
+  unknown transaction refusal, and `safeDelete` `PLAN_REFUSED` behavior.
 - Updated P5 operation documentation for rename class/member, move class,
   organize imports, safe delete, extract method, change signature, and external
   import success conditions, refusal behavior, warnings, and rollback
@@ -67,8 +69,11 @@ tagged.
 - Documented CLI and daemon JSON-RPC workflows are being promoted to beta
   compatibility contracts; breaking changes after beta require changelog entries
   and migration notes.
-- LSP and MCP pilots should treat documented commands/tools as beta-covered where
-  labelled, but still expect experimental behavior outside that baseline.
+- LSP pilots can rely on documented preview metadata fields for covered
+  `workspace/executeCommand` preview commands (`refactorkitPlanId`, operation,
+  status, summary, risk level, warnings, `changes`, and `documentChanges`) while
+  still expecting experimental behavior outside the labelled baseline; MCP pilots
+  should apply the same labelled-surface rule.
 - Consumers must keep preview review, diagnostics, apply, and rollback checks in
   automation; beta does not remove the alpha safety workflow.
 - No final beta artifact, checksum, source tag, or release commit exists yet.

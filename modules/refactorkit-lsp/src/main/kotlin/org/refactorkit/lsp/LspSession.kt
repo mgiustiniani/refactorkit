@@ -20,6 +20,8 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.TransactionId
+import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaLanguageAdapter
@@ -473,8 +475,33 @@ class LspSession {
                 val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
                 val current = scanner.scan(root)
                 when (val result = PatchEngine(root).apply(plan, current.hash)) {
-                    is ApplyResult.Applied -> buildJsonObject { put("transactionId", result.transaction.id.value) }
+                    is ApplyResult.Applied -> {
+                        TransactionLog(root.resolve(".refactorkit/transactions")).save(result.transaction)
+                        pendingPlans.remove(planId)
+                        refreshSnapshot()
+                        buildJsonObject { put("transactionId", result.transaction.id.value) }
+                    }
                     is ApplyResult.Refused -> throw JsonRpcException(JsonRpcErrorCodes.SNAPSHOT_CHANGED, result.diagnostics.first().message)
+                }
+            }
+            "refactorkit.rollback" -> {
+                val transactionId = args?.string("transactionId") ?: missing("transactionId")
+                val log = TransactionLog(root.resolve(".refactorkit/transactions"))
+                val tx = log.load(TransactionId(transactionId))
+                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $transactionId")
+                when (val result = PatchEngine(root).rollback(tx)) {
+                    is ApplyResult.Applied -> {
+                        log.delete(TransactionId(transactionId))
+                        refreshSnapshot()
+                        buildJsonObject {
+                            put("status", "rolledBack")
+                            put("transactionId", transactionId)
+                        }
+                    }
+                    is ApplyResult.Refused -> throw JsonRpcException(
+                        JsonRpcErrorCodes.INTERNAL_ERROR,
+                        "Rollback refused: ${result.diagnostics.joinToString("; ") { it.message }}",
+                    )
                 }
             }
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown command: $command")
@@ -532,6 +559,10 @@ class LspSession {
     }
 
     private fun planToLspWorkspaceEdit(plan: PatchPlan, snap: ProjectSnapshot): JsonObject {
+        if (plan.status == PatchStatus.REFUSED) {
+            throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+        }
+        pendingPlans[plan.id.value] = plan
         val changes = mutableMapOf<String, MutableList<JsonObject>>()
         val documentChanges = mutableListOf<JsonObject>()
         for (edit in plan.workspaceEdit.edits) {
@@ -574,6 +605,12 @@ class LspSession {
             }
         }
         return buildJsonObject {
+            put("refactorkitPlanId", plan.id.value)
+            put("operation", plan.operation)
+            put("status", plan.status.name)
+            put("summary", plan.summary)
+            put("riskLevel", plan.riskLevel.name)
+            put("warnings", buildJsonArray { plan.warnings.forEach { add(JsonPrimitive(it)) } })
             put("changes", buildJsonObject {
                 changes.forEach { (uri, edits) -> put(uri, JsonArray(edits)) }
             })

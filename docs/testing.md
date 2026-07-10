@@ -3,8 +3,9 @@
 See AGENTS.md §18 for the authoritative testing rules.
 
 Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests,
-initial P3/P4 safety/contract tests, focused P6 external-importer hardening, and
-P7 packaging/release-verification progress. The current golden suite contains 22
+initial P3 safety tests, initial P4 daemon/MCP contract tests, hardened P4 LSP
+command-contract coverage, focused P6 external-importer hardening, and P7
+packaging/release-verification progress. The current golden suite contains 22
 cases covering shipped patch-producing operations.
 
 ## Unit tests
@@ -102,8 +103,11 @@ external-importer checks:
   missing params, unknown plan, and stale plan/snapshot error code contracts.
 - MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack
   traces, and refusal of outside-workspace or not-in-snapshot file resources.
-- LSP: `executeCommand` refusal contracts for unknown plan IDs and unknown
-  commands.
+- LSP: `executeCommand` preview metadata (`refactorkitPlanId`, operation,
+  status, summary, risk level, and warnings), `renameClass` preview → apply →
+  rollback, pending-plan apply behavior, transaction-backed rollback response,
+  unknown plan and transaction refusals, unknown commands, and referenced
+  `safeDelete` `PLAN_REFUSED` behavior.
 - External importer: provenance warning details, GPL high-risk warning/risk
   level, one-public-type plus package-private helper preservation,
   multi-public-type splitting with package/import preservation, and non-Java
@@ -127,9 +131,10 @@ substitute for golden, unit, protocol, or rollback tests.
 
 ## Remaining beta coverage gaps
 
-The current suite covers the P1/P2 beta additions, initial P3/P4 safety and
-contract tests, and focused P6 importer hardening tests. Remaining expansion
-should focus on gaps not yet represented by golden, unit, or protocol tests:
+The current suite covers the P1/P2 beta additions, initial P3 safety tests,
+initial P4 daemon/MCP contract tests, hardened P4 LSP command tests, and focused
+P6 importer hardening tests. Remaining expansion should focus on gaps not yet
+represented by golden, unit, or protocol tests:
 
 - framework strings, generated code, unresolved-symbol, and public API risk paths;
 - `organizeImports` documented limitations beyond the clean no-op case;
@@ -142,7 +147,8 @@ should focus on gaps not yet represented by golden, unit, or protocol tests:
 - recipe/orchestration cases only for operations advertised as shipped;
 - broader daemon contracts for project/symbol/diagnostic methods;
 - broader LSP contracts for definition, references, prepareRename, rename,
-  codeAction, documentSymbol, diagnostics, and successful command workflows;
+  codeAction, documentSymbol, diagnostics, and command edges beyond the covered
+  preview/apply/rollback flow;
 - broader MCP contracts for external import, context bundles, and remaining
   scoped resources;
 - final tag-specific release notes, changelog, and installation/smoke-test

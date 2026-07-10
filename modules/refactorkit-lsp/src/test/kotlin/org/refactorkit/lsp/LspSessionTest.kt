@@ -242,6 +242,83 @@ class LspSessionTest {
     }
 
     @Test
+    fun executeCommandPreviewApplyRollbackRenameClassFlowRestoresWorkspace() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+
+        val preview = session.dispatch("workspace/executeCommand", buildJsonObject {
+            put("command", "refactorkit.renameClass")
+            put("arguments", JsonArray(listOf(buildJsonObject {
+                put("symbol", "com.example.UserManager")
+                put("newName", "AccountManager")
+            })))
+        }) as JsonObject
+        val planId = preview["refactorkitPlanId"]!!.jsonPrimitive.content
+
+        val apply = session.dispatch("workspace/executeCommand", buildJsonObject {
+            put("command", "refactorkit.applyPlan")
+            put("arguments", JsonArray(listOf(buildJsonObject { put("planId", planId) })))
+        }) as JsonObject
+        val transactionId = apply["transactionId"]!!.jsonPrimitive.content
+
+        assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
+        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+
+        val rollback = session.dispatch("workspace/executeCommand", buildJsonObject {
+            put("command", "refactorkit.rollback")
+            put("arguments", JsonArray(listOf(buildJsonObject { put("transactionId", transactionId) })))
+        }) as JsonObject
+
+        assertEquals("rolledBack", rollback["status"]!!.jsonPrimitive.content)
+        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
+        assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+    }
+
+    @Test
+    fun executeCommandRollbackRejectsUnknownTransactionId() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.rollback")
+                put("arguments", JsonArray(listOf(buildJsonObject { put("transactionId", "tx-missing") })))
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, ex.code)
+        assertTrue(ex.message.contains("Transaction not found"))
+        assertFalse(ex.message.contains("Exception"), ex.message)
+    }
+
+    @Test
+    fun executeCommandSafeDeleteRefusalUsesPlanRefusedCode() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+            "src/main/java/com/example/UseFoo.java" to "package com.example;\npublic class UseFoo { Foo foo; }\n",
+        )
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.safeDelete")
+                put("arguments", JsonArray(listOf(buildJsonObject { put("symbol", "com.example.Foo") })))
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.PLAN_REFUSED, ex.code)
+        assertTrue(ex.message.contains("reference", ignoreCase = true), ex.message)
+    }
+
+    @Test
     fun executeCommandApplyPlanRejectsUnknownPlanId() {
         val root = createProject(
             "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
