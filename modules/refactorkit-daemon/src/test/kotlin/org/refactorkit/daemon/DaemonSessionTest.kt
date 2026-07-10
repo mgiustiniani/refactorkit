@@ -8,10 +8,12 @@ import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import java.nio.file.Files
+import java.nio.file.Paths
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DaemonSessionTest {
@@ -85,6 +87,35 @@ class DaemonSessionTest {
         }) as JsonObject
         assertTrue(planResult["planId"]!!.jsonPrimitive.content.isNotBlank())
         assertEquals("PREVIEW", planResult["status"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun previewApplyRollbackRenameClassFlowRestoresWorkspace() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val planResult = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "renameClass")
+            put("symbol", "com.example.UserManager")
+            put("arguments", buildJsonObject { put("newName", "AccountManager") })
+        }) as JsonObject
+        val planId = planResult["planId"]!!.jsonPrimitive.content
+
+        val applyResult = session.dispatch("refactor.apply", params("planId" to planId)) as JsonObject
+        val transactionId = applyResult["transactionId"]!!.jsonPrimitive.content
+
+        assertEquals("applied", applyResult["status"]!!.jsonPrimitive.content)
+        assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
+        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+
+        val rollbackResult = session.dispatch("patch.rollback", params("transactionId" to transactionId)) as JsonObject
+
+        assertEquals("rolledBack", rollbackResult["status"]!!.jsonPrimitive.content)
+        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
+        assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
     }
 
     @Test
@@ -184,6 +215,67 @@ class DaemonSessionTest {
         val session = DaemonSession()
         val ex = assertFailsWith<JsonRpcException> { session.dispatch("bogus.method", null) }
         assertEquals(JsonRpcErrorCodes.METHOD_NOT_FOUND, ex.code)
+    }
+
+    @Test
+    fun previewRenameMissingNewNameThrowsInvalidParams() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "renameClass")
+                put("symbol", "com.example.UserManager")
+                put("arguments", buildJsonObject {})
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, ex.code)
+        assertTrue(ex.message.contains("arguments.newName"))
+    }
+
+    @Test
+    fun applyUnknownPlanThrowsInvalidParams() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("refactor.apply", params("planId" to "plan-missing"))
+        }
+
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, ex.code)
+        assertTrue(ex.message.contains("Plan not found"))
+    }
+
+    @Test
+    fun applyStalePlanThrowsSnapshotChangedCode() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val planResult = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "renameClass")
+            put("symbol", "com.example.UserManager")
+            put("arguments", buildJsonObject { put("newName", "AccountManager") })
+        }) as JsonObject
+        val planId = planResult["planId"]!!.jsonPrimitive.content
+        rootPath.resolve("src/main/java/com/example/UserManager.java")
+            .writeText("package com.example;\npublic class UserManager { int changed; }\n")
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("refactor.apply", params("planId" to planId))
+        }
+
+        assertEquals(JsonRpcErrorCodes.SNAPSHOT_CHANGED, ex.code)
+        assertTrue(ex.message.contains("Project changed since preview"))
     }
 
     @Test

@@ -2,8 +2,9 @@
 
 See AGENTS.md §18 for the authoritative testing rules.
 
-Status: implementation-informed after `v0.2.0-beta` P1/P2 tests. The current
-golden suite contains 21 cases covering shipped patch-producing operations.
+Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests and
+initial P3/P4 safety/contract tests. The current golden suite contains 21 cases
+covering shipped patch-producing operations.
 
 ## Unit tests
 
@@ -87,10 +88,26 @@ refactorkit test-golden --golden-dir path/to/golden
 | `external-class-import-conflict` | `importExternalJavaClass` | REFUSED | Naming conflict refusal. |
 | `external-class-import-license-block-unknown` | `importExternalJavaClass` | REFUSED | Unknown-license import blocked. |
 
+## Patch safety and protocol contract tests
+
+P3/P4 beta coverage now includes focused safety and integration-surface contract
+checks:
+
+- PatchEngine: stale snapshot refusal, outside-workspace path refusal,
+  overlapping-edit rejection, and rollback restoration for modify, create,
+  rename, and delete edits.
+- Daemon JSON-RPC: `refactor.preview` → `refactor.apply` → `patch.rollback`,
+  missing params, unknown plan, and stale plan/snapshot error code contracts.
+- MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack
+  traces, and refusal of outside-workspace or not-in-snapshot file resources.
+- LSP: `executeCommand` refusal contracts for unknown plan IDs and unknown
+  commands.
+
 ## Remaining beta coverage gaps
 
-The current suite covers the P1/P2 beta additions. Remaining expansion should focus
-on gaps not yet represented by golden cases:
+The current suite covers the P1/P2 beta additions and initial P3/P4 safety and
+contract tests. Remaining expansion should focus on gaps not yet represented by
+golden or protocol tests:
 
 - framework strings, generated code, unresolved-symbol, and public API risk paths;
 - `organizeImports` documented limitations beyond the clean no-op case;
@@ -100,7 +117,12 @@ on gaps not yet represented by golden cases:
   generated code, hierarchy/public API risk, and unsafe defaults;
 - `importExternalJavaClass` provenance, multiple public type, and package rewrite
   edge cases;
-- recipe/orchestration cases only for operations advertised as shipped.
+- recipe/orchestration cases only for operations advertised as shipped;
+- broader daemon contracts for project/symbol/diagnostic methods;
+- broader LSP contracts for definition, references, prepareRename, rename,
+  codeAction, documentSymbol, diagnostics, and successful command workflows;
+- broader MCP contracts for external import, context bundles, and remaining
+  scoped resources.
 
 ## Agent simulation tests
 

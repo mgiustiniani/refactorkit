@@ -8,11 +8,15 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.refactorkit.core.JsonRpcErrorCodes
+import org.refactorkit.core.JsonRpcException
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LspSessionTest {
@@ -235,5 +239,44 @@ class LspSessionTest {
         val documentChanges = result["documentChanges"]!!.jsonArray
 
         assertTrue(documentChanges.any { it.jsonObject["kind"]?.jsonPrimitive?.content == "rename" })
+    }
+
+    @Test
+    fun executeCommandApplyPlanRejectsUnknownPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.applyPlan")
+                put("arguments", JsonArray(listOf(buildJsonObject { put("planId", "plan-missing") })))
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, ex.code)
+        assertTrue(ex.message.contains("Plan not found"))
+        assertFalse(ex.message.contains("Exception"), ex.message)
+    }
+
+    @Test
+    fun executeCommandUnknownCommandReturnsInvalidParamsWithoutStackTrace() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.notImplemented")
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, ex.code)
+        assertTrue(ex.message.contains("Unknown command"))
+        assertFalse(ex.message.contains("\tat "), ex.message)
     }
 }

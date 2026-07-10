@@ -8,9 +8,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.nio.file.Files
+import java.nio.file.Paths
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class McpSessionTest {
@@ -24,6 +26,12 @@ class McpSessionTest {
         }
         return root.toString()
     }
+
+    private fun contentText(result: JsonObject): String =
+        result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+
+    private fun firstValueAfter(prefix: String, text: String): String =
+        text.lineSequence().first { it.trimStart().startsWith(prefix) }.substringAfter(prefix).trim()
 
     @Test
     fun initializeReturnsProtocolVersion() {
@@ -76,10 +84,68 @@ class McpSessionTest {
                 put("arguments", buildJsonObject { put("newName", "AccountManager") })
             })
         }) as JsonObject
-        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        val text = contentText(result)
         assertTrue(text.contains("Plan ID"))
         assertTrue(text.contains("PREVIEW"))
         assertEquals(false, result["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+    }
+
+    @Test
+    fun toolCallPreviewApplyRollbackRenameClassFlowRestoresWorkspace() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val preview = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "renameClass")
+                put("symbol", "com.example.UserManager")
+                put("arguments", buildJsonObject { put("newName", "AccountManager") })
+            })
+        }) as JsonObject
+        val planId = firstValueAfter("Plan ID  :", contentText(preview))
+
+        val apply = session.dispatch("tools/call", buildJsonObject {
+            put("name", "apply_refactoring")
+            put("arguments", buildJsonObject { put("planId", planId) })
+        }) as JsonObject
+        val transactionId = firstValueAfter("Transaction ID:", contentText(apply))
+
+        assertEquals(false, apply["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+        assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
+        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+
+        val rollback = session.dispatch("tools/call", buildJsonObject {
+            put("name", "rollback_refactoring")
+            put("arguments", buildJsonObject { put("transactionId", transactionId) })
+        }) as JsonObject
+
+        assertEquals(false, rollback["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+        assertTrue(contentText(rollback).contains("Rolled back"))
+        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
+        assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+    }
+
+    @Test
+    fun invalidToolReturnsErrorWithoutStackTrace() {
+        val session = McpSession()
+
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "not_a_tool")
+            put("arguments", buildJsonObject {})
+        }) as JsonObject
+        val text = contentText(result)
+
+        assertEquals(true, result["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+        assertTrue(text.contains("Unknown tool"))
+        assertFalse(text.contains("Exception"), text)
+        assertFalse(text.contains("\tat "), text)
     }
 
     @Test
@@ -255,6 +321,28 @@ class McpSessionTest {
         val text = result["contents"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
 
         assertTrue(text.contains("Access denied"))
+    }
+
+    @Test
+    fun fileResourceRejectsWorkspaceFileNotInScannedSnapshot() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val lateFile = rootPath.resolve("src/main/java/com/example/Late.java")
+        lateFile.writeText("package com.example;\npublic class Late {}\n")
+
+        val result = session.dispatch("resources/read", buildJsonObject {
+            put("uri", lateFile.toUri().toString())
+        }) as JsonObject
+        val text = result["contents"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+
+        assertTrue(text.contains("not part of the scanned workspace snapshot"), text)
     }
 
     @Test
