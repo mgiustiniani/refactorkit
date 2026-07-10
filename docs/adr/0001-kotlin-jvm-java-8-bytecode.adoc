@@ -1,0 +1,25 @@
+= ADR 0001: Use Kotlin/JVM with Java 8-Compatible Bytecode
+:toc:
+:sectnums:
+
+Date: 2026-07-10
+
+Status: Accepted for alpha
+
+== Context
+
+RefactorKit targets deterministic Java refactoring and code intelligence. The first language adapter is Java, and the engine must run against Java 8-era projects while understanding newer Java source forms over time.
+
+The implementation needs strong JVM ecosystem integration for Java parsing, build-tool discovery, LSP/JSON-RPC integrations, and future compiler-backed analysis.
+
+== Decision
+
+Implement RefactorKit primarily in Kotlin on the JVM. Compile project bytecode to Java 8-compatible targets where possible, while allowing the build itself and optional packaging tasks to run on a newer JDK.
+
+== Consequences
+
+* Kotlin data classes and sealed types support explicit immutable models for patch plans, diagnostics, symbols, and refactoring requests.
+* JVM-native Java tooling remains available for the Java adapter and future compiler-backed analysis.
+* Runtime compatibility remains broad for Java 8-era environments when using regular JVM distributions.
+* Some build and distribution steps, such as jlink packaging, still require a newer JDK at build time.
+* Dependencies must be selected carefully so the alpha does not accidentally require newer runtime bytecode than intended.

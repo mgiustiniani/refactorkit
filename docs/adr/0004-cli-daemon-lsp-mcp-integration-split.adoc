@@ -1,0 +1,32 @@
+= ADR 0004: Split Integration Surfaces into CLI, Daemon, LSP, and MCP
+:toc:
+:sectnums:
+
+Date: 2026-07-10
+
+Status: Accepted for alpha
+
+== Context
+
+RefactorKit is intended for humans, scripts, editors, local daemons, and LLM agents. These consumers need different protocols and ergonomics, but they should not each implement separate refactoring logic.
+
+The core engine must stay frontend-agnostic.
+
+== Decision
+
+Expose deterministic refactoring capabilities through four integration surfaces:
+
+* CLI for users, scripts, CI, and simple agent calls.
+* JSON-RPC daemon for long-running local sessions with warm project state.
+* LSP server for editor-native language features and workspace edits.
+* MCP server for local LLM agents using scoped tools, resources, and prompts.
+
+All surfaces delegate to shared core and language-adapter behavior instead of duplicating refactoring rules.
+
+== Consequences
+
+* Consumers can choose the protocol that fits their workflow.
+* Core safety concepts, especially previews and rollback, remain consistent across integrations.
+* Protocol-specific modules can evolve without coupling the engine to one IDE or UI.
+* The project must maintain compatibility tests for multiple entry points.
+* New capabilities should be added to core APIs first, then surfaced intentionally through each protocol.

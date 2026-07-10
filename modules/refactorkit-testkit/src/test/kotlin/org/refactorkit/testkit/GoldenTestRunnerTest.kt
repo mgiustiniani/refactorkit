@@ -23,6 +23,8 @@ class GoldenTestRunnerTest {
         assertTrue("move-class-simple"          in names, "Expected move-class-simple in $names")
         assertTrue("safe-delete-refused"        in names, "Expected safe-delete-refused in $names")
         assertTrue("rename-class-with-references" in names, "Expected rename-class-with-references in $names")
+        assertTrue("rename-member-method" in names, "Expected rename-member-method in $names")
+        assertTrue("safe-delete-unused-class" in names, "Expected safe-delete-unused-class in $names")
     }
 
     @Test
@@ -63,6 +65,26 @@ class GoldenTestRunnerTest {
         assertTrue(result.planValid, "Plan validation failed:\n${result.planErrors.joinToString("\n")}")
         assertEquals(PatchStatus.REFUSED, result.plan?.status)
         assertTrue(result.plan?.warnings?.isNotEmpty() == true)
+    }
+
+    // ── rename-member-method ──────────────────────────────────────────────────
+
+    @Test
+    fun renameMemberMethodPasses() {
+        val tc = GoldenTestLoader.loadNamed("rename-member-method", goldenDir)
+        val result = runner.run(tc)
+        assertTrue(result.passed, "Golden test failed:\n${result.errors.joinToString("\n")}")
+        assertEquals(PatchStatus.PREVIEW, result.plan?.status)
+    }
+
+    // ── safe-delete-unused-class ──────────────────────────────────────────────
+
+    @Test
+    fun safeDeleteUnusedClassPasses() {
+        val tc = GoldenTestLoader.loadNamed("safe-delete-unused-class", goldenDir)
+        val result = runner.run(tc)
+        assertTrue(result.passed, "Golden test failed:\n${result.errors.joinToString("\n")}")
+        assertEquals(PatchStatus.PREVIEW, result.plan?.status)
     }
 
     // ── rename-class-with-references ──────────────────────────────────────────

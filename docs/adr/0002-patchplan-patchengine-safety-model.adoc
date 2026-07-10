@@ -1,0 +1,25 @@
+= ADR 0002: Use PatchPlan and PatchEngine Preview-Apply-Rollback Safety Model
+:toc:
+:sectnums:
+
+Date: 2026-07-10
+
+Status: Accepted for alpha
+
+== Context
+
+RefactorKit exists to replace fragile text edits with deterministic, reviewable refactoring operations. Code changes may rename, move, create, delete, or modify files, so direct writes would make failures difficult to inspect and recover from.
+
+The alpha needs a small but explicit safety model that all clients can share.
+
+== Decision
+
+Represent each planned change as a `PatchPlan` containing a workspace edit, affected files, diagnostics, warnings, confidence, and snapshot information. Apply changes through `PatchEngine` only after preview, validation, and user or caller approval. Record transaction metadata so applied changes can be rolled back.
+
+== Consequences
+
+* CLI, daemon, LSP, and MCP clients can all present the same preview semantics.
+* The engine can reject stale plans, overlapping edits, and writes outside the workspace boundary.
+* Rollback metadata gives alpha users a recovery path after accepted changes.
+* Refactoring implementations must produce structured edits instead of mutating files directly.
+* Complex operations may need additional diagnostics before they can be safely accepted.

@@ -1,0 +1,25 @@
+= ADR 0006: Scope MCP Tools and Resources Without Arbitrary Filesystem Access
+:toc:
+:sectnums:
+
+Date: 2026-07-10
+
+Status: Accepted for alpha
+
+== Context
+
+RefactorKit's MCP server is intended for local LLM agents. Agents need project context and deterministic refactoring operations, but arbitrary filesystem access would expand the trust boundary and make safety guarantees harder to reason about.
+
+MCP access should support the RefactorKit workflow, not become a general-purpose shell or file browser.
+
+== Decision
+
+Expose MCP tools and resources for project scanning, symbol lookup, diagnostics, refactoring preview/apply, rollback, external Java class import, and context bundles. Limit file resources to paths inside the currently scanned workspace snapshot. Do not expose arbitrary filesystem read or write tools through MCP.
+
+== Consequences
+
+* Local agents receive focused, relevant project context instead of unrestricted filesystem access.
+* Refactoring writes still go through PatchPlan and PatchEngine safety checks.
+* Requests outside the workspace or outside the scanned snapshot can be refused explicitly.
+* Some agent workflows may need another trusted tool for non-project files.
+* Security-sensitive MCP behavior remains auditable at the protocol boundary.

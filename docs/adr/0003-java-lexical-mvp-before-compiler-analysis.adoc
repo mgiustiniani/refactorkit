@@ -1,0 +1,25 @@
+= ADR 0003: Start Java Refactoring with a Lexical MVP Before Compiler-Backed Analysis
+:toc:
+:sectnums:
+
+Date: 2026-07-10
+
+Status: Accepted for alpha
+
+== Context
+
+RefactorKit must support early Java refactoring workflows before a full compiler-backed semantic model is available. Full binding-aware Java analysis is valuable, but integrating and hardening it would delay alpha feedback.
+
+The alpha still needs conservative scanning, symbol discovery, reference search, and initial refactoring previews.
+
+== Decision
+
+Use a lexical and structural Java MVP for alpha Java support. Implement package, class, member, import, and reference detection conservatively, and refuse or warn for ambiguous cases. Treat compiler-backed binding analysis as a future hardening step rather than an alpha prerequisite.
+
+== Consequences
+
+* Alpha users can exercise the end-to-end refactoring workflow earlier.
+* Conservative warnings remain necessary for reflection, framework strings, generated code, overloads, and other semantic risks.
+* The Java adapter must avoid claiming certainty when lexical evidence is insufficient.
+* Compiler-backed analysis can later replace or augment lexical detection without changing the PatchPlan safety model.
+* Documentation must present the alpha as useful but not equivalent to a mature IDE semantic engine.

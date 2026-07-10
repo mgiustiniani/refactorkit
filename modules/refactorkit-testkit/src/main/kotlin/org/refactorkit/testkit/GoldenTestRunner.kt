@@ -9,6 +9,7 @@ import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
+import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
 import java.nio.file.Files
 import java.nio.file.Path
@@ -102,6 +103,10 @@ class GoldenTestRunner(
             "moveClass" -> {
                 val to = request.arguments["to"] ?: error("moveClass needs 'to' in arguments")
                 JavaMoveClassPlanner(adapter).preview(snap, requireSymbol(request), to)
+            }
+            "renameMember" -> {
+                val newName = request.arguments["newName"] ?: error("renameMember needs 'newName' in arguments")
+                JavaRenameMemberPlanner(adapter).preview(snap, requireSymbol(request), newName)
             }
             "organizeImports" -> {
                 val filePaths = (request.arguments["file"] ?: request.arguments["files"]

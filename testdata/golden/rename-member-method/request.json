@@ -1,0 +1,7 @@
+{
+  "operation": "renameMember",
+  "symbol": "com.example.UserManager#displayName",
+  "arguments": {
+    "newName": "renderName"
+  }
+}
