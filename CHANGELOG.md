@@ -28,10 +28,11 @@ review safety boundaries before applying refactorings.
   using JDT's zero-based columns, source-visible override relation evidence, and
   `JDT_PARSE` unresolved-type warnings; tests now cover selected-member
   identity/reference evidence, overload disambiguation, constructor
-  identity/references, same-simple-name import disambiguation, interface/enum/
-  record discovery, child/base method override detection, interface implementation
-  override detection, and representative Maven/Gradle sample source-root
-  validation with type and method discovery.
+  identity/references, same-simple-name import disambiguation, static method
+  import/call references, interface/enum/record discovery, child/base method
+  override detection, interface implementation override detection, representative
+  Maven/Gradle sample source-root validation, and cross-module Gradle sourcepath
+  resolution with interface reference/override evidence.
 - Advanced `renameMember` JDT integration from warning-only evidence to exact
   signed method overload selection for the proven slice plus conservative
   inheritance safety: signed selectors such as
@@ -49,8 +50,9 @@ review safety boundaries before applying refactorings.
   CLI `definition`/`references`, while keeping lexical lookup as the fallback
   for existing unsigned symbols. LSP definition/reference/rename-position
   resolution now uses the same clean JDT binding evidence for overloaded member
-  call sites, and limited change-signature accepts signed selectors for
-  single-method cases while preserving overload refusals.
+  call sites, signed member rename is verified across static import and invocation
+  ranges, and limited change-signature accepts signed selectors for single-method
+  cases while preserving overload refusals.
 
 ## v0.2.0-beta - 2026-07-10
 

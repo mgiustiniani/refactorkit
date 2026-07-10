@@ -281,6 +281,59 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun jdtAnalyzerResolvesRepresentativeMultiModuleSourceRoots() {
+        val root = repoRoot().resolve("samples/java-multimodule")
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+
+        assertTrue(result.warnings.isEmpty(), "expected clean multi-module sourcepath evidence, got ${result.warnings}")
+        assertTrue(result.symbols.any { it.qualifiedName == "com.example.api.UserApi" })
+        assertTrue(result.symbols.any { it.qualifiedName == "com.example.service.UserService" })
+        assertTrue(result.references.any {
+            it.symbolQualifiedName == "com.example.api.UserApi" &&
+                it.path.toString().endsWith("service/src/main/java/com/example/service/UserService.java")
+        }, "expected cross-module UserApi reference, got ${result.references}")
+        assertTrue(result.overrideRelations.any {
+            it.overridingSymbolQualifiedName == "com.example.service.UserService#findName(java.lang.String)" &&
+                it.overriddenSymbolQualifiedName == "com.example.api.UserApi#findName(java.lang.String)"
+        }, "expected cross-module override relation, got ${result.overrideRelations}")
+    }
+
+    @Test
+    fun jdtReferencesResolveStaticMethodImportsAndCalls() {
+        val root = Files.createTempDirectory("rk-jdt-static-import-test")
+        root.resolve("src/main/java/com/acme/Text.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                public class Text {
+                    public static String format(String value) { return value.trim(); }
+                }
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/com/acme/App.java").apply {
+            Files.createDirectories(parent)
+            writeText("""
+                package com.acme;
+                import static com.acme.Text.format;
+                public class App {
+                    String run() { return format(" value "); }
+                }
+            """.trimIndent() + "\n")
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+        val references = result.references.filter {
+            it.symbolQualifiedName == "com.acme.Text#format(java.lang.String)" &&
+                it.path.toString().endsWith("App.java")
+        }
+
+        assertTrue(result.warnings.isEmpty(), "expected clean static import evidence, got ${result.warnings}")
+        assertEquals(2, references.size, "expected static import and invocation references, got $references")
+        assertTrue(references.all { it.evidence == JdtJavaSemanticEvidence.JDT_BINDING })
+    }
+
+    @Test
     fun jdtWarningsReportUnresolvedTypesWithoutClaimingBindingCertainty() {
         val root = Files.createTempDirectory("rk-jdt-unresolved-test")
         root.resolve("src/main/java/com/acme/NeedsDependency.java").apply {

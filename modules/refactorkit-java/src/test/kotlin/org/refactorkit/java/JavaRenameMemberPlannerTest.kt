@@ -87,6 +87,37 @@ class JavaRenameMemberPlannerTest {
     }
 
     @Test
+    fun signedMemberSelectorRenamesStaticImportAndCallWithJdtEvidence() {
+        val root = createTempProject(
+            "src/main/java/com/example/Text.java" to """
+                package com.example;
+                public class Text {
+                    public static String format(String value) { return value.trim(); }
+                }
+            """.trimIndent(),
+            "src/main/java/com/example/App.java" to """
+                package com.example;
+                import static com.example.Text.format;
+                public class App {
+                    String run() { return format(" value "); }
+                }
+            """.trimIndent(),
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.preview(snap, "com.example.Text#format(java.lang.String)", "normalize")
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val result = PatchEngine(root).apply(plan, snap.hash)
+        assertIs<ApplyResult.Applied>(result)
+
+        val declaration = root.resolve("src/main/java/com/example/Text.java").readText()
+        val client = root.resolve("src/main/java/com/example/App.java").readText()
+        assertTrue(declaration.contains("String normalize(String value)"), declaration)
+        assertTrue(client.contains("import static com.example.Text.normalize;"), client)
+        assertTrue(client.contains("return normalize(\" value \");"), client)
+    }
+
+    @Test
     fun signedMemberSelectorRefusesOverrideRelationUntilPropagationExists() {
         val root = createTempProject(
             "src/main/java/com/example/Base.java" to """
