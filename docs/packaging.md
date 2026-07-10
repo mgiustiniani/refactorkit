@@ -54,6 +54,54 @@ refactorkit-runtime-<version>-linux-x86_64.zip
 refactorkit-runtime-<version>-linux-x86_64.zip.sha256
 ```
 
+## Install and smoke-test a downloaded release asset
+
+For `v0.2.0-beta`, the expected Linux x86_64 release assets are:
+
+```text
+refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
+refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
+```
+
+Download both files from the GitHub release page, then verify and unpack the zip:
+
+```bash
+sha256sum -c refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.2.0-beta-linux-x86_64.zip -d /tmp/refactorkit-v0.2.0-beta
+```
+
+The package layout after extraction is:
+
+```text
+/tmp/refactorkit-v0.2.0-beta/refactorkit/
+  bin/refactorkit
+  runtime/bin/java
+```
+
+Smoke-test the extracted launcher with `JAVA_HOME` unset:
+
+```bash
+RK=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin/refactorkit
+
+env -u JAVA_HOME "$RK" --help
+env -u JAVA_HOME "$RK" scan samples/java-maven-simple
+env -u JAVA_HOME "$RK" scan samples/java-gradle-simple
+env -u JAVA_HOME "$RK" scan samples/java-spring-simple
+env -u JAVA_HOME "$RK" scan samples/java-jpa-simple
+env -u JAVA_HOME "$RK" scan samples/java-multimodule
+```
+
+Run sample scans from a RefactorKit source checkout. To make the launcher easier
+to call, add the extracted `bin` directory to `PATH`:
+
+```bash
+export PATH=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin:$PATH
+refactorkit --help
+```
+
+Final release notes must record the final artifact URL, checksum, source tag,
+and release commit before tagging.
+
 ## Run packaged CLI
 
 ```bash

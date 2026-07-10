@@ -25,6 +25,54 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
 
+## Install the v0.2.0-beta runtime package
+
+The beta release publishes a self-contained Linux x86_64 runtime zip. It includes
+`refactorkit/bin/refactorkit` and an embedded Java runtime at
+`refactorkit/runtime/bin/java`, so users do not need a globally installed Java
+runtime to run the CLI.
+
+Final release metadata is filled in only after the release commit is known:
+
+```text
+Release URL: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
+Checksum URL: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
+Expected SHA-256: <TBD after release artifact is built>
+Source commit: <TBD before tagging>
+```
+
+Download, verify, and unpack the runtime asset:
+
+```bash
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
+sha256sum -c refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.2.0-beta-linux-x86_64.zip -d /tmp/refactorkit-v0.2.0-beta
+```
+
+Run smoke checks with `JAVA_HOME` unset to prove the embedded runtime is used:
+
+```bash
+RK=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin/refactorkit
+
+env -u JAVA_HOME "$RK" --help
+env -u JAVA_HOME "$RK" scan samples/java-maven-simple
+env -u JAVA_HOME "$RK" scan samples/java-gradle-simple
+env -u JAVA_HOME "$RK" scan samples/java-spring-simple
+env -u JAVA_HOME "$RK" scan samples/java-jpa-simple
+env -u JAVA_HOME "$RK" scan samples/java-multimodule
+```
+
+Optionally add the extracted launcher to `PATH`:
+
+```bash
+export PATH=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin:$PATH
+refactorkit --help
+```
+
+Run the sample scan commands from a RefactorKit source checkout that contains the
+`samples/` directory.
+
 ## Build
 
 ```bash
