@@ -28,6 +28,10 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.webimporter.ExternalJavaClassImporter
+import org.refactorkit.webimporter.ImportRequest
+import org.refactorkit.webimporter.LicensePolicy
+import org.refactorkit.webimporter.SourceKind
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -60,6 +64,7 @@ class DaemonSession {
         "refactor.preview"  -> refactorPreview(params)
         "refactor.apply"    -> refactorApply(params)
         "patch.rollback"    -> patchRollback(params)
+        "java.importExternalClass" -> javaImportExternalClass(params)
         else -> throw JsonRpcException(JsonRpcErrorCodes.METHOD_NOT_FOUND, "Method not found: $method")
     }
 
@@ -251,6 +256,24 @@ class DaemonSession {
         }
     }
 
+    private fun javaImportExternalClass(params: JsonObject?): JsonElement {
+        val p = params ?: missing("params")
+        val code = p.string("code") ?: missing("code")
+        val targetPackage = p.string("targetPackage") ?: missing("targetPackage")
+        val snap = requireSnapshot()
+        val plan = ExternalJavaClassImporter().preview(ImportRequest(
+            code = code,
+            targetPackage = targetPackage,
+            targetModule = p.string("targetModule"),
+            sourceUrl = p.string("sourceUrl"),
+            sourceKind = parseSourceKind(p.string("sourceKind")),
+            licensePolicy = parseLicensePolicy(p.string("licensePolicy")),
+            snapshot = snap,
+        ))
+        pendingPlans[plan.id.value] = plan
+        return planToJson(plan)
+    }
+
     private fun patchRollback(params: JsonObject?): JsonElement {
         val txId = params?.string("transactionId") ?: missing("transactionId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
@@ -282,6 +305,20 @@ class DaemonSession {
 
     private fun JsonObject.string(key: String): String? =
         (this[key] as? JsonPrimitive)?.content
+
+    private fun parseLicensePolicy(value: String?): LicensePolicy = when (value) {
+        "block-unknown", "BLOCK_UNKNOWN" -> LicensePolicy.BLOCK_UNKNOWN
+        "allow", "ALLOW" -> LicensePolicy.ALLOW
+        else -> LicensePolicy.WARN
+    }
+
+    private fun parseSourceKind(value: String?): SourceKind = when (value) {
+        "clipboard", "CLIPBOARD" -> SourceKind.CLIPBOARD
+        "url", "URL" -> SourceKind.URL
+        "file", "FILE" -> SourceKind.FILE
+        "llm", "LLM" -> SourceKind.LLM
+        else -> SourceKind.SNIPPET
+    }
 
     private fun planToJson(plan: PatchPlan): JsonObject = buildJsonObject {
         put("planId", plan.id.value)

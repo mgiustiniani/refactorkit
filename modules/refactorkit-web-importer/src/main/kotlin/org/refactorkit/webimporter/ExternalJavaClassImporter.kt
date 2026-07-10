@@ -152,9 +152,7 @@ class ExternalJavaClassImporter {
             LicenseRisk.LOW -> {} // no warning needed
         }
 
-        warnings += "Provenance: ${provenance.sourceKind} ${provenance.sourceUrl ?: "(no URL)"} " +
-            "retrievedAt=${provenance.retrievedAt} license=${provenance.licenseDetected} " +
-            "hash=${provenance.originalHash.take(16)}"
+        warnings += provenanceWarning(provenance)
         warnings += "Target source root: $sourceRoot."
         val riskyImports = unresolvedImportCandidates(filePlans.map { it.third }, targetPkg)
         if (riskyImports.isNotEmpty()) {
@@ -327,6 +325,14 @@ class ExternalJavaClassImporter {
         return digest.digest(input.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 
+    private fun provenanceWarning(provenance: ProvenanceRecord): String =
+        "Provenance: sourceKind=${provenance.sourceKind} " +
+            "sourceUrl=${provenance.sourceUrl ?: "(none)"} " +
+            "retrievedAt=${provenance.retrievedAt} " +
+            "licenseDetected=${provenance.licenseDetected} " +
+            "licenseRisk=${provenance.licenseRisk} " +
+            "originalHash=${provenance.originalHash}"
+
     private fun refused(reason: String, provenance: ProvenanceRecord) = PatchPlan(
         operation = "importExternalJavaClass",
         status = PatchStatus.REFUSED,
@@ -338,8 +344,7 @@ class ExternalJavaClassImporter {
         workspaceEdit = WorkspaceEdit(),
         warnings = listOf(
             reason,
-            "Provenance: ${provenance.sourceKind} ${provenance.sourceUrl ?: "(none)"} " +
-                "license=${provenance.licenseDetected} risk=${provenance.licenseRisk}",
+            provenanceWarning(provenance),
         ),
         riskLevel = RiskLevel.HIGH,
     )

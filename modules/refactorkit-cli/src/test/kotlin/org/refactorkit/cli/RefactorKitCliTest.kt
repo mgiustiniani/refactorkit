@@ -2,6 +2,7 @@ package org.refactorkit.cli
 
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.exists
@@ -28,6 +29,29 @@ class RefactorKitCliTest {
 
         assertEquals(0, result.code)
         assertTrue(result.stdout.contains("CLASS\tcom.example.UserManager"))
+    }
+
+    @Test
+    fun javaImportClassOutputIncludesProvenanceAndLicenseFields() {
+        val root = Files.createTempDirectory("rk-cli-import-test")
+        val source = Files.createTempFile("Imported", ".java")
+        source.toFile().writeText("// MIT License\npublic class Imported {}\n")
+
+        val result = captureStdout {
+            RefactorKitCli().run(listOf(
+                "java", "import-class",
+                "--target-package", "com.example.imported",
+                "--file", source.toString(),
+                root.toString(),
+            ))
+        }
+
+        assertEquals(0, result.code)
+        assertTrue(result.stdout.contains("Provenance:"), result.stdout)
+        assertTrue(result.stdout.contains("sourceKind=FILE"), result.stdout)
+        assertTrue(result.stdout.contains("licenseDetected=MIT"), result.stdout)
+        assertTrue(result.stdout.contains("licenseRisk=LOW"), result.stdout)
+        assertTrue(Regex("originalHash=[0-9a-f]{64}").containsMatchIn(result.stdout), result.stdout)
     }
 
     @Test

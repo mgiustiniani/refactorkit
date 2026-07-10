@@ -30,7 +30,37 @@ Beta P6 hardening evidence:
 
 - focused importer tests now cover provenance warning fields, GPL high-risk
   warnings, single-file helper preservation, multi-public-type splitting with
-  package/import preservation, and non-Java Markdown fence stripping.
+  package/import preservation, and non-Java Markdown fence stripping;
+- CLI, daemon JSON-RPC, and MCP tests now assert that importer preview output
+  exposes the stable provenance/license fields.
+
+## Provenance/license output contract
+
+Every external import preview or refusal must expose one warning line with these
+stable field names:
+
+```text
+Provenance: sourceKind=... sourceUrl=... retrievedAt=... licenseDetected=... licenseRisk=... originalHash=...
+```
+
+Field meanings:
+
+- `sourceKind`: `CLIPBOARD`, `URL`, `FILE`, `LLM`, or `SNIPPET`;
+- `sourceUrl`: source URL when known, otherwise `(none)`;
+- `retrievedAt`: ISO-8601 retrieval/planning timestamp;
+- `licenseDetected`: detector result such as `MIT`, `Apache-2.0`, `BSD`, `GPL`,
+  `LGPL`, `MPL`, `copyright-notice`, or `unknown`;
+- `licenseRisk`: `LOW`, `MEDIUM`, `HIGH`, or `UNKNOWN`;
+- `originalHash`: SHA-256 hash of the cleaned source text.
+
+Users see this line in:
+
+- CLI `refactorkit java import-class` preview output under warnings;
+- daemon JSON-RPC `java.importExternalClass` responses in the `warnings` array;
+- MCP `import_external_java_class` tool output text under `Warnings`.
+
+The fields support audit review only. They do not prove license compatibility or
+replace human provenance review before committing imported external code.
 
 ## Operation safety summary
 
@@ -64,7 +94,5 @@ Remaining gaps:
 - dependency resolution is warning-only;
 - import unusedness is not type-resolved;
 - class renaming/merge conflict workflows are not implemented yet;
-- CLI/JSON-RPC/MCP output documentation still needs to spell out license-risk
-  and provenance fields;
 - refusal wording should continue to emphasize user review instead of overwrite;
 - applying the preview is still delegated to `PatchEngine`/CLI/MCP after user approval.

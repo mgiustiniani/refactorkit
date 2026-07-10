@@ -35,6 +35,10 @@ tagged.
 - Hardened P6 external Java importer coverage for provenance warnings, GPL
   high-risk handling, helper-type preservation, multi-public-type splitting, and
   non-Java Markdown fence stripping.
+- Advanced importer output-contract coverage and docs so CLI `java import-class`,
+  daemon JSON-RPC `java.importExternalClass`, and MCP
+  `import_external_java_class` expose stable provenance/license fields in
+  warnings or output text.
 - Verified P7 runtime artifact workflow progress: CI builds the self-contained
   runtime zip and checksum, verifies the checksum, smoke-tests the packaged
   launcher with `JAVA_HOME` unset across representative samples, and release tag
@@ -50,8 +54,9 @@ tagged.
   remains lexical.
 - `safe-delete`, limited `extract-method`, and limited `change-signature` remain
   conservative and may refuse ambiguous plans.
-- LSP, MCP, recipe, and external importer surfaces still include experimental
-  areas before `v1.0.0`.
+- LSP, MCP, recipe, and parts of the external importer surface still include
+  experimental areas before `v1.0.0`; importer provenance/license output fields
+  are documented for beta review.
 
 #### Migration notes from v0.1.0-alpha so far
 

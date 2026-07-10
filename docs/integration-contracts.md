@@ -76,7 +76,41 @@ of the beta baseline for documented methods.
 | `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
 | `refactor.apply` | `beta-contract` | Requires `planId`; must reject stale snapshots/plans. |
 | `patch.rollback` | `beta-contract` | Requires `transactionId`; must stay inside workspace root. |
+| `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |
+
+### `java.importExternalClass` preview contract
+
+`java.importExternalClass` is experimental for `v0.2.0-beta`, but its importer
+provenance/license warning line is an output contract for beta pilots.
+
+Required request fields:
+
+- `code`: Java source text to import; may include Markdown fences;
+- `targetPackage`: fully-qualified target package, or an empty string for the
+  default package.
+
+Optional request fields:
+
+- `targetModule`: module/source-root selector when the scanned workspace has
+  multiple modules;
+- `sourceUrl`: URL or provenance URL for the source text;
+- `sourceKind`: `clipboard`, `url`, `file`, `llm`, or `snippet`; defaults to
+  `snippet` for daemon requests;
+- `licensePolicy`: `warn`, `block-unknown`, or `allow`; defaults to `warn`.
+
+The response uses the standard patch-plan preview envelope with `planId`,
+`operation=importExternalJavaClass`, `status`, `summary`, `confidence`,
+`riskLevel`, `affectedFiles`, `warnings`, and `diagnosticsAfterPreview`. The
+`warnings` array must include exactly one provenance/license line with these
+stable key names:
+
+```text
+Provenance: sourceKind=... sourceUrl=... retrievedAt=... licenseDetected=... licenseRisk=... originalHash=...
+```
+
+`sourceUrl` is `(none)` when no URL is known; `retrievedAt` is an ISO-8601
+instant; `originalHash` is the SHA-256 hash of the cleaned source text.
 
 ### `refactor.preview` operation classification
 
@@ -127,12 +161,19 @@ access.
 | `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries. |
 | `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; experimental operations keep their label. |
 | `available_refactorings` | `experimental` | Descriptor shape may change. |
-| `import_external_java_class` | `experimental` | Conflict/license/provenance behavior is still hardening. |
+| `import_external_java_class` | `experimental` | Import preview with stable provenance/license warning fields in output text. |
 | `generate_context_bundle` | `experimental` | Bundle shape may change with agent needs. |
 
 `preview_refactoring` beta operations are `renameClass`, `renameMember`,
 `moveClass`, `organizeImports`, and `safeDelete`. `extractMethod` and all
 `changeSignature.*` operations are experimental.
+
+`import_external_java_class` requires `code` and `targetPackage`. It accepts
+optional `sourceUrl` and `licensePolicy` (`warn`, `block-unknown`, or `allow`),
+and records MCP tool calls with `sourceKind=LLM`. The tool output text must show
+the same provenance/license warning line as the daemon importer contract under
+`Warnings`, including `sourceKind`, `sourceUrl`, `retrievedAt`,
+`licenseDetected`, `licenseRisk`, and `originalHash`.
 
 ### Resources and prompts
 

@@ -3,6 +3,7 @@ package org.refactorkit.daemon
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
@@ -276,6 +277,32 @@ class DaemonSessionTest {
 
         assertEquals(JsonRpcErrorCodes.SNAPSHOT_CHANGED, ex.code)
         assertTrue(ex.message.contains("Project changed since preview"))
+    }
+
+    @Test
+    fun javaImportExternalClassReturnsProvenanceAndLicenseWarnings() {
+        val root = createProject(
+            "src/main/java/com/example/App.java" to "package com.example;\npublic class App {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val result = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", "// MIT License\npublic class Imported {}\n")
+            put("targetPackage", "com.example.imported")
+            put("sourceKind", "url")
+            put("sourceUrl", "https://example.invalid/Imported.java")
+            put("licensePolicy", "warn")
+        }) as JsonObject
+        val warnings = result["warnings"]!!.jsonArray.joinToString("\n") { it.jsonPrimitive.content }
+
+        assertEquals("importExternalJavaClass", result["operation"]!!.jsonPrimitive.content)
+        assertEquals("PREVIEW", result["status"]!!.jsonPrimitive.content)
+        assertTrue(warnings.contains("sourceKind=URL"), warnings)
+        assertTrue(warnings.contains("sourceUrl=https://example.invalid/Imported.java"), warnings)
+        assertTrue(warnings.contains("licenseDetected=MIT"), warnings)
+        assertTrue(warnings.contains("licenseRisk=LOW"), warnings)
+        assertTrue(Regex("originalHash=[0-9a-f]{64}").containsMatchIn(warnings), warnings)
     }
 
     @Test

@@ -106,10 +106,11 @@ class ExternalJavaClassImporterTest {
         ))
 
         val provenance = plan.warnings.single { it.startsWith("Provenance:") }
-        assertTrue(provenance.contains("URL"))
-        assertTrue(provenance.contains("https://example.invalid/Foo.java"))
-        assertTrue(provenance.contains("license=MIT"))
-        assertTrue(Regex("hash=[0-9a-f]{16}").containsMatchIn(provenance))
+        assertTrue(provenance.contains("sourceKind=URL"))
+        assertTrue(provenance.contains("sourceUrl=https://example.invalid/Foo.java"))
+        assertTrue(provenance.contains("licenseDetected=MIT"))
+        assertTrue(provenance.contains("licenseRisk=LOW"))
+        assertTrue(Regex("originalHash=[0-9a-f]{64}").containsMatchIn(provenance))
     }
 
     @Test

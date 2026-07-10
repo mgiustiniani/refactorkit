@@ -243,6 +243,36 @@ class McpSessionTest {
     }
 
     @Test
+    fun importExternalJavaClassToolReturnsProvenanceAndLicenseFields() {
+        val root = createProject(
+            "src/main/java/com/example/App.java" to "package com.example;\npublic class App {}\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "import_external_java_class")
+            put("arguments", buildJsonObject {
+                put("code", "// MIT License\npublic class Imported {}\n")
+                put("targetPackage", "com.example.imported")
+                put("sourceUrl", "https://example.invalid/Imported.java")
+                put("licensePolicy", "warn")
+            })
+        }) as JsonObject
+        val text = contentText(result)
+
+        assertEquals(false, result["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+        assertTrue(text.contains("sourceKind=LLM"), text)
+        assertTrue(text.contains("sourceUrl=https://example.invalid/Imported.java"), text)
+        assertTrue(text.contains("licenseDetected=MIT"), text)
+        assertTrue(text.contains("licenseRisk=LOW"), text)
+        assertTrue(Regex("originalHash=[0-9a-f]{64}").containsMatchIn(text), text)
+    }
+
+    @Test
     fun resourcesListContainsStandardResources() {
         val session = McpSession()
         val result = session.dispatch("resources/list", null) as JsonObject
