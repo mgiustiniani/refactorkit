@@ -2,6 +2,7 @@ package org.refactorkit.webimporter
 
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.RiskLevel
 import org.refactorkit.java.JavaProjectScanner
 import java.nio.file.Files
 import kotlin.io.path.writeText
@@ -45,6 +46,26 @@ class ExternalJavaClassImporterTest {
     }
 
     @Test
+    fun stripsNonJavaFenceFromSurroundingProse() {
+        val code = """
+            Here is the class:
+
+            ```text
+            public class FromFence {}
+            ```
+
+            Use it carefully.
+        """.trimIndent()
+        val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example", licensePolicy = LicensePolicy.ALLOW))
+        val create = plan.workspaceEdit.edits.filterIsInstance<FileEdit.Create>().single()
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(create.content.contains("public class FromFence"))
+        assertTrue(!create.content.contains("Here is the class"))
+        assertTrue(!create.content.contains("```"))
+    }
+
+    @Test
     fun refusedWhenNoPublicType() {
         val code = "class PackagePrivate {}"
         val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example"))
@@ -68,6 +89,40 @@ class ExternalJavaClassImporterTest {
         val license = LicenseDetector.detect(code)
         assertEquals("MIT", license.detected)
         assertEquals(LicenseRisk.LOW, license.risk)
+    }
+
+    @Test
+    fun provenanceWarningIncludesSourceLicenseAndHashFragment() {
+        val code = """
+            // MIT License
+            public class Foo {}
+        """.trimIndent()
+        val plan = importer.preview(ImportRequest(
+            code = code,
+            targetPackage = "com.example",
+            sourceKind = SourceKind.URL,
+            sourceUrl = "https://example.invalid/Foo.java",
+            licensePolicy = LicensePolicy.ALLOW,
+        ))
+
+        val provenance = plan.warnings.single { it.startsWith("Provenance:") }
+        assertTrue(provenance.contains("URL"))
+        assertTrue(provenance.contains("https://example.invalid/Foo.java"))
+        assertTrue(provenance.contains("license=MIT"))
+        assertTrue(Regex("hash=[0-9a-f]{16}").containsMatchIn(provenance))
+    }
+
+    @Test
+    fun gplLicenseProducesHighRiskWarningAndPlanRisk() {
+        val code = """
+            // GNU General Public License
+            public class Copyleft {}
+        """.trimIndent()
+        val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example", licensePolicy = LicensePolicy.WARN))
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertEquals(RiskLevel.HIGH, plan.riskLevel)
+        assertTrue(plan.warnings.any { it.contains("GPL") && it.contains("HIGH risk") && it.contains("copyleft") })
     }
 
     @Test
@@ -95,6 +150,22 @@ class ExternalJavaClassImporterTest {
     }
 
     @Test
+    fun keepsOnePublicTypeWithPackagePrivateHelperInSingleFile() {
+        val code = """
+            package old.pkg;
+            public class Foo { Helper helper; }
+            class Helper {}
+        """.trimIndent()
+        val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example", licensePolicy = LicensePolicy.ALLOW))
+        val creates = plan.workspaceEdit.edits.filterIsInstance<FileEdit.Create>()
+
+        assertEquals(1, creates.size)
+        assertEquals("Foo.java", creates.single().path.fileName.toString())
+        assertTrue(creates.single().content.contains("package com.example;"))
+        assertTrue(creates.single().content.contains("class Helper"))
+    }
+
+    @Test
     fun splitsTwoPublicTypes() {
         val code = """
             public class Foo {}
@@ -106,6 +177,27 @@ class ExternalJavaClassImporterTest {
         val names = creates.map { it.path.fileName.toString() }.toSet()
         assertTrue("Foo.java" in names)
         assertTrue("Bar.java" in names)
+    }
+
+    @Test
+    fun splitPublicTypesPreservesImportsAndRewritesPackageInEachFile() {
+        val code = """
+            package old.pkg;
+            import java.util.List;
+            import org.acme.External;
+            public class Foo { List<External> values; }
+            public class Bar { List<String> names; }
+        """.trimIndent()
+        val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example", licensePolicy = LicensePolicy.ALLOW))
+        val creates = plan.workspaceEdit.edits.filterIsInstance<FileEdit.Create>()
+
+        assertEquals(2, creates.size)
+        creates.forEach { create ->
+            assertTrue(create.content.contains("package com.example;"))
+            assertTrue(!create.content.contains("package old.pkg;"))
+            assertTrue(create.content.contains("import java.util.List;"))
+            assertTrue(create.content.contains("import org.acme.External;"))
+        }
     }
 
     @Test

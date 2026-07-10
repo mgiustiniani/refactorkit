@@ -2,9 +2,10 @@
 
 See AGENTS.md §18 for the authoritative testing rules.
 
-Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests and
-initial P3/P4 safety/contract tests. The current golden suite contains 21 cases
-covering shipped patch-producing operations.
+Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests,
+initial P3/P4 safety/contract tests, and focused P6 external-importer hardening
+coverage. The current golden suite contains 21 cases covering shipped
+patch-producing operations.
 
 ## Unit tests
 
@@ -88,10 +89,10 @@ refactorkit test-golden --golden-dir path/to/golden
 | `external-class-import-conflict` | `importExternalJavaClass` | REFUSED | Naming conflict refusal. |
 | `external-class-import-license-block-unknown` | `importExternalJavaClass` | REFUSED | Unknown-license import blocked. |
 
-## Patch safety and protocol contract tests
+## Patch safety, protocol contract, and importer hardening tests
 
-P3/P4 beta coverage now includes focused safety and integration-surface contract
-checks:
+P3/P4/P6 beta coverage now includes focused safety, integration-surface, and
+external-importer checks:
 
 - PatchEngine: stale snapshot refusal, outside-workspace path refusal,
   overlapping-edit rejection, and rollback restoration for modify, create,
@@ -102,12 +103,16 @@ checks:
   traces, and refusal of outside-workspace or not-in-snapshot file resources.
 - LSP: `executeCommand` refusal contracts for unknown plan IDs and unknown
   commands.
+- External importer: provenance warning details, GPL high-risk warning/risk
+  level, one-public-type plus package-private helper preservation,
+  multi-public-type splitting with package/import preservation, and non-Java
+  Markdown fence stripping.
 
 ## Remaining beta coverage gaps
 
-The current suite covers the P1/P2 beta additions and initial P3/P4 safety and
-contract tests. Remaining expansion should focus on gaps not yet represented by
-golden or protocol tests:
+The current suite covers the P1/P2 beta additions, initial P3/P4 safety and
+contract tests, and focused P6 importer hardening tests. Remaining expansion
+should focus on gaps not yet represented by golden, unit, or protocol tests:
 
 - framework strings, generated code, unresolved-symbol, and public API risk paths;
 - `organizeImports` documented limitations beyond the clean no-op case;
@@ -115,8 +120,8 @@ golden or protocol tests:
 - `extractMethod` additional conservative refusal paths;
 - `changeSignature.*` refusal coverage for overloads, method references,
   generated code, hierarchy/public API risk, and unsafe defaults;
-- `importExternalJavaClass` provenance, multiple public type, and package rewrite
-  edge cases;
+- `importExternalJavaClass` CLI/JSON-RPC/MCP output contracts, refusal wording,
+  conflict-policy choices, and additional license-policy combinations;
 - recipe/orchestration cases only for operations advertised as shipped;
 - broader daemon contracts for project/symbol/diagnostic methods;
 - broader LSP contracts for definition, references, prepareRename, rename,
