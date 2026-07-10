@@ -65,8 +65,8 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Java Language Adapter
 |Kotlin/JVM library
-|Java scan/symbol/reference/diagnostic/refactoring capability: rename class/member, move class, organize imports, safe delete, extract method MVP, change signature MVP, recipes, framework-aware risk detection.
-|`modules/refactorkit-java`, Java docs.
+|Java scan/symbol/reference/diagnostic/refactoring capability: rename class/member, move class, organize imports, safe delete, extract method MVP, change signature MVP, recipes, framework-aware risk detection, and selected Eclipse JDT binding-backed analysis with explicit lexical fallback.
+|`modules/refactorkit-java`, Java docs, ADR 0008.
 |implementation-informed
 
 |External Java Class Importer

@@ -46,6 +46,11 @@ review safety boundaries before applying refactorings.
   binding keys, or override families containing declarations outside the scanned
   source workspace. Unsigned member rename remains a lexical fallback with
   overload warnings.
+- Added JDT-backed safe-delete type-reference evidence when semantic analysis is
+  clean, preventing same-simple-name types in different packages from being
+  conflated. Safe delete reports exact binding evidence, falls back explicitly to
+  lexical reference scanning when JDT warnings exist, and preserves forced-delete
+  and framework-risk behavior.
 - Added read-only JDT-backed signed member search/lookup/reference support for
   exact member IDs such as `com.example.Lookup#find(java.lang.String)` across
   the Java adapter, daemon `symbol.search`/`symbol.definition`/

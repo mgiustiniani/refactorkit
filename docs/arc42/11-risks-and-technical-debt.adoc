@@ -9,9 +9,9 @@ Status: implementation-informed, needs human review for prioritization.
 |ID |Risk / debt |Impact |Mitigation / next action |Status
 
 |R-001
-|Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations still rely on lexical or structural evidence.
-|Refactorings outside the supported signed `renameMember` slice may miss reflection, generated code, annotation processors, external callers, and some framework/string references.
-|Follow ADR 0008; retain conservative refusal/warning behavior, extend representative JDT-backed coverage, and refuse signed member rename when an override family includes external declarations.
+|Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations and explicit fallback paths still rely on lexical or structural evidence.
+|Refactorings outside the supported signed `renameMember` and safe-delete type-reference slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable.
+|Follow ADR 0008; retain conservative refusal/warning behavior, keep safe-delete lexical fallback explicit, extend representative JDT-backed coverage, and refuse signed member rename when an override family includes external declarations.
 |known risk
 
 |R-002
@@ -33,9 +33,9 @@ Status: implementation-informed, needs human review for prioritization.
 |known limitation
 
 |R-005
-|Safe delete does not inspect build files, generated code, reflection, external config, or all framework references.
-|Possible unsafe delete if non-source references exist.
-|Maintain warnings; add build/config/framework analysis before lowering risk.
+|Safe delete uses exact JDT bindings only for clean source analysis and does not inspect build files, generated code, reflection, external config, or all framework references.
+|Possible unsafe delete if non-source references exist; lexical fallback may also conflate same-simple-name types when semantic evidence is unavailable.
+|Maintain framework, forced-delete, and lexical-fallback warnings; add build/config/framework analysis and broader classpath robustness before lowering risk.
 |known risk
 
 |R-006

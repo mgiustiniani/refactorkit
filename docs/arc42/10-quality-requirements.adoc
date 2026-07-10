@@ -60,8 +60,8 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 
 |QS-CORR-001
 |Correctness
-|When safe delete finds source references, it returns a refused plan and lists references instead of deleting.
-|Golden test `safe-delete-refused`, Java planner.
+|When clean JDT analysis resolves the safe-delete target binding, RefactorKit refuses deletion for binding-matched references without conflating unrelated same-simple-name types in other packages. If JDT parse/classpath warnings or the exact target binding prevent semantic evidence, it uses the lexical scan and warns explicitly.
+|`JavaSafeDeletePlannerTest`: imported target refusal with JDT evidence, unrelated same-simple-name type allowed, and lexical fallback warning.
 |implementation-informed
 
 |QS-CORR-002
@@ -118,8 +118,8 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |Chapter 1 quality goals may not reflect business priorities.
 |needs-review
 
-|Java analysis is mostly lexical
-|False positives/negatives may remain for complex Java, reflection, generated code, and framework configuration.
+|Compiler-backed Java analysis covers selected slices only
+|Signed member rename and safe-delete type references use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on safe-delete fallback paths, especially for reflection, generated code, and framework configuration.
 |known risk
 
 |No explicit performance targets

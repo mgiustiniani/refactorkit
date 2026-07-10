@@ -39,8 +39,11 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
 
         val frameworkAssessment = JavaFrameworkDetector.assess(declarationFile)
 
-        // Find all references across the project (excluding declaration file)
-        val references = findReferences(snapshot, symbolFqn, simpleName, oldPkg, declarationFile.path)
+        // Prefer exact JDT type-binding references when semantic analysis is clean.
+        val semanticReferences = findJdtTypeReferences(snapshot, symbolFqn, declarationFile.path)
+        val references = semanticReferences
+            ?: findReferences(snapshot, symbolFqn, simpleName, oldPkg, declarationFile.path)
+        val referenceEvidence = if (semanticReferences != null) "JDT binding" else "lexical fallback"
 
         if (references.isNotEmpty() && !force) {
             val refList = references.take(20).joinToString("\n") { ref ->
@@ -49,7 +52,7 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
             val extra = if (references.size > 20) "\n  ... and ${references.size - 20} more" else ""
             return refused(
                 snapshot, "safeDelete",
-                "Cannot delete $symbolFqn: ${references.size} reference(s) found.\n$refList$extra\n" +
+                "Cannot delete $symbolFqn: ${references.size} reference(s) found using $referenceEvidence evidence.\n$refList$extra\n" +
                     "Use --force to delete anyway (dangerous).",
             )
         }
@@ -57,6 +60,11 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
         val warnings = mutableListOf<String>()
         if (references.isNotEmpty()) {
             warnings += "Forced delete: ${references.size} reference(s) were found and ignored. This will break the build."
+        }
+        warnings += if (semanticReferences != null) {
+            "Java source references were evaluated using exact JDT type-binding evidence."
+        } else {
+            "JDT type-binding evidence was unavailable or not clean; Java source references use lexical fallback. Review carefully."
         }
         warnings += "Build configuration (pom.xml, build.gradle) is not scanned for references."
         warnings += frameworkAssessment.warnings("safeDelete")
@@ -76,6 +84,33 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
     }
 
     // ── private ──────────────────────────────────────────────────────────────
+
+    private fun findJdtTypeReferences(
+        snapshot: ProjectSnapshot,
+        symbolFqn: String,
+        declarationPath: Path,
+    ): List<Reference>? {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        if (analysis.warnings.isNotEmpty()) return null
+        val target = analysis.symbols.singleOrNull { symbol ->
+            symbol.qualifiedName == symbolFqn && symbol.kind in JDT_DELETEABLE_KINDS
+        } ?: return null
+        val bindingKey = target.bindingKey ?: return null
+        return analysis.references
+            .filter { it.bindingKey == bindingKey && it.path != declarationPath }
+            .map { reference ->
+                Reference(
+                    symbolId = SymbolId(symbolFqn),
+                    location = SourceLocation(reference.path, reference.sourceRange),
+                )
+            }
+            .distinctBy {
+                "${it.location.path}:${it.location.range.start.line}:${it.location.range.start.character}:${it.location.range.end.character}"
+            }
+            .sortedWith(compareBy<Reference> { it.location.path.toString() }
+                .thenBy { it.location.range.start.line }
+                .thenBy { it.location.range.start.character })
+    }
 
     private fun findReferences(
         snapshot: ProjectSnapshot,
@@ -137,6 +172,12 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
             Symbol.Kind.INTERFACE,
             Symbol.Kind.ENUM,
             Symbol.Kind.RECORD,
+        )
+        private val JDT_DELETEABLE_KINDS = setOf(
+            JdtJavaSemanticSymbolKind.CLASS,
+            JdtJavaSemanticSymbolKind.INTERFACE,
+            JdtJavaSemanticSymbolKind.ENUM,
+            JdtJavaSemanticSymbolKind.RECORD,
         )
     }
 }

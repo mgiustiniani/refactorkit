@@ -1,6 +1,6 @@
 # Safe Delete
 
-Status: implementation-informed for `v0.2.0-beta` documentation. Safe delete is
+Status: implementation-informed for `v0.3.0-SNAPSHOT`. Safe delete is
 preview-first and only removes Java type source files through a `PatchPlan`.
 
 ## Command
@@ -19,12 +19,16 @@ A safe-delete preview is considered reliable only when:
 - the target type symbol is found in the scanned Java symbol index;
 - the declaration source file is present in the snapshot;
 - no Java source references are found in scanned files, unless `--force` is used;
+- clean JDT analysis uses exact type-binding references; parse/classpath warnings
+  cause an explicit lexical fallback warning instead of claiming semantic certainty;
 - the affected file list contains the declaration file that would be deleted;
 - warnings have been reviewed by a human or calling agent.
 
 The generated patch deletes the declaration source file only. It does not edit
 build files, resource files, generated sources, downstream projects, or external
-configuration.
+configuration. Exact JDT evidence distinguishes same-simple-name types in
+different packages and reports binding-matched source locations. When JDT evidence
+is unavailable or not clean, the preview states that lexical fallback was used.
 
 ## Refusal conditions
 
