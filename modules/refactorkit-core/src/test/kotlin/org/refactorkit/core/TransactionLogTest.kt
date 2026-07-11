@@ -262,6 +262,38 @@ class TransactionLogTest {
     }
 
     @Test
+    fun quarantinesRawTornJournalWritesAtMultipleByteBoundaries() {
+        listOf(1, 25, 50, 99).forEach { percentage ->
+            val logDir = Files.createTempDirectory("refactorkit-txlog-torn-$percentage")
+            val log = TransactionLog(logDir)
+            val transaction = Transaction(
+                id = TransactionId.new(),
+                planId = PlanId("plan-torn-$percentage"),
+                snapshotHashBefore = "hash",
+                rollbackEdit = WorkspaceEdit(),
+            )
+            log.prepare(TransactionJournalRecord(
+                transaction = transaction,
+                operation = "tornWrite",
+                forwardEdit = WorkspaceEdit(),
+                preImages = listOf(FileImage(Paths.get("Example.java"), "class Example {}\n")),
+                postImages = listOf(FileImage(Paths.get("Example.java"), "class Changed {}\n")),
+                state = JournalState.PREPARED,
+            ))
+            val record = logDir.resolve("${transaction.id.value}.json")
+            val complete = Files.readAllBytes(record)
+            val retainedBytes = (complete.size * percentage / 100).coerceIn(1, complete.size - 1)
+            Files.write(record, complete.copyOf(retainedBytes))
+
+            val error = assertFailsWith<TransactionLogException> { log.loadRecord(transaction.id) }
+
+            assertEquals("transaction.quarantined", error.code)
+            assertTrue(Files.notExists(record))
+            assertEquals(1L, Files.list(logDir.resolve(".quarantine")).use { it.count() })
+        }
+    }
+
+    @Test
     fun detectsChecksumTampering() {
         val logDir = Files.createTempDirectory("refactorkit-txlog-checksum")
         val log = TransactionLog(logDir)

@@ -86,8 +86,8 @@ class PatchEngine(
             runCatching { Files.deleteIfExists(source) }
             runCatching { Files.deleteIfExists(target) }
         }
-        val store = runCatching { Files.getFileStore(normalizedRoot) }.getOrNull()
-        val journalStore = runCatching { Files.getFileStore(metadataDir) }.getOrNull()
+        val store = fileStoreAtOrAbove(normalizedRoot)
+        val journalStore = fileStoreAtOrAbove(transactionLog.logDir)
         return WorkspaceFilesystemCapabilities(
             fileStoreName = store?.name() ?: "unknown",
             fileStoreType = store?.type() ?: "unknown",
@@ -100,6 +100,12 @@ class PatchEngine(
             replacementStrategy = "same-directory-temp-file+atomic-move+directory-force",
             failures = failures,
         )
+    }
+
+    private fun fileStoreAtOrAbove(path: Path): java.nio.file.FileStore? {
+        var current: Path? = path.toAbsolutePath().normalize()
+        while (current != null && !Files.exists(current, LinkOption.NOFOLLOW_LINKS)) current = current.parent
+        return current?.let { runCatching { Files.getFileStore(it) }.getOrNull() }
     }
 
     /** Validate a preview plan against the current snapshot hash before applying. */

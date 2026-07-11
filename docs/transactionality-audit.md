@@ -297,7 +297,12 @@ force the prior checksummed record remains authoritative while the uncommitted
 owner-only temp is ignored; after lifecycle atomic move the complete new
 `APPLYING` record and event history are readable. Workspace staging, partial
 commit, compensation failure, and restart retry also have deterministic evidence.
-Still open: raw torn-byte simulation and power-loss proof.
+Raw torn-byte tests truncate complete checksummed records at 1%, 25%, 50%, and
+99%; every fragment is atomically quarantined, the original path disappears, and
+subsequent journal activity remains blocked for review. A mounted-store test uses
+`/dev/shm` when available to keep the workspace and WAL on distinct file stores,
+asserts accurate capability identity, and proves apply/rollback lifecycle
+completion across the boundary. Actual power-loss proof remains open.
 
 ### TX-013 — Rollback filesystem metadata and directory state
 

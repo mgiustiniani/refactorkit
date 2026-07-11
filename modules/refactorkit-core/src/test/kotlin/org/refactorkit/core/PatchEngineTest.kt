@@ -267,6 +267,45 @@ class PatchEngineTest {
     }
 
     @Test
+    fun appliesAndRollsBackWithJournalOnDifferentMountedFileStore() {
+        val sharedMemory = Path.of("/dev/shm")
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            Files.isDirectory(sharedMemory) && Files.isWritable(sharedMemory),
+        )
+        val root = Files.createTempDirectory("refactorkit-workspace-store")
+        val journalRoot = Files.createTempDirectory(sharedMemory, "refactorkit-journal-store")
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.getFileStore(root) != Files.getFileStore(journalRoot))
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(FileEdit.Modify(
+            relative,
+            listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+        )))
+        val plan = PatchPlan(
+            operation = "crossStoreJournal",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "journal on a different mounted store",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+        val log = TransactionLog(journalRoot.resolve("transactions"))
+        val engine = PatchEngine(root, log)
+
+        val capabilities = engine.filesystemCapabilities()
+        assertFalse(capabilities.journalSharesWorkspaceFileStore)
+        assertEquals(Files.getFileStore(journalRoot).type(), capabilities.journalFileStoreType)
+        val applied = assertIs<ApplyResult.Applied>(engine.apply(plan, snapshot))
+        assertEquals("class Changed {}\n", Files.readString(root.resolve(relative)))
+        assertEquals(JournalState.APPLIED, log.loadRecord(applied.transaction.id)?.state)
+
+        assertIs<ApplyResult.Applied>(engine.rollback(applied.transaction))
+        assertEquals("class Example {}\n", Files.readString(root.resolve(relative)))
+        assertEquals(JournalState.ROLLED_BACK, log.loadRecord(applied.transaction.id)?.state)
+    }
+
+    @Test
     fun stagesAtomicReplacementsAndPreservesPosixPermissions() {
         val root = Files.createTempDirectory("refactorkit-test")
         val modify = root.resolve("Modify.java")

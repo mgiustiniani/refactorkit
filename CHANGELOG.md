@@ -23,6 +23,9 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added raw torn-byte quarantine tests at four truncation boundaries and a
+  conditional `/dev/shm` cross-filesystem WAL apply/rollback test.
+- Corrected capability reporting to use the configured transaction-log store.
 - Added schema-v4 journaled last-modified timestamps and exact timestamp
   restoration during rollback/recovery, preserving v2/v3 checksum compatibility.
 - Added real subprocess kill/restart acceptance at every journal write boundary:

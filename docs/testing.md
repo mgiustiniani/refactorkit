@@ -126,8 +126,9 @@ compensation retry by a clean `PatchEngine` restart. Journal subprocess tests fo
 temp-file force, and lifecycle atomic move. They prove respectively that complete
 `PREPARED`, prior-authoritative, and complete new `APPLYING` records survive. A workspace subprocess test force-kills a real JVM after the first of two committed
 images, inspects the durable `APPLYING`/mixed-image state, and proves exact clean-
-restart compensation. Power-loss, torn-journal, and mounted-filesystem scenarios
-remain separate RC acceptance gates.
+restart compensation. Raw journal truncation is tested at four byte boundaries, and `/dev/shm` provides
+a conditional distinct-store WAL apply/rollback test. Actual power-loss remains a
+separate RC acceptance gate.
 
 ## Packaged CLI and release verification smoke tests
 
