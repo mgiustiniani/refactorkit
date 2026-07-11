@@ -221,7 +221,7 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 
 |QS-RECIPE-001
 |Recoverability
-|Recipe execution is explicitly a durable saga with observable per-step and incomplete-compensation states, or is staged and committed as one validated plan; documentation never equates current best-effort compensation with atomic rollback.
+|Recipe execution stages all steps against one evolving snapshot and commits one validated recipe-wide plan; later planning failure and no-op execution write no transaction.
 |Transactionality audit `TX-008`; ADR 0004.
 |planned contract decision
 
@@ -280,7 +280,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Transactionality guarantees exceed current evidence
-|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Declared source scope is hash-bound and independently rescanned under lock; Java classpath entries, prospective outputs, local JAR directories, and declaration files are content-fingerprinted and revalidated before journaling. Same-file coordinates, cross-entry overlaps, complete preflight rendering, and line/character bounds are now enforced. Current flows still lack central diagnostics gates, enforced approval semantics, complete apply error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
+|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Declared source scope is hash-bound and independently rescanned under lock; Java classpath entries, prospective outputs, local JAR directories, and declaration files are content-fingerprinted and revalidated before journaling. Same-file coordinates, cross-entry overlaps, complete preflight rendering, and line/character bounds are now enforced. Current flows still lack central diagnostics gates, enforced approval semantics, complete apply error mapping, and current daemon state. Native LSP writes remain client-managed; recipes use one staged managed transaction.
 |release blocker; remaining and partially evidenced `TX` findings require closure plus destructive fault acceptance
 
 |Stable acceptance evidence incomplete

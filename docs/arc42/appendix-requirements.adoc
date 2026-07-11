@@ -350,8 +350,8 @@ These requirements capture the audit's required contract decisions and acceptanc
 |planned release blocker
 
 |REQ-TX-010
-|Choose and document recipe execution as either one staged transaction or a durable saga with per-step recovery and incomplete-compensation states.
-|planned contract decision
+|Stage every recipe step against one evolving immutable snapshot, expose one recipe-wide plan, and perform at most one managed WAL transaction; planning failure and no-op execution must not write journal records.
+|implemented and tested (`TX-008` closed)
 
 |REQ-TX-011
 |Use one coordinate space per file/plan, merge all same-file edits, validate complete line/character bounds and cross-edit overlap, and render every final file before mutation.
@@ -410,6 +410,6 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |needs-review
 
 |Transaction semantics exceed implementation evidence
-|`TX-001` through `TX-018` show that current managed writes are compensatable batches, native LSP edits are client-managed, and recipes are sagas; ACID/crash-safe, conflict-safe, durable, and isolated guarantees are not evidenced.
+|The transactionality audit narrows remaining gaps to native LSP ownership/versioning, diagnostics/approval/error/state contracts, metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.
 |release blocker; requirements need confirmation/narrowing
 |===

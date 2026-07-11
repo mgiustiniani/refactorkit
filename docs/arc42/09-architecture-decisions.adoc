@@ -57,4 +57,4 @@ ADR files were found under `docs/adr/` during alpha hardening.
 
 == Decision Candidate Coverage
 
-The existing ADR set covers the stable-release architecture: API `1.0` patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, and Eclipse JDT evidence-gated semantic authority. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADRs 0002 and 0004 now explicitly constrain current evidence to compensatable managed batches, client-managed native LSP edits, and recipe sagas; they do not claim transactionality fixes.
+The existing ADR set covers the stable-release architecture: API `1.0` patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, and Eclipse JDT evidence-gated semantic authority. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADRs 0002 and 0004 now record WAL-backed managed transaction guarantees, client-managed native LSP limitations, and the staged recipe-wide transaction boundary without claiming one filesystem-wide ACID commit.

@@ -165,10 +165,10 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-027
-|Recipe execution remains a per-step durable saga (`TX-008`); same-file coordinate merging, global overlap validation, bounds checks, and complete preflight rendering are implemented (`TX-009`, `TX-010` closed).
-|A later logical failure can still require multi-record reverse compensation rather than one recipe-wide commit.
-|Choose and fully specify either the retained durable saga boundary or one staged recipe-wide commit, with crash/cancellation acceptance evidence.
-|planned release blocker
+|Recipe steps are staged against one evolving immutable snapshot and reduced to one recipe-wide managed commit (`TX-008`, `TX-009`, `TX-010` closed).
+|Later planning failure now leaves workspace and journal untouched; successful apply has one WAL record and conflict-safe rollback boundary.
+|Retain tests for dependent steps, multi-class package moves, no-op execution, and later-step refusal as transaction-boundary evidence.
+|controlled
 
 |R-028
 |Diagnostics, approval, error mapping, and daemon state refresh are not transactionally enforced (`TX-015`, `TX-016`, `TX-017`, `TX-018`).
@@ -185,7 +185,7 @@ The active stable plan defines the remaining release-hardening workstreams:
 * keep API `0.2` active until normative patch/apply/rollback and API `1.0` CLI/daemon contracts are frozen and accepted;
 * prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
 * close or explicitly narrow `TX-001` through `TX-010` before stable transactionality claims, and resolve `TX-011` through `TX-018` contract/recovery gaps;
-* define managed apply as a durable transaction only after evidence; until then retain the accurate compensatable-batch, client-managed LSP edit, and recipe-saga classifications;
+* retain precise qualification for WAL-backed managed transactions, the staged recipe-wide boundary, client-managed native LSP edits, and unsupported/destructive filesystem failure models;
 * complete diagnostic regression gates and representative project acceptance;
 * classify and test stable LSP/MCP boundaries;
 * establish bounded performance and resource behavior;

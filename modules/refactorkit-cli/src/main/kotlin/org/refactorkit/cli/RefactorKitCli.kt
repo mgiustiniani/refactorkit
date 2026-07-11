@@ -468,7 +468,11 @@ class RefactorKitCli(
             step.plan?.warnings?.forEach { println("  Warning: $it") }
         }
         return when (result) {
-            is RecipeResult.Preview -> { println("\n${result.summary}\nUse --apply to apply."); 0 }
+            is RecipeResult.Preview -> {
+                println("\n${PatchPreviewRenderer(Paths.get(root)).render(result.recipePlan)}")
+                println("${result.summary}\nUse --apply to apply.")
+                0
+            }
             is RecipeResult.Applied -> { println("\n${result.summary}"); 0 }
             is RecipeResult.Failed  -> { System.err.println("Recipe failed: ${result.reason}"); 1 }
         }

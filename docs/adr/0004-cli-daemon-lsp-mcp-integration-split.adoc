@@ -27,11 +27,11 @@ For `v1.0.0`, the core patch contract plus documented CLI and daemon JSON-RPC co
 
 LSP capabilities and commands, and MCP tools, resources, and prompts, must each be classified as stable or experimental. Protocol presence does not make every exposed capability stable. Stable protocol paths must preserve preview, validation, apply, rollback, refusal, cancellation, bounded-request, and workspace-scope rules where applicable.
 
-The transaction boundary differs by surface. Current CLI `--apply`, daemon `refactor.apply`, MCP `apply_refactoring`, and LSP `refactorkit.applyPlan` flows are server-managed previewable, preflighted, compensatable batches. They write sequentially, save rollback metadata only after successful apply, and are not ACID or crash-safe transactions. Direct library apply remains caller-managed for snapshot and journal responsibilities.
+The transaction boundary differs by surface. CLI `--apply`, daemon `refactor.apply`, MCP `apply_refactoring`, LSP `refactorkit.applyPlan`, and direct library `PatchEngine.apply` are server/engine-managed transactions: they validate engine-owned snapshot evidence under lock, persist WAL before mutation, stage/force per-path content, require atomic replacement, and retain rollback/recovery state. This is not one filesystem-wide ACID commit, and destructive fault acceptance remains separately qualified.
 
 Native LSP rename and code-action responses are client-managed edits. The editor applies the returned `WorkspaceEdit` outside `PatchEngine`, so RefactorKit neither owns that write nor provides a RefactorKit rollback transaction for it. Current native LSP edits also carry stale unsaved-buffer and document-version risks because planning can use disk snapshots while `textDocument.version` is unset. Stable documentation and capability metadata must distinguish these paths from `refactorkit.applyPlan`.
 
-Recipes are sagas: each step is applied and logged separately, with reverse best-effort compensation after a later logical failure. A recipe is not one atomic transaction. The stable contract must either retain and durably specify saga recovery semantics or replace them with one staged, recipe-wide plan and commit; this decision does not claim either closure is implemented.
+Recipes use one staged transaction boundary. Each step is previewed against the immutable result of prior steps; after all steps succeed, the initial-to-final delta becomes one recipe-wide `PatchPlan` and one managed apply/WAL record. Planning refusal writes nothing, and no-op recipes create no transaction.
 
 == Consequences
 
@@ -42,10 +42,10 @@ Recipes are sagas: each step is applied and logged separately, with reverse best
 * New capabilities should be added to core APIs first, then surfaced intentionally through each protocol.
 * Unknown methods, fields, invalid parameters, unsupported versions, stale plans, validation failures, rollback conflicts, cancellation, and recovery-required states must produce deterministic, protocol-appropriate outcomes.
 * Native LSP contracts require document-version checks or an explicit versioned client-apply acknowledgement/journal design before RefactorKit-managed rollback can be advertised for editor writes.
-* Recipe contracts require explicit per-step journal, crash recovery, compensation-conflict, and incomplete-saga states if saga semantics are retained.
+* Recipe contracts expose one recipe-wide preview/apply/rollback boundary; step plans are staging evidence and are not independently committed.
 * Daemon state must be refreshed after successful apply and rollback before subsequent queries can be considered current.
 * The release sequence may freeze candidate contracts in immutable `v1.0.0-rc.N` releases after `v0.3.0`; stable status follows acceptance evidence rather than surface availability.
-* These required consequences define planned contract work and do not claim implementation completion.
+* Open consequences remain planned contract work except where the audited findings explicitly record implementation closure.
 
 == Audited Integration Limitations
 
@@ -54,14 +54,14 @@ The link:../transactionality-audit.md[transactionality audit] at commit `5f47ad0
 * `TX-002` is closed after the audit baseline: `PatchEngine` owns durable write-ahead lifecycle persistence, and CLI, daemon, MCP, custom LSP, and recipes no longer save/delete transaction records after mutation.
 * `TX-003` is closed after the audited baseline: CLI, daemon, LSP, and MCP reject malformed transaction IDs before log access, while the core enforces contained non-symlink record paths and coded failures.
 * `TX-007`: native LSP edits bypass RefactorKit apply and rollback; stale disk snapshots, unsaved buffers, and absent document versions can invalidate client-side application.
-* `TX-008`: recipes are per-step sagas with best-effort compensation; crashes, log failures, compensation failures, and plans not evaluated against one evolving staged workspace can leave partial results.
+* `TX-008` is closed after the audit baseline: recipes evaluate all steps against one evolving in-memory snapshot, reduce the result to one recipe-wide plan, and perform one managed apply/WAL transaction; planning failure writes neither workspace nor journal.
 * `TX-014` is closed for declared source and Java classpath scope after the audit baseline: apply requires a hash-bound `ProjectSnapshot`; `PatchEngine` independently rescans sources and verifies active/prospective classpath fingerprints under lock before journaling.
 * `TX-015`: integrations do not consistently run diagnostics as central pre-apply and post-apply transaction gates.
 * `TX-016`: `requiresUserApproval` is not enforced as a separate auditable state, so the meaning of apply invocation as approval remains a contract decision.
 * `TX-017` is narrowed: daemon/LSP rollback conflict and recovery-required outcomes now use stable dedicated codes, while apply validation failures can still collapse into `SNAPSHOT_CHANGED` and require complete error-category mapping.
 * `TX-018`: daemon apply and rollback validate with local rescans but do not update the stored session snapshot, so later queries can observe stale metadata.
 
-These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and source/classpath `TX-014` are recorded here as fixed; the other findings remain open or narrowed as stated.
+These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and source/classpath `TX-014` are recorded here as fixed; `TX-008` is also closed with a single staged recipe transaction; the other findings remain open or narrowed as stated.
 
 == Implementation Evidence
 

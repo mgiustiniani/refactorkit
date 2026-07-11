@@ -49,7 +49,7 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |`TransactionLog`, transactionality audit
 
 |Saga
-|Multi-step workflow that commits steps separately and attempts later compensation. Current recipes use best-effort saga behavior rather than one atomic recipe transaction.
+|Multi-step workflow that commits steps separately and attempts later compensation. RefactorKit recipes no longer use this boundary; they stage one recipe-wide transaction.
 |Recipes
 |ADR 0004, transactionality audit `TX-008`
 
@@ -144,7 +144,7 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |`refactorkit-web-importer`, importer docs
 
 |Recipe
-|YAML-defined multi-step refactoring workflow with dry-run/preview and per-step apply. Current apply is a saga with best-effort reverse compensation, not atomic recipe rollback.
+|YAML-defined multi-step refactoring workflow whose steps are previewed against one evolving staged snapshot and reduced to one recipe-wide managed apply/rollback transaction.
 |Java / CLI
 |`docs/recipe-engine.md`, `recipes/java/rename-package.yml`, transactionality audit
 

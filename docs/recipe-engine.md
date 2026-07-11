@@ -24,15 +24,24 @@ Safety behavior:
 - required parameters are validated;
 - parameter defaults are supported;
 - simple parameter types are validated: `string`, `boolean`, `integer`/`int`;
-- each mutating step produces a `PatchPlan` before application;
-- apply mode saves transaction logs under `.refactorkit/transactions`;
-- if a later step refuses or fails after earlier steps applied, previously applied
-  recipe steps are rolled back in reverse order where possible;
-- diagnostics steps refuse recipes when error diagnostics are present.
+- each mutating step produces a `PatchPlan` and is evaluated against the staged
+  result of all previous steps without writing the workspace;
+- all successful steps are reduced to one recipe-wide `PatchPlan` from the initial
+  snapshot to the final staged snapshot;
+- apply mode performs exactly one managed `PatchEngine` transaction and saves one
+  lifecycle record under `.refactorkit/transactions`;
+- later-step refusal or failure occurs before journaling and leaves the workspace
+  and transaction log untouched;
+- no-op recipes create no transaction;
+- diagnostics steps run against the evolving staged snapshot and refuse recipes
+  when error diagnostics are present;
+- `movePackage` stages each class move sequentially, avoiding stale same-file
+  coordinate merges.
 
 Limitations:
 
 - recipe parameters are string-substituted templates only;
 - validation hooks are limited to built-in step validation and `runDiagnostics`;
-- multi-step rollback is best-effort if the workspace is externally modified while
-  a recipe is running.
+- recipe-wide rollback follows the standard conflict-safe `PatchEngine` policy;
+- whole-file replacement edits are currently used when reducing staged content to
+  the final recipe-wide delta.

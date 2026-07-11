@@ -1,7 +1,11 @@
 package org.refactorkit.java.recipe
 
+import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JournalState
+import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import java.nio.file.Files
 import kotlin.io.path.exists
@@ -81,6 +85,7 @@ class RecipeEngineTest {
         assertTrue(result.summary.contains("preview"))
         assertEquals(1, result.stepPlans.size)
         assertEquals(PatchStatus.PREVIEW, result.stepPlans[0].plan?.status)
+        assertTrue(result.recipePlan.workspaceEdit.edits.any { it is FileEdit.Rename })
     }
 
     @Test
@@ -191,7 +196,7 @@ class RecipeEngineTest {
     }
 
     @Test
-    fun applyFailureRollsBackPreviouslyAppliedSteps() {
+    fun laterStepFailureLeavesWorkspaceAndJournalUntouched() {
         val root = createProject(
             "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
             "src/main/java/com/example/Wrong.java" to "package com.example;\npublic class Other {}\n",
@@ -217,13 +222,113 @@ class RecipeEngineTest {
         )
 
         val failed = assertIs<RecipeResult.Failed>(result)
-        assertTrue(failed.reason.contains("Rolled back 1 applied step"))
+        assertTrue(failed.reason.contains("runDiagnostics"), failed.reason)
         assertTrue(root.resolve("src/main/java/com/example/UserManager.java").exists())
         assertTrue(!root.resolve("src/main/java/com/example/AccountManager.java").exists())
         assertTrue(root.resolve("src/main/java/com/example/UserManager.java").readText().contains("UserManager"))
         val records = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords()
-        assertEquals(1, records.size)
-        assertEquals(JournalState.ROLLED_BACK, records.single().state)
+        assertTrue(records.isEmpty())
+    }
+
+    @Test
+    fun dependentStepsAreStagedAndCommittedAsOneTransaction() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val yaml = """
+            id: java.rename-and-move
+            name: Rename and move
+            parameters:
+              symbol: string
+              newName: string
+              targetPackage: string
+            steps:
+              - type: renameClass
+                symbol: "{{ symbol }}"
+                newName: "{{ newName }}"
+              - type: moveClass
+                symbol: "com.example.{{ newName }}"
+                to: "{{ targetPackage }}"
+        """.trimIndent()
+        val recipe = RecipeLoader.load(yaml.byteInputStream())
+
+        val result = engine.run(
+            recipe,
+            mapOf(
+                "symbol" to "com.example.UserManager",
+                "newName" to "AccountManager",
+                "targetPackage" to "com.account",
+            ),
+            root,
+            dryRun = false,
+        )
+
+        val applied = assertIs<RecipeResult.Applied>(result)
+        assertEquals(1, applied.transactionIds.size)
+        assertEquals(1, TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().size)
+        assertTrue(root.resolve("src/main/java/com/account/AccountManager.java").exists())
+        assertTrue(!root.resolve("src/main/java/com/example/UserManager.java").exists())
+        assertTrue(!root.resolve("src/main/java/com/example/AccountManager.java").exists())
+
+        val log = TransactionLog(root.resolve(".refactorkit/transactions"))
+        val transactionId = TransactionId.parseOrNull(applied.transactionIds.single())!!
+        val transaction = log.load(transactionId)!!
+        assertIs<ApplyResult.Applied>(PatchEngine(root).rollback(transaction))
+        assertTrue(root.resolve("src/main/java/com/example/UserManager.java").exists())
+        assertTrue(!root.resolve("src/main/java/com/account/AccountManager.java").exists())
+        assertEquals(JournalState.ROLLED_BACK, log.loadRecord(transactionId)?.state)
+    }
+
+    @Test
+    fun noOpRecipeApplyCreatesNoTransaction() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val recipe = RecipeLoader.load("""
+            id: java.summary-only
+            name: Summary only
+            steps:
+              - type: summarizePatch
+        """.trimIndent().byteInputStream())
+
+        val result = engine.run(recipe, emptyMap(), root, dryRun = false)
+
+        val applied = assertIs<RecipeResult.Applied>(result)
+        assertTrue(applied.transactionIds.isEmpty())
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().isEmpty())
+    }
+
+    @Test
+    fun movePackageStagesEachClassAgainstThePreviousMove() {
+        val root = createProject(
+            "src/main/java/com/old/A.java" to "package com.old;\npublic class A { B value; }\n",
+            "src/main/java/com/old/B.java" to "package com.old;\npublic class B {}\n",
+        )
+        val recipe = RecipeLoader.load("""
+            id: java.move-package-test
+            name: Move package
+            parameters:
+              from: string
+              to: string
+            steps:
+              - type: movePackage
+                from: "{{ from }}"
+                to: "{{ to }}"
+        """.trimIndent().byteInputStream())
+
+        val result = engine.run(
+            recipe,
+            mapOf("from" to "com.old", "to" to "com.newpkg"),
+            root,
+            dryRun = false,
+        )
+
+        val applied = assertIs<RecipeResult.Applied>(result)
+        assertEquals(1, applied.transactionIds.size)
+        assertTrue(root.resolve("src/main/java/com/newpkg/A.java").readText().contains("package com.newpkg;"))
+        assertTrue(root.resolve("src/main/java/com/newpkg/B.java").readText().contains("package com.newpkg;"))
+        assertTrue(!root.resolve("src/main/java/com/old/A.java").exists())
+        assertTrue(!root.resolve("src/main/java/com/old/B.java").exists())
     }
 
     @Test

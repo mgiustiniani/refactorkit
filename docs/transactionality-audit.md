@@ -188,22 +188,26 @@ transactions, or implement a versioned client-apply acknowledgement/journal
 contract. Stable docs must not promise RefactorKit rollback for writes performed
 by the editor.
 
-### TX-008 — Recipes are sagas, not atomic transactions
+### TX-008 — Recipe transaction boundary
 
-Severity: **high**.
+Status: **closed after the audited baseline**.
 
-`RecipeEngine` applies and logs each step as a separate transaction. On a later
-logical failure it attempts reverse compensation. A process crash, log-save
-failure, rollback conflict, or I/O failure can leave a partially applied recipe.
-Dry-run steps are not all evaluated against one evolving staged workspace.
+`RecipeEngine` no longer applies or journals individual steps. Every step is
+previewed against an immutable snapshot produced by applying the previous step
+through `WorkspaceEditSimulator`, which shares `PatchEngine`'s structural-segment
+normalization and overlap semantics. A refusal, diagnostics failure, invalid
+range, or later planning error therefore leaves both workspace and transaction
+journal untouched.
 
-`movePackage` also merges plans built from one snapshot; multiple modifications
-of the same file can remain separate edits whose ranges were calculated against
-the same original content but are applied sequentially.
-
-Required closure: either stage/merge/validate one recipe-wide `PatchPlan` and
-commit it once, or explicitly specify recipe execution as a durable saga with
-recovery status and per-step journal semantics.
+After every step succeeds, the engine derives one recipe-wide delta from the
+initial snapshot to the final staged snapshot and applies exactly one `PatchPlan`
+against the initial engine-owned snapshot. The resulting write has one WAL
+record, one transaction ID, and normal atomic apply/recovery/rollback semantics;
+a no-op recipe writes no transaction. `movePackage` likewise previews each class
+move against the result of the previous staged move instead of merging plans
+calculated from one stale coordinate space. Tests cover later-step refusal with
+zero writes/records, dependent rename-then-move steps, multi-class package moves,
+and a single durable transaction.
 
 ### TX-009 — Multiple modifications of one file have ambiguous coordinates
 
@@ -330,13 +334,13 @@ path occurs.
 
 | Flow | Preflight | Workspace writes | Durable intent before write | Rollback record | Current classification |
 |------|-----------|------------------|-----------------------------|-----------------|------------------------|
-| CLI `--apply` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; workspace writes not yet durably staged |
-| Daemon `refactor.apply` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; stale session afterward |
-| MCP `apply_refactoring` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; workspace writes not yet durably staged |
-| LSP `refactorkit.applyPlan` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; workspace writes not yet durably staged |
+| CLI `--apply` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed recoverable transaction on supported filesystems |
+| Daemon `refactor.apply` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed transaction; session refresh remains open |
+| MCP `apply_refactoring` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed recoverable transaction on supported filesystems |
+| LSP `refactorkit.applyPlan` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed transaction; native client edits are separate |
 | LSP native rename/code action | server plans only | editor/client writes | no | no RefactorKit transaction for client write | client-managed edit, not RefactorKit transaction |
-| Recipe apply | per step | sequential journaled transactions | per step | retained per-step lifecycle | durable saga boundary remains open |
-| Direct library `PatchEngine.apply` | snapshot-aware, under lock | sequential | versioned WAL | retained lifecycle record | recoverable managed batch; scan scope and durable workspace staging remain open |
+| Recipe apply | all steps staged in memory | one recipe-wide managed apply | one versioned WAL record | one retained lifecycle record | single managed transaction (`TX-008` closed) |
+| Direct library `PatchEngine.apply` | engine-owned source/classpath validation under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed recoverable transaction on supported filesystems |
 
 ## Requirements criticalities
 
@@ -372,7 +376,7 @@ The current requirements should be corrected before API `1.0` freeze.
 
 ## Recommended closure order
 
-1. Define recipe saga/transaction and LSP client/server transaction boundaries.
+1. Define the LSP client/server transaction boundary and versioned buffer contract.
 2. Integrate diagnostics and remaining stable error categories into commit gates.
 3. Add fault-injection, kill/restart, concurrency, corruption, and mounted
    filesystem capability tests before `v1.0.0-rc.1`.

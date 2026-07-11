@@ -13,17 +13,20 @@ review safety boundaries before applying refactorings.
   adding `java.compiler`. Packaged-runtime smoke coverage now checks the module,
   executes signed `definition`/`references` with `JAVA_HOME` unset, verifies
   overload precision, and proves fixture sources remain unchanged.
-- Completed a transactionality/requirements audit. Current flows are explicitly
-  classified as preflighted compensatable batches rather than crash-safe durable
-  transactions; critical `v1.0.0-rc.1` blockers cover write-ahead journaling,
-  partial I/O failure, transaction-log traversal/integrity, rollback conflicts,
-  concurrency, LSP client-managed edits, recipe sagas, same-file coordinate
-  merging, and text-range bounds.
+- Completed a transactionality/requirements audit. Baseline flows were classified
+  as preflighted compensatable batches; follow-up hardening tracks closure of
+  write-ahead journaling, partial I/O failure, transaction-log traversal/integrity,
+  rollback conflicts, concurrency, LSP client-managed edits, recipe boundaries,
+  same-file coordinates, and text-range bounds.
 - Closed transaction-log path finding `TX-003`: transaction IDs now use the
   generated UUIDv4 grammar, log paths are normalized and contained, symbolic-link
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Replaced per-step recipe sagas with one staged recipe transaction. Every step
+  plans against the immutable result of previous steps; successful workflows
+  become one recipe-wide `PatchPlan` and WAL record, while later refusal and
+  no-op execution write no transaction.
 - Added SHA-256 classpath evidence for active Java dependencies, compiled-output
   directories, local JAR discovery locations, and generated classpath manifests.
   Apply recomputes evidence under lock and refuses stale dependencies as

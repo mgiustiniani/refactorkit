@@ -17,7 +17,7 @@ The stable-release strategy has published the JDT foundation as `v0.3.0` and now
 |Topic |Strategy |Evidence |Status
 
 |Patch-first architecture
-|RefactorKit-managed operations produce `PatchPlan` / `WorkspaceEdit` previews and are applied by the core patch engine. Current managed writes are sequential compensatable batches; native LSP edits are client-applied outside this boundary, and recipes are per-step sagas.
+|RefactorKit-managed operations produce `PatchPlan` / `WorkspaceEdit` previews and are applied by the core patch engine. Managed writes use WAL-backed staged per-path atomic replacement; native LSP edits remain client-applied outside this boundary, while recipes stage all steps into one managed transaction.
 |`modules/refactorkit-core`, `docs/patch-engine.md`, ADRs 0002/0004, `docs/transactionality-audit.md`.
 |implementation-informed limitation
 

@@ -115,26 +115,29 @@ Status: implementation-informed from `docs/integration-contracts.md` and `docs/t
 
 Status: implementation-informed from `DaemonSession`, its daemon contract test, `docs/integration-contracts.md`, and the transactionality audit. Current apply/rollback rescans used for validation are not assigned back to the daemon session, so later queries can observe stale metadata (`TX-018`).
 
-== Runtime Scenario: Recipe Apply Saga
+== Runtime Scenario: Staged Recipe Apply
 
 [cols="1,3",options="header"]
 |===
 |Step |Interaction
 
 |1
-|The recipe engine plans and applies each step separately rather than staging one recipe-wide workspace state.
+|The recipe engine scans one initial snapshot and previews the first step without writing files.
 
 |2
-|After each successful step it saves that step's transaction metadata; a later step sees a workflow that may already have changed the workspace.
+|`WorkspaceEditSimulator` applies the step to an immutable staged snapshot using the same structural-segment normalization as `PatchEngine`; each later step plans against that evolving snapshot.
 
 |3
-|If a later logical step fails, the engine attempts earlier compensations in reverse order.
+|Any refusal, diagnostics error, invalid edit, or later planning failure returns before journaling and leaves the workspace untouched.
 
 |4
-|Each step is independently locked, normalized, rendered, journaled, staged, and recoverable; multiple same-file entries within a step share one validated coordinate space. A later logical failure can still require reverse compensation across multiple retained transaction records.
+|After all steps succeed, the engine computes one initial-to-final workspace delta and exposes one recipe-wide preview plan.
+
+|5
+|Apply validates the initial engine-owned snapshot and commits the recipe-wide plan through one lock/WAL/staged replacement transaction. No-op recipes create no transaction.
 |===
 
-Status: implementation-informed from `docs/transactionality-audit.md`. Recipe execution is a saga with best-effort compensation, not one atomic transaction.
+Status: implementation-informed from `docs/transactionality-audit.md`; `TX-008` is closed with one staged recipe transaction.
 
 == Runtime Scenario: External Java Class Import Preview
 
