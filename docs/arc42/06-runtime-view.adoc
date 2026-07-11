@@ -59,7 +59,7 @@ Status: implementation-informed from CLI, Java adapter, patch engine, testkit do
 |Agent explicitly calls `apply_refactoring`; the current engine treats this invocation as sufficient even though `requiresUserApproval` is advisory metadata rather than a separately enforced approval state.
 
 |7
-|After a completely successful apply, compensation is available through `rollback_refactoring`. The transaction log is saved after mutation, and rollback is not conflict-safe against later workspace edits.
+|Before mutation, `PatchEngine` persists `PREPARED`/`APPLYING` journal intent. After success, compensation is available through `rollback_refactoring`; lifecycle history is retained. Normal rollback is still not conflict-safe against later workspace edits.
 |===
 
 Status: implementation-informed from `docs/ai-workflow.md`, `docs/integration-contracts.md`, and the transactionality audit; stable MCP status remains capability-by-capability and acceptance-gated. MCP managed apply is a compensatable batch, not a durable transaction.

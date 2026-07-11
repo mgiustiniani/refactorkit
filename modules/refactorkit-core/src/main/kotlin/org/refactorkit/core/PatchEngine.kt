@@ -16,8 +16,27 @@ import kotlin.io.path.writeText
 
 class PatchEngine(
     private val workspaceRoot: Path,
+    private val transactionLog: TransactionLog = TransactionLog(
+        workspaceRoot.toAbsolutePath().normalize().resolve(".refactorkit/transactions"),
+    ),
 ) {
     private val normalizedRoot = workspaceRoot.toAbsolutePath().normalize()
+
+    /**
+     * Acquire the workspace lock and recover any interrupted managed lifecycle.
+     * Long-running integrations call this when opening a workspace; apply and
+     * rollback also invoke it automatically before mutation.
+     */
+    fun recover(): List<Diagnostic> {
+        val result = withWorkspaceLock {
+            ApplyResult.Applied(Transaction(
+                planId = PlanId("startup-recovery"),
+                snapshotHashBefore = "",
+                rollbackEdit = WorkspaceEdit(),
+            ))
+        }
+        return (result as? ApplyResult.Refused)?.diagnostics.orEmpty()
+    }
 
     /** Validate a preview plan against the current snapshot hash before applying. */
     fun validate(plan: PatchPlan, currentSnapshotHash: String): List<Diagnostic> = buildList {
@@ -51,20 +70,30 @@ class PatchEngine(
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(diagnostics)
         } else {
-            applyEdit(plan.id, plan.snapshotHash, plan.workspaceEdit)
+            applyPrepared(plan)
         }
     }
 
-    /**
-     * Roll back a previously applied transaction while holding the same one-writer
-     * workspace lock. Post-apply conflict validation remains tracked by TX-004.
-     */
+    /** Roll back an applied journaled transaction under the workspace lock. */
     fun rollback(transaction: Transaction): ApplyResult = withWorkspaceLock {
         val errors = validateEdits(transaction.rollbackEdit) + validateRuntimeState(transaction.rollbackEdit)
         if (errors.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(errors)
         } else {
-            applyEdit(transaction.planId, snapshotHashBefore = "", transaction.rollbackEdit)
+            val record = transactionLog.loadRecord(transaction.id)
+            try {
+                if (record != null) transactionLog.update(record.copy(state = JournalState.ROLLING_BACK))
+                executeWorkspaceEdit(transaction.rollbackEdit)
+                if (record != null) transactionLog.update(record.copy(state = JournalState.ROLLED_BACK))
+                ApplyResult.Applied(transaction)
+            } catch (error: Exception) {
+                if (record != null) markRecoveryRequired(record, "Rollback failed: ${error.message}")
+                ApplyResult.Refused(listOf(Diagnostic(
+                    "Rollback failed; recovery is required: ${error.message}",
+                    Diagnostic.Severity.ERROR,
+                    code = "transaction.recoveryRequired",
+                )))
+            }
         }
     }
 
@@ -97,7 +126,8 @@ class PatchEngine(
                 } else {
                     lock.use {
                         actionStarted = true
-                        action()
+                        val recoveryErrors = recoverIncompleteTransactions()
+                        if (recoveryErrors.isNotEmpty()) ApplyResult.Refused(recoveryErrors) else action()
                     }
                 }
             }
@@ -224,75 +254,213 @@ class PatchEngine(
         }
     }
 
-    private fun applyEdit(planId: PlanId, snapshotHashBefore: String, workspaceEdit: WorkspaceEdit): ApplyResult {
+    private fun applyPrepared(plan: PatchPlan): ApplyResult {
+        val record = try {
+            prepareJournalRecord(plan)
+        } catch (error: Exception) {
+            return ApplyResult.Refused(listOf(Diagnostic(
+                "Cannot stage transaction before apply: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.prepareFailed",
+            )))
+        }
+
+        try {
+            transactionLog.prepare(record)
+            transactionLog.update(record.copy(state = JournalState.APPLYING))
+        } catch (error: Exception) {
+            return ApplyResult.Refused(listOf(Diagnostic(
+                "Cannot persist write-ahead transaction intent: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.journalFailed",
+            )))
+        }
+
+        return try {
+            executeWorkspaceEdit(plan.workspaceEdit)
+            transactionLog.update(record.copy(state = JournalState.APPLIED))
+            ApplyResult.Applied(record.transaction)
+        } catch (error: Exception) {
+            val recovered = recoverJournalRecord(record.copy(state = JournalState.APPLYING), "Apply failed: ${error.message}")
+            ApplyResult.Refused(listOf(Diagnostic(
+                if (recovered) {
+                    "Apply failed and the previous workspace state was restored: ${error.message}"
+                } else {
+                    "Apply failed; durable recovery is required: ${error.message}"
+                },
+                Diagnostic.Severity.ERROR,
+                code = if (recovered) "transaction.applyFailedCompensated" else "transaction.recoveryRequired",
+            )))
+        }
+    }
+
+    private fun prepareJournalRecord(plan: PatchPlan): TransactionJournalRecord {
+        val affected = plan.workspaceEdit.affectedFiles()
+            .map { normalizedRoot.relativize(resolveInsideWorkspace(it)) }
+            .distinct()
+        val initial = linkedMapOf<Path, String?>()
+        affected.forEach { relative ->
+            val absolute = normalizedRoot.resolve(relative)
+            initial[relative] = if (Files.exists(absolute, LinkOption.NOFOLLOW_LINKS)) Files.readString(absolute) else null
+        }
+        val working = initial.toMutableMap()
         val rollbackEdits = mutableListOf<FileEdit>()
 
-        for (edit in workspaceEdit.edits) {
-            val absolute = resolveInsideWorkspace(edit.path)
+        plan.workspaceEdit.edits.forEach { edit ->
+            val path = normalizedRoot.relativize(resolveInsideWorkspace(edit.path))
             when (edit) {
                 is FileEdit.Create -> {
-                    if (absolute.exists() && !edit.overwrite) {
-                        return ApplyResult.Refused(listOf(Diagnostic(
-                            "Refusing to overwrite existing file: ${edit.path}",
-                            Diagnostic.Severity.ERROR, code = "file.exists",
-                        )))
-                    }
-                    val previous = if (absolute.exists()) absolute.readText() else null
-                    absolute.parent?.createDirectories()
-                    absolute.writeText(edit.content)
-                    rollbackEdits += if (previous == null) FileEdit.Delete(edit.path)
-                    else FileEdit.Create(edit.path, previous, overwrite = true)
+                    val previous = working[path]
+                    working[path] = edit.content
+                    rollbackEdits += if (previous == null) FileEdit.Delete(path)
+                    else FileEdit.Create(path, previous, overwrite = true)
                 }
-
                 is FileEdit.Delete -> {
-                    if (!absolute.exists()) {
-                        return ApplyResult.Refused(listOf(Diagnostic(
-                            "Cannot delete missing file: ${edit.path}",
-                            Diagnostic.Severity.ERROR, code = "file.missing",
-                        )))
-                    }
-                    rollbackEdits += FileEdit.Create(edit.path, absolute.readText(), overwrite = true)
-                    Files.delete(absolute)
+                    val previous = requireNotNull(working[path]) { "Missing staged source: $path" }
+                    working[path] = null
+                    rollbackEdits += FileEdit.Create(path, previous, overwrite = true)
                 }
-
                 is FileEdit.Rename -> {
-                    val absoluteNew = resolveInsideWorkspace(edit.newPath)
-                    if (!absolute.exists()) {
-                        return ApplyResult.Refused(listOf(Diagnostic(
-                            "Cannot rename missing file: ${edit.path}",
-                            Diagnostic.Severity.ERROR, code = "file.missing",
-                        )))
-                    }
-                    if (absoluteNew.exists()) {
-                        return ApplyResult.Refused(listOf(Diagnostic(
-                            "Refusing to overwrite rename target: ${edit.newPath}",
-                            Diagnostic.Severity.ERROR, code = "file.exists",
-                        )))
-                    }
-                    absoluteNew.parent?.createDirectories()
-                    Files.move(absolute, absoluteNew)
-                    rollbackEdits += FileEdit.Rename(edit.newPath, edit.path)
+                    val target = normalizedRoot.relativize(resolveInsideWorkspace(edit.newPath))
+                    val previous = requireNotNull(working[path]) { "Missing staged rename source: $path" }
+                    working[path] = null
+                    working[target] = previous
+                    rollbackEdits += FileEdit.Rename(target, path)
                 }
-
                 is FileEdit.Modify -> {
-                    if (!absolute.isRegularFile()) {
-                        return ApplyResult.Refused(listOf(Diagnostic(
-                            "Cannot modify missing file: ${edit.path}",
-                            Diagnostic.Severity.ERROR, code = "file.missing",
-                        )))
-                    }
-                    val previous = absolute.readText()
-                    absolute.writeText(TextEdits.apply(previous, edit.textEdits))
-                    rollbackEdits += FileEdit.Create(edit.path, previous, overwrite = true)
+                    val previous = requireNotNull(working[path]) { "Missing staged modify source: $path" }
+                    working[path] = TextEdits.apply(previous, edit.textEdits)
+                    rollbackEdits += FileEdit.Create(path, previous, overwrite = true)
                 }
             }
         }
 
-        return ApplyResult.Applied(Transaction(
-            planId = planId,
-            snapshotHashBefore = snapshotHashBefore,
+        val transaction = Transaction(
+            planId = plan.id,
+            snapshotHashBefore = plan.snapshotHash,
             rollbackEdit = WorkspaceEdit(rollbackEdits.asReversed()),
-        ))
+        )
+        return TransactionJournalRecord(
+            transaction = transaction,
+            operation = plan.operation,
+            forwardEdit = plan.workspaceEdit,
+            preImages = initial.map { FileImage(it.key, it.value) },
+            postImages = working.map { FileImage(it.key, it.value) },
+            state = JournalState.PREPARED,
+        )
+    }
+
+    private fun executeWorkspaceEdit(workspaceEdit: WorkspaceEdit) {
+        workspaceEdit.edits.forEach { edit ->
+            val absolute = resolveInsideWorkspace(edit.path)
+            when (edit) {
+                is FileEdit.Create -> {
+                    if (absolute.exists() && !edit.overwrite) error("Refusing to overwrite existing file: ${edit.path}")
+                    absolute.parent?.createDirectories()
+                    absolute.writeText(edit.content)
+                }
+                is FileEdit.Delete -> Files.delete(absolute)
+                is FileEdit.Rename -> {
+                    val target = resolveInsideWorkspace(edit.newPath)
+                    target.parent?.createDirectories()
+                    Files.move(absolute, target)
+                }
+                is FileEdit.Modify -> {
+                    val previous = absolute.readText()
+                    absolute.writeText(TextEdits.apply(previous, edit.textEdits))
+                }
+            }
+        }
+    }
+
+    private fun recoverIncompleteTransactions(): List<Diagnostic> {
+        val records = try {
+            transactionLog.listRecords()
+        } catch (error: Exception) {
+            return listOf(Diagnostic(
+                "Cannot inspect transaction journal during startup recovery: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.recoveryRequired",
+            ))
+        }
+        return buildList {
+            records.forEach { record ->
+                try {
+                    when (record.state) {
+                        JournalState.PREPARED -> transactionLog.update(record.copy(state = JournalState.ROLLED_BACK))
+                        JournalState.APPLYING, JournalState.ROLLING_BACK -> {
+                            if (!recoverJournalRecord(record, "Recovered after interrupted ${record.state.name.lowercase()}")) {
+                                add(Diagnostic(
+                                    "Transaction ${record.transaction.id.value} requires manual recovery",
+                                    Diagnostic.Severity.ERROR,
+                                    code = "transaction.recoveryRequired",
+                                ))
+                            }
+                        }
+                        JournalState.RECOVERY_REQUIRED -> add(Diagnostic(
+                            "Transaction ${record.transaction.id.value} requires manual recovery",
+                            Diagnostic.Severity.ERROR,
+                            code = "transaction.recoveryRequired",
+                        ))
+                        JournalState.APPLIED, JournalState.ROLLED_BACK -> Unit
+                    }
+                } catch (error: Exception) {
+                    add(Diagnostic(
+                        "Transaction ${record.transaction.id.value} recovery failed: ${error.message}",
+                        Diagnostic.Severity.ERROR,
+                        code = "transaction.recoveryRequired",
+                    ))
+                }
+            }
+        }
+    }
+
+    private fun recoverJournalRecord(record: TransactionJournalRecord, reason: String): Boolean {
+        val pre = record.preImages.associateBy { it.path }
+        val post = record.postImages.associateBy { it.path }
+        val compatible = try {
+            (pre.keys + post.keys).all { path ->
+                val current = readImage(path)
+                current == pre[path]?.content || current == post[path]?.content
+            }
+        } catch (error: Exception) {
+            markRecoveryRequired(record, "$reason; cannot inspect workspace state: ${error.message}")
+            return false
+        }
+        if (!compatible) {
+            markRecoveryRequired(record, "$reason; workspace state conflicts with journal images")
+            return false
+        }
+        return try {
+            pre.values.forEach { image -> restoreImage(image) }
+            transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
+            true
+        } catch (error: Exception) {
+            markRecoveryRequired(record, "$reason; compensation failed: ${error.message}")
+            false
+        }
+    }
+
+    private fun readImage(path: Path): String? {
+        val absolute = resolveInsideWorkspace(path)
+        return if (Files.exists(absolute, LinkOption.NOFOLLOW_LINKS)) {
+            if (!Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) error("Recovery path is not a regular file: $path")
+            Files.readString(absolute)
+        } else null
+    }
+
+    private fun restoreImage(image: FileImage) {
+        val absolute = resolveInsideWorkspace(image.path)
+        if (image.content == null) {
+            Files.deleteIfExists(absolute)
+        } else {
+            absolute.parent?.createDirectories()
+            absolute.writeText(image.content)
+        }
+    }
+
+    private fun markRecoveryRequired(record: TransactionJournalRecord, failure: String) {
+        runCatching { transactionLog.update(record.copy(state = JournalState.RECOVERY_REQUIRED, failure = failure)) }
     }
 
     private fun validateInsideWorkspace(path: Path): Diagnostic? {

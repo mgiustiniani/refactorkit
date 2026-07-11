@@ -180,6 +180,95 @@ class PatchEngineTest {
         assertTrue(Files.exists(root.resolve("OldName.java")))
         assertFalse(Files.exists(root.resolve("NewName.java")))
         assertEquals("class DeleteMe {}\n", Files.readString(root.resolve("DeleteMe.java")))
+        val record = TransactionLog(root.resolve(".refactorkit/transactions")).loadRecord(apply.transaction.id)
+        assertEquals(JournalState.ROLLED_BACK, record?.state)
+    }
+
+    @Test
+    fun persistsAppliedWriteAheadJournalLifecycle() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "testJournal",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "journal lifecycle",
+            affectedFiles = setOf(relative),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                relative,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
+        val record = TransactionLog(root.resolve(".refactorkit/transactions")).loadRecord(applied.transaction.id)
+
+        assertEquals(JournalState.APPLIED, record?.state)
+        assertEquals(TransactionJournalRecord.CURRENT_SCHEMA_VERSION, record?.schemaVersion)
+        assertEquals("class Example {}\n", record?.preImages?.single()?.content)
+        assertEquals("class Changed {}\n", record?.postImages?.single()?.content)
+        assertEquals("testJournal", record?.operation)
+    }
+
+    @Test
+    fun startupRecoveryRestoresInterruptedApplyingTransaction() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        val preContent = "class Example {}\n"
+        val postContent = "class Changed {}\n"
+        Files.writeString(root.resolve(source), postContent)
+        val log = TransactionLog(root.resolve(".refactorkit/transactions"))
+        val transaction = Transaction(
+            planId = PlanId("plan-interrupted"),
+            snapshotHashBefore = "before",
+            rollbackEdit = WorkspaceEdit(listOf(FileEdit.Create(source, preContent, overwrite = true))),
+        )
+        val interrupted = TransactionJournalRecord(
+            transaction = transaction,
+            operation = "interrupted",
+            forwardEdit = WorkspaceEdit(),
+            preImages = listOf(FileImage(source, preContent)),
+            postImages = listOf(FileImage(source, postContent)),
+            state = JournalState.PREPARED,
+        )
+        log.prepare(interrupted)
+        log.update(interrupted.copy(state = JournalState.APPLYING))
+
+        val recoveryErrors = PatchEngine(root).recover()
+
+        assertTrue(recoveryErrors.isEmpty(), recoveryErrors.toString())
+        assertEquals(preContent, Files.readString(root.resolve(source)))
+        assertEquals(JournalState.ROLLED_BACK, log.loadRecord(transaction.id)?.state)
+    }
+
+    @Test
+    fun startupRecoveryBlocksOnConflictingWorkspaceState() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class External {}\n")
+        val log = TransactionLog(root.resolve(".refactorkit/transactions"))
+        val transaction = Transaction(
+            planId = PlanId("plan-conflict"),
+            snapshotHashBefore = "before",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        val interrupted = TransactionJournalRecord(
+            transaction = transaction,
+            operation = "interrupted",
+            forwardEdit = WorkspaceEdit(),
+            preImages = listOf(FileImage(source, "class Example {}\n")),
+            postImages = listOf(FileImage(source, "class Changed {}\n")),
+            state = JournalState.PREPARED,
+        )
+        log.prepare(interrupted)
+        log.update(interrupted.copy(state = JournalState.APPLYING))
+        val recoveryErrors = PatchEngine(root).recover()
+
+        assertTrue(recoveryErrors.any { it.code == "transaction.recoveryRequired" })
+        assertEquals("class External {}\n", Files.readString(root.resolve(source)))
+        assertEquals(JournalState.RECOVERY_REQUIRED, log.loadRecord(transaction.id)?.state)
     }
 
     @Test

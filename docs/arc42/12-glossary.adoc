@@ -44,7 +44,7 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |ADRs 0002 and 0004, transactionality audit
 
 |Transaction Log
-|Post-write compensation metadata stored under `.refactorkit/transactions`. Current persistence is not a durable write-ahead journal and lacks the complete security, integrity, lifecycle, and recovery properties planned for stable transactionality.
+|Versioned write-ahead recovery metadata stored under `.refactorkit/transactions`, durably created before mutation and atomically advanced through apply/rollback/recovery states. Integrity checksum, schema migration/quarantine, full metadata, and complete fault evidence remain planned.
 |Core / workspace
 |`TransactionLog`, transactionality audit
 

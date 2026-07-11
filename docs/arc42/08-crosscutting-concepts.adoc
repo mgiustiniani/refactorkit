@@ -23,13 +23,13 @@ Status: implementation-informed for structural/overlap validation, conservative 
 
 == Compensation, Journal, and Recovery
 
-After every managed write succeeds, the current patch engine returns a `Transaction` containing an id, original plan id, applied timestamp, pre-apply snapshot hash, and reverse compensation edit. Integration callers then save it under `.refactorkit/transactions`. This post-write ordering leaves no durable recovery intent if mutation, process execution, or log persistence fails (`TX-001`, `TX-002`).
+Before every managed write, `PatchEngine` durably creates a versioned `PREPARED` journal record containing transaction identity, operation, forward/compensation edits, and affected-path pre/post images, then advances to `APPLYING`. Apply, rollback, and startup recovery retain lifecycle states through `APPLIED`, `ROLLING_BACK`, `ROLLED_BACK`, or `RECOVERY_REQUIRED`; integrations no longer persist metadata after mutation (`TX-002` closed, `TX-001` narrowed).
 
 Transaction identifiers now enforce the generated UUIDv4 grammar; normalized transaction-log paths are contained, reject symbolic links and non-regular records, apply owner-only permissions where supported, and report coded corruption/path failures (`TX-003` closed after the audit baseline). Records and persistence still lack a versioned lifecycle, complete forward/pre/post state, integrity checksum, atomic durable save, corruption quarantine, and retained recovery/audit history (`TX-011`, `TX-012`). Compensation restores text content only, not full permissions, ownership, timestamps, ACLs, extended attributes, encoding metadata, or created directory state (`TX-013`).
 
 Rollback does not verify expected post-apply state and can overwrite edits made after apply (`TX-004`). Snapshot-aware apply validates affected-file content/existence under the workspace lock, but complete snapshot scope is not yet engine-owned, so a library caller can omit newly appeared relevant sources (`TX-014`). Recipe apply is a per-step saga that attempts reverse compensation after later logical failure; it is not one atomic transaction (`TX-008`).
 
-Status: implementation-informed from `docs/transactionality-audit.md`. A write-ahead lifecycle, conflict-safe rollback, durable/corruption-safe journal, metadata policy, complete stable library preconditions, and explicit `RECOVERY_REQUIRED` state remain planned closure requirements.
+Status: implementation-informed from `docs/transactionality-audit.md`. The write-ahead lifecycle, compatible startup compensation, and explicit `RECOVERY_REQUIRED` state are implemented. Conflict-safe normal rollback, durable workspace replacement, journal checksum/migration/quarantine, complete metadata policy, and engine-owned scan scope remain closure requirements.
 
 == Diagnostics Model
 

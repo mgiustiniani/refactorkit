@@ -145,7 +145,7 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-ROLLBACK
 |Run managed compensation
 |Developer, Agent/App
-|After a completely successful managed apply and post-write log save, replay reverse text/file edits. Current compensation is not conflict-safe against post-apply changes and does not restore complete filesystem metadata.
+|Persist compensation and pre/post recovery images before mutation, retain lifecycle history, and replay rollback under the workspace lock. Current normal rollback is not conflict-safe against post-apply changes and does not restore complete filesystem metadata.
 |Core tests, testkit agent simulation, transactionality audit `TX-002`, `TX-004`, `TX-013`.
 |implementation-informed limitation
 
@@ -201,7 +201,7 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-RECIPE-RUN
 |Run recipe
 |Developer, CI, Agent
-|Execute YAML-defined Java refactoring steps as a saga: each applied step has a separate post-write transaction log and later failure triggers best-effort reverse compensation. This is not one atomic recipe transaction.
+|Execute YAML-defined Java refactoring steps as a saga: each applied step has a separate write-ahead lifecycle record and later failure triggers reverse compensation. This is not one atomic recipe transaction.
 |`docs/recipe-engine.md`, recipe engine tests, sample recipe, transactionality audit `TX-008`.
 |implementation-informed limitation
 

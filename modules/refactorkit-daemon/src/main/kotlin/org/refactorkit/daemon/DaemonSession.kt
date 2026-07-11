@@ -105,10 +105,17 @@ class DaemonSession {
 
     private fun projectOpen(params: JsonObject?): JsonElement {
         val root = params?.string("root") ?: missing("root")
-        val path = Paths.get(root)
+        val path = Paths.get(root).toAbsolutePath().normalize()
+        val recoveryErrors = PatchEngine(path).recover()
+        if (recoveryErrors.isNotEmpty()) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.INTERNAL_ERROR,
+                "Workspace recovery required: ${recoveryErrors.joinToString("; ") { it.message }}",
+            )
+        }
         val snap = scanner.scan(path)
         snapshot = snap
-        workspaceRoot = path.toAbsolutePath().normalize()
+        workspaceRoot = path
         return buildJsonObject {
             put("root", workspaceRoot.toString())
             put("fileCount", snap.files.size)
@@ -272,8 +279,6 @@ class DaemonSession {
         val currentSnap = scanner.scan(root)
         return when (val result = PatchEngine(root).apply(plan, currentSnap)) {
             is ApplyResult.Applied -> {
-                val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-                log.save(result.transaction)
                 pendingPlans.remove(planId)
                 buildJsonObject {
                     put("status", "applied")
@@ -316,7 +321,6 @@ class DaemonSession {
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $txId")
         return when (val result = PatchEngine(root).rollback(tx)) {
             is ApplyResult.Applied -> {
-                log.delete(transactionId)
                 buildJsonObject {
                     put("status", "rolledBack")
                     put("transactionId", txId)

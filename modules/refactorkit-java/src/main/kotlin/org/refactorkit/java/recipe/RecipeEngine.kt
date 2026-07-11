@@ -8,7 +8,6 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Transaction
-import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
@@ -71,11 +70,9 @@ class RecipeEngine(
         val stepResults = mutableListOf<StepResult>()
         val appliedTransactions = mutableListOf<Transaction>()
         val txIds = mutableListOf<String>()
-        val transactionLog = TransactionLog(workspaceRoot.toAbsolutePath().normalize().resolve(".refactorkit/transactions"))
-
         fun fail(reason: String): RecipeResult.Failed {
             val rollbackSummary = if (!dryRun && appliedTransactions.isNotEmpty()) {
-                rollbackApplied(workspaceRoot, transactionLog, appliedTransactions)
+                rollbackApplied(workspaceRoot, appliedTransactions)
             } else ""
             val fullReason = if (rollbackSummary.isBlank()) reason else "$reason $rollbackSummary"
             return RecipeResult.Failed(stepResults, fullReason)
@@ -98,7 +95,6 @@ class RecipeEngine(
             if (!dryRun && result.plan != null && result.plan.status == PatchStatus.PREVIEW) {
                 when (val apply = PatchEngine(workspaceRoot).apply(result.plan, snap)) {
                     is ApplyResult.Applied -> {
-                        transactionLog.save(apply.transaction)
                         appliedTransactions += apply.transaction
                         txIds += apply.transaction.id.value
                         snap = scanner.scan(workspaceRoot) // refresh after apply
@@ -246,13 +242,12 @@ class RecipeEngine(
 
     private fun rollbackApplied(
         workspaceRoot: Path,
-        transactionLog: TransactionLog,
         appliedTransactions: List<Transaction>,
     ): String {
         val failures = mutableListOf<String>()
         for (transaction in appliedTransactions.asReversed()) {
             when (val rollback = PatchEngine(workspaceRoot).rollback(transaction)) {
-                is ApplyResult.Applied -> transactionLog.delete(transaction.id)
+                is ApplyResult.Applied -> Unit
                 is ApplyResult.Refused -> failures += "${transaction.id.value}: " +
                     rollback.diagnostics.joinToString("; ") { it.message }
             }

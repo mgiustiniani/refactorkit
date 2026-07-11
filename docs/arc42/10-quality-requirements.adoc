@@ -280,7 +280,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Transactionality guarantees exceed current evidence
-|Managed writes now have one-writer locking and affected-file revalidation; the hash-only apply API is removed, while complete snapshot scope is not yet engine-owned. Current flows still lack write-ahead recovery, conflict-safe rollback, durable replacement, complete same-file/bounds validation, central diagnostics gates, enforced approval semantics, precise error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
+|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, and explicit recovery-required blocking. Complete snapshot scope is not yet engine-owned. Current flows still lack conflict-safe normal rollback, durable workspace replacement, complete same-file validation, central diagnostics gates, enforced approval semantics, precise error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
 |release blocker; `TX-001` through `TX-018` open
 
 |Stable acceptance evidence incomplete

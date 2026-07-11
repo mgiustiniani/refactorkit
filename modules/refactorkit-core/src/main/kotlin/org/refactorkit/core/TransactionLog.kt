@@ -1,59 +1,91 @@
 package org.refactorkit.core
 
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
+import java.time.Instant
+import java.util.UUID
 import java.util.stream.Collectors
 
 /**
- * File-based transaction log stored under [logDir].
+ * Versioned write-ahead transaction journal stored under [logDir].
  *
- * Each transaction is persisted as a JSON file named <transaction-id>.json.
- * Transaction identifiers and every existing path component are validated before
- * access so client input cannot escape the log directory or traverse symlinks.
+ * Records are created durably before workspace mutation and replaced through a
+ * same-directory temporary file plus atomic move for every lifecycle transition.
  */
 class TransactionLog(logDir: Path) {
     val logDir: Path = logDir.toAbsolutePath().normalize()
 
+    /** Compatibility helper for importing an already-applied transaction. */
     fun save(transaction: Transaction) {
-        prepareLogDirectory()
-        val file = secureFile(transaction.id)
-        try {
-            Files.writeString(
-                file,
-                transaction.toJson(),
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE,
-            )
-            setOwnerOnlyPermissions(file, directory = false)
-        } catch (error: TransactionLogException) {
-            throw error
-        } catch (error: Exception) {
-            throw TransactionLogException(
-                code = "transaction.writeFailed",
-                message = "Cannot persist transaction ${transaction.id.value}",
-                cause = error,
-            )
-        }
+        prepare(TransactionJournalRecord(
+            transaction = transaction,
+            operation = "legacyAppliedTransaction",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.APPLIED,
+        ))
     }
 
-    fun load(id: TransactionId): Transaction? {
+    fun prepare(record: TransactionJournalRecord) {
+        require(record.state == JournalState.PREPARED || record.state == JournalState.APPLIED) {
+            "New journal records must start PREPARED"
+        }
+        prepareLogDirectory()
+        val file = secureFile(record.transaction.id)
+        writeNewDurably(file, record.toJson())
+    }
+
+    fun update(record: TransactionJournalRecord) {
+        prepareLogDirectory()
+        val file = secureFile(record.transaction.id)
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw TransactionLogException(
+                "transaction.missing",
+                "Transaction journal record is missing: ${record.transaction.id.value}",
+            )
+        }
+        replaceDurably(file, record.copy(updatedAt = Instant.now()).toJson())
+    }
+
+    fun load(id: TransactionId): Transaction? =
+        loadRecord(id)?.takeIf { it.state == JournalState.APPLIED }?.transaction
+
+    fun loadRecord(id: TransactionId): TransactionJournalRecord? {
         ensureSecureLogDirectory()
         val file = secureFile(id)
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return null
         requireRegularFile(file)
         return try {
-            transactionFromJson(Files.readString(file)).also { transaction ->
-                if (transaction.id != id) {
-                    throw TransactionLogException(
-                        "transaction.corrupt",
-                        "Transaction record ID does not match file name: ${id.value}",
-                    )
-                }
+            val json = Files.readString(file)
+            val record = if (json.contains("\"schemaVersion\"")) {
+                journalRecordFromJson(json)
+            } else {
+                val transaction = transactionFromJson(json)
+                TransactionJournalRecord(
+                    transaction = transaction,
+                    operation = "legacyAppliedTransaction",
+                    forwardEdit = WorkspaceEdit(),
+                    preImages = emptyList(),
+                    postImages = emptyList(),
+                    state = JournalState.APPLIED,
+                )
             }
+            if (record.transaction.id != id) {
+                throw TransactionLogException(
+                    "transaction.corrupt",
+                    "Transaction record ID does not match file name: ${id.value}",
+                )
+            }
+            record
         } catch (error: TransactionLogException) {
             throw error
         } catch (error: Exception) {
@@ -94,6 +126,8 @@ class TransactionLog(logDir: Path) {
         }
     }
 
+    fun listRecords(): List<TransactionJournalRecord> = list().mapNotNull(::loadRecord)
+
     fun delete(id: TransactionId) {
         ensureSecureLogDirectory()
         val file = secureFile(id)
@@ -101,11 +135,84 @@ class TransactionLog(logDir: Path) {
         requireRegularFile(file)
         try {
             Files.delete(file)
+            forceDirectory()
         } catch (error: Exception) {
             throw TransactionLogException(
                 code = "transaction.deleteFailed",
                 message = "Cannot delete transaction record: ${id.value}",
                 cause = error,
+            )
+        }
+    }
+
+    private fun writeNewDurably(file: Path, content: String) {
+        try {
+            FileChannel.open(file, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+                writeFully(channel, content)
+                channel.force(true)
+            }
+            setOwnerOnlyPermissions(file, directory = false)
+            forceDirectory()
+        } catch (error: TransactionLogException) {
+            throw error
+        } catch (error: Exception) {
+            throw TransactionLogException(
+                "transaction.writeFailed",
+                "Cannot persist transaction journal ${file.fileName}",
+                error,
+            )
+        }
+    }
+
+    private fun replaceDurably(file: Path, content: String) {
+        val temporary = logDir.resolve(".${file.fileName}.tmp-${UUID.randomUUID()}")
+        try {
+            FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+                writeFully(channel, content)
+                channel.force(true)
+            }
+            setOwnerOnlyPermissions(temporary, directory = false)
+            try {
+                Files.move(
+                    temporary,
+                    file,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } catch (error: AtomicMoveNotSupportedException) {
+                throw TransactionLogException(
+                    "transaction.atomicMoveUnsupported",
+                    "Filesystem does not support atomic transaction journal replacement",
+                    error,
+                )
+            }
+            forceDirectory()
+        } catch (error: TransactionLogException) {
+            Files.deleteIfExists(temporary)
+            throw error
+        } catch (error: Exception) {
+            Files.deleteIfExists(temporary)
+            throw TransactionLogException(
+                "transaction.writeFailed",
+                "Cannot update transaction journal ${file.fileName}",
+                error,
+            )
+        }
+    }
+
+    private fun writeFully(channel: FileChannel, content: String) {
+        val buffer = ByteBuffer.wrap(content.toByteArray(Charsets.UTF_8))
+        while (buffer.hasRemaining()) channel.write(buffer)
+    }
+
+    private fun forceDirectory(path: Path = logDir) {
+        try {
+            FileChannel.open(path, StandardOpenOption.READ).use { it.force(true) }
+        } catch (error: Exception) {
+            throw TransactionLogException(
+                "transaction.durabilityFailed",
+                "Cannot durably flush transaction journal directory: $path",
+                error,
             )
         }
     }
@@ -119,6 +226,9 @@ class TransactionLog(logDir: Path) {
         }
         ensureSecureLogDirectory()
         setOwnerOnlyPermissions(logDir, directory = true)
+        forceDirectory(logDir)
+        logDir.parent?.let(::forceDirectory)
+        logDir.parent?.parent?.let(::forceDirectory)
     }
 
     private fun ensureSecureLogDirectory() {

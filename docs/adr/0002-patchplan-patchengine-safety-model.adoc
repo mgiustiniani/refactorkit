@@ -52,16 +52,16 @@ The link:../transactionality-audit.md[transactionality audit] at commit `5f47ad0
 
 The following open findings qualify the accepted direction and must not be read as implemented fixes:
 
-* `TX-001`: sequential direct writes can fail after earlier writes, without caught compensation or a returned transaction; incomplete compensation needs an explicit `RECOVERY_REQUIRED` outcome.
-* `TX-002`: integration callers persist transaction metadata after mutation, leaving a crash and log-failure window; recovery intent and lifecycle state must be durable before mutation.
+* `TX-001` is substantially narrowed: apply renders pre/post images and compensation before mutation, catches I/O failure, performs compatible compensation, and durably reports `RECOVERY_REQUIRED`; direct workspace staging remains with `TX-006`.
+* `TX-002` is closed: `PatchEngine` durably persists and advances the versioned write-ahead lifecycle before and through workspace mutation; integrations no longer save metadata afterward.
 * `TX-003` is closed after the audited baseline: transaction IDs enforce the generated UUIDv4 grammar; normalized contained log paths reject symbolic links and non-regular records; owner-only permissions are applied where supported; and malformed records produce coded failures. Durable journal lifecycle/integrity work remains under `TX-002`, `TX-011`, and `TX-012`.
 * `TX-004`: rollback has no post-apply state check and can overwrite later user or process changes; normal rollback must be conflict-aware.
 * `TX-005` is closed for RefactorKit-managed writes after the audited baseline: `PatchEngine` holds a non-blocking OS file lock across validation/apply/rollback, snapshot-aware apply revalidates affected paths under that lock, the hash-only overload is removed, and all first-party/test callers use the protected contract.
 * `TX-006`: direct writes, non-negotiated moves, and absent durable flush/staging make replacement neither crash-safe nor durably atomic.
 * `TX-009`: overlap validation is per `FileEdit.Modify`; multiple modifications of one file can use ambiguous coordinates and drift after earlier edits.
 * `TX-010`: preflight does not fully validate line/character bounds or render every resulting file before the first workspace write.
-* `TX-011`: transaction records lack recovery and audit fields such as schema and lifecycle versions, forward edits, per-path pre/post hashes, validation results, recovery attempts, and integrity data; successful rollback currently removes history.
-* `TX-012`: transaction-log persistence is direct and lacks atomic replacement, durability, integrity checks, schema migration, quarantine, and structured corruption handling.
+* `TX-011` is partially closed: retained records now include schema, operation, forward/compensation edits, pre/post images, lifecycle, timestamps, and failure detail; version metadata, validation/attempt history, post-snapshot, and integrity checksum remain.
+* `TX-012` is partially closed: create/update/delete persistence durably flushes files/directories and lifecycle replacement requires a same-directory atomic move; checksum, migration, quarantine, capability reporting, and fault evidence remain.
 * `TX-013`: rollback restores text rather than complete filesystem metadata or directory state, and the edit model does not represent all advertised directory operations.
 * `TX-014` is narrowed: apply requires a `ProjectSnapshot`, its hash is derived from files, and affected paths are checked under lock. A caller can still supply stale scope that omits newly appeared semantically relevant sources, so stable closure requires engine-owned rescan scope.
 * `TX-015`: diagnostics are not a central pre-commit and post-apply gate, and diagnostic regression does not generally trigger automatic compensation.
@@ -69,7 +69,7 @@ The following open findings qualify the accepted direction and must not be read 
 
 == Residual Risks and Open Scope
 
-* At the audited `5f47ad0` baseline, `TX-001` through `TX-006` and `TX-009` through `TX-016` were open; subsequent implementation closes `TX-003` and managed-write `TX-005`, and narrows `TX-014`.
-* Recovery from interrupted I/O, process termination, machine failure, log failure, and incomplete compensation remains open.
+* At the audited `5f47ad0` baseline, `TX-001` through `TX-006` and `TX-009` through `TX-016` were open; subsequent implementation closes `TX-002`, `TX-003`, and managed-write `TX-005`, substantially narrows `TX-001`, and partially closes `TX-011`, `TX-012`, and `TX-014`.
+* Startup recovery now handles compatible interrupted lifecycle states and blocks conflicts; kill/power-loss, torn workspace writes, journal corruption, and incomplete-compensation fault evidence remain open.
 * Managed snapshot-aware writes now close the normal RefactorKit-writer scan-to-mutation race; native editor-applied LSP edits, omitted newly appeared sources in caller-provided scope, and hostile filesystem namespace replacement remain outside that evidence.
 * Stable `1.0` transactionality must not be claimed until the required guarantees are either evidenced or narrowed to precise degraded guarantees.

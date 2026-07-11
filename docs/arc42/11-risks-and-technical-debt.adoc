@@ -141,9 +141,9 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-023
-|PatchEngine preflight rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions. Managed writes hold a workspace lock and revalidate affected-file preconditions; the hash-only overload is removed (`TX-005` closed, `TX-014` narrowed). Direct sequential writes still have no write-ahead recovery, durable staging, or guaranteed atomic replacement (`TX-001`, `TX-002`, `TX-006`).
-|An I/O or process failure can leave partial workspace state and no durable rollback record; caller-provided scope can omit newly appeared relevant sources, and editor-managed LSP writes remain outside managed isolation.
-|Make scan scope engine-owned; define precise degraded filesystem guarantees; add write-ahead lifecycle, staged/durable replacement, compensation failure reporting, startup recovery, and fault/restart/concurrency evidence.
+|PatchEngine preflight rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions. Managed writes hold a workspace lock, revalidate affected paths, and durably journal pre/post recovery intent before mutation (`TX-002`, `TX-005` closed; `TX-001`, `TX-014` narrowed). Direct workspace writes still lack durable staging and guaranteed atomic replacement (`TX-006`).
+|A torn workspace write can require manual recovery despite a durable `RECOVERY_REQUIRED` record; caller-provided scope can omit newly appeared relevant sources, and editor-managed LSP writes remain outside managed isolation.
+|Make scan scope engine-owned; define precise degraded filesystem guarantees; add staged/durable workspace replacement, checksum/quarantine, and fault/kill/restart/filesystem evidence.
 |planned release blocker
 
 |R-024

@@ -1,5 +1,6 @@
 package org.refactorkit.java.recipe
 
+import org.refactorkit.core.JournalState
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.TransactionLog
 import java.nio.file.Files
@@ -220,7 +221,9 @@ class RecipeEngineTest {
         assertTrue(root.resolve("src/main/java/com/example/UserManager.java").exists())
         assertTrue(!root.resolve("src/main/java/com/example/AccountManager.java").exists())
         assertTrue(root.resolve("src/main/java/com/example/UserManager.java").readText().contains("UserManager"))
-        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
+        val records = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords()
+        assertEquals(1, records.size)
+        assertEquals(JournalState.ROLLED_BACK, records.single().state)
     }
 
     @Test

@@ -333,7 +333,6 @@ class RefactorKitCli(
         } ?: run { System.err.println("Transaction not found: $txId"); return 1 }
         return when (val result = PatchEngine(workspaceRoot).rollback(tx)) {
             is ApplyResult.Applied -> {
-                log.delete(transactionId)
                 println("Rolled back transaction $txId.")
                 0
             }
@@ -352,8 +351,6 @@ class RefactorKitCli(
         val engine = PatchEngine(workspaceRoot)
         return when (val result = engine.apply(plan, snap)) {
             is ApplyResult.Applied -> {
-                val log = TransactionLog(workspaceRoot.resolve(".refactorkit/transactions"))
-                log.save(result.transaction)
                 println("Applied. Transaction: ${result.transaction.id.value}")
                 println("To rollback: refactorkit patch rollback ${result.transaction.id.value}")
                 0

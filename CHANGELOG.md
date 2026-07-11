@@ -20,6 +20,12 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added a versioned write-ahead transaction journal owned by `PatchEngine`.
+  Durable lifecycle transitions cover `PREPARED`, `APPLYING`, `APPLIED`,
+  `ROLLING_BACK`, `ROLLED_BACK`, and `RECOVERY_REQUIRED`; retained pre/post
+  images support startup compensation when workspace state is compatible, while
+  conflicts block writes for manual recovery. Journal updates use fsynced
+  same-directory temporary files and required atomic replacement.
 - Added a one-writer workspace lock around managed apply and rollback. The
   snapshot-aware apply path revalidates affected source/target state under the
   lock, and refuses contention, changed files, unsafe lock symlinks, and

@@ -43,12 +43,40 @@ class TransactionLogTest {
             )
         }
         val loaded = log.load(tx.id)
+        val record = log.loadRecord(tx.id)
 
         assertNotNull(loaded)
+        assertEquals(JournalState.APPLIED, record?.state)
+        assertEquals(TransactionJournalRecord.CURRENT_SCHEMA_VERSION, record?.schemaVersion)
         assertEquals(tx.id, loaded.id)
         assertEquals(tx.planId, loaded.planId)
         assertEquals(tx.snapshotHashBefore, loaded.snapshotHashBefore)
         assertEquals(3, loaded.rollbackEdit.edits.size)
+    }
+
+    @Test
+    fun atomicallyAdvancesJournalLifecycleWithoutTemporaryFiles() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-lifecycle")
+        val log = TransactionLog(logDir)
+        val transaction = Transaction(
+            planId = PlanId("plan-lifecycle"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        val prepared = TransactionJournalRecord(
+            transaction = transaction,
+            operation = "test",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        )
+
+        log.prepare(prepared)
+        assertEquals(JournalState.PREPARED, log.loadRecord(transaction.id)?.state)
+        log.update(prepared.copy(state = JournalState.APPLYING))
+        assertEquals(JournalState.APPLYING, log.loadRecord(transaction.id)?.state)
+        assertTrue(Files.list(logDir).use { stream -> stream.noneMatch { it.fileName.toString().contains(".tmp-") } })
     }
 
     @Test

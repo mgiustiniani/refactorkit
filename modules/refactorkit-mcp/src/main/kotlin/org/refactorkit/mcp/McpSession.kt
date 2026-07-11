@@ -179,10 +179,17 @@ class McpSession {
 
     private fun toolProjectScan(args: JsonObject): String {
         val root = args.string("root") ?: missing("root")
-        val path = Paths.get(root)
+        val path = Paths.get(root).toAbsolutePath().normalize()
+        val recoveryErrors = PatchEngine(path).recover()
+        if (recoveryErrors.isNotEmpty()) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.INTERNAL_ERROR,
+                "Workspace recovery required: ${recoveryErrors.joinToString("; ") { it.message }}",
+            )
+        }
         val snap = scanner.scan(path)
         snapshot = snap
-        workspaceRoot = path.toAbsolutePath().normalize()
+        workspaceRoot = path
         return "Scanned ${snap.workspace.root}\nFiles: ${snap.files.size}\nModules: ${snap.modules.size}\nSnapshot: ${snap.hash}"
     }
 
@@ -321,8 +328,6 @@ class McpSession {
         val current = scanner.scan(root)
         return when (val result = PatchEngine(root).apply(plan, current)) {
             is ApplyResult.Applied -> {
-                val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-                log.save(result.transaction)
                 pendingPlans.remove(planId)
                 // Refresh snapshot
                 snapshot = scanner.scan(root)
@@ -344,7 +349,6 @@ class McpSession {
             ?: return "Transaction not found: $txId"
         return when (val result = PatchEngine(root).rollback(tx)) {
             is ApplyResult.Applied -> {
-                log.delete(transactionId)
                 snapshot = scanner.scan(root)
                 "Rolled back transaction $txId."
             }

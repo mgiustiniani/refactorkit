@@ -57,42 +57,31 @@ failure windows below.
 
 ### TX-001 — Sequential writes can escape rollback on I/O failure
 
-Severity: **critical**.
+Status: **substantially narrowed; durable staging remains open under `TX-006`**.
 
-`PatchEngine.applyEdit` writes each file directly in a loop. It does not catch an
-exception from directory creation, read, write, delete, or move and does not
-execute already-collected rollback edits on failure.
+Before mutation, `PatchEngine` now renders the complete logical result, captures
+pre/post images, builds compensation, and durably writes `PREPARED` then
+`APPLYING`. I/O exceptions are caught. If current affected paths still match a
+journaled pre/post image, compensation restores the pre-state and records
+`ROLLED_BACK`; otherwise the durable record becomes `RECOVERY_REQUIRED` and
+future managed writes are blocked. Startup recovery applies the same rule after
+an interrupted `APPLYING` or `ROLLING_BACK` lifecycle.
 
-Examples include disk-full, permission changes, process interruption, device
-errors, file locks, and a race after preflight. If edit N fails after edits 1…N-1,
-the call can throw with a partially changed workspace and no returned
-`Transaction`.
-
-Preflight prevents predictable state errors; it does not make I/O atomic.
-
-Required closure:
-
-- stage writes safely;
-- persist recovery intent before mutation;
-- catch and classify I/O failure;
-- compensate already-applied operations where possible;
-- return an explicit `RECOVERY_REQUIRED` state if compensation is incomplete.
+Workspace file replacement is still direct rather than temp-file staged and
+fsynced. A torn/truncated destination may therefore require manual recovery, and
+power-loss/filesystem capability evidence remains open with `TX-006`.
 
 ### TX-002 — Transaction metadata is persisted after workspace mutation
 
-Severity: **critical**.
+Status: **closed after the audited baseline**.
 
-CLI, daemon, MCP, and LSP `applyPlan` call `PatchEngine.apply` first and call
-`TransactionLog.save` only after `ApplyResult.Applied`. A crash between the first
-workspace write and log save—or after all writes but before save—leaves no durable
-rollback record. A log-write failure has the same outcome.
-
-This directly conflicts with the requirement to write transaction/recovery
-metadata before apply.
-
-Required closure: use a write-ahead journal with lifecycle states such as
-`PREPARED`, `APPLYING`, `APPLIED`, `ROLLING_BACK`, `ROLLED_BACK`, and
-`RECOVERY_REQUIRED`, persisted atomically and durably before/through mutation.
+`PatchEngine` now owns journal persistence. It durably creates a versioned
+`PREPARED` record containing operation, forward edit, transaction compensation,
+and affected-path pre/post images, then atomically advances to `APPLYING` before
+the first workspace write. Successful apply and rollback transition through
+`APPLIED`, `ROLLING_BACK`, and retained `ROLLED_BACK`; incomplete/conflicting
+recovery becomes `RECOVERY_REQUIRED`. CLI, daemon, MCP, LSP, recipes, and tests no
+longer save or delete transaction metadata after mutation.
 
 ### TX-003 — Transaction log paths accept unvalidated transaction IDs
 
@@ -233,19 +222,25 @@ before any workspace write.
 
 ### TX-011 — Transaction records are insufficient for stable audit/recovery
 
-Current records contain ID, plan ID, apply time, pre-snapshot hash, and rollback
-edits. They omit schema version, operation, forward edit, affected-file pre/post
-hashes, post-apply snapshot hash, implementation/API version, lifecycle status,
-validation results, recovery attempts, and integrity checksum.
+Status: **partially closed**.
 
-The log is deleted after successful rollback, removing audit history, and the
-transaction returned by rollback (effectively redo metadata) is discarded.
+Records now contain schema version, operation, forward edit, compensation,
+affected-file pre/post content images, pre-snapshot hash, lifecycle state,
+update time, and failure detail. Successful rollback retains history as
+`ROLLED_BACK`. Remaining stable fields include implementation/API version,
+post-apply workspace snapshot, validation/recovery-attempt history, content
+hashes separated from recovery payloads, and an integrity checksum.
 
 ### TX-012 — Transaction-log persistence is not atomic or corruption-safe
 
-`TransactionLog.save` writes the final JSON path directly. There is no temporary
-file/atomic rename, fsync, checksum, schema migration, quarantine, or structured
-corruption response. A truncated log can throw during `load`.
+Status: **partially closed**.
+
+New records use create-new plus file/directory durable flush. Lifecycle updates
+write and fsync a same-directory temporary file, require atomic replacement, and
+fsync the journal directory. Parsing/schema/path failures remain coded. Still
+open: integrity checksum, schema migration, corrupt-record quarantine, explicit
+filesystem capability reporting, and fault-injected proof for every persistence
+boundary.
 
 ### TX-013 — Rollback does not restore full filesystem state
 
@@ -302,13 +297,13 @@ path occurs.
 
 | Flow | Preflight | Workspace writes | Durable intent before write | Rollback record | Current classification |
 |------|-----------|------------------|-----------------------------|-----------------|------------------------|
-| CLI `--apply` | yes | sequential, in process | no | saved after successful apply | compensatable batch, not crash-safe transaction |
-| Daemon `refactor.apply` | yes | sequential, in process | no | saved after successful apply | compensatable batch; stale session afterward |
-| MCP `apply_refactoring` | yes | sequential, in process | no | saved after successful apply | compensatable batch, not crash-safe transaction |
-| LSP `refactorkit.applyPlan` | yes | sequential, in process | no | saved after successful apply | compensatable batch, not crash-safe transaction |
+| CLI `--apply` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; workspace writes not yet durably staged |
+| Daemon `refactor.apply` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; stale session afterward |
+| MCP `apply_refactoring` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; workspace writes not yet durably staged |
+| LSP `refactorkit.applyPlan` | yes, under lock | sequential, in process | versioned WAL | retained lifecycle record | recoverable managed batch; workspace writes not yet durably staged |
 | LSP native rename/code action | server plans only | editor/client writes | no | no RefactorKit transaction for client write | client-managed edit, not RefactorKit transaction |
-| Recipe apply | per step | sequential transactions | no | one log after each successful step | saga with best-effort compensation |
-| Direct library `PatchEngine.apply` | only with caller-supplied hash | sequential | no | caller responsibility | unsafe to describe as durable transaction |
+| Recipe apply | per step | sequential journaled transactions | per step | retained per-step lifecycle | durable saga boundary remains open |
+| Direct library `PatchEngine.apply` | snapshot-aware, under lock | sequential | versioned WAL | retained lifecycle record | recoverable managed batch; scan scope and durable workspace staging remain open |
 
 ## Requirements criticalities
 

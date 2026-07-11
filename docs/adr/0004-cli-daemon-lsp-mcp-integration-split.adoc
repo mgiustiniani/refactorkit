@@ -51,7 +51,7 @@ Recipes are sagas: each step is applied and logged separately, with reverse best
 
 The link:../transactionality-audit.md[transactionality audit] at commit `5f47ad0` records these open integration findings:
 
-* `TX-002`: CLI, daemon, MCP, and custom LSP apply paths save transaction metadata after workspace mutation, so crashes or log-write failures can leave no durable recovery record.
+* `TX-002` is closed after the audit baseline: `PatchEngine` owns durable write-ahead lifecycle persistence, and CLI, daemon, MCP, custom LSP, and recipes no longer save/delete transaction records after mutation.
 * `TX-003` is closed after the audited baseline: CLI, daemon, LSP, and MCP reject malformed transaction IDs before log access, while the core enforces contained non-symlink record paths and coded failures.
 * `TX-007`: native LSP edits bypass RefactorKit apply and rollback; stale disk snapshots, unsaved buffers, and absent document versions can invalidate client-side application.
 * `TX-008`: recipes are per-step sagas with best-effort compensation; crashes, log failures, compensation failures, and plans not evaluated against one evolving staged workspace can leave partial results.

@@ -222,8 +222,9 @@ the exact previewed plan. `refactorkit.applyPlan` returns `{ "transactionId":
 workspace snapshot, and republishes diagnostics.
 
 `refactorkit.rollback` requires `{ "transactionId": "..." }`. On success it
-loads transaction metadata, rolls the workspace back, deletes the transaction-log
-entry, refreshes the snapshot, republishes diagnostics, and returns:
+loads the applied journal record, transitions through `ROLLING_BACK`, rolls the
+workspace back, retains the record as `ROLLED_BACK`, refreshes the snapshot,
+republishes diagnostics, and returns:
 
 ```json
 { "status": "rolledBack", "transactionId": "..." }
