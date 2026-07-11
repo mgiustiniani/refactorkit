@@ -139,6 +139,12 @@ Status: implementation-informed, needs human review for prioritization.
 |Clients may depend on untested protocol behavior, and MCP privilege or cancellation boundaries could be overstated.
 |Inventory every capability, command, tool, resource, and prompt and pass stable protocol boundary suites.
 |planned release blocker
+
+|R-023
+|PatchEngine preflight now rejects structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions, but interrupted I/O recovery and time-of-check-to-time-of-use races remain unresolved.
+|An I/O interruption after writing starts can still leave partial filesystem changes, and filesystem state can change between preflight validation and a write; preflight evidence must not be interpreted as full atomicity.
+|Add deterministic interrupted-apply recovery and reporting, define filesystem-capability guarantees, and add race/adversarial acceptance evidence before claiming the stable atomicity contract.
+|planned release blocker
 |===
 
 == Technical Debt from Release Plan

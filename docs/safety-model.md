@@ -2,7 +2,7 @@
 
 See AGENTS.md for the authoritative initial architecture and implementation rules.
 
-## Beta operation workflow
+## Preview/apply/rollback workflow
 
 For every mutating operation:
 
@@ -16,13 +16,21 @@ For every mutating operation:
 5. Run diagnostics and relevant tests after apply.
 6. Roll back by transaction ID if verification fails or the change is rejected.
 
+Before the first write, `PatchEngine` validates every path, rejects traversal
+outside the normalized workspace, rejects any symbolic-link component below the
+workspace root, rejects overlapping text edits, and simulates ordered
+create/modify/rename/delete existence transitions. A predictable failure in a
+later edit therefore refuses the entire plan before an earlier edit is written.
+The symbolic-link check is intentionally conservative: even a link pointing back
+inside the workspace is refused to avoid path-identity and race ambiguity.
+
 Rollback restores files tracked by the transaction. It does not repair external
 projects, generated artifacts, build caches, legal/provenance obligations, or
 manual edits made after apply.
 
-## Beta preview warnings and manual review
+## Preview warnings and manual review
 
-For `v0.2.0-beta`, preview-warning wording has been reviewed against the
+Since `v0.2.0-beta`, preview-warning wording has been reviewed against the
 operation documentation for the shipped and experimental Java operations. The
 warnings are part of the safety contract: a preview is review evidence, not an
 automatic proof that the change is complete.

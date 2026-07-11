@@ -36,9 +36,9 @@ Status: implementation-informed, needs-review for priority and completeness.
 |implementation-informed
 
 |C-TECH-006
-|Patch application must reject stale snapshot hashes, overlapping edits, and paths outside the workspace root.
-|`PatchEngine.validate` and `PatchEngine.validateEdits`.
-|implementation-informed
+|Patch application must reject stale snapshot hashes, overlapping edits, paths outside the workspace root, and any symbolic-link component below the workspace root. Before its first write, it must simulate ordered file existence/type transitions so predictable missing-file or existing-file refusals cannot leave earlier edits applied.
+|`PatchEngine.validate`, `PatchEngine.validateEdits`, and `PatchEngine.validateRuntimeState`; ADR 0002; core tests.
+|implementation-informed; interrupted I/O and TOCTOU safety remain open
 
 |C-TECH-007
 |Rollback metadata is stored as transaction logs under the target workspace.

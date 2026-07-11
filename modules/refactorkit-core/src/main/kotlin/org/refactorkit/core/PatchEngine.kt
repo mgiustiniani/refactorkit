@@ -1,6 +1,7 @@
 package org.refactorkit.core
 
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
@@ -22,6 +23,7 @@ class PatchEngine(
             add(Diagnostic("Project changed since preview; regenerate the plan", Diagnostic.Severity.ERROR, code = "snapshot.changed"))
         }
         addAll(validateEdits(plan.workspaceEdit))
+        addAll(validateRuntimeState(plan.workspaceEdit))
     }
 
     /** Apply a validated preview plan. Aborts if snapshot hash mismatch. */
@@ -39,7 +41,7 @@ class PatchEngine(
      * different from the pre-apply state.
      */
     fun rollback(transaction: Transaction): ApplyResult {
-        val errors = validateEdits(transaction.rollbackEdit)
+        val errors = validateEdits(transaction.rollbackEdit) + validateRuntimeState(transaction.rollbackEdit)
         if (errors.any { it.severity == Diagnostic.Severity.ERROR }) {
             return ApplyResult.Refused(errors)
         }
@@ -51,7 +53,11 @@ class PatchEngine(
     private fun validateEdits(edit: WorkspaceEdit): List<Diagnostic> = buildList {
         edit.edits.forEach { fileEdit ->
             validateInsideWorkspace(fileEdit.path)?.let(::add)
-            if (fileEdit is FileEdit.Rename) validateInsideWorkspace(fileEdit.newPath)?.let(::add)
+            validateNoSymbolicLinkTraversal(fileEdit.path)?.let(::add)
+            if (fileEdit is FileEdit.Rename) {
+                validateInsideWorkspace(fileEdit.newPath)?.let(::add)
+                validateNoSymbolicLinkTraversal(fileEdit.newPath)?.let(::add)
+            }
             if (fileEdit is FileEdit.Modify) validateNoOverlaps(fileEdit)?.let(::add)
         }
     }
@@ -137,6 +143,105 @@ class PatchEngine(
         } else null
     }
 
+    private fun validateNoSymbolicLinkTraversal(path: Path): Diagnostic? {
+        val absolute = resolveInsideWorkspace(path)
+        if (!absolute.startsWith(normalizedRoot)) return null
+        var current = normalizedRoot
+        for (component in normalizedRoot.relativize(absolute)) {
+            current = current.resolve(component)
+            if (Files.isSymbolicLink(current)) {
+                return Diagnostic(
+                    "Edit path traverses a symbolic link: $path",
+                    Diagnostic.Severity.ERROR,
+                    code = "path.symbolicLink",
+                )
+            }
+        }
+        return null
+    }
+
+    /**
+     * Simulate file existence/type transitions before the first workspace write.
+     * This prevents a predictable later refusal from leaving earlier edits applied.
+     */
+    private fun validateRuntimeState(edit: WorkspaceEdit): List<Diagnostic> {
+        val states = mutableMapOf<Path, VirtualFileState>()
+        fun state(path: Path): VirtualFileState {
+            val absolute = resolveInsideWorkspace(path)
+            if (!absolute.startsWith(normalizedRoot)) return VirtualFileState(false, false)
+            return states.getOrPut(absolute) {
+                VirtualFileState(
+                    exists = Files.exists(absolute, LinkOption.NOFOLLOW_LINKS),
+                    regular = Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS),
+                )
+            }
+        }
+        val diagnostics = mutableListOf<Diagnostic>()
+        edit.edits.forEach { fileEdit ->
+            when (fileEdit) {
+                is FileEdit.Create -> {
+                    val current = state(fileEdit.path)
+                    if (current.exists && !fileEdit.overwrite) {
+                        diagnostics += Diagnostic(
+                            "Refusing to overwrite existing file: ${fileEdit.path}",
+                            Diagnostic.Severity.ERROR,
+                            code = "file.exists",
+                        )
+                    } else {
+                        current.exists = true
+                        current.regular = true
+                    }
+                }
+                is FileEdit.Delete -> {
+                    val current = state(fileEdit.path)
+                    if (!current.exists) {
+                        diagnostics += Diagnostic(
+                            "Cannot delete missing file: ${fileEdit.path}",
+                            Diagnostic.Severity.ERROR,
+                            code = "file.missing",
+                        )
+                    } else {
+                        current.exists = false
+                        current.regular = false
+                    }
+                }
+                is FileEdit.Rename -> {
+                    val source = state(fileEdit.path)
+                    val target = state(fileEdit.newPath)
+                    when {
+                        !source.exists -> diagnostics += Diagnostic(
+                            "Cannot rename missing file: ${fileEdit.path}",
+                            Diagnostic.Severity.ERROR,
+                            code = "file.missing",
+                        )
+                        target.exists -> diagnostics += Diagnostic(
+                            "Refusing to overwrite rename target: ${fileEdit.newPath}",
+                            Diagnostic.Severity.ERROR,
+                            code = "file.exists",
+                        )
+                        else -> {
+                            target.exists = true
+                            target.regular = source.regular
+                            source.exists = false
+                            source.regular = false
+                        }
+                    }
+                }
+                is FileEdit.Modify -> {
+                    val current = state(fileEdit.path)
+                    if (!current.exists || !current.regular) {
+                        diagnostics += Diagnostic(
+                            "Cannot modify missing file: ${fileEdit.path}",
+                            Diagnostic.Severity.ERROR,
+                            code = "file.missing",
+                        )
+                    }
+                }
+            }
+        }
+        return diagnostics
+    }
+
     private fun validateNoOverlaps(edit: FileEdit.Modify): Diagnostic? {
         val sorted = edit.textEdits.sortedWith(
             compareBy<TextEdit> { it.range.start.line }.thenBy { it.range.start.character },
@@ -148,6 +253,11 @@ class PatchEngine(
     }
 
     private fun resolveInsideWorkspace(path: Path): Path = normalizedRoot.resolve(path).normalize()
+
+    private data class VirtualFileState(
+        var exists: Boolean,
+        var regular: Boolean,
+    )
 }
 
 sealed interface ApplyResult {

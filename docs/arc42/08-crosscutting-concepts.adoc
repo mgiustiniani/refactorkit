@@ -12,11 +12,14 @@ All mutating operations are represented as `PatchPlan`s containing operation nam
 
 * only preview plans can be applied;
 * current snapshot hash matches the preview hash;
-* edit paths stay inside the workspace root;
-* text edits do not overlap;
-* create/rename operations do not overwrite existing files by default.
+* edit paths stay inside the workspace root, retaining the `path.outsideWorkspace` diagnostic;
+* every symbolic-link path component below the workspace root is refused with `path.symbolicLink`, conservatively even when the link resolves inside the workspace;
+* text edits do not overlap; and
+* ordered create, modify, rename, and delete operations have valid file existence/type transitions.
 
-Status: implementation-informed. For API `1.0`, these behaviors plus edit ordering, symlink/path traversal handling, filesystem-dependent atomicity, interrupted/partial apply recovery, and transaction-log corruption outcomes become normative only after stable acceptance evidence. No production workspace write may bypass `PatchEngine`.
+The ordered state simulation runs before the first write. It prevents a predictable later missing-file or existing-file refusal from leaving an earlier edit applied, while still allowing valid sequences such as modify then rename. Tests cover an outside-pointing symlink with no write, create followed by a missing-file delete with no partial create, and a successful modify-then-rename sequence.
+
+Status: implementation-informed for structural/overlap validation, conservative symlink refusal, and ordered state simulation. This preflight is not full filesystem atomicity: interrupted I/O recovery and time-of-check-to-time-of-use races remain open. For API `1.0`, filesystem-dependent atomicity, interrupted/partial apply recovery, and transaction-log corruption outcomes become normative only after stable acceptance evidence. No production workspace write may bypass `PatchEngine`.
 
 == Rollback and Traceability
 

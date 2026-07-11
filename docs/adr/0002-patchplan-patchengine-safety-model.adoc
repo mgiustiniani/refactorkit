@@ -18,6 +18,10 @@ Represent each planned change as a `PatchPlan` containing a workspace edit, affe
 
 At `apiVersion=1.0`, edit ordering, stale-snapshot rejection, overlap rejection, workspace and symlink boundaries, atomicity by filesystem capability, partial-failure reporting, transaction-log handling, apply, and rollback behavior are normative versioned contracts. Production workspace writes must not bypass `PatchEngine`.
 
+Before the first write, `PatchEngine` validates structural paths and overlapping edits, then simulates the ordered create, modify, rename, and delete operations. The simulation tracks file existence and type transitions so that a predictable later refusal caused by a missing or existing file does not occur after earlier edits have already been applied.
+
+Every symbolic-link path component below the workspace root is rejected with diagnostic code `path.symbolicLink`, including links that resolve to a location inside the workspace. This conservative rule complements the existing `path.outsideWorkspace` rejection.
+
 Where an operation contract requires diagnostics, compare diagnostics before preview, after preview simulation, after apply, and after rollback. Validation regression beyond the approved plan causes refusal rather than an unreported or best-effort write.
 
 == Consequences
@@ -28,3 +32,17 @@ Where an operation contract requires diagnostics, compare diagnostics before pre
 * Refactoring implementations must produce structured edits instead of mutating files directly.
 * Complex operations may need additional diagnostics before they can be safely accepted.
 * Stable acceptance requires property, stress, corruption, interruption, unsafe-path, and hash-restoration evidence; the accepted architecture does not by itself prove those behaviors complete.
+* Preflight validation reduces predictable partial writes but does not provide full filesystem atomicity.
+
+== Evidence
+
+The late first v1 S1 `PatchEngine` hardening slice includes test evidence for:
+
+* rejecting a symbolic link to a location outside the workspace without writing;
+* rejecting a create followed by a delete of a missing file without leaving the earlier create applied; and
+* accepting a valid modify-then-rename sequence through ordered state simulation.
+
+== Residual Risks and Open Scope
+
+* Recovery from interrupted I/O remains open.
+* Time-of-check-to-time-of-use races between validation and filesystem writes remain open.

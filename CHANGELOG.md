@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`1.0.0-rc.1-SNAPSHOT`)
 
+- Hardened `PatchEngine` preflight validation: all ordered file-state transitions
+  are simulated before the first write, so predictable later missing/existing-file
+  failures cannot leave earlier edits applied. Workspace edits that traverse a
+  symbolic-link component are refused with `path.symbolicLink` before writes.
 - Advanced main toward the first stable-contract release candidate after verified
   `v0.3.0` publication. The implementation version is
   `1.0.0-rc.1-SNAPSHOT`; API baseline remains `0.2` until the API `1.0` contract

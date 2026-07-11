@@ -62,6 +62,18 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |`docs/external-class-importer.md`, importer tests.
 |implementation-informed
 
+|QS-SAFE-006
+|Safety
+|When any edit path contains a symbolic-link component below the workspace root, RefactorKit refuses it with `path.symbolicLink` before writing, even when the link resolves inside the workspace; ordinary path escapes continue to use `path.outsideWorkspace`.
+|`PatchEngineTest.refusesSymbolicLinkTraversalWithoutWritingOutsideWorkspace`; `PatchEngine.validateNoSymbolicLinkTraversal`.
+|implementation-informed
+
+|QS-SAFE-007
+|Safety
+|Before the first write, RefactorKit simulates ordered create, modify, rename, and delete existence/type transitions. A later predictable missing-file or existing-file refusal leaves earlier edits unapplied, while a valid modify-then-rename sequence succeeds.
+|`PatchEngineTest.preflightRefusalLeavesEarlierEditsUnapplied`, `PatchEngineTest.preflightSupportsSequentialModifyThenRename`; `PatchEngine.validateRuntimeState`.
+|implementation-informed; interrupted I/O and TOCTOU races remain open
+
 |QS-CORR-001
 |Correctness
 |When clean JDT analysis resolves the safe-delete target binding, RefactorKit refuses deletion for binding-matched references without conflating unrelated same-simple-name types in other packages. If JDT parse/classpath warnings or the exact target binding prevent semantic evidence, it uses the lexical scan and warns explicitly.

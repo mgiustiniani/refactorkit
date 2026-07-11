@@ -57,6 +57,78 @@ class PatchEngineTest {
     }
 
     @Test
+    fun refusesSymbolicLinkTraversalWithoutWritingOutsideWorkspace() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val outside = Files.createTempDirectory("refactorkit-outside")
+        Files.createSymbolicLink(root.resolve("linked"), outside)
+        val plan = PatchPlan(
+            operation = "test",
+            snapshotHash = "snapshot",
+            confidence = 1.0,
+            summary = "symbolic link escape test",
+            affectedFiles = setOf(Path.of("linked", "escaped.txt")),
+            workspaceEdit = WorkspaceEdit(listOf(
+                FileEdit.Create(Path.of("linked", "escaped.txt"), "must not escape"),
+            )),
+        )
+
+        val result = PatchEngine(root).apply(plan, "snapshot")
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "path.symbolicLink" })
+        assertFalse(Files.exists(outside.resolve("escaped.txt")))
+    }
+
+    @Test
+    fun preflightRefusalLeavesEarlierEditsUnapplied() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val plan = PatchPlan(
+            operation = "test",
+            snapshotHash = "snapshot",
+            confidence = 1.0,
+            summary = "preflight all edits",
+            affectedFiles = setOf(Path.of("Created.java"), Path.of("Missing.java")),
+            workspaceEdit = WorkspaceEdit(listOf(
+                FileEdit.Create(Path.of("Created.java"), "class Created {}\n"),
+                FileEdit.Delete(Path.of("Missing.java")),
+            )),
+        )
+
+        val result = PatchEngine(root).apply(plan, "snapshot")
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "file.missing" })
+        assertFalse(Files.exists(root.resolve("Created.java")))
+    }
+
+    @Test
+    fun preflightSupportsSequentialModifyThenRename() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        Files.writeString(root.resolve("Old.java"), "class Old {}\n")
+        val edit = WorkspaceEdit(listOf(
+            FileEdit.Modify(
+                Path.of("Old.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 9)), "New")),
+            ),
+            FileEdit.Rename(Path.of("Old.java"), Path.of("New.java")),
+        ))
+        val plan = PatchPlan(
+            operation = "test",
+            snapshotHash = "snapshot",
+            confidence = 1.0,
+            summary = "sequential virtual state",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+
+        val result = PatchEngine(root).apply(plan, "snapshot")
+
+        assertIs<ApplyResult.Applied>(result)
+        assertFalse(Files.exists(root.resolve("Old.java")))
+        assertEquals("class New {}\n", Files.readString(root.resolve("New.java")))
+    }
+
+    @Test
     fun rollbackRestoresModifyCreateRenameAndDeleteEdits() {
         val root = Files.createTempDirectory("refactorkit-test")
         Files.writeString(root.resolve("Modify.java"), "hello world\n")
