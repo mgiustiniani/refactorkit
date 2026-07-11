@@ -283,9 +283,13 @@ owner-only `.quarantine` directory and reported as `transaction.quarantined`.
 Any retained quarantine record blocks list/load/new writes and therefore startup
 recovery until explicit manual review/removal; quarantine failure is separately
 coded. Still open: explicit journal-filesystem capability reporting and
-fault-injected proof for every journal persistence boundary. Workspace staging,
-partial commit, compensation failure, and restart retry now have deterministic
-in-process evidence.
+real kill/torn-write proof for every journal persistence boundary. Deterministic
+journal hooks now prove that a failure after new-record force leaves a complete
+`PREPARED` intent, a lifecycle temp-file failure preserves the prior record and
+cleans the temp, and a post-atomic-move/pre-directory-force failure leaves the
+complete new state readable by restart. Workspace staging, partial commit,
+compensation failure, and restart retry also have deterministic in-process
+evidence.
 
 ### TX-013 — Rollback filesystem metadata and directory state
 

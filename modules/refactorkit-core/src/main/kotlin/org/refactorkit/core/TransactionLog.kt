@@ -20,7 +20,24 @@ import java.util.stream.Collectors
  * Records are created durably before workspace mutation and replaced through a
  * same-directory temporary file plus atomic move for every lifecycle transition.
  */
-class TransactionLog(logDir: Path) {
+enum class JournalFaultPoint {
+    AFTER_NEW_FILE_FORCE,
+    AFTER_UPDATE_TEMP_FORCE,
+    AFTER_UPDATE_ATOMIC_MOVE,
+}
+
+fun interface JournalFaultInjector {
+    fun inject(point: JournalFaultPoint, path: Path)
+
+    companion object {
+        val NONE = JournalFaultInjector { _, _ -> }
+    }
+}
+
+class TransactionLog(
+    logDir: Path,
+    private val faultInjector: JournalFaultInjector = JournalFaultInjector.NONE,
+) {
     val logDir: Path = logDir.toAbsolutePath().normalize()
 
     /** Compatibility helper for importing an already-applied transaction. */
@@ -209,6 +226,7 @@ class TransactionLog(logDir: Path) {
                 channel.force(true)
             }
             setOwnerOnlyPermissions(file, directory = false)
+            faultInjector.inject(JournalFaultPoint.AFTER_NEW_FILE_FORCE, file)
             forceDirectory()
         } catch (error: TransactionLogException) {
             throw error
@@ -229,6 +247,7 @@ class TransactionLog(logDir: Path) {
                 channel.force(true)
             }
             setOwnerOnlyPermissions(temporary, directory = false)
+            faultInjector.inject(JournalFaultPoint.AFTER_UPDATE_TEMP_FORCE, temporary)
             try {
                 Files.move(
                     temporary,
@@ -243,6 +262,7 @@ class TransactionLog(logDir: Path) {
                     error,
                 )
             }
+            faultInjector.inject(JournalFaultPoint.AFTER_UPDATE_ATOMIC_MOVE, file)
             forceDirectory()
         } catch (error: TransactionLogException) {
             Files.deleteIfExists(temporary)

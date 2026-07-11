@@ -115,7 +115,10 @@ external-importer checks:
 
 ## Transaction fault injection
 
-Core tests inject deterministic failures after staged-file force and after each
+Core tests inject journal failures after new-record force, lifecycle temp-file
+force, and lifecycle atomic move. They prove restart-visible complete records or
+preservation of the previous record plus temporary-file cleanup at each boundary.
+Workspace tests inject deterministic failures after staged-file force and after each
 committed workspace image. Acceptance covers unchanged content and temporary-file
 cleanup on staging disk-full, full compensation after a partial multi-file
 commit, durable `RECOVERY_REQUIRED` after compensation failure, and successful

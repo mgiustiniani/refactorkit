@@ -168,6 +168,100 @@ class TransactionLogTest {
     }
 
     @Test
+    fun newRecordPostForceFailureLeavesCompletePreparedIntentForRestart() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-fault")
+        val transaction = Transaction(
+            id = TransactionId.new(),
+            planId = PlanId("plan-new-record-fault"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        val prepared = TransactionJournalRecord(
+            transaction = transaction,
+            operation = "newRecordFault",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        )
+        val failing = TransactionLog(logDir, JournalFaultInjector { point, _ ->
+            if (point == JournalFaultPoint.AFTER_NEW_FILE_FORCE) throw java.io.IOException("injected journal directory failure")
+        })
+
+        assertFailsWith<TransactionLogException> { failing.prepare(prepared) }
+
+        val restartRecord = TransactionLog(logDir).loadRecord(transaction.id)
+        assertEquals(JournalState.PREPARED, restartRecord?.state)
+        assertEquals(listOf(JournalState.PREPARED), restartRecord?.history?.map(JournalEvent::state))
+    }
+
+    @Test
+    fun updateTempFailurePreservesPreviousJournalRecordAndCleansTemp() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-fault")
+        val transaction = Transaction(
+            id = TransactionId.new(),
+            planId = PlanId("plan-temp-fault"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        val prepared = TransactionJournalRecord(
+            transaction = transaction,
+            operation = "tempFault",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        )
+        TransactionLog(logDir).prepare(prepared)
+        val failing = TransactionLog(logDir, JournalFaultInjector { point, _ ->
+            if (point == JournalFaultPoint.AFTER_UPDATE_TEMP_FORCE) throw java.io.IOException("injected temp failure")
+        })
+
+        assertFailsWith<TransactionLogException> {
+            failing.update(prepared.copy(state = JournalState.APPLYING))
+        }
+
+        assertEquals(JournalState.PREPARED, TransactionLog(logDir).loadRecord(transaction.id)?.state)
+        assertTrue(Files.list(logDir).use { stream ->
+            stream.noneMatch { it.fileName.toString().startsWith(".${transaction.id.value}.json.tmp-") }
+        })
+    }
+
+    @Test
+    fun postMoveFailureLeavesCompleteNewJournalForRestart() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-fault")
+        val transaction = Transaction(
+            id = TransactionId.new(),
+            planId = PlanId("plan-move-fault"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        val prepared = TransactionJournalRecord(
+            transaction = transaction,
+            operation = "moveFault",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        )
+        TransactionLog(logDir).prepare(prepared)
+        val failing = TransactionLog(logDir, JournalFaultInjector { point, _ ->
+            if (point == JournalFaultPoint.AFTER_UPDATE_ATOMIC_MOVE) throw java.io.IOException("injected directory force failure")
+        })
+
+        assertFailsWith<TransactionLogException> {
+            failing.update(prepared.copy(state = JournalState.APPLYING))
+        }
+
+        val restartRecord = TransactionLog(logDir).loadRecord(transaction.id)
+        assertEquals(JournalState.APPLYING, restartRecord?.state)
+        assertEquals(
+            listOf(JournalState.PREPARED, JournalState.APPLYING),
+            restartRecord?.history?.map(JournalEvent::state),
+        )
+    }
+
+    @Test
     fun detectsChecksumTampering() {
         val logDir = Files.createTempDirectory("refactorkit-txlog-checksum")
         val log = TransactionLog(logDir)
