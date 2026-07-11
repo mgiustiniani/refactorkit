@@ -65,6 +65,15 @@ env -u JAVA_HOME "$RK" scan samples/java-jpa-simple
 env -u JAVA_HOME "$RK" scan samples/java-multimodule
 ```
 
+For a source build, run the packaged-runtime signed-selector smoke test. It
+checks that the embedded image contains `java.compiler`, executes JDT-backed
+`definition` and `references` using only that image, and verifies its temporary
+fixture remains unchanged:
+
+```bash
+env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
+```
+
 Optionally add the extracted launcher to `PATH`:
 
 ```bash

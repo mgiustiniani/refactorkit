@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`1.0.0-rc.1-SNAPSHOT`)
 
+- Fixed the self-contained jlink runtime for JDT-backed signed selectors by
+  adding `java.compiler`. Packaged-runtime smoke coverage now checks the module,
+  executes signed `definition`/`references` with `JAVA_HOME` unset, verifies
+  overload precision, and proves fixture sources remain unchanged.
 - Completed a transactionality/requirements audit. Current flows are explicitly
   classified as preflighted compensatable batches rather than crash-safe durable
   transactions; critical `v1.0.0-rc.1` blockers cover write-ahead journaling,

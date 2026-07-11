@@ -120,6 +120,10 @@ P7 packaging verification now covers the self-contained runtime artifact:
 - CI builds `refactorkit-runtime.zip` and writes
   `refactorkit-runtime.zip.sha256`.
 - CI verifies the checksum with `sha256sum -c` before uploading artifacts.
+- CI runs `:modules:refactorkit-cli:smokePackagedCli` with `JAVA_HOME` unset.
+  The task checks bundled `java.compiler`, runs signed-selector `definition` and
+  `references` against a temporary Java fixture, checks overload precision, and
+  verifies source hashes are unchanged.
 - CI runs the packaged launcher with `JAVA_HOME` unset.
 - CI scans Maven, Gradle, Spring, JPA, and multi-module samples using the
   packaged launcher.

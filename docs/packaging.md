@@ -120,6 +120,7 @@ installation, run the smoke command with `JAVA_HOME` unset:
 ```bash
 env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
 env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/java-maven-simple
+env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
 ```
 
 The launcher resolves its runtime relative to the package directory:
@@ -139,14 +140,18 @@ bin\refactorkit.bat
 Default `jlink` module set:
 
 ```text
-java.base,java.logging,java.xml,jdk.unsupported
+java.base,java.compiler,java.logging,java.xml,jdk.unsupported
 ```
+
+`java.compiler` is required by JDT-backed signed member lookups through
+`javax.lang.model.SourceVersion`; omitting it causes the packaged CLI to fail even
+when the host has a full JDK.
 
 Override if needed:
 
 ```bash
 ./gradlew :modules:refactorkit-cli:jlinkRuntime \
-  -Prefactorkit.runtime.modules=java.base,java.logging,java.xml,jdk.unsupported
+  -Prefactorkit.runtime.modules=java.base,java.compiler,java.logging,java.xml,jdk.unsupported
 ```
 
 ## Verification
@@ -156,6 +161,9 @@ CI packaging verification currently checks:
 - `refactorkit-runtime.zip` is built;
 - `refactorkit-runtime.zip.sha256` is generated and verified with
   `sha256sum -c`;
+- the packaged runtime module list contains `java.compiler`;
+- signed JDT-backed `definition` and `references` run through the packaged
+  launcher with `JAVA_HOME` unset and leave fixture sources unchanged;
 - the packaged launcher runs with `JAVA_HOME` unset;
 - packaged `scan` succeeds for Maven, Gradle, Spring, JPA, and multi-module
   samples;

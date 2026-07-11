@@ -70,6 +70,7 @@ jobs:
           rm -rf release-smoke
           mkdir release-smoke
           unzip -q "refactorkit-runtime-${version}-linux-x86_64.zip" -d release-smoke
+          env -u JAVA_HOME bash scripts/smoke-packaged-cli.sh release-smoke/refactorkit
           env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit --help
           env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit scan samples/java-maven-simple
 

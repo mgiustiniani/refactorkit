@@ -40,7 +40,7 @@ tasks.test {
 // ── self-contained CLI packaging ─────────────────────────────────────────────
 
 val runtimeModules = providers.gradleProperty("refactorkit.runtime.modules")
-    .orElse("java.base,java.logging,java.xml,jdk.unsupported")
+    .orElse("java.base,java.compiler,java.logging,java.xml,jdk.unsupported")
 
 val packageDir = layout.buildDirectory.dir("package/refactorkit")
 val runtimeDir = layout.buildDirectory.dir("jlink/runtime")
@@ -57,7 +57,7 @@ fun javaTool(toolName: String): String {
  *
  * Override modules if needed:
  *   ./gradlew :modules:refactorkit-cli:jlinkRuntime \
- *     -Prefactorkit.runtime.modules=java.base,java.logging,java.xml,jdk.unsupported
+ *     -Prefactorkit.runtime.modules=java.base,java.compiler,java.logging,java.xml,jdk.unsupported
  */
 tasks.register<Exec>("jlinkRuntime") {
     group = "distribution"
@@ -145,6 +145,20 @@ tasks.register("refactorkitRuntimeDist") {
         out.resolve("bin/refactorkit").setExecutable(true)
         println("Self-contained RefactorKit CLI package: ${out.absolutePath}")
     }
+}
+
+tasks.register<Exec>("smokePackagedCli") {
+    group = "verification"
+    description = "Smoke-test signed JDT lookups using only the packaged jlink runtime."
+    dependsOn("refactorkitRuntimeDist")
+
+    workingDir = rootProject.projectDir
+    environment.remove("JAVA_HOME")
+    commandLine(
+        "bash",
+        rootProject.file("scripts/smoke-packaged-cli.sh").absolutePath,
+        packageDir.get().asFile.absolutePath,
+    )
 }
 
 tasks.register<Zip>("refactorkitRuntimeZip") {
