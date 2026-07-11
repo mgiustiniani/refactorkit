@@ -75,8 +75,11 @@ hooks now cover post-force staging and each committed image. Tests prove a
 staging disk-full failure leaves content unchanged and removes temporary files,
 a failure after the first of multiple replacements compensates every path, and
 a second injected compensation failure persists `RECOVERY_REQUIRED` before a
-clean restart retries and completes compensation. Real process-kill, power-loss,
-torn-journal, and mounted-filesystem evidence remains mandatory before RC.
+clean restart retries and completes compensation. A subprocess acceptance test now force-kills a real JVM after the first durable
+replacement of a two-file apply, verifies the retained `APPLYING` WAL and mixed
+pre/post workspace state, then starts a clean engine and proves exact
+compensation to `ROLLED_BACK`. Power-loss, torn-journal, and mounted-filesystem
+evidence remain mandatory before RC.
 
 ### TX-002 — Transaction metadata is persisted after workspace mutation
 
