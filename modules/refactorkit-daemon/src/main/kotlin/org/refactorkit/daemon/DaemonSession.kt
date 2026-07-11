@@ -292,7 +292,7 @@ class DaemonSession {
             }
             is ApplyResult.Refused -> {
                 val msg = result.diagnostics.joinToString("; ") { it.message }
-                throw JsonRpcException(JsonRpcErrorCodes.SNAPSHOT_CHANGED, msg)
+                throw JsonRpcException(JsonRpcErrorCodes.applyRefusalCode(result.diagnostics), msg)
             }
         }
     }
@@ -339,12 +339,10 @@ class DaemonSession {
             }
             is ApplyResult.Refused -> {
                 val msg = result.diagnostics.joinToString("; ") { it.message }
-                val code = when {
-                    result.diagnostics.any { it.code == "rollback.conflict" } -> JsonRpcErrorCodes.ROLLBACK_CONFLICT
-                    result.diagnostics.any { it.code == "transaction.recoveryRequired" } -> JsonRpcErrorCodes.RECOVERY_REQUIRED
-                    else -> JsonRpcErrorCodes.INTERNAL_ERROR
-                }
-                throw JsonRpcException(code, "Rollback refused: $msg")
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.rollbackRefusalCode(result.diagnostics),
+                    "Rollback refused: $msg",
+                )
             }
         }
     }

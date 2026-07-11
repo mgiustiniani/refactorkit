@@ -35,9 +35,14 @@ surfaces should map it to a stable exit-code category and human-readable message
 | `document-version-mismatch` | LSP version is stale/non-monotonic, versionable edits are unsupported, or managed disk writes would diverge from open buffers. | `DOCUMENT_VERSION_MISMATCH` (`-32007`) |
 | `rollback-conflict` | Affected path differs from its exact post-apply journal image. | `ROLLBACK_CONFLICT` (`-32005`) |
 | `recovery-required` | Interrupted apply/rollback cannot be compensated automatically or journal recovery fails. | `RECOVERY_REQUIRED` (`-32006`) |
-| `diagnostics-failure` | Apply/rollback diagnostics report failure or post-apply validation fails. | `INTERNAL_ERROR` until specialized code exists |
+| `plan-validation-failed` | Edit overlap/range/render/status validation fails. | `PLAN_VALIDATION_FAILED` (`-32008`) |
+| `workspace-locked` | Another managed writer holds the workspace lock or lock acquisition fails. | `WORKSPACE_LOCKED` (`-32009`) |
+| `filesystem-unsupported` | Required atomic move or durable force capability is unavailable. | `FILESYSTEM_UNSUPPORTED` (`-32010`) |
+| `apply-failed` | WAL preparation/persistence or compensated managed apply fails. | `APPLY_FAILED` (`-32011`) |
+| `unsafe-path` | Path escapes the workspace or traverses a symbolic link/unsafe lock path. | `UNSAFE_PATH` (`-32012`) |
+| `file-conflict` | Required source is missing or a target already exists. | `FILE_CONFLICT` (`-32013`) |
+| `diagnostics-failure` | Apply/rollback diagnostics report failure or post-apply validation fails. | Reserved for the diagnostics-gate workstream (`TX-015`) |
 | `unsupported-operation` | Method, command, operation, language, or refactoring is not supported. | `METHOD_NOT_FOUND` or `INVALID_PARAMS` |
-| `unsafe-path` | Path escapes the workspace root or was not part of the scanned snapshot. | `INVALID_PARAMS` |
 | `conflict-or-license-policy` | Naming conflict, overwrite refusal, unknown/risky license, or license policy block. | `PLAN_REFUSED` or `INVALID_PARAMS` |
 
 ## CLI compatibility baseline

@@ -322,15 +322,20 @@ approval token/state. Calling apply with a preview plan is treated as sufficient
 The stable contract must define whether explicit apply invocation is approval or
 whether approval is a separately auditable transition.
 
-### TX-017 — Integration error mapping is inconsistent
+### TX-017 — Integration error mapping
 
-Status: **partially closed**.
+Status: **closed after the audited baseline**.
 
-Daemon/LSP rollback post-image conflicts now map to stable
-`ROLLBACK_CONFLICT (-32005)` and incomplete recovery maps to
-`RECOVERY_REQUIRED (-32006)`; force remains explicit. Apply paths still map many
-`ApplyResult.Refused` causes to `SNAPSHOT_CHANGED`, even for overlap, unsafe path,
-missing file, collision, capability refusal, or another validation error.
+Core-owned deterministic mapping now classifies every managed apply refusal by
+diagnostic code and risk precedence. Snapshot/precondition changes remain
+`SNAPSHOT_CHANGED (-32002)`; recovery is `RECOVERY_REQUIRED (-32006)`; validation,
+lock, filesystem capability, unsafe path, file conflict, and apply/journal failures
+map respectively to `PLAN_VALIDATION_FAILED (-32008)`, `WORKSPACE_LOCKED (-32009)`,
+`FILESYSTEM_UNSUPPORTED (-32010)`, `UNSAFE_PATH (-32012)`, `FILE_CONFLICT
+(-32013)`, and `APPLY_FAILED (-32011)`. Rollback uses the same central policy for
+conflict, recovery, path/filesystem, and apply failures. Daemon and LSP throw these
+stable codes; MCP refusal text includes the mapped numeric category. Table-driven
+core tests prove category coverage and order-independent highest-risk precedence.
 
 ### TX-018 — Daemon state refresh after mutation
 

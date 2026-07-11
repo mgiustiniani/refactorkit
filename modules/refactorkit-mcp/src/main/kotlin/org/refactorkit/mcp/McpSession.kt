@@ -338,7 +338,8 @@ class McpSession {
                 "Applied successfully.\nTransaction ID: ${result.transaction.id.value}\nTo rollback: use tool rollback_refactoring with transactionId=${result.transaction.id.value}"
             }
             is ApplyResult.Refused -> {
-                "Apply refused: ${result.diagnostics.joinToString("; ") { it.message }}"
+                val code = JsonRpcErrorCodes.applyRefusalCode(result.diagnostics)
+                "Apply refused [$code]: ${result.diagnostics.joinToString("; ") { it.message }}"
             }
         }
     }
@@ -359,7 +360,10 @@ class McpSession {
                 snapshot = scanner.scan(root)
                 "${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId."
             }
-            is ApplyResult.Refused -> "Rollback refused: ${result.diagnostics.joinToString("; ") { it.message }}"
+            is ApplyResult.Refused -> {
+                val code = JsonRpcErrorCodes.rollbackRefusalCode(result.diagnostics)
+                "Rollback refused [$code]: ${result.diagnostics.joinToString("; ") { it.message }}"
+            }
         }
     }
 

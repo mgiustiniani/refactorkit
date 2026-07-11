@@ -41,6 +41,35 @@ object JsonRpcErrorCodes {
     const val ROLLBACK_CONFLICT = -32005
     const val RECOVERY_REQUIRED = -32006
     const val DOCUMENT_VERSION_MISMATCH = -32007
+    const val PLAN_VALIDATION_FAILED = -32008
+    const val WORKSPACE_LOCKED = -32009
+    const val FILESYSTEM_UNSUPPORTED = -32010
+    const val APPLY_FAILED = -32011
+    const val UNSAFE_PATH = -32012
+    const val FILE_CONFLICT = -32013
+
+    fun applyRefusalCode(diagnostics: List<Diagnostic>): Int {
+        val codes = diagnostics.mapNotNull(Diagnostic::code)
+        return when {
+            codes.any { it == "transaction.recoveryRequired" } -> RECOVERY_REQUIRED
+            codes.any { it == "workspace.locked" || it == "workspace.lockFailed" } -> WORKSPACE_LOCKED
+            codes.any { it.startsWith("filesystem.") } -> FILESYSTEM_UNSUPPORTED
+            codes.any { it.startsWith("path.") || it == "workspace.lockUnsafe" } -> UNSAFE_PATH
+            codes.any { it == "file.exists" || it == "file.missing" } -> FILE_CONFLICT
+            codes.any { it.startsWith("snapshot.") || it.startsWith("file.precondition") } -> SNAPSHOT_CHANGED
+            codes.any { it.startsWith("edit.") || it == "plan.notPreview" } -> PLAN_VALIDATION_FAILED
+            codes.any { it.startsWith("transaction.") } -> APPLY_FAILED
+            else -> INTERNAL_ERROR
+        }
+    }
+
+    fun rollbackRefusalCode(diagnostics: List<Diagnostic>): Int = when {
+        diagnostics.any { it.code == "rollback.conflict" } -> ROLLBACK_CONFLICT
+        diagnostics.any { it.code == "transaction.recoveryRequired" } -> RECOVERY_REQUIRED
+        diagnostics.any { it.code?.startsWith("path.") == true } -> UNSAFE_PATH
+        diagnostics.any { it.code?.startsWith("filesystem.") == true } -> FILESYSTEM_UNSUPPORTED
+        else -> APPLY_FAILED
+    }
 }
 
 class JsonRpcException(val code: Int, override val message: String) : RuntimeException(message)

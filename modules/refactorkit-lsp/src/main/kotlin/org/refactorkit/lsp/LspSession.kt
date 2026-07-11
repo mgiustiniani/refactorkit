@@ -544,7 +544,10 @@ class LspSession {
                         refreshSnapshot()
                         buildJsonObject { put("transactionId", result.transaction.id.value) }
                     }
-                    is ApplyResult.Refused -> throw JsonRpcException(JsonRpcErrorCodes.SNAPSHOT_CHANGED, result.diagnostics.first().message)
+                    is ApplyResult.Refused -> throw JsonRpcException(
+                        JsonRpcErrorCodes.applyRefusalCode(result.diagnostics),
+                        result.diagnostics.joinToString("; ") { it.message },
+                    )
                 }
             }
             "refactorkit.rollback" -> {
@@ -567,13 +570,8 @@ class LspSession {
                         }
                     }
                     is ApplyResult.Refused -> {
-                        val code = when {
-                            result.diagnostics.any { it.code == "rollback.conflict" } -> JsonRpcErrorCodes.ROLLBACK_CONFLICT
-                            result.diagnostics.any { it.code == "transaction.recoveryRequired" } -> JsonRpcErrorCodes.RECOVERY_REQUIRED
-                            else -> JsonRpcErrorCodes.INTERNAL_ERROR
-                        }
                         throw JsonRpcException(
-                            code,
+                            JsonRpcErrorCodes.rollbackRefusalCode(result.diagnostics),
                             "Rollback refused: ${result.diagnostics.joinToString("; ") { it.message }}",
                         )
                     }

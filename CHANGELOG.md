@@ -23,6 +23,10 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Closed integration error mapping gap `TX-017`: daemon and LSP now expose
+  deterministic codes for snapshot, recovery, validation, lock, filesystem,
+  unsafe-path, file-conflict, and apply/journal refusals; MCP includes the same
+  mapped numeric category.
 - Closed daemon state gap `TX-018`: successful apply/rollback now replaces the
   stored session snapshot, clears every stale pending plan, returns the refreshed
   hash, and serves current summary/symbol queries immediately.

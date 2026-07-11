@@ -89,9 +89,9 @@ Status: implementation-informed.
 
 CLI `--apply`, daemon `refactor.apply`, MCP `apply_refactoring`, and custom LSP `refactorkit.applyPlan` use the managed WAL-backed flow. Native LSP rename and WorkspaceEdit commands are explicitly client-managed/no-rollback. Full-sync open-buffer overlays feed planning, open-document edits carry exact versions, unsupported versionable edits refuse, and managed LSP disk writes reject dirty or affected-open buffers (`TX-007` closed).
 
-Approval is currently advisory metadata: invoking apply is sufficient, and no separate approval token or auditable transition is enforced (`TX-016`). Daemon/LSP error mapping collapses distinct refusal causes and rollback failures, weakening deterministic recovery (`TX-017`). Daemon apply/rollback refreshes stored session state, clears stale plans, and returns the new hash (`TX-018` closed).
+Approval is currently advisory metadata: invoking apply is sufficient, and no separate approval token or auditable transition is enforced (`TX-016`). Daemon/LSP/MCP use a core-owned deterministic refusal mapper for snapshot, recovery, validation, lock, filesystem, unsafe-path, file-conflict, and apply/journal categories (`TX-017` closed). Daemon apply/rollback refreshes stored session state, clears stale plans, and returns the new hash (`TX-018` closed).
 
-Status: implementation-informed. LSP ownership/document versions and daemon state refresh are implemented; approval semantics and complete error categories remain open.
+Status: implementation-informed. LSP ownership/document versions and daemon state refresh are implemented; approval semantics remain open; managed apply/rollback error categories are implemented.
 
 == Protocol Capability Discovery
 
