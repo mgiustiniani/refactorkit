@@ -22,11 +22,13 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RollbackMode
+import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaLanguageAdapter
@@ -39,6 +41,7 @@ import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
 import java.net.URI
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.math.max
@@ -56,6 +59,8 @@ class LspSession {
 
     @Volatile private var rootUri: String? = null
     @Volatile private var snapshot: ProjectSnapshot? = null
+    @Volatile private var supportsDocumentChanges: Boolean = false
+    private val openDocuments = linkedMapOf<String, OpenDocument>()
     private val pendingPlans = object : LinkedHashMap<String, PatchPlan>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > 128
     }
@@ -74,10 +79,10 @@ class LspSession {
         "initialized"                   -> { refreshSnapshot(); JsonNull }
         "shutdown"                      -> JsonNull
         "exit"                          -> { onExit(); JsonNull }
-        "textDocument/didOpen",
-        "textDocument/didChange",
-        "textDocument/didSave",
-        "textDocument/didClose"         -> { refreshSnapshot(); JsonNull }
+        "textDocument/didOpen"          -> { didOpen(params); JsonNull }
+        "textDocument/didChange"        -> { didChange(params); JsonNull }
+        "textDocument/didSave"          -> { didSave(params); JsonNull }
+        "textDocument/didClose"         -> { didClose(params); JsonNull }
         "textDocument/definition"       -> definition(params)
         "textDocument/references"       -> references(params)
         "textDocument/prepareRename"    -> prepareRename(params)
@@ -93,6 +98,9 @@ class LspSession {
     // ── LSP methods ───────────────────────────────────────────────────────────
 
     private fun initialize(params: JsonObject?): JsonElement {
+        supportsDocumentChanges = params?.obj("capabilities")?.obj("workspace")
+            ?.obj("workspaceEdit")?.get("documentChanges")?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true
+        openDocuments.clear()
         rootUri = params?.string("rootUri") ?: (params?.get("workspaceFolders") as? JsonArray)
             ?.firstOrNull()?.jsonObject?.string("uri")
         rootUri?.let { uri ->
@@ -108,7 +116,11 @@ class LspSession {
         }
         return buildJsonObject {
             put("capabilities", buildJsonObject {
-                put("textDocumentSync", 1) // Full sync
+                put("textDocumentSync", buildJsonObject {
+                    put("openClose", true)
+                    put("change", 1) // Full sync
+                    put("save", buildJsonObject { put("includeText", true) })
+                })
                 put("definitionProvider", true)
                 put("referencesProvider", true)
                 put("documentSymbolProvider", true)
@@ -148,6 +160,59 @@ class LspSession {
                 put("version", RefactorKitVersion.VERSION)
             })
         }
+    }
+
+    private fun didOpen(params: JsonObject?) {
+        val document = params?.obj("textDocument") ?: missing("textDocument")
+        val uri = document.string("uri") ?: missing("textDocument.uri")
+        val version = document.int("version") ?: missing("textDocument.version")
+        val text = document.string("text") ?: missing("textDocument.text")
+        val path = relativePathForUri(uri)
+        openDocuments[uri] = OpenDocument(path, version, text)
+        pendingPlans.clear()
+        refreshSnapshot()
+    }
+
+    private fun didChange(params: JsonObject?) {
+        val document = params?.obj("textDocument") ?: missing("textDocument")
+        val uri = document.string("uri") ?: missing("textDocument.uri")
+        val version = document.int("version") ?: missing("textDocument.version")
+        val current = openDocuments[uri]
+            ?: documentVersionError("Document is not open: $uri")
+        if (version <= current.version) {
+            documentVersionError(
+                "Document version must increase for $uri: current=${current.version}, received=$version",
+            )
+        }
+        val changes = params["contentChanges"] as? JsonArray ?: missing("contentChanges")
+        if (changes.size != 1 || changes.single().jsonObject.containsKey("range")) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                "RefactorKit advertises full document sync and requires one range-free content change",
+            )
+        }
+        val text = changes.single().jsonObject.string("text") ?: missing("contentChanges[0].text")
+        openDocuments[uri] = current.copy(version = version, content = text)
+        pendingPlans.clear()
+        refreshSnapshot()
+    }
+
+    private fun didSave(params: JsonObject?) {
+        val uri = params?.obj("textDocument")?.string("uri") ?: missing("textDocument.uri")
+        val current = openDocuments[uri] ?: return
+        val savedContent = params.string("text") ?: runCatching {
+            Files.readString(snapshotRoot().resolve(current.path))
+        }.getOrDefault(current.content)
+        openDocuments[uri] = current.copy(content = savedContent)
+        pendingPlans.clear()
+        refreshSnapshot()
+    }
+
+    private fun didClose(params: JsonObject?) {
+        val uri = params?.obj("textDocument")?.string("uri") ?: missing("textDocument.uri")
+        openDocuments.remove(uri)
+        pendingPlans.clear()
+        refreshSnapshot()
     }
 
     private fun definition(params: JsonObject?): JsonElement {
@@ -219,7 +284,6 @@ class LspSession {
         if (plan.status == PatchStatus.REFUSED) {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, plan.summary)
         }
-        pendingPlans[plan.id.value] = plan
         return planToLspWorkspaceEdit(plan, snap)
     }
 
@@ -420,7 +484,6 @@ class LspSession {
                 val newName = args.string("newName") ?: args.string("newParameterName") ?: missing("newName")
                 val plan = JavaChangeSignaturePlanner(adapter).previewRenameParameter(snap, symbol, oldName, newName)
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
-                pendingPlans[plan.id.value] = plan
                 planToLspWorkspaceEdit(plan, snap)
             }
             "refactorkit.changeSignature.addParameter" -> {
@@ -430,7 +493,6 @@ class LspSession {
                 val default = args.string("default") ?: args.string("defaultExpression") ?: missing("default")
                 val plan = JavaChangeSignaturePlanner(adapter).previewAddParameter(snap, symbol, type, name, default)
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
-                pendingPlans[plan.id.value] = plan
                 planToLspWorkspaceEdit(plan, snap)
             }
             "refactorkit.changeSignature.reorderParameters" -> {
@@ -438,7 +500,6 @@ class LspSession {
                 val order = args.string("order") ?: missing("order")
                 val plan = JavaChangeSignaturePlanner(adapter).previewReorderParameters(snap, symbol, order.split(','))
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
-                pendingPlans[plan.id.value] = plan
                 planToLspWorkspaceEdit(plan, snap)
             }
             "refactorkit.changeSignature.removeParameter" -> {
@@ -446,7 +507,6 @@ class LspSession {
                 val name = args.string("name") ?: args.string("parameterName") ?: missing("name")
                 val plan = JavaChangeSignaturePlanner(adapter).previewRemoveParameter(snap, symbol, name)
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
-                pendingPlans[plan.id.value] = plan
                 planToLspWorkspaceEdit(plan, snap)
             }
             "refactorkit.moveClass" -> {
@@ -476,6 +536,7 @@ class LspSession {
             "refactorkit.applyPlan" -> {
                 val planId = args?.string("planId") ?: missing("planId")
                 val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+                requireManagedWriteSafe(plan.affectedFiles)
                 val current = scanner.scan(root)
                 when (val result = PatchEngine(root).apply(plan, current)) {
                     is ApplyResult.Applied -> {
@@ -496,6 +557,7 @@ class LspSession {
                 val log = TransactionLog(root.resolve(".refactorkit/transactions"))
                 val tx = log.load(parsedTransactionId)
                     ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $transactionId")
+                requireManagedWriteSafe(tx.rollbackEdit.affectedFiles())
                 when (val result = PatchEngine(root).rollback(tx, mode)) {
                     is ApplyResult.Applied -> {
                         refreshSnapshot()
@@ -530,7 +592,7 @@ class LspSession {
     private fun refreshSnapshotFromUri(uri: String) {
         try {
             val path = Paths.get(URI(uri))
-            snapshot = scanner.scan(path)
+            snapshot = overlayOpenDocuments(scanner.scan(path))
             publishDiagnostics()
         } catch (e: Exception) {
             System.err.println("RefactorKit LSP: failed to scan workspace: ${e.message}")
@@ -580,10 +642,21 @@ class LspSession {
         if (plan.status == PatchStatus.REFUSED) {
             throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
         }
+        val normalizedEdit = WorkspaceEditSimulator.normalize(plan.workspaceEdit)
+        val structural = normalizedEdit.edits.any { it !is FileEdit.Modify }
+        val openPaths = openDocuments.values.map { it.path.normalize() }.toSet()
+        val modifiesOpenDocument = normalizedEdit.edits.filterIsInstance<FileEdit.Modify>()
+            .any { it.path.normalize() in openPaths }
+        if (!supportsDocumentChanges && (structural || modifiesOpenDocument)) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+                "LSP client must support versioned documentChanges for structural or open-document edits",
+            )
+        }
         pendingPlans[plan.id.value] = plan
         val changes = mutableMapOf<String, MutableList<JsonObject>>()
         val documentChanges = mutableListOf<JsonObject>()
-        for (edit in plan.workspaceEdit.edits) {
+        for (edit in normalizedEdit.edits) {
             when (edit) {
                 is FileEdit.Modify -> {
                     val uri = uriForPath(snap, edit.path)
@@ -598,7 +671,8 @@ class LspSession {
                     documentChanges += buildJsonObject {
                         put("textDocument", buildJsonObject {
                             put("uri", uri)
-                            put("version", JsonNull)
+                            openDocuments.values.firstOrNull { it.path.normalize() == edit.path.normalize() }
+                                ?.let { put("version", it.version) } ?: put("version", JsonNull)
                         })
                         put("edits", JsonArray(edits))
                     }
@@ -629,10 +703,16 @@ class LspSession {
             put("summary", plan.summary)
             put("riskLevel", plan.riskLevel.name)
             put("warnings", buildJsonArray { plan.warnings.forEach { add(JsonPrimitive(it)) } })
-            put("changes", buildJsonObject {
-                changes.forEach { (uri, edits) -> put(uri, JsonArray(edits)) }
-            })
-            put("documentChanges", JsonArray(documentChanges))
+            put("refactorkitEditOwnership", "client-managed")
+            put("refactorkitRollbackAvailable", false)
+            put("refactorkitDocumentVersionsChecked", supportsDocumentChanges)
+            if (supportsDocumentChanges) {
+                put("documentChanges", JsonArray(documentChanges))
+            } else {
+                put("changes", buildJsonObject {
+                    changes.forEach { (uri, edits) -> put(uri, JsonArray(edits)) }
+                })
+            }
         }
     }
 
@@ -640,6 +720,66 @@ class LspSession {
         put("title", title)
         put("command", command)
         put("arguments", buildJsonArray { add(argument) })
+    }
+
+    private fun overlayOpenDocuments(diskSnapshot: ProjectSnapshot): ProjectSnapshot {
+        if (openDocuments.isEmpty()) return diskSnapshot
+        val files = diskSnapshot.files.associateBy { it.path }.toMutableMap()
+        openDocuments.values.forEach { document ->
+            val languageId = files[document.path]?.languageId
+                ?: document.path.fileName.toString().substringAfterLast('.', "java")
+            files[document.path] = SourceFile(document.path, document.content, languageId)
+        }
+        return diskSnapshot.copy(files = files.values.sortedBy { it.path.toString() })
+    }
+
+    private fun snapshotRoot(): Path = snapshot?.workspace?.root
+        ?: rootUri?.let { Paths.get(URI(it)).toAbsolutePath().normalize() }
+        ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+
+    private fun relativePathForUri(uri: String): Path {
+        val root = snapshotRoot()
+        val absolute = try {
+            Paths.get(URI(uri)).toAbsolutePath().normalize()
+        } catch (error: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid document URI: $uri")
+        }
+        if (!absolute.startsWith(root)) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Document is outside workspace: $uri")
+        }
+        val relative = root.relativize(absolute)
+        if (!relative.fileName.toString().endsWith(".java")) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unsupported LSP document type: $uri")
+        }
+        return relative
+    }
+
+    private fun dirtyOpenDocuments(): List<OpenDocument> {
+        val root = snapshotRoot()
+        return openDocuments.values.filter { document ->
+            runCatching {
+                !Files.isRegularFile(root.resolve(document.path)) ||
+                    Files.readString(root.resolve(document.path)) != document.content
+            }.getOrDefault(true)
+        }
+    }
+
+    private fun requireManagedWriteSafe(affectedFiles: Set<Path>) {
+        val dirty = dirtyOpenDocuments()
+        if (dirty.isNotEmpty()) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+                "Managed apply is refused while documents have unsaved content: ${dirty.map { it.path }}",
+            )
+        }
+        val affected = affectedFiles.map(Path::normalize).toSet()
+        val openAffected = openDocuments.values.filter { it.path.normalize() in affected }
+        if (openAffected.isNotEmpty()) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+                "Managed apply is refused for open documents; use the versioned client-managed edit or close them: ${openAffected.map { it.path }}",
+            )
+        }
     }
 
     private fun fileForUri(snap: ProjectSnapshot, uri: String) = runCatching {
@@ -702,11 +842,26 @@ class LspSession {
         Diagnostic.Severity.INFO -> 3
     }
 
+    private fun documentVersionError(message: String): Nothing {
+        onNotification("window/showMessage", buildJsonObject {
+            put("type", 1)
+            put("message", "RefactorKit rejected document synchronization: $message")
+        })
+        throw JsonRpcException(JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH, message)
+    }
+
     private fun missing(field: String): Nothing =
         throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Missing required field: $field")
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.content
+    private fun JsonObject.int(key: String): Int? = (this[key] as? JsonPrimitive)?.content?.toIntOrNull()
     private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
+
+    private data class OpenDocument(
+        val path: Path,
+        val version: Int,
+        val content: String,
+    )
 
     companion object {
         private val TOKEN_TYPES = listOf(

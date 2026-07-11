@@ -32,6 +32,7 @@ surfaces should map it to a stable exit-code category and human-readable message
 | `refused-plan` | Planner intentionally refuses an unsafe or ambiguous operation. | `PLAN_REFUSED` (`-32001`) |
 | `invalid-input` | Missing/invalid parameter, unknown plan id, unknown tool/command shape. | `INVALID_PARAMS` (`-32602`) |
 | `stale-snapshot-or-plan` | Workspace changed after preview or plan no longer matches current snapshot. | `SNAPSHOT_CHANGED` (`-32002`) |
+| `document-version-mismatch` | LSP version is stale/non-monotonic, versionable edits are unsupported, or managed disk writes would diverge from open buffers. | `DOCUMENT_VERSION_MISMATCH` (`-32007`) |
 | `rollback-conflict` | Affected path differs from its exact post-apply journal image. | `ROLLBACK_CONFLICT` (`-32005`) |
 | `recovery-required` | Interrupted apply/rollback cannot be compensated automatically or journal recovery fails. | `RECOVERY_REQUIRED` (`-32006`) |
 | `diagnostics-failure` | Apply/rollback diagnostics report failure or post-apply validation fails. | `INTERNAL_ERROR` until specialized code exists |
@@ -188,8 +189,11 @@ show the refusal, warnings, affected files when present, and next action.
 ## LSP server baseline
 
 `modules/refactorkit-lsp` exposes a JSON-RPC/LSP server over stdio using standard
-`Content-Length` framing. Workspace edits include legacy `changes` for text edits
-and `documentChanges` for file create/delete/rename operations.
+`Content-Length` framing. Clients advertising
+`workspace.workspaceEdit.documentChanges=true` receive versionable
+`documentChanges`; legacy `changes` is used only for closed-document text edits
+when that capability is absent. Structural or open-document edits require
+`documentChanges` support and otherwise refuse.
 
 The LSP initialize response `serverInfo.version` is read-only metadata and uses
 the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
@@ -214,15 +218,25 @@ RefactorKit metadata:
 
 - `refactorkitPlanId`: pending plan id to pass to `refactorkit.applyPlan`;
 - `operation`, `status`, `summary`, `riskLevel`, and `warnings`;
-- legacy `changes` for text edits;
-- `documentChanges` for text edits plus create, delete, and rename file edits.
+- `refactorkitEditOwnership: "client-managed"` and
+  `refactorkitRollbackAvailable: false` for editor-applied WorkspaceEdits;
+- `refactorkitDocumentVersionsChecked`, indicating negotiated versionable-edit support;
+- `documentChanges` for capable clients, with the exact tracked version on every
+  open-document text edit and `null` only for closed documents;
+- legacy `changes` only for closed-document text edits when the client lacks
+  `documentChanges`; structural/open-document plans refuse in that mode.
 
-Clients should preserve `refactorkitPlanId` from the preview result. The LSP
-server also stores pending plans internally so `refactorkit.applyPlan` can apply
-the exact previewed plan. `refactorkit.applyPlan` returns `{ "transactionId":
+Native WorkspaceEdit application is owned by the editor and has no RefactorKit
+journal/rollback transaction. `didOpen`/`didChange` full-sync text and strictly
+increasing versions are overlaid on disk scans for planning; lifecycle changes
+invalidate pending plans. Clients should preserve `refactorkitPlanId` only when
+using the distinct managed path. The LSP server stores pending plans internally
+so `refactorkit.applyPlan` can apply the exact previewed plan. `refactorkit.applyPlan` returns `{ "transactionId":
 "..." }`; `PatchEngine` owns write-ahead lifecycle persistence before mutation,
-then the LSP session removes the pending plan, refreshes the
-workspace snapshot, and republishes diagnostics.
+then the LSP session removes the pending plan, refreshes the workspace snapshot,
+and republishes diagnostics. Managed apply refuses with
+`DOCUMENT_VERSION_MISMATCH (-32007)` if any buffer is unsaved or an affected
+document is open; managed rollback applies the same affected-open-document guard.
 
 `refactorkit.rollback` requires `{ "transactionId": "..." }` and accepts
 optional `"force": true`. Normal mode verifies exact post-apply images and never

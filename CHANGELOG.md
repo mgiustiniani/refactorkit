@@ -23,6 +23,11 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Closed LSP ownership/version gap `TX-007`: full-sync open buffers now overlay
+  disk snapshots, document versions must increase, native WorkspaceEdits declare
+  client-managed/no-rollback ownership and carry exact open-document versions,
+  incapable clients refuse, and managed apply/rollback rejects dirty or affected
+  open documents.
 - Replaced per-step recipe sagas with one staged recipe transaction. Every step
   plans against the immutable result of previous steps; successful workflows
   become one recipe-wide `PatchPlan` and WAL record, while later refusal and

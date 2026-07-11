@@ -215,7 +215,7 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 
 |QS-PROTO-002
 |Consistency and interoperability
-|A native LSP edit is identified as client-managed, carries a checked document version or is refused for stale/unsaved content, and never advertises RefactorKit transaction rollback unless a versioned client-apply acknowledgement/journal contract exists.
+|A native LSP edit is identified as client-managed/no-rollback, plans from full-sync open-buffer overlays, carries exact open-document versions, and refuses incapable clients; managed LSP writes reject dirty or affected-open buffers.
 |Transactionality audit `TX-007`; ADR 0004; future LSP contract tests.
 |planned release blocker
 
@@ -280,7 +280,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Transactionality guarantees exceed current evidence
-|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Declared source scope is hash-bound and independently rescanned under lock; Java classpath entries, prospective outputs, local JAR directories, and declaration files are content-fingerprinted and revalidated before journaling. Same-file coordinates, cross-entry overlaps, complete preflight rendering, and line/character bounds are now enforced. Current flows still lack central diagnostics gates, enforced approval semantics, complete apply error mapping, and current daemon state. Native LSP writes remain client-managed; recipes use one staged managed transaction.
+|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Declared source scope is hash-bound and independently rescanned under lock; Java classpath entries, prospective outputs, local JAR directories, and declaration files are content-fingerprinted and revalidated before journaling. Same-file coordinates, cross-entry overlaps, complete preflight rendering, and line/character bounds are now enforced. Current flows still lack central diagnostics gates, enforced approval semantics, complete apply error mapping, and current daemon state. Native LSP writes are version-checked and explicitly client-managed; recipes use one staged managed transaction.
 |release blocker; remaining and partially evidenced `TX` findings require closure plus destructive fault acceptance
 
 |Stable acceptance evidence incomplete

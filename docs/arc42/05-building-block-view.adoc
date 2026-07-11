@@ -19,7 +19,7 @@ Because several modules are libraries rather than independently deployed process
 
 == Level 1: RefactorKit System
 
-RefactorKit provides deterministic code-intelligence and refactoring capabilities with preview, validation, managed apply, and compensation semantics. Managed apply is a WAL-backed, recoverable, staged per-path transaction rather than one filesystem-wide ACID commit; native LSP edits are client-managed, and recipes reduce staged steps to one managed transaction. RefactorKit exposes capabilities through CLI, daemon, LSP, MCP, and library integration modes. For `v1.0.0`, the core patch, documented CLI, and documented daemon surfaces become stable API `1.0` contracts only after acceptance; LSP and MCP surfaces are stable only capability by capability where explicitly classified.
+RefactorKit provides deterministic code-intelligence and refactoring capabilities with preview, validation, managed apply, and compensation semantics. Managed apply is a WAL-backed, recoverable, staged per-path transaction rather than one filesystem-wide ACID commit; native LSP edits are version-checked and explicitly client-managed/no-rollback, and recipes reduce staged steps to one managed transaction. RefactorKit exposes capabilities through CLI, daemon, LSP, MCP, and library integration modes. For `v1.0.0`, the core patch, documented CLI, and documented daemon surfaces become stable API `1.0` contracts only after acceptance; LSP and MCP surfaces are stable only capability by capability where explicitly classified.
 
 == Level 2: Containers and Building Blocks
 

@@ -159,10 +159,10 @@ Status: implementation-informed, needs human review for prioritization.
 |critical data-loss risk; planned release blocker
 
 |R-026
-|Native LSP rename/code-action edits are client-managed outside `PatchEngine`, can be planned from stale disk content for unsaved buffers, and carry no document version (`TX-007`).
-|Editors can apply stale edits without RefactorKit-owned transaction or rollback, while clients may infer guarantees from server-managed apply documentation.
-|Classify native edits explicitly, require document-version checks or a client-apply acknowledgement/journal design, and never advertise RefactorKit rollback for editor-owned writes without evidence.
-|planned release blocker
+|Native LSP edits are explicitly client-managed/no-rollback; full-sync buffer overlays, strictly increasing versions, versioned `documentChanges`, capability refusal, and managed-write open-buffer guards close `TX-007`.
+|Client-owned application still depends on the editor honoring LSP version preconditions; it intentionally has no RefactorKit transaction record.
+|Retain ownership/version contract tests and keep native editor writes distinct from managed `applyPlan`/rollback guarantees.
+|controlled
 
 |R-027
 |Recipe steps are staged against one evolving immutable snapshot and reduced to one recipe-wide managed commit (`TX-008`, `TX-009`, `TX-010` closed).

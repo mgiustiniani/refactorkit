@@ -169,24 +169,33 @@ different mounted store that rejects atomic replacement fails with
 `RECOVERY_REQUIRED` handling. Complete filesystem metadata restoration remains
 separate under `TX-013`.
 
-### TX-007 — LSP native edits bypass RefactorKit apply/rollback
+### TX-007 — LSP native and managed edit ownership
 
-Severity: **high contract mismatch**.
+Status: **closed by explicit client-managed classification and versioned-buffer safety after the audited baseline**.
 
-`textDocument/rename` and several code actions return an LSP `WorkspaceEdit`.
-The editor applies that edit outside `PatchEngine`; RefactorKit does not create or
-persist a transaction for the actual client-side write. Only the custom
-`refactorkit.applyPlan` path performs server-managed apply/logging.
+Native `textDocument/rename` and WorkspaceEdit-returning commands are explicitly
+client-managed: responses publish `refactorkitEditOwnership=client-managed` and
+`refactorkitRollbackAvailable=false`; RefactorKit does not advertise a journal or
+rollback for editor-owned writes. Clients declaring `documentChanges` support
+receive `OptionalVersionedTextDocumentIdentifier` entries. Open-document edits
+carry the exact tracked version, while closed-document versions remain `null` as
+per LSP semantics. Structural or open-document edits are refused with
+`DOCUMENT_VERSION_MISMATCH (-32007)` when the client lacks versioned
+`documentChanges` support.
 
-The server also refreshes snapshots from disk on `didOpen`/`didChange` without
-tracking unsaved document content, and emits `textDocument.version = null`. A
-client can therefore apply edits calculated from stale disk content to an unsaved
-buffer.
+`didOpen` captures full text/version, `didChange` requires one range-free full
+sync update with a strictly increasing version, `didSave` reconciles disk text,
+and `didClose` removes the overlay. Definition, references, rename, code actions,
+symbols, diagnostics, and previews operate on a disk scan overlaid with current
+open-buffer content rather than stale disk-only snapshots. Document lifecycle
+changes invalidate pending managed plans.
 
-Required closure: classify native LSP edits as client-managed/non-RefactorKit
-transactions, or implement a versioned client-apply acknowledgement/journal
-contract. Stable docs must not promise RefactorKit rollback for writes performed
-by the editor.
+The custom `refactorkit.applyPlan`/rollback path remains RefactorKit-managed and
+WAL-backed, but refuses unsaved workspace buffers and any affected open document;
+this prevents server disk writes from diverging from editor buffers. Tests prove
+open-buffer semantic visibility, emitted version preconditions, monotonic-version
+refusal, capability refusal, managed-write refusal with no disk mutation, and the
+existing closed-document managed apply/rollback flow.
 
 ### TX-008 — Recipe transaction boundary
 
@@ -338,7 +347,7 @@ path occurs.
 | Daemon `refactor.apply` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed transaction; session refresh remains open |
 | MCP `apply_refactoring` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed recoverable transaction on supported filesystems |
 | LSP `refactorkit.applyPlan` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed transaction; native client edits are separate |
-| LSP native rename/code action | server plans only | editor/client writes | no | no RefactorKit transaction for client write | client-managed edit, not RefactorKit transaction |
+| LSP native rename/WorkspaceEdit command | overlay-aware versioned planning | editor/client writes | no | no RefactorKit transaction for client write | explicitly client-managed; open buffers carry checked versions (`TX-007` closed) |
 | Recipe apply | all steps staged in memory | one recipe-wide managed apply | one versioned WAL record | one retained lifecycle record | single managed transaction (`TX-008` closed) |
 | Direct library `PatchEngine.apply` | engine-owned source/classpath validation under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed recoverable transaction on supported filesystems |
 
@@ -376,9 +385,8 @@ The current requirements should be corrected before API `1.0` freeze.
 
 ## Recommended closure order
 
-1. Define the LSP client/server transaction boundary and versioned buffer contract.
-2. Integrate diagnostics and remaining stable error categories into commit gates.
-3. Add fault-injection, kill/restart, concurrency, corruption, and mounted
+1. Integrate diagnostics and remaining stable error categories into commit gates.
+2. Add fault-injection, kill/restart, concurrency, corruption, and mounted
    filesystem capability tests before `v1.0.0-rc.1`.
 
 ## Stable-release verdict

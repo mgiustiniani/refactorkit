@@ -40,6 +40,7 @@ object JsonRpcErrorCodes {
     const val PROJECT_NOT_OPEN = -32004
     const val ROLLBACK_CONFLICT = -32005
     const val RECOVERY_REQUIRED = -32006
+    const val DOCUMENT_VERSION_MISMATCH = -32007
 }
 
 class JsonRpcException(val code: Int, override val message: String) : RuntimeException(message)

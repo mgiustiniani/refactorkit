@@ -80,10 +80,10 @@ Status: implementation-informed from `docs/ai-workflow.md`, `docs/integration-co
 |LSP server maps requests to Java/core model operations.
 
 |4
-|For native rename and code actions, the server returns a standard LSP `WorkspaceEdit`; the editor applies it outside `PatchEngine`. This is a client-managed edit with no RefactorKit transaction or rollback record.
+|For native rename and WorkspaceEdit-returning commands, the server labels the result client-managed/no-rollback; the editor applies it outside `PatchEngine`. Open-buffer text edits carry the exact tracked document version.
 
 |5
-|Current planning can use disk snapshots rather than unsaved buffer content and emits no document version, creating stale-buffer application risk.
+|`didOpen`/full-sync `didChange` overlays feed planning. Non-increasing versions and incapable clients for structural/open-document edits are refused; managed disk apply/rollback rejects unsaved or affected-open documents (`TX-007` closed).
 
 |6
 |For the custom `refactorkit.applyPlan` command, RefactorKit owns sequential writes and post-apply compensation logging, with the same non-crash-safe limitations as other managed apply paths.

@@ -93,7 +93,7 @@ Status: implementation-informed, needs-review for priority and completeness.
 |implementation-informed
 
 |C-BOUND-002
-|LSP is for editor-native features; advanced AI workflows use JSON-RPC or MCP instead of overloading LSP. Native LSP `WorkspaceEdit`s are client-managed and have no RefactorKit transaction/rollback; custom `refactorkit.applyPlan` is a distinct managed path.
+|LSP is for editor-native features; advanced AI workflows use JSON-RPC or MCP instead of overloading LSP. Native LSP `WorkspaceEdit`s are version-checked, client-managed, and have no RefactorKit transaction/rollback; custom `refactorkit.applyPlan` is a distinct managed path that refuses dirty/affected-open buffers.
 |`AGENTS.md`, `docs/integration-contracts.md`, ADR 0004, transactionality audit `TX-007`.
 |implementation-informed limitation
 

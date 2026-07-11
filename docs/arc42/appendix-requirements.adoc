@@ -222,7 +222,7 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-LSP
 |Serve LSP
 |Editor / IDE
-|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics. Native rename/code-action edits are applied by the client without a RefactorKit transaction; custom `applyPlan` is server-managed. Unsaved-buffer/version safety remains open.
+|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics. Native WorkspaceEdits are explicitly client-managed/no-rollback and carry tracked open-document versions; custom `applyPlan` is managed and refuses dirty/affected-open buffers.
 |LSP module/tests, integration docs, transactionality audit `TX-007`.
 |implementation-informed limitation
 
@@ -346,8 +346,8 @@ These requirements capture the audit's required contract decisions and acceptanc
 |planned release blocker
 
 |REQ-TX-009
-|Classify native LSP edits as client-managed unless a versioned client-apply acknowledgement/journal exists; check document versions for unsaved buffers and do not promise RefactorKit rollback for editor-owned writes.
-|planned release blocker
+|Classify native LSP edits as client-managed/no-rollback, overlay full-sync buffers, require monotonic versions, emit exact open-document versions, refuse incapable clients, and guard managed disk writes from open-buffer divergence.
+|implemented and tested (`TX-007` closed)
 
 |REQ-TX-010
 |Stage every recipe step against one evolving immutable snapshot, expose one recipe-wide plan, and perform at most one managed WAL transaction; planning failure and no-op execution must not write journal records.
@@ -410,6 +410,6 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |needs-review
 
 |Transaction semantics exceed implementation evidence
-|The transactionality audit narrows remaining gaps to native LSP ownership/versioning, diagnostics/approval/error/state contracts, metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.
+|The transactionality audit narrows remaining gaps to diagnostics/approval/error/state contracts, metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.
 |release blocker; requirements need confirmation/narrowing
 |===

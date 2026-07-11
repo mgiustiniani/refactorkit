@@ -34,6 +34,11 @@ class LspSessionTest {
 
     private fun initializeParams(root: String): JsonObject = buildJsonObject {
         put("rootUri", Paths.get(root).toUri().toString())
+        put("capabilities", buildJsonObject {
+            put("workspace", buildJsonObject {
+                put("workspaceEdit", buildJsonObject { put("documentChanges", true) })
+            })
+        })
     }
 
     private fun textDocumentParams(root: String, file: String): JsonObject = buildJsonObject {
@@ -55,6 +60,9 @@ class LspSessionTest {
         assertEquals(RefactorKitVersion.NAME, serverInfo["name"]!!.jsonPrimitive.content)
         assertEquals(RefactorKitVersion.VERSION, serverInfo["version"]!!.jsonPrimitive.content)
         assertEquals("true", capabilities["codeActionProvider"]!!.jsonPrimitive.content)
+        val sync = capabilities["textDocumentSync"]!!.jsonObject
+        assertEquals("1", sync["change"]!!.jsonPrimitive.content)
+        assertEquals("true", sync["save"]!!.jsonObject["includeText"]!!.jsonPrimitive.content)
         assertTrue(capabilities["semanticTokensProvider"]!!.jsonObject["legend"]!!.jsonObject["tokenTypes"]!!.jsonArray.isNotEmpty())
         assertEquals("refactorkit", capabilities["diagnosticProvider"]!!.jsonObject["identifier"]!!.jsonPrimitive.content)
         val commands = capabilities["executeCommandProvider"]!!.jsonObject["commands"]!!.jsonArray
@@ -64,6 +72,106 @@ class LspSessionTest {
         assertTrue(commands.contains("refactorkit.changeSignature.addParameter"))
         assertTrue(commands.contains("refactorkit.changeSignature.reorderParameters"))
         assertTrue(commands.contains("refactorkit.changeSignature.removeParameter"))
+    }
+
+    @Test
+    fun nativeRenameUsesOpenBufferAndCarriesDocumentVersion() {
+        val diskContent = "package com.example;\npublic class Foo {}\n"
+        val openContent = "package com.example;\npublic class Foo { int unsaved; }\n"
+        val root = createProject("src/main/java/com/example/Foo.java" to diskContent)
+        val fileUri = Paths.get(root).resolve("src/main/java/com/example/Foo.java").toUri().toString()
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+        session.dispatch("textDocument/didOpen", buildJsonObject {
+            put("textDocument", buildJsonObject {
+                put("uri", fileUri)
+                put("languageId", "java")
+                put("version", 7)
+                put("text", openContent)
+            })
+        })
+
+        val symbols = session.dispatch("textDocument/documentSymbol", textDocumentParams(root, "src/main/java/com/example/Foo.java")) as JsonArray
+        assertTrue(symbols.any { it.jsonObject["name"]!!.jsonPrimitive.content == "unsaved" })
+        val rename = session.dispatch("textDocument/rename", buildJsonObject {
+            put("textDocument", buildJsonObject { put("uri", fileUri) })
+            put("position", buildJsonObject { put("line", 1); put("character", 14) })
+            put("newName", "Bar")
+        }) as JsonObject
+
+        val versionedEdits = rename["documentChanges"]!!.jsonArray.filter {
+            it.jsonObject["textDocument"] != null
+        }
+        assertTrue(versionedEdits.isNotEmpty())
+        assertTrue(versionedEdits.all {
+            it.jsonObject["textDocument"]!!.jsonObject["version"]!!.jsonPrimitive.content == "7"
+        })
+        assertEquals("client-managed", rename["refactorkitEditOwnership"]!!.jsonPrimitive.content)
+        assertEquals("false", rename["refactorkitRollbackAvailable"]!!.jsonPrimitive.content)
+        assertEquals(diskContent, Files.readString(Paths.get(root).resolve("src/main/java/com/example/Foo.java")))
+    }
+
+    @Test
+    fun didChangeRejectsNonIncreasingDocumentVersion() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val fileUri = Paths.get(root).resolve("src/main/java/com/example/Foo.java").toUri().toString()
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+        session.dispatch("textDocument/didOpen", buildJsonObject {
+            put("textDocument", buildJsonObject {
+                put("uri", fileUri); put("version", 3); put("text", "package com.example;\npublic class Foo {}\n")
+            })
+        })
+        val notifications = mutableListOf<String>()
+        session.onNotification = { method, _ -> notifications += method }
+
+        session.dispatch("textDocument/didChange", buildJsonObject {
+            put("textDocument", buildJsonObject { put("uri", fileUri); put("version", 4) })
+            put("contentChanges", buildJsonArray {
+                add(buildJsonObject { put("text", "package com.example;\npublic class Foo { int changed; }\n") })
+            })
+        })
+        val symbols = session.dispatch(
+            "textDocument/documentSymbol",
+            textDocumentParams(root, "src/main/java/com/example/Foo.java"),
+        ) as JsonArray
+        assertTrue(symbols.any { it.jsonObject["name"]!!.jsonPrimitive.content == "changed" })
+
+        val error = assertFailsWith<JsonRpcException> {
+            session.dispatch("textDocument/didChange", buildJsonObject {
+                put("textDocument", buildJsonObject { put("uri", fileUri); put("version", 4) })
+                put("contentChanges", buildJsonArray {
+                    add(buildJsonObject { put("text", "package com.example;\npublic class Foo { int stale; }\n") })
+                })
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH, error.code)
+        assertTrue("window/showMessage" in notifications)
+    }
+
+    @Test
+    fun clientWithoutDocumentChangesCannotReceiveStructuralEdit() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = LspSession()
+        session.dispatch("initialize", buildJsonObject {
+            put("rootUri", Paths.get(root).toUri().toString())
+        })
+
+        val error = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.renameClass")
+                put("arguments", buildJsonArray {
+                    add(buildJsonObject { put("symbol", "com.example.Foo"); put("newName", "Bar") })
+                })
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH, error.code)
     }
 
     @Test
@@ -177,8 +285,10 @@ class LspSessionTest {
                 })
             } as kotlinx.serialization.json.JsonElement)
         }) as JsonObject
-        val changes = result["changes"]!!.jsonObject
-        assertTrue(changes.containsKey(fileUri), "expected edit for $fileUri in $changes")
+        val changes = result["documentChanges"]!!.jsonArray
+        assertTrue(changes.any {
+            it.jsonObject["textDocument"]?.jsonObject?.get("uri")?.jsonPrimitive?.content == fileUri
+        }, "expected versionable edit for $fileUri in $changes")
     }
 
     @Test
@@ -286,6 +396,39 @@ class LspSessionTest {
     }
 
     @Test
+    fun managedApplyRefusesAffectedOpenDocument() {
+        val content = "package com.example;\npublic class UserManager {}\n"
+        val root = createProject("src/main/java/com/example/UserManager.java" to content)
+        val fileUri = Paths.get(root).resolve("src/main/java/com/example/UserManager.java").toUri().toString()
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+        session.dispatch("textDocument/didOpen", buildJsonObject {
+            put("textDocument", buildJsonObject {
+                put("uri", fileUri); put("languageId", "java"); put("version", 1); put("text", content)
+            })
+        })
+        val preview = session.dispatch("workspace/executeCommand", buildJsonObject {
+            put("command", "refactorkit.renameClass")
+            put("arguments", buildJsonArray {
+                add(buildJsonObject { put("symbol", "com.example.UserManager"); put("newName", "AccountManager") })
+            })
+        }) as JsonObject
+
+        val error = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.applyPlan")
+                put("arguments", buildJsonArray {
+                    add(buildJsonObject { put("planId", preview["refactorkitPlanId"]!!.jsonPrimitive.content) })
+                })
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH, error.code)
+        assertTrue(Files.exists(Paths.get(root).resolve("src/main/java/com/example/UserManager.java")))
+        assertFalse(Files.exists(Paths.get(root).resolve("src/main/java/com/example/AccountManager.java")))
+    }
+
+    @Test
     fun executeCommandPreviewApplyRollbackRenameClassFlowRestoresWorkspace() {
         val root = createProject(
             "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
@@ -310,7 +453,26 @@ class LspSessionTest {
         val transactionId = apply["transactionId"]!!.jsonPrimitive.content
 
         assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
-        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+        val accountPath = rootPath.resolve("src/main/java/com/example/AccountManager.java")
+        assertTrue(Files.exists(accountPath))
+        val accountUri = accountPath.toUri().toString()
+        session.dispatch("textDocument/didOpen", buildJsonObject {
+            put("textDocument", buildJsonObject {
+                put("uri", accountUri); put("languageId", "java"); put("version", 1)
+                put("text", Files.readString(accountPath))
+            })
+        })
+        val openRollbackError = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.rollback")
+                put("arguments", JsonArray(listOf(buildJsonObject { put("transactionId", transactionId) })))
+            })
+        }
+        assertEquals(JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH, openRollbackError.code)
+        assertTrue(Files.exists(accountPath))
+        session.dispatch("textDocument/didClose", buildJsonObject {
+            put("textDocument", buildJsonObject { put("uri", accountUri) })
+        })
 
         val rollback = session.dispatch("workspace/executeCommand", buildJsonObject {
             put("command", "refactorkit.rollback")
