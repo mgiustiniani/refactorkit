@@ -7,7 +7,19 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
+### Next development (`1.0.0-rc.1-SNAPSHOT`)
+
+- Advanced main toward the first stable-contract release candidate after verified
+  `v0.3.0` publication. The implementation version is
+  `1.0.0-rc.1-SNAPSHOT`; API baseline remains `0.2` until the API `1.0` contract
+  inventory and migration gates are complete.
+
 ## [0.3.0] - 2026-07-10
+
+- Published immutable tag `v0.3.0` and a non-prerelease latest GitHub Release
+  with the self-contained Linux x86_64 runtime zip and SHA-256. Independently
+  downloaded assets verified successfully, passed `JAVA_HOME`-unset smoke checks,
+  and were deployed to the local production installation.
 
 - Activated the detailed `v1.0.0` stable release plan, including the required
   `v0.3.0` → immutable RC → stable sequence, API `1.0` freeze, Java 8–25/JDT

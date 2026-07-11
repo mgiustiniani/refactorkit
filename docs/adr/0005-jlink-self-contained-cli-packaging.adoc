@@ -27,3 +27,9 @@ For stable releases, the runtime archive is a versioned product contract. Publis
 * Runtime module selection must be maintained as dependencies evolve.
 * Release automation must classify prerelease and stable artifacts from immutable tags and must not move or recreate a failed tag.
 * Self-containment, checksum, SBOM, provenance, and reproducibility claims require evidence from the published artifact; successful assembly alone is insufficient.
+
+== Implementation Evidence
+
+The immutable `v0.3.0` tag points to commit `ba114134be605b7b0076e7471f8111c081a8aaa3`. Its GitHub release at https://github.com/mgiustiniani/refactorkit/releases/tag/v0.3.0 is published as the latest, non-prerelease release with a self-contained runtime ZIP and its `.sha256` asset. The downloaded archive verified as SHA-256 `0cf054a7eb99a86734f663ca0966da2b47259b8a4658bca97f9044bc2d21ff10`, passed version, help, and sample-project scan checks with `JAVA_HOME` unset, and was deployed locally.
+
+This evidence validates the published `v0.3.0` runtime and checksum path. It does not establish the remaining SBOM, provenance or attestation, reproducibility, and stable-contract evidence required for `v1.0.0`, so the ADR status remains unchanged.

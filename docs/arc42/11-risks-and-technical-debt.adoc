@@ -129,10 +129,10 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-021
-|Checksum, SBOM, provenance/attestation, and clean-build reproducibility evidence are not yet recorded for a promoted stable asset.
-|A package may be self-contained but unverifiable, non-reproducible, or inconsistent with release metadata.
+|The published `v0.3.0` asset has checksum and downloaded-artifact smoke evidence, but SBOM, provenance/attestation, clean-build reproducibility, and promoted stable-RC evidence are not yet recorded.
+|The `v0.3.0` package is independently checksum-verifiable and locally runnable, but a later stable package could still be non-reproducible or inconsistent with release metadata.
 |Verify two clean builds and the downloaded immutable-RC asset, documenting unavoidable reproducibility limits before stable publication.
-|planned release blocker
+|planned stable-release blocker; `v0.3.0` checksum/smoke path implementation-informed
 
 |R-022
 |LSP and MCP surfaces are implemented but not yet completely classified as stable or experimental.
@@ -145,8 +145,8 @@ Status: implementation-informed, needs human review for prioritization.
 
 The active stable plan defines the remaining release-hardening workstreams:
 
-* publish and close `v0.3.0` before immutable `v1.0.0-rc.N` candidates;
-* freeze normative patch/apply/rollback and API `1.0` CLI/daemon contracts;
+* `v0.3.0` publication is complete from immutable tag `v0.3.0`; main now advances toward `1.0.0-rc.1-SNAPSHOT`;
+* keep API `0.2` active until normative patch/apply/rollback and API `1.0` CLI/daemon contracts are frozen and accepted;
 * prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
 * complete diagnostic regression gates and representative project acceptance;
 * classify and test stable LSP/MCP boundaries;
@@ -154,4 +154,4 @@ The active stable plan defines the remaining release-hardening workstreams:
 * verify self-contained assets with checksum, SBOM, provenance/attestation, and reproducibility evidence;
 * promote only an RC with no unresolved release blocker.
 
-Status: confirmed target from `docs/releases/v1.0.0-plan.md`; implementation and acceptance evidence pending.
+Status: confirmed target from `docs/releases/v1.0.0-plan.md`; `v0.3.0` publication and downloaded-runtime smoke evidence are implementation-informed, while RC/stable acceptance evidence remains pending.

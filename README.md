@@ -25,9 +25,9 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
 
-## Install the v0.2.0-beta runtime package
+## Install the v0.3.0 runtime package
 
-The beta release publishes a self-contained Linux x86_64 runtime zip. It includes
+The current release publishes a self-contained Linux x86_64 runtime zip. It includes
 `refactorkit/bin/refactorkit` and an embedded Java runtime at
 `refactorkit/runtime/bin/java`, so users do not need a globally installed Java
 runtime to run the CLI.
@@ -35,26 +35,27 @@ runtime to run the CLI.
 Published release metadata:
 
 ```text
-Release page: https://github.com/mgiustiniani/refactorkit/releases/tag/v0.2.0-beta
-Runtime asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
-Checksum asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
-Source tag: v0.2.0-beta
-Release commit: 62166e88957ffe84a38e5dc21a923e2f2a521ab3
+Release page: https://github.com/mgiustiniani/refactorkit/releases/tag/v0.3.0
+Runtime asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip
+Checksum asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip.sha256
+Source tag: v0.3.0
+Release commit: ba114134be605b7b0076e7471f8111c081a8aaa3
+Runtime SHA-256: 0cf054a7eb99a86734f663ca0966da2b47259b8a4658bca97f9044bc2d21ff10
 ```
 
 Download, verify, and unpack the runtime asset:
 
 ```bash
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.2.0-beta/refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
-sha256sum -c refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.2.0-beta-linux-x86_64.zip -d /tmp/refactorkit-v0.2.0-beta
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip.sha256
+sha256sum -c refactorkit-runtime-0.3.0-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.3.0-linux-x86_64.zip -d /tmp/refactorkit-v0.3.0
 ```
 
 Run smoke checks with `JAVA_HOME` unset to prove the embedded runtime is used:
 
 ```bash
-RK=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.3.0/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -67,7 +68,7 @@ env -u JAVA_HOME "$RK" scan samples/java-multimodule
 Optionally add the extracted launcher to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.3.0/refactorkit/bin:$PATH
 refactorkit --help
 ```
 

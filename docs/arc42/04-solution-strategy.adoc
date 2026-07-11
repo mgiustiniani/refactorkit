@@ -8,7 +8,7 @@ Status: implementation-informed with planned items explicitly marked.
 
 RefactorKit is structured as a local, deterministic refactoring engine around a language-independent patch core and pluggable language/integration adapters. The primary strategy is to make every change previewable, diagnosable, rollbackable, and consumable by humans, CI, editors, and local AI agents.
 
-The stable-release strategy publishes the JDT foundation as `v0.3.0`, freezes proposed API `1.0` contracts in immutable release candidates, and promotes the accepted candidate to `v1.0.0`. Stability is evidence-gated per contract and capability; intentionally unsupported refactoring shapes remain conservative refusals rather than release gaps.
+The stable-release strategy has published the JDT foundation as `v0.3.0` and now advances main toward `1.0.0-rc.1-SNAPSHOT`. Proposed API `1.0` contracts will be frozen in immutable release candidates before the accepted candidate is promoted to `v1.0.0`; the active API remains `0.2` until those contract gates pass. Stability is evidence-gated per contract and capability; intentionally unsupported refactoring shapes remain conservative refusals rather than release gaps.
 
 == Fundamental Decisions
 
@@ -97,7 +97,7 @@ These are shown as containers/building blocks in `docs/c4/workspace.dsl`.
 |Packaging
 |jlink-generated embedded runtime plus checksum, SBOM, provenance/attestation, and reproducibility evidence
 |Avoid requiring users to install Java globally and make promoted release assets independently verifiable.
-|implementation-informed foundation; stable evidence planned
+|implementation-informed; `v0.3.0` runtime/checksum smoke evidence recorded, stable evidence planned
 
 |Architecture model
 |Structurizr DSL C4 model

@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: confirmed. The baseline was approved on 2026-07-10; the stable-release objective was explicitly confirmed on 2026-07-11.
+Status: confirmed. The baseline was approved on 2026-07-10; the stable-release objective was explicitly confirmed on 2026-07-11; publication progress was confirmed on 2026-07-11.
 
 == Requirements Overview
 
@@ -12,7 +12,7 @@ The first supported language is Java. The Java adapter is intended to work with 
 
 RefactorKit is intended to replace fragile direct text edits, especially in AI-assisted development workflows, with deterministic semantic operations and patch previews.
 
-The confirmed stable-release target is `v0.3.0`, followed by one or more immutable `v1.0.0-rc.N` candidates, then `v1.0.0`. Stable means that advertised operations and the core patch, CLI, daemon, packaging, and classified protocol boundaries have versioned contracts, conservative refusal behavior, and acceptance evidence. It does not mean that every possible Java refactoring is implemented.
+The `v0.3.0` foundation release has been published from its immutable tag. Main now advances toward `1.0.0-rc.1-SNAPSHOT`, followed by one or more immutable `v1.0.0-rc.N` candidates and then `v1.0.0`. The advertised API remains `0.2` until the stable contract gates are satisfied. Stable means that advertised operations and the core patch, CLI, daemon, packaging, and classified protocol boundaries have versioned contracts, conservative refusal behavior, and acceptance evidence. It does not mean that every possible Java refactoring is implemented.
 
 Evidence: `README.md`, `AGENTS.md`, `docs/architecture.md`, `docs/releases/v1.0.0-plan.md`.
 
@@ -108,4 +108,4 @@ Status: implementation-informed from `AGENTS.md`.
 
 == Confirmation Record
 
-The user explicitly approved this chapter proposal on 2026-07-10, including the stated product direction, stakeholder expectations, quality goals, and scope boundaries. On 2026-07-11, the user explicitly activated the stable-release target and confirmed the release sequence and stable-contract meaning summarized above.
+The user explicitly approved this chapter proposal on 2026-07-10, including the stated product direction, stakeholder expectations, quality goals, and scope boundaries. On 2026-07-11, the user explicitly activated the stable-release target and confirmed the release sequence and stable-contract meaning summarized above. Later that day, the user confirmed completion of `v0.3.0` publication and the transition toward `1.0.0-rc.1-SNAPSHOT` while API `0.2` remains in force until the stable contract gates pass.

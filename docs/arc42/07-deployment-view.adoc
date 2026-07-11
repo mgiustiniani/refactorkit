@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed for local runtime/package facts; stable release verification is planned.
+Status: implementation-informed for local runtime/package facts and the published `v0.3.0` deployment; stable release verification is planned.
 
 == Deployment Overview
 
@@ -22,7 +22,7 @@ RefactorKit is a local tool/library, not a hosted service. Current repository ev
 |Packaged CLI distribution
 |`bin/refactorkit`, `bin/refactorkit.bat`, module jars under `lib/`, embedded runtime under `runtime/`.
 |Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`; stable promotion additionally verifies checksum, SBOM, provenance/attestation, reproducibility evidence or limits, archive layout, permissions, licenses, version metadata, and `JAVA_HOME`-unset execution.
-|implementation-informed foundation; stable evidence planned
+|implementation-informed; published `v0.3.0` runtime/checksum smoke verified, stable evidence planned
 
 |Editor host process
 |`refactorkit-lsp` process launched by an external editor/IDE.
@@ -44,6 +44,12 @@ RefactorKit is a local tool/library, not a hosted service. Current repository ev
 |In-process use; stable public API and packaging policy need review.
 |planned, needs-review
 |===
+
+== Published Deployment Evidence
+
+The immutable `v0.3.0` tag points to commit `ba114134be605b7b0076e7471f8111c081a8aaa3`. The https://github.com/mgiustiniani/refactorkit/releases/tag/v0.3.0[GitHub Release] is latest and non-prerelease and publishes the runtime ZIP with its `.sha256` asset. The downloaded archive matched SHA-256 `0cf054a7eb99a86734f663ca0966da2b47259b8a4658bca97f9044bc2d21ff10`, passed version, help, and sample-project scan checks with `JAVA_HOME` unset, and was deployed locally.
+
+Status: implementation-informed for `v0.3.0`. This does not satisfy the remaining SBOM, provenance/attestation, reproducibility, and stable-contract gates for `v1.0.0`.
 
 == Runtime Dependencies
 

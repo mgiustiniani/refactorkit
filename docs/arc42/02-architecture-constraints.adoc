@@ -135,9 +135,9 @@ Status: implementation-informed, needs-review for priority and completeness.
 |implementation-informed
 
 |C-PROC-005
-|Release order is `v0.3.0`, immutable `v1.0.0-rc.N` candidate tags as needed, then `v1.0.0`; tags must not be moved or recreated.
+|Release order is published immutable `v0.3.0`, immutable `v1.0.0-rc.N` candidate tags as needed, then `v1.0.0`; tags must not be moved or recreated. Main advances toward `1.0.0-rc.1-SNAPSHOT`, while API `0.2` remains active until stable contract gates pass.
 |`docs/releases/v1.0.0-plan.md`; ADRs 0004, 0005, and 0008.
-|confirmed target
+|confirmed; `v0.3.0` step implementation-informed
 
 |C-PROC-006
 |Stable acceptance must define and pass bounded scan, index, preview, apply, memory, request, result, cache, pending-plan, and transaction-metadata budgets with deterministic timeout/cancellation/limit behavior.

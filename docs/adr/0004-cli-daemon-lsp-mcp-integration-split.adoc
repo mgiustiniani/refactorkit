@@ -36,3 +36,7 @@ LSP capabilities and commands, and MCP tools, resources, and prompts, must each 
 * New capabilities should be added to core APIs first, then surfaced intentionally through each protocol.
 * Unknown methods, fields, invalid parameters, unsupported versions, stale plans, and cancellation must produce deterministic protocol-appropriate outcomes.
 * The release sequence may freeze candidate contracts in immutable `v1.0.0-rc.N` releases after `v0.3.0`; stable status follows acceptance evidence rather than surface availability.
+
+== Implementation Evidence
+
+The published `v0.3.0` release establishes the transition boundary toward `1.0.0-rc.1-SNAPSHOT` development. The advertised API remains `0.2` until the stable contract inventory, compatibility, and acceptance-evidence gates in this decision are satisfied; publication of a latest, non-prerelease `v0.3.0` release does not by itself promote the integration contracts to `apiVersion=1.0`.
