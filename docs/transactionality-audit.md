@@ -282,8 +282,9 @@ for backward verification. Malformed, ID-mismatched, or checksum-invalid records
 owner-only `.quarantine` directory and reported as `transaction.quarantined`.
 Any retained quarantine record blocks list/load/new writes and therefore startup
 recovery until explicit manual review/removal; quarantine failure is separately
-coded. Still open: explicit journal-filesystem capability reporting and
-real kill/torn-write proof for every journal persistence boundary. Deterministic
+coded. Capability reporting now names workspace and journal file stores, whether they
+are shared, and the journal durability strategy alongside atomic-move/file-force/
+directory-force probe results. Still open: real kill/torn-write proof for every journal persistence boundary. Deterministic
 journal hooks now prove that a failure after new-record force leaves a complete
 `PREPARED` intent, a lifecycle temp-file failure preserves the prior record and
 cleans the temp, and a post-atomic-move/pre-directory-force failure leaves the

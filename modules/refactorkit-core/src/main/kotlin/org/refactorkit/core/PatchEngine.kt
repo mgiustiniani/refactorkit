@@ -87,9 +87,13 @@ class PatchEngine(
             runCatching { Files.deleteIfExists(target) }
         }
         val store = runCatching { Files.getFileStore(normalizedRoot) }.getOrNull()
+        val journalStore = runCatching { Files.getFileStore(metadataDir) }.getOrNull()
         return WorkspaceFilesystemCapabilities(
             fileStoreName = store?.name() ?: "unknown",
             fileStoreType = store?.type() ?: "unknown",
+            journalFileStoreName = journalStore?.name() ?: "unknown",
+            journalFileStoreType = journalStore?.type() ?: "unknown",
+            journalSharesWorkspaceFileStore = store != null && journalStore != null && store == journalStore,
             atomicMoveSupported = atomicMove,
             durableFileForceSupported = fileForce,
             durableDirectoryForceSupported = directoryForce,
@@ -1207,10 +1211,14 @@ enum class RollbackMode {
 data class WorkspaceFilesystemCapabilities(
     val fileStoreName: String,
     val fileStoreType: String,
+    val journalFileStoreName: String,
+    val journalFileStoreType: String,
+    val journalSharesWorkspaceFileStore: Boolean,
     val atomicMoveSupported: Boolean,
     val durableFileForceSupported: Boolean,
     val durableDirectoryForceSupported: Boolean,
     val replacementStrategy: String,
+    val journalStrategy: String = "create-new+file-force+atomic-replace+directory-force",
     val failures: List<String> = emptyList(),
 ) {
     val supportsDurableAtomicReplacement: Boolean

@@ -23,6 +23,8 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Extended filesystem capability reporting with journal store identity,
+  workspace-store relationship, and durability strategy.
 - Added deterministic journal fault hooks and tests around new-record force,
   lifecycle temp-file force, atomic move, cleanup, and restart readability.
 - Added deterministic workspace fault hooks and tests for staging disk-full,

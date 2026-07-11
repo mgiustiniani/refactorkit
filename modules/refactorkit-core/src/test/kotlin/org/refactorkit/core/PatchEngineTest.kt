@@ -250,6 +250,10 @@ class PatchEngineTest {
         val capabilities = PatchEngine(root).filesystemCapabilities()
 
         assertTrue(capabilities.fileStoreType.isNotBlank())
+        assertTrue(capabilities.journalFileStoreName.isNotBlank())
+        assertTrue(capabilities.journalFileStoreType.isNotBlank())
+        assertTrue(capabilities.journalSharesWorkspaceFileStore)
+        assertEquals("create-new+file-force+atomic-replace+directory-force", capabilities.journalStrategy)
         assertEquals(
             capabilities.atomicMoveSupported &&
                 capabilities.durableFileForceSupported &&
