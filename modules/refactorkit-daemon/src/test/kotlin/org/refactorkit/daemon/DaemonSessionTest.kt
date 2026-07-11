@@ -45,6 +45,26 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun serverCapabilitiesDescribesMethodsAndSafetyWithoutOpenProject() {
+        val session = DaemonSession()
+
+        val result = session.dispatch("server.capabilities", null) as JsonObject
+        val methods = result["methods"]!!.jsonArray.map { it.jsonObject }
+        val byName = methods.associateBy { it["name"]!!.jsonPrimitive.content }
+        val safety = result["safety"]!!.jsonObject
+
+        assertEquals(RefactorKitVersion.API_VERSION, result["apiVersion"]!!.jsonPrimitive.content)
+        assertEquals("json-rpc-2.0", result["protocol"]!!.jsonPrimitive.content)
+        assertEquals("stdio", result["transport"]!!.jsonPrimitive.content)
+        assertEquals("beta-contract", byName["refactor.apply"]!!["stability"]!!.jsonPrimitive.content)
+        assertEquals("true", byName["refactor.apply"]!!["writesWorkspace"]!!.jsonPrimitive.content)
+        assertEquals("experimental", byName["java.importExternalClass"]!!["stability"]!!.jsonPrimitive.content)
+        assertEquals("false", byName["server.version"]!!["requiresProject"]!!.jsonPrimitive.content)
+        assertEquals("true", safety["previewBeforeApply"]!!.jsonPrimitive.content)
+        assertEquals("true", safety["transactionRollback"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun projectOpenReturnsFileCount() {
         val root = createProject(
             "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",

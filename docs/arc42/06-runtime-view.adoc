@@ -82,6 +82,30 @@ Status: implementation-informed from `docs/ai-workflow.md` and `docs/integration
 
 Status: implementation-informed from `docs/integration-contracts.md`.
 
+== Runtime Scenario: Daemon Capability Discovery Before Project Open
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|A daemon client starts the local daemon over stdio and sends JSON-RPC method `server.capabilities` before `project.open`.
+
+|2
+|The daemon returns RefactorKit name, version, API version, protocol `json-rpc-2.0`, and transport `stdio` without creating a project session or accessing a workspace.
+
+|3
+|The response lists documented daemon methods with stability, `requiresProject`, and `writesWorkspace` descriptors. `java.importExternalClass` is explicitly classified as experimental.
+
+|4
+|The response also advertises preview-before-apply, snapshot validation, transaction rollback, and workspace-scoped-write safety flags.
+
+|5
+|The client uses the metadata to select compatible calls and still opens a project before invoking methods whose descriptor requires one. Discovery itself grants no filesystem access.
+|===
+
+Status: implementation-informed from `DaemonSession`, its daemon contract test, and `docs/integration-contracts.md`.
+
 == Runtime Scenario: External Java Class Import Preview
 
 [cols="1,3",options="header"]

@@ -35,8 +35,8 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |JSON-RPC Daemon
 |Kotlin/JVM application
-|Long-running stdio JSON-RPC session for project open/summary, symbols, diagnostics, refactor preview/apply, and rollback.
-|`modules/refactorkit-daemon`, `docs/integration-contracts.md`.
+|Long-running stdio JSON-RPC session for pre-project version/capability discovery, project open/summary, symbols, diagnostics, refactor preview/apply, and rollback. Capability discovery describes method stability, project requirements, workspace-write behavior, and safety guarantees without opening a workspace.
+|`modules/refactorkit-daemon`, daemon contract tests, `docs/integration-contracts.md`.
 |implementation-informed
 
 |LSP Server

@@ -94,6 +94,12 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |`docs/ai-workflow.md`, `docs/integration-contracts.md`.
 |implementation-informed
 
+|QS-API-001
+|Interoperability
+|Before opening a project, a daemon client can discover implementation/API identity, JSON-RPC stdio transport, method stability and project/write requirements, and advertised patch-safety properties without causing workspace access or mutation.
+|`DaemonSessionTest.serverCapabilitiesDescribesMethodsAndSafetyWithoutOpenProject`; daemon contract documentation.
+|implementation-informed
+
 |QS-PORT-001
 |Portability
 |A packaged CLI can run with its embedded runtime and scan a sample project without relying on `PATH` Java.

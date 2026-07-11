@@ -16,6 +16,9 @@ review safety boundaries before applying refactorings.
 - Exposed version metadata through `refactorkit --version`, `refactorkit version`,
   CLI help text, daemon JSON-RPC `server.version`, and LSP/MCP `serverInfo`.
 - Added CLI, daemon, LSP, and MCP tests for the version/API metadata surfaces.
+- Added daemon JSON-RPC `server.capabilities`, available before project open, with
+  implementation/API metadata, transport/protocol identifiers, method stability,
+  project/write requirements, and preview/snapshot/rollback/workspace safety flags.
 - Drafted the compatibility and deprecation policy for beta-contract,
   experimental, and internal integration surfaces.
 - Added ADR 0008, selecting Eclipse JDT as the primary `v0.3.0` compiler-backed

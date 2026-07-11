@@ -68,6 +68,14 @@ External Java class import records provenance warnings, detects common license i
 
 Status: implementation-informed.
 
+== Protocol Capability Discovery
+
+The stdio JSON-RPC daemon exposes read-only `server.capabilities` before `project.open`. Its response identifies the implementation and API version, fixes protocol and transport to `json-rpc-2.0` over `stdio`, and describes each documented method by stability, project prerequisite, and workspace-write behavior. The external Java import preview method is marked `experimental`; the documented daemon baseline is marked `beta-contract`.
+
+The response advertises the cross-cutting safety properties `previewBeforeApply`, `snapshotValidation`, `transactionRollback`, and `workspaceScopedWrites`. These flags describe server behavior; capability discovery neither opens a project nor authorizes filesystem access. A daemon contract test exercises response metadata on a fresh session.
+
+Status: implementation-informed.
+
 == Agent and MCP Safety
 
 MCP exposes deterministic tools, resources, and prompts. File resources are scoped to the scanned workspace snapshot and arbitrary filesystem access is refused. Agent workflow expects project scan, focused context, preview, inspection, apply, diagnostics, and rollback.

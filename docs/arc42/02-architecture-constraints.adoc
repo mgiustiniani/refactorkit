@@ -54,6 +54,11 @@ Status: implementation-informed, needs-review for priority and completeness.
 |The CLI distribution must be able to include an embedded Java runtime created with `jlink`.
 |`docs/packaging.md`, CLI Gradle packaging tasks.
 |implementation-informed
+
+|C-TECH-010
+|The stdio daemon must expose read-only capability discovery before a project is opened. Discovery reports protocol and transport identity, method stability and project/write requirements, and the safety properties clients may rely on.
+|`DaemonSession.serverCapabilities`, `DaemonSessionTest`, `docs/integration-contracts.md`.
+|implementation-informed
 |===
 
 == Architectural Boundary Constraints

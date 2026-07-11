@@ -82,6 +82,7 @@ of the beta baseline for documented methods.
 | Method | Status | Request category |
 |--------|--------|------------------|
 | `server.version` | `beta-contract` | Read-only implementation/API metadata; does not require an opened project. |
+| `server.capabilities` | `beta-contract` | Read-only protocol/method/safety discovery; does not require an opened project. |
 | `project.open` | `beta-contract` | Workspace lifecycle; requires `root`. |
 | `project.summary` | `beta-contract` | Read-only project metadata. |
 | `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
@@ -93,6 +94,22 @@ of the beta baseline for documented methods.
 | `patch.rollback` | `beta-contract` | Requires `transactionId`; must stay inside workspace root. |
 | `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |
+
+### `server.capabilities` contract
+
+`server.capabilities` is available before project open and returns additive
+read-only discovery metadata:
+
+- `name`, `version`, and `apiVersion`;
+- `protocol` (`json-rpc-2.0`) and `transport` (`stdio`);
+- `methods`, where each entry exposes `name`, `stability`, `requiresProject`, and
+  `writesWorkspace`;
+- `safety`, including `previewBeforeApply`, `snapshotValidation`,
+  `transactionRollback`, and `workspaceScopedWrites`.
+
+Clients should use this response instead of inferring mutability or stability
+from method names. Capability discovery does not open a project and does not
+authorize filesystem access.
 
 ### `server.version` contract
 

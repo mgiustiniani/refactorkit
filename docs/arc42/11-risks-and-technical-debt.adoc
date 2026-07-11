@@ -91,6 +91,12 @@ Status: implementation-informed, needs human review for prioritization.
 |A move may require manual follow-up outside analyzed source. Parse/classpath warnings or unavailable target binding trigger broader lexical file scoping, which can reintroduce unrelated old-package edits or same-simple-name confusion.
 |Retain explicit lexical-file-scoping and non-source warnings, target conflict/invalid-package refusals, overlap prevention, and binding-scoping tests; broaden classpath and non-source reference analysis before lowering risk.
 |known risk
+
+|R-015
+|Daemon capability metadata is maintained alongside the request dispatcher and can drift from implemented method behavior.
+|Clients could make incorrect compatibility, project-lifecycle, or workspace-write assumptions from stale descriptors or safety flags.
+|Keep the capability contract test aligned with every documented daemon method; prefer deriving dispatch and discovery from one method registry if the surface grows.
+|known risk
 |===
 
 == Technical Debt from Release Plan

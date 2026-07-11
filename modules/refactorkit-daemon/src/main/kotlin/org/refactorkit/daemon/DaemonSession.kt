@@ -56,8 +56,9 @@ class DaemonSession {
     // ── public dispatcher ─────────────────────────────────────────────────────
 
     fun dispatch(method: String, params: JsonObject?): JsonElement = when (method) {
-        "server.version"    -> serverVersion()
-        "project.open"      -> projectOpen(params)
+        "server.version"      -> serverVersion()
+        "server.capabilities" -> serverCapabilities()
+        "project.open"        -> projectOpen(params)
         "project.summary"   -> projectSummary()
         "symbol.search"     -> symbolSearch(params)
         "symbol.definition" -> symbolDefinition(params)
@@ -76,6 +77,30 @@ class DaemonSession {
         put("name", RefactorKitVersion.NAME)
         put("version", RefactorKitVersion.VERSION)
         put("apiVersion", RefactorKitVersion.API_VERSION)
+    }
+
+    private fun serverCapabilities(): JsonElement = buildJsonObject {
+        put("name", RefactorKitVersion.NAME)
+        put("version", RefactorKitVersion.VERSION)
+        put("apiVersion", RefactorKitVersion.API_VERSION)
+        put("protocol", "json-rpc-2.0")
+        put("transport", "stdio")
+        put("methods", buildJsonArray {
+            DAEMON_METHODS.forEach { capability ->
+                add(buildJsonObject {
+                    put("name", capability.name)
+                    put("stability", capability.stability)
+                    put("requiresProject", capability.requiresProject)
+                    put("writesWorkspace", capability.writesWorkspace)
+                })
+            }
+        })
+        put("safety", buildJsonObject {
+            put("previewBeforeApply", true)
+            put("snapshotValidation", true)
+            put("transactionRollback", true)
+            put("workspaceScopedWrites", true)
+        })
     }
 
     private fun projectOpen(params: JsonObject?): JsonElement {
@@ -351,7 +376,28 @@ class DaemonSession {
         })
     }
 
+    private data class DaemonMethodCapability(
+        val name: String,
+        val stability: String,
+        val requiresProject: Boolean,
+        val writesWorkspace: Boolean,
+    )
+
     companion object {
         private const val MAX_PENDING_PLANS = 128
+        private val DAEMON_METHODS = listOf(
+            DaemonMethodCapability("server.version", "beta-contract", false, false),
+            DaemonMethodCapability("server.capabilities", "beta-contract", false, false),
+            DaemonMethodCapability("project.open", "beta-contract", false, false),
+            DaemonMethodCapability("project.summary", "beta-contract", true, false),
+            DaemonMethodCapability("symbol.search", "beta-contract", true, false),
+            DaemonMethodCapability("symbol.definition", "beta-contract", true, false),
+            DaemonMethodCapability("symbol.references", "beta-contract", true, false),
+            DaemonMethodCapability("diagnostics", "beta-contract", true, false),
+            DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
+            DaemonMethodCapability("refactor.apply", "beta-contract", true, true),
+            DaemonMethodCapability("patch.rollback", "beta-contract", true, true),
+            DaemonMethodCapability("java.importExternalClass", "experimental", true, false),
+        )
     }
 }
