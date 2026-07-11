@@ -23,6 +23,9 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Closed daemon state gap `TX-018`: successful apply/rollback now replaces the
+  stored session snapshot, clears every stale pending plan, returns the refreshed
+  hash, and serves current summary/symbol queries immediately.
 - Closed LSP ownership/version gap `TX-007`: full-sync open buffers now overlay
   disk snapshots, document versions must increase, native WorkspaceEdits declare
   client-managed/no-rollback ownership and carry exact open-document versions,

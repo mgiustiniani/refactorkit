@@ -332,19 +332,23 @@ Daemon/LSP rollback post-image conflicts now map to stable
 `ApplyResult.Refused` causes to `SNAPSHOT_CHANGED`, even for overlap, unsafe path,
 missing file, collision, capability refusal, or another validation error.
 
-### TX-018 — Daemon state is stale after successful apply/rollback
+### TX-018 — Daemon state refresh after mutation
 
-The daemon apply/rollback paths rescan locally for validation but do not assign the
-new snapshot back to the session, unlike MCP/LSP refresh behavior. Subsequent
-queries can observe stale session metadata until another project-open/refresh
-path occurs.
+Status: **closed after the audited baseline**.
+
+After successful apply or rollback, the daemon rescans the workspace, atomically
+replaces its session snapshot, clears every pending plan derived from the old
+state, and returns the refreshed `snapshotHash`. Subsequent project summary and
+symbol queries therefore observe the committed or restored state immediately.
+Tests verify response/session hash equality and symbol visibility after both
+apply and rollback.
 
 ## Flow classification
 
 | Flow | Preflight | Workspace writes | Durable intent before write | Rollback record | Current classification |
 |------|-----------|------------------|-----------------------------|-----------------|------------------------|
 | CLI `--apply` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed recoverable transaction on supported filesystems |
-| Daemon `refactor.apply` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed transaction; session refresh remains open |
+| Daemon `refactor.apply` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed transaction with immediate session refresh (`TX-018` closed) |
 | MCP `apply_refactoring` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed recoverable transaction on supported filesystems |
 | LSP `refactorkit.applyPlan` | yes, under lock | staged durable per-path atomic replacement | versioned WAL | retained lifecycle record | managed transaction; native client edits are separate |
 | LSP native rename/WorkspaceEdit command | overlay-aware versioned planning | editor/client writes | no | no RefactorKit transaction for client write | explicitly client-managed; open buffers carry checked versions (`TX-007` closed) |

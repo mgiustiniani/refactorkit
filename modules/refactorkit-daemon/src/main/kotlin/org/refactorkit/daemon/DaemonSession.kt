@@ -280,11 +280,14 @@ class DaemonSession {
         val currentSnap = scanner.scan(root)
         return when (val result = PatchEngine(root).apply(plan, currentSnap)) {
             is ApplyResult.Applied -> {
-                pendingPlans.remove(planId)
+                val refreshed = scanner.scan(root)
+                snapshot = refreshed
+                pendingPlans.clear()
                 buildJsonObject {
                     put("status", "applied")
                     put("transactionId", result.transaction.id.value)
                     put("planId", planId)
+                    put("snapshotHash", refreshed.hash)
                 }
             }
             is ApplyResult.Refused -> {
@@ -325,9 +328,13 @@ class DaemonSession {
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $txId")
         return when (val result = PatchEngine(root).rollback(tx, mode)) {
             is ApplyResult.Applied -> {
+                val refreshed = scanner.scan(root)
+                snapshot = refreshed
+                pendingPlans.clear()
                 buildJsonObject {
                     put("status", "rolledBack")
                     put("transactionId", txId)
+                    put("snapshotHash", refreshed.hash)
                 }
             }
             is ApplyResult.Refused -> {

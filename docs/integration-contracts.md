@@ -93,8 +93,8 @@ of the beta baseline for documented methods.
 | `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |
 | `diagnostics` | `beta-contract` | Read-only diagnostics query. |
 | `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
-| `refactor.apply` | `beta-contract` | Requires `planId`; must reject stale snapshots/plans. |
-| `patch.rollback` | `beta-contract` | Requires `transactionId`; must stay inside workspace root. |
+| `refactor.apply` | `beta-contract` | Requires `planId`; rejects stale snapshots/plans, refreshes session state, clears stale pending plans, and returns `snapshotHash`. |
+| `patch.rollback` | `beta-contract` | Requires `transactionId`; stays inside workspace root, refreshes session state, clears stale pending plans, and returns `snapshotHash`. |
 | `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |
 

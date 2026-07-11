@@ -171,9 +171,9 @@ Status: implementation-informed, needs human review for prioritization.
 |controlled
 
 |R-028
-|Diagnostics, approval, error mapping, and daemon state refresh are not transactionally enforced (`TX-015`, `TX-016`, `TX-017`, `TX-018`).
-|Apply can commit unapproved diagnostic regressions; approval lacks an auditable meaning; clients cannot distinguish refusal/recovery causes; daemon queries can observe stale post-write metadata.
-|Define authoritative diagnostic gates and approval semantics, publish stable error categories, compensate or report diagnostic failures deterministically, and refresh session state after apply/rollback.
+|Diagnostics, approval, and complete error mapping are not transactionally enforced (`TX-015`, `TX-016`, `TX-017`); daemon state refresh is implemented (`TX-018` closed).
+|Apply can commit unapproved diagnostic regressions; approval lacks an auditable meaning; clients cannot distinguish every refusal/recovery cause.
+|Define authoritative diagnostic gates and approval semantics, publish stable error categories, and compensate or report diagnostic failures deterministically.
 |planned release blocker
 |===
 

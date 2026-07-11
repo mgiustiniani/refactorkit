@@ -43,7 +43,7 @@ Recipes use one staged transaction boundary. Each step is previewed against the 
 * Unknown methods, fields, invalid parameters, unsupported versions, stale plans, validation failures, rollback conflicts, cancellation, and recovery-required states must produce deterministic, protocol-appropriate outcomes.
 * Native LSP responses declare client ownership and no RefactorKit rollback, while exact open-document versions protect editor application; managed apply/rollback remains a separate WAL-backed path.
 * Recipe contracts expose one recipe-wide preview/apply/rollback boundary; step plans are staging evidence and are not independently committed.
-* Daemon state must be refreshed after successful apply and rollback before subsequent queries can be considered current.
+* Daemon state is refreshed and stale pending plans are cleared after successful apply/rollback before any subsequent query (`TX-018` closed).
 * The release sequence may freeze candidate contracts in immutable `v1.0.0-rc.N` releases after `v0.3.0`; stable status follows acceptance evidence rather than surface availability.
 * Open consequences remain planned contract work except where the audited findings explicitly record implementation closure.
 
@@ -59,9 +59,9 @@ The link:../transactionality-audit.md[transactionality audit] at commit `5f47ad0
 * `TX-015`: integrations do not consistently run diagnostics as central pre-apply and post-apply transaction gates.
 * `TX-016`: `requiresUserApproval` is not enforced as a separate auditable state, so the meaning of apply invocation as approval remains a contract decision.
 * `TX-017` is narrowed: daemon/LSP rollback conflict and recovery-required outcomes now use stable dedicated codes, while apply validation failures can still collapse into `SNAPSHOT_CHANGED` and require complete error-category mapping.
-* `TX-018`: daemon apply and rollback validate with local rescans but do not update the stored session snapshot, so later queries can observe stale metadata.
+* `TX-018` is closed after the audit baseline: daemon apply/rollback rescans into the stored session snapshot, clears stale pending plans, returns the new hash, and serves current symbols/summary immediately.
 
-These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and source/classpath `TX-014` are recorded here as fixed; `TX-007` and `TX-008` are also closed with versioned client-edit and single staged recipe boundaries; the other findings remain open or narrowed as stated.
+These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and source/classpath `TX-014` are recorded here as fixed; `TX-007`, `TX-008`, and `TX-018` are also closed with versioned client-edit, single staged recipe, and current daemon-session boundaries; the other findings remain open or narrowed as stated.
 
 == Implementation Evidence
 

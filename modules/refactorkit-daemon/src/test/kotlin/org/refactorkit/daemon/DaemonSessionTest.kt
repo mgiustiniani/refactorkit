@@ -1,5 +1,6 @@
 package org.refactorkit.daemon
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -189,6 +190,11 @@ class DaemonSessionTest {
             put("arguments", buildJsonObject { put("newName", "AccountManager") })
         }) as JsonObject
         val planId = planResult["planId"]!!.jsonPrimitive.content
+        val stalePlan = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "renameClass")
+            put("symbol", "com.example.UserManager")
+            put("arguments", buildJsonObject { put("newName", "LegacyManager") })
+        }) as JsonObject
 
         val applyResult = session.dispatch("refactor.apply", params("planId" to planId)) as JsonObject
         val transactionId = applyResult["transactionId"]!!.jsonPrimitive.content
@@ -196,12 +202,46 @@ class DaemonSessionTest {
         assertEquals("applied", applyResult["status"]!!.jsonPrimitive.content)
         assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
         assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+        val summaryAfterApply = session.dispatch("project.summary", null) as JsonObject
+        assertEquals(
+            applyResult["snapshotHash"]!!.jsonPrimitive.content,
+            summaryAfterApply["snapshotHash"]!!.jsonPrimitive.content,
+        )
+        val symbolsAfterApply = session.dispatch("symbol.search", params("query" to "AccountManager")) as JsonArray
+        assertTrue(symbolsAfterApply.any { it.jsonObject["id"]!!.jsonPrimitive.content == "com.example.AccountManager" })
+        val stalePlanError = assertFailsWith<JsonRpcException> {
+            session.dispatch(
+                "refactor.apply",
+                params("planId" to stalePlan["planId"]!!.jsonPrimitive.content),
+            )
+        }
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, stalePlanError.code)
+        assertTrue(stalePlanError.message.contains("Plan not found"))
+        val pendingBeforeRollback = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "renameClass")
+            put("symbol", "com.example.AccountManager")
+            put("arguments", buildJsonObject { put("newName", "CurrentManager") })
+        }) as JsonObject
 
         val rollbackResult = session.dispatch("patch.rollback", params("transactionId" to transactionId)) as JsonObject
 
         assertEquals("rolledBack", rollbackResult["status"]!!.jsonPrimitive.content)
         assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
         assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+        val summaryAfterRollback = session.dispatch("project.summary", null) as JsonObject
+        assertEquals(
+            rollbackResult["snapshotHash"]!!.jsonPrimitive.content,
+            summaryAfterRollback["snapshotHash"]!!.jsonPrimitive.content,
+        )
+        val symbolsAfterRollback = session.dispatch("symbol.search", params("query" to "UserManager")) as JsonArray
+        assertTrue(symbolsAfterRollback.any { it.jsonObject["id"]!!.jsonPrimitive.content == "com.example.UserManager" })
+        val rollbackClearedPlan = assertFailsWith<JsonRpcException> {
+            session.dispatch(
+                "refactor.apply",
+                params("planId" to pendingBeforeRollback["planId"]!!.jsonPrimitive.content),
+            )
+        }
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, rollbackClearedPlan.code)
     }
 
     @Test

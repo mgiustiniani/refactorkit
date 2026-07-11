@@ -113,7 +113,7 @@ Status: implementation-informed from `docs/integration-contracts.md` and `docs/t
 |The client uses the metadata to select compatible calls and still opens a project before invoking methods whose descriptor requires one. Discovery itself grants no filesystem access.
 |===
 
-Status: implementation-informed from `DaemonSession`, its daemon contract test, `docs/integration-contracts.md`, and the transactionality audit. Current apply/rollback rescans used for validation are not assigned back to the daemon session, so later queries can observe stale metadata (`TX-018`).
+Status: implementation-informed from `DaemonSession`, its daemon contract test, `docs/integration-contracts.md`, and the transactionality audit. Successful apply/rollback rescans into the stored session, clears stale pending plans, returns the new snapshot hash, and makes subsequent summary/symbol queries current (`TX-018` closed).
 
 == Runtime Scenario: Staged Recipe Apply
 
