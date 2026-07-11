@@ -253,8 +253,11 @@ Records now contain schema version, operation, forward edit, compensation,
 affected-file pre/post content images, pre-snapshot hash, lifecycle state,
 update time, and failure detail. Successful rollback retains history as
 `ROLLED_BACK`. Remaining stable fields include implementation/API version,
-post-apply workspace snapshot, validation/recovery-attempt history, content
-hashes separated from recovery payloads, and an integrity checksum.
+post-apply workspace snapshot, validation/recovery-attempt history, and content
+hashes separated from recovery payloads. Schema-v2 records now carry a canonical
+SHA-256 integrity checksum covering transaction, approval, edits, pre/post images,
+lifecycle, timestamps, and failure detail; tampering fails as
+`transaction.corrupt`.
 
 ### TX-012 — Transaction-log persistence is not atomic or corruption-safe
 
@@ -263,9 +266,10 @@ Status: **partially closed**.
 New records use create-new plus file/directory durable flush. Lifecycle updates
 write and fsync a same-directory temporary file, require atomic replacement, and
 fsync the journal directory. Parsing/schema/path failures remain coded. Still
-open: integrity checksum, schema migration, corrupt-record quarantine, explicit
-filesystem capability reporting, and fault-injected proof for every persistence
-boundary.
+Schema-v2 writes include and verify a canonical SHA-256 checksum. Schema-v1
+records remain readable and are atomically migrated to v2 on the next lifecycle
+update. Still open: corrupt-record quarantine, explicit journal-filesystem
+capability reporting, and fault-injected proof for every persistence boundary.
 
 ### TX-013 — Rollback does not restore full filesystem state
 

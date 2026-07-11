@@ -23,6 +23,9 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added schema-v2 transaction journal SHA-256 integrity checksums covering the
+  complete canonical record. Tampering is rejected as `transaction.corrupt`;
+  schema-v1 records remain readable and migrate atomically on lifecycle update.
 - Added a central staged diagnostics gate for production managed Java applies.
   CLI, daemon, managed LSP, MCP, recipes, and golden tests compare JDT errors on
   current versus exact post-image snapshots under lock and refuse regressions or

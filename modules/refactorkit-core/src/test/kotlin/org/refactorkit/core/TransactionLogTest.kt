@@ -168,6 +168,63 @@ class TransactionLogTest {
     }
 
     @Test
+    fun detectsChecksumTampering() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-checksum")
+        val log = TransactionLog(logDir)
+        val transaction = Transaction(
+            planId = PlanId("plan-checksum"),
+            snapshotHashBefore = "hash-before",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        log.save(transaction)
+        val file = logDir.resolve("${transaction.id.value}.json")
+        val persisted = Files.readString(file)
+        assertTrue(persisted.contains("\"checksum\""))
+        Files.writeString(file, persisted.replace("hash-before", "hash-after"))
+
+        val error = assertFailsWith<TransactionLogException> { log.loadRecord(transaction.id) }
+
+        assertEquals("transaction.corrupt", error.code)
+        assertTrue(error.cause?.message?.contains("checksum mismatch") == true)
+    }
+
+    @Test
+    fun readsSchemaOneAndMigratesOnLifecycleUpdate() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-migration")
+        val log = TransactionLog(logDir)
+        val transaction = Transaction(
+            planId = PlanId("plan-migration"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        val prepared = TransactionJournalRecord(
+            transaction = transaction,
+            operation = "migration",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        )
+        log.prepare(prepared)
+        val file = logDir.resolve("${transaction.id.value}.json")
+        val schemaOne = Files.readString(file)
+            .replace("\"schemaVersion\": 2", "\"schemaVersion\": 1")
+            .lineSequence()
+            .filterNot { it.trimStart().startsWith("\"checksum\"") }
+            .joinToString("\n")
+            .replace(",\n}", "\n}")
+        Files.writeString(file, schemaOne)
+
+        val legacy = log.loadRecord(transaction.id)!!
+        assertEquals(1, legacy.schemaVersion)
+        log.update(legacy.copy(state = JournalState.APPLYING))
+
+        val migrated = log.loadRecord(transaction.id)!!
+        assertEquals(TransactionJournalRecord.CURRENT_SCHEMA_VERSION, migrated.schemaVersion)
+        assertTrue(Files.readString(file).contains("\"checksum\""))
+    }
+
+    @Test
     fun reportsCorruptTransactionRecordStructurally() {
         val logDir = Files.createTempDirectory("refactorkit-txlog-corrupt")
         val id = TransactionId.new()

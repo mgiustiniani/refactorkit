@@ -5,6 +5,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.security.MessageDigest
 import java.time.Instant
 
 enum class JournalState {
@@ -33,7 +34,7 @@ data class TransactionJournalRecord(
     val failure: String? = null,
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 1
+        const val CURRENT_SCHEMA_VERSION = 2
     }
 }
 
@@ -48,6 +49,7 @@ internal data class TransactionJournalDto(
     val state: String,
     val updatedAt: String,
     val failure: String? = null,
+    val checksum: String? = null,
 )
 
 @Serializable
@@ -57,10 +59,11 @@ internal data class FileImageDto(
 )
 
 private val journalJson = Json { prettyPrint = true; ignoreUnknownKeys = true }
+private val canonicalJournalJson = Json { prettyPrint = false; encodeDefaults = true }
 
-internal fun TransactionJournalRecord.toJson(): String = journalJson.encodeToString(
-    TransactionJournalDto(
-        schemaVersion = schemaVersion,
+internal fun TransactionJournalRecord.toJson(): String {
+    val unsigned = TransactionJournalDto(
+        schemaVersion = TransactionJournalRecord.CURRENT_SCHEMA_VERSION,
         transaction = transaction.toDto(),
         operation = operation,
         forwardEdit = forwardEdit.toDto(),
@@ -69,13 +72,19 @@ internal fun TransactionJournalRecord.toJson(): String = journalJson.encodeToStr
         state = state.name,
         updatedAt = updatedAt.toString(),
         failure = failure,
-    ),
-)
+        checksum = null,
+    )
+    return journalJson.encodeToString(unsigned.copy(checksum = checksum(unsigned)))
+}
 
 internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
     val dto = journalJson.decodeFromString<TransactionJournalDto>(json)
-    require(dto.schemaVersion == TransactionJournalRecord.CURRENT_SCHEMA_VERSION) {
+    require(dto.schemaVersion in 1..TransactionJournalRecord.CURRENT_SCHEMA_VERSION) {
         "Unsupported transaction journal schema: ${dto.schemaVersion}"
+    }
+    if (dto.schemaVersion >= 2) {
+        require(!dto.checksum.isNullOrBlank()) { "Transaction journal checksum is missing" }
+        require(dto.checksum == checksum(dto.copy(checksum = null))) { "Transaction journal checksum mismatch" }
     }
     return TransactionJournalRecord(
         schemaVersion = dto.schemaVersion,
@@ -88,4 +97,9 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
         updatedAt = Instant.parse(dto.updatedAt),
         failure = dto.failure,
     )
+}
+
+private fun checksum(dto: TransactionJournalDto): String {
+    val bytes = canonicalJournalJson.encodeToString(dto).toByteArray(Charsets.UTF_8)
+    return MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }
