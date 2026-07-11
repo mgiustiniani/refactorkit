@@ -54,8 +54,8 @@ apply endpoint is the explicit approval event; no separate token
 exchange is required. Each surface supplies an `ApplyAuthorization` identity and
 the WAL transaction persists approval kind, surface, actor, and timestamp. Plans
 with `requiresUserApproval=true` refuse before journaling when authorization is
-missing. Direct two-argument library apply records the invocation as surface
-`library`; callers needing an approval workflow use the authorization overload.
+missing. Direct library apply requires explicit `ApplyAuthorization` and
+`DiagnosticsGate`; there is no implicit approval or ungated overload.
 
 ## CLI compatibility baseline
 

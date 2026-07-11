@@ -307,7 +307,7 @@ writer guarantee and remains destructive-concurrency test scope.
 
 ### TX-015 — Central diagnostics transaction gate
 
-Status: **closed for production managed Java surfaces; low-level ungated overload retained for compatibility**.
+Status: **closed after the audited baseline**.
 
 `PatchEngine` now owns diagnostics-regression evaluation under the workspace
 lock after snapshot/precondition validation and before WAL creation. A configured
@@ -322,11 +322,11 @@ CLI, daemon, managed LSP, MCP, recipe, and golden-test flows configure the JDT
 Java diagnostics provider centrally rather than trusting planner-populated
 metadata. Because `PatchEngine` commits exactly the validated staged post-images,
 the pre-WAL simulated snapshot is the authoritative post-apply diagnostic state.
-Core tests prove regression refusal and preservation of pre-existing errors.
-Two-/three-argument low-level library overloads remain source-compatible with an
-explicitly named disabled gate (`library-unspecified`/surface id); removing those
-overloads or requiring a provider is still an API-freeze decision before claiming
-that arbitrary third-party direct-library calls are diagnostics-gated.
+Core tests prove regression refusal and preservation of pre-existing errors. The
+ungated two-/three-argument `PatchEngine.apply` overloads were removed before API
+freeze: every direct library caller must now provide both `ApplyAuthorization`
+and `DiagnosticsGate`. Test-only package extensions make any intentionally
+disabled gate explicit rather than a production default.
 
 ### TX-016 — Approval semantics and audit state
 
@@ -338,9 +338,9 @@ there is no separate approval-token lifecycle. `PatchEngine` accepts an
 with `approval.required`/`APPROVAL_REQUIRED (-32014)` when authorization is
 missing, and creates no journal record on refusal. Successful transactions retain
 an immutable `ApprovalRecord` with `EXPLICIT_APPLY` or `NOT_REQUIRED`, surface,
-actor, and timestamp. The two-argument direct-library apply overload itself is
-the explicit approval event and records surface `library`; CLI, daemon, managed
-LSP, MCP, recipe, and testkit paths provide their specific surface identifiers.
+actor, and timestamp. Direct-library apply requires an explicit `ApplyAuthorization`; CLI, daemon,
+managed LSP, MCP, recipe, and testkit paths provide their specific surface
+identifiers.
 Legacy journal DTOs remain readable with `LEGACY_UNRECORDED`. Tests prove refusal
 without writes, persisted approval identity, and backward-compatible journal
 round trips.

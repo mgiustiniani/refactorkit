@@ -410,6 +410,6 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |needs-review
 
 |Transaction semantics exceed implementation evidence
-|The transactionality audit narrows remaining gaps to stable direct-library diagnostics-gate enforcement, metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.
+|The transactionality audit narrows remaining gaps to metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.
 |release blocker; requirements need confirmation/narrowing
 |===

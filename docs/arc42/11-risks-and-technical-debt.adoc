@@ -171,9 +171,9 @@ Status: implementation-informed, needs human review for prioritization.
 |controlled
 
 |R-028
-|Production managed Java surfaces use the core staged JDT diagnostics gate (`TX-015` closed for those surfaces); compatibility direct-library overloads remain explicitly ungated. `TX-016` through `TX-018` are closed.
-|A third-party direct-library caller using a compatibility overload can omit authoritative diagnostics.
-|Require `DiagnosticsGate` when freezing the stable direct-library apply API; retain staged-regression tests.
+|Core apply requires an explicit staged diagnostics gate; managed Java surfaces use JDT (`TX-015` closed). `TX-016` through `TX-018` are closed.
+|A caller can deliberately pass a disabled gate, but this choice is explicit and identifiable rather than an implicit production default.
+|Document disabled-gate use as unsupported for stable managed Java flows and retain staged-regression tests.
 |planned release blocker
 |===
 

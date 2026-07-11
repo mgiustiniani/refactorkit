@@ -27,6 +27,7 @@ review safety boundaries before applying refactorings.
   CLI, daemon, managed LSP, MCP, recipes, and golden tests compare JDT errors on
   current versus exact post-image snapshots under lock and refuse regressions or
   unavailable diagnostics as `DIAGNOSTICS_FAILED (-32015)` before WAL creation.
+  Direct library apply now requires explicit authorization and diagnostics gate.
 - Closed approval gap `TX-016`: explicit managed apply is the approval event;
   missing authorization refuses before journaling, while transactions persist
   approval kind, surface, actor, and timestamp with legacy-record compatibility.

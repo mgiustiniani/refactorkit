@@ -120,20 +120,6 @@ class PatchEngine(
      * scan is treated as the pre-lock expectation and every initially affected
      * file is revalidated after lock acquisition before the first mutation.
      */
-    fun apply(plan: PatchPlan, currentSnapshot: ProjectSnapshot): ApplyResult =
-        apply(
-            plan,
-            currentSnapshot,
-            ApplyAuthorization.explicit("library"),
-            DiagnosticsGate.disabled("library-unspecified"),
-        )
-
-    fun apply(
-        plan: PatchPlan,
-        currentSnapshot: ProjectSnapshot,
-        authorization: ApplyAuthorization,
-    ): ApplyResult = apply(plan, currentSnapshot, authorization, DiagnosticsGate.disabled(authorization.surface))
-
     fun apply(
         plan: PatchPlan,
         currentSnapshot: ProjectSnapshot,
