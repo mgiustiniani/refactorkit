@@ -1,8 +1,9 @@
 # Rename class and member
 
-Status: implementation-informed for `v0.2.0-beta` documentation. Rename
-operations are lexical Java previews backed by `PatchPlan`, not full compiler
-semantic refactorings.
+Status: implementation-informed for `v0.3.0-SNAPSHOT`. Rename operations are
+previewable Java transformations backed by `PatchPlan`. Proven class and signed
+method slices use JDT binding evidence; unsupported or unclean semantic cases
+remain explicit lexical fallbacks or refusals.
 
 ## Commands
 
@@ -27,7 +28,10 @@ A `renameClass` preview is considered safe enough to review when:
 - the preview updates the declaration file, constructor/simple-name references in
   applicable source files, fully qualified references, direct imports, and the
   source filename;
-- warnings about lexical limits and framework findings have been reviewed.
+- clean JDT analysis uses exact type/constructor declaration and reference ranges;
+- parse/classpath warnings produce an explicit lexical fallback warning;
+- a type or source file with the requested target name does not already exist;
+- warnings about fallback limits and framework findings have been reviewed.
 
 ## Member rename success conditions
 
@@ -42,8 +46,9 @@ A `renameMember` preview is considered safe enough to review when:
 
 ## Refusal conditions
 
-Class rename refuses when the target name is invalid, the symbol is missing or is
-not a renameable type, or the declaration file is missing.
+Class rename refuses when the target name is invalid or unchanged, the symbol is
+missing or is not a renameable type, the declaration file is missing, or the
+target type/source filename already exists.
 
 Member rename refuses when:
 
@@ -59,8 +64,9 @@ review.
 
 ## Warnings and manual-review areas
 
-Rename previews use token-aware lexical matching but do not provide full Java type
-binding. Review carefully when any of these apply:
+Rename previews use exact JDT binding ranges for proven clean class and signed
+method slices. Lexical fallback remains available where documented and is always
+reported in preview warnings. Review carefully when any of these apply:
 
 - comments and string literals are not rewritten for class rename;
 - reflection, annotation-processor output, generated code, `ServiceLoader`, and

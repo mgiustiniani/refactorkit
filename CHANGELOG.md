@@ -46,6 +46,11 @@ review safety boundaries before applying refactorings.
   binding keys, or override families containing declarations outside the scanned
   source workspace. Unsigned member rename remains a lexical fallback with
   overload warnings.
+- Added JDT-backed class rename when semantic analysis is clean: type declaration,
+  constructor declaration, import, qualified/simple type reference, and
+  constructor-call edits use exact binding ranges. Same-simple-name types in
+  other packages remain unchanged; existing target symbols/files are refused;
+  parse/classpath warnings trigger an explicit lexical fallback warning.
 - Added JDT-backed safe-delete type-reference evidence when semantic analysis is
   clean, preventing same-simple-name types in different packages from being
   conflated. Safe delete reports exact binding evidence, falls back explicitly to

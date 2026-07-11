@@ -40,8 +40,8 @@ RefactorKit is structured as a local, deterministic refactoring engine around a 
 |implementation-informed
 
 |Incremental compiler-backed Java analysis with explicit fallback
-|Proven Java slices use exact Eclipse JDT binding evidence; operations retain explicit lexical fallback or conservative refusal when semantic evidence is unavailable or not clean. Safe delete uses exact type-binding references when possible and warns when it falls back.
-|ADR 0008, signed member rename, safe-delete planner and tests.
+|Proven Java slices use exact Eclipse JDT binding evidence; operations retain explicit lexical fallback or conservative refusal when semantic evidence is unavailable or not clean. Class rename and safe delete use exact type-binding evidence when possible and warn when they fall back.
+|ADR 0008; signed member rename, class-rename, and safe-delete planners and tests.
 |implementation-informed
 
 |Framework risk awareness

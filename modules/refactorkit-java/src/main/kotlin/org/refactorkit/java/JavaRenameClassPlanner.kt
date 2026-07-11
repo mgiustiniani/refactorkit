@@ -35,6 +35,9 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
         if (!isValidJavaIdentifier(newSimpleName)) {
             return refused(snapshot, "renameClass", "Invalid Java identifier: $newSimpleName")
         }
+        if (oldSimple == newSimpleName) {
+            return refused(snapshot, "renameClass", "Old and new type names are the same: $oldSimple")
+        }
 
         // Find the symbol
         val index = adapter.buildSymbols(snapshot)
@@ -44,6 +47,40 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
 
         val declarationFile = snapshot.files.find { it.path == symbol.location.path }
             ?: return refused(snapshot, "renameClass", "Declaration file not found: ${symbol.location.path}")
+        val newFileName = "$newSimpleName.java"
+        val newFilePath = declarationFile.path.resolveSibling(newFileName)
+        if (index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newFilePath }) {
+            return refused(snapshot, "renameClass", "Rename target already exists: $newFqn ($newFilePath)")
+        }
+
+        buildJdtRenameEvidence(snapshot, symbolFqn, newSimpleName, declarationFile.path)?.let { evidence ->
+            val frameworkAssessment = JavaFrameworkDetector.assess(declarationFile)
+            val affectedPaths = evidence.modifications.mapTo(mutableSetOf()) { it.path }
+            affectedPaths.add(declarationFile.path)
+            affectedPaths.add(newFilePath)
+            val warnings = mutableListOf(
+                "JDT type binding selected $symbolFqn; declaration, constructor, and reference edits use exact JDT source ranges.",
+                "String literals and comments are NOT scanned. Reflection and annotation processor output require manual review.",
+            )
+            warnings += frameworkAssessment.warnings("renameClass")
+            if (affectedPaths.size > 10) warnings += "Large rename: ${affectedPaths.size} files affected."
+            return PatchPlan(
+                operation = "renameClass",
+                status = PatchStatus.PREVIEW,
+                snapshotHash = snapshot.hash,
+                confidence = 0.96,
+                requiresUserApproval = true,
+                summary = "Rename $oldSimple → $newSimpleName (FQN: $newFqn) using JDT binding evidence. ${affectedPaths.size} file(s) affected.",
+                affectedFiles = affectedPaths,
+                workspaceEdit = WorkspaceEdit(evidence.modifications + FileEdit.Rename(declarationFile.path, newFilePath)),
+                warnings = warnings,
+                riskLevel = when {
+                    frameworkAssessment.hasFindings -> RiskLevel.HIGH
+                    affectedPaths.size > 10 -> RiskLevel.MEDIUM
+                    else -> RiskLevel.LOW
+                },
+            )
+        }
 
         val edits = mutableListOf<FileEdit>()
         val affectedPaths = mutableSetOf<Path>()
@@ -57,8 +94,6 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
         }
 
         // 2. Rename the source file itself
-        val newFileName = "$newSimpleName.java"
-        val newFilePath = declarationFile.path.resolveSibling(newFileName)
         edits += FileEdit.Rename(declarationFile.path, newFilePath)
         affectedPaths.add(declarationFile.path)
         affectedPaths.add(newFilePath)
@@ -89,6 +124,7 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             affectedPaths.size > 10 -> RiskLevel.MEDIUM
             else -> RiskLevel.LOW
         }
+        warnings += "JDT type-binding evidence was unavailable or not clean; rename uses lexical fallback. Review carefully."
         warnings += "String literals and comments are NOT scanned. Reflection and annotation processor output require manual review."
         warnings += frameworkAssessment.warnings("renameClass")
         if (affectedPaths.size > 10) warnings += "Large rename: ${affectedPaths.size} files affected."
@@ -108,6 +144,48 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    private fun buildJdtRenameEvidence(
+        snapshot: ProjectSnapshot,
+        symbolFqn: String,
+        newSimpleName: String,
+        declarationPath: Path,
+    ): JdtRenameEvidence? {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        if (analysis.warnings.isNotEmpty()) return null
+        val target = analysis.symbols.singleOrNull { symbol ->
+            symbol.qualifiedName == symbolFqn && symbol.kind in JDT_RENAMEABLE_KINDS
+        } ?: return null
+        val bindingKey = target.bindingKey ?: return null
+        val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
+        fun add(path: Path, range: SourceRange) {
+            editsByPath.getOrPut(path) { mutableListOf() } += TextEdit(range, newSimpleName)
+        }
+        add(target.path, target.sourceRange)
+        analysis.symbols
+            .filter { symbol ->
+                symbol.kind == JdtJavaSemanticSymbolKind.CONSTRUCTOR &&
+                    symbol.ownerQualifiedName == symbolFqn &&
+                    symbol.path == declarationPath
+            }
+            .forEach { add(it.path, it.sourceRange) }
+        analysis.references
+            .filter { it.bindingKey == bindingKey }
+            .forEach { add(it.path, it.sourceRange) }
+        val modifications = editsByPath.map { (path, textEdits) ->
+            FileEdit.Modify(
+                path,
+                textEdits.distinctBy {
+                    "${it.range.start.line}:${it.range.start.character}:${it.range.end.line}:${it.range.end.character}"
+                }.sortedWith(compareBy({ it.range.start.line }, { it.range.start.character })),
+            )
+        }
+        return JdtRenameEvidence(modifications)
+    }
+
+    private data class JdtRenameEvidence(
+        val modifications: List<FileEdit.Modify>,
+    )
 
     private fun buildModify(
         file: SourceFile,
@@ -171,6 +249,12 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             Symbol.Kind.INTERFACE,
             Symbol.Kind.ENUM,
             Symbol.Kind.RECORD,
+        )
+        private val JDT_RENAMEABLE_KINDS = setOf(
+            JdtJavaSemanticSymbolKind.CLASS,
+            JdtJavaSemanticSymbolKind.INTERFACE,
+            JdtJavaSemanticSymbolKind.ENUM,
+            JdtJavaSemanticSymbolKind.RECORD,
         )
     }
 }

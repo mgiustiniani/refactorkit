@@ -46,9 +46,11 @@ Status: implementation-informed.
 
 The Java adapter combines lexical/source-level scanning with selected Eclipse JDT-backed semantic-analysis slices. Signed `renameMember` uses JDT binding keys to rename transitive source-visible class/interface override families, including their scanned declarations and binding-matched call sites. Static and private methods do not form override relations, and a family containing an external declaration is refused.
 
+Class rename resolves the exact target type binding when JDT analysis is clean. It generates source-range edits for the type declaration, constructor declarations, and binding-matched imports, type references, and constructor calls before renaming the source file. Binding identity leaves same-simple-name types in other packages unchanged. An unchanged requested name or an existing target symbol/file is refused. JDT parse/classpath warnings or an unavailable exact target binding trigger lexical behavior with an explicit fallback warning; reflection, framework, and generated-code warnings remain.
+
 Safe delete uses exact JDT type-binding references when semantic analysis is clean and the exact target binding is available. Binding identity distinguishes types that share a simple name across packages. JDT parse/classpath warnings or an unavailable exact target binding trigger the existing lexical scan and an explicit fallback warning. Forced-delete behavior and framework warnings remain unchanged. Other conservative planners refuse ambiguous cases instead of guessing, especially extract method and structural change-signature operations.
 
-Known limitations include incomplete compiler-backed coverage outside the supported signed-member and safe-delete slices and limited handling of reflection, generated code, external configuration, framework strings, annotation-processor output, and unknown external callers.
+Known limitations include incomplete compiler-backed coverage outside the supported signed-member, class-rename, and safe-delete slices and limited handling of reflection, generated code, external configuration, framework strings, annotation-processor output, and unknown external callers.
 
 Status: implementation-informed.
 

@@ -76,6 +76,12 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |`docs/change-signature.md`, tests.
 |implementation-informed
 
+|QS-CORR-004
+|Correctness
+|When clean JDT analysis resolves the exact class-rename target binding, RefactorKit renames the type declaration, constructors, binding-matched imports/type references/constructor calls, and source file without changing same-simple-name types in other packages. It refuses unchanged names and existing target symbol/file conflicts; unavailable clean binding evidence produces an explicit lexical-fallback warning.
+|`JavaRenameClassPlannerTest`: constructor rename/apply, imports, same-simple-name disambiguation, target conflict refusal, and fallback warning.
+|implementation-informed
+
 |QS-AI-001
 |AI safety
 |A local LLM can get focused context through MCP without arbitrary filesystem access and request preview/refactoring tools.
@@ -119,7 +125,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Compiler-backed Java analysis covers selected slices only
-|Signed member rename and safe-delete type references use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on safe-delete fallback paths, especially for reflection, generated code, and framework configuration.
+|Signed member rename, class rename, and safe-delete type references use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on class-rename or safe-delete fallback paths, especially for reflection, generated code, and framework configuration.
 |known risk
 
 |No explicit performance targets
