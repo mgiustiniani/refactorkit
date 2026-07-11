@@ -59,9 +59,14 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |`JavaLanguageAdapter.kt`
 
 |Symbol
-|Named code element such as class, interface, enum, record, method, field, constructor, package, or unknown.
+|Named code element such as class, interface, enum, record, annotation type, method, field, constructor, package, or unknown.
 |Core / Java
 |`Models.kt`
+
+|Annotation Type
+|Java `@interface` declaration represented as an `ANNOTATION` symbol. RefactorKit indexes its declaration, nesting owner, binding identity, and usages for type-level lookup and existing class-style operations; this term does not include annotation element/member refactoring.
+|Core / Java
+|`Models.kt`, `JavaLanguageAdapter.kt`, `JdtJavaSemanticAnalyzer.kt`, ADR 0008
 
 |Reference
 |Source location that references a symbol.

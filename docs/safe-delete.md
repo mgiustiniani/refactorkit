@@ -9,7 +9,7 @@ preview-first and only removes Java type source files through a `PatchPlan`.
 refactorkit safe-delete --symbol com.example.LegacyType [--force] [--apply] <root>
 ```
 
-Supported symbols are Java classes, interfaces, enums, and records discovered in
+Supported symbols are Java classes, interfaces, enums, records, and annotation types discovered in
 the scanned project snapshot.
 
 ## Success conditions

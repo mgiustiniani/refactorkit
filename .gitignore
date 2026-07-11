@@ -4,6 +4,7 @@
 build/
 out/
 .idea/
+.ide/
 *.iml
 .DS_Store
 .refactorkit/transactions/

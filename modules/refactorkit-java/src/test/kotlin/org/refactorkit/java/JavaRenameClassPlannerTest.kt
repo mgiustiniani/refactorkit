@@ -8,6 +8,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -181,6 +182,44 @@ class JavaRenameClassPlannerTest {
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun jdtRenameSupportsAnnotationTypesAndExactUsages() {
+        val root = createTempProject(
+            "src/main/java/com/acme/Audited.java" to """
+                package com.acme;
+                public @interface Audited {}
+            """.trimIndent(),
+            "src/main/java/com/acme/Service.java" to """
+                package com.acme;
+                @Audited
+                public class Service {}
+            """.trimIndent(),
+            "src/main/java/com/other/Audited.java" to """
+                package com.other;
+                public @interface Audited {}
+            """.trimIndent(),
+            "src/main/java/com/other/OtherService.java" to """
+                package com.other;
+                @Audited
+                public class OtherService {}
+            """.trimIndent(),
+        )
+        val snapshot = JavaProjectScanner().scan(root)
+        val annotation = adapter.buildSymbols(snapshot).symbols.single { it.id.value == "com.acme.Audited" }
+        assertEquals(org.refactorkit.core.Symbol.Kind.ANNOTATION, annotation.kind)
+
+        val plan = planner.preview(snapshot, "com.acme.Audited", "Tracked")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.warnings.any { it.contains("JDT type binding selected") }, plan.warnings.toString())
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot.hash))
+
+        assertFalse(Files.exists(root.resolve("src/main/java/com/acme/Audited.java")))
+        assertTrue(root.resolve("src/main/java/com/acme/Tracked.java").readText().contains("@interface Tracked"))
+        assertTrue(root.resolve("src/main/java/com/acme/Service.java").readText().contains("@Tracked"))
+        assertTrue(root.resolve("src/main/java/com/other/Audited.java").readText().contains("@interface Audited"))
+        assertTrue(root.resolve("src/main/java/com/other/OtherService.java").readText().contains("@Audited"))
+    }
 
     private fun createTempProject(vararg entries: Pair<String, String>): java.nio.file.Path {
         val root = Files.createTempDirectory("refactorkit-rename-test")

@@ -22,13 +22,16 @@ affected files.
 
 A `renameClass` preview is considered safe enough to review when:
 
-- the target symbol is a discovered Java class, interface, enum, or record;
+- the target symbol is a discovered Java class, interface, enum, record, or
+  annotation type;
 - the new simple name is a valid Java identifier;
 - the declaration source file exists in the snapshot;
 - the preview updates the declaration file, constructor/simple-name references in
   applicable source files, fully qualified references, direct imports, and the
   source filename;
-- clean JDT analysis uses exact type/constructor declaration and reference ranges;
+- clean JDT analysis uses exact type/constructor declaration and reference ranges,
+  including annotation declarations/usages while preserving unrelated
+  same-simple-name annotation types;
 - parse/classpath warnings produce an explicit lexical fallback warning;
 - a type or source file with the requested target name does not already exist;
 - warnings about fallback limits and framework findings have been reviewed.

@@ -10,7 +10,7 @@ Status: implementation-informed, needs human review for prioritization.
 
 |R-001
 |Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations and explicit fallback paths still rely on lexical or structural evidence.
-|Refactorings outside the supported signed `renameMember`, class-rename, move-class file-scoping, safe-delete type-reference, and exact-import use slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Class rename, move class, and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable; unresolved organize-imports files retain lexical cleanup only.
+|Refactorings outside the supported signed `renameMember`, type-level rename (including annotation types), move-class file-scoping, safe-delete type-reference, annotation-type indexing/reference, and exact-import use slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Type-level rename, move class, and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable; unresolved organize-imports files retain lexical cleanup only.
 |Follow ADR 0008; retain conservative refusal/warning behavior, keep fallback paths explicit, extend representative JDT-backed coverage, and refuse signed member rename when an override family includes external declarations.
 |known risk
 
@@ -97,6 +97,12 @@ Status: implementation-informed, needs human review for prioritization.
 |Clients could make incorrect compatibility, project-lifecycle, or workspace-write assumptions from stale descriptors or safety flags.
 |Keep the capability contract test aligned with every documented daemon method; prefer deriving dispatch and discovery from one method registry if the surface grows.
 |known risk
+
+|R-016
+|Annotation support is limited to annotation-type symbols and existing type-level operations; annotation elements and members do not have dedicated lookup or refactoring support.
+|Users could infer broader annotation-member support from successful annotation-type rename, move, or safe-delete operations.
+|Keep the type/member boundary explicit in capability documentation and add semantic element/member analysis plus focused tests before advertising such refactorings.
+|known limitation
 |===
 
 == Technical Debt from Release Plan

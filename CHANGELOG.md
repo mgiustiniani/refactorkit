@@ -49,6 +49,10 @@ review safety boundaries before applying refactorings.
   binding keys, or override families containing declarations outside the scanned
   source workspace. Unsigned member rename remains a lexical fallback with
   overload warnings.
+- Added Java annotation-type symbols across lexical indexing and JDT binding
+  analysis. Annotation declarations/usages now participate in exact class-style
+  rename, move, safe-delete, read-only symbol lookup, and type-owner validation;
+  same-simple-name annotation types remain disambiguated by binding.
 - Added JDT-backed unused exact-import removal when analysis is clean. Import
   binding keys are normalized to declarations so parameterized type and generic
   static-method uses retain their imports; wildcard and unresolved imports remain

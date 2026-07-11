@@ -249,12 +249,14 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             Symbol.Kind.INTERFACE,
             Symbol.Kind.ENUM,
             Symbol.Kind.RECORD,
+            Symbol.Kind.ANNOTATION,
         )
         private val JDT_RENAMEABLE_KINDS = setOf(
             JdtJavaSemanticSymbolKind.CLASS,
             JdtJavaSemanticSymbolKind.INTERFACE,
             JdtJavaSemanticSymbolKind.ENUM,
             JdtJavaSemanticSymbolKind.RECORD,
+            JdtJavaSemanticSymbolKind.ANNOTATION,
         )
     }
 }

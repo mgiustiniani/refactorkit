@@ -253,6 +253,7 @@ class JavaLanguageAdapter : LanguageAdapter {
             JdtJavaSemanticSymbolKind.INTERFACE -> Symbol.Kind.INTERFACE
             JdtJavaSemanticSymbolKind.ENUM -> Symbol.Kind.ENUM
             JdtJavaSemanticSymbolKind.RECORD -> Symbol.Kind.RECORD
+            JdtJavaSemanticSymbolKind.ANNOTATION -> Symbol.Kind.ANNOTATION
             JdtJavaSemanticSymbolKind.METHOD -> Symbol.Kind.METHOD
             JdtJavaSemanticSymbolKind.FIELD -> Symbol.Kind.FIELD
             JdtJavaSemanticSymbolKind.CONSTRUCTOR -> Symbol.Kind.CONSTRUCTOR
@@ -463,6 +464,7 @@ class JavaLanguageAdapter : LanguageAdapter {
                 "interface" -> Symbol.Kind.INTERFACE
                 "enum" -> Symbol.Kind.ENUM
                 "record" -> Symbol.Kind.RECORD
+                "@interface" -> Symbol.Kind.ANNOTATION
                 else -> Symbol.Kind.UNKNOWN
             }
             val name = match.groupValues[2]
@@ -692,10 +694,10 @@ class JavaLanguageAdapter : LanguageAdapter {
 
     companion object {
         private val packageRegex = Regex("(?m)^\\s*package\\s+([A-Za-z_][\\w.]*)\\s*;")
-        private val topLevelTypeRegex = Regex("(?m)^\\s*(?:public\\s+|protected\\s+|private\\s+)?(?:abstract\\s+|final\\s+|sealed\\s+|non-sealed\\s+)*\\b(class|interface|enum|record)\\s+([A-Za-z_][A-Za-z0-9_]*)")
+        private val topLevelTypeRegex = Regex("(?m)^\\s*(?:public\\s+|protected\\s+|private\\s+)?(?:abstract\\s+|final\\s+|sealed\\s+|non-sealed\\s+)*(class|interface|enum|record|@interface)\\s+([A-Za-z_][A-Za-z0-9_]*)")
         private val methodRegex = Regex("^\\s*(?:(?:public|protected|private|static|final|abstract|synchronized|native|strictfp|default)\\s+)*(?:<[^>]+>\\s*)?[A-Za-z_$][\\w$<>,.?\\[\\] ]*\\s+([A-Za-z_$][\\w$]*)\\s*\\([^;{}]*\\)\\s*(?:throws\\s+[^{}]+)?(?:\\{|;)")
-        private val fieldRegex = Regex("^\\s*(?:(?:public|protected|private|static|final|volatile|transient)\\s+)*(?!class\\b|interface\\b|enum\\b|record\\b)(?:[A-Za-z_$][\\w$<>,.?\\[\\] ]+)\\s+([A-Za-z_$][\\w$]*)\\s*(?:=[^;]*)?;")
+        private val fieldRegex = Regex("^\\s*(?:(?:public|protected|private|static|final|volatile|transient)\\s+)*(?!class\\b|interface\\b|enum\\b|record\\b|@interface\\b)(?:[A-Za-z_$][\\w$<>,.?\\[\\] ]+)\\s+([A-Za-z_$][\\w$]*)\\s*(?:=[^;]*)?;")
         private val CONTROL_KEYWORDS = setOf("if", "for", "while", "switch", "catch", "return", "new")
-        private val TYPE_KINDS = setOf(Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.ENUM, Symbol.Kind.RECORD)
+        private val TYPE_KINDS = setOf(Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.ENUM, Symbol.Kind.RECORD, Symbol.Kind.ANNOTATION)
     }
 }

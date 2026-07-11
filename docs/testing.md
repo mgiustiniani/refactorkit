@@ -174,6 +174,9 @@ scan → find symbol → preview → inspect → apply → verify → rollback �
 
 ## Integration test notes
 
+- Annotation-type coverage verifies lexical/JDT symbol discovery and exact
+  binding-backed rename of the declaration and selected annotation usages while
+  preserving an unrelated same-simple-name annotation type.
 - `JavaOrganizeImportsPlanner` sorts and deduplicates imports, removes
   same-package imports, and uses clean JDT declaration-normalized binding evidence
   to remove unused exact imports. Tests preserve used parameterized-type, generic

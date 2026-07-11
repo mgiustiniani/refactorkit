@@ -285,7 +285,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
     }
 
     companion object {
-        private val TYPE_KINDS = setOf(Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.ENUM, Symbol.Kind.RECORD)
+        private val TYPE_KINDS = setOf(Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.ENUM, Symbol.Kind.RECORD, Symbol.Kind.ANNOTATION)
         private val MEMBER_KINDS = setOf(Symbol.Kind.METHOD, Symbol.Kind.FIELD, Symbol.Kind.CONSTRUCTOR)
         private val JDT_MEMBER_KINDS = setOf(
             JdtJavaSemanticSymbolKind.METHOD,

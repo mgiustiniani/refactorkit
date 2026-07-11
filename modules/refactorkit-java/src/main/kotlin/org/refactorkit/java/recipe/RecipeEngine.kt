@@ -196,6 +196,7 @@ class RecipeEngine(
                 org.refactorkit.core.Symbol.Kind.INTERFACE,
                 org.refactorkit.core.Symbol.Kind.ENUM,
                 org.refactorkit.core.Symbol.Kind.RECORD,
+                org.refactorkit.core.Symbol.Kind.ANNOTATION,
             )
         }
         return symbols.map { sym ->

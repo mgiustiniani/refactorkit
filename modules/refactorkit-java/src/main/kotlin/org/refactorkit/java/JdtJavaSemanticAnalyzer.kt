@@ -4,6 +4,7 @@ import org.eclipse.jdt.core.JavaCore
 import org.eclipse.jdt.core.dom.AST
 import org.eclipse.jdt.core.dom.ASTParser
 import org.eclipse.jdt.core.dom.ASTVisitor
+import org.eclipse.jdt.core.dom.AnnotationTypeDeclaration
 import org.eclipse.jdt.core.dom.ClassInstanceCreation
 import org.eclipse.jdt.core.dom.CompilationUnit
 import org.eclipse.jdt.core.dom.EnumDeclaration
@@ -133,6 +134,29 @@ class JdtJavaSemanticAnalyzer {
             }
 
             override fun endVisit(node: TypeDeclaration) {
+                if (ownerStack.isNotEmpty()) ownerStack.removeAt(ownerStack.lastIndex)
+            }
+
+            override fun visit(node: AnnotationTypeDeclaration): Boolean {
+                val binding = node.resolveBinding()
+                val annotationSymbol = symbol(
+                    file = file,
+                    compilationUnit = compilationUnit,
+                    packageName = packageName,
+                    ownerQualifiedName = ownerStack.lastOrNull(),
+                    simpleName = node.name.identifier,
+                    kind = JdtJavaSemanticSymbolKind.ANNOTATION,
+                    startPosition = node.name.startPosition,
+                    bindingQualifiedName = binding?.qualifiedName,
+                    bindingKey = binding?.key,
+                    memberSignature = null,
+                )
+                symbols += annotationSymbol
+                ownerStack += annotationSymbol.qualifiedName
+                return true
+            }
+
+            override fun endVisit(node: AnnotationTypeDeclaration) {
                 if (ownerStack.isNotEmpty()) ownerStack.removeAt(ownerStack.lastIndex)
             }
 
@@ -516,6 +540,7 @@ class JdtJavaSemanticAnalyzer {
         val parent = parent
         return when (parent) {
             is TypeDeclaration -> parent.name === this
+            is AnnotationTypeDeclaration -> parent.name === this
             is EnumDeclaration -> parent.name === this
             is RecordDeclaration -> parent.name === this
             is MethodDeclaration -> parent.name === this
@@ -616,6 +641,7 @@ enum class JdtJavaSemanticSymbolKind {
     INTERFACE,
     ENUM,
     RECORD,
+    ANNOTATION,
     METHOD,
     FIELD,
     CONSTRUCTOR,

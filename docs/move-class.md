@@ -19,7 +19,8 @@ Add `--apply` only after preview review.
 
 A `moveClass` preview is considered safe enough to review when:
 
-- the target symbol is a discovered Java class, interface, enum, or record;
+- the target symbol is a discovered Java class, interface, enum, record, or
+  annotation type;
 - the target package differs from the current package;
 - the declaration source file exists in the snapshot;
 - the preview rewrites or inserts the package declaration in the moved file;

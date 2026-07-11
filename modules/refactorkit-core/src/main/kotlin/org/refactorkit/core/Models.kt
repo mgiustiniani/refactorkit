@@ -189,6 +189,7 @@ data class Symbol(
         INTERFACE,
         ENUM,
         RECORD,
+        ANNOTATION,
         METHOD,
         FIELD,
         CONSTRUCTOR,

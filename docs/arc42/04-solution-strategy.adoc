@@ -40,8 +40,8 @@ RefactorKit is structured as a local, deterministic refactoring engine around a 
 |implementation-informed
 
 |Incremental compiler-backed Java analysis with explicit fallback
-|Proven Java slices use exact Eclipse JDT binding evidence; operations retain explicit lexical fallback or conservative refusal when semantic evidence is unavailable or not clean. Class rename and safe delete use exact type-binding evidence when possible. Move class uses exact target-type binding to scope package/import/FQN edits to actual referencing files. Organize imports uses per-file clean binding-use evidence to remove an exact import only when its imported declaration binding has no non-import use; unresolved files retain lexical cleanup behavior.
-|ADR 0008; signed member rename, class-rename, move-class, safe-delete, and organize-imports planners and tests.
+|Proven Java slices use exact Eclipse JDT binding evidence; operations retain explicit lexical fallback or conservative refusal when semantic evidence is unavailable or not clean. Class rename and safe delete use exact type-binding evidence when possible. Move class uses exact target-type binding to scope package/import/FQN edits to actual referencing files. Java annotation types are represented as first-class symbols by lexical and JDT indexing and reuse the existing type-level lookup, rename, move, safe-delete, recipe, and owner-validation paths. Organize imports uses per-file clean binding-use evidence to remove an exact import only when its imported declaration binding has no non-import use; unresolved files retain lexical cleanup behavior.
+|ADR 0008; signed member rename, class-rename, move-class, safe-delete, annotation-type, and organize-imports planners/analyzers and tests.
 |implementation-informed
 
 |Framework risk awareness
