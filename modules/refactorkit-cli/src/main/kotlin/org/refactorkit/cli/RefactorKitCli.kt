@@ -533,7 +533,7 @@ class RefactorKitCli(
             if (fullSnap.files.any { it.path == relPath }) fullSnap
             else {
                 val sf = org.refactorkit.core.SourceFile(relPath, path.readText(), language)
-                org.refactorkit.core.ProjectSnapshot(fullSnap.workspace, fullSnap.modules, fullSnap.files + sf)
+                fullSnap.copy(files = fullSnap.files + sf)
             }
         }
         val plan = GenericLocalRenamePlanner().preview(snap, relPath, from, to)

@@ -1,9 +1,17 @@
 package org.refactorkit.java
 
+import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.ClasspathEvidenceKind
+import org.refactorkit.core.FileEdit
+import org.refactorkit.core.PatchEngine
+import org.refactorkit.core.PatchPlan
+import org.refactorkit.core.WorkspaceEdit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import java.nio.file.Files
+import java.nio.file.Path
 
 class JavaProjectScannerTest {
     @Test
@@ -32,14 +40,53 @@ class JavaProjectScannerTest {
         Files.createDirectories(root.resolve("dependency-cache"))
         Files.writeString(root.resolve("target/classpath.txt"), "# generated dependency classpath\ndependency-cache\nmissing.jar\n")
 
-        val module = JavaProjectScanner().scan(root).modules.single()
+        val snapshot = JavaProjectScanner().scan(root)
+        val module = snapshot.modules.single()
         val classpath = module.classpathEntries.map { it.toString().replace('\\', '/') }.toSet()
+        val evidence = snapshot.classpathEvidence.associateBy {
+            it.path.toString().replace('\\', '/') to it.kind
+        }
 
         assertTrue("target/classes" in classpath)
         assertTrue("build/classes/java/main" in classpath)
         assertTrue("libs/local.jar" in classpath)
         assertTrue("dependency-cache" in classpath)
         assertTrue("missing.jar" !in classpath)
+        assertTrue(("dependency-cache" to ClasspathEvidenceKind.ENTRY) in evidence)
+        assertTrue(("target/classpath.txt" to ClasspathEvidenceKind.DECLARATION_FILE) in evidence)
+        assertTrue(("libs" to ClasspathEvidenceKind.JAR_DIRECTORY) in evidence)
+        assertEquals(
+            "missing",
+            evidence.getValue("target/test-classes" to ClasspathEvidenceKind.ENTRY).fingerprint,
+        )
+    }
+
+    @Test
+    fun refusesApplyWhenGeneratedClasspathDeclarationChangesAfterScan() {
+        val root = Files.createTempDirectory("refactorkit-java-classpath-evidence")
+        val source = Path.of("src/main/java/com/example/App.java")
+        Files.createDirectories(root.resolve(source).parent)
+        Files.writeString(root.resolve(source), "package com.example; public class App {}\n")
+        Files.createDirectories(root.resolve("dependency-cache"))
+        Files.createDirectories(root.resolve("other-dependency-cache"))
+        Files.createDirectories(root.resolve("target"))
+        Files.writeString(root.resolve("target/classpath.txt"), "dependency-cache\n")
+        val snapshot = JavaProjectScanner().scan(root)
+        val plan = PatchPlan(
+            operation = "classpathDeclarationEvidence",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "refuse stale generated classpath",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Delete(source))),
+        )
+        Files.writeString(root.resolve("target/classpath.txt"), "other-dependency-cache\n")
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.classpathChanged" }, result.diagnostics.toString())
+        assertTrue(Files.exists(root.resolve(source)))
     }
 
     @Test

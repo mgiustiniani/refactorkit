@@ -24,6 +24,10 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added SHA-256 classpath evidence for active Java dependencies, compiled-output
+  directories, local JAR discovery locations, and generated classpath manifests.
+  Apply recomputes evidence under lock and refuses stale dependencies as
+  `snapshot.classpathChanged` before journaling.
 - Made source snapshot scope engine-verified under the workspace lock. Snapshot
   hashes now bind module/source-root scope, extensions, ignore policy, language
   IDs, paths, and contents; apply independently rescans and refuses omitted,

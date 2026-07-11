@@ -56,8 +56,9 @@ data class ProjectSnapshot(
     val files: List<SourceFile>,
     val sourceExtensions: Set<String> = inferSourceExtensions(files),
     val ignoredDirectories: Set<String> = DEFAULT_IGNORED_DIRECTORIES,
+    val classpathEvidence: List<ClasspathEvidence> = emptyList(),
 ) {
-    val hash: String = hashSnapshot(modules, files, sourceExtensions, ignoredDirectories)
+    val hash: String = hashSnapshot(modules, files, sourceExtensions, ignoredDirectories, classpathEvidence)
 
     companion object {
         val DEFAULT_IGNORED_DIRECTORIES: Set<String> = setOf(
@@ -74,6 +75,7 @@ data class ProjectSnapshot(
             files: List<SourceFile>,
             sourceExtensions: Set<String>,
             ignoredDirectories: Set<String>,
+            classpathEvidence: List<ClasspathEvidence> = emptyList(),
         ): String {
             val digest = MessageDigest.getInstance("SHA-256")
             modules.sortedBy { it.name }.forEach { module ->
@@ -83,6 +85,9 @@ data class ProjectSnapshot(
             }
             sourceExtensions.sorted().forEach { digest.update("extension\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
             ignoredDirectories.sorted().forEach { digest.update("ignored\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+            classpathEvidence.sortedWith(compareBy<ClasspathEvidence> { it.path.toString() }.thenBy { it.kind.name }).forEach { evidence ->
+                digest.update("classpathEvidence\u0000${evidence.path}\u0000${evidence.kind}\u0000${evidence.fingerprint}\u0000".toByteArray(Charsets.UTF_8))
+            }
             files.sortedBy { it.path.toString() }.forEach { file ->
                 digest.update(file.path.toString().toByteArray(Charsets.UTF_8))
                 digest.update(0)

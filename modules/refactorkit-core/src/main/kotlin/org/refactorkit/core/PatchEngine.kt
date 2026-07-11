@@ -339,6 +339,9 @@ class PatchEngine(
                 code = "snapshot.scopeInvalid",
             ))
         }
+        diagnostics += validateClasspathEvidence(snapshot)
+        if (diagnostics.isNotEmpty()) return diagnostics
+
         val declaredRoots = snapshot.modules.flatMap { it.sourceRoots }
             .map(::resolveInsideWorkspace)
         val roots = (declaredRoots.ifEmpty { listOf(normalizedRoot) })
@@ -400,6 +403,7 @@ class PatchEngine(
             actualByPath.values.toList(),
             snapshot.sourceExtensions,
             snapshot.ignoredDirectories,
+            snapshot.classpathEvidence,
         )
         if (actualHash != snapshot.hash) {
             val expectedByPath = snapshot.files.associateBy { it.path }
@@ -423,6 +427,54 @@ class PatchEngine(
             )
         }
         return diagnostics
+    }
+
+    private fun validateClasspathEvidence(snapshot: ProjectSnapshot): List<Diagnostic> {
+        val evidenceByKey = snapshot.classpathEvidence.groupBy { it.path.normalize() to it.kind }
+        val duplicates = evidenceByKey.filterValues { it.size > 1 }.keys
+        if (duplicates.isNotEmpty()) {
+            return listOf(Diagnostic(
+                "Snapshot contains duplicate classpath evidence: ${duplicates.sortedBy { it.first.toString() }}",
+                Diagnostic.Severity.ERROR,
+                code = "snapshot.scopeInvalid",
+            ))
+        }
+
+        val entryEvidencePaths = snapshot.classpathEvidence
+            .filter { it.kind == ClasspathEvidenceKind.ENTRY }
+            .map { it.path.normalize() }
+            .toSet()
+        val missingEvidence = snapshot.modules.flatMap(Module::classpathEntries)
+            .map(Path::normalize)
+            .filterNot(entryEvidencePaths::contains)
+            .distinct()
+        if (missingEvidence.isNotEmpty()) {
+            return listOf(Diagnostic(
+                "Snapshot classpath entries lack content evidence: ${missingEvidence.sortedBy(Path::toString)}",
+                Diagnostic.Severity.ERROR,
+                code = "snapshot.scopeInvalid",
+            ))
+        }
+
+        val changed = mutableListOf<Path>()
+        try {
+            snapshot.classpathEvidence.forEach { evidence ->
+                val absolute = resolveInsideWorkspace(evidence.path)
+                val actual = ClasspathEvidence.fingerprint(absolute, evidence.kind)
+                if (actual != evidence.fingerprint) changed.add(evidence.path)
+            }
+        } catch (error: Exception) {
+            return listOf(Diagnostic(
+                "Cannot verify classpath evidence under workspace lock: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "snapshot.classpathUnreadable",
+            ))
+        }
+        return if (changed.isEmpty()) emptyList() else listOf(Diagnostic(
+            "Classpath changed since the supplied snapshot: ${changed.distinct().sortedBy(Path::toString)}; rescan and regenerate the plan",
+            Diagnostic.Severity.ERROR,
+            code = "snapshot.classpathChanged",
+        ))
     }
 
     private fun extensionOf(path: Path): String? = path.fileName?.toString()

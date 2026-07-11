@@ -55,13 +55,13 @@ The link:../transactionality-audit.md[transactionality audit] at commit `5f47ad0
 * `TX-003` is closed after the audited baseline: CLI, daemon, LSP, and MCP reject malformed transaction IDs before log access, while the core enforces contained non-symlink record paths and coded failures.
 * `TX-007`: native LSP edits bypass RefactorKit apply and rollback; stale disk snapshots, unsaved buffers, and absent document versions can invalidate client-side application.
 * `TX-008`: recipes are per-step sagas with best-effort compensation; crashes, log failures, compensation failures, and plans not evaluated against one evolving staged workspace can leave partial results.
-* `TX-014` is closed for declared source scope after the audit baseline: apply requires a hash-bound `ProjectSnapshot`, and `PatchEngine` independently rescans its roots/extensions/ignore policy under lock before journaling. Mutable classpath artifact fingerprints remain separate.
+* `TX-014` is closed for declared source and Java classpath scope after the audit baseline: apply requires a hash-bound `ProjectSnapshot`; `PatchEngine` independently rescans sources and verifies active/prospective classpath fingerprints under lock before journaling.
 * `TX-015`: integrations do not consistently run diagnostics as central pre-apply and post-apply transaction gates.
 * `TX-016`: `requiresUserApproval` is not enforced as a separate auditable state, so the meaning of apply invocation as approval remains a contract decision.
 * `TX-017` is narrowed: daemon/LSP rollback conflict and recovery-required outcomes now use stable dedicated codes, while apply validation failures can still collapse into `SNAPSHOT_CHANGED` and require complete error-category mapping.
 * `TX-018`: daemon apply and rollback validate with local rescans but do not update the stored session snapshot, so later queries can observe stale metadata.
 
-These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and declared-source `TX-014` are recorded here as fixed; the other findings remain open or narrowed as stated.
+These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and source/classpath `TX-014` are recorded here as fixed; the other findings remain open or narrowed as stated.
 
 == Implementation Evidence
 

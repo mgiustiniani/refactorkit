@@ -144,9 +144,8 @@ between scan and lock acquisition.
 The hash-only apply overload has been removed, all internal tests use the same
 snapshot-aware contract, and `ProjectSnapshot.hash` is now derived from files
 rather than caller-overridable constructor state. Native editor-applied LSP edits
-remain outside this managed lock boundary under `TX-007`. Engine-owned declared-source
-rescan scope is now implemented under `TX-014`; mutable classpath artifact
-fingerprints remain in the compiler/classpath workstream.
+remain outside this managed lock boundary under `TX-007`. Engine-owned declared-source rescan and Java classpath evidence are now
+implemented under `TX-014`.
 
 ### TX-006 — Direct file replacement is not crash-safe or durable
 
@@ -263,9 +262,9 @@ or created parent-directory state. Implicitly created directories remain after
 rollback. Directory create/rename operations described by requirements are not
 represented in the current `FileEdit` model.
 
-### TX-014 — Apply snapshot ownership is not fully engine-derived
+### TX-014 — Apply snapshot scope ownership
 
-Status: **closed for declared source scope after the audited baseline**.
+Status: **closed for declared source and Java classpath scope after the audited baseline**.
 
 The hash-only apply overload is removed and `ProjectSnapshot.hash` now binds
 module roots, declared source roots/classpath paths, source extensions, ignored
@@ -281,9 +280,17 @@ added/missing/changed detail. Tests prove a library caller cannot reuse a stale
 snapshot that omits a newly appeared source, while declared ignored build output
 does not create false staleness.
 
-Classpath path membership is hash-bound, but content fingerprints for mutable JAR
-or compiled-output entries remain part of the compiler/classpath evidence
-workstream rather than this source-snapshot closure.
+Java scans also capture hash-bound classpath evidence for every active classpath
+entry, prospective conventional compiled-output directory, local JAR directory,
+and generated classpath declaration file. Files and recursively traversed
+directories are SHA-256 fingerprinted; absent discovery locations retain an
+explicit `missing` fingerprint. Under the workspace lock, apply recomputes all
+fingerprints before journaling, refuses changes as `snapshot.classpathChanged`,
+and rejects active entries without evidence as `snapshot.scopeInvalid`. This
+covers JAR replacement, compiled-output mutation/appearance, local JAR membership,
+and generated classpath declaration changes. As with workspace sources, a hostile
+writer changing an artifact after locked validation is outside the cooperative
+writer guarantee and remains destructive-concurrency test scope.
 
 ### TX-015 — Diagnostics are not a central transaction gate
 

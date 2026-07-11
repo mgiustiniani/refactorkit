@@ -426,6 +426,106 @@ class PatchEngineTest {
     }
 
     @Test
+    fun refusesChangedClasspathEntryBeforeJournaling() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        val dependency = Path.of("lib/dependency.jar")
+        Files.createDirectories(root.resolve(dependency).parent)
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        Files.writeString(root.resolve(dependency), "jar-before")
+        val snapshot = ProjectSnapshot(
+            workspace = Workspace(root),
+            modules = listOf(Module("root", root, classpathEntries = listOf(dependency))),
+            files = listOf(SourceFile(source, Files.readString(root.resolve(source)), "java")),
+            sourceExtensions = setOf("java"),
+            classpathEvidence = listOf(ClasspathEvidence.capture(root, dependency, ClasspathEvidenceKind.ENTRY)),
+        )
+        val plan = PatchPlan(
+            operation = "classpathEvidence",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "detect changed dependency",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                source,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        Files.writeString(root.resolve(dependency), "jar-after")
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.classpathChanged" }, result.diagnostics.toString())
+        assertEquals("class Example {}\n", Files.readString(root.resolve(source)))
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
+    }
+
+    @Test
+    fun refusesNewConventionalClasspathOutputWatchedAsMissing() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        val output = Path.of("target/classes")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val snapshot = ProjectSnapshot(
+            workspace = Workspace(root),
+            modules = listOf(Module("root", root)),
+            files = listOf(SourceFile(source, Files.readString(root.resolve(source)), "java")),
+            sourceExtensions = setOf("java"),
+            classpathEvidence = listOf(ClasspathEvidence.capture(root, output, ClasspathEvidenceKind.ENTRY)),
+        )
+        val plan = PatchPlan(
+            operation = "classpathDiscoveryEvidence",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "detect new compiled output",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                source,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        Files.createDirectories(root.resolve(output))
+        Files.write(root.resolve(output).resolve("Dependency.class"), byteArrayOf(1, 2, 3))
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.classpathChanged" }, result.diagnostics.toString())
+        assertEquals("class Example {}\n", Files.readString(root.resolve(source)))
+    }
+
+    @Test
+    fun refusesClasspathEntryWithoutContentEvidence() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        val dependency = Path.of("lib/dependency.jar")
+        Files.createDirectories(root.resolve(dependency).parent)
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        Files.writeString(root.resolve(dependency), "jar")
+        val snapshot = ProjectSnapshot(
+            workspace = Workspace(root),
+            modules = listOf(Module("root", root, classpathEntries = listOf(dependency))),
+            files = listOf(SourceFile(source, Files.readString(root.resolve(source)), "java")),
+            sourceExtensions = setOf("java"),
+        )
+        val plan = PatchPlan(
+            operation = "missingClasspathEvidence",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "refuse unverified dependency",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Delete(source))),
+        )
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.scopeInvalid" }, result.diagnostics.toString())
+        assertTrue(Files.exists(root.resolve(source)))
+    }
+
+    @Test
     fun refusesNewSourceOmittedFromCallerSnapshot() {
         val root = Files.createTempDirectory("refactorkit-test")
         val relative = Path.of("Example.java")
