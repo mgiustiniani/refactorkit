@@ -47,6 +47,8 @@ class JavaProjectScanner {
             workspace = Workspace(normalizedRoot),
             modules = modules,
             files = files,
+            sourceExtensions = setOf("java"),
+            ignoredDirectories = emptySet(),
         )
     }
 

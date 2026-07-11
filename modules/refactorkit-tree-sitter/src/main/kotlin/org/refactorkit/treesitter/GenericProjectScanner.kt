@@ -42,6 +42,8 @@ class GenericProjectScanner(
                 sourceRoots = sourceRoots.map(normalizedRoot::relativize),
             )),
             files = files,
+            sourceExtensions = extensionLanguageIds.keys,
+            ignoredDirectories = IGNORED_DIRECTORIES,
         )
     }
 

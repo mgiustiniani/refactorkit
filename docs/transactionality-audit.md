@@ -144,8 +144,9 @@ between scan and lock acquisition.
 The hash-only apply overload has been removed, all internal tests use the same
 snapshot-aware contract, and `ProjectSnapshot.hash` is now derived from files
 rather than caller-overridable constructor state. Native editor-applied LSP edits
-remain outside this managed lock boundary under `TX-007`. Full engine-owned
-workspace rescan scope remains a separate `TX-014` concern.
+remain outside this managed lock boundary under `TX-007`. Engine-owned declared-source
+rescan scope is now implemented under `TX-014`; mutable classpath artifact
+fingerprints remain in the compiler/classpath workstream.
 
 ### TX-006 — Direct file replacement is not crash-safe or durable
 
@@ -264,15 +265,25 @@ represented in the current `FileEdit` model.
 
 ### TX-014 — Apply snapshot ownership is not fully engine-derived
 
-Status: **narrowed after the audited baseline**.
+Status: **closed for declared source scope after the audited baseline**.
 
-The hash-only apply overload is removed and `ProjectSnapshot.hash` is computed
-from snapshot files rather than accepted as a constructor argument. Apply now
-requires a `ProjectSnapshot` and revalidates all initially affected paths under
-the workspace lock. A library consumer can still reuse or construct a stale
-snapshot whose file list omits a newly appeared, semantically relevant but
-previously unaffected source. Stable closure therefore still requires an
-engine-owned rescan/scope manifest rather than caller discipline alone.
+The hash-only apply overload is removed and `ProjectSnapshot.hash` now binds
+module roots, declared source roots/classpath paths, source extensions, ignored
+directory policy, language IDs, file paths, and contents. Java snapshots declare
+`.java` even when initially empty; generic snapshots declare their complete
+extension map and ignore policy. Under the workspace lock, `PatchEngine`
+requires a non-empty declared extension set, independently walks the hash-bound
+source roots (or the workspace root fallback), without following symlink
+directories, re-reads all matching files, and compares
+a newly computed scope hash before journaling. Added, removed, changed, omitted,
+or metadata-altered sources refuse as `snapshot.scopeChanged` with structured
+added/missing/changed detail. Tests prove a library caller cannot reuse a stale
+snapshot that omits a newly appeared source, while declared ignored build output
+does not create false staleness.
+
+Classpath path membership is hash-bound, but content fingerprints for mutable JAR
+or compiled-output entries remain part of the compiler/classpath evidence
+workstream rather than this source-snapshot closure.
 
 ### TX-015 — Diagnostics are not a central transaction gate
 
@@ -354,11 +365,9 @@ The current requirements should be corrected before API `1.0` freeze.
 
 ## Recommended closure order
 
-1. Make apply snapshot scope engine-owned so newly appeared relevant files cannot
-   be omitted by library callers (`TX-014`).
-2. Define recipe saga/transaction and LSP client/server transaction boundaries.
-3. Integrate diagnostics and remaining stable error categories into commit gates.
-4. Add fault-injection, kill/restart, concurrency, corruption, and mounted
+1. Define recipe saga/transaction and LSP client/server transaction boundaries.
+2. Integrate diagnostics and remaining stable error categories into commit gates.
+3. Add fault-injection, kill/restart, concurrency, corruption, and mounted
    filesystem capability tests before `v1.0.0-rc.1`.
 
 ## Stable-release verdict

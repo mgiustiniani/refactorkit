@@ -406,6 +406,77 @@ class PatchEngineTest {
     }
 
     @Test
+    fun refusesSnapshotWithoutDeclaredSourceExtensions() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val snapshot = ProjectSnapshot(Workspace(root), emptyList(), emptyList())
+        val plan = PatchPlan(
+            operation = "missingScope",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "refuse undeclared source scope",
+            affectedFiles = setOf(Path.of("Created.java")),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Create(Path.of("Created.java"), "class Created {}\n"))),
+        )
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.scopeInvalid" }, result.diagnostics.toString())
+        assertFalse(Files.exists(root.resolve("Created.java")))
+    }
+
+    @Test
+    fun refusesNewSourceOmittedFromCallerSnapshot() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "engineOwnedScope",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "detect omitted source",
+            affectedFiles = setOf(relative),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                relative,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        Files.writeString(root.resolve("Added.java"), "class Added {}\n")
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.scopeChanged" }, result.diagnostics.toString())
+        assertEquals("class Example {}\n", Files.readString(root.resolve(relative)))
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
+    }
+
+    @Test
+    fun ignoresNewSourcesInsideDeclaredIgnoredDirectories() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "ignoredScope",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "ignore generated build source",
+            affectedFiles = setOf(relative),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                relative,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        Files.createDirectories(root.resolve("build/generated"))
+        Files.writeString(root.resolve("build/generated/Generated.java"), "class Generated {}\n")
+
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
+        assertEquals("class Changed {}\n", Files.readString(root.resolve(relative)))
+    }
+
+    @Test
     fun refusesWhenAffectedFileChangesBetweenScanAndLock() {
         val root = Files.createTempDirectory("refactorkit-test")
         val relative = Path.of("Example.java")

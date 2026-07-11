@@ -54,10 +54,46 @@ data class ProjectSnapshot(
     val workspace: Workspace,
     val modules: List<Module>,
     val files: List<SourceFile>,
+    val sourceExtensions: Set<String> = inferSourceExtensions(files),
+    val ignoredDirectories: Set<String> = DEFAULT_IGNORED_DIRECTORIES,
 ) {
-    val hash: String = hashFiles(files)
+    val hash: String = hashSnapshot(modules, files, sourceExtensions, ignoredDirectories)
 
     companion object {
+        val DEFAULT_IGNORED_DIRECTORIES: Set<String> = setOf(
+            ".git", ".gradle", ".idea", ".refactorkit",
+            "build", "target", "dist", "out", "coverage", "node_modules", "__pycache__",
+        )
+
+        fun inferSourceExtensions(files: List<SourceFile>): Set<String> = files.mapNotNull { file ->
+            file.path.fileName?.toString()?.substringAfterLast('.', missingDelimiterValue = "")?.takeIf(String::isNotEmpty)
+        }.toSet()
+
+        fun hashSnapshot(
+            modules: List<Module>,
+            files: List<SourceFile>,
+            sourceExtensions: Set<String>,
+            ignoredDirectories: Set<String>,
+        ): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            modules.sortedBy { it.name }.forEach { module ->
+                digest.update("module\u0000${module.name}\u0000${module.root.toAbsolutePath().normalize()}\u0000".toByteArray(Charsets.UTF_8))
+                module.sourceRoots.sortedBy(Path::toString).forEach { digest.update("sourceRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.classpathEntries.sortedBy(Path::toString).forEach { digest.update("classpath\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+            }
+            sourceExtensions.sorted().forEach { digest.update("extension\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+            ignoredDirectories.sorted().forEach { digest.update("ignored\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+            files.sortedBy { it.path.toString() }.forEach { file ->
+                digest.update(file.path.toString().toByteArray(Charsets.UTF_8))
+                digest.update(0)
+                digest.update(file.languageId.toByteArray(Charsets.UTF_8))
+                digest.update(0)
+                digest.update(file.content.toByteArray(Charsets.UTF_8))
+                digest.update(0)
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+
         fun hashFiles(files: List<SourceFile>): String {
             val digest = MessageDigest.getInstance("SHA-256")
             files.sortedBy { it.path.toString() }.forEach { file ->

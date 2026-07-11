@@ -141,8 +141,8 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-023
-|PatchEngine preflight rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions. Managed writes hold a workspace lock, revalidate affected paths, durably journal pre/post intent, stage all content, require atomic replacement, and flush files/directories (`TX-001`, `TX-002`, `TX-005`, supported-filesystem `TX-006` closed; `TX-014` narrowed).
-|Unsupported root capability is refused and per-target atomic-move failure is recoverable, but mounted-store variation and destructive kill/disk-full/power-loss evidence remain; caller-provided scope and editor-managed LSP writes remain outside complete evidence.
+|PatchEngine preflight rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions. Managed writes hold a workspace lock, revalidate affected paths, durably journal pre/post intent, stage all content, require atomic replacement, and flush files/directories (`TX-001`, `TX-002`, `TX-005`, supported-filesystem `TX-006`, and declared-source `TX-014` closed).
+|Unsupported root capability is refused and per-target atomic-move failure is recoverable, but mounted-store variation and destructive kill/disk-full/power-loss evidence remain; mutable classpath artifacts and editor-managed LSP writes remain outside complete evidence.
 |Make scan scope engine-owned; add journal checksum/quarantine and fault/kill/restart/mounted-filesystem acceptance evidence.
 |planned release blocker
 
@@ -153,9 +153,9 @@ Status: implementation-informed, needs human review for prioritization.
 |remaining journal integrity and release blocker
 
 |R-025
-|Versioned normal rollback now verifies exact post-images and explicit force is audited (`TX-004` closed), but restoration remains content/POSIX-permission focused and complete scan scope is caller-provided (`TX-013`, `TX-014`).
-|Legacy image-less records require manual recovery; ownership, timestamps, ACLs, extended attributes, encoding metadata, and directory state may not be restored; omitted newly appeared sources can weaken library freshness scope.
-|Define full metadata/directory restoration and engine-owned scan scope; keep forced/manual recovery separate and explicit.
+|Versioned normal rollback now verifies exact post-images and explicit force is audited (`TX-004` closed), but restoration remains content/POSIX-permission focused and mutable classpath artifacts are not content-fingerprinted (`TX-013`; S2 classpath evidence).
+|Legacy image-less records require manual recovery; ownership, timestamps, ACLs, extended attributes, encoding metadata, and directory state may not be restored; mutable JAR/compiled-output changes can invalidate semantic evidence without a content fingerprint.
+|Define full metadata/directory restoration and classpath content fingerprints; keep forced/manual recovery separate and explicit.
 |critical data-loss risk; planned release blocker
 
 |R-026

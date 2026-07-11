@@ -11,6 +11,7 @@ import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
 import java.util.UUID
+import java.util.stream.Collectors
 
 class PatchEngine(
     private val workspaceRoot: Path,
@@ -142,6 +143,7 @@ class PatchEngine(
                 ))
             }
             addAll(validate(normalizedPlan, currentSnapshot.hash))
+            addAll(validateEngineOwnedSnapshot(currentSnapshot))
             addAll(validateAffectedFilePreconditions(normalizedEdit, currentSnapshot))
         }
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
@@ -327,6 +329,105 @@ class PatchEngine(
             }
         }
     }
+
+    private fun validateEngineOwnedSnapshot(snapshot: ProjectSnapshot): List<Diagnostic> {
+        val diagnostics = mutableListOf<Diagnostic>()
+        if (snapshot.sourceExtensions.isEmpty()) {
+            return listOf(Diagnostic(
+                "Snapshot source scope must declare at least one file extension",
+                Diagnostic.Severity.ERROR,
+                code = "snapshot.scopeInvalid",
+            ))
+        }
+        val declaredRoots = snapshot.modules.flatMap { it.sourceRoots }
+            .map(::resolveInsideWorkspace)
+        val roots = (declaredRoots.ifEmpty { listOf(normalizedRoot) })
+            .map { it.toAbsolutePath().normalize() }
+            .distinct()
+            .sortedBy { it.nameCount }
+            .fold(mutableListOf<Path>()) { selected, candidate ->
+                if (selected.none { candidate.startsWith(it) }) selected.add(candidate)
+                selected
+            }
+
+        roots.forEach { root ->
+            if (!root.startsWith(normalizedRoot)) {
+                diagnostics += Diagnostic(
+                    "Snapshot source root is outside workspace: $root",
+                    Diagnostic.Severity.ERROR,
+                    code = "snapshot.scopeInvalid",
+                )
+            } else {
+                validateNoSymbolicLinkTraversal(normalizedRoot.relativize(root))?.let(diagnostics::add)
+            }
+        }
+        if (diagnostics.isNotEmpty()) return diagnostics
+
+        val languageByExtension = snapshot.files.mapNotNull { file ->
+            val extension = extensionOf(file.path) ?: return@mapNotNull null
+            extension to file.languageId
+        }.toMap()
+        val actualByPath = linkedMapOf<Path, SourceFile>()
+        try {
+            roots.filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }.forEach { sourceRoot ->
+                Files.walk(sourceRoot).use { stream ->
+                    stream
+                        .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+                        .filter { absolute ->
+                            val relative = normalizedRoot.relativize(absolute)
+                            relative.none { component -> component.toString() in snapshot.ignoredDirectories }
+                        }
+                        .filter { extensionOf(it) in snapshot.sourceExtensions }
+                        .map { absolute ->
+                            val relative = normalizedRoot.relativize(absolute)
+                            val extension = requireNotNull(extensionOf(relative))
+                            SourceFile(relative, Files.readString(absolute), languageByExtension[extension] ?: extension)
+                        }
+                        .collect(Collectors.toList())
+                        .forEach { actualByPath[it.path] = it }
+                }
+            }
+        } catch (error: Exception) {
+            return listOf(Diagnostic(
+                "Cannot rescan snapshot scope under workspace lock: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "snapshot.scopeUnreadable",
+            ))
+        }
+
+        val actualHash = ProjectSnapshot.hashSnapshot(
+            snapshot.modules,
+            actualByPath.values.toList(),
+            snapshot.sourceExtensions,
+            snapshot.ignoredDirectories,
+        )
+        if (actualHash != snapshot.hash) {
+            val expectedByPath = snapshot.files.associateBy { it.path }
+            val added = actualByPath.keys - expectedByPath.keys
+            val missing = expectedByPath.keys - actualByPath.keys
+            val changed = (actualByPath.keys intersect expectedByPath.keys).filter { path ->
+                val actual = actualByPath.getValue(path)
+                val expected = expectedByPath.getValue(path)
+                actual.content != expected.content || actual.languageId != expected.languageId
+            }
+            val detail = buildList {
+                if (added.isNotEmpty()) add("added=${added.sortedBy(Path::toString)}")
+                if (missing.isNotEmpty()) add("missing=${missing.sortedBy(Path::toString)}")
+                if (changed.isNotEmpty()) add("changed=${changed.sortedBy(Path::toString)}")
+                if (isEmpty()) add("scope metadata changed")
+            }.joinToString(", ")
+            diagnostics += Diagnostic(
+                "Workspace source scope changed since the supplied snapshot ($detail); rescan and regenerate the plan",
+                Diagnostic.Severity.ERROR,
+                code = "snapshot.scopeChanged",
+            )
+        }
+        return diagnostics
+    }
+
+    private fun extensionOf(path: Path): String? = path.fileName?.toString()
+        ?.substringAfterLast('.', missingDelimiterValue = "")
+        ?.takeIf(String::isNotEmpty)
 
     private fun validateAffectedFilePreconditions(
         edit: WorkspaceEdit,
