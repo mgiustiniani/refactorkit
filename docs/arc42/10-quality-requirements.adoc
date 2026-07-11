@@ -10,7 +10,7 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 ** Preview before apply
 ** Reject stale or unsafe edits
 ** Compensating rollback after a completely successful managed apply
-** Planned crash recovery, isolation, durability, and conflict-safe rollback (not current guarantees)
+** Implemented managed-write recovery/isolation/durability and versioned conflict-safe rollback; destructive acceptance evidence remains
 ** Warnings for high-risk Java/framework/import cases
 * Correctness
 ** Symbol-aware Java operations where supported
@@ -280,7 +280,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Transactionality guarantees exceed current evidence
-|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Complete snapshot scope is not yet engine-owned. Current flows still lack conflict-safe normal rollback, complete same-file/bounds validation, central diagnostics gates, enforced approval semantics, precise error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
+|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Complete snapshot scope is not yet engine-owned. Current flows still lack complete same-file/bounds validation, central diagnostics gates, enforced approval semantics, complete apply error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
 |release blocker; remaining and partially evidenced `TX` findings require closure plus destructive fault acceptance
 
 |Stable acceptance evidence incomplete

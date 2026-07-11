@@ -153,9 +153,9 @@ Status: implementation-informed, needs human review for prioritization.
 |remaining journal integrity and release blocker
 
 |R-025
-|Rollback has no post-apply conflict check, restores text rather than complete filesystem state, and relies on caller-supplied snapshot hashes (`TX-004`, `TX-013`, `TX-014`).
-|Rollback can overwrite newer user/editor/process changes; permissions, ownership, timestamps, ACLs, extended attributes, encoding metadata, and directory state may not be restored; a library caller can bypass meaningful freshness validation.
-|Persist expected pre/post hashes and metadata scope, derive/revalidate protected preconditions in the engine, refuse normal rollback conflicts, and define forced/manual recovery separately.
+|Versioned normal rollback now verifies exact post-images and explicit force is audited (`TX-004` closed), but restoration remains content/POSIX-permission focused and complete scan scope is caller-provided (`TX-013`, `TX-014`).
+|Legacy image-less records require manual recovery; ownership, timestamps, ACLs, extended attributes, encoding metadata, and directory state may not be restored; omitted newly appeared sources can weaken library freshness scope.
+|Define full metadata/directory restoration and engine-owned scan scope; keep forced/manual recovery separate and explicit.
 |critical data-loss risk; planned release blocker
 
 |R-026

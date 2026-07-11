@@ -32,6 +32,8 @@ surfaces should map it to a stable exit-code category and human-readable message
 | `refused-plan` | Planner intentionally refuses an unsafe or ambiguous operation. | `PLAN_REFUSED` (`-32001`) |
 | `invalid-input` | Missing/invalid parameter, unknown plan id, unknown tool/command shape. | `INVALID_PARAMS` (`-32602`) |
 | `stale-snapshot-or-plan` | Workspace changed after preview or plan no longer matches current snapshot. | `SNAPSHOT_CHANGED` (`-32002`) |
+| `rollback-conflict` | Affected path differs from its exact post-apply journal image. | `ROLLBACK_CONFLICT` (`-32005`) |
+| `recovery-required` | Interrupted apply/rollback cannot be compensated automatically or journal recovery fails. | `RECOVERY_REQUIRED` (`-32006`) |
 | `diagnostics-failure` | Apply/rollback diagnostics report failure or post-apply validation fails. | `INTERNAL_ERROR` until specialized code exists |
 | `unsupported-operation` | Method, command, operation, language, or refactoring is not supported. | `METHOD_NOT_FOUND` or `INVALID_PARAMS` |
 | `unsafe-path` | Path escapes the workspace root or was not part of the scanned snapshot. | `INVALID_PARAMS` |
@@ -62,7 +64,7 @@ compatible.
 | `refactorkit move-class --symbol <fqcn> --to-package <pkg> [--apply] [path]` | `beta-contract` | Clean JDT evidence scopes package/import/FQN edits to binding-matched files; lexical scoping is explicit otherwise. Invalid packages and existing targets are refused; framework/string warnings remain. |
 | `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; clean JDT evidence also removes binding-proven unused exact imports, while wildcard/unresolved imports and unclean files remain conservative. |
 | `refactorkit safe-delete --symbol <fqcn> [--force] [--apply] [path]` | `beta-contract` | Refuses referenced symbols by default; forced behavior requires explicit risk note. |
-| `refactorkit patch rollback <transaction-id> --root <path>` | `beta-contract` | Rollback transaction lookup and workspace-root safety. |
+| `refactorkit patch rollback <transaction-id> [--force] --root <path>` | `beta-contract` | Normal rollback validates exact post-images and refuses conflicts; `--force` is an explicit destructive pre-image restore. |
 | `refactorkit test-golden [case] [--golden-dir <path>]` | `beta-contract` | CI/test harness command for documented golden fixtures. |
 | `refactorkit extract-method ...` | `experimental` | Limited MVP; success/refusal coverage expands during beta. |
 | `refactorkit change-signature ...` | `experimental` | Limited rename/add/reorder/remove parameter support; conservative refusal expected. |
@@ -218,10 +220,13 @@ RefactorKit metadata:
 Clients should preserve `refactorkitPlanId` from the preview result. The LSP
 server also stores pending plans internally so `refactorkit.applyPlan` can apply
 the exact previewed plan. `refactorkit.applyPlan` returns `{ "transactionId":
-"..." }`, writes transaction metadata, removes the pending plan, refreshes the
+"..." }`; `PatchEngine` owns write-ahead lifecycle persistence before mutation,
+then the LSP session removes the pending plan, refreshes the
 workspace snapshot, and republishes diagnostics.
 
-`refactorkit.rollback` requires `{ "transactionId": "..." }`. On success it
+`refactorkit.rollback` requires `{ "transactionId": "..." }` and accepts
+optional `"force": true`. Normal mode verifies exact post-apply images and never
+overwrites later changes; force is an explicit destructive override. On success it
 loads the applied journal record, transitions through `ROLLING_BACK`, rolls the
 workspace back, retains the record as `ROLLED_BACK`, refreshes the snapshot,
 republishes diagnostics, and returns:
@@ -234,8 +239,9 @@ Rollback refusal semantics:
 
 - missing or unknown transaction ids are `INVALID_PARAMS` and must not expose a
   stack trace;
-- rollback engine refusal currently maps to `INTERNAL_ERROR` with a concise
-  `Rollback refused: ...` message;
+- post-apply divergence maps to `ROLLBACK_CONFLICT` (`-32005`) and leaves the
+  journal `APPLIED` for retry; incomplete recovery maps to `RECOVERY_REQUIRED`
+  (`-32006`); other rollback engine failures remain concise `INTERNAL_ERROR`s;
 - refused preview plans, including referenced `safeDelete`, use `PLAN_REFUSED`
   and do not create a pending plan or workspace edit;
 - unknown LSP commands and unknown plan ids are `INVALID_PARAMS` and must not
@@ -256,7 +262,7 @@ the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 |------|--------|-------|
 | `project_scan`, `project_summary` | `beta-contract` | Workspace lifecycle and project metadata. |
 | `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries. |
-| `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; experimental operations keep their label. |
+| `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; rollback refuses post-apply divergence by default and accepts explicit `force=true`. |
 | `available_refactorings` | `experimental` | Descriptor shape may change. |
 | `import_external_java_class` | `experimental` | Import preview with stable provenance/license warning fields in output text. |
 | `generate_context_bundle` | `experimental` | Bundle shape may change with agent needs. |

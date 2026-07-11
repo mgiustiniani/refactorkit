@@ -21,6 +21,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -487,12 +488,15 @@ class LspSession {
             }
             "refactorkit.rollback" -> {
                 val transactionId = args?.string("transactionId") ?: missing("transactionId")
+                val mode = if (args?.get("force")?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true) {
+                    RollbackMode.FORCE
+                } else RollbackMode.NORMAL
                 val parsedTransactionId = TransactionId.parseOrNull(transactionId)
                     ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid transaction ID: $transactionId")
                 val log = TransactionLog(root.resolve(".refactorkit/transactions"))
                 val tx = log.load(parsedTransactionId)
                     ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $transactionId")
-                when (val result = PatchEngine(root).rollback(tx)) {
+                when (val result = PatchEngine(root).rollback(tx, mode)) {
                     is ApplyResult.Applied -> {
                         refreshSnapshot()
                         buildJsonObject {
@@ -500,10 +504,17 @@ class LspSession {
                             put("transactionId", transactionId)
                         }
                     }
-                    is ApplyResult.Refused -> throw JsonRpcException(
-                        JsonRpcErrorCodes.INTERNAL_ERROR,
-                        "Rollback refused: ${result.diagnostics.joinToString("; ") { it.message }}",
-                    )
+                    is ApplyResult.Refused -> {
+                        val code = when {
+                            result.diagnostics.any { it.code == "rollback.conflict" } -> JsonRpcErrorCodes.ROLLBACK_CONFLICT
+                            result.diagnostics.any { it.code == "transaction.recoveryRequired" } -> JsonRpcErrorCodes.RECOVERY_REQUIRED
+                            else -> JsonRpcErrorCodes.INTERNAL_ERROR
+                        }
+                        throw JsonRpcException(
+                            code,
+                            "Rollback refused: ${result.diagnostics.joinToString("; ") { it.message }}",
+                        )
+                    }
                 }
             }
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown command: $command")

@@ -205,6 +205,44 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun rollbackConflictUsesStableCodeAndForceRestores() {
+        val root = createProject(
+            "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val preview = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "renameClass")
+            put("symbol", "com.example.UserManager")
+            put("arguments", buildJsonObject { put("newName", "AccountManager") })
+        }) as JsonObject
+        val applied = session.dispatch(
+            "refactor.apply",
+            params("planId" to preview["planId"]!!.jsonPrimitive.content),
+        ) as JsonObject
+        val transactionId = applied["transactionId"]!!.jsonPrimitive.content
+        Files.writeString(
+            rootPath.resolve("src/main/java/com/example/AccountManager.java"),
+            "package com.example;\npublic class ExternalChange {}\n",
+        )
+
+        val conflict = assertFailsWith<JsonRpcException> {
+            session.dispatch("patch.rollback", params("transactionId" to transactionId))
+        }
+        assertEquals(JsonRpcErrorCodes.ROLLBACK_CONFLICT, conflict.code)
+        assertTrue(Files.readString(rootPath.resolve("src/main/java/com/example/AccountManager.java")).contains("ExternalChange"))
+
+        val forced = session.dispatch("patch.rollback", buildJsonObject {
+            put("transactionId", transactionId)
+            put("force", true)
+        }) as JsonObject
+        assertEquals("rolledBack", forced["status"]!!.jsonPrimitive.content)
+        assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
+        assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+    }
+
+    @Test
     fun rollbackRejectsMalformedTransactionId() {
         val root = createProject(
             "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",

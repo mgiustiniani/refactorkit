@@ -29,17 +29,17 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |`Models.kt`, `TextEdits.kt`
 
 |PatchEngine
-|Core service that preflights and sequentially applies preview plans and can replay compensation after a completely successful managed apply. Current behavior is not ACID or crash-safe.
+|Core service that locks, preflights, journals, stages, durably commits per-path images, recovers interrupted managed writes, and performs conflict-safe or explicitly forced rollback. Multi-path batches are recoverable rather than one filesystem-wide ACID commit.
 |Core
 |`PatchEngine.kt`, ADR 0002, transactionality audit
 
 |Transaction
-|Current model name for post-success compensation metadata. It is not evidence of atomicity, isolation, durability, write-ahead recovery, or conflict-safe rollback.
+|Domain identity and compensation view embedded in the durable journal record. Journal pre/post images and lifecycle—not the `Transaction` object alone—provide recovery and conflict-safe rollback evidence.
 |Core
 |`Models.kt`, `docs/transactionality-audit.md`
 
 |Compensatable Batch
-|Previewed and preflighted sequential writes for which reverse edits are returned only after all writes succeed. This is the accurate classification of current CLI and server-managed apply paths.
+|Legacy classification for previewed/preflighted sequential writes with post-success compensation only. Current managed paths have advanced to locked, write-ahead-journaled, durably staged recoverable batches.
 |Core / integrations
 |ADRs 0002 and 0004, transactionality audit
 

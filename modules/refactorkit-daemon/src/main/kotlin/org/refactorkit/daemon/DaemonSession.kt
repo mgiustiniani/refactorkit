@@ -17,6 +17,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.SymbolId
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
@@ -313,13 +314,16 @@ class DaemonSession {
 
     private fun patchRollback(params: JsonObject?): JsonElement {
         val txId = params?.string("transactionId") ?: missing("transactionId")
+        val mode = if (params?.get("force")?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true) {
+            RollbackMode.FORCE
+        } else RollbackMode.NORMAL
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val transactionId = TransactionId.parseOrNull(txId)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid transaction ID: $txId")
         val log = TransactionLog(root.resolve(".refactorkit/transactions"))
         val tx = log.load(transactionId)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $txId")
-        return when (val result = PatchEngine(root).rollback(tx)) {
+        return when (val result = PatchEngine(root).rollback(tx, mode)) {
             is ApplyResult.Applied -> {
                 buildJsonObject {
                     put("status", "rolledBack")
@@ -328,7 +332,12 @@ class DaemonSession {
             }
             is ApplyResult.Refused -> {
                 val msg = result.diagnostics.joinToString("; ") { it.message }
-                throw JsonRpcException(JsonRpcErrorCodes.INTERNAL_ERROR, "Rollback refused: $msg")
+                val code = when {
+                    result.diagnostics.any { it.code == "rollback.conflict" } -> JsonRpcErrorCodes.ROLLBACK_CONFLICT
+                    result.diagnostics.any { it.code == "transaction.recoveryRequired" } -> JsonRpcErrorCodes.RECOVERY_REQUIRED
+                    else -> JsonRpcErrorCodes.INTERNAL_ERROR
+                }
+                throw JsonRpcException(code, "Rollback refused: $msg")
             }
         }
     }

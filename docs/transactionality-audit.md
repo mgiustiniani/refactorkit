@@ -106,19 +106,21 @@ closure remains part of `TX-005`.
 
 ### TX-004 — Rollback can overwrite changes made after apply
 
-Severity: **critical data-loss risk**.
+Status: **closed for versioned journal transactions after the audited baseline**.
 
-`Transaction` stores `snapshotHashBefore` but rollback does not validate the
-current/post-apply state. Rollback edits use overwrite-capable creates. If a user,
-editor, generator, or second RefactorKit process modifies an affected file after
-apply, rollback can overwrite that newer content.
+Normal rollback now requires an `APPLIED` journal record with matching pre/post
+path sets and compares every current affected path against the exact journaled
+post-image under the workspace lock. Modified files, modified rename targets,
+recreated rename sources, recreated deleted files, removed created files, and
+non-regular/symlink state are refused with `rollback.conflict` without changing
+workspace content or blocking unrelated future transactions. The record remains
+`APPLIED` with conflict detail so rollback can be retried.
 
-Required closure:
-
-- store expected post-apply hashes per affected path and/or a post-apply snapshot;
-- refuse normal rollback when current state differs;
-- expose explicit conflict/recovery modes rather than silently overwriting;
-- define behavior for recreated deleted files and modified rename targets.
+`RollbackMode.FORCE` is a separately explicit destructive contract exposed as
+`--force` or protocol `force=true`; it restores durable pre-images regardless of
+post-apply content and records the override in retained history. Legacy records
+without stable pre/post images refuse automatic rollback with
+`rollback.preconditionUnavailable` and require manual recovery.
 
 ### TX-005 — No workspace isolation or cross-process lock
 
@@ -292,10 +294,13 @@ whether approval is a separately auditable transition.
 
 ### TX-017 — Integration error mapping is inconsistent
 
-Daemon/LSP apply paths map all `ApplyResult.Refused` cases to
-`SNAPSHOT_CHANGED`, even when the actual cause is overlap, unsafe path, missing
-file, collision, or another validation error. Rollback refusal is often mapped to
-`INTERNAL_ERROR`. This weakens deterministic recovery decisions.
+Status: **partially closed**.
+
+Daemon/LSP rollback post-image conflicts now map to stable
+`ROLLBACK_CONFLICT (-32005)` and incomplete recovery maps to
+`RECOVERY_REQUIRED (-32006)`; force remains explicit. Apply paths still map many
+`ApplyResult.Refused` causes to `SNAPSHOT_CHANGED`, even for overlap, unsafe path,
+missing file, collision, capability refusal, or another validation error.
 
 ### TX-018 — Daemon state is stale after successful apply/rollback
 
@@ -354,10 +359,9 @@ The current requirements should be corrected before API `1.0` freeze.
    be omitted by library callers (`TX-014`).
 2. Merge same-file edits into one coordinate space and validate all line/character
    bounds before mutation (`TX-009`, `TX-010`).
-3. Add post-state hashes and conflict-safe rollback (`TX-004`).
-4. Define recipe saga/transaction and LSP client/server transaction boundaries.
-5. Integrate diagnostics and stable error categories into commit/rollback gates.
-6. Add fault-injection, kill/restart, concurrency, corruption, and mounted
+3. Define recipe saga/transaction and LSP client/server transaction boundaries.
+4. Integrate diagnostics and remaining stable error categories into commit gates.
+5. Add fault-injection, kill/restart, concurrency, corruption, and mounted
    filesystem capability tests before `v1.0.0-rc.1`.
 
 ## Stable-release verdict

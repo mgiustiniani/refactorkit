@@ -126,28 +126,62 @@ class PatchEngine(
         }
     }
 
-    /** Roll back an applied journaled transaction under the workspace lock. */
-    fun rollback(transaction: Transaction): ApplyResult = withWorkspaceLock {
-        val errors = validateEdits(transaction.rollbackEdit) + validateRuntimeState(transaction.rollbackEdit)
-        if (errors.any { it.severity == Diagnostic.Severity.ERROR }) {
-            ApplyResult.Refused(errors)
-        } else {
-            val record = transactionLog.loadRecord(transaction.id)
-            try {
-                val staged = stageWorkspaceEdit(transaction.rollbackEdit)
-                val permissions = derivePostPermissions(transaction.rollbackEdit)
-                if (record != null) transactionLog.update(record.copy(state = JournalState.ROLLING_BACK))
-                commitPostImages(staged.preImages, staged.postImages, permissions)
-                if (record != null) transactionLog.update(record.copy(state = JournalState.ROLLED_BACK))
-                ApplyResult.Applied(transaction)
-            } catch (error: Exception) {
-                if (record != null) markRecoveryRequired(record, "Rollback failed: ${error.message}")
-                ApplyResult.Refused(listOf(Diagnostic(
-                    "Rollback failed; recovery is required: ${error.message}",
-                    Diagnostic.Severity.ERROR,
-                    code = "transaction.recoveryRequired",
-                )))
+    /**
+     * Roll back an applied journaled transaction under the workspace lock.
+     * Normal mode refuses any post-apply path divergence; force mode is an
+     * explicit destructive override that restores journaled pre-images.
+     */
+    fun rollback(
+        transaction: Transaction,
+        mode: RollbackMode = RollbackMode.NORMAL,
+    ): ApplyResult = withWorkspaceLock {
+        val record = transactionLog.loadRecord(transaction.id)
+            ?: return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+                "Transaction journal record is missing: ${transaction.id.value}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.journalMissing",
+            )))
+        if (record.state != JournalState.APPLIED) {
+            return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+                "Transaction is not in APPLIED state: ${record.state}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.notApplied",
+            )))
+        }
+        val journalErrors = validateJournalImages(record)
+        if (journalErrors.isNotEmpty()) return@withWorkspaceLock ApplyResult.Refused(journalErrors)
+        if (record.preImages.isEmpty() || record.postImages.isEmpty()) {
+            return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+                "Transaction lacks stable rollback pre/post images",
+                Diagnostic.Severity.ERROR,
+                code = "rollback.preconditionUnavailable",
+            )))
+        }
+        if (mode == RollbackMode.NORMAL) {
+            val conflicts = validateRollbackPostImages(record)
+            if (conflicts.isNotEmpty()) {
+                transactionLog.update(record.copy(failure = conflicts.joinToString("; ") { it.message }))
+                return@withWorkspaceLock ApplyResult.Refused(conflicts)
             }
+        }
+
+        try {
+            val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
+            val permissions = derivePostPermissions(transaction.rollbackEdit)
+            transactionLog.update(record.copy(state = JournalState.ROLLING_BACK))
+            commitPostImages(currentImages, record.preImages, permissions)
+            transactionLog.update(record.copy(
+                state = JournalState.ROLLED_BACK,
+                failure = if (mode == RollbackMode.FORCE) "Forced rollback explicitly requested" else null,
+            ))
+            ApplyResult.Applied(transaction)
+        } catch (error: Exception) {
+            markRecoveryRequired(record, "Rollback failed: ${error.message}")
+            ApplyResult.Refused(listOf(Diagnostic(
+                "Rollback failed; recovery is required: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.recoveryRequired",
+            )))
         }
     }
 
@@ -228,6 +262,44 @@ class PatchEngine(
                 lockPath,
                 setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
             )
+        }
+    }
+
+    private fun validateJournalImages(record: TransactionJournalRecord): List<Diagnostic> = buildList {
+        val prePaths = record.preImages.map { it.path }.toSet()
+        val postPaths = record.postImages.map { it.path }.toSet()
+        if (prePaths != postPaths) {
+            add(Diagnostic(
+                "Transaction pre/post image path sets do not match",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.corrupt",
+            ))
+        }
+        (prePaths + postPaths).forEach { path ->
+            validateInsideWorkspace(path)?.let(::add)
+            validateNoSymbolicLinkTraversal(path)?.let(::add)
+        }
+    }
+
+    private fun validateRollbackPostImages(record: TransactionJournalRecord): List<Diagnostic> = buildList {
+        record.postImages.forEach { expected ->
+            val actual = try {
+                readImage(expected.path)
+            } catch (error: Exception) {
+                add(Diagnostic(
+                    "Cannot verify rollback state for ${expected.path}: ${error.message}",
+                    Diagnostic.Severity.ERROR,
+                    code = "rollback.conflict",
+                ))
+                return@forEach
+            }
+            if (actual != expected.content) {
+                add(Diagnostic(
+                    "Rollback conflict: ${expected.path} changed after apply",
+                    Diagnostic.Severity.ERROR,
+                    code = "rollback.conflict",
+                ))
+            }
         }
     }
 
@@ -773,6 +845,11 @@ class PatchEngine(
         MAY_BE_ABSENT,
         MUST_BE_SCANNED,
     }
+}
+
+enum class RollbackMode {
+    NORMAL,
+    FORCE,
 }
 
 data class WorkspaceFilesystemCapabilities(

@@ -38,6 +38,8 @@ object JsonRpcErrorCodes {
     const val SNAPSHOT_CHANGED = -32002
     const val SYMBOL_NOT_FOUND = -32003
     const val PROJECT_NOT_OPEN = -32004
+    const val ROLLBACK_CONFLICT = -32005
+    const val RECOVERY_REQUIRED = -32006
 }
 
 class JsonRpcException(val code: Int, override val message: String) : RuntimeException(message)

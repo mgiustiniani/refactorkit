@@ -18,6 +18,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -124,9 +125,12 @@ class McpSession {
             add(tool("apply_refactoring", "Apply a previously previewed plan.",
                 required = listOf("planId"),
                 props = mapOf("planId" to "string: plan ID returned by preview_refactoring")))
-            add(tool("rollback_refactoring", "Roll back a previously applied transaction.",
+            add(tool("rollback_refactoring", "Roll back a previously applied transaction; normal mode refuses post-apply changes.",
                 required = listOf("transactionId"),
-                props = mapOf("transactionId" to "string: transaction ID returned by apply_refactoring")))
+                props = mapOf(
+                    "transactionId" to "string: transaction ID returned by apply_refactoring",
+                    "force" to "boolean: explicitly overwrite post-apply changes (default false)",
+                )))
             add(tool("import_external_java_class", "Import an external Java class into the project with license/conflict checks.",
                 required = listOf("code", "targetPackage"),
                 props = mapOf(
@@ -342,15 +346,18 @@ class McpSession {
     private fun toolRollbackRefactoring(args: JsonObject): String {
         val txId = args.string("transactionId") ?: missing("transactionId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val mode = if (args["force"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true) {
+            RollbackMode.FORCE
+        } else RollbackMode.NORMAL
         val transactionId = TransactionId.parseOrNull(txId)
             ?: return "Invalid transaction ID: $txId"
         val log = TransactionLog(root.resolve(".refactorkit/transactions"))
         val tx = log.load(transactionId)
             ?: return "Transaction not found: $txId"
-        return when (val result = PatchEngine(root).rollback(tx)) {
+        return when (val result = PatchEngine(root).rollback(tx, mode)) {
             is ApplyResult.Applied -> {
                 snapshot = scanner.scan(root)
-                "Rolled back transaction $txId."
+                "${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId."
             }
             is ApplyResult.Refused -> "Rollback refused: ${result.diagnostics.joinToString("; ") { it.message }}"
         }

@@ -188,6 +188,62 @@ class PatchEngineTest {
     }
 
     @Test
+    fun normalRollbackRefusesPostApplyChangesAndForceRestoresPreImages() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        Files.writeString(root.resolve("Modify.java"), "before modify\n")
+        Files.writeString(root.resolve("Old.java"), "before rename\n")
+        Files.writeString(root.resolve("Delete.java"), "before delete\n")
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(
+            FileEdit.Modify(
+                Path.of("Modify.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 0), SourcePosition(0, 6)), "after")),
+            ),
+            FileEdit.Create(Path.of("Created.java"), "created\n"),
+            FileEdit.Rename(Path.of("Old.java"), Path.of("New.java")),
+            FileEdit.Delete(Path.of("Delete.java")),
+        ))
+        val plan = PatchPlan(
+            operation = "rollbackConflict",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "rollback conflict coverage",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
+        Files.writeString(root.resolve("Modify.java"), "external modify\n")
+        Files.writeString(root.resolve("Created.java"), "external created\n")
+        Files.writeString(root.resolve("Old.java"), "external recreated source\n")
+        Files.writeString(root.resolve("New.java"), "external rename target\n")
+        Files.writeString(root.resolve("Delete.java"), "external recreated delete\n")
+
+        val refused = PatchEngine(root).rollback(applied.transaction)
+
+        assertIs<ApplyResult.Refused>(refused)
+        assertTrue(refused.diagnostics.all { it.code == "rollback.conflict" })
+        assertEquals("external modify\n", Files.readString(root.resolve("Modify.java")))
+        assertEquals("external created\n", Files.readString(root.resolve("Created.java")))
+        assertEquals("external recreated source\n", Files.readString(root.resolve("Old.java")))
+        assertEquals("external rename target\n", Files.readString(root.resolve("New.java")))
+        assertEquals("external recreated delete\n", Files.readString(root.resolve("Delete.java")))
+        val log = TransactionLog(root.resolve(".refactorkit/transactions"))
+        assertEquals(JournalState.APPLIED, log.loadRecord(applied.transaction.id)?.state)
+
+        val forced = PatchEngine(root).rollback(applied.transaction, RollbackMode.FORCE)
+
+        assertIs<ApplyResult.Applied>(forced)
+        assertEquals("before modify\n", Files.readString(root.resolve("Modify.java")))
+        assertFalse(Files.exists(root.resolve("Created.java")))
+        assertEquals("before rename\n", Files.readString(root.resolve("Old.java")))
+        assertFalse(Files.exists(root.resolve("New.java")))
+        assertEquals("before delete\n", Files.readString(root.resolve("Delete.java")))
+        val record = log.loadRecord(applied.transaction.id)
+        assertEquals(JournalState.ROLLED_BACK, record?.state)
+        assertEquals("Forced rollback explicitly requested", record?.failure)
+    }
+
+    @Test
     fun reportsWorkspaceFilesystemReplacementCapabilities() {
         val root = Files.createTempDirectory("refactorkit-test")
 

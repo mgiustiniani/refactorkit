@@ -6,6 +6,7 @@ import org.refactorkit.core.PatchPreviewRenderer
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.TransactionLogException
@@ -331,9 +332,10 @@ class RefactorKitCli(
             System.err.println("Transaction log error [${error.code}]: ${error.message}")
             return 1
         } ?: run { System.err.println("Transaction not found: $txId"); return 1 }
-        return when (val result = PatchEngine(workspaceRoot).rollback(tx)) {
+        val mode = if ("force" in parsed.flags) RollbackMode.FORCE else RollbackMode.NORMAL
+        return when (val result = PatchEngine(workspaceRoot).rollback(tx, mode)) {
             is ApplyResult.Applied -> {
-                println("Rolled back transaction $txId.")
+                println("${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId.")
                 0
             }
             is ApplyResult.Refused -> {
@@ -601,7 +603,7 @@ class RefactorKitCli(
           refactorkit move-class        --symbol <fqcn> --to-package <pkg>        [--apply] [<path>]
           refactorkit organize-imports  <file...>                               [--apply] [--root <path>]
           refactorkit safe-delete       --symbol <fqcn>                        [--apply] [--force] [<path>]
-          refactorkit patch rollback    <transaction-id>                        [--root <path>]
+          refactorkit patch rollback    <transaction-id> [--force]              [--root <path>]
           refactorkit java symbols      <path>                                  (alias for symbols)
           refactorkit java diagnostics  <path>                                  (alias for diagnostics)
           refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]

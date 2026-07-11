@@ -29,7 +29,7 @@ Status: implementation-informed for documented flows; no C4 dynamic diagrams yet
 |Only after every write succeeds does the current flow return compensating rollback edits; the CLI then persists transaction metadata. A write or process failure can therefore leave partial state without a durable recovery record.
 
 |7
-|Rollback replays compensation without validating post-apply file state and can overwrite later edits. Central diagnostics gates, conflict-safe rollback, workspace locking, durable journaling, and crash recovery are planned requirements, not current behavior.
+|Normal rollback compares every affected path with the exact retained post-image under the workspace lock and refuses `rollback.conflict` without writes. Explicit force restores pre-images and records the override. Central diagnostics gates and complete metadata restoration remain planned.
 |===
 
 Status: implementation-informed from CLI, Java adapter, patch engine, testkit docs, and `docs/transactionality-audit.md`. This is a preflighted compensatable batch, not an ACID or crash-safe transaction.

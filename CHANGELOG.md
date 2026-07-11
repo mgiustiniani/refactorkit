@@ -24,6 +24,10 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Made rollback conflict-safe by validating exact journaled post-images under the
+  workspace lock. Normal rollback refuses later edits as `rollback.conflict`;
+  explicit `--force`/`force=true` restores pre-images and records the destructive
+  override. Daemon/LSP expose stable rollback-conflict/recovery error codes.
 - Replaced direct workspace writes with fully rendered same-directory staging,
   file `force`, required atomic replacement, and parent-directory `force` for
   apply, rollback, and recovery. POSIX permissions are preserved for modify/move

@@ -231,7 +231,11 @@ refactorkit rename --symbol com.example.UserManager --to AccountManager --apply 
 refactorkit diagnostics samples/java-maven-simple
 
 # 4. Roll back by transaction ID if verification fails or the change is no longer wanted.
+# Refuses if affected files changed after apply
 refactorkit patch rollback <transaction-id> --root samples/java-maven-simple
+
+# Explicit destructive override after reviewing the conflict
+refactorkit patch rollback <transaction-id> --force --root samples/java-maven-simple
 ```
 
 ### External Java class import
