@@ -10,8 +10,8 @@ Status: implementation-informed, needs human review for prioritization.
 
 |R-001
 |Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations and explicit fallback paths still rely on lexical or structural evidence.
-|Refactorings outside the supported signed `renameMember` (including exact annotation-element rename), type-level rename (including annotation types), move-class file-scoping, safe-delete type-reference, annotation-type/element indexing and reference, and exact-import use slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Type-level rename, move class, and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable; unresolved organize-imports files retain lexical cleanup only.
-|Follow ADR 0008; retain conservative refusal/warning behavior, keep fallback paths explicit, extend representative JDT-backed coverage, and refuse signed member rename when an override family includes external declarations.
+|Refactorings outside the supported signed-method and unambiguous-field `renameMember` slices (including exact annotation-element rename), type-level rename (including annotation types), move-class file-scoping, safe-delete type-reference, annotation-type/element indexing and reference, and exact-import use slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Arbitrary unsigned methods retain lexical behavior. Type-level rename, move class, and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable; unresolved organize-imports files retain lexical cleanup only.
+|Follow ADR 0008; retain conservative refusal/warning behavior, keep fallback paths explicit, extend representative JDT-backed coverage, refuse signed method rename when an override family includes external declarations, and validate owner-field collisions before field semantic fallback.
 |known risk
 
 |R-002
@@ -103,6 +103,12 @@ Status: implementation-informed, needs human review for prioritization.
 |Users could infer broader annotation-member or annotation-value editing from successful signed element rename.
 |Keep the exact supported boundary explicit; retain binding-based same-name disambiguation tests and add dedicated semantic evidence before advertising change-signature or default-value editing.
 |known limitation
+
+|R-017
+|Exact field rename depends on an unambiguous `Owner#field` selector and clean global JDT evidence; unclean or unresolved analysis retains lexical member fallback, and non-source references remain outside binding ranges.
+|Fallback may rename shadowing or unrelated same-named identifiers, and callers could overgeneralize field evidence to arbitrary unsigned methods.
+|Keep fallback warnings explicit, preserve owner-field target-collision refusal before fallback, retain binding-disambiguation tests, and do not advertise unsigned-method semantic coverage without separate evidence.
+|known risk
 |===
 
 == Technical Debt from Release Plan

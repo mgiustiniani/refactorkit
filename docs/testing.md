@@ -174,6 +174,9 @@ scan → find symbol → preview → inspect → apply → verify → rollback �
 
 ## Integration test notes
 
+- Field-rename coverage verifies exact JDT declaration/reference edits preserve
+  a shadowing local and an unrelated same-name field, and verifies refusal when
+  the target owner already declares the requested field name.
 - Annotation-element coverage verifies signed zero-parameter JDT identity,
   read-only definition/reference lookup, and exact rename of the declaration and
   named usage while preserving an unrelated same-signature annotation element.

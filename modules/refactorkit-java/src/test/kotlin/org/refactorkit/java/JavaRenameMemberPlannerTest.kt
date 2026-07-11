@@ -335,6 +335,61 @@ class JavaRenameMemberPlannerTest {
     }
 
     @Test
+    fun jdtFieldRenamePreservesShadowingLocalsAndUnrelatedFields() {
+        val root = createTempProject(
+            "src/main/java/com/acme/Stats.java" to """
+                package com.acme;
+                public class Stats {
+                    public int count;
+                    public int total() {
+                        int count = 2;
+                        return this.count + count;
+                    }
+                }
+            """.trimIndent(),
+            "src/main/java/com/acme/Client.java" to """
+                package com.acme;
+                class Client { int read(Stats stats) { return stats.count; } }
+            """.trimIndent(),
+            "src/main/java/com/other/Stats.java" to """
+                package com.other;
+                public class Stats { public int count; }
+            """.trimIndent(),
+        )
+        val snapshot = JavaProjectScanner().scan(root)
+
+        val plan = planner.preview(snapshot, "com.acme.Stats#count", "itemCount")
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.warnings.any { it.contains("exact field com.acme.Stats#count") }, plan.warnings.toString())
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot.hash))
+        val stats = root.resolve("src/main/java/com/acme/Stats.java").readText()
+        val client = root.resolve("src/main/java/com/acme/Client.java").readText()
+        val unrelated = root.resolve("src/main/java/com/other/Stats.java").readText()
+        assertTrue(stats.contains("int itemCount;"), stats)
+        assertTrue(stats.contains("this.itemCount + count"), stats)
+        assertTrue(stats.contains("int count = 2"), stats)
+        assertTrue(client.contains("stats.itemCount"), client)
+        assertTrue(unrelated.contains("int count;"), unrelated)
+    }
+
+    @Test
+    fun fieldRenameRefusesExistingTargetField() {
+        val root = createTempProject(
+            "src/main/java/com/acme/Stats.java" to """
+                package com.acme;
+                public class Stats { public int count; public int itemCount; }
+            """.trimIndent(),
+        )
+        val snapshot = JavaProjectScanner().scan(root)
+
+        val plan = planner.preview(snapshot, "com.acme.Stats#count", "itemCount")
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("already exists"), plan.summary)
+    }
+
+    @Test
     fun signedRenameUpdatesAnnotationElementDeclarationAndNamedUsages() {
         val root = createTempProject(
             "src/main/java/com/acme/Route.java" to """

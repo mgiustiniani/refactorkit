@@ -49,6 +49,10 @@ review safety boundaries before applying refactorings.
   binding keys, or override families containing declarations outside the scanned
   source workspace. Unsigned member rename remains a lexical fallback with
   overload warnings.
+- Added authoritative JDT field rename for unambiguous field selectors. Exact
+  declaration/reference ranges preserve shadowing locals and same-name fields in
+  unrelated owners; an existing target field is refused even when semantic
+  evidence falls back.
 - Added signed JDT annotation-element identity and rename. Selectors such as
   `com.acme.Route#path()` now resolve through read-only lookup/reference APIs and
   rename exact element declarations plus named annotation usages while preserving

@@ -47,6 +47,9 @@ A `renameMember` preview is considered safe enough to review when:
 - likely in-scope Java files are updated based on owner package/import/FQN/simple
   name visibility;
 - overload warnings, if present, have been reviewed;
+- unambiguous field selectors use exact JDT declaration/reference ranges when
+  evidence is clean, preserving shadowing locals and unrelated same-name fields;
+  an existing target field causes refusal;
 - signed annotation-element selectors such as `com.acme.Route#path()` update the
   declaration and binding-matched named usages; implicit single-element values do
   not contain a member name and require no edit.
@@ -71,8 +74,8 @@ review.
 
 ## Warnings and manual-review areas
 
-Rename previews use exact JDT binding ranges for proven clean class and signed
-method slices. Lexical fallback remains available where documented and is always
+Rename previews use exact JDT binding ranges for proven clean class, field, and
+signed method slices. Lexical fallback remains available where documented and is always
 reported in preview warnings. Review carefully when any of these apply:
 
 - comments and string literals are not rewritten for class rename;

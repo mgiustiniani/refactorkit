@@ -106,6 +106,12 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |`JavaRenameMemberPlannerTest`: annotation-element lookup/reference and applied signed rename with package-disambiguation evidence.
 |implementation-informed
 
+|QS-CORR-009
+|Correctness
+|Given an unambiguous `FIELD` selector `com.acme.Stats#count` and clean global JDT evidence, rename uses exact field-binding ranges so the declaration, `this.count`, and `stats.count` change while a shadowing local `count` and `com.other.Stats#count` remain unchanged. If the owner already declares the target field, the planner refuses before semantic fallback; unclean or unresolved evidence otherwise retains explicit lexical member fallback. This scenario does not cover arbitrary unsigned methods.
+|`JavaRenameMemberPlannerTest`: exact field declaration/qualified-reference apply with local-shadow and other-owner preservation, owner-field target-collision refusal, and fallback behavior.
+|implementation-informed
+
 |QS-AI-001
 |AI safety
 |A local LLM can get focused context through MCP without arbitrary filesystem access and request preview/refactoring tools.
@@ -155,7 +161,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Compiler-backed Java analysis covers selected slices only
-|Signed member rename (including exact annotation-element declarations and named usages), type-level rename (including annotation types), move-class file scoping, safe-delete type references, annotation-type/element indexing and reference analysis, and exact-import use checks use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on explicit fallback paths. Annotation-element change-signature and default-value editing are not supported. Organize imports preserves wildcard imports and unresolved files do not receive semantic unused-import removal.
+|Signed method rename (including exact annotation-element declarations and named usages), unambiguous `Owner#field` field rename, type-level rename (including annotation types), move-class file scoping, safe-delete type references, annotation-type/element indexing and reference analysis, and exact-import use checks use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on explicit fallback paths. Field evidence does not imply semantic support for arbitrary unsigned methods. Annotation-element change-signature and default-value editing are not supported. Organize imports preserves wildcard imports and unresolved files do not receive semantic unused-import removal.
 |known risk
 
 |No explicit performance targets

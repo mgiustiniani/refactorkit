@@ -27,6 +27,8 @@ import java.nio.file.Path
  *   renamed and a warning is emitted.
  * - Signed method selectors use JDT binding evidence for the currently proven
  *   exact-overload slice and refuse when semantic evidence is not clean.
+ * - Unambiguous field selectors use exact JDT declaration/reference ranges when
+ *   evidence is clean; otherwise the documented lexical fallback remains visible.
  * - Constructor rename follows class rename (not a standalone member rename).
  */
 class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
@@ -73,6 +75,17 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
 
         if (memberSelector.contains('(')) {
             return previewSignedJdtRename(snapshot, ownerFqn, memberSelector, oldMemberName, newMemberName)
+        }
+        if (members.singleOrNull()?.kind == Symbol.Kind.FIELD) {
+            if (index.symbols.any { symbol ->
+                    symbol.id.value.substringBeforeLast('#', "") == ownerFqn &&
+                        symbol.kind == Symbol.Kind.FIELD &&
+                        symbol.name == newMemberName
+                }
+            ) {
+                return refused(snapshot, "renameMember", "Field target already exists: $ownerFqn#$newMemberName")
+            }
+            previewJdtFieldRename(snapshot, ownerFqn, oldMemberName, newMemberName)?.let { return it }
         }
 
         val warnings = mutableListOf<String>()
@@ -160,6 +173,62 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         if (name.isEmpty()) return false
         if (!name[0].isLetter() && name[0] != '_' && name[0] != '$') return false
         return name.all { JavaLexer.isIdentChar(it) }
+    }
+
+    private fun previewJdtFieldRename(
+        snapshot: ProjectSnapshot,
+        ownerFqn: String,
+        oldMemberName: String,
+        newMemberName: String,
+    ): PatchPlan? {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        if (analysis.warnings.isNotEmpty()) return null
+        val candidate = analysis.symbols.singleOrNull { symbol ->
+            symbol.ownerQualifiedName == ownerFqn &&
+                symbol.simpleName == oldMemberName &&
+                symbol.kind == JdtJavaSemanticSymbolKind.FIELD
+        } ?: return null
+        if (analysis.symbols.any { symbol ->
+                symbol.ownerQualifiedName == ownerFqn &&
+                    symbol.simpleName == newMemberName &&
+                    symbol.kind == JdtJavaSemanticSymbolKind.FIELD
+            }
+        ) {
+            return refused(snapshot, "renameMember", "Field target already exists: $ownerFqn#$newMemberName")
+        }
+        val bindingKey = candidate.bindingKey ?: return null
+        val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
+        fun addEdit(path: Path, range: org.refactorkit.core.SourceRange) {
+            editsByPath.getOrPut(path) { mutableListOf() } += TextEdit(range, newMemberName)
+        }
+        addEdit(candidate.path, candidate.sourceRange)
+        analysis.references
+            .filter { reference ->
+                reference.bindingKey == bindingKey && reference.symbolKind == JdtJavaSemanticSymbolKind.FIELD
+            }
+            .forEach { reference -> addEdit(reference.path, reference.sourceRange) }
+        val edits = editsByPath.map { (path, textEdits) ->
+            FileEdit.Modify(
+                path,
+                textEdits.distinctBy { "${it.range.start.line}:${it.range.start.character}:${it.range.end.line}:${it.range.end.character}" }
+                    .sortedWith(compareBy({ it.range.start.line }, { it.range.start.character })),
+            )
+        }
+        return PatchPlan(
+            operation = "renameMember",
+            status = PatchStatus.PREVIEW,
+            snapshotHash = snapshot.hash,
+            confidence = 0.95,
+            requiresUserApproval = true,
+            summary = "Rename field '$oldMemberName' → '$newMemberName' in $ownerFqn using JDT binding evidence. ${editsByPath.size} file(s) affected.",
+            affectedFiles = editsByPath.keys,
+            workspaceEdit = WorkspaceEdit(edits),
+            warnings = listOf(
+                "JDT binding selected exact field $ownerFqn#$oldMemberName; edits were generated from JDT declaration/reference ranges.",
+                "Reflection, serialization names, framework strings, and annotation-processor output are NOT updated. Review manually.",
+            ),
+            riskLevel = RiskLevel.LOW,
+        )
     }
 
     private fun previewSignedJdtRename(
