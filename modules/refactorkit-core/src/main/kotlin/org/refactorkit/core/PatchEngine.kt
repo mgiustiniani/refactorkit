@@ -2,17 +2,15 @@ package org.refactorkit.core
 
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
-import kotlin.io.path.createDirectories
-import kotlin.io.path.exists
-import kotlin.io.path.isRegularFile
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
+import java.util.UUID
 
 class PatchEngine(
     private val workspaceRoot: Path,
@@ -38,6 +36,52 @@ class PatchEngine(
         return (result as? ApplyResult.Refused)?.diagnostics.orEmpty()
     }
 
+    /** Probe the workspace-root filesystem used by managed staging and journals. */
+    fun filesystemCapabilities(): WorkspaceFilesystemCapabilities {
+        val metadataDir = normalizedRoot.resolve(".refactorkit")
+        val source = metadataDir.resolve(".capability-${UUID.randomUUID()}.tmp")
+        val target = metadataDir.resolve(".capability-${UUID.randomUUID()}.moved")
+        var fileForce = false
+        var atomicMove = false
+        var directoryForce = false
+        val failures = mutableListOf<String>()
+        try {
+            Files.createDirectories(metadataDir)
+            FileChannel.open(source, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+                channel.write(java.nio.ByteBuffer.wrap(byteArrayOf(0)))
+                channel.force(true)
+                fileForce = true
+            }
+            try {
+                Files.move(source, target, StandardCopyOption.ATOMIC_MOVE)
+                atomicMove = true
+            } catch (error: AtomicMoveNotSupportedException) {
+                failures += "atomicMove:${error.message}"
+            }
+            try {
+                forceWorkspaceDirectory(metadataDir)
+                directoryForce = true
+            } catch (error: Exception) {
+                failures += "directoryForce:${error.message}"
+            }
+        } catch (error: Exception) {
+            failures += "probe:${error.message}"
+        } finally {
+            runCatching { Files.deleteIfExists(source) }
+            runCatching { Files.deleteIfExists(target) }
+        }
+        val store = runCatching { Files.getFileStore(normalizedRoot) }.getOrNull()
+        return WorkspaceFilesystemCapabilities(
+            fileStoreName = store?.name() ?: "unknown",
+            fileStoreType = store?.type() ?: "unknown",
+            atomicMoveSupported = atomicMove,
+            durableFileForceSupported = fileForce,
+            durableDirectoryForceSupported = directoryForce,
+            replacementStrategy = "same-directory-temp-file+atomic-move+directory-force",
+            failures = failures,
+        )
+    }
+
     /** Validate a preview plan against the current snapshot hash before applying. */
     fun validate(plan: PatchPlan, currentSnapshotHash: String): List<Diagnostic> = buildList {
         if (plan.status != PatchStatus.PREVIEW) {
@@ -57,6 +101,14 @@ class PatchEngine(
      */
     fun apply(plan: PatchPlan, currentSnapshot: ProjectSnapshot): ApplyResult = withWorkspaceLock {
         val diagnostics = buildList {
+            val capabilities = filesystemCapabilities()
+            if (!capabilities.supportsDurableAtomicReplacement) {
+                add(Diagnostic(
+                    "Workspace filesystem does not satisfy durable atomic replacement: ${capabilities.failures.joinToString()}",
+                    Diagnostic.Severity.ERROR,
+                    code = "filesystem.capabilityUnsupported",
+                ))
+            }
             if (currentSnapshot.workspace.root.toAbsolutePath().normalize() != normalizedRoot) {
                 add(Diagnostic(
                     "Snapshot workspace does not match PatchEngine workspace",
@@ -82,8 +134,10 @@ class PatchEngine(
         } else {
             val record = transactionLog.loadRecord(transaction.id)
             try {
+                val staged = stageWorkspaceEdit(transaction.rollbackEdit)
+                val permissions = derivePostPermissions(transaction.rollbackEdit)
                 if (record != null) transactionLog.update(record.copy(state = JournalState.ROLLING_BACK))
-                executeWorkspaceEdit(transaction.rollbackEdit)
+                commitPostImages(staged.preImages, staged.postImages, permissions)
                 if (record != null) transactionLog.update(record.copy(state = JournalState.ROLLED_BACK))
                 ApplyResult.Applied(transaction)
             } catch (error: Exception) {
@@ -277,7 +331,7 @@ class PatchEngine(
         }
 
         return try {
-            executeWorkspaceEdit(plan.workspaceEdit)
+            commitPostImages(record.preImages, record.postImages, derivePostPermissions(plan.workspaceEdit))
             transactionLog.update(record.copy(state = JournalState.APPLIED))
             ApplyResult.Applied(record.transaction)
         } catch (error: Exception) {
@@ -289,13 +343,34 @@ class PatchEngine(
                     "Apply failed; durable recovery is required: ${error.message}"
                 },
                 Diagnostic.Severity.ERROR,
-                code = if (recovered) "transaction.applyFailedCompensated" else "transaction.recoveryRequired",
+                code = if (!recovered) {
+                    "transaction.recoveryRequired"
+                } else {
+                    (error as? WorkspaceWriteException)?.code ?: "transaction.applyFailedCompensated"
+                },
             )))
         }
     }
 
     private fun prepareJournalRecord(plan: PatchPlan): TransactionJournalRecord {
-        val affected = plan.workspaceEdit.affectedFiles()
+        val staged = stageWorkspaceEdit(plan.workspaceEdit)
+        val transaction = Transaction(
+            planId = plan.id,
+            snapshotHashBefore = plan.snapshotHash,
+            rollbackEdit = staged.rollbackEdit,
+        )
+        return TransactionJournalRecord(
+            transaction = transaction,
+            operation = plan.operation,
+            forwardEdit = plan.workspaceEdit,
+            preImages = staged.preImages,
+            postImages = staged.postImages,
+            state = JournalState.PREPARED,
+        )
+    }
+
+    private fun stageWorkspaceEdit(workspaceEdit: WorkspaceEdit): StagedWorkspaceEdit {
+        val affected = workspaceEdit.affectedFiles()
             .map { normalizedRoot.relativize(resolveInsideWorkspace(it)) }
             .distinct()
         val initial = linkedMapOf<Path, String?>()
@@ -305,8 +380,7 @@ class PatchEngine(
         }
         val working = initial.toMutableMap()
         val rollbackEdits = mutableListOf<FileEdit>()
-
-        plan.workspaceEdit.edits.forEach { edit ->
+        workspaceEdit.edits.forEach { edit ->
             val path = normalizedRoot.relativize(resolveInsideWorkspace(edit.path))
             when (edit) {
                 is FileEdit.Create -> {
@@ -334,42 +408,150 @@ class PatchEngine(
                 }
             }
         }
-
-        val transaction = Transaction(
-            planId = plan.id,
-            snapshotHashBefore = plan.snapshotHash,
-            rollbackEdit = WorkspaceEdit(rollbackEdits.asReversed()),
-        )
-        return TransactionJournalRecord(
-            transaction = transaction,
-            operation = plan.operation,
-            forwardEdit = plan.workspaceEdit,
+        return StagedWorkspaceEdit(
             preImages = initial.map { FileImage(it.key, it.value) },
             postImages = working.map { FileImage(it.key, it.value) },
-            state = JournalState.PREPARED,
+            rollbackEdit = WorkspaceEdit(rollbackEdits.asReversed()),
         )
     }
 
-    private fun executeWorkspaceEdit(workspaceEdit: WorkspaceEdit) {
+    private fun derivePostPermissions(workspaceEdit: WorkspaceEdit): Map<Path, Set<PosixFilePermission>?> {
+        val permissions = workspaceEdit.affectedFiles().associate { path ->
+            val relative = normalizedRoot.relativize(resolveInsideWorkspace(path))
+            val absolute = normalizedRoot.resolve(relative)
+            relative to if (
+                Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS) &&
+                Files.getFileAttributeView(absolute, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) != null
+            ) {
+                Files.getPosixFilePermissions(absolute, LinkOption.NOFOLLOW_LINKS)
+            } else null
+        }.toMutableMap()
         workspaceEdit.edits.forEach { edit ->
-            val absolute = resolveInsideWorkspace(edit.path)
+            val path = normalizedRoot.relativize(resolveInsideWorkspace(edit.path))
             when (edit) {
-                is FileEdit.Create -> {
-                    if (absolute.exists() && !edit.overwrite) error("Refusing to overwrite existing file: ${edit.path}")
-                    absolute.parent?.createDirectories()
-                    absolute.writeText(edit.content)
-                }
-                is FileEdit.Delete -> Files.delete(absolute)
+                is FileEdit.Create -> if (!permissions.containsKey(path)) permissions[path] = null
+                is FileEdit.Delete -> permissions[path] = null
                 is FileEdit.Rename -> {
-                    val target = resolveInsideWorkspace(edit.newPath)
-                    target.parent?.createDirectories()
-                    Files.move(absolute, target)
+                    val target = normalizedRoot.relativize(resolveInsideWorkspace(edit.newPath))
+                    permissions[target] = permissions[path]
+                    permissions[path] = null
                 }
-                is FileEdit.Modify -> {
-                    val previous = absolute.readText()
-                    absolute.writeText(TextEdits.apply(previous, edit.textEdits))
+                is FileEdit.Modify -> Unit
+            }
+        }
+        return permissions
+    }
+
+    private fun commitPostImages(
+        preImages: List<FileImage>,
+        postImages: List<FileImage>,
+        desiredPermissions: Map<Path, Set<PosixFilePermission>?> = emptyMap(),
+    ) {
+        val stagedFiles = linkedMapOf<Path, Path>()
+        val preByPath = preImages.associateBy { it.path }
+        val postByPath = postImages.associateBy { it.path }
+        try {
+            postImages.filter { it.content != null }.forEach { image ->
+                val target = resolveInsideWorkspace(image.path)
+                createDirectoriesDurably(requireNotNull(target.parent))
+                val temporary = target.parent.resolve(".refactorkit-stage-${UUID.randomUUID()}.tmp")
+                FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+                    val buffer = java.nio.ByteBuffer.wrap(requireNotNull(image.content).toByteArray(Charsets.UTF_8))
+                    while (buffer.hasRemaining()) channel.write(buffer)
+                    channel.force(true)
+                }
+                applyStagedPermissions(
+                    temporary,
+                    target,
+                    image,
+                    desiredPermissions[image.path],
+                    preByPath,
+                    postByPath,
+                )
+                FileChannel.open(temporary, StandardOpenOption.WRITE).use { it.force(true) }
+                stagedFiles[image.path] = temporary
+            }
+
+            postImages.sortedBy { it.content == null }.forEach { image ->
+                val target = resolveInsideWorkspace(image.path)
+                if (image.content == null) {
+                    Files.deleteIfExists(target)
+                    target.parent?.let(::forceWorkspaceDirectory)
+                } else {
+                    val temporary = requireNotNull(stagedFiles.remove(image.path))
+                    try {
+                        Files.move(
+                            temporary,
+                            target,
+                            StandardCopyOption.ATOMIC_MOVE,
+                            StandardCopyOption.REPLACE_EXISTING,
+                        )
+                    } catch (error: AtomicMoveNotSupportedException) {
+                        throw WorkspaceWriteException(
+                            "filesystem.atomicMoveUnsupported",
+                            "Filesystem does not support atomic replacement for ${image.path}",
+                            error,
+                        )
+                    }
+                    target.parent?.let(::forceWorkspaceDirectory)
                 }
             }
+        } finally {
+            stagedFiles.values.forEach { runCatching { Files.deleteIfExists(it) } }
+        }
+    }
+
+    private fun applyStagedPermissions(
+        temporary: Path,
+        target: Path,
+        image: FileImage,
+        desiredPermissions: Set<PosixFilePermission>?,
+        preByPath: Map<Path, FileImage>,
+        postByPath: Map<Path, FileImage>,
+    ) {
+        if (Files.getFileAttributeView(temporary, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) == null) return
+        val source = when {
+            Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) -> target
+            else -> preByPath.values.firstOrNull { candidate ->
+                candidate.content == image.content && postByPath[candidate.path]?.content == null
+            }?.path?.let(::resolveInsideWorkspace)?.takeIf { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+        }
+        val permissions = desiredPermissions ?: if (source != null) {
+            Files.getPosixFilePermissions(source, LinkOption.NOFOLLOW_LINKS)
+        } else {
+            setOf(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.GROUP_READ,
+                PosixFilePermission.OTHERS_READ,
+            )
+        }
+        Files.setPosixFilePermissions(temporary, permissions)
+    }
+
+    private fun createDirectoriesDurably(directory: Path) {
+        val missing = mutableListOf<Path>()
+        var current: Path? = directory
+        while (current != null && !Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+            missing.add(current)
+            current = current.parent
+        }
+        missing.asReversed().forEach { path ->
+            Files.createDirectory(path)
+            forceWorkspaceDirectory(path)
+            path.parent?.let(::forceWorkspaceDirectory)
+        }
+    }
+
+    private fun forceWorkspaceDirectory(directory: Path) {
+        try {
+            FileChannel.open(directory, StandardOpenOption.READ).use { it.force(true) }
+        } catch (error: Exception) {
+            throw WorkspaceWriteException(
+                "filesystem.directoryForceFailed",
+                "Cannot durably flush workspace directory: $directory",
+                error,
+            )
         }
     }
 
@@ -418,21 +600,23 @@ class PatchEngine(
     private fun recoverJournalRecord(record: TransactionJournalRecord, reason: String): Boolean {
         val pre = record.preImages.associateBy { it.path }
         val post = record.postImages.associateBy { it.path }
-        val compatible = try {
-            (pre.keys + post.keys).all { path ->
-                val current = readImage(path)
-                current == pre[path]?.content || current == post[path]?.content
-            }
+        val current = try {
+            (pre.keys + post.keys).associateWith(::readImage)
         } catch (error: Exception) {
             markRecoveryRequired(record, "$reason; cannot inspect workspace state: ${error.message}")
             return false
+        }
+        val compatible = current.all { (path, content) ->
+            content == pre[path]?.content || content == post[path]?.content
         }
         if (!compatible) {
             markRecoveryRequired(record, "$reason; workspace state conflicts with journal images")
             return false
         }
         return try {
-            pre.values.forEach { image -> restoreImage(image) }
+            if (current.any { (path, content) -> content != pre[path]?.content }) {
+                commitPostImages(post.values.toList(), pre.values.toList())
+            }
             transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
             true
         } catch (error: Exception) {
@@ -447,16 +631,6 @@ class PatchEngine(
             if (!Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) error("Recovery path is not a regular file: $path")
             Files.readString(absolute)
         } else null
-    }
-
-    private fun restoreImage(image: FileImage) {
-        val absolute = resolveInsideWorkspace(image.path)
-        if (image.content == null) {
-            Files.deleteIfExists(absolute)
-        } else {
-            absolute.parent?.createDirectories()
-            absolute.writeText(image.content)
-        }
     }
 
     private fun markRecoveryRequired(record: TransactionJournalRecord, failure: String) {
@@ -589,11 +763,36 @@ class PatchEngine(
         var regular: Boolean,
     )
 
+    private data class StagedWorkspaceEdit(
+        val preImages: List<FileImage>,
+        val postImages: List<FileImage>,
+        val rollbackEdit: WorkspaceEdit,
+    )
+
     private enum class InitialPathRole {
         MAY_BE_ABSENT,
         MUST_BE_SCANNED,
     }
 }
+
+data class WorkspaceFilesystemCapabilities(
+    val fileStoreName: String,
+    val fileStoreType: String,
+    val atomicMoveSupported: Boolean,
+    val durableFileForceSupported: Boolean,
+    val durableDirectoryForceSupported: Boolean,
+    val replacementStrategy: String,
+    val failures: List<String> = emptyList(),
+) {
+    val supportsDurableAtomicReplacement: Boolean
+        get() = atomicMoveSupported && durableFileForceSupported && durableDirectoryForceSupported
+}
+
+class WorkspaceWriteException(
+    val code: String,
+    override val message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)
 
 sealed interface ApplyResult {
     data class Applied(val transaction: Transaction) : ApplyResult

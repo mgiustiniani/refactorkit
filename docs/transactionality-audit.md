@@ -57,7 +57,7 @@ failure windows below.
 
 ### TX-001 — Sequential writes can escape rollback on I/O failure
 
-Status: **substantially narrowed; durable staging remains open under `TX-006`**.
+Status: **implementation closed on supported filesystems; destructive fault evidence remains a release gate**.
 
 Before mutation, `PatchEngine` now renders the complete logical result, captures
 pre/post images, builds compensation, and durably writes `PREPARED` then
@@ -67,9 +67,11 @@ journaled pre/post image, compensation restores the pre-state and records
 future managed writes are blocked. Startup recovery applies the same rule after
 an interrupted `APPLYING` or `ROLLING_BACK` lifecycle.
 
-Workspace file replacement is still direct rather than temp-file staged and
-fsynced. A torn/truncated destination may therefore require manual recovery, and
-power-loss/filesystem capability evidence remains open with `TX-006`.
+Workspace content is now fully staged before commit, each file replacement is
+atomically moved and durably flushed, and deletes/directories are followed by
+directory flushes (`TX-006`). A process/I/O failure therefore leaves each path in
+a journaled pre- or post-image suitable for compensation. Kill, disk-full,
+power-loss, and filesystem fault-injection evidence remains mandatory before RC.
 
 ### TX-002 — Transaction metadata is persisted after workspace mutation
 
@@ -145,16 +147,25 @@ workspace rescan scope remains a separate `TX-014` concern.
 
 ### TX-006 — Direct file replacement is not crash-safe or durable
 
-Severity: **high**.
+Status: **closed for filesystems satisfying the reported capability contract;
+unsupported capability is refused**.
 
-Modify/create use direct `writeText`, which can truncate a destination before all
-new bytes are durable. Rename uses `Files.move` without requesting/negotiating
-`ATOMIC_MOVE`. There is no temp-file staging, fsync of file/directory entries, or
-filesystem-capability reporting.
+Managed apply, rollback, and recovery now render final affected-path images and
+stage every non-deleted result in a same-directory temporary file before changing
+user files. Staged bytes and preserved POSIX permissions are flushed, commit uses
+required `ATOMIC_MOVE` replacement, deletes use atomic unlink semantics, and each
+parent directory is flushed after replacement/deletion. Newly created parent
+directories are flushed together with their parent entries. Temporary files are
+cleaned on success and failure.
 
-Required closure: define atomicity by filesystem capability and implement
-same-directory temp files, durable flush where supported, atomic replace/move
-where available, and explicit degraded guarantees otherwise.
+`PatchEngine.filesystemCapabilities()` reports file-store identity, atomic-move,
+file-force, directory-force, the replacement strategy, and probe failures.
+Apply refuses `filesystem.capabilityUnsupported` before journaling when the
+workspace-root store cannot satisfy durable atomic replacement; a target on a
+different mounted store that rejects atomic replacement fails with
+`filesystem.atomicMoveUnsupported` and follows journal compensation or durable
+`RECOVERY_REQUIRED` handling. Complete filesystem metadata restoration remains
+separate under `TX-013`.
 
 ### TX-007 — LSP native edits bypass RefactorKit apply/rollback
 
@@ -339,18 +350,15 @@ The current requirements should be corrected before API `1.0` freeze.
 
 ## Recommended closure order
 
-1. Introduce a versioned write-ahead transaction journal and startup recovery.
-2. Make apply snapshot scope engine-owned so newly appeared relevant files cannot
+1. Make apply snapshot scope engine-owned so newly appeared relevant files cannot
    be omitted by library callers (`TX-014`).
-3. Stage/render all file results, merge same-file edits, and validate all bounds
-   before mutation.
-4. Use temp-file plus atomic/durable replacement where supported; implement
-   compensation and `RECOVERY_REQUIRED` reporting otherwise.
-5. Add post-state hashes and conflict-safe rollback.
-6. Define recipe saga/transaction and LSP client/server transaction boundaries.
-7. Integrate diagnostics and stable error categories into commit/rollback gates.
-8. Add fault-injection, kill/restart, concurrency, corruption, and filesystem
-   capability tests before `v1.0.0-rc.1`.
+2. Merge same-file edits into one coordinate space and validate all line/character
+   bounds before mutation (`TX-009`, `TX-010`).
+3. Add post-state hashes and conflict-safe rollback (`TX-004`).
+4. Define recipe saga/transaction and LSP client/server transaction boundaries.
+5. Integrate diagnostics and stable error categories into commit/rollback gates.
+6. Add fault-injection, kill/restart, concurrency, corruption, and mounted
+   filesystem capability tests before `v1.0.0-rc.1`.
 
 ## Stable-release verdict
 

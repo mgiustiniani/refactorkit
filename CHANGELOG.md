@@ -24,6 +24,11 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Replaced direct workspace writes with fully rendered same-directory staging,
+  file `force`, required atomic replacement, and parent-directory `force` for
+  apply, rollback, and recovery. POSIX permissions are preserved for modify/move
+  flows, temporary files are cleaned, and filesystem capability probes/refusals
+  expose unsupported durability instead of silently degrading.
 - Added a versioned write-ahead transaction journal owned by `PatchEngine`.
   Durable lifecycle transitions cover `PREPARED`, `APPLYING`, `APPLIED`,
   `ROLLING_BACK`, `ROLLED_BACK`, and `RECOVERY_REQUIRED`; retained pre/post

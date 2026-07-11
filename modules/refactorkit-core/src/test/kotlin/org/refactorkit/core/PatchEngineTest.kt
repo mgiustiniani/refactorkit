@@ -8,7 +8,10 @@ import kotlin.test.assertTrue
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.LinkOption
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermission
 
 class PatchEngineTest {
     @Test
@@ -182,6 +185,81 @@ class PatchEngineTest {
         assertEquals("class DeleteMe {}\n", Files.readString(root.resolve("DeleteMe.java")))
         val record = TransactionLog(root.resolve(".refactorkit/transactions")).loadRecord(apply.transaction.id)
         assertEquals(JournalState.ROLLED_BACK, record?.state)
+    }
+
+    @Test
+    fun reportsWorkspaceFilesystemReplacementCapabilities() {
+        val root = Files.createTempDirectory("refactorkit-test")
+
+        val capabilities = PatchEngine(root).filesystemCapabilities()
+
+        assertTrue(capabilities.fileStoreType.isNotBlank())
+        assertEquals(
+            capabilities.atomicMoveSupported &&
+                capabilities.durableFileForceSupported &&
+                capabilities.durableDirectoryForceSupported,
+            capabilities.supportsDurableAtomicReplacement,
+        )
+        assertEquals("same-directory-temp-file+atomic-move+directory-force", capabilities.replacementStrategy)
+        assertTrue(Files.walk(root).use { stream ->
+            stream.noneMatch { it.fileName.toString().startsWith(".capability-") }
+        })
+    }
+
+    @Test
+    fun stagesAtomicReplacementsAndPreservesPosixPermissions() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val modify = root.resolve("Modify.java")
+        val oldName = root.resolve("Old.java")
+        Files.writeString(modify, "class Modify {}\n")
+        Files.writeString(oldName, "class Old {}\n")
+        val posix = Files.getFileAttributeView(modify, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) != null
+        val modifyPermissions = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
+        val renamePermissions = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.GROUP_READ)
+        if (posix) {
+            Files.setPosixFilePermissions(modify, modifyPermissions)
+            Files.setPosixFilePermissions(oldName, renamePermissions)
+        }
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(
+            FileEdit.Modify(
+                Path.of("Modify.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 12)), "Changed")),
+            ),
+            FileEdit.Rename(Path.of("Old.java"), Path.of("New.java")),
+            FileEdit.Create(Path.of("nested/Created.java"), "class Created {}\n"),
+        ))
+        val plan = PatchPlan(
+            operation = "durableReplacement",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "stage durable replacements",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
+
+        assertEquals("class Changed {}\n", Files.readString(modify))
+        assertFalse(Files.exists(oldName))
+        assertEquals("class Old {}\n", Files.readString(root.resolve("New.java")))
+        assertTrue(Files.exists(root.resolve("nested/Created.java")))
+        assertNoWorkspaceStageFiles(root)
+        if (posix) {
+            assertEquals(modifyPermissions, Files.getPosixFilePermissions(modify))
+            assertEquals(renamePermissions, Files.getPosixFilePermissions(root.resolve("New.java")))
+        }
+
+        assertIs<ApplyResult.Applied>(PatchEngine(root).rollback(applied.transaction))
+        assertNoWorkspaceStageFiles(root)
+        assertEquals("class Modify {}\n", Files.readString(modify))
+        assertEquals("class Old {}\n", Files.readString(oldName))
+    }
+
+    private fun assertNoWorkspaceStageFiles(root: Path) {
+        assertTrue(Files.walk(root).use { stream ->
+            stream.noneMatch { it.fileName.toString().startsWith(".refactorkit-stage-") }
+        })
     }
 
     @Test

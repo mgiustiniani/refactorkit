@@ -23,7 +23,7 @@ Status: implementation-informed for documented flows; no C4 dynamic diagrams yet
 |Planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, risk level, and an explicit JDT-backed, lexical, or refusal evidence classification.
 
 |5
-|User reviews the preview. If applying, `PatchEngine` acquires the workspace writer lock, checks the derived current snapshot hash, revalidates initially affected paths, and preflights path, symbolic-link, overlap, and ordered file-state rules before sequential direct writes.
+|User reviews the preview. If applying, `PatchEngine` acquires the workspace writer lock, checks the derived current snapshot hash, revalidates affected paths, probes durability capability, renders complete post-images, durably journals intent, stages same-directory files, and commits per-path atomic replacements/deletes with directory flushes.
 
 |6
 |Only after every write succeeds does the current flow return compensating rollback edits; the CLI then persists transaction metadata. A write or process failure can therefore leave partial state without a durable recovery record.

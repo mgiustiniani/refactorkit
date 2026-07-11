@@ -280,8 +280,8 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Transactionality guarantees exceed current evidence
-|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, and explicit recovery-required blocking. Complete snapshot scope is not yet engine-owned. Current flows still lack conflict-safe normal rollback, durable workspace replacement, complete same-file validation, central diagnostics gates, enforced approval semantics, precise error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
-|release blocker; `TX-001` through `TX-018` open
+|Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Complete snapshot scope is not yet engine-owned. Current flows still lack conflict-safe normal rollback, complete same-file/bounds validation, central diagnostics gates, enforced approval semantics, precise error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
+|release blocker; remaining and partially evidenced `TX` findings require closure plus destructive fault acceptance
 
 |Stable acceptance evidence incomplete
 |API `1.0`, Java 8–25, diagnostics, protocol classification, packaging, supply-chain, reproducibility, and narrowed-or-evidenced transactionality claims cannot be marked stable until the immutable RC acceptance matrix passes.
