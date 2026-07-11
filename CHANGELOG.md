@@ -20,6 +20,12 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added a one-writer workspace lock around managed apply and rollback. The
+  snapshot-aware apply path revalidates affected source/target state under the
+  lock, and refuses contention, changed files, unsafe lock symlinks, and
+  unavailable preconditions before mutation. First-party CLI, daemon, LSP, MCP,
+  recipe, and golden paths now use this API; the hash-only library compatibility
+  overload remains a documented `TX-005`/`TX-014` closure item.
 - Hardened `PatchEngine` preflight validation: all ordered file-state transitions
   are simulated before the first write, so predictable later missing/existing-file
   failures cannot leave earlier edits applied. Workspace edits that traverse a

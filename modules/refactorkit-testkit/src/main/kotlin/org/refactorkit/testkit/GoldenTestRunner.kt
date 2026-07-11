@@ -76,7 +76,7 @@ class GoldenTestRunner(
         // 6. Apply if PREVIEW
         val afterErrors = mutableListOf<String>()
         if (plan.status == PatchStatus.PREVIEW) {
-            when (val result = PatchEngine(workDir).apply(plan, snap.hash)) {
+            when (val result = PatchEngine(workDir).apply(plan, snap)) {
                 is ApplyResult.Applied -> Unit
                 is ApplyResult.Refused -> {
                     planErrors += "PatchEngine refused apply: " +

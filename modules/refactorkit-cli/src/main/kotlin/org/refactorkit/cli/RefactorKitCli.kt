@@ -350,7 +350,7 @@ class RefactorKitCli(
     private fun applyPlanAndLog(plan: org.refactorkit.core.PatchPlan, snap: ProjectSnapshot, root: String): Int {
         val workspaceRoot = snap.workspace.root
         val engine = PatchEngine(workspaceRoot)
-        return when (val result = engine.apply(plan, snap.hash)) {
+        return when (val result = engine.apply(plan, snap)) {
             is ApplyResult.Applied -> {
                 val log = TransactionLog(workspaceRoot.resolve(".refactorkit/transactions"))
                 log.save(result.transaction)

@@ -5,8 +5,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 
 class PatchEngineTest {
     @Test
@@ -169,6 +171,84 @@ class PatchEngineTest {
         assertTrue(Files.exists(root.resolve("OldName.java")))
         assertFalse(Files.exists(root.resolve("NewName.java")))
         assertEquals("class DeleteMe {}\n", Files.readString(root.resolve("DeleteMe.java")))
+    }
+
+    @Test
+    fun refusesWhenAffectedFileChangesBetweenScanAndLock() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        val file = root.resolve(relative)
+        Files.writeString(file, "class Example {}\n")
+        val snapshot = ProjectSnapshot(
+            workspace = Workspace(root),
+            modules = emptyList(),
+            files = listOf(SourceFile(relative, Files.readString(file), "java")),
+        )
+        val plan = PatchPlan(
+            operation = "test",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "affected file precondition",
+            affectedFiles = setOf(relative),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                relative,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        Files.writeString(file, "class ExternalChange {}\n")
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "file.preconditionChanged" })
+        assertEquals("class ExternalChange {}\n", Files.readString(file))
+    }
+
+    @Test
+    fun refusesConcurrentWriterWhileWorkspaceLockIsHeld() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val metadata = Files.createDirectories(root.resolve(".refactorkit"))
+        val lockPath = metadata.resolve("workspace.lock")
+        val snapshot = ProjectSnapshot(Workspace(root), emptyList(), emptyList())
+        val plan = PatchPlan(
+            operation = "test",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "workspace lock",
+            affectedFiles = setOf(Path.of("Created.java")),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Create(Path.of("Created.java"), "class Created {}\n"))),
+        )
+
+        val result = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE).use { channel ->
+            channel.lock().use { PatchEngine(root).apply(plan, snapshot) }
+        }
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "workspace.locked" })
+        assertFalse(Files.exists(root.resolve("Created.java")))
+    }
+
+    @Test
+    fun refusesSymbolicLinkWorkspaceMetadataWithoutWritingOutside() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val outside = Files.createTempDirectory("refactorkit-lock-outside")
+        Files.createSymbolicLink(root.resolve(".refactorkit"), outside)
+        val snapshot = ProjectSnapshot(Workspace(root), emptyList(), emptyList())
+        val plan = PatchPlan(
+            operation = "test",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "unsafe workspace lock",
+            affectedFiles = setOf(Path.of("Created.java")),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Create(Path.of("Created.java"), "class Created {}\n"))),
+        )
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "workspace.lockUnsafe" })
+        assertFalse(Files.exists(outside.resolve("workspace.lock")))
+        assertFalse(Files.exists(root.resolve("Created.java")))
     }
 
     @Test

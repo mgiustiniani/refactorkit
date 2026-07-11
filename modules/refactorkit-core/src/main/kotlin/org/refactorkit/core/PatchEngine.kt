@@ -1,8 +1,13 @@
 package org.refactorkit.core
 
+import java.nio.channels.FileChannel
+import java.nio.channels.OverlappingFileLockException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermission
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.isRegularFile
@@ -26,29 +31,200 @@ class PatchEngine(
         addAll(validateRuntimeState(plan.workspaceEdit))
     }
 
-    /** Apply a validated preview plan. Aborts if snapshot hash mismatch. */
-    fun apply(plan: PatchPlan, currentSnapshotHash: String): ApplyResult {
-        val diagnostics = validate(plan, currentSnapshotHash)
-        if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
-            return ApplyResult.Refused(diagnostics)
+    /**
+     * Apply a preview while holding the workspace's one-writer lock. The supplied
+     * scan is treated as the pre-lock expectation and every initially affected
+     * file is revalidated after lock acquisition before the first mutation.
+     */
+    fun apply(plan: PatchPlan, currentSnapshot: ProjectSnapshot): ApplyResult = withWorkspaceLock {
+        val diagnostics = buildList {
+            if (currentSnapshot.workspace.root.toAbsolutePath().normalize() != normalizedRoot) {
+                add(Diagnostic(
+                    "Snapshot workspace does not match PatchEngine workspace",
+                    Diagnostic.Severity.ERROR,
+                    code = "snapshot.workspaceMismatch",
+                ))
+            }
+            addAll(validate(plan, currentSnapshot.hash))
+            addAll(validateAffectedFilePreconditions(plan.workspaceEdit, currentSnapshot))
         }
-        return applyEdit(plan.id, plan.snapshotHash, plan.workspaceEdit)
+        if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
+            ApplyResult.Refused(diagnostics)
+        } else {
+            applyEdit(plan.id, plan.snapshotHash, plan.workspaceEdit)
+        }
     }
 
     /**
-     * Roll back a previously applied transaction.
-     * Does NOT check the snapshot hash because the current state is necessarily
-     * different from the pre-apply state.
+     * Compatibility API for callers that cannot yet supply a scanned snapshot.
+     * It provides one-writer locking but cannot prove affected-file preconditions;
+     * stable integrations must use [apply] with [ProjectSnapshot].
      */
-    fun rollback(transaction: Transaction): ApplyResult {
+    fun apply(plan: PatchPlan, currentSnapshotHash: String): ApplyResult = withWorkspaceLock {
+        val diagnostics = validate(plan, currentSnapshotHash)
+        if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
+            ApplyResult.Refused(diagnostics)
+        } else {
+            applyEdit(plan.id, plan.snapshotHash, plan.workspaceEdit)
+        }
+    }
+
+    /**
+     * Roll back a previously applied transaction while holding the same one-writer
+     * workspace lock. Post-apply conflict validation remains tracked by TX-004.
+     */
+    fun rollback(transaction: Transaction): ApplyResult = withWorkspaceLock {
         val errors = validateEdits(transaction.rollbackEdit) + validateRuntimeState(transaction.rollbackEdit)
         if (errors.any { it.severity == Diagnostic.Severity.ERROR }) {
-            return ApplyResult.Refused(errors)
+            ApplyResult.Refused(errors)
+        } else {
+            applyEdit(transaction.planId, snapshotHashBefore = "", transaction.rollbackEdit)
         }
-        return applyEdit(transaction.planId, snapshotHashBefore = "", transaction.rollbackEdit)
     }
 
     // ── private ──────────────────────────────────────────────────────────────
+
+    private fun withWorkspaceLock(action: () -> ApplyResult): ApplyResult {
+        val metadataDir = normalizedRoot.resolve(".refactorkit")
+        val lockPath = metadataDir.resolve("workspace.lock")
+        validateLockPath(metadataDir, lockPath)?.let { return ApplyResult.Refused(listOf(it)) }
+        var actionStarted = false
+        return try {
+            Files.createDirectories(metadataDir)
+            validateLockPath(metadataDir, lockPath)?.let { return ApplyResult.Refused(listOf(it)) }
+            FileChannel.open(
+                lockPath,
+                setOf(StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS),
+            ).use { channel ->
+                restrictLockPermissions(lockPath)
+                val lock = try {
+                    channel.tryLock()
+                } catch (_: OverlappingFileLockException) {
+                    null
+                }
+                if (lock == null) {
+                    ApplyResult.Refused(listOf(Diagnostic(
+                        "Workspace is locked by another RefactorKit writer",
+                        Diagnostic.Severity.ERROR,
+                        code = "workspace.locked",
+                    )))
+                } else {
+                    lock.use {
+                        actionStarted = true
+                        action()
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            if (actionStarted) throw error
+            ApplyResult.Refused(listOf(Diagnostic(
+                "Cannot acquire workspace lock: ${error.message ?: error::class.simpleName}",
+                Diagnostic.Severity.ERROR,
+                code = "workspace.lockFailed",
+            )))
+        }
+    }
+
+    private fun validateLockPath(metadataDir: Path, lockPath: Path): Diagnostic? {
+        validateNoSymbolicLinkTraversal(normalizedRoot.relativize(metadataDir))?.let { return it.copy(
+            message = "Workspace metadata path traverses a symbolic link: $metadataDir",
+            code = "workspace.lockUnsafe",
+        ) }
+        if (Files.exists(metadataDir, LinkOption.NOFOLLOW_LINKS) &&
+            !Files.isDirectory(metadataDir, LinkOption.NOFOLLOW_LINKS)
+        ) {
+            return Diagnostic(
+                "Workspace metadata path is not a directory: $metadataDir",
+                Diagnostic.Severity.ERROR,
+                code = "workspace.lockUnsafe",
+            )
+        }
+        if (Files.isSymbolicLink(lockPath) ||
+            (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS) &&
+                !Files.isRegularFile(lockPath, LinkOption.NOFOLLOW_LINKS))
+        ) {
+            return Diagnostic(
+                "Workspace lock path is not a safe regular file: $lockPath",
+                Diagnostic.Severity.ERROR,
+                code = "workspace.lockUnsafe",
+            )
+        }
+        return null
+    }
+
+    private fun restrictLockPermissions(lockPath: Path) {
+        if (Files.getFileAttributeView(lockPath, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) != null) {
+            Files.setPosixFilePermissions(
+                lockPath,
+                setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
+            )
+        }
+    }
+
+    private fun validateAffectedFilePreconditions(
+        edit: WorkspaceEdit,
+        snapshot: ProjectSnapshot,
+    ): List<Diagnostic> {
+        val expectedFiles = snapshot.files.associateBy { resolveInsideWorkspace(it.path) }
+        val initialRoles = linkedMapOf<Path, InitialPathRole>()
+        edit.edits.forEach { fileEdit ->
+            val source = resolveInsideWorkspace(fileEdit.path)
+            initialRoles.putIfAbsent(source, when (fileEdit) {
+                is FileEdit.Create -> InitialPathRole.MAY_BE_ABSENT
+                is FileEdit.Modify, is FileEdit.Delete, is FileEdit.Rename -> InitialPathRole.MUST_BE_SCANNED
+            })
+            if (fileEdit is FileEdit.Rename) {
+                initialRoles.putIfAbsent(resolveInsideWorkspace(fileEdit.newPath), InitialPathRole.MAY_BE_ABSENT)
+            }
+        }
+        return buildList {
+            initialRoles.forEach { (path, role) ->
+                if (!path.startsWith(normalizedRoot)) return@forEach
+                val relative = normalizedRoot.relativize(path)
+                if (validateNoSymbolicLinkTraversal(relative) != null) return@forEach
+                val expected = expectedFiles[path]
+                if (expected != null) {
+                    if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                        add(Diagnostic(
+                            "Affected file changed after the apply snapshot was scanned: $relative",
+                            Diagnostic.Severity.ERROR,
+                            code = "file.preconditionChanged",
+                        ))
+                    } else {
+                        val actualContent = try {
+                            Files.readString(path)
+                        } catch (error: Exception) {
+                            add(Diagnostic(
+                                "Cannot verify affected file precondition for $relative: ${error.message}",
+                                Diagnostic.Severity.ERROR,
+                                code = "file.preconditionUnreadable",
+                            ))
+                            return@forEach
+                        }
+                        if (actualContent != expected.content) {
+                            add(Diagnostic(
+                                "Affected file changed after the apply snapshot was scanned: $relative",
+                                Diagnostic.Severity.ERROR,
+                                code = "file.preconditionChanged",
+                            ))
+                        }
+                    }
+                } else if (role == InitialPathRole.MUST_BE_SCANNED) {
+                    add(Diagnostic(
+                        "Affected existing file was not present in the apply snapshot: $relative",
+                        Diagnostic.Severity.ERROR,
+                        code = "file.preconditionUnavailable",
+                    ))
+                } else if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+                    add(Diagnostic(
+                        "Affected path appeared after the apply snapshot was scanned: $relative",
+                        Diagnostic.Severity.ERROR,
+                        code = "file.preconditionChanged",
+                    ))
+                }
+            }
+        }
+    }
 
     private fun validateEdits(edit: WorkspaceEdit): List<Diagnostic> = buildList {
         edit.edits.forEach { fileEdit ->
@@ -258,6 +434,11 @@ class PatchEngine(
         var exists: Boolean,
         var regular: Boolean,
     )
+
+    private enum class InitialPathRole {
+        MAY_BE_ABSENT,
+        MUST_BE_SCANNED,
+    }
 }
 
 sealed interface ApplyResult {

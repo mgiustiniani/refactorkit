@@ -270,7 +270,7 @@ class DaemonSession {
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val currentSnap = scanner.scan(root)
-        return when (val result = PatchEngine(root).apply(plan, currentSnap.hash)) {
+        return when (val result = PatchEngine(root).apply(plan, currentSnap)) {
             is ApplyResult.Applied -> {
                 val log = TransactionLog(root.resolve(".refactorkit/transactions"))
                 log.save(result.transaction)

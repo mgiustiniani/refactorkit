@@ -466,7 +466,7 @@ class LspSession {
                 val planId = args?.string("planId") ?: missing("planId")
                 val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
                 val current = scanner.scan(root)
-                when (val result = PatchEngine(root).apply(plan, current.hash)) {
+                when (val result = PatchEngine(root).apply(plan, current)) {
                     is ApplyResult.Applied -> {
                         TransactionLog(root.resolve(".refactorkit/transactions")).save(result.transaction)
                         pendingPlans.remove(planId)

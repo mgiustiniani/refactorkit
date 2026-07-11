@@ -96,7 +96,7 @@ class RecipeEngine(
             }
 
             if (!dryRun && result.plan != null && result.plan.status == PatchStatus.PREVIEW) {
-                when (val apply = PatchEngine(workspaceRoot).apply(result.plan, snap.hash)) {
+                when (val apply = PatchEngine(workspaceRoot).apply(result.plan, snap)) {
                     is ApplyResult.Applied -> {
                         transactionLog.save(apply.transaction)
                         appliedTransactions += apply.transaction

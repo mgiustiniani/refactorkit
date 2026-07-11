@@ -141,9 +141,9 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-023
-|PatchEngine preflight now rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions, but direct sequential writes have no write-ahead recovery, workspace lock, durable staging, or guaranteed atomic replacement (`TX-001`, `TX-002`, `TX-005`, `TX-006`).
-|An I/O or process failure can leave partial workspace state and no durable rollback record; concurrent writers can invalidate preflight through time-of-check-to-time-of-use races.
-|Define precise degraded filesystem guarantees; add one-writer isolation, affected-file preconditions, write-ahead lifecycle, staged/durable replacement, compensation failure reporting, startup recovery, and fault/restart/concurrency evidence.
+|PatchEngine preflight rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions. Managed first-party writes now hold a workspace lock and revalidate affected-file preconditions, while the hash-only compatibility overload remains weaker (`TX-005`, `TX-014`). Direct sequential writes still have no write-ahead recovery, durable staging, or guaranteed atomic replacement (`TX-001`, `TX-002`, `TX-006`).
+|An I/O or process failure can leave partial workspace state and no durable rollback record; hash-only callers and editor-managed LSP writes remain outside complete affected-file isolation evidence.
+|Retire or narrow the hash-only API; define precise degraded filesystem guarantees; add write-ahead lifecycle, staged/durable replacement, compensation failure reporting, startup recovery, and fault/restart/concurrency evidence.
 |planned release blocker
 
 |R-024

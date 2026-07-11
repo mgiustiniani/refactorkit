@@ -131,15 +131,28 @@ Required closure:
 
 ### TX-005 — No workspace isolation or cross-process lock
 
-Severity: **critical**.
+Status: **substantially closed for managed first-party writes; compatibility API
+closure remains**.
 
-Snapshot scan, validation, and writes are not protected by a workspace lock.
-Multiple CLI/daemon/LSP/MCP processes can validate the same snapshot and then
-interleave writes. Files can also change between preflight and mutation
-(time-of-check to time-of-use).
+`PatchEngine` now acquires a non-blocking operating-system `FileLock` at
+`.refactorkit/workspace.lock` around validation, apply, and rollback. Lock
+ownership belongs to the process/channel, contention returns `workspace.locked`
+immediately (zero wait timeout), and process termination releases stale OS lock
+ownership; the regular marker file may remain safely. Symbolic-link or
+non-regular lock paths are refused, and owner-only POSIX permissions are applied
+where supported.
 
-Required closure: define one-writer workspace locking, lock ownership/timeout/
-stale-lock recovery, and revalidate affected file hashes while holding the lock.
+The snapshot-aware `apply(plan, ProjectSnapshot)` overload revalidates every
+initially affected source or target after acquiring the lock. Changed, appeared,
+missing, unscanned, or workspace-mismatched state is refused before mutation.
+CLI, daemon, managed LSP/MCP apply, recipes, and golden execution use this path.
+Tests cover same-process contention, symlink metadata refusal, and a file change
+between scan and lock acquisition.
+
+The hash-only compatibility overload is also locked but cannot prove per-file
+preconditions. It must be removed or narrowed before the stable library API is
+frozen; this residual overlaps `TX-014`. Native editor-applied LSP edits remain
+outside this managed lock boundary under `TX-007`.
 
 ### TX-006 — Direct file replacement is not crash-safe or durable
 
@@ -326,7 +339,8 @@ The current requirements should be corrected before API `1.0` freeze.
 
 ## Recommended closure order
 
-1. Add workspace lock and affected-file precondition hashes (`TX-005`).
+1. Retire/narrow the hash-only apply compatibility path and freeze the managed
+   lock/precondition contract (`TX-005`, `TX-014`).
 2. Introduce a versioned write-ahead transaction journal and startup recovery.
 3. Stage/render all file results, merge same-file edits, and validate all bounds
    before mutation.

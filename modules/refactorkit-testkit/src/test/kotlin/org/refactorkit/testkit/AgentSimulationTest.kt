@@ -59,7 +59,7 @@ class AgentSimulationTest {
     }
 
     private fun fileTree(root: Path): Map<String, String> = root.toFile().walkTopDown()
-        .filter { it.isFile }
+        .filter { it.isFile && !it.toPath().startsWith(root.resolve(".refactorkit")) }
         .associate { file -> root.relativize(file.toPath()).toString().replace('\\', '/') to file.readText() }
 
     private fun assertPreviewApplyRollbackRestores(caseName: String, root: Path, plan: org.refactorkit.core.PatchPlan, snapshotHash: String) {

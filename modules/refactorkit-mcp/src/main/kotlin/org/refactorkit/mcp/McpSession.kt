@@ -319,7 +319,7 @@ class McpSession {
         val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val current = scanner.scan(root)
-        return when (val result = PatchEngine(root).apply(plan, current.hash)) {
+        return when (val result = PatchEngine(root).apply(plan, current)) {
             is ApplyResult.Applied -> {
                 val log = TransactionLog(root.resolve(".refactorkit/transactions"))
                 log.save(result.transaction)

@@ -56,7 +56,7 @@ The following open findings qualify the accepted direction and must not be read 
 * `TX-002`: integration callers persist transaction metadata after mutation, leaving a crash and log-failure window; recovery intent and lifecycle state must be durable before mutation.
 * `TX-003` is closed after the audited baseline: transaction IDs enforce the generated UUIDv4 grammar; normalized contained log paths reject symbolic links and non-regular records; owner-only permissions are applied where supported; and malformed records produce coded failures. Durable journal lifecycle/integrity work remains under `TX-002`, `TX-011`, and `TX-012`.
 * `TX-004`: rollback has no post-apply state check and can overwrite later user or process changes; normal rollback must be conflict-aware.
-* `TX-005`: there is no workspace isolation or cross-process writer lock, and affected files are not revalidated under a lock.
+* `TX-005` is substantially closed for managed first-party writes after the audited baseline: `PatchEngine` holds a non-blocking OS file lock across validation/apply/rollback, and snapshot-aware apply revalidates affected paths under that lock. The hash-only compatibility overload still lacks per-file preconditions and must be removed or narrowed with `TX-014` before stable library freeze.
 * `TX-006`: direct writes, non-negotiated moves, and absent durable flush/staging make replacement neither crash-safe nor durably atomic.
 * `TX-009`: overlap validation is per `FileEdit.Modify`; multiple modifications of one file can use ambiguous coordinates and drift after earlier edits.
 * `TX-010`: preflight does not fully validate line/character bounds or render every resulting file before the first workspace write.
@@ -69,7 +69,7 @@ The following open findings qualify the accepted direction and must not be read 
 
 == Residual Risks and Open Scope
 
-* At the audited `5f47ad0` baseline, `TX-001` through `TX-006` and `TX-009` through `TX-016` were open; subsequent implementation closes `TX-003` only.
+* At the audited `5f47ad0` baseline, `TX-001` through `TX-006` and `TX-009` through `TX-016` were open; subsequent implementation closes `TX-003` and substantially closes managed first-party `TX-005`, with its hash-only compatibility residual explicit.
 * Recovery from interrupted I/O, process termination, machine failure, log failure, and incomplete compensation remains open.
-* Time-of-check-to-time-of-use races and concurrent writers between validation and filesystem writes remain open.
+* Managed snapshot-aware writes now close the normal RefactorKit-writer scan-to-mutation race; hash-only library callers, native editor-applied LSP edits, and hostile filesystem namespace replacement remain outside that evidence.
 * Stable `1.0` transactionality must not be claimed until the required guarantees are either evidenced or narrowed to precise degraded guarantees.
