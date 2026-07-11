@@ -165,9 +165,9 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-027
-|Recipe execution is a per-step saga, while multiple same-file modifies can use drifting coordinates and text character bounds are incompletely preflighted (`TX-008`, `TX-009`, `TX-010`).
-|Crashes or failed compensation can leave partial recipes; later text edits can target changed content or throw during mutation.
-|Choose a durable saga or one staged recipe-wide commit; merge edits into one coordinate space per file, validate overlap/bounds globally, and render all staged results before mutation.
+|Recipe execution remains a per-step durable saga (`TX-008`); same-file coordinate merging, global overlap validation, bounds checks, and complete preflight rendering are implemented (`TX-009`, `TX-010` closed).
+|A later logical failure can still require multi-record reverse compensation rather than one recipe-wide commit.
+|Choose and fully specify either the retained durable saga boundary or one staged recipe-wide commit, with crash/cancellation acceptance evidence.
 |planned release blocker
 
 |R-028

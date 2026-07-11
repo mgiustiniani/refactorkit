@@ -4,13 +4,13 @@ object TextEdits {
     fun apply(content: String, edits: List<TextEdit>): String {
         val lineStarts = computeLineStarts(content)
         val replacements = edits.sortedWith(
-            compareByDescending<TextEdit> { offsetOf(lineStarts, it.range.start) }
-                .thenByDescending { offsetOf(lineStarts, it.range.end) },
+            compareByDescending<TextEdit> { offsetOf(lineStarts, content.length, it.range.start) }
+                .thenByDescending { offsetOf(lineStarts, content.length, it.range.end) },
         )
         val builder = StringBuilder(content)
         replacements.forEach { edit ->
-            val start = offsetOf(lineStarts, edit.range.start)
-            val end = offsetOf(lineStarts, edit.range.end)
+            val start = offsetOf(lineStarts, content.length, edit.range.start)
+            val end = offsetOf(lineStarts, content.length, edit.range.end)
             require(start <= end) { "edit start must be <= edit end" }
             builder.replace(start, end, edit.newText)
         }
@@ -36,7 +36,8 @@ object TextEdits {
         return SourcePosition(line, offset - lineStart)
     }
 
-    fun offsetOf(content: String, position: SourcePosition): Int = offsetOf(computeLineStarts(content), position)
+    fun offsetOf(content: String, position: SourcePosition): Int =
+        offsetOf(computeLineStarts(content), content.length, position)
 
     private fun computeLineStarts(content: String): List<Int> {
         val starts = mutableListOf(0)
@@ -46,8 +47,18 @@ object TextEdits {
         return starts
     }
 
-    private fun offsetOf(lineStarts: List<Int>, position: SourcePosition): Int {
+    private fun offsetOf(lineStarts: List<Int>, contentLength: Int, position: SourcePosition): Int {
         require(position.line < lineStarts.size) { "line ${position.line} is outside file" }
-        return lineStarts[position.line] + position.character
+        val lineStart = lineStarts[position.line]
+        val lineEndExclusive = if (position.line + 1 < lineStarts.size) {
+            lineStarts[position.line + 1] - 1 // exclude the newline delimiter
+        } else {
+            contentLength
+        }
+        val lineLength = lineEndExclusive - lineStart
+        require(position.character <= lineLength) {
+            "character ${position.character} is outside line ${position.line} length $lineLength"
+        }
+        return lineStart + position.character
     }
 }

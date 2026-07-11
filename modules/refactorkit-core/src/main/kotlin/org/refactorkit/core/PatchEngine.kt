@@ -84,14 +84,34 @@ class PatchEngine(
 
     /** Validate a preview plan against the current snapshot hash before applying. */
     fun validate(plan: PatchPlan, currentSnapshotHash: String): List<Diagnostic> = buildList {
+        val normalizedEdit = normalizeWorkspaceEdit(plan.workspaceEdit)
         if (plan.status != PatchStatus.PREVIEW) {
             add(Diagnostic("Only preview plans can be applied", Diagnostic.Severity.ERROR, code = "plan.notPreview"))
         }
         if (plan.snapshotHash != currentSnapshotHash) {
             add(Diagnostic("Project changed since preview; regenerate the plan", Diagnostic.Severity.ERROR, code = "snapshot.changed"))
         }
-        addAll(validateEdits(plan.workspaceEdit))
-        addAll(validateRuntimeState(plan.workspaceEdit))
+        addAll(validateEdits(normalizedEdit))
+        addAll(validateRuntimeState(normalizedEdit))
+        if (none { it.severity == Diagnostic.Severity.ERROR }) {
+            try {
+                stageWorkspaceEdit(normalizedEdit)
+            } catch (error: IllegalArgumentException) {
+                val rangeFailure = error.message?.contains("outside line") == true ||
+                    error.message?.startsWith("line ") == true
+                add(Diagnostic(
+                    "Cannot render workspace edit before mutation: ${error.message}",
+                    Diagnostic.Severity.ERROR,
+                    code = if (rangeFailure) "edit.rangeOutOfBounds" else "edit.renderFailed",
+                ))
+            } catch (error: Exception) {
+                add(Diagnostic(
+                    "Cannot render workspace edit before mutation: ${error.message}",
+                    Diagnostic.Severity.ERROR,
+                    code = "edit.renderFailed",
+                ))
+            }
+        }
     }
 
     /**
@@ -100,6 +120,11 @@ class PatchEngine(
      * file is revalidated after lock acquisition before the first mutation.
      */
     fun apply(plan: PatchPlan, currentSnapshot: ProjectSnapshot): ApplyResult = withWorkspaceLock {
+        val normalizedEdit = normalizeWorkspaceEdit(plan.workspaceEdit)
+        val normalizedPlan = plan.copy(
+            workspaceEdit = normalizedEdit,
+            affectedFiles = normalizedEdit.affectedFiles(),
+        )
         val diagnostics = buildList {
             val capabilities = filesystemCapabilities()
             if (!capabilities.supportsDurableAtomicReplacement) {
@@ -116,13 +141,13 @@ class PatchEngine(
                     code = "snapshot.workspaceMismatch",
                 ))
             }
-            addAll(validate(plan, currentSnapshot.hash))
-            addAll(validateAffectedFilePreconditions(plan.workspaceEdit, currentSnapshot))
+            addAll(validate(normalizedPlan, currentSnapshot.hash))
+            addAll(validateAffectedFilePreconditions(normalizedEdit, currentSnapshot))
         }
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(diagnostics)
         } else {
-            applyPrepared(plan)
+            applyPrepared(normalizedPlan)
         }
     }
 
@@ -366,6 +391,31 @@ class PatchEngine(
                 }
             }
         }
+    }
+
+    /**
+     * All Modify entries between structural file operations share the coordinate
+     * space that existed at the start of that segment. Merge them per path so
+     * offsets are applied once and overlap validation spans the complete set.
+     */
+    private fun normalizeWorkspaceEdit(edit: WorkspaceEdit): WorkspaceEdit {
+        val normalized = mutableListOf<FileEdit>()
+        val pending = linkedMapOf<Path, MutableList<TextEdit>>()
+        fun flushPending() {
+            pending.forEach { (path, textEdits) -> normalized += FileEdit.Modify(path, textEdits.toList()) }
+            pending.clear()
+        }
+        edit.edits.forEach { fileEdit ->
+            when (fileEdit) {
+                is FileEdit.Modify -> pending.getOrPut(fileEdit.path) { mutableListOf() }.addAll(fileEdit.textEdits)
+                is FileEdit.Create, is FileEdit.Delete, is FileEdit.Rename -> {
+                    flushPending()
+                    normalized += fileEdit
+                }
+            }
+        }
+        flushPending()
+        return WorkspaceEdit(normalized)
     }
 
     private fun validateEdits(edit: WorkspaceEdit): List<Diagnostic> = buildList {

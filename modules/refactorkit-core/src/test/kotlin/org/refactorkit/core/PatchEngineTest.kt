@@ -494,6 +494,90 @@ class PatchEngineTest {
     }
 
     @Test
+    fun mergesMultipleModifyEntriesInOneOriginalCoordinateSpace() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "alpha beta gamma\n")
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(
+            FileEdit.Modify(relative, listOf(
+                TextEdit(SourceRange(SourcePosition(0, 0), SourcePosition(0, 5)), "A-LONG"),
+            )),
+            FileEdit.Modify(relative, listOf(
+                TextEdit(SourceRange(SourcePosition(0, 11), SourcePosition(0, 16)), "G"),
+            )),
+        ))
+        val plan = PatchPlan(
+            operation = "mergeModifyCoordinates",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "merge same-file modifies",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
+        assertEquals("A-LONG beta G\n", Files.readString(root.resolve(relative)))
+        val record = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single()
+        assertEquals(1, record.forwardEdit.edits.filterIsInstance<FileEdit.Modify>().size)
+        assertEquals(2, (record.forwardEdit.edits.single() as FileEdit.Modify).textEdits.size)
+    }
+
+    @Test
+    fun rejectsOverlapAcrossSeparateModifyEntries() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "crossEntryOverlap",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "reject cross-entry overlap",
+            affectedFiles = setOf(relative),
+            workspaceEdit = WorkspaceEdit(listOf(
+                FileEdit.Modify(relative, listOf(
+                    TextEdit(SourceRange(SourcePosition(0, 0), SourcePosition(0, 5)), "interface"),
+                )),
+                FileEdit.Modify(relative, listOf(
+                    TextEdit(SourceRange(SourcePosition(0, 3), SourcePosition(0, 7)), "object"),
+                )),
+            )),
+        )
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "edit.overlap" })
+        assertEquals("class Example {}\n", Files.readString(root.resolve(relative)))
+    }
+
+    @Test
+    fun refusesCharacterOutsideLineBeforeJournalOrWorkspaceMutation() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "abc\ndef\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "invalidCharacterBounds",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "reject invalid character",
+            affectedFiles = setOf(relative),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(relative, listOf(
+                TextEdit(SourceRange(SourcePosition(0, 4), SourcePosition(0, 4)), "x"),
+            )))),
+        )
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "edit.rangeOutOfBounds" }, result.diagnostics.toString())
+        assertEquals("abc\ndef\n", Files.readString(root.resolve(relative)))
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
+    }
+
+    @Test
     fun rejectsOverlappingTextEdits() {
         val root = Files.createTempDirectory("refactorkit-test")
         val file = root.resolve("Example.java")

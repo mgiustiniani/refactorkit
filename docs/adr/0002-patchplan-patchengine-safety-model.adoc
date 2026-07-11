@@ -58,8 +58,8 @@ The following open findings qualify the accepted direction and must not be read 
 * `TX-004` is closed for versioned journal transactions: normal rollback verifies exact affected-path post-images and refuses `rollback.conflict` without writes; explicit force restores pre-images and records the destructive override; legacy records without images require manual recovery.
 * `TX-005` is closed for RefactorKit-managed writes after the audited baseline: `PatchEngine` holds a non-blocking OS file lock across validation/apply/rollback, snapshot-aware apply revalidates affected paths under that lock, the hash-only overload is removed, and all first-party/test callers use the protected contract.
 * `TX-006` is closed for reported supported filesystems: apply/rollback/recovery use same-directory staging, file force, required atomic replacement, delete/parent-directory force, durable directory creation, permission preservation, temp cleanup, and explicit capability refusal.
-* `TX-009`: overlap validation is per `FileEdit.Modify`; multiple modifications of one file can use ambiguous coordinates and drift after earlier edits.
-* `TX-010`: preflight does not fully validate line/character bounds or render every resulting file before the first workspace write.
+* `TX-009` is closed: modify entries are normalized per path/structural segment into one original-content coordinate space, with overlap validation across the merged set and one normalized journal edit.
+* `TX-010` is closed: line and character-within-line bounds are enforced, exact line-end positions remain valid, and preflight renders complete results before journal creation or mutation.
 * `TX-011` is partially closed: retained records now include schema, operation, forward/compensation edits, pre/post images, lifecycle, timestamps, and failure detail; version metadata, validation/attempt history, post-snapshot, and integrity checksum remain.
 * `TX-012` is partially closed: create/update/delete persistence durably flushes files/directories and lifecycle replacement requires a same-directory atomic move; checksum, migration, quarantine, capability reporting, and fault evidence remain.
 * `TX-013`: rollback restores text rather than complete filesystem metadata or directory state, and the edit model does not represent all advertised directory operations.
@@ -69,7 +69,7 @@ The following open findings qualify the accepted direction and must not be read 
 
 == Residual Risks and Open Scope
 
-* At the audited `5f47ad0` baseline, `TX-001` through `TX-006` and `TX-009` through `TX-016` were open; subsequent implementation closes `TX-001` through managed-write `TX-006` (with filesystem qualification), and partially closes `TX-011`, `TX-012`, and `TX-014`.
+* At the audited `5f47ad0` baseline, `TX-001` through `TX-006` and `TX-009` through `TX-016` were open; subsequent implementation closes `TX-001` through managed-write `TX-006` (with filesystem qualification), plus `TX-009` and `TX-010`, and partially closes `TX-011`, `TX-012`, and `TX-014`.
 * Startup recovery now handles compatible interrupted lifecycle states and blocks conflicts; kill/power-loss, torn workspace writes, journal corruption, and incomplete-compensation fault evidence remain open.
 * Managed snapshot-aware writes now close the normal RefactorKit-writer scan-to-mutation race; native editor-applied LSP edits, omitted newly appeared sources in caller-provided scope, and hostile filesystem namespace replacement remain outside that evidence.
 * Stable `1.0` transactionality must not be claimed until the required guarantees are either evidenced or narrowed to precise degraded guarantees.

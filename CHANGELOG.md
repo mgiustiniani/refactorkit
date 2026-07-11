@@ -24,6 +24,10 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Normalized multiple same-file modify entries into one original-content
+  coordinate space per structural segment, with cross-entry overlap checks.
+  Preflight now renders complete results and validates character-within-line
+  bounds before journal creation, returning stable range/render diagnostics.
 - Made rollback conflict-safe by validating exact journaled post-images under the
   workspace lock. Normal rollback refuses later edits as `rollback.conflict`;
   explicit `--force`/`force=true` restores pre-images and records the destructive

@@ -131,7 +131,7 @@ Status: implementation-informed from `DaemonSession`, its daemon contract test, 
 |If a later logical step fails, the engine attempts earlier compensations in reverse order.
 
 |4
-|A crash, log failure, I/O failure, concurrent edit, or compensation conflict can leave a partially completed recipe. Multiple same-file edits may also retain original-snapshot coordinates across sequential modifications.
+|Each step is independently locked, normalized, rendered, journaled, staged, and recoverable; multiple same-file entries within a step share one validated coordinate space. A later logical failure can still require reverse compensation across multiple retained transaction records.
 |===
 
 Status: implementation-informed from `docs/transactionality-audit.md`. Recipe execution is a saga with best-effort compensation, not one atomic transaction.

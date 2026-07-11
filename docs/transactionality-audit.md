@@ -207,29 +207,28 @@ recovery status and per-step journal semantics.
 
 ### TX-009 — Multiple modifications of one file have ambiguous coordinates
 
-Severity: **high**.
+Status: **closed after the audited baseline**.
 
-Overlap validation is local to each `FileEdit.Modify`. A `WorkspaceEdit` may
-contain multiple modifies for the same path. Later ranges are applied to content
-already changed by earlier modifies, although planners commonly calculate ranges
-from the original snapshot. Cross-edit overlap and coordinate drift are not
-rejected.
-
-Required closure: define one coordinate space per file/plan, merge all text edits
-for a path before apply, and validate overlap/bounds across the complete merged
-set.
+Before validation and journaling, `PatchEngine` normalizes every segment between
+structural file operations. All `FileEdit.Modify` entries for the same path in a
+segment are merged into one original-content coordinate space, applied once in
+descending-offset order, and persisted as one normalized forward edit. Global
+per-path overlap validation therefore detects overlaps spanning separate input
+entries, while structural create/delete/rename boundaries explicitly start a new
+coordinate segment. Tests prove length-changing disjoint edits retain original
+coordinates and cross-entry overlaps refuse without mutation.
 
 ### TX-010 — Text ranges are not fully bounds-validated during preflight
 
-Severity: **high**.
+Status: **closed after the audited baseline**.
 
-`TextEdits.offsetOf` verifies the line index but does not verify that `character`
-is within that line. `TextEdits.apply` can therefore throw or address an
-unexpected offset during mutation. Preflight does not render every modify against
-the simulated content.
-
-Required closure: validate line/character bounds and render every staged file
-before any workspace write.
+`TextEdits.offsetOf` now validates both line index and character-within-line,
+including exact line-end insertion and the empty line after a trailing newline.
+Preflight normalizes edits and renders the complete staged workspace result before
+journal creation or workspace mutation. Invalid ranges return
+`edit.rangeOutOfBounds`; other render failures return `edit.renderFailed`.
+Tests prove an overlong character cannot cross into the next line and that refusal
+leaves both source content and transaction journal unchanged.
 
 ## Additional major gaps
 
@@ -357,11 +356,9 @@ The current requirements should be corrected before API `1.0` freeze.
 
 1. Make apply snapshot scope engine-owned so newly appeared relevant files cannot
    be omitted by library callers (`TX-014`).
-2. Merge same-file edits into one coordinate space and validate all line/character
-   bounds before mutation (`TX-009`, `TX-010`).
-3. Define recipe saga/transaction and LSP client/server transaction boundaries.
-4. Integrate diagnostics and remaining stable error categories into commit gates.
-5. Add fault-injection, kill/restart, concurrency, corruption, and mounted
+2. Define recipe saga/transaction and LSP client/server transaction boundaries.
+3. Integrate diagnostics and remaining stable error categories into commit gates.
+4. Add fault-injection, kill/restart, concurrency, corruption, and mounted
    filesystem capability tests before `v1.0.0-rc.1`.
 
 ## Stable-release verdict
