@@ -15,6 +15,11 @@ review safety boundaries before applying refactorings.
   partial I/O failure, transaction-log traversal/integrity, rollback conflicts,
   concurrency, LSP client-managed edits, recipe sagas, same-file coordinate
   merging, and text-range bounds.
+- Closed transaction-log path finding `TX-003`: transaction IDs now use the
+  generated UUIDv4 grammar, log paths are normalized and contained, symbolic-link
+  traversal and non-regular records are rejected, owner-only permissions are
+  applied where supported, and corrupt records produce coded errors. CLI, daemon,
+  LSP, and MCP reject malformed rollback IDs before filesystem access.
 - Hardened `PatchEngine` preflight validation: all ordered file-state transitions
   are simulated before the first write, so predictable later missing/existing-file
   failures cannot leave earlier edits applied. Workspace edits that traverse a

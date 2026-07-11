@@ -309,12 +309,14 @@ class DaemonSession {
     private fun patchRollback(params: JsonObject?): JsonElement {
         val txId = params?.string("transactionId") ?: missing("transactionId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val transactionId = TransactionId.parseOrNull(txId)
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid transaction ID: $txId")
         val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-        val tx = log.load(TransactionId(txId))
+        val tx = log.load(transactionId)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $txId")
         return when (val result = PatchEngine(root).rollback(tx)) {
             is ApplyResult.Applied -> {
-                log.delete(TransactionId(txId))
+                log.delete(transactionId)
                 buildJsonObject {
                     put("status", "rolledBack")
                     put("transactionId", txId)

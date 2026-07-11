@@ -17,8 +17,19 @@ value class PlanId(val value: String) {
 
 @JvmInline
 value class TransactionId(val value: String) {
+    init {
+        require(isValid(value)) { "Invalid transaction ID" }
+    }
+
     companion object {
+        private val PATTERN = Regex("transaction-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+
         fun new(): TransactionId = TransactionId("transaction-${UUID.randomUUID()}")
+
+        fun parseOrNull(value: String): TransactionId? =
+            value.takeIf(::isValid)?.let(::TransactionId)
+
+        fun isValid(value: String): Boolean = PATTERN.matches(value)
     }
 }
 

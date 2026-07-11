@@ -8,6 +8,7 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
+import org.refactorkit.core.TransactionLogException
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaLanguageAdapter
@@ -321,12 +322,18 @@ class RefactorKitCli(
             ?: run { System.err.println("patch rollback requires a transaction ID"); return 2 }
         val root = parsed.options["root"] ?: "."
         val workspaceRoot = Paths.get(root).toAbsolutePath().normalize()
+        val transactionId = TransactionId.parseOrNull(txId)
+            ?: run { System.err.println("Invalid transaction ID: $txId"); return 2 }
         val log = TransactionLog(workspaceRoot.resolve(".refactorkit/transactions"))
-        val tx = log.load(TransactionId(txId))
-            ?: run { System.err.println("Transaction not found: $txId"); return 1 }
+        val tx = try {
+            log.load(transactionId)
+        } catch (error: TransactionLogException) {
+            System.err.println("Transaction log error [${error.code}]: ${error.message}")
+            return 1
+        } ?: run { System.err.println("Transaction not found: $txId"); return 1 }
         return when (val result = PatchEngine(workspaceRoot).rollback(tx)) {
             is ApplyResult.Applied -> {
-                log.delete(TransactionId(txId))
+                log.delete(transactionId)
                 println("Rolled back transaction $txId.")
                 0
             }

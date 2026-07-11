@@ -337,12 +337,14 @@ class McpSession {
     private fun toolRollbackRefactoring(args: JsonObject): String {
         val txId = args.string("transactionId") ?: missing("transactionId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val transactionId = TransactionId.parseOrNull(txId)
+            ?: return "Invalid transaction ID: $txId"
         val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-        val tx = log.load(TransactionId(txId))
+        val tx = log.load(transactionId)
             ?: return "Transaction not found: $txId"
         return when (val result = PatchEngine(root).rollback(tx)) {
             is ApplyResult.Applied -> {
-                log.delete(TransactionId(txId))
+                log.delete(transactionId)
                 snapshot = scanner.scan(root)
                 "Rolled back transaction $txId."
             }

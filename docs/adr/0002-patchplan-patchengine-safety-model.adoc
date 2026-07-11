@@ -54,7 +54,7 @@ The following open findings qualify the accepted direction and must not be read 
 
 * `TX-001`: sequential direct writes can fail after earlier writes, without caught compensation or a returned transaction; incomplete compensation needs an explicit `RECOVERY_REQUIRED` outcome.
 * `TX-002`: integration callers persist transaction metadata after mutation, leaving a crash and log-failure window; recovery intent and lifecycle state must be durable before mutation.
-* `TX-003`: transaction IDs and transaction-log paths lack identifier, containment, symbolic-link, permission, and corruption hardening.
+* `TX-003` is closed after the audited baseline: transaction IDs enforce the generated UUIDv4 grammar; normalized contained log paths reject symbolic links and non-regular records; owner-only permissions are applied where supported; and malformed records produce coded failures. Durable journal lifecycle/integrity work remains under `TX-002`, `TX-011`, and `TX-012`.
 * `TX-004`: rollback has no post-apply state check and can overwrite later user or process changes; normal rollback must be conflict-aware.
 * `TX-005`: there is no workspace isolation or cross-process writer lock, and affected files are not revalidated under a lock.
 * `TX-006`: direct writes, non-negotiated moves, and absent durable flush/staging make replacement neither crash-safe nor durably atomic.
@@ -69,7 +69,7 @@ The following open findings qualify the accepted direction and must not be read 
 
 == Residual Risks and Open Scope
 
-* `TX-001` through `TX-006` and `TX-009` through `TX-016` remain open at the audited baseline.
+* At the audited `5f47ad0` baseline, `TX-001` through `TX-006` and `TX-009` through `TX-016` were open; subsequent implementation closes `TX-003` only.
 * Recovery from interrupted I/O, process termination, machine failure, log failure, and incomplete compensation remains open.
 * Time-of-check-to-time-of-use races and concurrent writers between validation and filesystem writes remain open.
 * Stable `1.0` transactionality must not be claimed until the required guarantees are either evidenced or narrowed to precise degraded guarantees.

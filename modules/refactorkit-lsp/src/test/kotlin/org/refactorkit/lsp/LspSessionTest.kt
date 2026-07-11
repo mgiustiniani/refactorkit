@@ -333,13 +333,34 @@ class LspSessionTest {
         val ex = assertFailsWith<JsonRpcException> {
             session.dispatch("workspace/executeCommand", buildJsonObject {
                 put("command", "refactorkit.rollback")
-                put("arguments", JsonArray(listOf(buildJsonObject { put("transactionId", "tx-missing") })))
+                put("arguments", JsonArray(listOf(buildJsonObject {
+                    put("transactionId", "transaction-550e8400-e29b-41d4-a716-446655440000")
+                })))
             })
         }
 
         assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, ex.code)
         assertTrue(ex.message.contains("Transaction not found"))
         assertFalse(ex.message.contains("Exception"), ex.message)
+    }
+
+    @Test
+    fun executeCommandRollbackRejectsMalformedTransactionId() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+
+        val ex = assertFailsWith<JsonRpcException> {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.rollback")
+                put("arguments", JsonArray(listOf(buildJsonObject { put("transactionId", "../../outside") })))
+            })
+        }
+
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, ex.code)
+        assertTrue(ex.message.contains("Invalid transaction ID"))
     }
 
     @Test

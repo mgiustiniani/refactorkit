@@ -147,10 +147,10 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-024
-|Transaction-log identifiers, paths, schema, integrity, persistence, and retention are not hardened (`TX-003`, `TX-011`, `TX-012`).
-|A client-supplied traversal-shaped ID or transaction-directory symlink can threaten files outside the intended log boundary; truncated or incomplete records can fail recovery and audit.
-|Validate identifier grammar, normalize and enforce containment, reject symbolic-link traversal, restrict permissions, use atomic durable journal persistence, version schemas/lifecycle, verify integrity, quarantine corruption, and retain appropriate history.
-|critical security and release blocker
+|Transaction-log identifier/path hardening is implemented (`TX-003` closed), while schema, integrity, atomic durable persistence, quarantine, and retention remain open (`TX-011`, `TX-012`).
+|Validated UUIDv4 IDs, normalized containment, symbolic-link/non-regular-file refusal, owner-only permissions where supported, and coded corrupt-record failures prevent the audited direct traversal path; truncated or incomplete records can still block recovery and audit.
+|Add atomic durable journal persistence, version schemas/lifecycle, verify integrity, quarantine corruption, and retain appropriate history.
+|remaining journal integrity and release blocker
 
 |R-025
 |Rollback has no post-apply conflict check, restores text rather than complete filesystem state, and relies on caller-supplied snapshot hashes (`TX-004`, `TX-013`, `TX-014`).

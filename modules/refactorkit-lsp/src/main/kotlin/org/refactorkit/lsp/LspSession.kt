@@ -478,12 +478,14 @@ class LspSession {
             }
             "refactorkit.rollback" -> {
                 val transactionId = args?.string("transactionId") ?: missing("transactionId")
+                val parsedTransactionId = TransactionId.parseOrNull(transactionId)
+                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid transaction ID: $transactionId")
                 val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-                val tx = log.load(TransactionId(transactionId))
+                val tx = log.load(parsedTransactionId)
                     ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $transactionId")
                 when (val result = PatchEngine(root).rollback(tx)) {
                     is ApplyResult.Applied -> {
-                        log.delete(TransactionId(transactionId))
+                        log.delete(parsedTransactionId)
                         refreshSnapshot()
                         buildJsonObject {
                             put("status", "rolledBack")

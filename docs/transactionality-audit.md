@@ -96,25 +96,22 @@ Required closure: use a write-ahead journal with lifecycle states such as
 
 ### TX-003 — Transaction log paths accept unvalidated transaction IDs
 
-Severity: **critical security/integrity**.
+Status: **closed after the audited baseline**.
 
-`TransactionId` accepts arbitrary strings. `TransactionLog.load` and `delete`
-resolve `"${id.value}.json"` beneath `logDir` without identifier validation,
-normalization, or containment checks. CLI/daemon/LSP/MCP accept transaction IDs
-from clients.
+`TransactionId` now accepts only the generated `transaction-<UUIDv4>` grammar,
+and CLI/daemon/LSP/MCP reject malformed client identifiers before transaction-log
+access. `TransactionLog` normalizes its directory, derives contained file paths
+only from validated IDs, rejects symbolic-link components and non-regular record
+files, creates records without overwriting, and applies owner-only POSIX
+permissions where supported. Malformed JSON, mismatched record IDs, unsafe paths,
+and I/O failures produce coded `TransactionLogException` outcomes instead of
+escaping as parsing errors.
 
-Traversal-shaped IDs can address JSON files outside the transaction directory.
-The log directory itself is also written directly and is not protected by
-`PatchEngine` symbolic-link checks.
-
-Required closure:
-
-- validate transaction IDs against the generated identifier grammar;
-- normalize and enforce containment for every log path;
-- reject symlink traversal;
-- use owner-only permissions where supported;
-- treat malformed/corrupt entries as structured errors, never uncaught parsing
-  exceptions.
+Tests cover traversal-shaped identifiers, symbolic-link directories and records,
+corrupt JSON, valid missing IDs, and protocol-level invalid-parameter mapping.
+Atomic/durable journal persistence, schema/integrity metadata, quarantine, and
+startup recovery remain open under `TX-002`, `TX-011`, and `TX-012`. TOCTOU
+closure remains part of `TX-005`.
 
 ### TX-004 — Rollback can overwrite changes made after apply
 
@@ -329,17 +326,16 @@ The current requirements should be corrected before API `1.0` freeze.
 
 ## Recommended closure order
 
-1. Fix transaction-ID/log path traversal and log symlink containment.
-2. Add workspace lock and affected-file precondition hashes.
-3. Introduce a versioned write-ahead transaction journal and startup recovery.
-4. Stage/render all file results, merge same-file edits, and validate all bounds
+1. Add workspace lock and affected-file precondition hashes (`TX-005`).
+2. Introduce a versioned write-ahead transaction journal and startup recovery.
+3. Stage/render all file results, merge same-file edits, and validate all bounds
    before mutation.
-5. Use temp-file plus atomic/durable replacement where supported; implement
+4. Use temp-file plus atomic/durable replacement where supported; implement
    compensation and `RECOVERY_REQUIRED` reporting otherwise.
-6. Add post-state hashes and conflict-safe rollback.
-7. Define recipe saga/transaction and LSP client/server transaction boundaries.
-8. Integrate diagnostics and stable error categories into commit/rollback gates.
-9. Add fault-injection, kill/restart, concurrency, corruption, and filesystem
+5. Add post-state hashes and conflict-safe rollback.
+6. Define recipe saga/transaction and LSP client/server transaction boundaries.
+7. Integrate diagnostics and stable error categories into commit/rollback gates.
+8. Add fault-injection, kill/restart, concurrency, corruption, and filesystem
    capability tests before `v1.0.0-rc.1`.
 
 ## Stable-release verdict

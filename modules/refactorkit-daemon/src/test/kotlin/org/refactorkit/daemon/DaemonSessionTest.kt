@@ -205,6 +205,22 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun rollbackRejectsMalformedTransactionId() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val error = assertFailsWith<JsonRpcException> {
+            session.dispatch("patch.rollback", params("transactionId" to "../../outside"))
+        }
+
+        assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, error.code)
+        assertTrue(error.message.contains("Invalid transaction ID"))
+    }
+
+    @Test
     fun previewExtractMethodReturnsPlanId() {
         val root = createProject(
             "src/main/java/com/example/App.java" to """
