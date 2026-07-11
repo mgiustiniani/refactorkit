@@ -9,6 +9,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -49,6 +50,42 @@ class JavaOrganizeImportsPlannerTest {
         val javaIdx = importLines.indexOfFirst { it.contains("java.util.List") }
         val orgIdx = importLines.indexOfFirst { it.contains("org.slf4j") }
         assertTrue(javaIdx < orgIdx, "java.* should come before org.*")
+        assertTrue(plan.warnings.any { it.contains("JDT evidence was unclean") }, plan.warnings.toString())
+    }
+
+    @Test
+    fun removesOnlyBindingProvenUnusedExactImports() {
+        val content = """
+            package com.example;
+            import java.time.*;
+            import java.util.List;
+            import java.util.Map;
+            import java.util.Set;
+            import static java.util.Collections.emptyList;
+            import static java.util.Collections.singletonList;
+            public class Foo {
+                List<Map<String, String>> values = emptyList();
+            }
+        """.trimIndent()
+
+        val root = Files.createTempDirectory("refactorkit-imports-jdt")
+        val file = root.resolve("src/main/java/com/example/Foo.java")
+        Files.createDirectories(file.parent)
+        file.writeText(content)
+        val snapshot = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewSingleFile(snapshot, Paths.get("src/main/java/com/example/Foo.java"))
+        val result = PatchEngine(root).apply(plan, snapshot.hash)
+
+        assertIs<ApplyResult.Applied>(result)
+        val updated = file.readText()
+        assertTrue(updated.contains("import java.util.List;"), updated)
+        assertTrue(updated.contains("import java.util.Map;"), updated)
+        assertTrue(updated.contains("import static java.util.Collections.emptyList;"), updated)
+        assertTrue(updated.contains("import java.time.*;"), updated)
+        assertFalse(updated.contains("import java.util.Set;"), updated)
+        assertFalse(updated.contains("import static java.util.Collections.singletonList;"), updated)
+        assertTrue(plan.warnings.any { it.contains("removed 2 unused import(s)") }, plan.warnings.toString())
     }
 
     @Test

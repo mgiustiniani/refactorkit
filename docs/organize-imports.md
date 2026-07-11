@@ -1,7 +1,8 @@
 # Organize imports
 
-Status: implementation-informed for `v0.2.0-beta` documentation. Organize imports
-is a low-risk lexical cleanup for Java import blocks.
+Status: implementation-informed for `v0.3.0-SNAPSHOT`. Organize imports is a
+low-risk Java import-block cleanup. Clean JDT binding evidence additionally
+removes exact imports proven unused; unclean files retain lexical cleanup only.
 
 ## Command
 
@@ -20,8 +21,9 @@ A preview can change a file when:
 
 - the file is present in the scanned snapshot;
 - the file has a Java import block;
-- duplicate imports or same-package imports can be removed, or imports can be
-  sorted into RefactorKit's import order;
+- duplicate imports or same-package imports can be removed, imports can be
+  sorted into RefactorKit's import order, or clean JDT binding evidence proves
+  that an exact import has no non-import use;
 - the preview affected-file list matches the files that need changes.
 
 Current ordering groups non-static imports as `java.*`, `javax.*`, `jakarta.*`,
@@ -41,12 +43,17 @@ problem and rescan before applying.
 
 ## Warnings and manual-review areas
 
-- Full unused-import detection requires type resolution and is not performed in
-  the beta MVP.
+- Exact unused imports are removed only when their declaration-normalized JDT
+  binding has no non-import use in a clean file. Parameterized type and generic
+  static-method uses are matched to the imported declaration binding.
+- Wildcard and unresolved imports are preserved. Files with JDT parse/classpath
+  errors explicitly fall back to sorting, deduplication, and same-package removal
+  without unused-import removal.
 - Import comments and unusual formatting around the import block should be
   reviewed in the diff.
-- Static-import semantics, wildcard imports, annotation processors, and generated
-  sources are not type-checked by this operation.
+- Exact static imports participate in binding-backed usage checks. Wildcard
+  imports, annotation-processor behavior, and generated sources remain manual
+  review areas.
 - The operation does not add missing dependencies or resolve unresolved types.
 
 ## Rollback expectations

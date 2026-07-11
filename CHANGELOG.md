@@ -49,6 +49,11 @@ review safety boundaries before applying refactorings.
   binding keys, or override families containing declarations outside the scanned
   source workspace. Unsigned member rename remains a lexical fallback with
   overload warnings.
+- Added JDT-backed unused exact-import removal when analysis is clean. Import
+  binding keys are normalized to declarations so parameterized type and generic
+  static-method uses retain their imports; wildcard and unresolved imports remain
+  conservative, and files with parse/classpath errors explicitly keep lexical
+  sorting/deduplication/same-package cleanup only.
 - Added JDT-scoped move-class when semantic analysis is clean: package/import/FQN
   edits are restricted to files with binding-matched references, so unrelated
   old-package files and same-simple-name types remain unchanged. Invalid packages,

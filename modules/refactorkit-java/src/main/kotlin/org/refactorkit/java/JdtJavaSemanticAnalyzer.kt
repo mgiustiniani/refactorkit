@@ -8,8 +8,11 @@ import org.eclipse.jdt.core.dom.ClassInstanceCreation
 import org.eclipse.jdt.core.dom.CompilationUnit
 import org.eclipse.jdt.core.dom.EnumDeclaration
 import org.eclipse.jdt.core.dom.FieldDeclaration
+import org.eclipse.jdt.core.dom.IBinding
 import org.eclipse.jdt.core.dom.IMethodBinding
+import org.eclipse.jdt.core.dom.ImportDeclaration
 import org.eclipse.jdt.core.dom.ITypeBinding
+import org.eclipse.jdt.core.dom.IVariableBinding
 import org.eclipse.jdt.core.dom.SimpleName
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration
 import org.eclipse.jdt.core.dom.MethodDeclaration
@@ -63,12 +66,32 @@ class JdtJavaSemanticAnalyzer {
                 )
             }
         }
+        val bindingUses = fileAnalyses.flatMap { analysis ->
+            analysis.rawReferences.mapNotNull { raw ->
+                val bindingKey = raw.bindingKey ?: return@mapNotNull null
+                JdtJavaSemanticBindingUse(
+                    simpleName = raw.simpleName,
+                    path = raw.path,
+                    line = raw.line,
+                    sourceRange = raw.sourceRange,
+                    bindingKey = bindingKey,
+                    isImport = raw.isImport,
+                    evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                )
+            }
+        }
         val warnings = fileAnalyses.flatMap { it.warnings }
         val overrideRelations = buildOverrideRelations(
             fileAnalyses.flatMap { it.methodBindings },
             fileAnalyses.flatMap { it.inheritances },
         )
-        return JdtJavaSemanticAnalysisResult(symbols, references, warnings, overrideRelations)
+        return JdtJavaSemanticAnalysisResult(
+            symbols = symbols,
+            references = references,
+            warnings = warnings,
+            overrideRelations = overrideRelations,
+            bindingUses = bindingUses,
+        )
     }
 
     fun analyzeFile(file: SourceFile): List<JdtJavaSemanticSymbol> =
@@ -203,6 +226,21 @@ class JdtJavaSemanticAnalyzer {
                 return true
             }
 
+            override fun visit(node: ImportDeclaration): Boolean {
+                val importedName = node.name.fullyQualifiedName
+                val simpleName = importedName.substringAfterLast('.')
+                val simpleNameStart = node.name.startPosition + node.name.length - simpleName.length
+                rawReferences += RawReference(
+                    simpleName = simpleName,
+                    path = file.path,
+                    line = (compilationUnit.getLineNumber(simpleNameStart) - 1).coerceAtLeast(0),
+                    sourceRange = rangeFor(compilationUnit, simpleNameStart, simpleName.length),
+                    bindingKey = declarationBindingKey(node.resolveBinding()),
+                    isImport = true,
+                )
+                return false
+            }
+
             override fun visit(node: ClassInstanceCreation): Boolean {
                 val binding = node.resolveConstructorBinding() ?: return true
                 rawReferences += RawReference(
@@ -210,7 +248,8 @@ class JdtJavaSemanticAnalyzer {
                     path = file.path,
                     line = (compilationUnit.getLineNumber(node.startPosition) - 1).coerceAtLeast(0),
                     sourceRange = rangeFor(compilationUnit, node.type.startPosition, node.type.length),
-                    bindingKey = binding.key,
+                    bindingKey = declarationBindingKey(binding),
+                    isImport = false,
                 )
                 return true
             }
@@ -222,7 +261,8 @@ class JdtJavaSemanticAnalyzer {
                     path = file.path,
                     line = (compilationUnit.getLineNumber(node.startPosition) - 1).coerceAtLeast(0),
                     sourceRange = rangeFor(compilationUnit, node.startPosition, node.length),
-                    bindingKey = node.resolveBinding()?.key,
+                    bindingKey = declarationBindingKey(node.resolveBinding()),
+                    isImport = false,
                 )
                 return true
             }
@@ -239,6 +279,13 @@ class JdtJavaSemanticAnalyzer {
                 )
             }
         return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances)
+    }
+
+    private fun declarationBindingKey(binding: IBinding?): String? = when (binding) {
+        is ITypeBinding -> binding.typeDeclaration.key
+        is IMethodBinding -> binding.methodDeclaration.key
+        is IVariableBinding -> binding.variableDeclaration.key
+        else -> binding?.key
     }
 
     private fun buildOverrideRelations(
@@ -502,6 +549,7 @@ class JdtJavaSemanticAnalyzer {
         val line: Int,
         val sourceRange: SourceRange,
         val bindingKey: String?,
+        val isImport: Boolean,
     )
 }
 
@@ -510,6 +558,7 @@ data class JdtJavaSemanticAnalysisResult(
     val references: List<JdtJavaSemanticReference> = emptyList(),
     val warnings: List<JdtJavaSemanticWarning> = emptyList(),
     val overrideRelations: List<JdtJavaSemanticOverrideRelation> = emptyList(),
+    val bindingUses: List<JdtJavaSemanticBindingUse> = emptyList(),
 )
 
 data class JdtJavaSemanticSymbol(
@@ -534,6 +583,16 @@ data class JdtJavaSemanticReference(
     val line: Int,
     val sourceRange: SourceRange,
     val bindingKey: String?,
+    val evidence: JdtJavaSemanticEvidence,
+)
+
+data class JdtJavaSemanticBindingUse(
+    val simpleName: String,
+    val path: Path,
+    val line: Int,
+    val sourceRange: SourceRange,
+    val bindingKey: String,
+    val isImport: Boolean,
     val evidence: JdtJavaSemanticEvidence,
 )
 

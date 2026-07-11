@@ -88,6 +88,12 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |`JavaMoveClassPlannerTest`: apply, used versus unused old-package files, target-package import removal, unrelated same-simple-name preservation, invalid/conflict refusal, and fallback warning.
 |implementation-informed
 
+|QS-CORR-006
+|Correctness
+|For a file with clean JDT evidence, organize imports removes an exact import only when its declaration binding has no non-import use, including normalized generic type, method, and variable uses. It preserves wildcard imports. For an unresolved file, it retains lexical sorting, deduplication, and same-package removal without claiming semantic unused-import cleanup.
+|`JavaOrganizeImportsPlannerTest`: used `List<Map<...>>` and generic static `emptyList` imports retained; unused `Set` and `singletonList` imports removed; wildcard preservation; unresolved-file lexical behavior; existing preview/apply/rollback coverage.
+|implementation-informed
+
 |QS-AI-001
 |AI safety
 |A local LLM can get focused context through MCP without arbitrary filesystem access and request preview/refactoring tools.
@@ -137,7 +143,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Compiler-backed Java analysis covers selected slices only
-|Signed member rename, class rename, move-class file scoping, and safe-delete type references use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on class-rename, move-class, or safe-delete fallback paths, especially for reflection, generated code, and framework configuration.
+|Signed member rename, class rename, move-class file scoping, safe-delete type references, and exact-import use checks use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on explicit fallback paths. Organize imports preserves wildcard imports and unresolved files do not receive semantic unused-import removal.
 |known risk
 
 |No explicit performance targets
