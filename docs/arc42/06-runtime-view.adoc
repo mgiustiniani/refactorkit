@@ -23,13 +23,16 @@ Status: implementation-informed for documented flows; no C4 dynamic diagrams yet
 |Planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, risk level, and an explicit JDT-backed, lexical, or refusal evidence classification.
 
 |5
-|User reviews the preview. If applying, `PatchEngine` validates the current snapshot hash, checks edit safety, applies the workspace edit, and creates rollback metadata.
+|User reviews the preview. If applying, `PatchEngine` checks the caller-supplied current snapshot hash and preflights path, symbolic-link, overlap, and ordered file-state rules before sequential direct writes.
 
 |6
-|Configured stable validation compares diagnostics before preview, after simulation, and after apply; an unapproved regression refuses apply. Rollback uses the recorded `Transaction` and, where required, verifies post-rollback diagnostics and restoration.
+|Only after every write succeeds does the current flow return compensating rollback edits; the CLI then persists transaction metadata. A write or process failure can therefore leave partial state without a durable recovery record.
+
+|7
+|Rollback replays compensation without validating post-apply file state and can overwrite later edits. Central diagnostics gates, conflict-safe rollback, workspace locking, durable journaling, and crash recovery are planned requirements, not current behavior.
 |===
 
-Status: implementation-informed from CLI, Java adapter, patch engine, and testkit docs.
+Status: implementation-informed from CLI, Java adapter, patch engine, testkit docs, and `docs/transactionality-audit.md`. This is a preflighted compensatable batch, not an ACID or crash-safe transaction.
 
 == Runtime Scenario: AI-assisted Refactoring through MCP
 
@@ -53,10 +56,13 @@ Status: implementation-informed from CLI, Java adapter, patch engine, and testki
 |Agent/user inspects affected files, warnings, and diagnostics.
 
 |6
-|Agent calls `apply_refactoring` only after approval; rollback remains available through `rollback_refactoring`.
+|Agent explicitly calls `apply_refactoring`; the current engine treats this invocation as sufficient even though `requiresUserApproval` is advisory metadata rather than a separately enforced approval state.
+
+|7
+|After a completely successful apply, compensation is available through `rollback_refactoring`. The transaction log is saved after mutation, and rollback is not conflict-safe against later workspace edits.
 |===
 
-Status: implementation-informed from `docs/ai-workflow.md` and `docs/integration-contracts.md`; stable MCP status remains capability-by-capability and acceptance-gated.
+Status: implementation-informed from `docs/ai-workflow.md`, `docs/integration-contracts.md`, and the transactionality audit; stable MCP status remains capability-by-capability and acceptance-gated. MCP managed apply is a compensatable batch, not a durable transaction.
 
 == Runtime Scenario: Editor Operation through LSP
 
@@ -74,13 +80,16 @@ Status: implementation-informed from `docs/ai-workflow.md` and `docs/integration
 |LSP server maps requests to Java/core model operations.
 
 |4
-|For workspace edits, the server returns standard LSP edit structures, including `changes` and `documentChanges` where applicable.
+|For native rename and code actions, the server returns a standard LSP `WorkspaceEdit`; the editor applies it outside `PatchEngine`. This is a client-managed edit with no RefactorKit transaction or rollback record.
 
 |5
-|For advanced patch commands, editor can use advertised `workspace/executeCommand` hooks.
+|Current planning can use disk snapshots rather than unsaved buffer content and emits no document version, creating stale-buffer application risk.
+
+|6
+|For the custom `refactorkit.applyPlan` command, RefactorKit owns sequential writes and post-apply compensation logging, with the same non-crash-safe limitations as other managed apply paths.
 |===
 
-Status: implementation-informed from `docs/integration-contracts.md`; stable LSP status remains capability-by-capability and acceptance-gated.
+Status: implementation-informed from `docs/integration-contracts.md` and `docs/transactionality-audit.md`; stable LSP status remains capability-by-capability and acceptance-gated. Native edits and RefactorKit-managed apply have distinct transaction boundaries.
 
 == Runtime Scenario: Daemon Capability Discovery Before Project Open
 
@@ -104,7 +113,28 @@ Status: implementation-informed from `docs/integration-contracts.md`; stable LSP
 |The client uses the metadata to select compatible calls and still opens a project before invoking methods whose descriptor requires one. Discovery itself grants no filesystem access.
 |===
 
-Status: implementation-informed from `DaemonSession`, its daemon contract test, and `docs/integration-contracts.md`.
+Status: implementation-informed from `DaemonSession`, its daemon contract test, `docs/integration-contracts.md`, and the transactionality audit. Current apply/rollback rescans used for validation are not assigned back to the daemon session, so later queries can observe stale metadata (`TX-018`).
+
+== Runtime Scenario: Recipe Apply Saga
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|The recipe engine plans and applies each step separately rather than staging one recipe-wide workspace state.
+
+|2
+|After each successful step it saves that step's transaction metadata; a later step sees a workflow that may already have changed the workspace.
+
+|3
+|If a later logical step fails, the engine attempts earlier compensations in reverse order.
+
+|4
+|A crash, log failure, I/O failure, concurrent edit, or compensation conflict can leave a partially completed recipe. Multiple same-file edits may also retain original-snapshot coordinates across sequential modifications.
+|===
+
+Status: implementation-informed from `docs/transactionality-audit.md`. Recipe execution is a saga with best-effort compensation, not one atomic transaction.
 
 == Runtime Scenario: External Java Class Import Preview
 

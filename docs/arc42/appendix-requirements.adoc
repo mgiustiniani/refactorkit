@@ -19,7 +19,7 @@ Status: implementation-informed, needs-review. No Gherkin `.feature` files were 
 |implementation-informed
 
 |`docs/*.md`
-|Subsystem behavior and limitations.
+|Subsystem behavior and limitations. `docs/transactionality-audit.md` is the evidence baseline for current apply, compensation, journal, LSP, recipe, and recovery limitations `TX-001` through `TX-018`.
 |implementation-informed
 
 |`modules/*`
@@ -64,7 +64,7 @@ rectangle RefactorKit {
   usecase "Run Diagnostics" as UC_DIAG
   usecase "Preview Refactoring" as UC_PREVIEW
   usecase "Apply Patch Plan" as UC_APPLY
-  usecase "Rollback Transaction" as UC_ROLLBACK
+  usecase "Run Managed Compensation" as UC_ROLLBACK
   usecase "Run Java Refactoring" as UC_JAVA
   usecase "Run Recipe" as UC_RECIPE
   usecase "Import External Java Class" as UC_IMPORT
@@ -97,7 +97,7 @@ App --> UC_APPLY
 UC_JAVA ..> UC_PREVIEW : includes
 UC_RECIPE ..> UC_PREVIEW : includes
 UC_IMPORT ..> UC_PREVIEW : includes
-UC_APPLY ..> UC_ROLLBACK : creates rollback data
+UC_APPLY ..> UC_ROLLBACK : after complete success
 @enduml
 ----
 
@@ -138,16 +138,16 @@ UC_APPLY ..> UC_ROLLBACK : creates rollback data
 |UC-APPLY-PATCH
 |Apply patch plan
 |Developer, Agent/App
-|Validate current snapshot and edit safety before writing workspace changes.
-|`PatchEngine`, tests.
-|implementation-informed
+|Check a caller-supplied current snapshot hash and preflight selected path, symbolic-link, overlap, and ordered file-state rules before sequential managed writes. Current behavior is a compensatable batch, not an ACID or crash-safe transaction.
+|`PatchEngine`, tests, transactionality audit.
+|implementation-informed limitation
 
 |UC-ROLLBACK
-|Rollback transaction
+|Run managed compensation
 |Developer, Agent/App
-|Restore files from transaction rollback metadata after an applied patch.
-|Core tests, testkit agent simulation.
-|implementation-informed
+|After a completely successful managed apply and post-write log save, replay reverse text/file edits. Current compensation is not conflict-safe against post-apply changes and does not restore complete filesystem metadata.
+|Core tests, testkit agent simulation, transactionality audit `TX-002`, `TX-004`, `TX-013`.
+|implementation-informed limitation
 
 |UC-JAVA-RENAME-CLASS
 |Rename Java class
@@ -201,9 +201,9 @@ UC_APPLY ..> UC_ROLLBACK : creates rollback data
 |UC-RECIPE-RUN
 |Run recipe
 |Developer, CI, Agent
-|Execute YAML-defined Java refactoring workflows with dry-run preview and rollback behavior.
-|`docs/recipe-engine.md`, recipe engine tests, sample recipe.
-|implementation-informed
+|Execute YAML-defined Java refactoring steps as a saga: each applied step has a separate post-write transaction log and later failure triggers best-effort reverse compensation. This is not one atomic recipe transaction.
+|`docs/recipe-engine.md`, recipe engine tests, sample recipe, transactionality audit `TX-008`.
+|implementation-informed limitation
 
 |UC-IMPORT-EXTERNAL-JAVA
 |Import external Java class
@@ -222,9 +222,9 @@ UC_APPLY ..> UC_ROLLBACK : creates rollback data
 |UC-LSP
 |Serve LSP
 |Editor / IDE
-|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics.
-|LSP module/tests, integration docs.
-|implementation-informed
+|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics. Native rename/code-action edits are applied by the client without a RefactorKit transaction; custom `applyPlan` is server-managed. Unsaved-buffer/version safety remains open.
+|LSP module/tests, integration docs, transactionality audit `TX-007`.
+|implementation-informed limitation
 
 |UC-MCP
 |Serve MCP tools/resources/prompts
@@ -277,12 +277,20 @@ UC_APPLY ..> UC_ROLLBACK : creates rollback data
 |`PatchPlan`, Java planners, MCP/LSP/daemon preview contracts.
 
 |UC-APPLY-PATCH
-|REQ-SAFE-002
-|`PatchEngine.apply`, snapshot hash validation, overlap/path validation.
+|REQ-SAFE-002, REQ-TX-001 through REQ-TX-008, REQ-TX-011, REQ-TX-012
+|`PatchEngine.apply`, snapshot hash validation, overlap/path validation, transactionality audit.
 
 |UC-ROLLBACK
-|REQ-SAFE-003
-|`Transaction`, `TransactionLog`, agent simulation tests.
+|REQ-SAFE-003, REQ-TX-004 through REQ-TX-006
+|`Transaction`, `TransactionLog`, agent simulation tests, transactionality audit.
+
+|UC-RECIPE-RUN
+|REQ-TX-010
+|Recipe engine tests and transactionality audit.
+
+|UC-LSP
+|REQ-TX-009
+|LSP module/tests and transactionality audit.
 
 |UC-IMPORT-EXTERNAL-JAVA
 |REQ-IMPORT-001
@@ -295,6 +303,63 @@ UC_APPLY ..> UC_ROLLBACK : creates rollback data
 |UC-PACKAGE-CLI
 |REQ-PACKAGE-001
 |Gradle jlink tasks, packaging docs, CI.
+|===
+
+== Transactionality Requirement Clarifications
+
+These requirements capture the audit's required contract decisions and acceptance gaps. They are not implementation claims.
+
+[cols="1,4,1",options="header"]
+|===
+|ID |Requirement |Status
+
+|REQ-TX-001
+|Define atomicity, consistency validation, isolation, durability, compensation, rollback, and crash recovery separately; do not describe current preflighted compensatable batches as ACID or crash-safe transactions.
+|needs-review; release-blocking terminology
+
+|REQ-TX-002
+|Define the transaction boundary for one plan, recipe, native LSP edit, custom managed LSP apply, diagnostics, and direct library use.
+|needs-review
+
+|REQ-TX-003
+|Cover process kill, power loss, disk full, permission change, non-atomic filesystems, log corruption, concurrent writers, and editor-buffer divergence in the failure model.
+|planned acceptance
+
+|REQ-TX-004
+|Normal rollback must detect post-apply conflicts and refuse rather than silently overwrite later changes; forced and manual recovery require explicit contracts.
+|planned release blocker
+
+|REQ-TX-005
+|Define a durable versioned journal lifecycle, integrity and permissions, retention, startup recovery, and observable incomplete-recovery states before managed writes are called crash-safe.
+|planned release blocker
+
+|REQ-TX-006
+|Define snapshot scope, engine-verified affected-file preconditions, per-path expected hashes, metadata scope, case sensitivity, generated files, and symbolic-link behavior.
+|planned release blocker
+
+|REQ-TX-007
+|Define authoritative diagnostics and regression gates before, during simulation, after apply, and after rollback, including deterministic recovery when validation fails.
+|planned release blocker
+
+|REQ-TX-008
+|Define one-writer workspace locking, timeout, stale-lock recovery, cancellation, and multi-process behavior.
+|planned release blocker
+
+|REQ-TX-009
+|Classify native LSP edits as client-managed unless a versioned client-apply acknowledgement/journal exists; check document versions for unsaved buffers and do not promise RefactorKit rollback for editor-owned writes.
+|planned release blocker
+
+|REQ-TX-010
+|Choose and document recipe execution as either one staged transaction or a durable saga with per-step recovery and incomplete-compensation states.
+|planned contract decision
+
+|REQ-TX-011
+|Use one coordinate space per file/plan, merge all same-file edits, validate complete line/character bounds and cross-edit overlap, and render every final file before mutation.
+|planned release blocker
+
+|REQ-TX-012
+|Define whether explicit apply invocation is approval or require a separately auditable approval transition/token; map validation, rollback, and recovery errors deterministically and refresh integration state after mutation.
+|planned contract decision
 |===
 
 == Gherkin Scenario Listing
@@ -343,4 +408,8 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |No confirmed stakeholder/business priorities
 |Functional catalogue may not reflect product priorities.
 |needs-review
+
+|Transaction semantics exceed implementation evidence
+|`TX-001` through `TX-018` show that current managed writes are compensatable batches, native LSP edits are client-managed, and recipes are sagas; ACID/crash-safe, conflict-safe, durable, and isolated guarantees are not evidenced.
+|release blocker; requirements need confirmation/narrowing
 |===

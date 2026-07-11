@@ -4,7 +4,7 @@
 
 Date: 2026-07-10
 
-Status: Accepted; stable surface classification pending
+Status: Accepted; stable surface classification and transaction-boundary evidence pending
 
 == Context
 
@@ -27,16 +27,42 @@ For `v1.0.0`, the core patch contract plus documented CLI and daemon JSON-RPC co
 
 LSP capabilities and commands, and MCP tools, resources, and prompts, must each be classified as stable or experimental. Protocol presence does not make every exposed capability stable. Stable protocol paths must preserve preview, validation, apply, rollback, refusal, cancellation, bounded-request, and workspace-scope rules where applicable.
 
+The transaction boundary differs by surface. Current CLI `--apply`, daemon `refactor.apply`, MCP `apply_refactoring`, and LSP `refactorkit.applyPlan` flows are server-managed previewable, preflighted, compensatable batches. They write sequentially, save rollback metadata only after successful apply, and are not ACID or crash-safe transactions. Direct library apply remains caller-managed for snapshot and journal responsibilities.
+
+Native LSP rename and code-action responses are client-managed edits. The editor applies the returned `WorkspaceEdit` outside `PatchEngine`, so RefactorKit neither owns that write nor provides a RefactorKit rollback transaction for it. Current native LSP edits also carry stale unsaved-buffer and document-version risks because planning can use disk snapshots while `textDocument.version` is unset. Stable documentation and capability metadata must distinguish these paths from `refactorkit.applyPlan`.
+
+Recipes are sagas: each step is applied and logged separately, with reverse best-effort compensation after a later logical failure. A recipe is not one atomic transaction. The stable contract must either retain and durably specify saga recovery semantics or replace them with one staged, recipe-wide plan and commit; this decision does not claim either closure is implemented.
+
 == Consequences
 
 * Consumers can choose the protocol that fits their workflow.
-* Core safety concepts, especially previews and rollback, remain consistent across integrations.
+* Core preview concepts remain shared, while apply ownership, durability, rollback, and recovery guarantees must be stated per integration path rather than described as uniformly transactional.
 * Protocol-specific modules can evolve without coupling the engine to one IDE or UI.
 * The project must maintain contract and compatibility tests for every advertised stable entry point.
 * New capabilities should be added to core APIs first, then surfaced intentionally through each protocol.
-* Unknown methods, fields, invalid parameters, unsupported versions, stale plans, and cancellation must produce deterministic protocol-appropriate outcomes.
+* Unknown methods, fields, invalid parameters, unsupported versions, stale plans, validation failures, rollback conflicts, cancellation, and recovery-required states must produce deterministic, protocol-appropriate outcomes.
+* Native LSP contracts require document-version checks or an explicit versioned client-apply acknowledgement/journal design before RefactorKit-managed rollback can be advertised for editor writes.
+* Recipe contracts require explicit per-step journal, crash recovery, compensation-conflict, and incomplete-saga states if saga semantics are retained.
+* Daemon state must be refreshed after successful apply and rollback before subsequent queries can be considered current.
 * The release sequence may freeze candidate contracts in immutable `v1.0.0-rc.N` releases after `v0.3.0`; stable status follows acceptance evidence rather than surface availability.
+* These required consequences define planned contract work and do not claim implementation completion.
+
+== Audited Integration Limitations
+
+The link:../transactionality-audit.md[transactionality audit] at commit `5f47ad0` records these open integration findings:
+
+* `TX-002`: CLI, daemon, MCP, and custom LSP apply paths save transaction metadata after workspace mutation, so crashes or log-write failures can leave no durable recovery record.
+* `TX-003`: client-supplied transaction IDs reach transaction-log load/delete paths without sufficient validation and containment protections.
+* `TX-007`: native LSP edits bypass RefactorKit apply and rollback; stale disk snapshots, unsaved buffers, and absent document versions can invalidate client-side application.
+* `TX-008`: recipes are per-step sagas with best-effort compensation; crashes, log failures, compensation failures, and plans not evaluated against one evolving staged workspace can leave partial results.
+* `TX-014`: direct library callers can satisfy apply with a caller-supplied hash rather than an engine-verified current workspace state.
+* `TX-015`: integrations do not consistently run diagnostics as central pre-apply and post-apply transaction gates.
+* `TX-016`: `requiresUserApproval` is not enforced as a separate auditable state, so the meaning of apply invocation as approval remains a contract decision.
+* `TX-017`: daemon and LSP error mapping can collapse distinct validation failures into `SNAPSHOT_CHANGED` and rollback refusal into `INTERNAL_ERROR`, preventing deterministic recovery decisions.
+* `TX-018`: daemon apply and rollback validate with local rescans but do not update the stored session snapshot, so later queries can observe stale metadata.
+
+These findings supplement the core-engine limitations in ADR 0002. None is recorded here as fixed.
 
 == Implementation Evidence
 
-The published `v0.3.0` release establishes the transition boundary toward `1.0.0-rc.1-SNAPSHOT` development. The advertised API remains `0.2` until the stable contract inventory, compatibility, and acceptance-evidence gates in this decision are satisfied; publication of a latest, non-prerelease `v0.3.0` release does not by itself promote the integration contracts to `apiVersion=1.0`.
+The published `v0.3.0` release establishes the transition boundary toward `1.0.0-rc.1-SNAPSHOT` development. The advertised API remains `0.2` until the stable contract inventory, compatibility, transaction-boundary, and acceptance-evidence gates in this decision are satisfied; publication of a latest, non-prerelease `v0.3.0` release does not by itself promote the integration contracts to `apiVersion=1.0`.

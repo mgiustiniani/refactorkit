@@ -9,7 +9,8 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 * Safety
 ** Preview before apply
 ** Reject stale or unsafe edits
-** Rollback after apply
+** Compensating rollback after a completely successful managed apply
+** Planned crash recovery, isolation, durability, and conflict-safe rollback (not current guarantees)
 ** Warnings for high-risk Java/framework/import cases
 * Correctness
 ** Symbol-aware Java operations where supported
@@ -73,6 +74,30 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |Before the first write, RefactorKit simulates ordered create, modify, rename, and delete existence/type transitions. A later predictable missing-file or existing-file refusal leaves earlier edits unapplied, while a valid modify-then-rename sequence succeeds.
 |`PatchEngineTest.preflightRefusalLeavesEarlierEditsUnapplied`, `PatchEngineTest.preflightSupportsSequentialModifyThenRename`; `PatchEngine.validateRuntimeState`.
 |implementation-informed; interrupted I/O and TOCTOU races remain open
+
+|QS-SAFE-008
+|Safety and recoverability
+|When a managed apply completes without interruption or concurrency, RefactorKit returns reverse compensation and the integration saves it afterward. The contract describes this as a preflighted compensatable batch and does not promise ACID, crash-safe, durable, or all-or-nothing execution.
+|`docs/transactionality-audit.md`, ADR 0002.
+|implementation-informed limitation
+
+|QS-SAFE-009
+|Data integrity
+|If an affected file differs from its expected post-apply state, normal rollback refuses rather than overwriting the later edit and exposes conflict/manual-recovery information.
+|Transactionality audit `TX-004`; future fault/concurrency acceptance suite.
+|planned release blocker
+
+|QS-SAFE-010
+|Security and recovery
+|Malformed transaction IDs, traversal, transaction-directory symlinks, truncated/corrupt journal records, or integrity failures produce structured refusal without reading, deleting, or overwriting data outside the protected journal boundary.
+|Transactionality audit `TX-003`, `TX-011`, `TX-012`; future security/corruption suite.
+|planned release blocker
+
+|QS-SAFE-011
+|Isolation and durability
+|Under concurrent writers, I/O failure, process kill, power loss, disk full, permission changes, or filesystems without atomic move, managed apply either preserves the prior state or records a durable, deterministic recovery state and declared degraded guarantee.
+|Transactionality audit `TX-001`, `TX-002`, `TX-005`, `TX-006`; future fault-injection/restart/filesystem suite.
+|planned release blocker
 
 |QS-CORR-001
 |Correctness
@@ -188,6 +213,24 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |Stable LSP/MCP contract suites; ADRs 0004 and 0006.
 |confirmed target; planned evidence
 
+|QS-PROTO-002
+|Consistency and interoperability
+|A native LSP edit is identified as client-managed, carries a checked document version or is refused for stale/unsaved content, and never advertises RefactorKit transaction rollback unless a versioned client-apply acknowledgement/journal contract exists.
+|Transactionality audit `TX-007`; ADR 0004; future LSP contract tests.
+|planned release blocker
+
+|QS-RECIPE-001
+|Recoverability
+|Recipe execution is explicitly a durable saga with observable per-step and incomplete-compensation states, or is staged and committed as one validated plan; documentation never equates current best-effort compensation with atomic rollback.
+|Transactionality audit `TX-008`; ADR 0004.
+|planned contract decision
+
+|QS-EDIT-001
+|Correctness
+|All modifications to one file use one original coordinate space, are merged and checked together for overlap and complete line/character bounds, and every final file is rendered before the first workspace mutation.
+|Transactionality audit `TX-009`, `TX-010`; future core tests.
+|planned release blocker
+
 |QS-PERF-001
 |Performance
 |Reference workspaces remain within documented scan, index, preview, apply, and memory budgets, while daemon requests, results, caches, pending plans, and transaction metadata fail with deterministic limit/timeout/cancellation behavior rather than unbounded growth.
@@ -236,7 +279,11 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |Security properties for MCP/importer/external language-server boundaries need formal review; stable MCP least-privilege and workspace-boundary tests reduce but do not eliminate this gap.
 |needs-review
 
+|Transactionality guarantees exceed current evidence
+|Current flows lack write-ahead recovery, conflict-safe rollback, one-writer isolation, durable replacement, complete same-file/bounds validation, central diagnostics gates, enforced approval semantics, precise error mapping, and current daemon state. Native LSP writes are client-managed and recipes are sagas.
+|release blocker; `TX-001` through `TX-018` open
+
 |Stable acceptance evidence incomplete
-|API `1.0`, Java 8–25, diagnostics, protocol classification, packaging, supply-chain, and reproducibility claims cannot be marked stable until the immutable RC acceptance matrix passes.
+|API `1.0`, Java 8–25, diagnostics, protocol classification, packaging, supply-chain, reproducibility, and narrowed-or-evidenced transactionality claims cannot be marked stable until the immutable RC acceptance matrix passes.
 |planned release blocker
 |===

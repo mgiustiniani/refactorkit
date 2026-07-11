@@ -41,9 +41,9 @@ Status: implementation-informed, needs-review for priority and completeness.
 |implementation-informed; interrupted I/O and TOCTOU safety remain open
 
 |C-TECH-007
-|Rollback metadata is stored as transaction logs under the target workspace.
-|C4 model and `TransactionLog`/`.refactorkit/transactions` references.
-|implementation-informed
+|Current managed apply returns compensation only after all sequential writes succeed, and integrations then store transaction logs under `.refactorkit/transactions`. This is a preflighted compensatable batch, not an ACID, crash-safe, durable, or isolated transaction.
+|`TransactionLog`, ADR 0002, `docs/transactionality-audit.md`.
+|implementation-informed limitation
 
 |C-TECH-008
 |External Java class imports must remain preview-based, warn about unknown license/provenance, and avoid overwriting by default.
@@ -74,6 +74,11 @@ Status: implementation-informed, needs-review for priority and completeness.
 |Stable diagnostics and validation must provide deterministic severity, source range, evidence, and error categories and must refuse configured regressions beyond the approved plan.
 |`docs/releases/v1.0.0-plan.md`; ADRs 0002 and 0008.
 |confirmed target; planned acceptance
+
+|C-TECH-014
+|Any stable transactionality claim must define and evidence its mutation boundary, filesystem capability/degradation, write-ahead recovery lifecycle, one-writer isolation, affected-file preconditions, conflict-safe compensation, journal security/integrity, complete edit rendering, diagnostics gates, approval semantics, and recovery/error states. Until then, documentation must use the narrower compensatable-batch classification.
+|ADRs 0002 and 0004; `docs/transactionality-audit.md` (`TX-001` through `TX-018`).
+|planned release constraint; needs-review
 |===
 
 == Architectural Boundary Constraints
@@ -88,9 +93,9 @@ Status: implementation-informed, needs-review for priority and completeness.
 |implementation-informed
 
 |C-BOUND-002
-|LSP is for editor-native features; advanced AI workflows use JSON-RPC or MCP instead of overloading LSP.
-|`AGENTS.md`, `docs/integration-contracts.md`.
-|implementation-informed
+|LSP is for editor-native features; advanced AI workflows use JSON-RPC or MCP instead of overloading LSP. Native LSP `WorkspaceEdit`s are client-managed and have no RefactorKit transaction/rollback; custom `refactorkit.applyPlan` is a distinct managed path.
+|`AGENTS.md`, `docs/integration-contracts.md`, ADR 0004, transactionality audit `TX-007`.
+|implementation-informed limitation
 
 |C-BOUND-003
 |MCP must expose deterministic tools and focused resources, not arbitrary filesystem access.

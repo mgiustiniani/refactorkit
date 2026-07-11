@@ -29,19 +29,29 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |`Models.kt`, `TextEdits.kt`
 
 |PatchEngine
-|Core service that validates and applies preview plans and rollbacks transactions.
+|Core service that preflights and sequentially applies preview plans and can replay compensation after a completely successful managed apply. Current behavior is not ACID or crash-safe.
 |Core
-|`PatchEngine.kt`
+|`PatchEngine.kt`, ADR 0002, transactionality audit
 
 |Transaction
-|Rollback metadata created after applying a patch plan.
+|Current model name for post-success compensation metadata. It is not evidence of atomicity, isolation, durability, write-ahead recovery, or conflict-safe rollback.
 |Core
-|`Models.kt`
+|`Models.kt`, `docs/transactionality-audit.md`
+
+|Compensatable Batch
+|Previewed and preflighted sequential writes for which reverse edits are returned only after all writes succeed. This is the accurate classification of current CLI and server-managed apply paths.
+|Core / integrations
+|ADRs 0002 and 0004, transactionality audit
 
 |Transaction Log
-|Stored rollback metadata under `.refactorkit/transactions`.
+|Post-write compensation metadata stored under `.refactorkit/transactions`. Current persistence is not a durable write-ahead journal and lacks the complete security, integrity, lifecycle, and recovery properties planned for stable transactionality.
 |Core / workspace
-|`TransactionLog`, recipe/test docs
+|`TransactionLog`, transactionality audit
+
+|Saga
+|Multi-step workflow that commits steps separately and attempts later compensation. Current recipes use best-effort saga behavior rather than one atomic recipe transaction.
+|Recipes
+|ADR 0004, transactionality audit `TX-008`
 
 |ProjectSnapshot
 |Immutable snapshot of workspace modules and source files with a content hash.
@@ -134,9 +144,9 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |`refactorkit-web-importer`, importer docs
 
 |Recipe
-|YAML-defined multi-step deterministic refactoring workflow with dry-run/preview and rollback behavior.
+|YAML-defined multi-step refactoring workflow with dry-run/preview and per-step apply. Current apply is a saga with best-effort reverse compensation, not atomic recipe rollback.
 |Java / CLI
-|`docs/recipe-engine.md`, `recipes/java/rename-package.yml`
+|`docs/recipe-engine.md`, `recipes/java/rename-package.yml`, transactionality audit
 
 |Golden Test
 |Test case with before/after trees, request JSON, and expected plan metadata.

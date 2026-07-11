@@ -22,7 +22,7 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |ADR 0002
 |Use PatchPlan and PatchEngine Preview-Apply-Rollback Safety Model
 |link:../adr/0002-patchplan-patchengine-safety-model.adoc[docs/adr/0002-patchplan-patchengine-safety-model.adoc]
-|Accepted; stable contract evidence pending
+|Accepted; stable contract implementation and evidence pending
 
 |ADR 0003
 |Start Java Refactoring with a Lexical MVP Before Compiler-Backed Analysis
@@ -32,7 +32,7 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |ADR 0004
 |Split Integration Surfaces into CLI, Daemon, LSP, and MCP
 |link:../adr/0004-cli-daemon-lsp-mcp-integration-split.adoc[docs/adr/0004-cli-daemon-lsp-mcp-integration-split.adoc]
-|Accepted; stable surface classification pending
+|Accepted; stable surface classification and transaction-boundary evidence pending
 
 |ADR 0005
 |Package the CLI with a Self-Contained jlink Runtime
@@ -57,4 +57,4 @@ ADR files were found under `docs/adr/` during alpha hardening.
 
 == Decision Candidate Coverage
 
-The existing ADR set covers the stable-release architecture: API `1.0` patch safety, integration-surface classification, self-contained verifiable packaging, MCP least privilege, and Eclipse JDT evidence-gated semantic authority. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. No new decision was needed solely to activate the stable target.
+The existing ADR set covers the stable-release architecture: API `1.0` patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, and Eclipse JDT evidence-gated semantic authority. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADRs 0002 and 0004 now explicitly constrain current evidence to compensatable managed batches, client-managed native LSP edits, and recipe sagas; they do not claim transactionality fixes.

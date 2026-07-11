@@ -141,9 +141,39 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-023
-|PatchEngine preflight now rejects structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions, but interrupted I/O recovery and time-of-check-to-time-of-use races remain unresolved.
-|An I/O interruption after writing starts can still leave partial filesystem changes, and filesystem state can change between preflight validation and a write; preflight evidence must not be interpreted as full atomicity.
-|Add deterministic interrupted-apply recovery and reporting, define filesystem-capability guarantees, and add race/adversarial acceptance evidence before claiming the stable atomicity contract.
+|PatchEngine preflight now rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions, but direct sequential writes have no write-ahead recovery, workspace lock, durable staging, or guaranteed atomic replacement (`TX-001`, `TX-002`, `TX-005`, `TX-006`).
+|An I/O or process failure can leave partial workspace state and no durable rollback record; concurrent writers can invalidate preflight through time-of-check-to-time-of-use races.
+|Define precise degraded filesystem guarantees; add one-writer isolation, affected-file preconditions, write-ahead lifecycle, staged/durable replacement, compensation failure reporting, startup recovery, and fault/restart/concurrency evidence.
+|planned release blocker
+
+|R-024
+|Transaction-log identifiers, paths, schema, integrity, persistence, and retention are not hardened (`TX-003`, `TX-011`, `TX-012`).
+|A client-supplied traversal-shaped ID or transaction-directory symlink can threaten files outside the intended log boundary; truncated or incomplete records can fail recovery and audit.
+|Validate identifier grammar, normalize and enforce containment, reject symbolic-link traversal, restrict permissions, use atomic durable journal persistence, version schemas/lifecycle, verify integrity, quarantine corruption, and retain appropriate history.
+|critical security and release blocker
+
+|R-025
+|Rollback has no post-apply conflict check, restores text rather than complete filesystem state, and relies on caller-supplied snapshot hashes (`TX-004`, `TX-013`, `TX-014`).
+|Rollback can overwrite newer user/editor/process changes; permissions, ownership, timestamps, ACLs, extended attributes, encoding metadata, and directory state may not be restored; a library caller can bypass meaningful freshness validation.
+|Persist expected pre/post hashes and metadata scope, derive/revalidate protected preconditions in the engine, refuse normal rollback conflicts, and define forced/manual recovery separately.
+|critical data-loss risk; planned release blocker
+
+|R-026
+|Native LSP rename/code-action edits are client-managed outside `PatchEngine`, can be planned from stale disk content for unsaved buffers, and carry no document version (`TX-007`).
+|Editors can apply stale edits without RefactorKit-owned transaction or rollback, while clients may infer guarantees from server-managed apply documentation.
+|Classify native edits explicitly, require document-version checks or a client-apply acknowledgement/journal design, and never advertise RefactorKit rollback for editor-owned writes without evidence.
+|planned release blocker
+
+|R-027
+|Recipe execution is a per-step saga, while multiple same-file modifies can use drifting coordinates and text character bounds are incompletely preflighted (`TX-008`, `TX-009`, `TX-010`).
+|Crashes or failed compensation can leave partial recipes; later text edits can target changed content or throw during mutation.
+|Choose a durable saga or one staged recipe-wide commit; merge edits into one coordinate space per file, validate overlap/bounds globally, and render all staged results before mutation.
+|planned release blocker
+
+|R-028
+|Diagnostics, approval, error mapping, and daemon state refresh are not transactionally enforced (`TX-015`, `TX-016`, `TX-017`, `TX-018`).
+|Apply can commit unapproved diagnostic regressions; approval lacks an auditable meaning; clients cannot distinguish refusal/recovery causes; daemon queries can observe stale post-write metadata.
+|Define authoritative diagnostic gates and approval semantics, publish stable error categories, compensate or report diagnostic failures deterministically, and refresh session state after apply/rollback.
 |planned release blocker
 |===
 
@@ -154,6 +184,8 @@ The active stable plan defines the remaining release-hardening workstreams:
 * `v0.3.0` publication is complete from immutable tag `v0.3.0`; main now advances toward `1.0.0-rc.1-SNAPSHOT`;
 * keep API `0.2` active until normative patch/apply/rollback and API `1.0` CLI/daemon contracts are frozen and accepted;
 * prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
+* close or explicitly narrow `TX-001` through `TX-010` before stable transactionality claims, and resolve `TX-011` through `TX-018` contract/recovery gaps;
+* define managed apply as a durable transaction only after evidence; until then retain the accurate compensatable-batch, client-managed LSP edit, and recipe-saga classifications;
 * complete diagnostic regression gates and representative project acceptance;
 * classify and test stable LSP/MCP boundaries;
 * establish bounded performance and resource behavior;

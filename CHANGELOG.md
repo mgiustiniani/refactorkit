@@ -9,6 +9,12 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`1.0.0-rc.1-SNAPSHOT`)
 
+- Completed a transactionality/requirements audit. Current flows are explicitly
+  classified as preflighted compensatable batches rather than crash-safe durable
+  transactions; critical `v1.0.0-rc.1` blockers cover write-ahead journaling,
+  partial I/O failure, transaction-log traversal/integrity, rollback conflicts,
+  concurrency, LSP client-managed edits, recipe sagas, same-file coordinate
+  merging, and text-range bounds.
 - Hardened `PatchEngine` preflight validation: all ordered file-state transitions
   are simulated before the first write, so predictable later missing/existing-file
   failures cannot leave earlier edits applied. Workspace edits that traverse a

@@ -19,7 +19,7 @@ Because several modules are libraries rather than independently deployed process
 
 == Level 1: RefactorKit System
 
-RefactorKit provides deterministic code-intelligence and refactoring capabilities with preview, validation, apply, and rollback semantics. It exposes those capabilities through CLI, daemon, LSP, MCP, and library integration modes. For `v1.0.0`, the core patch, documented CLI, and documented daemon surfaces are stable API `1.0` contracts after acceptance; LSP and MCP surfaces are stable only capability by capability where explicitly classified.
+RefactorKit provides deterministic code-intelligence and refactoring capabilities with preview, validation, managed apply, and compensation semantics. Current managed apply is a preflighted compensatable batch rather than an ACID/crash-safe transaction; native LSP edits are client-managed, and recipes are sagas. RefactorKit exposes capabilities through CLI, daemon, LSP, MCP, and library integration modes. For `v1.0.0`, the core patch, documented CLI, and documented daemon surfaces become stable API `1.0` contracts only after acceptance; LSP and MCP surfaces are stable only capability by capability where explicitly classified.
 
 == Level 2: Containers and Building Blocks
 
@@ -59,9 +59,9 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Core Patch and Model Engine
 |Kotlin/JVM library
-|Workspace/project/source models, symbols, references, diagnostics, text/file/workspace edits, patch plans, preview/apply/rollback engine, transaction log, JSON-RPC primitives, and language adapter contract. Stable acceptance freezes normative stale, overlap, path/symlink, atomicity, partial-failure, apply, and rollback behavior.
-|`modules/refactorkit-core`.
-|implementation-informed; stable contract evidence planned
+|Workspace/project/source models, symbols, references, diagnostics, text/file/workspace edits, patch plans, preflight/sequential apply/compensation engine, post-apply transaction log, JSON-RPC primitives, and language adapter contract. Stable acceptance must freeze precise stale, overlap, path/symlink, same-file coordinates, bounds, filesystem capability, partial-failure, journal, isolation, apply, compensation, and recovery behavior.
+|`modules/refactorkit-core`, ADR 0002, `docs/transactionality-audit.md`.
+|implementation-informed limitations; stable contract evidence planned
 
 |Java Language Adapter
 |Kotlin/JVM library
@@ -89,9 +89,9 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Transaction Log Store
 |Local file storage
-|Rollback metadata under `.refactorkit/transactions`.
-|Patch engine/testkit/recipe docs.
-|implementation-informed
+|Post-success compensation metadata under `.refactorkit/transactions`; current records are saved after mutation and lack durable write-ahead lifecycle, complete integrity/recovery fields, and hardened identifier/path handling.
+|Patch engine/testkit/recipe docs; transactionality audit `TX-002`, `TX-003`, `TX-011`, `TX-012`.
+|implementation-informed limitation
 |===
 
 == Key Dependencies
