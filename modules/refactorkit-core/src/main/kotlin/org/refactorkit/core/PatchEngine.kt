@@ -14,11 +14,25 @@ import java.time.Instant
 import java.util.UUID
 import java.util.stream.Collectors
 
+enum class PatchFaultPoint {
+    AFTER_STAGED_FILE_FORCE,
+    AFTER_COMMITTED_IMAGE,
+}
+
+fun interface PatchFaultInjector {
+    fun inject(point: PatchFaultPoint, path: Path, sequence: Int)
+
+    companion object {
+        val NONE = PatchFaultInjector { _, _, _ -> }
+    }
+}
+
 class PatchEngine(
     private val workspaceRoot: Path,
     private val transactionLog: TransactionLog = TransactionLog(
         workspaceRoot.toAbsolutePath().normalize().resolve(".refactorkit/transactions"),
     ),
+    private val faultInjector: PatchFaultInjector = PatchFaultInjector.NONE,
 ) {
     private val normalizedRoot = workspaceRoot.toAbsolutePath().normalize()
 
@@ -854,7 +868,7 @@ class PatchEngine(
         val preByPath = preImages.associateBy { it.path }
         val postByPath = postImages.associateBy { it.path }
         try {
-            postImages.filter { it.content != null }.forEach { image ->
+            postImages.filter { it.content != null }.forEachIndexed { index, image ->
                 val target = resolveInsideWorkspace(image.path)
                 createDirectoriesDurably(requireNotNull(target.parent))
                 val temporary = target.parent.resolve(".refactorkit-stage-${UUID.randomUUID()}.tmp")
@@ -873,9 +887,10 @@ class PatchEngine(
                 )
                 FileChannel.open(temporary, StandardOpenOption.WRITE).use { it.force(true) }
                 stagedFiles[image.path] = temporary
+                faultInjector.inject(PatchFaultPoint.AFTER_STAGED_FILE_FORCE, image.path, index + 1)
             }
 
-            postImages.sortedBy { it.content == null }.forEach { image ->
+            postImages.sortedBy { it.content == null }.forEachIndexed { index, image ->
                 val target = resolveInsideWorkspace(image.path)
                 if (image.content == null) {
                     Files.deleteIfExists(target)
@@ -898,6 +913,7 @@ class PatchEngine(
                     }
                     target.parent?.let(::forceWorkspaceDirectory)
                 }
+                faultInjector.inject(PatchFaultPoint.AFTER_COMMITTED_IMAGE, image.path, index + 1)
             }
         } finally {
             stagedFiles.values.forEach { runCatching { Files.deleteIfExists(it) } }
@@ -973,7 +989,7 @@ class PatchEngine(
                 try {
                     when (record.state) {
                         JournalState.PREPARED -> transactionLog.update(record.copy(state = JournalState.ROLLED_BACK))
-                        JournalState.APPLYING, JournalState.ROLLING_BACK -> {
+                        JournalState.APPLYING, JournalState.ROLLING_BACK, JournalState.RECOVERY_REQUIRED -> {
                             if (!recoverJournalRecord(record, "Recovered after interrupted ${record.state.name.lowercase()}")) {
                                 add(Diagnostic(
                                     "Transaction ${record.transaction.id.value} requires manual recovery",
@@ -982,11 +998,6 @@ class PatchEngine(
                                 ))
                             }
                         }
-                        JournalState.RECOVERY_REQUIRED -> add(Diagnostic(
-                            "Transaction ${record.transaction.id.value} requires manual recovery",
-                            Diagnostic.Severity.ERROR,
-                            code = "transaction.recoveryRequired",
-                        ))
                         JournalState.APPLIED, JournalState.ROLLED_BACK -> Unit
                     }
                 } catch (error: Exception) {

@@ -113,6 +113,16 @@ external-importer checks:
   multi-public-type splitting with package/import preservation, and non-Java
   Markdown fence stripping.
 
+## Transaction fault injection
+
+Core tests inject deterministic failures after staged-file force and after each
+committed workspace image. Acceptance covers unchanged content and temporary-file
+cleanup on staging disk-full, full compensation after a partial multi-file
+commit, durable `RECOVERY_REQUIRED` after compensation failure, and successful
+compensation retry by a clean `PatchEngine` restart. Real process-kill,
+power-loss, journal-boundary, and mounted-filesystem scenarios remain separate RC
+acceptance gates.
+
 ## Packaged CLI and release verification smoke tests
 
 P7 packaging verification now covers the self-contained runtime artifact:

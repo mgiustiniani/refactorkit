@@ -352,6 +352,140 @@ class PatchEngineTest {
     }
 
     @Test
+    fun stagingDiskFailureLeavesWorkspaceUnchangedAndCleansTemporaryFiles() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(FileEdit.Modify(
+            relative,
+            listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+        )))
+        val plan = PatchPlan(
+            operation = "faultInjectedStaging",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "inject disk full after staged force",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+        var injected = false
+        val injector = PatchFaultInjector { point, _, _ ->
+            if (!injected && point == PatchFaultPoint.AFTER_STAGED_FILE_FORCE) {
+                injected = true
+                throw java.io.IOException("injected disk full")
+            }
+        }
+
+        val result = PatchEngine(root, faultInjector = injector).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "transaction.applyFailedCompensated" })
+        assertEquals("class Example {}\n", Files.readString(root.resolve(relative)))
+        assertNoWorkspaceStageFiles(root)
+        assertEquals(
+            JournalState.ROLLED_BACK,
+            TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single().state,
+        )
+    }
+
+    @Test
+    fun compensatesAWriteFailureInjectedAfterPartialWorkspaceCommit() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        Files.writeString(root.resolve("First.java"), "class First {}\n")
+        Files.writeString(root.resolve("Second.java"), "class Second {}\n")
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(
+            FileEdit.Modify(
+                Path.of("First.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 11)), "ChangedFirst")),
+            ),
+            FileEdit.Modify(
+                Path.of("Second.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 12)), "ChangedSecond")),
+            ),
+        ))
+        val plan = PatchPlan(
+            operation = "faultInjectedPartialCommit",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "inject failure after first committed image",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+        var injected = false
+        val injector = PatchFaultInjector { point, _, sequence ->
+            if (!injected && point == PatchFaultPoint.AFTER_COMMITTED_IMAGE && sequence == 1) {
+                injected = true
+                throw java.io.IOException("injected disk failure")
+            }
+        }
+
+        val result = PatchEngine(root, faultInjector = injector).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "transaction.applyFailedCompensated" })
+        assertEquals("class First {}\n", Files.readString(root.resolve("First.java")))
+        assertEquals("class Second {}\n", Files.readString(root.resolve("Second.java")))
+        val record = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single()
+        assertEquals(JournalState.ROLLED_BACK, record.state)
+        assertEquals(
+            listOf(JournalState.PREPARED, JournalState.APPLYING, JournalState.ROLLED_BACK),
+            record.history.map(JournalEvent::state),
+        )
+        assertTrue(record.failure?.contains("injected disk failure") == true)
+    }
+
+    @Test
+    fun restartRecoveryCompletesAfterInjectedCompensationFailure() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        Files.writeString(root.resolve("First.java"), "class First {}\n")
+        Files.writeString(root.resolve("Second.java"), "class Second {}\n")
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(
+            FileEdit.Modify(
+                Path.of("First.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 11)), "ChangedFirst")),
+            ),
+            FileEdit.Modify(
+                Path.of("Second.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 12)), "ChangedSecond")),
+            ),
+        ))
+        val plan = PatchPlan(
+            operation = "faultInjectedRecovery",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "inject apply and compensation failures",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+        var failures = 0
+        val injector = PatchFaultInjector { point, _, sequence ->
+            if (point == PatchFaultPoint.AFTER_COMMITTED_IMAGE && sequence == 1 && failures < 2) {
+                failures++
+                throw java.io.IOException("injected failure $failures")
+            }
+        }
+
+        val failed = PatchEngine(root, faultInjector = injector).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(failed)
+        assertTrue(failed.diagnostics.any { it.code == "transaction.recoveryRequired" })
+        assertEquals(
+            JournalState.RECOVERY_REQUIRED,
+            TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single().state,
+        )
+
+        assertTrue(PatchEngine(root).recover().isEmpty())
+        assertEquals("class First {}\n", Files.readString(root.resolve("First.java")))
+        assertEquals("class Second {}\n", Files.readString(root.resolve("Second.java")))
+        val recovered = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single()
+        assertEquals(JournalState.ROLLED_BACK, recovered.state)
+        assertTrue(recovered.history.map(JournalEvent::state).contains(JournalState.RECOVERY_REQUIRED))
+    }
+
+    @Test
     fun persistsAppliedWriteAheadJournalLifecycle() {
         val root = Files.createTempDirectory("refactorkit-test")
         val relative = Path.of("Example.java")

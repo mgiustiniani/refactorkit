@@ -70,8 +70,13 @@ an interrupted `APPLYING` or `ROLLING_BACK` lifecycle.
 Workspace content is now fully staged before commit, each file replacement is
 atomically moved and durably flushed, and deletes/directories are followed by
 directory flushes (`TX-006`). A process/I/O failure therefore leaves each path in
-a journaled pre- or post-image suitable for compensation. Kill, disk-full,
-power-loss, and filesystem fault-injection evidence remains mandatory before RC.
+a journaled pre- or post-image suitable for compensation. Deterministic fault
+hooks now cover post-force staging and each committed image. Tests prove a
+staging disk-full failure leaves content unchanged and removes temporary files,
+a failure after the first of multiple replacements compensates every path, and
+a second injected compensation failure persists `RECOVERY_REQUIRED` before a
+clean restart retries and completes compensation. Real process-kill, power-loss,
+torn-journal, and mounted-filesystem evidence remains mandatory before RC.
 
 ### TX-002 — Transaction metadata is persisted after workspace mutation
 
@@ -278,7 +283,9 @@ owner-only `.quarantine` directory and reported as `transaction.quarantined`.
 Any retained quarantine record blocks list/load/new writes and therefore startup
 recovery until explicit manual review/removal; quarantine failure is separately
 coded. Still open: explicit journal-filesystem capability reporting and
-fault-injected proof for every persistence boundary.
+fault-injected proof for every journal persistence boundary. Workspace staging,
+partial commit, compensation failure, and restart retry now have deterministic
+in-process evidence.
 
 ### TX-013 — Rollback filesystem metadata and directory state
 
