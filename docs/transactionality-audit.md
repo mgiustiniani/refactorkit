@@ -287,9 +287,14 @@ Tests prove modify and rename permissions survive apply and return exactly after
 rollback on POSIX filesystems. Schema-v1 records remain readable with unknown
 permissions.
 
-Ownership, timestamps, ACLs, extended attributes, encoding metadata, and created
-parent-directory state remain open. Implicitly created directories remain after
-rollback, and directory create/rename operations are not represented in the
+Schema-v2 records also retain every parent directory created by the transaction.
+Rollback and crash compensation remove them deepest-first with durable parent
+flushes. Normal rollback refuses before writes when a transaction-created
+directory contains any external path, preventing data loss; tests cover both
+exact cleanup and conflict refusal.
+
+Ownership, timestamps, ACLs, extended attributes, and encoding metadata remain
+open. Explicit directory create/rename operations are not represented in the
 current `FileEdit` model.
 
 ### TX-014 — Apply snapshot scope ownership

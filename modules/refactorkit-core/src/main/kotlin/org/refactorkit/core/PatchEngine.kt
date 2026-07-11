@@ -205,7 +205,7 @@ class PatchEngine(
             )))
         }
         if (mode == RollbackMode.NORMAL) {
-            val conflicts = validateRollbackPostImages(record)
+            val conflicts = validateRollbackPostImages(record) + validateCreatedDirectoryState(record)
             if (conflicts.isNotEmpty()) {
                 transactionLog.update(record.copy(failure = conflicts.joinToString("; ") { it.message }))
                 return@withWorkspaceLock ApplyResult.Refused(conflicts)
@@ -217,6 +217,7 @@ class PatchEngine(
             val permissions = record.preImages.associate { it.path to it.posixPermissions }
             transactionLog.update(record.copy(state = JournalState.ROLLING_BACK))
             commitPostImages(currentImages, record.preImages, permissions)
+            removeCreatedDirectories(record.createdDirectories)
             transactionLog.update(record.copy(
                 state = JournalState.ROLLED_BACK,
                 failure = if (mode == RollbackMode.FORCE) "Forced rollback explicitly requested" else null,
@@ -325,6 +326,27 @@ class PatchEngine(
         (prePaths + postPaths).forEach { path ->
             validateInsideWorkspace(path)?.let(::add)
             validateNoSymbolicLinkTraversal(path)?.let(::add)
+        }
+    }
+
+    private fun validateCreatedDirectoryState(record: TransactionJournalRecord): List<Diagnostic> {
+        if (record.createdDirectories.isEmpty()) return emptyList()
+        val allowed = (record.createdDirectories + record.postImages.filter { it.content != null }.map { it.path })
+            .map { resolveInsideWorkspace(it) }
+            .toSet()
+        return record.createdDirectories.flatMap { relative ->
+            val directory = resolveInsideWorkspace(relative)
+            if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) emptyList() else {
+                val unexpected = Files.walk(directory).use { stream ->
+                    stream.filter { it != directory && it !in allowed }.collect(Collectors.toList())
+                }
+                if (unexpected.isEmpty()) emptyList() else listOf(Diagnostic(
+                    "Rollback conflict: created directory $relative contains external paths: " +
+                        unexpected.map { normalizedRoot.relativize(it) },
+                    Diagnostic.Severity.ERROR,
+                    code = "rollback.conflict",
+                ))
+            }
         }
     }
 
@@ -673,6 +695,7 @@ class PatchEngine(
             forwardEdit = plan.workspaceEdit,
             preImages = preImages,
             postImages = postImages,
+            createdDirectories = missingParentDirectories(postImages),
             state = JournalState.PREPARED,
         )
     }
@@ -721,6 +744,30 @@ class PatchEngine(
             postImages = working.map { FileImage(it.key, it.value) },
             rollbackEdit = WorkspaceEdit(rollbackEdits.asReversed()),
         )
+    }
+
+    private fun missingParentDirectories(postImages: List<FileImage>): List<Path> {
+        val missing = linkedSetOf<Path>()
+        postImages.filter { it.content != null }.forEach { image ->
+            var current: Path? = resolveInsideWorkspace(image.path).parent
+            while (current != null && current.startsWith(normalizedRoot) &&
+                !Files.exists(current, LinkOption.NOFOLLOW_LINKS)
+            ) {
+                missing.add(normalizedRoot.relativize(current))
+                current = current.parent
+            }
+        }
+        return missing.sortedBy { it.nameCount }
+    }
+
+    private fun removeCreatedDirectories(directories: List<Path>) {
+        directories.sortedByDescending { it.nameCount }.forEach { relative ->
+            val directory = resolveInsideWorkspace(relative)
+            if (Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
+                Files.delete(directory)
+                directory.parent?.let(::forceWorkspaceDirectory)
+            }
+        }
     }
 
     private fun readPosixPermissions(path: Path): Set<PosixFilePermission>? {
@@ -930,6 +977,11 @@ class PatchEngine(
             markRecoveryRequired(record, "$reason; workspace state conflicts with journal images")
             return false
         }
+        val directoryConflicts = validateCreatedDirectoryState(record)
+        if (directoryConflicts.isNotEmpty()) {
+            markRecoveryRequired(record, "$reason; ${directoryConflicts.joinToString("; ") { it.message }}")
+            return false
+        }
         return try {
             if (current.any { (path, content) -> content != pre[path]?.content }) {
                 commitPostImages(
@@ -938,6 +990,7 @@ class PatchEngine(
                     pre.values.associate { it.path to it.posixPermissions },
                 )
             }
+            removeCreatedDirectories(record.createdDirectories)
             transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
             true
         } catch (error: Exception) {

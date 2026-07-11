@@ -23,6 +23,9 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Journaled transaction-created parent directories and remove them deepest-first
+  during rollback/recovery. External paths inside those directories cause
+  conflict-safe refusal before rollback writes.
 - Extended schema-v2 pre/post images with POSIX permissions so apply, rollback,
   force rollback, and startup compensation restore journaled modes exactly.
 - Added schema-v2 transaction journal SHA-256 integrity checksums covering the

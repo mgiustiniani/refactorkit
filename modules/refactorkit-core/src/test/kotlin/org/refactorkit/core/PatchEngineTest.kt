@@ -310,10 +310,39 @@ class PatchEngineTest {
         assertNoWorkspaceStageFiles(root)
         assertEquals("class Modify {}\n", Files.readString(modify))
         assertEquals("class Old {}\n", Files.readString(oldName))
+        assertFalse(Files.exists(root.resolve("nested")))
         if (posix) {
             assertEquals(modifyPermissions, Files.getPosixFilePermissions(modify))
             assertEquals(renamePermissions, Files.getPosixFilePermissions(oldName))
         }
+    }
+
+    @Test
+    fun rollbackRefusesExternalFilesInsideTransactionCreatedDirectory() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "createdDirectoryConflict",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "create nested source",
+            affectedFiles = setOf(Path.of("generated/New.java")),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Create(
+                Path.of("generated/New.java"),
+                "class New {}\n",
+            ))),
+        )
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
+        Files.writeString(root.resolve("generated/external.txt"), "external\n")
+
+        val rollback = PatchEngine(root).rollback(applied.transaction)
+
+        assertIs<ApplyResult.Refused>(rollback)
+        assertTrue(rollback.diagnostics.any { it.code == "rollback.conflict" })
+        assertTrue(Files.exists(root.resolve("generated/New.java")))
+        assertTrue(Files.exists(root.resolve("generated/external.txt")))
     }
 
     private fun assertNoWorkspaceStageFiles(root: Path) {
