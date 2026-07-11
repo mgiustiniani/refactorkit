@@ -120,7 +120,14 @@ class PatchEngine(
      * scan is treated as the pre-lock expectation and every initially affected
      * file is revalidated after lock acquisition before the first mutation.
      */
-    fun apply(plan: PatchPlan, currentSnapshot: ProjectSnapshot): ApplyResult = withWorkspaceLock {
+    fun apply(plan: PatchPlan, currentSnapshot: ProjectSnapshot): ApplyResult =
+        apply(plan, currentSnapshot, ApplyAuthorization.explicit("library"))
+
+    fun apply(
+        plan: PatchPlan,
+        currentSnapshot: ProjectSnapshot,
+        authorization: ApplyAuthorization,
+    ): ApplyResult = withWorkspaceLock {
         val normalizedEdit = WorkspaceEditSimulator.normalize(plan.workspaceEdit)
         val normalizedPlan = plan.copy(
             workspaceEdit = normalizedEdit,
@@ -143,13 +150,26 @@ class PatchEngine(
                 ))
             }
             addAll(validate(normalizedPlan, currentSnapshot.hash))
+            if (normalizedPlan.requiresUserApproval && !authorization.approved) {
+                add(Diagnostic(
+                    "Explicit approval is required before applying this plan",
+                    Diagnostic.Severity.ERROR,
+                    code = "approval.required",
+                ))
+            }
             addAll(validateEngineOwnedSnapshot(currentSnapshot))
             addAll(validateAffectedFilePreconditions(normalizedEdit, currentSnapshot))
         }
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(diagnostics)
         } else {
-            applyPrepared(normalizedPlan)
+            val approval = ApprovalRecord(
+                kind = if (normalizedPlan.requiresUserApproval) ApprovalKind.EXPLICIT_APPLY else ApprovalKind.NOT_REQUIRED,
+                surface = authorization.surface,
+                actor = authorization.actor,
+                recordedAt = java.time.Instant.now(),
+            )
+            applyPrepared(normalizedPlan, approval)
         }
     }
 
@@ -558,9 +578,9 @@ class PatchEngine(
         }
     }
 
-    private fun applyPrepared(plan: PatchPlan): ApplyResult {
+    private fun applyPrepared(plan: PatchPlan, approval: ApprovalRecord): ApplyResult {
         val record = try {
-            prepareJournalRecord(plan)
+            prepareJournalRecord(plan, approval)
         } catch (error: Exception) {
             return ApplyResult.Refused(listOf(Diagnostic(
                 "Cannot stage transaction before apply: ${error.message}",
@@ -602,12 +622,13 @@ class PatchEngine(
         }
     }
 
-    private fun prepareJournalRecord(plan: PatchPlan): TransactionJournalRecord {
+    private fun prepareJournalRecord(plan: PatchPlan, approval: ApprovalRecord): TransactionJournalRecord {
         val staged = stageWorkspaceEdit(plan.workspaceEdit)
         val transaction = Transaction(
             planId = plan.id,
             snapshotHashBefore = plan.snapshotHash,
             rollbackEdit = staged.rollbackEdit,
+            approval = approval,
         )
         return TransactionJournalRecord(
             transaction = transaction,

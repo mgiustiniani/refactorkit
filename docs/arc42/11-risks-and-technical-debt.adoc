@@ -171,9 +171,9 @@ Status: implementation-informed, needs human review for prioritization.
 |controlled
 
 |R-028
-|Diagnostics and approval are not transactionally enforced (`TX-015`, `TX-016`); deterministic managed error mapping and daemon state refresh are implemented (`TX-017`, `TX-018` closed).
-|Apply can commit unapproved diagnostic regressions and approval lacks an auditable meaning.
-|Define authoritative diagnostic gates and approval semantics, then compensate or report diagnostic failures deterministically.
+|Central diagnostics gates remain open (`TX-015`); auditable explicit-apply approval, deterministic error mapping, and daemon refresh are implemented (`TX-016` through `TX-018` closed).
+|Apply can still commit diagnostic regressions when a planner/integration omits authoritative simulation.
+|Define authoritative before/simulation/after diagnostics gates and compensate or report failures deterministically.
 |planned release blocker
 |===
 

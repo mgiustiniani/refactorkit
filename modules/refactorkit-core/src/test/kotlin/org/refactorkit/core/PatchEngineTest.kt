@@ -406,6 +406,41 @@ class PatchEngineTest {
     }
 
     @Test
+    fun requiresAndAuditsExplicitApproval() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "approval",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            requiresUserApproval = true,
+            summary = "require explicit approval",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Delete(source))),
+        )
+        val engine = PatchEngine(root)
+
+        val refused = engine.apply(plan, snapshot, ApplyAuthorization.missing("test", "reviewer"))
+
+        assertIs<ApplyResult.Refused>(refused)
+        assertTrue(refused.diagnostics.any { it.code == "approval.required" })
+        assertTrue(Files.exists(root.resolve(source)))
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
+
+        val applied = assertIs<ApplyResult.Applied>(
+            engine.apply(plan, snapshot, ApplyAuthorization.explicit("test", "reviewer")),
+        )
+        assertEquals(ApprovalKind.EXPLICIT_APPLY, applied.transaction.approval.kind)
+        assertEquals("test", applied.transaction.approval.surface)
+        assertEquals("reviewer", applied.transaction.approval.actor)
+        val record = TransactionLog(root.resolve(".refactorkit/transactions"))
+            .loadRecord(applied.transaction.id)
+        assertEquals(applied.transaction.approval, record?.transaction?.approval)
+    }
+
+    @Test
     fun refusesSnapshotWithoutDeclaredSourceExtensions() {
         val root = Files.createTempDirectory("refactorkit-test")
         val snapshot = ProjectSnapshot(Workspace(root), emptyList(), emptyList())

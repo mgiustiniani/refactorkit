@@ -1,5 +1,6 @@
 package org.refactorkit.java.recipe
 
+import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
@@ -113,7 +114,11 @@ class RecipeEngine(
 
         if (dryRun) return RecipeResult.Preview(stepResults, recipePlan, summary)
         if (transactionCount == 0) return RecipeResult.Applied(stepResults, recipePlan, emptyList(), summary)
-        return when (val apply = PatchEngine(workspaceRoot).apply(recipePlan, initialSnapshot)) {
+        return when (val apply = PatchEngine(workspaceRoot).apply(
+            recipePlan,
+            initialSnapshot,
+            ApplyAuthorization.explicit("recipe-engine"),
+        )) {
             is ApplyResult.Applied -> RecipeResult.Applied(
                 stepResults,
                 recipePlan,

@@ -358,8 +358,8 @@ These requirements capture the audit's required contract decisions and acceptanc
 |planned release blocker
 
 |REQ-TX-012
-|Define whether explicit apply invocation is approval or require a separately auditable approval transition/token; map validation, rollback, and recovery errors deterministically and refresh integration state after mutation.
-|planned contract decision
+|Treat explicit managed apply as auditable approval, refuse missing authorization, persist approval identity, map managed refusal categories deterministically, and refresh integration state after mutation.
+|implemented and tested (`TX-016`, `TX-017`, `TX-018` closed)
 |===
 
 == Gherkin Scenario Listing
@@ -410,6 +410,6 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |needs-review
 
 |Transaction semantics exceed implementation evidence
-|The transactionality audit narrows remaining gaps to diagnostics/approval/error/state contracts, metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.
+|The transactionality audit narrows remaining gaps to diagnostics gates, metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.
 |release blocker; requirements need confirmation/narrowing
 |===

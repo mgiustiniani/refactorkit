@@ -12,6 +12,7 @@ class JsonRpcErrorCodesTest {
             "edit.overlap" to JsonRpcErrorCodes.PLAN_VALIDATION_FAILED,
             "path.outsideWorkspace" to JsonRpcErrorCodes.UNSAFE_PATH,
             "file.exists" to JsonRpcErrorCodes.FILE_CONFLICT,
+            "approval.required" to JsonRpcErrorCodes.APPROVAL_REQUIRED,
             "workspace.locked" to JsonRpcErrorCodes.WORKSPACE_LOCKED,
             "filesystem.capabilityUnsupported" to JsonRpcErrorCodes.FILESYSTEM_UNSUPPORTED,
             "transaction.journalFailed" to JsonRpcErrorCodes.APPLY_FAILED,

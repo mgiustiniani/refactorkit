@@ -315,12 +315,22 @@ partial diagnostic simulation.
 This does not satisfy the stronger requirements that plans be diagnosed before
 apply and validated after apply.
 
-### TX-016 — Approval is advisory, not enforced state
+### TX-016 — Approval semantics and audit state
 
-`requiresUserApproval` is metadata. `PatchEngine.apply` does not require an
-approval token/state. Calling apply with a preview plan is treated as sufficient.
-The stable contract must define whether explicit apply invocation is approval or
-whether approval is a separately auditable transition.
+Status: **closed after the audited baseline**.
+
+The stable contract defines an explicit managed apply invocation as approval;
+there is no separate approval-token lifecycle. `PatchEngine` accepts an
+`ApplyAuthorization` naming surface and actor, refuses approval-required plans
+with `approval.required`/`APPROVAL_REQUIRED (-32014)` when authorization is
+missing, and creates no journal record on refusal. Successful transactions retain
+an immutable `ApprovalRecord` with `EXPLICIT_APPLY` or `NOT_REQUIRED`, surface,
+actor, and timestamp. The two-argument direct-library apply overload itself is
+the explicit approval event and records surface `library`; CLI, daemon, managed
+LSP, MCP, recipe, and testkit paths provide their specific surface identifiers.
+Legacy journal DTOs remain readable with `LEGACY_UNRECORDED`. Tests prove refusal
+without writes, persisted approval identity, and backward-compatible journal
+round trips.
 
 ### TX-017 — Integration error mapping
 
@@ -332,7 +342,7 @@ diagnostic code and risk precedence. Snapshot/precondition changes remain
 lock, filesystem capability, unsafe path, file conflict, and apply/journal failures
 map respectively to `PLAN_VALIDATION_FAILED (-32008)`, `WORKSPACE_LOCKED (-32009)`,
 `FILESYSTEM_UNSUPPORTED (-32010)`, `UNSAFE_PATH (-32012)`, `FILE_CONFLICT
-(-32013)`, and `APPLY_FAILED (-32011)`. Rollback uses the same central policy for
+(-32013)`, `APPROVAL_REQUIRED (-32014)`, and `APPLY_FAILED (-32011)`. Rollback uses the same central policy for
 conflict, recovery, path/filesystem, and apply failures. Daemon and LSP throw these
 stable codes; MCP refusal text includes the mapped numeric category. Table-driven
 core tests prove category coverage and order-independent highest-risk precedence.

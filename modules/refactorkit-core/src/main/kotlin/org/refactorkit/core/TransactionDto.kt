@@ -17,6 +17,15 @@ data class TransactionDto(
     val appliedAt: String,
     val snapshotHashBefore: String,
     val rollbackEdit: WorkspaceEditDto,
+    val approval: ApprovalRecordDto? = null,
+)
+
+@Serializable
+data class ApprovalRecordDto(
+    val kind: String,
+    val surface: String,
+    val actor: String,
+    val recordedAt: String,
 )
 
 @Serializable
@@ -70,6 +79,12 @@ fun Transaction.toDto(): TransactionDto = TransactionDto(
     appliedAt = appliedAt.toString(),
     snapshotHashBefore = snapshotHashBefore,
     rollbackEdit = rollbackEdit.toDto(),
+    approval = ApprovalRecordDto(
+        kind = approval.kind.name,
+        surface = approval.surface,
+        actor = approval.actor,
+        recordedAt = approval.recordedAt.toString(),
+    ),
 )
 
 fun WorkspaceEdit.toDto(): WorkspaceEditDto = WorkspaceEditDto(edits.map { it.toDto() })
@@ -95,6 +110,14 @@ fun TransactionDto.toDomain(): Transaction = Transaction(
     appliedAt = Instant.parse(appliedAt),
     snapshotHashBefore = snapshotHashBefore,
     rollbackEdit = rollbackEdit.toDomain(),
+    approval = approval?.let {
+        ApprovalRecord(
+            kind = ApprovalKind.valueOf(it.kind),
+            surface = it.surface,
+            actor = it.actor,
+            recordedAt = Instant.parse(it.recordedAt),
+        )
+    } ?: ApprovalRecord.legacy(),
 )
 
 fun WorkspaceEditDto.toDomain(): WorkspaceEdit = WorkspaceEdit(edits.map { it.toDomain() })

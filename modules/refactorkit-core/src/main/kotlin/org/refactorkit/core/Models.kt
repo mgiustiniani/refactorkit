@@ -222,12 +222,46 @@ data class PatchPlan(
     val riskLevel: RiskLevel = RiskLevel.LOW,
 )
 
+enum class ApprovalKind {
+    EXPLICIT_APPLY,
+    NOT_REQUIRED,
+    LEGACY_UNRECORDED,
+}
+
+data class ApplyAuthorization(
+    val approved: Boolean,
+    val surface: String,
+    val actor: String,
+) {
+    init {
+        require(surface.isNotBlank()) { "approval surface must not be blank" }
+        require(actor.isNotBlank()) { "approval actor must not be blank" }
+    }
+
+    companion object {
+        fun explicit(surface: String, actor: String = "caller") = ApplyAuthorization(true, surface, actor)
+        fun missing(surface: String, actor: String = "caller") = ApplyAuthorization(false, surface, actor)
+    }
+}
+
+data class ApprovalRecord(
+    val kind: ApprovalKind,
+    val surface: String,
+    val actor: String,
+    val recordedAt: Instant,
+) {
+    companion object {
+        fun legacy() = ApprovalRecord(ApprovalKind.LEGACY_UNRECORDED, "legacy", "unknown", Instant.EPOCH)
+    }
+}
+
 data class Transaction(
     val id: TransactionId = TransactionId.new(),
     val planId: PlanId,
     val appliedAt: Instant = Instant.now(),
     val snapshotHashBefore: String,
     val rollbackEdit: WorkspaceEdit,
+    val approval: ApprovalRecord = ApprovalRecord.legacy(),
 )
 
 data class Symbol(

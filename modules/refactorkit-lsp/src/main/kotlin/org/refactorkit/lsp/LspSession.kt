@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
@@ -538,7 +539,7 @@ class LspSession {
                 val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
                 requireManagedWriteSafe(plan.affectedFiles)
                 val current = scanner.scan(root)
-                when (val result = PatchEngine(root).apply(plan, current)) {
+                when (val result = PatchEngine(root).apply(plan, current, ApplyAuthorization.explicit("lsp-managed-command"))) {
                     is ApplyResult.Applied -> {
                         pendingPlans.remove(planId)
                         refreshSnapshot()

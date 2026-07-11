@@ -41,9 +41,19 @@ surfaces should map it to a stable exit-code category and human-readable message
 | `apply-failed` | WAL preparation/persistence or compensated managed apply fails. | `APPLY_FAILED` (`-32011`) |
 | `unsafe-path` | Path escapes the workspace or traverses a symbolic link/unsafe lock path. | `UNSAFE_PATH` (`-32012`) |
 | `file-conflict` | Required source is missing or a target already exists. | `FILE_CONFLICT` (`-32013`) |
+| `approval-required` | A plan marked `requiresUserApproval` reaches apply without explicit authorization. | `APPROVAL_REQUIRED` (`-32014`) |
 | `diagnostics-failure` | Apply/rollback diagnostics report failure or post-apply validation fails. | Reserved for the diagnostics-gate workstream (`TX-015`) |
 | `unsupported-operation` | Method, command, operation, language, or refactoring is not supported. | `METHOD_NOT_FOUND` or `INVALID_PARAMS` |
 | `conflict-or-license-policy` | Naming conflict, overwrite refusal, unknown/risky license, or license policy block. | `PLAN_REFUSED` or `INVALID_PARAMS` |
+
+### Managed apply approval contract
+
+Calling a managed apply endpoint is the explicit approval event; no separate token
+exchange is required. Each surface supplies an `ApplyAuthorization` identity and
+the WAL transaction persists approval kind, surface, actor, and timestamp. Plans
+with `requiresUserApproval=true` refuse before journaling when authorization is
+missing. Direct two-argument library apply records the invocation as surface
+`library`; callers needing an approval workflow use the authorization overload.
 
 ## CLI compatibility baseline
 

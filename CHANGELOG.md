@@ -23,6 +23,9 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Closed approval gap `TX-016`: explicit managed apply is the approval event;
+  missing authorization refuses before journaling, while transactions persist
+  approval kind, surface, actor, and timestamp with legacy-record compatibility.
 - Closed integration error mapping gap `TX-017`: daemon and LSP now expose
   deterministic codes for snapshot, recovery, validation, lock, filesystem,
   unsafe-path, file-conflict, and apply/journal refusals; MCP includes the same
