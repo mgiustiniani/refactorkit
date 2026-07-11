@@ -2,6 +2,7 @@ package org.refactorkit.testkit
 
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -77,7 +78,12 @@ class GoldenTestRunner(
         // 6. Apply if PREVIEW
         val afterErrors = mutableListOf<String>()
         if (plan.status == PatchStatus.PREVIEW) {
-            when (val result = PatchEngine(workDir).apply(plan, snap, ApplyAuthorization.explicit("golden-testkit"))) {
+            when (val result = PatchEngine(workDir).apply(
+                plan,
+                snap,
+                ApplyAuthorization.explicit("golden-testkit"),
+                DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+            )) {
                 is ApplyResult.Applied -> Unit
                 is ApplyResult.Refused -> {
                     planErrors += "PatchEngine refused apply: " +

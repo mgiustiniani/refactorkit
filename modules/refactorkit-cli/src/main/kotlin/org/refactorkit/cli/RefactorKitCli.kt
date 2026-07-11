@@ -2,6 +2,7 @@ package org.refactorkit.cli
 
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPreviewRenderer
 import org.refactorkit.core.PatchStatus
@@ -352,7 +353,12 @@ class RefactorKitCli(
     private fun applyPlanAndLog(plan: org.refactorkit.core.PatchPlan, snap: ProjectSnapshot, root: String): Int {
         val workspaceRoot = snap.workspace.root
         val engine = PatchEngine(workspaceRoot)
-        return when (val result = engine.apply(plan, snap, ApplyAuthorization.explicit("cli"))) {
+        return when (val result = engine.apply(
+            plan,
+            snap,
+            ApplyAuthorization.explicit("cli"),
+            DiagnosticsGate.enabled("java-jdt", JavaLanguageAdapter()::diagnostics),
+        )) {
             is ApplyResult.Applied -> {
                 println("Applied. Transaction: ${result.transaction.id.value}")
                 println("To rollback: refactorkit patch rollback ${result.transaction.id.value}")

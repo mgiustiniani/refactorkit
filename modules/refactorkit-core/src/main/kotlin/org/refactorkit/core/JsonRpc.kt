@@ -48,6 +48,7 @@ object JsonRpcErrorCodes {
     const val UNSAFE_PATH = -32012
     const val FILE_CONFLICT = -32013
     const val APPROVAL_REQUIRED = -32014
+    const val DIAGNOSTICS_FAILED = -32015
 
     fun applyRefusalCode(diagnostics: List<Diagnostic>): Int {
         val codes = diagnostics.mapNotNull(Diagnostic::code)
@@ -58,6 +59,7 @@ object JsonRpcErrorCodes {
             codes.any { it.startsWith("path.") || it == "workspace.lockUnsafe" } -> UNSAFE_PATH
             codes.any { it == "file.exists" || it == "file.missing" } -> FILE_CONFLICT
             codes.any { it == "approval.required" } -> APPROVAL_REQUIRED
+            codes.any { it.startsWith("diagnostics.") } -> DIAGNOSTICS_FAILED
             codes.any { it.startsWith("snapshot.") || it.startsWith("file.precondition") } -> SNAPSHOT_CHANGED
             codes.any { it.startsWith("edit.") || it == "plan.notPreview" } -> PLAN_VALIDATION_FAILED
             codes.any { it.startsWith("transaction.") } -> APPLY_FAILED

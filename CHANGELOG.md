@@ -23,6 +23,10 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added a central staged diagnostics gate for production managed Java applies.
+  CLI, daemon, managed LSP, MCP, recipes, and golden tests compare JDT errors on
+  current versus exact post-image snapshots under lock and refuse regressions or
+  unavailable diagnostics as `DIAGNOSTICS_FAILED (-32015)` before WAL creation.
 - Closed approval gap `TX-016`: explicit managed apply is the approval event;
   missing authorization refuses before journaling, while transactions persist
   approval kind, surface, actor, and timestamp with legacy-record compatibility.

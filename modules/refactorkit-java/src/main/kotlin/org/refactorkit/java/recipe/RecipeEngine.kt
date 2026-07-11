@@ -3,6 +3,7 @@ package org.refactorkit.java.recipe
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
+import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
@@ -118,6 +119,7 @@ class RecipeEngine(
             recipePlan,
             initialSnapshot,
             ApplyAuthorization.explicit("recipe-engine"),
+            DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
         )) {
             is ApplyResult.Applied -> RecipeResult.Applied(
                 stepResults,

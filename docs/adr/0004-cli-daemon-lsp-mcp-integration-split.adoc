@@ -56,12 +56,12 @@ The link:../transactionality-audit.md[transactionality audit] at commit `5f47ad0
 * `TX-007` is closed after the audit baseline: native edits are explicitly client-managed/no-rollback, full-sync open buffers overlay disk snapshots, open-document edits carry exact versions, unsupported clients refuse, and managed disk writes reject dirty/affected-open buffers.
 * `TX-008` is closed after the audit baseline: recipes evaluate all steps against one evolving in-memory snapshot, reduce the result to one recipe-wide plan, and perform one managed apply/WAL transaction; planning failure writes neither workspace nor journal.
 * `TX-014` is closed for declared source and Java classpath scope after the audit baseline: apply requires a hash-bound `ProjectSnapshot`; `PatchEngine` independently rescans sources and verifies active/prospective classpath fingerprints under lock before journaling.
-* `TX-015`: integrations do not consistently run diagnostics as central pre-apply and post-apply transaction gates.
+* `TX-015` is closed for production managed Java integrations: CLI, daemon, managed LSP, MCP, recipes, and testkit supply JDT diagnostics to the core staged regression gate; compatibility direct-library overloads remain explicitly ungated pending API freeze.
 * `TX-016` is closed after the audit baseline: explicit managed apply invocation is approval; missing authorization refuses before journaling, and successful WAL records persist approval kind/surface/actor/time.
 * `TX-017` is closed after the audit baseline: one core mapper assigns stable snapshot, recovery, validation, lock, filesystem, unsafe-path, file-conflict, and apply/journal categories by deterministic risk precedence; daemon/LSP expose codes and MCP includes the mapped category.
 * `TX-018` is closed after the audit baseline: daemon apply/rollback rescans into the stored session snapshot, clears stale pending plans, returns the new hash, and serves current symbols/summary immediately.
 
-These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and source/classpath `TX-014` are recorded here as fixed; `TX-007`, `TX-008`, `TX-016`, `TX-017`, and `TX-018` are also closed with versioned client-edit, single staged recipe, and current daemon-session boundaries; the other findings remain open or narrowed as stated.
+These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX-003`, and source/classpath `TX-014` are recorded here as fixed; `TX-007`, `TX-008`, and production-managed `TX-015` through `TX-018` are also closed with versioned client-edit, single staged recipe, and current daemon-session boundaries; the other findings remain open or narrowed as stated.
 
 == Implementation Evidence
 

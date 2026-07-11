@@ -37,7 +37,7 @@ Diagnostics use structured severity (`INFO`, `WARNING`, `ERROR`), optional sourc
 
 The stable target extends the contract with deterministic source range, evidence, and error-category fields and with comparison before preview, after preview simulation, after apply, and after rollback where an operation requires those gates. A configured regression beyond the approved plan causes refusal.
 
-Status: implementation-informed baseline; stable compiler-backed contract planned. Diagnostics are not currently a central transaction gate, most plans carry empty before/after diagnostics, and apply does not generally compensate on diagnostic regression (`TX-015`).
+Status: implementation-informed. Production managed Java surfaces supply JDT diagnostics to a core gate that compares current and exact staged post-image snapshots under lock before WAL, refusing new errors or unavailable diagnostics (`TX-015` closed for those surfaces). Compatibility direct-library overloads remain explicitly ungated pending API freeze.
 
 == Risk Model
 
@@ -91,7 +91,7 @@ CLI `--apply`, daemon `refactor.apply`, MCP `apply_refactoring`, and custom LSP 
 
 Explicit managed apply invocation is the approval event; missing authorization refuses before journaling, while successful transactions persist approval kind/surface/actor/time (`TX-016` closed). Daemon/LSP/MCP use a core-owned deterministic refusal mapper for snapshot, recovery, validation, lock, filesystem, unsafe-path, file-conflict, approval, and apply/journal categories (`TX-017` closed). Daemon apply/rollback refreshes stored session state, clears stale plans, and returns the new hash (`TX-018` closed).
 
-Status: implementation-informed. LSP ownership/document versions and daemon state refresh are implemented; approval semantics and managed apply/rollback error categories are implemented; central diagnostics gates remain open.
+Status: implementation-informed. LSP ownership/document versions and daemon state refresh are implemented; approval semantics and managed apply/rollback error categories are implemented; production managed Java diagnostics gates are implemented; compatibility direct-library gate enforcement remains an API-freeze item.
 
 == Protocol Capability Discovery
 

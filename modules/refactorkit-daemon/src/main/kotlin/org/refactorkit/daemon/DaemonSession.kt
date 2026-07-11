@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.PatchEngine
@@ -279,7 +280,12 @@ class DaemonSession {
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val currentSnap = scanner.scan(root)
-        return when (val result = PatchEngine(root).apply(plan, currentSnap, ApplyAuthorization.explicit("daemon-json-rpc"))) {
+        return when (val result = PatchEngine(root).apply(
+            plan,
+            currentSnap,
+            ApplyAuthorization.explicit("daemon-json-rpc"),
+            DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+        )) {
             is ApplyResult.Applied -> {
                 val refreshed = scanner.scan(root)
                 snapshot = refreshed

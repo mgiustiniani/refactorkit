@@ -64,7 +64,7 @@ The following open findings qualify the accepted direction and must not be read 
 * `TX-012` is partially closed: create/update/delete persistence durably flushes files/directories and lifecycle replacement requires a same-directory atomic move; checksum, migration, quarantine, capability reporting, and fault evidence remain.
 * `TX-013`: rollback restores text rather than complete filesystem metadata or directory state, and the edit model does not represent all advertised directory operations.
 * `TX-014` is closed for declared source and Java classpath scope: snapshot hashes bind module/source-root metadata, extensions, ignore policy, language IDs, paths, source content, and classpath evidence. Under lock the engine independently walks and rehashes sources plus active/prospective classpath entries, local JAR directories, and generated declaration files, refusing changed evidence before journaling.
-* `TX-015`: diagnostics are not a central pre-commit and post-apply gate, and diagnostic regression does not generally trigger automatic compensation.
+* `TX-015` is closed for production managed Java surfaces: a core gate compares JDT diagnostics on current and exact staged post-image snapshots under lock before WAL, refusing new errors/provider failure. Compatibility low-level overloads remain explicitly ungated pending API freeze.
 * `TX-016` is closed: explicit managed apply invocation is the approval event; approval-required plans refuse missing authorization, and the transaction persists approval kind, surface, actor, and timestamp. Legacy records are marked `LEGACY_UNRECORDED`.
 
 == Residual Risks and Open Scope

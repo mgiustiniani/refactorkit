@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.PatchEngine
@@ -331,7 +332,12 @@ class McpSession {
         val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val current = scanner.scan(root)
-        return when (val result = PatchEngine(root).apply(plan, current, ApplyAuthorization.explicit("mcp-tool"))) {
+        return when (val result = PatchEngine(root).apply(
+            plan,
+            current,
+            ApplyAuthorization.explicit("mcp-tool"),
+            DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+        )) {
             is ApplyResult.Applied -> {
                 pendingPlans.remove(planId)
                 // Refresh snapshot

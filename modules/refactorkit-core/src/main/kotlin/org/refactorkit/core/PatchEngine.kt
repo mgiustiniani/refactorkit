@@ -121,12 +121,24 @@ class PatchEngine(
      * file is revalidated after lock acquisition before the first mutation.
      */
     fun apply(plan: PatchPlan, currentSnapshot: ProjectSnapshot): ApplyResult =
-        apply(plan, currentSnapshot, ApplyAuthorization.explicit("library"))
+        apply(
+            plan,
+            currentSnapshot,
+            ApplyAuthorization.explicit("library"),
+            DiagnosticsGate.disabled("library-unspecified"),
+        )
 
     fun apply(
         plan: PatchPlan,
         currentSnapshot: ProjectSnapshot,
         authorization: ApplyAuthorization,
+    ): ApplyResult = apply(plan, currentSnapshot, authorization, DiagnosticsGate.disabled(authorization.surface))
+
+    fun apply(
+        plan: PatchPlan,
+        currentSnapshot: ProjectSnapshot,
+        authorization: ApplyAuthorization,
+        diagnosticsGate: DiagnosticsGate,
     ): ApplyResult = withWorkspaceLock {
         val normalizedEdit = WorkspaceEditSimulator.normalize(plan.workspaceEdit)
         val normalizedPlan = plan.copy(
@@ -163,6 +175,8 @@ class PatchEngine(
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(diagnostics)
         } else {
+            val gateDiagnostics = validateDiagnosticsGate(currentSnapshot, normalizedEdit, diagnosticsGate)
+            if (gateDiagnostics.isNotEmpty()) return@withWorkspaceLock ApplyResult.Refused(gateDiagnostics)
             val approval = ApprovalRecord(
                 kind = if (normalizedPlan.requiresUserApproval) ApprovalKind.EXPLICIT_APPLY else ApprovalKind.NOT_REQUIRED,
                 surface = authorization.surface,
@@ -447,6 +461,32 @@ class PatchEngine(
             )
         }
         return diagnostics
+    }
+
+    private fun validateDiagnosticsGate(
+        snapshot: ProjectSnapshot,
+        edit: WorkspaceEdit,
+        gate: DiagnosticsGate,
+    ): List<Diagnostic> {
+        val provider = gate.provider ?: return emptyList()
+        return try {
+            val before = provider(snapshot)
+            val staged = WorkspaceEditSimulator.apply(snapshot, edit)
+            val after = provider(staged)
+            val regressions = diagnosticsRegression(before, after)
+            if (regressions.isEmpty()) emptyList() else listOf(Diagnostic(
+                "Diagnostics gate '${gate.id}' found ${regressions.size} new error(s): " +
+                    regressions.joinToString("; ") { it.message },
+                Diagnostic.Severity.ERROR,
+                code = "diagnostics.regression",
+            ))
+        } catch (error: Exception) {
+            listOf(Diagnostic(
+                "Diagnostics gate '${gate.id}' failed: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "diagnostics.unavailable",
+            ))
+        }
     }
 
     private fun validateClasspathEvidence(snapshot: ProjectSnapshot): List<Diagnostic> {

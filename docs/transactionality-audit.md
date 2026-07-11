@@ -305,15 +305,28 @@ and generated classpath declaration changes. As with workspace sources, a hostil
 writer changing an artifact after locked validation is outside the cooperative
 writer guarantee and remains destructive-concurrency test scope.
 
-### TX-015 — Diagnostics are not a central transaction gate
+### TX-015 — Central diagnostics transaction gate
 
-Most planners leave `diagnosticsBefore` and `diagnosticsAfterPreview` empty.
-Apply paths generally do not run post-apply diagnostics and do not automatically
-roll back a diagnostic regression. Only selected operations/recipe steps perform
-partial diagnostic simulation.
+Status: **closed for production managed Java surfaces; low-level ungated overload retained for compatibility**.
 
-This does not satisfy the stronger requirements that plans be diagnosed before
-apply and validated after apply.
+`PatchEngine` now owns diagnostics-regression evaluation under the workspace
+lock after snapshot/precondition validation and before WAL creation. A configured
+`DiagnosticsGate` diagnoses the current snapshot, applies the normalized edit to
+an immutable staged snapshot, diagnoses the exact post-image, and refuses any
+increase in ERROR diagnostics as `diagnostics.regression`; provider failure
+refuses as `diagnostics.unavailable`. Both map to `DIAGNOSTICS_FAILED (-32015)`.
+Existing identical errors are tolerated using multiset comparison, while new or
+additional errors block without workspace or journal writes.
+
+CLI, daemon, managed LSP, MCP, recipe, and golden-test flows configure the JDT
+Java diagnostics provider centrally rather than trusting planner-populated
+metadata. Because `PatchEngine` commits exactly the validated staged post-images,
+the pre-WAL simulated snapshot is the authoritative post-apply diagnostic state.
+Core tests prove regression refusal and preservation of pre-existing errors.
+Two-/three-argument low-level library overloads remain source-compatible with an
+explicitly named disabled gate (`library-unspecified`/surface id); removing those
+overloads or requiring a provider is still an API-freeze decision before claiming
+that arbitrary third-party direct-library calls are diagnostics-gated.
 
 ### TX-016 — Approval semantics and audit state
 
@@ -342,7 +355,8 @@ diagnostic code and risk precedence. Snapshot/precondition changes remain
 lock, filesystem capability, unsafe path, file conflict, and apply/journal failures
 map respectively to `PLAN_VALIDATION_FAILED (-32008)`, `WORKSPACE_LOCKED (-32009)`,
 `FILESYSTEM_UNSUPPORTED (-32010)`, `UNSAFE_PATH (-32012)`, `FILE_CONFLICT
-(-32013)`, `APPROVAL_REQUIRED (-32014)`, and `APPLY_FAILED (-32011)`. Rollback uses the same central policy for
+(-32013)`, `APPROVAL_REQUIRED (-32014)`, `DIAGNOSTICS_FAILED (-32015)`, and
+`APPLY_FAILED (-32011)`. Rollback uses the same central policy for
 conflict, recovery, path/filesystem, and apply failures. Daemon and LSP throw these
 stable codes; MCP refusal text includes the mapped numeric category. Table-driven
 core tests prove category coverage and order-independent highest-risk precedence.

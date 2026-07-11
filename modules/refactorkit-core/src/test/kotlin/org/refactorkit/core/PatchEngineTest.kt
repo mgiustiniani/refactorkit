@@ -406,6 +406,74 @@ class PatchEngineTest {
     }
 
     @Test
+    fun diagnosticsGateRefusesNewErrorsBeforeJournaling() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "diagnosticsGate",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "introduce diagnostics regression",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                source,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Broken")),
+            ))),
+        )
+        val gate = DiagnosticsGate.enabled("test") { staged ->
+            if (staged.files.any { "Broken" in it.content }) listOf(Diagnostic(
+                "new compiler error",
+                Diagnostic.Severity.ERROR,
+                code = "compiler.test",
+            )) else emptyList()
+        }
+
+        val result = PatchEngine(root).apply(
+            plan,
+            snapshot,
+            ApplyAuthorization.explicit("test"),
+            gate,
+        )
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "diagnostics.regression" })
+        assertEquals("class Example {}\n", Files.readString(root.resolve(source)))
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
+    }
+
+    @Test
+    fun diagnosticsGateAllowsPreExistingErrorsWithoutRegression() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "diagnosticsGateExisting",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "preserve existing diagnostic",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                source,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        val existing = Diagnostic("existing compiler error", Diagnostic.Severity.ERROR, code = "compiler.existing")
+
+        val result = PatchEngine(root).apply(
+            plan,
+            snapshot,
+            ApplyAuthorization.explicit("test"),
+            DiagnosticsGate.enabled("test") { listOf(existing) },
+        )
+
+        assertIs<ApplyResult.Applied>(result)
+        assertEquals("class Changed {}\n", Files.readString(root.resolve(source)))
+    }
+
+    @Test
     fun requiresAndAuditsExplicitApproval() {
         val root = Files.createTempDirectory("refactorkit-test")
         val source = Path.of("Example.java")
