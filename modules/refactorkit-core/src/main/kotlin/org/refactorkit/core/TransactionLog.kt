@@ -39,6 +39,9 @@ class TransactionLog(
     private val faultInjector: JournalFaultInjector = JournalFaultInjector.NONE,
 ) {
     val logDir: Path = logDir.toAbsolutePath().normalize()
+    private val orphanTempPattern = Regex(
+        "\\.transaction-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json\\.tmp-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+    )
 
     /** Compatibility helper for importing an already-applied transaction. */
     fun save(transaction: Transaction) {
@@ -155,6 +158,26 @@ class TransactionLog(
     }
 
     fun listRecords(): List<TransactionJournalRecord> = list().mapNotNull(::loadRecord)
+
+    /** Remove uncommitted lifecycle temps while the caller holds the workspace lock. */
+    fun cleanupOrphanedTemps(): Int {
+        ensureSecureLogDirectory()
+        if (!Files.exists(logDir, LinkOption.NOFOLLOW_LINKS)) return 0
+        val candidates = Files.list(logDir).use { stream ->
+            stream.filter { orphanTempPattern.matches(it.fileName.toString()) }.collect(Collectors.toList())
+        }
+        candidates.forEach { path ->
+            if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                throw TransactionLogException(
+                    "transaction.pathUnsafe",
+                    "Unsafe orphan transaction temp path: ${path.fileName}",
+                )
+            }
+            Files.delete(path)
+        }
+        if (candidates.isNotEmpty()) forceDirectory()
+        return candidates.size
+    }
 
     fun delete(id: TransactionId) {
         ensureSecureLogDirectory()

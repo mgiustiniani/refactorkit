@@ -23,6 +23,8 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added lock-scoped durable cleanup of strictly named orphan lifecycle temp files
+  during startup recovery; unsafe symlink/non-regular candidates are refused.
 - Added raw torn-byte quarantine tests at four truncation boundaries and a
   conditional `/dev/shm` cross-filesystem WAL apply/rollback test.
 - Corrected capability reporting to use the configured transaction-log store.

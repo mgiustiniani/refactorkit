@@ -100,7 +100,10 @@ class ProcessKillRecoveryTest {
         assertTrue(Files.list(logDir).use { stream ->
             stream.anyMatch { it.fileName.toString().startsWith(".${transaction.id.value}.json.tmp-") }
         })
-        TransactionLog(logDir).update(requireNotNull(retained).copy(state = JournalState.ROLLED_BACK))
+        assertTrue(PatchEngine(root, TransactionLog(logDir)).recover().isEmpty())
+        assertTrue(Files.list(logDir).use { stream ->
+            stream.noneMatch { it.fileName.toString().startsWith(".${transaction.id.value}.json.tmp-") }
+        })
         assertEquals(JournalState.ROLLED_BACK, TransactionLog(logDir).loadRecord(transaction.id)?.state)
     }
 

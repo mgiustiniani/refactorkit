@@ -118,17 +118,22 @@ external-importer checks:
 Core tests inject journal failures after new-record force, lifecycle temp-file
 force, and lifecycle atomic move. They prove restart-visible complete records or
 preservation of the previous record plus temporary-file cleanup at each boundary.
-Workspace tests inject deterministic failures after staged-file force and after each
-committed workspace image. Acceptance covers unchanged content and temporary-file
-cleanup on staging disk-full, full compensation after a partial multi-file
+Workspace tests inject deterministic failures after staged-file force and after
+each committed workspace image. Acceptance covers unchanged content and temporary-
+file cleanup on staging disk-full, full compensation after a partial multi-file
 commit, durable `RECOVERY_REQUIRED` after compensation failure, and successful
-compensation retry by a clean `PatchEngine` restart. Journal subprocess tests force-kill real JVMs after new-record force, lifecycle
+compensation retry by a clean `PatchEngine` restart.
+
+Journal subprocess tests force-kill real JVMs after new-record force, lifecycle
 temp-file force, and lifecycle atomic move. They prove respectively that complete
-`PREPARED`, prior-authoritative, and complete new `APPLYING` records survive. A workspace subprocess test force-kills a real JVM after the first of two committed
-images, inspects the durable `APPLYING`/mixed-image state, and proves exact clean-
-restart compensation. Raw journal truncation is tested at four byte boundaries, and `/dev/shm` provides
-a conditional distinct-store WAL apply/rollback test. Actual power-loss remains a
-separate RC acceptance gate.
+`PREPARED`, prior-authoritative, and complete new `APPLYING` records survive.
+Startup recovery durably removes strictly named non-authoritative lifecycle temps
+under the workspace lock. A workspace subprocess test force-kills a real JVM
+after the first of two committed images, inspects the durable `APPLYING`/mixed-
+image state, and proves exact clean-restart compensation. Raw journal truncation
+is tested at four byte boundaries, and `/dev/shm` provides a conditional distinct-
+store WAL apply/rollback test. Actual power-loss remains a separate RC acceptance
+gate.
 
 ## Packaged CLI and release verification smoke tests
 

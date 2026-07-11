@@ -999,6 +999,7 @@ class PatchEngine(
 
     private fun recoverIncompleteTransactions(): List<Diagnostic> {
         val records = try {
+            transactionLog.cleanupOrphanedTemps()
             transactionLog.listRecords()
         } catch (error: Exception) {
             return listOf(Diagnostic(

@@ -294,7 +294,7 @@ pre-directory-force failure leaves the complete new state readable by restart.
 Real subprocess kills now cover all three journal write boundaries: after a new
 record is forced the complete `PREPARED` intent is readable; after lifecycle temp
 force the prior checksummed record remains authoritative while the uncommitted
-owner-only temp is ignored; after lifecycle atomic move the complete new
+owner-only temp is non-authoritative and durably removed under the workspace lock during restart recovery; after lifecycle atomic move the complete new
 `APPLYING` record and event history are readable. Workspace staging, partial
 commit, compensation failure, and restart retry also have deterministic evidence.
 Raw torn-byte tests truncate complete checksummed records at 1%, 25%, 50%, and
