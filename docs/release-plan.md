@@ -10,7 +10,8 @@ users and local AI agents can safely rely on.
 | `v0.1.0-alpha` | First public CLI/library preview | APIs may change; patch engine and Java MVP are usable with review |
 | `v0.2.0-beta` | Broader Java refactoring validation | CLI/JSON-RPC contracts mostly stable; migration notes required for breaking changes |
 | `v0.3.0` | Post-beta contract and analysis planning slice | Version/API metadata is explicit; SemVer/deprecation and compiler-backed analysis plans are drafted |
-| `v1.0.0` | Stable local deterministic refactoring engine | Core patch model, CLI, daemon API, and rollback semantics are stable |
+| `v1.0.0-rc.1` | Stable-contract release candidate | Proposed API `1.0`, semantic boundaries, acceptance, performance, and supply-chain evidence are frozen for validation |
+| `v1.0.0` | Stable local deterministic refactoring engine | Core patch model, CLI, daemon API, supported Java semantics, packaging, and rollback contracts are stable |
 
 ## Phase 1 — Alpha hardening (`v0.1.0-alpha`)
 
@@ -126,6 +127,12 @@ Initial work items:
 
 ## Phase 3 — Stable release (`v1.0.0`)
 
+Detailed active plan: [docs/releases/v1.0.0-plan.md](releases/v1.0.0-plan.md).
+The required sequence is `v0.3.0`, `v1.0.0-rc.1` (and additional immutable RCs
+when needed), then `v1.0.0`. Stable scope is contract-based: unsupported Java
+cases may refuse conservatively, but advertised stable operations may not hide
+unsafe lexical behavior.
+
 Exit criteria:
 
 - Patch engine semantics are frozen: snapshot hash validation, overlap rejection,
@@ -139,17 +146,26 @@ Work items:
 
 1. Define semantic versioning policy and deprecation rules.
 2. Finalize machine-readable API/version metadata for daemon, LSP, MCP, and CLI consumers.
-3. Add CI artifact signing/checksums.
-4. Add stress tests for large workspaces and overlapping edit plans.
-5. Decide whether Java type resolution remains lexical-MVP or moves to a
-   compiler-backed engine before `v1.0.0`.
-6. Freeze `v1.0.0` only when release-candidate CI has passed on a clean tag.
+3. Add checksum, SBOM, artifact provenance/attestation, and reproducibility checks.
+4. Add safety/property/stress tests for large workspaces, mixed edit plans,
+   symlinks, interrupted apply, rollback restoration, and bounded daemon state.
+5. Complete the Eclipse JDT path for advertised stable Java operations, source
+   levels 8 through 25, deterministic classpath evidence, diagnostics, and
+   explicit refusal/fallback boundaries.
+6. Freeze stable CLI/daemon API `1.0`; classify LSP/MCP surfaces as stable or
+   experimental and test the stable subset.
+7. Publish migration, operation, architecture, packaging, and acceptance docs.
+8. Freeze `v1.0.0` only after a clean immutable RC tag passes all acceptance and
+   independently downloaded artifact verification.
 
 ## Current open risks
 
-- Java analysis is still mostly lexical, not fully type-resolved.
+- Java analysis has authoritative JDT-backed slices, but source-level 8–25,
+  diagnostics, classpath completeness, and all stable-operation boundaries are
+  not yet proven as a single `v1.0.0` contract.
 - Some multi-language and LSP-backed capabilities are explicit stubs/future work.
-- `organize-imports` does not remove unused imports.
+- `organize-imports` removes binding-proven unused exact imports only when JDT
+  evidence is clean; wildcard, unresolved, and unclean cases remain conservative.
 - `safe-delete` does not inspect build files, generated code, reflection, or
   external configuration.
 - `extract-method` and `change-signature` are conservative MVP implementations.

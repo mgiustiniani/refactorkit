@@ -4,7 +4,7 @@
 
 Date: 2026-07-10
 
-Status: Accepted for alpha
+Status: Accepted; stable MCP classification pending
 
 == Context
 
@@ -16,6 +16,8 @@ MCP access should support the RefactorKit workflow, not become a general-purpose
 
 Expose MCP tools and resources for project scanning, symbol lookup, diagnostics, refactoring preview/apply, rollback, external Java class import, and context bundles. Limit file resources to paths inside the currently scanned workspace snapshot. Do not expose arbitrary filesystem read or write tools through MCP.
 
+Classify every tool, resource, and prompt as stable or experimental for `v1.0.0`. Stable mutation tools must use the versioned preview/apply/rollback contract and must not provide a path around `PatchEngine`. Apply bounded request, result, pending-plan, timeout, and cancellation behavior with deterministic structured refusals.
+
 == Consequences
 
 * Local agents receive focused, relevant project context instead of unrestricted filesystem access.
@@ -23,3 +25,4 @@ Expose MCP tools and resources for project scanning, symbol lookup, diagnostics,
 * Requests outside the workspace or outside the scanned snapshot can be refused explicitly.
 * Some agent workflows may need another trusted tool for non-project files.
 * Security-sensitive MCP behavior remains auditable at the protocol boundary.
+* Stable classification requires initialization/capability, malformed-input, refusal, cancellation, and workspace-boundary contract evidence; an implemented MCP endpoint is not stable by default.

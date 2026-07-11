@@ -4,7 +4,7 @@
 
 Date: 2026-07-10
 
-Status: Accepted for alpha
+Status: Superseded by ADR 0008
 
 == Context
 
@@ -14,12 +14,14 @@ The alpha still needs conservative scanning, symbol discovery, reference search,
 
 == Decision
 
-Use a lexical and structural Java MVP for alpha Java support. Implement package, class, member, import, and reference detection conservatively, and refuse or warn for ambiguous cases. Treat compiler-backed binding analysis as a future hardening step rather than an alpha prerequisite.
+For the historical alpha, use a lexical and structural Java MVP. Implement package, class, member, import, and reference detection conservatively, and refuse or warn for ambiguous cases. Compiler-backed binding analysis was not an alpha prerequisite.
+
+ADR 0007 subsequently required compiler/classpath-aware evidence for semantic guarantees, and ADR 0008 selected Eclipse JDT as the primary analysis strategy. This ADR therefore no longer authorizes lexical analysis to act as hidden semantic authority for stable operations.
 
 == Consequences
 
-* Alpha users can exercise the end-to-end refactoring workflow earlier.
+* Alpha users could exercise the end-to-end refactoring workflow earlier.
 * Conservative warnings remain necessary for reflection, framework strings, generated code, overloads, and other semantic risks.
 * The Java adapter must avoid claiming certainty when lexical evidence is insufficient.
-* Compiler-backed analysis can later replace or augment lexical detection without changing the PatchPlan safety model.
+* Compiler-backed analysis can replace or augment lexical detection without changing the PatchPlan safety model.
 * Documentation must present the alpha as useful but not equivalent to a mature IDE semantic engine.

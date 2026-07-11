@@ -4,7 +4,7 @@
 
 Date: 2026-07-10
 
-Status: Accepted for beta; requires v1.0.0 follow-up
+Status: Superseded by ADR 0008
 
 == Context
 
@@ -16,7 +16,7 @@ The beta keeps that useful MVP, but integration consumers need to know which beh
 
 For `v0.2.0-beta`, RefactorKit may continue to use lexical and structural Java analysis for documented previews when planners are conservative, warnings are visible, and ambiguous operations are refused instead of guessed.
 
-Before `v1.0.0`, Java refactoring guarantees that depend on semantic meaning must be backed by compiler/classpath-aware analysis. This includes overload resolution, inheritance and interface dispatch, generated-code and annotation-processor effects, framework/string references, classpath-aware type resolution, and robust import or unused-import handling.
+Before `v1.0.0`, Java refactoring guarantees that depend on semantic meaning must be backed by compiler/classpath-aware analysis. This includes overload resolution, inheritance and interface dispatch, classpath-aware type resolution, and robust import or unused-import handling. Generated-code, annotation-processor, reflection, framework, and string/configuration effects require proven evidence or conservative refusal; compiler-backed parsing alone does not make them safe.
 
 == Consequences
 
@@ -26,11 +26,9 @@ Before `v1.0.0`, Java refactoring guarantees that depend on semantic meaning mus
 * Framework, reflection, generated-code, overload, and external-configuration risks remain beta limitations.
 * The PatchPlan safety model remains valid when compiler-backed analysis replaces or augments lexical detection.
 
-== v1.0.0 Follow-up
+== v1.0.0 Follow-up Resolution
 
-Before `v1.0.0`, RefactorKit must decide and document the compiler-backed Java analysis strategy, for example Eclipse JDT, javac APIs, OpenRewrite, or a combination.
-
-The follow-up must define at least:
+ADR 0008 selects Eclipse JDT as the primary compiler-backed symbol, binding, and reference strategy. Stable promotion remains conditional on the following evidence:
 
 * classpath and source-root discovery requirements;
 * binding-aware symbol identity and reference search;

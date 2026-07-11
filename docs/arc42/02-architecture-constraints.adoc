@@ -59,6 +59,21 @@ Status: implementation-informed, needs-review for priority and completeness.
 |The stdio daemon must expose read-only capability discovery before a project is opened. Discovery reports protocol and transport identity, method stability and project/write requirements, and the safety properties clients may rely on.
 |`DaemonSession.serverCapabilities`, `DaemonSessionTest`, `docs/integration-contracts.md`.
 |implementation-informed
+
+|C-TECH-011
+|Stable Java source support must use an Eclipse JDT version and explicit project compliance configuration proven on representative Java 8, 11, 17, 21, and 25 constructs. Java 8-compatible RefactorKit bytecode is a separate constraint and is not source-support evidence.
+|`docs/releases/v1.0.0-plan.md`; ADRs 0001 and 0008.
+|confirmed target; planned acceptance
+
+|C-TECH-012
+|A stable Java operation must classify its evidence as JDT binding-backed, narrowly proven lexical behavior, or refusal. Missing or unclean semantic evidence must never become hidden lexical semantic authority.
+|`docs/releases/v1.0.0-plan.md`; ADRs 0003, 0007, and 0008.
+|confirmed target; planned acceptance
+
+|C-TECH-013
+|Stable diagnostics and validation must provide deterministic severity, source range, evidence, and error categories and must refuse configured regressions beyond the approved plan.
+|`docs/releases/v1.0.0-plan.md`; ADRs 0002 and 0008.
+|confirmed target; planned acceptance
 |===
 
 == Architectural Boundary Constraints
@@ -86,6 +101,11 @@ Status: implementation-informed, needs-review for priority and completeness.
 |C2 containers in the C4 model represent runtime entry points or intentionally separable building blocks; current library modules are not necessarily standalone deployables.
 |`docs/c4/workspace.dsl`.
 |implementation-informed
+
+|C-BOUND-005
+|At `v1.0.0`, core patch, documented CLI, and daemon contracts use API version `1.0`; every LSP capability/command and MCP tool/resource/prompt must be classified independently as stable or experimental.
+|`docs/releases/v1.0.0-plan.md`; ADRs 0002, 0004, and 0006.
+|confirmed target; planned acceptance
 |===
 
 == Process and Quality Constraints
@@ -110,7 +130,22 @@ Status: implementation-informed, needs-review for priority and completeness.
 |implementation-informed as design constraint; needs ongoing review
 
 |C-PROC-004
-|ADRs, if added later, must be stored separately and chapter 9 must remain an index rather than rewriting ADR bodies.
-|Installed arc42 agent rule.
-|planned
+|ADRs must be stored separately and chapter 9 must remain an index rather than rewriting ADR bodies.
+|Installed arc42 agent rule; `docs/adr/`.
+|implementation-informed
+
+|C-PROC-005
+|Release order is `v0.3.0`, immutable `v1.0.0-rc.N` candidate tags as needed, then `v1.0.0`; tags must not be moved or recreated.
+|`docs/releases/v1.0.0-plan.md`; ADRs 0004, 0005, and 0008.
+|confirmed target
+
+|C-PROC-006
+|Stable acceptance must define and pass bounded scan, index, preview, apply, memory, request, result, cache, pending-plan, and transaction-metadata budgets with deterministic timeout/cancellation/limit behavior.
+|`docs/releases/v1.0.0-plan.md`; ADRs 0004, 0006, and 0008.
+|confirmed target; planned acceptance
+
+|C-PROC-007
+|Stable self-contained release assets require checksum, SBOM, provenance/attestation, clean-build reproducibility comparison, archive-layout verification, and `JAVA_HOME`-unset smoke evidence.
+|`docs/releases/v1.0.0-plan.md`; ADR 0005.
+|confirmed target; planned acceptance
 |===

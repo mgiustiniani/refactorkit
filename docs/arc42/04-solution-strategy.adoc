@@ -8,6 +8,8 @@ Status: implementation-informed with planned items explicitly marked.
 
 RefactorKit is structured as a local, deterministic refactoring engine around a language-independent patch core and pluggable language/integration adapters. The primary strategy is to make every change previewable, diagnosable, rollbackable, and consumable by humans, CI, editors, and local AI agents.
 
+The stable-release strategy publishes the JDT foundation as `v0.3.0`, freezes proposed API `1.0` contracts in immutable release candidates, and promotes the accepted candidate to `v1.0.0`. Stability is evidence-gated per contract and capability; intentionally unsupported refactoring shapes remain conservative refusals rather than release gaps.
+
 == Fundamental Decisions
 
 [cols="1,3,2,1",options="header"]
@@ -39,8 +41,8 @@ RefactorKit is structured as a local, deterministic refactoring engine around a 
 |`docs/ai-workflow.md`, `refactorkit-mcp`.
 |implementation-informed
 
-|Incremental compiler-backed Java analysis with explicit fallback
-|Proven Java slices use exact Eclipse JDT binding evidence; operations retain explicit lexical fallback or conservative refusal when semantic evidence is unavailable or not clean. Class rename and safe delete use exact type-binding evidence when possible. Move class uses exact target-type binding to scope package/import/FQN edits to actual referencing files. Java annotation types are represented as first-class symbols by lexical and JDT indexing and reuse the existing type-level lookup, rename, move, safe-delete, recipe, and owner-validation paths. Annotation elements are represented as zero-parameter signed `METHOD` symbols; read-only lookup/reference queries resolve them, and clean signed member rename updates exact declarations and binding-matched named usages. An unambiguous `FIELD` selector `Owner#field` uses exact field-binding declaration/reference ranges when global JDT evidence is clean, with owner-field collision refusal taking precedence over semantic fallback; unclean or unresolved evidence retains explicit lexical member fallback. This does not imply semantic support for arbitrary unsigned methods. Organize imports uses per-file clean binding-use evidence to remove an exact import only when its imported declaration binding has no non-import use; unresolved files retain lexical cleanup behavior.
+|Incremental compiler-backed Java analysis with classified evidence
+|Proven Java slices use exact Eclipse JDT binding evidence; prototype operations currently retain explicit lexical behavior or conservative refusal when semantic evidence is unavailable or not clean. Stable promotion requires that every fallback be separately narrow and proven safe; otherwise the stable outcome is refusal. No lexical path may claim compiler-backed semantic authority. Class rename and safe delete use exact type-binding evidence when possible. Move class uses exact target-type binding to scope package/import/FQN edits to actual referencing files. Java annotation types are represented as first-class symbols by lexical and JDT indexing and reuse the existing type-level lookup, rename, move, safe-delete, recipe, and owner-validation paths. Annotation elements are represented as zero-parameter signed `METHOD` symbols; read-only lookup/reference queries resolve them, and clean signed member rename updates exact declarations and binding-matched named usages. An unambiguous `FIELD` selector `Owner#field` uses exact field-binding declaration/reference ranges when global JDT evidence is clean, with owner-field collision refusal taking precedence over semantic fallback; unclean or unresolved evidence retains explicit lexical member fallback. This does not imply semantic support for arbitrary unsigned methods. Organize imports uses per-file clean binding-use evidence to remove an exact import only when its imported declaration binding has no non-import use; unresolved files retain lexical cleanup behavior.
 |ADR 0008; signed method and unambiguous field member-rename, class-rename, move-class, safe-delete, annotation-type, annotation-element, and organize-imports planners/analyzers and tests.
 |implementation-informed
 
@@ -93,9 +95,9 @@ These are shown as containers/building blocks in `docs/c4/workspace.dsl`.
 |implementation-informed
 
 |Packaging
-|jlink-generated embedded runtime for the CLI distribution
-|Avoid requiring users to install Java globally at runtime.
-|implementation-informed
+|jlink-generated embedded runtime plus checksum, SBOM, provenance/attestation, and reproducibility evidence
+|Avoid requiring users to install Java globally and make promoted release assets independently verifiable.
+|implementation-informed foundation; stable evidence planned
 
 |Architecture model
 |Structurizr DSL C4 model
@@ -105,4 +107,4 @@ These are shown as containers/building blocks in `docs/c4/workspace.dsl`.
 
 == Links to Decisions
 
-Chapter 9 indexes the repository ADRs. The incremental compiler-backed Java analysis strategy, including the completed JDT-backed v0.3.0 slices, is recorded in link:../adr/0008-compiler-backed-java-analysis-strategy.adoc[ADR 0008].
+Chapter 9 indexes the repository ADRs. ADRs 0002, 0004, 0005, 0006, and 0008 jointly record the stable safety, integration-boundary, packaging, least-privilege, and compiler-backed Java strategies. No new architectural decision was required for the stable-release activation; the existing decisions were tightened with evidence-gated promotion criteria.

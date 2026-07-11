@@ -11,7 +11,7 @@ Status: implementation-informed, needs human review for prioritization.
 |R-001
 |Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations and explicit fallback paths still rely on lexical or structural evidence.
 |Refactorings outside the supported signed-method and unambiguous-field `renameMember` slices (including exact annotation-element rename), type-level rename (including annotation types), move-class file-scoping, safe-delete type-reference, annotation-type/element indexing and reference, and exact-import use slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Arbitrary unsigned methods retain lexical behavior. Type-level rename, move class, and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable; unresolved organize-imports files retain lexical cleanup only.
-|Follow ADR 0008; retain conservative refusal/warning behavior, keep fallback paths explicit, extend representative JDT-backed coverage, refuse signed method rename when an override family includes external declarations, and validate owner-field collisions before field semantic fallback.
+|Follow ADR 0008; classify every stable path as JDT-backed, narrowly proven lexical behavior, or refusal. Do not promote prototype lexical fallbacks that can perform an incorrect semantic edit; retain external-family and collision refusals.
 |known risk
 
 |R-002
@@ -29,13 +29,13 @@ Status: implementation-informed, needs human review for prioritization.
 |R-004
 |Change-signature is conservative and refuses hierarchy/public/protected/generated/method-reference cases.
 |Limited support for public API evolution.
-|Add compiler-backed hierarchy/call-site analysis or document as alpha limitation.
+|Add compiler-backed hierarchy/call-site analysis or retain the documented limited shape and conservative refusal at stable.
 |known limitation
 
 |R-005
 |Safe delete uses exact JDT bindings only for clean source analysis and does not inspect build files, generated code, reflection, external config, or all framework references.
 |Possible unsafe delete if non-source references exist; lexical fallback may also conflate same-simple-name types when semantic evidence is unavailable.
-|Maintain framework, forced-delete, and lexical-fallback warnings; add build/config/framework analysis and broader classpath robustness before lowering risk.
+|Maintain framework and forced-delete warnings; for stable classification, prove any narrow lexical behavior safe or refuse when exact evidence is unavailable. Add build/config/framework analysis before lowering risk.
 |known risk
 
 |R-006
@@ -51,22 +51,22 @@ Status: implementation-informed, needs human review for prioritization.
 |implementation-informed
 
 |R-008
-|No ADRs exist for major architecture decisions.
-|Decision rationale may be lost or hard to review.
-|Create ADRs for core decisions; keep chapter 9 as index.
-|actionable
+|ADR status and stable capability classification can drift from contracts and implementation evidence.
+|Reviewers or clients may mistake implemented prototype behavior for an accepted stable guarantee.
+|Keep chapter 9 synchronized with ADR bodies and require contract snapshots plus RC acceptance before stable classification.
+|known risk
 
 |R-009
-|Public library API stability is not documented.
-|Embedding applications may depend on unstable internals.
-|Define public API/versioning policy before beta/stable release.
-|needs-review
+|The stable plan freezes core patch, CLI, and daemon API `1.0` contracts, but the in-process library export boundary is not yet inventoried.
+|Embedding applications may depend on internals not covered by the stable integration contract.
+|Publish an explicit stable library surface or classify in-process APIs as non-stable before RC acceptance.
+|planned release review
 
 |R-010
-|No formal deployment/release artifact matrix.
-|Packaging expectations across OSes and artifact repositories may be unclear.
-|Clarify release process, OS targets, checksums/signing.
-|needs-review
+|The confirmed stable artifact is Linux x86_64; additional OS and artifact-repository targets remain undefined.
+|Consumers may assume portability beyond the verified self-contained archive.
+|Publish the exact artifact matrix and verification commands; classify other targets as unsupported or experimental.
+|known limitation
 
 |R-011
 |Security threat model is incomplete.
@@ -83,13 +83,13 @@ Status: implementation-informed, needs human review for prioritization.
 |R-013
 |Class rename uses exact JDT bindings only when source analysis is clean and the exact target binding is available; reflection, generated code, framework strings/configuration, and unknown external callers remain outside binding-matched source edits.
 |A rename may require manual follow-up outside analyzed source, while lexical fallback may conflate same-simple-name types.
-|Retain explicit lexical-fallback plus reflection/framework/generated-code warnings, conflict refusals, and same-simple-name binding tests; broaden classpath and non-source reference analysis before lowering risk.
+|Retain reflection/framework/generated-code warnings, conflict refusals, and same-simple-name binding tests; stable classification must prove any narrow fallback safe or refuse without clean binding evidence.
 |known risk
 
 |R-014
 |Move class uses exact JDT bindings only to select referencing files when source analysis is clean; edits inside selected files remain lexical, and reflection, generated code, framework strings/configuration, annotation-processor output, and unknown external callers remain outside this evidence.
 |A move may require manual follow-up outside analyzed source. Parse/classpath warnings or unavailable target binding trigger broader lexical file scoping, which can reintroduce unrelated old-package edits or same-simple-name confusion.
-|Retain explicit lexical-file-scoping and non-source warnings, target conflict/invalid-package refusals, overlap prevention, and binding-scoping tests; broaden classpath and non-source reference analysis before lowering risk.
+|Retain non-source warnings, target conflict/invalid-package refusals, overlap prevention, and binding-scoping tests; stable classification must prove lexical file scoping safe for its exact contract or refuse without clean evidence.
 |known risk
 
 |R-015
@@ -105,21 +105,53 @@ Status: implementation-informed, needs human review for prioritization.
 |known limitation
 
 |R-017
-|Exact field rename depends on an unambiguous `Owner#field` selector and clean global JDT evidence; unclean or unresolved analysis retains lexical member fallback, and non-source references remain outside binding ranges.
+|Exact field rename depends on an unambiguous `Owner#field` selector and clean global JDT evidence; unclean or unresolved prototype analysis retains lexical member fallback, and non-source references remain outside binding ranges.
 |Fallback may rename shadowing or unrelated same-named identifiers, and callers could overgeneralize field evidence to arbitrary unsigned methods.
-|Keep fallback warnings explicit, preserve owner-field target-collision refusal before fallback, retain binding-disambiguation tests, and do not advertise unsigned-method semantic coverage without separate evidence.
+|For stable classification, prove a narrow lexical contract cannot perform an incorrect semantic edit or replace it with refusal; preserve collision and binding-disambiguation tests.
 |known risk
+
+|R-018
+|The current JDT baseline and fixed Java 21 compliance do not prove the advertised Java 8 through Java 25 source range.
+|Stable parsing, bindings, diagnostics, or refactorings may fail or misclassify newer or older constructs.
+|Upgrade JDT, configure compliance per project/source set, and pass representative Java 8, 11, 17, 21, and 25 acceptance suites.
+|planned release blocker
+
+|R-019
+|Stable diagnostics and before/simulation/after/rollback validation gates are not yet evidenced as one versioned contract.
+|An apply could introduce unapproved regressions or clients could interpret diagnostics inconsistently.
+|Freeze diagnostic fields/categories and enforce operation-specific regression gates before RC promotion.
+|planned release blocker
+
+|R-020
+|No accepted numeric performance/resource budgets are recorded.
+|Large workspaces or hostile protocol inputs could cause unbounded latency, memory, pending plans, caches, results, or transaction metadata.
+|Define reference workspaces and limits; add repeatable stress, cancellation, timeout, and deterministic limit-error evidence.
+|planned release blocker
+
+|R-021
+|Checksum, SBOM, provenance/attestation, and clean-build reproducibility evidence are not yet recorded for a promoted stable asset.
+|A package may be self-contained but unverifiable, non-reproducible, or inconsistent with release metadata.
+|Verify two clean builds and the downloaded immutable-RC asset, documenting unavoidable reproducibility limits before stable publication.
+|planned release blocker
+
+|R-022
+|LSP and MCP surfaces are implemented but not yet completely classified as stable or experimental.
+|Clients may depend on untested protocol behavior, and MCP privilege or cancellation boundaries could be overstated.
+|Inventory every capability, command, tool, resource, and prompt and pass stable protocol boundary suites.
+|planned release blocker
 |===
 
 == Technical Debt from Release Plan
 
-The release plan identifies additional hardening items before alpha/beta/stable releases:
+The active stable plan defines the remaining release-hardening workstreams:
 
-* expand golden tests for all existing Java operations;
-* verify rollback in agent simulation tests for each mutating operation;
-* add daemon/LSP/MCP contract tests for preview/apply/rollback error cases;
-* publish zipped self-contained CLI artifacts from CI;
-* define semantic versioning and deprecation rules;
-* add artifact signing/checksums.
+* publish and close `v0.3.0` before immutable `v1.0.0-rc.N` candidates;
+* freeze normative patch/apply/rollback and API `1.0` CLI/daemon contracts;
+* prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
+* complete diagnostic regression gates and representative project acceptance;
+* classify and test stable LSP/MCP boundaries;
+* establish bounded performance and resource behavior;
+* verify self-contained assets with checksum, SBOM, provenance/attestation, and reproducibility evidence;
+* promote only an RC with no unresolved release blocker.
 
-Status: implementation-informed from `docs/release-plan.md`.
+Status: confirmed target from `docs/releases/v1.0.0-plan.md`; implementation and acceptance evidence pending.

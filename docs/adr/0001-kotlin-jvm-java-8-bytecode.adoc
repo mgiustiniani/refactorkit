@@ -4,17 +4,19 @@
 
 Date: 2026-07-10
 
-Status: Accepted for alpha
+Status: Accepted; stable compatibility evidence pending
 
 == Context
 
-RefactorKit targets deterministic Java refactoring and code intelligence. The first language adapter is Java, and the engine must run against Java 8-era projects while understanding newer Java source forms over time.
+RefactorKit targets deterministic Java refactoring and code intelligence. The first language adapter is Java. RefactorKit bytecode must remain usable in the documented Java 8-compatible deployment model while the Java adapter understands advertised source forms from Java 8 through Java 25.
 
 The implementation needs strong JVM ecosystem integration for Java parsing, build-tool discovery, LSP/JSON-RPC integrations, and future compiler-backed analysis.
 
 == Decision
 
-Implement RefactorKit primarily in Kotlin on the JVM. Compile project bytecode to Java 8-compatible targets where possible, while allowing the build itself and optional packaging tasks to run on a newer JDK.
+Implement RefactorKit primarily in Kotlin on the JVM. Compile project bytecode to the documented Java 8-compatible target where dependencies permit, while allowing the build, Eclipse JDT analysis, and packaging tasks to use a newer JDK.
+
+Treat RefactorKit runtime-bytecode compatibility, analyzed-project source compliance, and the JDK embedded in a self-contained distribution as separate contracts. Advertising Java 8 through Java 25 source support requires representative parsing, binding, diagnostics, and operation evidence at those source levels; Java 8-compatible RefactorKit bytecode alone is not that evidence.
 
 == Consequences
 
@@ -22,4 +24,6 @@ Implement RefactorKit primarily in Kotlin on the JVM. Compile project bytecode t
 * JVM-native Java tooling remains available for the Java adapter and future compiler-backed analysis.
 * Runtime compatibility remains broad for Java 8-era environments when using regular JVM distributions.
 * Some build and distribution steps, such as jlink packaging, still require a newer JDK at build time.
-* Dependencies must be selected carefully so the alpha does not accidentally require newer runtime bytecode than intended.
+* Dependencies must be selected carefully so RefactorKit does not accidentally require newer runtime bytecode than documented.
+* Eclipse JDT and source-compliance configuration must support the advertised Java 8 through Java 25 range before that range is a stable claim.
+* Release acceptance must verify both bytecode/runtime constraints and representative Java 8, 11, 17, 21, and 25 source behavior.

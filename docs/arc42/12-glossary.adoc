@@ -88,6 +88,26 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |Core / safety
 |`Models.kt`
 
+|Stable Contract
+|An API `1.0` behavior or capability with a versioned schema/semantics, deterministic failure modes, compatibility policy, and passing RC acceptance evidence. Stability does not imply support for every refactoring shape.
+|Release / integration
+|`docs/releases/v1.0.0-plan.md`, ADRs 0002 and 0004
+
+|Evidence Classification
+|Per-operation outcome classified as JDT binding-backed, narrowly proven lexical behavior, or refusal. Lexical behavior must not be presented as semantic authority.
+|Java / safety
+|ADR 0008
+
+|Release Candidate (RC)
+|Immutable `v1.0.0-rc.N` tag used to freeze and validate proposed stable contracts and artifacts; a failed tagged candidate is replaced by a new commit and RC number.
+|Release
+|`docs/releases/v1.0.0-plan.md`
+
+|SBOM
+|Software Bill of Materials published with a stable runtime asset as supply-chain verification evidence.
+|Packaging / release
+|ADR 0005
+
 |CLI
 |Command-line RefactorKit application.
 |Integration

@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed for local runtime/package facts; planned/needs-review for formal deployment decisions.
+Status: implementation-informed for local runtime/package facts; stable release verification is planned.
 
 == Deployment Overview
 
@@ -21,8 +21,8 @@ RefactorKit is a local tool/library, not a hosted service. Current repository ev
 
 |Packaged CLI distribution
 |`bin/refactorkit`, `bin/refactorkit.bat`, module jars under `lib/`, embedded runtime under `runtime/`.
-|Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`.
-|implementation-informed
+|Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`; stable promotion additionally verifies checksum, SBOM, provenance/attestation, reproducibility evidence or limits, archive layout, permissions, licenses, version metadata, and `JAVA_HOME`-unset execution.
+|implementation-informed foundation; stable evidence planned
 
 |Editor host process
 |`refactorkit-lsp` process launched by an external editor/IDE.
@@ -49,6 +49,8 @@ RefactorKit is a local tool/library, not a hosted service. Current repository ev
 
 * Build-time JDK is required for Gradle and `jlink` packaging.
 * The packaged CLI is intended not to require a globally installed Java runtime because it contains an embedded runtime.
+* Stable assets are promoted from immutable `v1.0.0-rc.N` tags only after independent verification; failed tagged candidates are replaced by a new commit and RC number, never by moving a tag.
+* Release classification, version metadata, checksum, SBOM, provenance/attestation, and packaged smoke results must agree with the promoted artifact.
 * Maven/Gradle projects are scanned from local workspace files.
 * Optional external language servers are outside the current deployment and treated as future/optional integrations.
 
@@ -59,11 +61,11 @@ No evidence was found for:
 * cloud/server deployment;
 * Docker image or Kubernetes deployment;
 * remote daemon exposure over HTTP/WebSocket;
-* published artifact repository coordinates and compatibility policy;
-* OS-specific release matrix beyond the jlink packaging notes.
+* published artifact repository coordinates beyond the Linux x86_64 stable runtime target;
+* OS-specific release matrix beyond the confirmed Linux x86_64 self-contained artifact.
 
-Status: blocked/unknown until deployment and release decisions are made.
+Status: needs-review for later distribution targets; the Linux x86_64 self-contained stable-release target is confirmed by `docs/releases/v1.0.0-plan.md`.
 
 == C4 Deployment View
 
-No C4 deployment view was generated in this baseline because deployment decisions are limited to local process/package facts. Owner: `arc42` with `c4model` once deployment nodes and artifact release policy are confirmed.
+No C4 deployment view was generated in this baseline because deployment remains a local-process and self-contained-package topology; the stable plan changes release evidence, not the runtime node structure. Owner: `arc42` with `c4model` if additional deployment nodes or targets are confirmed.

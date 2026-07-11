@@ -20,13 +20,13 @@ Status: implementation-informed for documented flows; no C4 dynamic diagrams yet
 |CLI delegates Java-specific analysis to `JavaLanguageAdapter` / planner classes.
 
 |4
-|Planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, and risk level.
+|Planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, risk level, and an explicit JDT-backed, lexical, or refusal evidence classification.
 
 |5
 |User reviews the preview. If applying, `PatchEngine` validates the current snapshot hash, checks edit safety, applies the workspace edit, and creates rollback metadata.
 
 |6
-|Diagnostics/tests may be run after apply. Rollback uses the recorded `Transaction` if needed.
+|Configured stable validation compares diagnostics before preview, after simulation, and after apply; an unapproved regression refuses apply. Rollback uses the recorded `Transaction` and, where required, verifies post-rollback diagnostics and restoration.
 |===
 
 Status: implementation-informed from CLI, Java adapter, patch engine, and testkit docs.
@@ -56,7 +56,7 @@ Status: implementation-informed from CLI, Java adapter, patch engine, and testki
 |Agent calls `apply_refactoring` only after approval; rollback remains available through `rollback_refactoring`.
 |===
 
-Status: implementation-informed from `docs/ai-workflow.md` and `docs/integration-contracts.md`.
+Status: implementation-informed from `docs/ai-workflow.md` and `docs/integration-contracts.md`; stable MCP status remains capability-by-capability and acceptance-gated.
 
 == Runtime Scenario: Editor Operation through LSP
 
@@ -80,7 +80,7 @@ Status: implementation-informed from `docs/ai-workflow.md` and `docs/integration
 |For advanced patch commands, editor can use advertised `workspace/executeCommand` hooks.
 |===
 
-Status: implementation-informed from `docs/integration-contracts.md`.
+Status: implementation-informed from `docs/integration-contracts.md`; stable LSP status remains capability-by-capability and acceptance-gated.
 
 == Runtime Scenario: Daemon Capability Discovery Before Project Open
 
@@ -92,7 +92,7 @@ Status: implementation-informed from `docs/integration-contracts.md`.
 |A daemon client starts the local daemon over stdio and sends JSON-RPC method `server.capabilities` before `project.open`.
 
 |2
-|The daemon returns RefactorKit name, version, API version, protocol `json-rpc-2.0`, and transport `stdio` without creating a project session or accessing a workspace.
+|The daemon returns RefactorKit name, version, API version, protocol `json-rpc-2.0`, and transport `stdio` without creating a project session or accessing a workspace. The stable target value is API version `1.0`; the current baseline remains pre-stable until contract acceptance.
 
 |3
 |The response lists documented daemon methods with stability, `requiresProject`, and `writesWorkspace` descriptors. `java.importExternalClass` is explicitly classified as experimental.

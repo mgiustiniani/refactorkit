@@ -17,44 +17,44 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |ADR 0001
 |Use Kotlin/JVM with Java 8-Compatible Bytecode
 |link:../adr/0001-kotlin-jvm-java-8-bytecode.adoc[docs/adr/0001-kotlin-jvm-java-8-bytecode.adoc]
-|Accepted for alpha
+|Accepted; stable compatibility evidence pending
 
 |ADR 0002
 |Use PatchPlan and PatchEngine Preview-Apply-Rollback Safety Model
 |link:../adr/0002-patchplan-patchengine-safety-model.adoc[docs/adr/0002-patchplan-patchengine-safety-model.adoc]
-|Accepted for alpha
+|Accepted; stable contract evidence pending
 
 |ADR 0003
 |Start Java Refactoring with a Lexical MVP Before Compiler-Backed Analysis
 |link:../adr/0003-java-lexical-mvp-before-compiler-analysis.adoc[docs/adr/0003-java-lexical-mvp-before-compiler-analysis.adoc]
-|Accepted for alpha
+|Superseded by ADR 0008
 
 |ADR 0004
 |Split Integration Surfaces into CLI, Daemon, LSP, and MCP
 |link:../adr/0004-cli-daemon-lsp-mcp-integration-split.adoc[docs/adr/0004-cli-daemon-lsp-mcp-integration-split.adoc]
-|Accepted for alpha
+|Accepted; stable surface classification pending
 
 |ADR 0005
 |Package the CLI with a Self-Contained jlink Runtime
 |link:../adr/0005-jlink-self-contained-cli-packaging.adoc[docs/adr/0005-jlink-self-contained-cli-packaging.adoc]
-|Accepted for alpha
+|Accepted; stable release evidence pending
 
 |ADR 0006
 |Scope MCP Tools and Resources Without Arbitrary Filesystem Access
 |link:../adr/0006-mcp-scoped-tools-and-resources.adoc[docs/adr/0006-mcp-scoped-tools-and-resources.adoc]
-|Accepted for alpha
+|Accepted; stable MCP classification pending
 
 |ADR 0007
 |Lexical Java MVP vs Compiler-Backed Analysis Before v1.0.0
 |link:../adr/0007-lexical-java-mvp-vs-compiler-analysis.adoc[docs/adr/0007-lexical-java-mvp-vs-compiler-analysis.adoc]
-|Accepted for beta; requires v1.0.0 follow-up
+|Superseded by ADR 0008
 
 |ADR 0008
 |Compiler-Backed Java Analysis Strategy
 |link:../adr/0008-compiler-backed-java-analysis-strategy.adoc[docs/adr/0008-compiler-backed-java-analysis-strategy.adoc]
-|Accepted for v0.3.0 prototype; v1.0.0 semantic guarantees require test evidence
+|Accepted; stable semantic capability promotion is evidence-gated
 |===
 
 == Decision Candidate Coverage
 
-The baseline alpha decision candidates have corresponding ADRs. ADR 0007 adds the beta lexical-versus-compiler-backed analysis baseline, and ADR 0008 records the post-beta compiler-backed Java analysis prototype strategy. Future architecture-significant decisions should be added as new ADR files and indexed here.
+The existing ADR set covers the stable-release architecture: API `1.0` patch safety, integration-surface classification, self-contained verifiable packaging, MCP least privilege, and Eclipse JDT evidence-gated semantic authority. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. No new decision was needed solely to activate the stable target.

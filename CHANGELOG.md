@@ -9,6 +9,12 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.3.0-SNAPSHOT`)
 
+- Activated the detailed `v1.0.0` stable release plan, including the required
+  `v0.3.0` → immutable RC → stable sequence, API `1.0` freeze, Java 8–25/JDT
+  boundaries, safety/stress gates, protocol classification, SBOM/provenance,
+  reproducibility, migration, and post-publication verification.
+- Updated release automation so hyphenated tags publish prereleases while stable
+  tags publish as the latest non-prerelease GitHub Release.
 - Advanced the main development version to `0.3.0-SNAPSHOT` after the published
   `v0.2.0-beta` release.
 - Added centralized version/API metadata: implementation name `RefactorKit`,

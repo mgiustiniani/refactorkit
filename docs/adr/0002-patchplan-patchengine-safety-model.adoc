@@ -4,22 +4,27 @@
 
 Date: 2026-07-10
 
-Status: Accepted for alpha
+Status: Accepted; stable contract evidence pending
 
 == Context
 
 RefactorKit exists to replace fragile text edits with deterministic, reviewable refactoring operations. Code changes may rename, move, create, delete, or modify files, so direct writes would make failures difficult to inspect and recover from.
 
-The alpha needs a small but explicit safety model that all clients can share.
+All integration surfaces need one explicit safety model. For `apiVersion=1.0`, that model is a versioned product contract rather than an implementation convention.
 
 == Decision
 
-Represent each planned change as a `PatchPlan` containing a workspace edit, affected files, diagnostics, warnings, confidence, and snapshot information. Apply changes through `PatchEngine` only after preview, validation, and user or caller approval. Record transaction metadata so applied changes can be rolled back.
+Represent each planned change as a `PatchPlan` containing a workspace edit, affected files, diagnostics, warnings, confidence, evidence classification, and snapshot information. Apply changes through `PatchEngine` only after preview, validation, and user or caller approval. Record transaction metadata sufficient to diagnose an interrupted apply and to roll back every managed write.
+
+At `apiVersion=1.0`, edit ordering, stale-snapshot rejection, overlap rejection, workspace and symlink boundaries, atomicity by filesystem capability, partial-failure reporting, transaction-log handling, apply, and rollback behavior are normative versioned contracts. Production workspace writes must not bypass `PatchEngine`.
+
+Where an operation contract requires diagnostics, compare diagnostics before preview, after preview simulation, after apply, and after rollback. Validation regression beyond the approved plan causes refusal rather than an unreported or best-effort write.
 
 == Consequences
 
 * CLI, daemon, LSP, and MCP clients can all present the same preview semantics.
 * The engine can reject stale plans, overlapping edits, and writes outside the workspace boundary.
-* Rollback metadata gives alpha users a recovery path after accepted changes.
+* Rollback metadata gives callers a recovery path after accepted changes and makes partial failure observable.
 * Refactoring implementations must produce structured edits instead of mutating files directly.
 * Complex operations may need additional diagnostics before they can be safely accepted.
+* Stable acceptance requires property, stress, corruption, interruption, unsafe-path, and hash-restoration evidence; the accepted architecture does not by itself prove those behaviors complete.

@@ -4,7 +4,7 @@
 
 Date: 2026-07-10
 
-Status: Accepted for alpha
+Status: Accepted; stable surface classification pending
 
 == Context
 
@@ -23,10 +23,16 @@ Expose deterministic refactoring capabilities through four integration surfaces:
 
 All surfaces delegate to shared core and language-adapter behavior instead of duplicating refactoring rules.
 
+For `v1.0.0`, the core patch contract plus documented CLI and daemon JSON-RPC contracts use `apiVersion=1.0`. Their command or method names, request/response fields, structured errors, capability metadata, lifecycle rules, and compatibility policy are stable only where explicitly inventoried and covered by contract evidence.
+
+LSP capabilities and commands, and MCP tools, resources, and prompts, must each be classified as stable or experimental. Protocol presence does not make every exposed capability stable. Stable protocol paths must preserve preview, validation, apply, rollback, refusal, cancellation, bounded-request, and workspace-scope rules where applicable.
+
 == Consequences
 
 * Consumers can choose the protocol that fits their workflow.
 * Core safety concepts, especially previews and rollback, remain consistent across integrations.
 * Protocol-specific modules can evolve without coupling the engine to one IDE or UI.
-* The project must maintain compatibility tests for multiple entry points.
+* The project must maintain contract and compatibility tests for every advertised stable entry point.
 * New capabilities should be added to core APIs first, then surfaced intentionally through each protocol.
+* Unknown methods, fields, invalid parameters, unsupported versions, stale plans, and cancellation must produce deterministic protocol-appropriate outcomes.
+* The release sequence may freeze candidate contracts in immutable `v1.0.0-rc.N` releases after `v0.3.0`; stable status follows acceptance evidence rather than surface availability.

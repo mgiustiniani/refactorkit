@@ -22,9 +22,13 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 * Usability
 ** CLI, daemon, LSP, MCP, and library integration modes
 ** Focused MCP resources and prompts for agents
-* Portability
-** Java 8-compatible bytecode where configured
+* Portability and supply-chain integrity
+** Java 8-compatible RefactorKit bytecode, separately verified from Java source support
 ** Self-contained CLI package with embedded runtime
+** Checksum, SBOM, provenance/attestation, and reproducibility evidence
+* Performance and resource control
+** Measurable reference-workspace budgets
+** Bounded requests, results, caches, pending plans, transaction metadata, memory, and execution time
 * Testability
 ** Unit tests, golden tests, sample projects, agent simulation tests, CI
 
@@ -135,6 +139,54 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |CI runs Gradle build, golden tests, self-contained package build, and packaged CLI smoke test.
 |`.github/workflows/ci.yml`.
 |implementation-informed
+
+|QS-SAFE-005
+|Safety
+|A stable apply path rejects unsafe symlinks/path traversal, exposes interrupted or partial apply deterministically, tolerates or reports transaction-log corruption, and restores the pre-apply hash after rollback for every managed write.
+|Stable safety acceptance matrix in `docs/releases/v1.0.0-plan.md`; ADR 0002.
+|confirmed target; planned evidence
+
+|QS-CORR-010
+|Correctness
+|Every advertised stable Java operation labels JDT-backed, narrowly proven lexical, or refusal evidence; unresolved or incomplete semantic evidence never results in a lexical edit presented as semantic authority.
+|Stable semantic acceptance matrix; ADR 0008.
+|confirmed target; planned evidence
+
+|QS-COMPAT-001
+|Compatibility
+|Representative Java 8, 11, 17, 21, and 25 projects parse, bind, diagnose, and execute only advertised stable operation shapes using explicit per-project compliance.
+|Stable Java compatibility matrix; ADRs 0001 and 0008.
+|confirmed target; planned evidence
+
+|QS-DIAG-001
+|Validation
+|Stable compiler-backed diagnostics have deterministic severity, source range, evidence, and category, and configured before/simulation/after/rollback gates refuse unapproved regressions.
+|Stable diagnostics acceptance matrix; ADRs 0002 and 0008.
+|confirmed target; planned evidence
+
+|QS-API-002
+|Interoperability
+|API `1.0` CLI and daemon clients receive versioned capability metadata and deterministic outcomes for unknown methods/fields, invalid parameters, stale plans, rollback failures, and supported `0.2` transition behavior or explicit version refusal.
+|Stable protocol contract suite; ADR 0004.
+|confirmed target; planned evidence
+
+|QS-PROTO-001
+|Interoperability and security
+|Every exposed LSP capability/command and MCP tool/resource/prompt is classified stable or experimental; stable paths pass initialization, malformed-input, refusal, cancellation, and workspace-boundary tests without arbitrary MCP filesystem access.
+|Stable LSP/MCP contract suites; ADRs 0004 and 0006.
+|confirmed target; planned evidence
+
+|QS-PERF-001
+|Performance
+|Reference workspaces remain within documented scan, index, preview, apply, and memory budgets, while daemon requests, results, caches, pending plans, and transaction metadata fail with deterministic limit/timeout/cancellation behavior rather than unbounded growth.
+|Stable benchmark and stress jobs in `docs/releases/v1.0.0-plan.md`.
+|confirmed target; planned evidence
+
+|QS-SUPPLY-001
+|Supply-chain integrity
+|A downloaded Linux x86_64 stable archive runs without global Java and independently verifies checksum, SBOM, provenance/attestation, layout, permissions, licenses, version metadata, and documented reproducibility evidence or limits.
+|Stable packaging acceptance matrix; ADR 0005.
+|confirmed target; planned evidence
 |===
 
 == Validation Commands
@@ -164,11 +216,15 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |Signed method rename (including exact annotation-element declarations and named usages), unambiguous `Owner#field` field rename, type-level rename (including annotation types), move-class file scoping, safe-delete type references, annotation-type/element indexing and reference analysis, and exact-import use checks use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on explicit fallback paths. Field evidence does not imply semantic support for arbitrary unsigned methods. Annotation-element change-signature and default-value editing are not supported. Organize imports preserves wildcard imports and unresolved files do not receive semantic unused-import removal.
 |known risk
 
-|No explicit performance targets
-|Indexing and large-workspace behavior need measurable targets.
-|needs-review
+|Performance targets not yet accepted
+|The stable plan now requires measurable reference-workspace and resource budgets, but numeric budgets and passing evidence remain pending.
+|planned release blocker
 
 |No full threat model
-|Security properties for MCP/importer/external language-server boundaries need formal review.
+|Security properties for MCP/importer/external language-server boundaries need formal review; stable MCP least-privilege and workspace-boundary tests reduce but do not eliminate this gap.
 |needs-review
+
+|Stable acceptance evidence incomplete
+|API `1.0`, Java 8–25, diagnostics, protocol classification, packaging, supply-chain, and reproducibility claims cannot be marked stable until the immutable RC acceptance matrix passes.
+|planned release blocker
 |===

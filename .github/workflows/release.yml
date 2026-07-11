@@ -76,7 +76,8 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
           body_path: RELEASE_NOTES.md
           files: |
             refactorkit-runtime-*-linux-x86_64.zip
