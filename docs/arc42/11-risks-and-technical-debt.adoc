@@ -147,7 +147,7 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-024
-|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 checksum, v1 migration, and corruption quarantine are implemented; richer retention/validation metadata remain (`TX-011`, `TX-012`).
+|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 checksum, v1 migration, and corruption quarantine are implemented; versioned snapshot/validation/lifecycle metadata is implemented; separate content hashes, capability reporting, and destructive fault evidence remain (`TX-011`, `TX-012`).
 |Validated UUIDv4 IDs, normalized containment, symbolic-link/non-regular-file refusal, owner-only permissions where supported, and coded corrupt-record failures prevent the audited direct traversal path; truncated or incomplete records can still block recovery and audit.
 |Add richer retained history and fault evidence; preserve checksum/migration/quarantine and durable lifecycle evidence.
 |remaining journal integrity and release blocker

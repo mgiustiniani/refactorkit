@@ -374,6 +374,15 @@ class PatchEngineTest {
 
         assertEquals(JournalState.APPLIED, record?.state)
         assertEquals(TransactionJournalRecord.CURRENT_SCHEMA_VERSION, record?.schemaVersion)
+        assertEquals(RefactorKitVersion.VERSION, record?.implementationVersion)
+        assertEquals(RefactorKitVersion.API_VERSION, record?.apiVersion)
+        assertEquals(snapshot.hash, record?.preSnapshotHash)
+        assertEquals(projectSnapshot(root).hash, record?.postSnapshotHash)
+        assertEquals(
+            listOf(JournalState.PREPARED, JournalState.APPLYING, JournalState.APPLIED),
+            record?.history?.map(JournalEvent::state),
+        )
+        assertTrue(record?.history?.zipWithNext()?.all { (left, right) -> !right.at.isBefore(left.at) } == true)
         assertEquals("class Example {}\n", record?.preImages?.single()?.content)
         assertEquals("class Changed {}\n", record?.postImages?.single()?.content)
         assertEquals("testJournal", record?.operation)

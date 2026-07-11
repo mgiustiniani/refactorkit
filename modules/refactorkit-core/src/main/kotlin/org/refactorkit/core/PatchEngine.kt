@@ -10,6 +10,7 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
+import java.time.Instant
 import java.util.UUID
 import java.util.stream.Collectors
 
@@ -169,7 +170,7 @@ class PatchEngine(
                 actor = authorization.actor,
                 recordedAt = java.time.Instant.now(),
             )
-            applyPrepared(normalizedPlan, approval)
+            applyPrepared(normalizedPlan, currentSnapshot, approval)
         }
     }
 
@@ -626,9 +627,13 @@ class PatchEngine(
         }
     }
 
-    private fun applyPrepared(plan: PatchPlan, approval: ApprovalRecord): ApplyResult {
+    private fun applyPrepared(
+        plan: PatchPlan,
+        snapshot: ProjectSnapshot,
+        approval: ApprovalRecord,
+    ): ApplyResult {
         val record = try {
-            prepareJournalRecord(plan, approval)
+            prepareJournalRecord(plan, snapshot, approval)
         } catch (error: Exception) {
             return ApplyResult.Refused(listOf(Diagnostic(
                 "Cannot stage transaction before apply: ${error.message}",
@@ -674,7 +679,11 @@ class PatchEngine(
         }
     }
 
-    private fun prepareJournalRecord(plan: PatchPlan, approval: ApprovalRecord): TransactionJournalRecord {
+    private fun prepareJournalRecord(
+        plan: PatchPlan,
+        snapshot: ProjectSnapshot,
+        approval: ApprovalRecord,
+    ): TransactionJournalRecord {
         val staged = stageWorkspaceEdit(plan.workspaceEdit)
         val preImages = staged.preImages.map { image ->
             image.copy(posixPermissions = readPosixPermissions(image.path))
@@ -696,7 +705,14 @@ class PatchEngine(
             preImages = preImages,
             postImages = postImages,
             createdDirectories = missingParentDirectories(postImages),
+            preSnapshotHash = snapshot.hash,
+            postSnapshotHash = postSnapshotHash(snapshot, postImages),
             state = JournalState.PREPARED,
+            history = listOf(JournalEvent(
+                JournalState.PREPARED,
+                Instant.now(),
+                "filesystem, snapshot, edit, approval, precondition, and diagnostics validation passed",
+            )),
         )
     }
 
@@ -743,6 +759,29 @@ class PatchEngine(
             preImages = initial.map { FileImage(it.key, it.value) },
             postImages = working.map { FileImage(it.key, it.value) },
             rollbackEdit = WorkspaceEdit(rollbackEdits.asReversed()),
+        )
+    }
+
+    private fun postSnapshotHash(snapshot: ProjectSnapshot, postImages: List<FileImage>): String {
+        val files = snapshot.files.associateByTo(linkedMapOf()) { it.path.normalize() }
+        postImages.forEach { image ->
+            val path = image.path.normalize()
+            if (image.content == null) {
+                files.remove(path)
+            } else {
+                val extension = extensionOf(path)
+                if (path in files || extension in snapshot.sourceExtensions) {
+                    val languageId = files[path]?.languageId ?: requireNotNull(extension)
+                    files[path] = SourceFile(path, image.content, languageId)
+                }
+            }
+        }
+        return ProjectSnapshot.hashSnapshot(
+            snapshot.modules,
+            files.values.toList(),
+            snapshot.sourceExtensions,
+            snapshot.ignoredDirectories,
+            snapshot.classpathEvidence,
         )
     }
 

@@ -41,7 +41,11 @@ class TransactionLog(logDir: Path) {
         }
         prepareLogDirectory()
         val file = secureFile(record.transaction.id)
-        writeNewDurably(file, record.toJson())
+        val now = Instant.now()
+        val initial = if (record.history.isEmpty()) {
+            record.copy(history = listOf(JournalEvent(record.state, now, record.failure)), updatedAt = now)
+        } else record
+        writeNewDurably(file, initial.toJson())
     }
 
     fun update(record: TransactionJournalRecord) {
@@ -53,7 +57,15 @@ class TransactionLog(logDir: Path) {
                 "Transaction journal record is missing: ${record.transaction.id.value}",
             )
         }
-        replaceDurably(file, record.copy(updatedAt = Instant.now()).toJson())
+        val persisted = loadRecord(record.transaction.id) ?: throw TransactionLogException(
+            "transaction.missing",
+            "Transaction journal record is missing: ${record.transaction.id.value}",
+        )
+        val now = Instant.now()
+        replaceDurably(file, record.copy(
+            history = persisted.history + JournalEvent(record.state, now, record.failure),
+            updatedAt = now,
+        ).toJson())
     }
 
     fun load(id: TransactionId): Transaction? =

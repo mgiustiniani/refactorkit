@@ -249,13 +249,17 @@ leaves both source content and transaction journal unchanged.
 
 Status: **partially closed**.
 
-Records now contain schema version, operation, forward edit, compensation,
-affected-file pre/post content images, pre-snapshot hash, lifecycle state,
-update time, and failure detail. Successful rollback retains history as
-`ROLLED_BACK`. Remaining stable fields include implementation/API version,
-post-apply workspace snapshot, validation/recovery-attempt history, and content
-hashes separated from recovery payloads. Schema-v2 records now carry a canonical
-SHA-256 integrity checksum covering transaction, approval, edits, pre/post images,
+Records now contain schema version, implementation/API version, operation,
+forward edit, compensation, affected-file pre/post content images, pre/post
+engine-scope snapshot hashes, lifecycle state, update time, and failure detail.
+An append-only timestamped event history begins with the successful filesystem,
+snapshot, edit, approval, precondition, and diagnostics validation outcome and
+retains each apply, rollback, refusal-detail, and recovery transition. Successful
+rollback therefore preserves the complete `PREPARED` through `ROLLED_BACK`
+sequence rather than only its terminal state. Legacy records remain readable
+with unknown version/hash metadata and empty history. Remaining stable work is
+content hashes separated from recovery payloads and destructive fault evidence.
+Schema-v3 records carry this metadata plus a canonical SHA-256 integrity checksum covering transaction, approval, edits, pre/post images,
 lifecycle, timestamps, and failure detail; tampering fails as
 `transaction.corrupt`.
 
@@ -266,9 +270,10 @@ Status: **partially closed**.
 New records use create-new plus file/directory durable flush. Lifecycle updates
 write and fsync a same-directory temporary file, require atomic replacement, and
 fsync the journal directory. Parsing/schema/path failures remain coded. Still
-Schema-v2 writes include and verify a canonical SHA-256 checksum. Schema-v1
-records remain readable and are atomically migrated to v2 on the next lifecycle
-update. Malformed, ID-mismatched, or checksum-invalid records are atomically moved to an
+Schema-v2/v3 writes include and verify canonical SHA-256 checksums. Schema-v1
+records remain readable; v1/v2 records are atomically migrated to v3 on the next
+lifecycle update, with the original v2 canonical checksum vocabulary preserved
+for backward verification. Malformed, ID-mismatched, or checksum-invalid records are atomically moved to an
 owner-only `.quarantine` directory and reported as `transaction.quarantined`.
 Any retained quarantine record blocks list/load/new writes and therefore startup
 recovery until explicit manual review/removal; quarantine failure is separately
