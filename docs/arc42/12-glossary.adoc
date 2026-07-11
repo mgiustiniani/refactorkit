@@ -64,9 +64,14 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |`Models.kt`
 
 |Annotation Type
-|Java `@interface` declaration represented as an `ANNOTATION` symbol. RefactorKit indexes its declaration, nesting owner, binding identity, and usages for type-level lookup and existing class-style operations; this term does not include annotation element/member refactoring.
+|Java `@interface` declaration represented as an `ANNOTATION` symbol. RefactorKit indexes its declaration, nesting owner, binding identity, and usages for type-level lookup and existing class-style operations.
 |Core / Java
 |`Models.kt`, `JavaLanguageAdapter.kt`, `JdtJavaSemanticAnalyzer.kt`, ADR 0008
+
+|Annotation Element
+|Zero-parameter member declared inside a Java annotation type, represented by JDT analysis as a signed `METHOD` symbol such as `com.acme.Route#path()`. Read-only queries and clean exact signed rename cover its declaration and binding-matched named usages; implicit values have no element name to edit. Change-signature and default-value editing are outside this support.
+|Java
+|`JdtJavaSemanticAnalyzer.kt`, `JavaRenameMemberPlannerTest.kt`, ADR 0008
 
 |Reference
 |Source location that references a symbol.

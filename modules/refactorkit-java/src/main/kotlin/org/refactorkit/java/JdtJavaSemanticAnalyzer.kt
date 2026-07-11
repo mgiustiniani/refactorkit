@@ -5,6 +5,7 @@ import org.eclipse.jdt.core.dom.AST
 import org.eclipse.jdt.core.dom.ASTParser
 import org.eclipse.jdt.core.dom.ASTVisitor
 import org.eclipse.jdt.core.dom.AnnotationTypeDeclaration
+import org.eclipse.jdt.core.dom.AnnotationTypeMemberDeclaration
 import org.eclipse.jdt.core.dom.ClassInstanceCreation
 import org.eclipse.jdt.core.dom.CompilationUnit
 import org.eclipse.jdt.core.dom.EnumDeclaration
@@ -205,6 +206,28 @@ class JdtJavaSemanticAnalyzer {
 
             override fun endVisit(node: RecordDeclaration) {
                 if (ownerStack.isNotEmpty()) ownerStack.removeAt(ownerStack.lastIndex)
+            }
+
+            override fun visit(node: AnnotationTypeMemberDeclaration): Boolean {
+                val owner = ownerStack.lastOrNull()
+                    ?: JavaPackageUtil.fqn(packageName, file.path.fileName.toString().removeSuffix(".java"))
+                val binding = node.resolveBinding()
+                val signature = "${node.name.identifier}()"
+                val memberSymbol = symbol(
+                    file = file,
+                    compilationUnit = compilationUnit,
+                    packageName = packageName,
+                    ownerQualifiedName = owner,
+                    simpleName = node.name.identifier,
+                    kind = JdtJavaSemanticSymbolKind.METHOD,
+                    startPosition = node.name.startPosition,
+                    bindingQualifiedName = null,
+                    bindingKey = binding?.key,
+                    memberSignature = signature,
+                )
+                symbols += memberSymbol
+                if (binding != null) methodBindings += MethodBindingRecord(memberSymbol, binding)
+                return true
             }
 
             override fun visit(node: MethodDeclaration): Boolean {
@@ -541,6 +564,7 @@ class JdtJavaSemanticAnalyzer {
         return when (parent) {
             is TypeDeclaration -> parent.name === this
             is AnnotationTypeDeclaration -> parent.name === this
+            is AnnotationTypeMemberDeclaration -> parent.name === this
             is EnumDeclaration -> parent.name === this
             is RecordDeclaration -> parent.name === this
             is MethodDeclaration -> parent.name === this

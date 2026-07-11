@@ -96,8 +96,14 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 
 |QS-CORR-007
 |Correctness
-|When two annotation types share the simple name `Audited`, an exact rename of `com.acme.Audited` to `Tracked` changes its declaration, source file, and binding-matched usages while preserving `com.other.Audited` and its usage. Annotation types also remain available to read-only lookup and existing type-level move, safe-delete, recipe, and owner-validation paths; no annotation element/member refactoring is implied.
+|When two annotation types share the simple name `Audited`, an exact rename of `com.acme.Audited` to `Tracked` changes its declaration, source file, and binding-matched usages while preserving `com.other.Audited` and its usage. Annotation types also remain available to read-only lookup and existing type-level move, safe-delete, recipe, and owner-validation paths.
 |`JavaRenameClassPlannerTest`: exact annotation-type declaration/file/usage rename with same-simple-name package disambiguation; lexical and JDT annotation indexing/analyzer evidence.
+|implementation-informed
+
+|QS-CORR-008
+|Correctness
+|Given the signed annotation-element selector `com.acme.Route#path()`, read-only lookup/reference queries resolve the zero-parameter `METHOD` symbol and its binding-matched named usages. With clean semantic evidence, rename to `value` updates the exact declaration and `@Route(path=...)` name while preserving an unrelated `com.other.Route#path()` declaration and usage. Implicit single-element values contain no name to edit.
+|`JavaRenameMemberPlannerTest`: annotation-element lookup/reference and applied signed rename with package-disambiguation evidence.
 |implementation-informed
 
 |QS-AI-001
@@ -149,7 +155,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Compiler-backed Java analysis covers selected slices only
-|Signed member rename, type-level rename (including annotation types), move-class file scoping, safe-delete type references, annotation-type indexing/reference analysis, and exact-import use checks use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on explicit fallback paths. Annotation element/member refactoring is not supported. Organize imports preserves wildcard imports and unresolved files do not receive semantic unused-import removal.
+|Signed member rename (including exact annotation-element declarations and named usages), type-level rename (including annotation types), move-class file scoping, safe-delete type references, annotation-type/element indexing and reference analysis, and exact-import use checks use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on explicit fallback paths. Annotation-element change-signature and default-value editing are not supported. Organize imports preserves wildcard imports and unresolved files do not receive semantic unused-import removal.
 |known risk
 
 |No explicit performance targets

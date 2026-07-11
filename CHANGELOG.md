@@ -49,6 +49,10 @@ review safety boundaries before applying refactorings.
   binding keys, or override families containing declarations outside the scanned
   source workspace. Unsigned member rename remains a lexical fallback with
   overload warnings.
+- Added signed JDT annotation-element identity and rename. Selectors such as
+  `com.acme.Route#path()` now resolve through read-only lookup/reference APIs and
+  rename exact element declarations plus named annotation usages while preserving
+  unrelated same-signature annotation elements.
 - Added Java annotation-type symbols across lexical indexing and JDT binding
   analysis. Annotation declarations/usages now participate in exact class-style
   rename, move, safe-delete, read-only symbol lookup, and type-owner validation;

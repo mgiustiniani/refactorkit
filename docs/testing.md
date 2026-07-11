@@ -174,6 +174,9 @@ scan → find symbol → preview → inspect → apply → verify → rollback �
 
 ## Integration test notes
 
+- Annotation-element coverage verifies signed zero-parameter JDT identity,
+  read-only definition/reference lookup, and exact rename of the declaration and
+  named usage while preserving an unrelated same-signature annotation element.
 - Annotation-type coverage verifies lexical/JDT symbol discovery and exact
   binding-backed rename of the declaration and selected annotation usages while
   preserving an unrelated same-simple-name annotation type.

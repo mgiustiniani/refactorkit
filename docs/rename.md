@@ -41,11 +41,15 @@ A `renameClass` preview is considered safe enough to review when:
 A `renameMember` preview is considered safe enough to review when:
 
 - the symbol uses `<fully.qualified.Owner#member>` form;
-- the owner type and target method or field are found;
+- the owner type and target method, field, or zero-parameter annotation element
+  are found;
 - the new member name is a valid Java identifier and differs from the old name;
 - likely in-scope Java files are updated based on owner package/import/FQN/simple
   name visibility;
-- overload warnings, if present, have been reviewed.
+- overload warnings, if present, have been reviewed;
+- signed annotation-element selectors such as `com.acme.Route#path()` update the
+  declaration and binding-matched named usages; implicit single-element values do
+  not contain a member name and require no edit.
 
 ## Refusal conditions
 

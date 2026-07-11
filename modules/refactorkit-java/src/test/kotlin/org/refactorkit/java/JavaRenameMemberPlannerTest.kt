@@ -3,6 +3,7 @@ package org.refactorkit.java
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.SymbolId
 import java.nio.file.Files
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -331,6 +332,47 @@ class JavaRenameMemberPlannerTest {
         val affected = planA.affectedFiles.map { it.toString() }
         assertTrue(affected.any { it.endsWith("A.java") })
         assertTrue(affected.none { it.endsWith("B.java") }, "B.java must not be affected by A#go rename")
+    }
+
+    @Test
+    fun signedRenameUpdatesAnnotationElementDeclarationAndNamedUsages() {
+        val root = createTempProject(
+            "src/main/java/com/acme/Route.java" to """
+                package com.acme;
+                public @interface Route { String path(); }
+            """.trimIndent(),
+            "src/main/java/com/acme/Service.java" to """
+                package com.acme;
+                @Route(path = "/users")
+                public class Service {}
+            """.trimIndent(),
+            "src/main/java/com/other/Route.java" to """
+                package com.other;
+                public @interface Route { String path(); }
+            """.trimIndent(),
+            "src/main/java/com/other/Service.java" to """
+                package com.other;
+                @Route(path = "/other")
+                public class Service {}
+            """.trimIndent(),
+        )
+        val snapshot = JavaProjectScanner().scan(root)
+        val member = adapter.findSymbol(snapshot, SymbolId("com.acme.Route#path()"))
+        val references = adapter.findReferences(snapshot, SymbolId("com.acme.Route#path()"))
+        assertEquals(org.refactorkit.core.Symbol.Kind.METHOD, member?.kind)
+        assertEquals(listOf("src/main/java/com/acme/Service.java"), references.map { it.location.path.toString() })
+
+        val plan = planner.preview(snapshot, "com.acme.Route#path()", "value")
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.warnings.any { it.contains("JDT declaration/reference ranges") }, plan.warnings.toString())
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot.hash))
+        val route = root.resolve("src/main/java/com/acme/Route.java").readText()
+        val service = root.resolve("src/main/java/com/acme/Service.java").readText()
+        assertTrue(route.contains("String value()"), route)
+        assertTrue(service.contains("@Route(value = \"/users\")"), service)
+        assertTrue(root.resolve("src/main/java/com/other/Route.java").readText().contains("String path()"))
+        assertTrue(root.resolve("src/main/java/com/other/Service.java").readText().contains("@Route(path = \"/other\")"))
     }
 
     private fun createTempProject(vararg entries: Pair<String, String>): java.nio.file.Path {
