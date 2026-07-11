@@ -23,6 +23,8 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added real subprocess kill/restart acceptance at lifecycle journal temp force,
+  proving old-record authority and subsequent lifecycle progress.
 - Added real subprocess kill/restart acceptance after a partial two-file commit,
   including WAL inspection and exact startup compensation.
 - Extended filesystem capability reporting with journal store identity,

@@ -122,7 +122,9 @@ Workspace tests inject deterministic failures after staged-file force and after 
 committed workspace image. Acceptance covers unchanged content and temporary-file
 cleanup on staging disk-full, full compensation after a partial multi-file
 commit, durable `RECOVERY_REQUIRED` after compensation failure, and successful
-compensation retry by a clean `PatchEngine` restart. A subprocess test also force-kills a real JVM after the first of two committed
+compensation retry by a clean `PatchEngine` restart. A journal subprocess test force-kills a real JVM after lifecycle temp-file force,
+proving the prior checksummed record remains authoritative and can advance after
+restart. A workspace subprocess test force-kills a real JVM after the first of two committed
 images, inspects the durable `APPLYING`/mixed-image state, and proves exact clean-
 restart compensation. Power-loss, torn-journal, and mounted-filesystem scenarios
 remain separate RC acceptance gates.

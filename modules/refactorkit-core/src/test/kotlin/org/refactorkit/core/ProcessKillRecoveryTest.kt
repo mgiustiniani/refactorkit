@@ -53,8 +53,82 @@ class ProcessKillRecoveryTest {
         assertTrue(recovered.failure?.contains("interrupted applying") == true)
     }
 
+    @Test
+    @Timeout(30)
+    fun processKillDuringJournalTempWritePreservesPreviousRecord() {
+        val root = Files.createTempDirectory("refactorkit-journal-kill")
+        val logDir = root.resolve(".refactorkit/transactions")
+        val transaction = Transaction(
+            id = TransactionId.new(),
+            planId = PlanId("plan-journal-kill"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        TransactionLog(logDir).prepare(TransactionJournalRecord(
+            transaction = transaction,
+            operation = "journalProcessKill",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        ))
+        val marker = root.resolve("journal-kill-ready.marker")
+        val output = root.resolve("journal-child-output.log")
+        val javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+        val child = ProcessBuilder(
+            javaExecutable,
+            "-cp",
+            System.getProperty("java.class.path"),
+            ProcessKillJournalUpdateMain::class.java.name,
+            logDir.toString(),
+            transaction.id.value,
+            marker.toString(),
+        )
+            .redirectErrorStream(true)
+            .redirectOutput(output.toFile())
+            .start()
+
+        val deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos()
+        while (!Files.exists(marker) && child.isAlive && System.nanoTime() < deadline) Thread.sleep(20)
+        assertTrue(Files.exists(marker), "Child did not force journal temp: ${readOutput(output)}")
+        child.destroyForcibly()
+        assertTrue(child.waitFor(10, TimeUnit.SECONDS), "Killed journal child did not terminate")
+
+        val retained = TransactionLog(logDir).loadRecord(transaction.id)
+        assertEquals(JournalState.PREPARED, retained?.state)
+        assertEquals(listOf(JournalState.PREPARED), retained?.history?.map(JournalEvent::state))
+        assertTrue(Files.list(logDir).use { stream ->
+            stream.anyMatch { it.fileName.toString().startsWith(".${transaction.id.value}.json.tmp-") }
+        })
+        TransactionLog(logDir).update(requireNotNull(retained).copy(state = JournalState.ROLLED_BACK))
+        assertEquals(JournalState.ROLLED_BACK, TransactionLog(logDir).loadRecord(transaction.id)?.state)
+    }
+
     private fun readOutput(path: Path): String =
         if (Files.exists(path)) Files.readString(path) else "<no child output>"
+}
+
+object ProcessKillJournalUpdateMain {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val logDir = Path.of(args[0])
+        val id = requireNotNull(TransactionId.parseOrNull(args[1]))
+        val marker = Path.of(args[2])
+        val log = TransactionLog(logDir, JournalFaultInjector { point, _ ->
+            if (point == JournalFaultPoint.AFTER_UPDATE_TEMP_FORCE) {
+                Files.writeString(
+                    marker,
+                    "ready\n",
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.SYNC,
+                )
+                Thread.sleep(Duration.ofMinutes(5).toMillis())
+            }
+        })
+        val record = requireNotNull(log.loadRecord(id))
+        log.update(record.copy(state = JournalState.APPLYING))
+    }
 }
 
 object ProcessKillApplyMain {

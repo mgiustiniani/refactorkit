@@ -287,13 +287,16 @@ Any retained quarantine record blocks list/load/new writes and therefore startup
 recovery until explicit manual review/removal; quarantine failure is separately
 coded. Capability reporting now names workspace and journal file stores, whether they
 are shared, and the journal durability strategy alongside atomic-move/file-force/
-directory-force probe results. Still open: real kill/torn-write proof for every journal persistence boundary. Deterministic
-journal hooks now prove that a failure after new-record force leaves a complete
-`PREPARED` intent, a lifecycle temp-file failure preserves the prior record and
-cleans the temp, and a post-atomic-move/pre-directory-force failure leaves the
-complete new state readable by restart. Workspace staging, partial commit,
-compensation failure, and restart retry also have deterministic in-process
-evidence.
+directory-force probe results. Deterministic journal hooks prove that a failure
+after new-record force leaves a complete `PREPARED` intent, a lifecycle temp-file
+failure preserves the prior record and cleans the temp, and a post-atomic-move/
+pre-directory-force failure leaves the complete new state readable by restart.
+A real subprocess kill after lifecycle temp-file force additionally proves that
+the prior checksummed record remains authoritative and can advance after restart
+while the uncommitted owner-only temp is ignored. Workspace staging, partial
+commit, compensation failure, and restart retry also have deterministic evidence.
+Still open: real kill coverage at the other journal boundaries, raw torn-byte
+simulation, and power-loss proof.
 
 ### TX-013 — Rollback filesystem metadata and directory state
 
