@@ -131,8 +131,7 @@ Required closure:
 
 ### TX-005 — No workspace isolation or cross-process lock
 
-Status: **substantially closed for managed first-party writes; compatibility API
-closure remains**.
+Status: **closed for RefactorKit-managed writes after the audited baseline**.
 
 `PatchEngine` now acquires a non-blocking operating-system `FileLock` at
 `.refactorkit/workspace.lock` around validation, apply, and rollback. Lock
@@ -149,10 +148,11 @@ CLI, daemon, managed LSP/MCP apply, recipes, and golden execution use this path.
 Tests cover same-process contention, symlink metadata refusal, and a file change
 between scan and lock acquisition.
 
-The hash-only compatibility overload is also locked but cannot prove per-file
-preconditions. It must be removed or narrowed before the stable library API is
-frozen; this residual overlaps `TX-014`. Native editor-applied LSP edits remain
-outside this managed lock boundary under `TX-007`.
+The hash-only apply overload has been removed, all internal tests use the same
+snapshot-aware contract, and `ProjectSnapshot.hash` is now derived from files
+rather than caller-overridable constructor state. Native editor-applied LSP edits
+remain outside this managed lock boundary under `TX-007`. Full engine-owned
+workspace rescan scope remains a separate `TX-014` concern.
 
 ### TX-006 — Direct file replacement is not crash-safe or durable
 
@@ -255,12 +255,17 @@ or created parent-directory state. Implicitly created directories remain after
 rollback. Directory create/rename operations described by requirements are not
 represented in the current `FileEdit` model.
 
-### TX-014 — `PatchEngine` trusts a caller-supplied current hash
+### TX-014 — Apply snapshot ownership is not fully engine-derived
 
-The library API receives `currentSnapshotHash`; it does not calculate or verify
-that hash itself. First-party integrations rescan before apply, but a library
-consumer can pass `plan.snapshotHash` without inspecting current files. Stable
-library safety cannot rely only on caller discipline.
+Status: **narrowed after the audited baseline**.
+
+The hash-only apply overload is removed and `ProjectSnapshot.hash` is computed
+from snapshot files rather than accepted as a constructor argument. Apply now
+requires a `ProjectSnapshot` and revalidates all initially affected paths under
+the workspace lock. A library consumer can still reuse or construct a stale
+snapshot whose file list omits a newly appeared, semantically relevant but
+previously unaffected source. Stable closure therefore still requires an
+engine-owned rescan/scope manifest rather than caller discipline alone.
 
 ### TX-015 — Diagnostics are not a central transaction gate
 
@@ -339,9 +344,9 @@ The current requirements should be corrected before API `1.0` freeze.
 
 ## Recommended closure order
 
-1. Retire/narrow the hash-only apply compatibility path and freeze the managed
-   lock/precondition contract (`TX-005`, `TX-014`).
-2. Introduce a versioned write-ahead transaction journal and startup recovery.
+1. Introduce a versioned write-ahead transaction journal and startup recovery.
+2. Make apply snapshot scope engine-owned so newly appeared relevant files cannot
+   be omitted by library callers (`TX-014`).
 3. Stage/render all file results, merge same-file edits, and validate all bounds
    before mutation.
 4. Use temp-file plus atomic/durable replacement where supported; implement

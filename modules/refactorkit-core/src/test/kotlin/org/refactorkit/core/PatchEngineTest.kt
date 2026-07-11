@@ -17,9 +17,10 @@ class PatchEngineTest {
         val file = root.resolve("Example.java")
         Files.writeString(file, "class Example {}\n")
 
+        val snapshot = projectSnapshot(root)
         val plan = PatchPlan(
             operation = "test",
-            snapshotHash = "snapshot-before-preview",
+            snapshotHash = snapshot.hash,
             confidence = 1.0,
             summary = "stale snapshot test",
             affectedFiles = setOf(Path.of("Example.java")),
@@ -31,7 +32,10 @@ class PatchEngineTest {
             )),
         )
 
-        val result = PatchEngine(root).apply(plan, "snapshot-after-change")
+        val changedSnapshot = snapshot.copy(
+            files = snapshot.files + SourceFile(Path.of("Other.java"), "class Other {}\n", "java"),
+        )
+        val result = PatchEngine(root).apply(plan, changedSnapshot)
 
         assertIs<ApplyResult.Refused>(result)
         assertTrue(result.diagnostics.any { it.code == "snapshot.changed" })
@@ -42,16 +46,17 @@ class PatchEngineTest {
     fun refusesApplyForPathOutsideWorkspace() {
         val root = Files.createTempDirectory("refactorkit-test")
         val outsidePath = Path.of("..", "rk-escape-${System.nanoTime()}.txt")
+        val snapshot = projectSnapshot(root)
         val plan = PatchPlan(
             operation = "test",
-            snapshotHash = "snapshot",
+            snapshotHash = snapshot.hash,
             confidence = 1.0,
             summary = "outside workspace test",
             affectedFiles = setOf(outsidePath),
             workspaceEdit = WorkspaceEdit(listOf(FileEdit.Create(outsidePath, "secret"))),
         )
 
-        val result = PatchEngine(root).apply(plan, "snapshot")
+        val result = PatchEngine(root).apply(plan, snapshot)
 
         assertIs<ApplyResult.Refused>(result)
         assertTrue(result.diagnostics.any { it.code == "path.outsideWorkspace" })
@@ -63,9 +68,10 @@ class PatchEngineTest {
         val root = Files.createTempDirectory("refactorkit-test")
         val outside = Files.createTempDirectory("refactorkit-outside")
         Files.createSymbolicLink(root.resolve("linked"), outside)
+        val snapshot = projectSnapshot(root)
         val plan = PatchPlan(
             operation = "test",
-            snapshotHash = "snapshot",
+            snapshotHash = snapshot.hash,
             confidence = 1.0,
             summary = "symbolic link escape test",
             affectedFiles = setOf(Path.of("linked", "escaped.txt")),
@@ -74,7 +80,7 @@ class PatchEngineTest {
             )),
         )
 
-        val result = PatchEngine(root).apply(plan, "snapshot")
+        val result = PatchEngine(root).apply(plan, snapshot)
 
         assertIs<ApplyResult.Refused>(result)
         assertTrue(result.diagnostics.any { it.code == "path.symbolicLink" })
@@ -84,9 +90,10 @@ class PatchEngineTest {
     @Test
     fun preflightRefusalLeavesEarlierEditsUnapplied() {
         val root = Files.createTempDirectory("refactorkit-test")
+        val snapshot = projectSnapshot(root)
         val plan = PatchPlan(
             operation = "test",
-            snapshotHash = "snapshot",
+            snapshotHash = snapshot.hash,
             confidence = 1.0,
             summary = "preflight all edits",
             affectedFiles = setOf(Path.of("Created.java"), Path.of("Missing.java")),
@@ -96,7 +103,7 @@ class PatchEngineTest {
             )),
         )
 
-        val result = PatchEngine(root).apply(plan, "snapshot")
+        val result = PatchEngine(root).apply(plan, snapshot)
 
         assertIs<ApplyResult.Refused>(result)
         assertTrue(result.diagnostics.any { it.code == "file.missing" })
@@ -107,6 +114,7 @@ class PatchEngineTest {
     fun preflightSupportsSequentialModifyThenRename() {
         val root = Files.createTempDirectory("refactorkit-test")
         Files.writeString(root.resolve("Old.java"), "class Old {}\n")
+        val snapshot = projectSnapshot(root)
         val edit = WorkspaceEdit(listOf(
             FileEdit.Modify(
                 Path.of("Old.java"),
@@ -116,14 +124,14 @@ class PatchEngineTest {
         ))
         val plan = PatchPlan(
             operation = "test",
-            snapshotHash = "snapshot",
+            snapshotHash = snapshot.hash,
             confidence = 1.0,
             summary = "sequential virtual state",
             affectedFiles = edit.affectedFiles(),
             workspaceEdit = edit,
         )
 
-        val result = PatchEngine(root).apply(plan, "snapshot")
+        val result = PatchEngine(root).apply(plan, snapshot)
 
         assertIs<ApplyResult.Applied>(result)
         assertFalse(Files.exists(root.resolve("Old.java")))
@@ -136,6 +144,7 @@ class PatchEngineTest {
         Files.writeString(root.resolve("Modify.java"), "hello world\n")
         Files.writeString(root.resolve("OldName.java"), "class OldName {}\n")
         Files.writeString(root.resolve("DeleteMe.java"), "class DeleteMe {}\n")
+        val snapshot = projectSnapshot(root)
 
         val edit = WorkspaceEdit(listOf(
             FileEdit.Modify(
@@ -148,14 +157,14 @@ class PatchEngineTest {
         ))
         val plan = PatchPlan(
             operation = "test",
-            snapshotHash = "snapshot",
+            snapshotHash = snapshot.hash,
             confidence = 1.0,
             summary = "rollback coverage",
             affectedFiles = edit.affectedFiles(),
             workspaceEdit = edit,
         )
 
-        val apply = PatchEngine(root).apply(plan, "snapshot")
+        val apply = PatchEngine(root).apply(plan, snapshot)
         assertIs<ApplyResult.Applied>(apply)
         assertEquals("hello RefactorKit\n", Files.readString(root.resolve("Modify.java")))
         assertTrue(Files.exists(root.resolve("Created.java")))
@@ -249,6 +258,16 @@ class PatchEngineTest {
         assertTrue(result.diagnostics.any { it.code == "workspace.lockUnsafe" })
         assertFalse(Files.exists(outside.resolve("workspace.lock")))
         assertFalse(Files.exists(root.resolve("Created.java")))
+    }
+
+    private fun projectSnapshot(root: Path): ProjectSnapshot {
+        val files = Files.walk(root).use { stream ->
+            stream
+                .filter { Files.isRegularFile(it) && !it.startsWith(root.resolve(".refactorkit")) }
+                .map { SourceFile(root.relativize(it), Files.readString(it), "test") }
+                .toList()
+        }
+        return ProjectSnapshot(Workspace(root), emptyList(), files)
     }
 
     @Test

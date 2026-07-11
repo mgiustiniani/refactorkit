@@ -54,8 +54,9 @@ data class ProjectSnapshot(
     val workspace: Workspace,
     val modules: List<Module>,
     val files: List<SourceFile>,
-    val hash: String = hashFiles(files),
 ) {
+    val hash: String = hashFiles(files)
+
     companion object {
         fun hashFiles(files: List<SourceFile>): String {
             val digest = MessageDigest.getInstance("SHA-256")

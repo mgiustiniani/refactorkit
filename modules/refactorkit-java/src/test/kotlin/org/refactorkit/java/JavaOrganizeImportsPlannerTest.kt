@@ -38,7 +38,7 @@ class JavaOrganizeImportsPlannerTest {
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
         val engine = PatchEngine(root)
-        val result = engine.apply(plan, snap.hash)
+        val result = engine.apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         val updated = file.readText()
@@ -75,7 +75,7 @@ class JavaOrganizeImportsPlannerTest {
         val snapshot = JavaProjectScanner().scan(root)
 
         val plan = planner.previewSingleFile(snapshot, Paths.get("src/main/java/com/example/Foo.java"))
-        val result = PatchEngine(root).apply(plan, snapshot.hash)
+        val result = PatchEngine(root).apply(plan, snapshot)
 
         assertIs<ApplyResult.Applied>(result)
         val updated = file.readText()
@@ -106,7 +106,7 @@ class JavaOrganizeImportsPlannerTest {
         val plan = planner.preview(snap, listOf(Paths.get("src/main/java/com/example/Foo.java")))
 
         val engine = PatchEngine(root)
-        engine.apply(plan, snap.hash)
+        engine.apply(plan, snap)
 
         val updated = file.readText()
         assertTrue(!updated.contains("import com.example.Other"), "same-package import removed")

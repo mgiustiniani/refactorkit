@@ -56,20 +56,6 @@ class PatchEngine(
     }
 
     /**
-     * Compatibility API for callers that cannot yet supply a scanned snapshot.
-     * It provides one-writer locking but cannot prove affected-file preconditions;
-     * stable integrations must use [apply] with [ProjectSnapshot].
-     */
-    fun apply(plan: PatchPlan, currentSnapshotHash: String): ApplyResult = withWorkspaceLock {
-        val diagnostics = validate(plan, currentSnapshotHash)
-        if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
-            ApplyResult.Refused(diagnostics)
-        } else {
-            applyEdit(plan.id, plan.snapshotHash, plan.workspaceEdit)
-        }
-    }
-
-    /**
      * Roll back a previously applied transaction while holding the same one-writer
      * workspace lock. Post-apply conflict validation remains tracked by TX-004.
      */

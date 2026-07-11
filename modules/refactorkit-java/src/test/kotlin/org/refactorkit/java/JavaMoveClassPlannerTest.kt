@@ -53,7 +53,7 @@ class JavaMoveClassPlannerTest {
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.warnings.any { it.contains("JDT type binding selected") }, plan.warnings.toString())
-        val result = PatchEngine(root).apply(plan, snapshot.hash)
+        val result = PatchEngine(root).apply(plan, snapshot)
         assertIs<ApplyResult.Applied>(result)
 
         assertFalse(Files.exists(root.resolve("src/main/java/com/old/Service.java")))

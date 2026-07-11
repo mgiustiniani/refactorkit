@@ -76,7 +76,7 @@ class JavaRenameMemberPlannerTest {
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.warnings.any { it.contains("JDT binding selected exact member signature") })
 
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         val declaration = root.resolve("src/main/java/com/example/Lookup.java").readText()
@@ -108,7 +108,7 @@ class JavaRenameMemberPlannerTest {
         val plan = planner.preview(snap, "com.example.Text#format(java.lang.String)", "normalize")
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         val declaration = root.resolve("src/main/java/com/example/Text.java").readText()
@@ -155,7 +155,7 @@ class JavaRenameMemberPlannerTest {
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.warnings.any { it.contains("Override-aware propagation selected 3 source declarations") })
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         assertTrue(root.resolve("src/main/java/com/example/Base.java").readText().contains("String lookup(String key)"))
@@ -194,7 +194,7 @@ class JavaRenameMemberPlannerTest {
         val plan = planner.preview(snap, "com.example.LookupApi#find(java.lang.String)", "lookup")
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
         assertTrue(root.resolve("src/main/java/com/example/LookupApi.java").readText().contains("String lookup(String key)"))
         assertTrue(root.resolve("src/main/java/com/example/DefaultLookup.java").readText().contains("String lookup(String key)"))
@@ -263,7 +263,7 @@ class JavaRenameMemberPlannerTest {
         val plan = planner.preview(snap, "com.example.UserManager#displayName", "getDisplayName")
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         val src = root.resolve("src/main/java/com/example/UserManager.java").readText()
@@ -362,7 +362,7 @@ class JavaRenameMemberPlannerTest {
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.warnings.any { it.contains("exact field com.acme.Stats#count") }, plan.warnings.toString())
-        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot.hash))
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
         val stats = root.resolve("src/main/java/com/acme/Stats.java").readText()
         val client = root.resolve("src/main/java/com/acme/Client.java").readText()
         val unrelated = root.resolve("src/main/java/com/other/Stats.java").readText()
@@ -421,7 +421,7 @@ class JavaRenameMemberPlannerTest {
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.warnings.any { it.contains("JDT declaration/reference ranges") }, plan.warnings.toString())
-        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot.hash))
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
         val route = root.resolve("src/main/java/com/acme/Route.java").readText()
         val service = root.resolve("src/main/java/com/acme/Service.java").readText()
         assertTrue(route.contains("String value()"), route)

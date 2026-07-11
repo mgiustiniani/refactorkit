@@ -4,6 +4,7 @@ import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaLanguageAdapter
@@ -62,11 +63,11 @@ class AgentSimulationTest {
         .filter { it.isFile && !it.toPath().startsWith(root.resolve(".refactorkit")) }
         .associate { file -> root.relativize(file.toPath()).toString().replace('\\', '/') to file.readText() }
 
-    private fun assertPreviewApplyRollbackRestores(caseName: String, root: Path, plan: org.refactorkit.core.PatchPlan, snapshotHash: String) {
+    private fun assertPreviewApplyRollbackRestores(caseName: String, root: Path, plan: org.refactorkit.core.PatchPlan, snapshot: ProjectSnapshot) {
         assertEquals(PatchStatus.PREVIEW, plan.status, "$caseName should produce a preview plan: ${plan.summary}")
         assertFalse(plan.diagnosticsAfterPreview.any { it.severity == Diagnostic.Severity.ERROR })
         val before = fileTree(root)
-        val applyResult = PatchEngine(root).apply(plan, snapshotHash)
+        val applyResult = PatchEngine(root).apply(plan, snapshot)
         assertIs<ApplyResult.Applied>(applyResult)
         assertTrue(fileTree(root) != before, "Apply should mutate the workspace")
         val rollbackResult = PatchEngine(root).rollback(applyResult.transaction)
@@ -87,14 +88,14 @@ class AgentSimulationTest {
                         "package com.example;\npublic class UserClient { String show(UserManager manager) { return manager.displayName(\"Ada\"); } }\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaRenameMemberPlanner(adapter).preview(snap, "com.example.UserManager#displayName", "renderName"), snap.hash)
+                Triple(root, JavaRenameMemberPlanner(adapter).preview(snap, "com.example.UserManager#displayName", "renderName"), snap)
             },
             rollbackCase("safeDelete") {
                 val root = project(
                     "src/main/java/com/example/UnusedTool.java" to "package com.example;\npublic class UnusedTool {}\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaSafeDeletePlanner(adapter).preview(snap, "com.example.UnusedTool"), snap.hash)
+                Triple(root, JavaSafeDeletePlanner(adapter).preview(snap, "com.example.UnusedTool"), snap)
             },
             rollbackCase("extractMethod") {
                 val root = project(
@@ -102,7 +103,7 @@ class AgentSimulationTest {
                         "package com.example;\n\npublic class Worker {\n    public void run() {\n        System.out.println(\"start\");\n        System.out.println(\"done\");\n    }\n}\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaExtractMethodPlanner().preview(snap, java.nio.file.Paths.get("src/main/java/com/example/Worker.java"), 5, 6, "logSteps"), snap.hash)
+                Triple(root, JavaExtractMethodPlanner().preview(snap, java.nio.file.Paths.get("src/main/java/com/example/Worker.java"), 5, 6, "logSteps"), snap)
             },
             rollbackCase("changeSignature.renameParameter") {
                 val root = project(
@@ -110,7 +111,7 @@ class AgentSimulationTest {
                         "package com.example;\npublic class Calculator { String join(String left, String right) { return left + right; } }\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaChangeSignaturePlanner(adapter).previewRenameParameter(snap, "com.example.Calculator#join", "right", "suffix"), snap.hash)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewRenameParameter(snap, "com.example.Calculator#join", "right", "suffix"), snap)
             },
             rollbackCase("changeSignature.addParameter") {
                 val root = project(
@@ -120,7 +121,7 @@ class AgentSimulationTest {
                         "package com.example;\npublic class Client {\n    String render(Formatter formatter) { return formatter.label(\"Ada\"); }\n}\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaChangeSignaturePlanner(adapter).previewAddParameter(snap, "com.example.Formatter#label", "String", "prefix", "\"user\""), snap.hash)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewAddParameter(snap, "com.example.Formatter#label", "String", "prefix", "\"user\""), snap)
             },
             rollbackCase("changeSignature.reorderParameters") {
                 val root = project(
@@ -130,7 +131,7 @@ class AgentSimulationTest {
                         "package com.example;\npublic class Client {\n    String render(Formatter formatter) { return formatter.pair(\"A\", \"B\"); }\n}\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaChangeSignaturePlanner(adapter).previewReorderParameters(snap, "com.example.Formatter#pair", listOf("right", "left")), snap.hash)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewReorderParameters(snap, "com.example.Formatter#pair", listOf("right", "left")), snap)
             },
             rollbackCase("changeSignature.removeParameter") {
                 val root = project(
@@ -140,7 +141,7 @@ class AgentSimulationTest {
                         "package com.example;\npublic class Client {\n    String render(Formatter formatter) { return formatter.name(\"Ada\", \"ignored\"); }\n}\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaChangeSignaturePlanner(adapter).previewRemoveParameter(snap, "com.example.Formatter#name", "unused"), snap.hash)
+                Triple(root, JavaChangeSignaturePlanner(adapter).previewRemoveParameter(snap, "com.example.Formatter#name", "unused"), snap)
             },
             rollbackCase("importExternalJavaClass") {
                 val root = project(
@@ -154,24 +155,24 @@ class AgentSimulationTest {
                     licensePolicy = LicensePolicy.WARN,
                     snapshot = snap,
                 ))
-                Triple(root, plan, snap.hash)
+                Triple(root, plan, snap)
             },
         )
 
         cases.forEach { case ->
-            val (root, plan, snapshotHash) = case.create()
-            assertPreviewApplyRollbackRestores(case.name, root, plan, snapshotHash)
+            val (root, plan, snapshot) = case.create()
+            assertPreviewApplyRollbackRestores(case.name, root, plan, snapshot)
         }
     }
 
     private data class RollbackCase(
         val name: String,
-        val create: () -> Triple<Path, org.refactorkit.core.PatchPlan, String>,
+        val create: () -> Triple<Path, org.refactorkit.core.PatchPlan, ProjectSnapshot>,
     )
 
     private fun rollbackCase(
         name: String,
-        create: () -> Triple<Path, org.refactorkit.core.PatchPlan, String>,
+        create: () -> Triple<Path, org.refactorkit.core.PatchPlan, ProjectSnapshot>,
     ): RollbackCase = RollbackCase(name, create)
 
     // ── scenario 1: rename class ──────────────────────────────────────────────
@@ -202,7 +203,7 @@ class AgentSimulationTest {
         assertFalse(plan.diagnosticsAfterPreview.any { it.severity == Diagnostic.Severity.ERROR })
 
         // 4. Apply
-        val applyResult = PatchEngine(root).apply(plan, snap.hash)
+        val applyResult = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applyResult)
 
         // 5. Verify
@@ -243,7 +244,7 @@ class AgentSimulationTest {
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
         // Apply
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         // Verify file moved
@@ -318,7 +319,7 @@ class AgentSimulationTest {
         assertTrue(plan.status == PatchStatus.PREVIEW || plan.affectedFiles.isEmpty())
 
         if (plan.status == PatchStatus.PREVIEW && plan.workspaceEdit.edits.isNotEmpty()) {
-            val result = PatchEngine(root).apply(plan, snap.hash)
+            val result = PatchEngine(root).apply(plan, snap)
             assertIs<ApplyResult.Applied>(result)
 
             val content = filePath.readText()

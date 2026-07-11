@@ -138,7 +138,7 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-APPLY-PATCH
 |Apply patch plan
 |Developer, Agent/App
-|Check a caller-supplied current snapshot hash and preflight selected path, symbolic-link, overlap, and ordered file-state rules before sequential managed writes. Current behavior is a compensatable batch, not an ACID or crash-safe transaction.
+|Acquire the workspace writer lock, check a file-derived current snapshot hash, revalidate initially affected paths, and preflight selected path, symbolic-link, overlap, and ordered file-state rules before sequential managed writes. Current behavior is a compensatable batch, not an ACID or crash-safe transaction.
 |`PatchEngine`, tests, transactionality audit.
 |implementation-informed limitation
 

@@ -38,7 +38,7 @@ class JavaExtractMethodPlannerTest {
         assertEquals(RiskLevel.MEDIUM, plan.riskLevel)
         assertTrue(plan.summary.contains("printMessages"))
 
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
         val content = root.resolve("src/main/java/com/example/App.java").readText()
         assertTrue(content.contains("printMessages();"), content)

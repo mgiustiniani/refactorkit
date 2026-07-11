@@ -54,7 +54,7 @@ class JavaRenameClassPlannerTest {
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
         val engine = PatchEngine(root)
-        val result = engine.apply(plan, snap.hash)
+        val result = engine.apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         val newFile = root.resolve("src/main/java/com/example/AccountManager.java")
@@ -95,7 +95,7 @@ class JavaRenameClassPlannerTest {
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.warnings.any { it.contains("JDT type binding selected") }, plan.warnings.toString())
-        val result = PatchEngine(root).apply(plan, snap.hash)
+        val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         val leftClient = root.resolve("src/main/java/com/acme/app/LeftClient.java").readText()
@@ -173,7 +173,7 @@ class JavaRenameClassPlannerTest {
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
         val engine = PatchEngine(root)
-        val result = engine.apply(plan, snap.hash)
+        val result = engine.apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
 
         val clientContent = root.resolve("src/main/java/com/other/Client.java").readText()
@@ -212,7 +212,7 @@ class JavaRenameClassPlannerTest {
         val plan = planner.preview(snapshot, "com.acme.Audited", "Tracked")
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertTrue(plan.warnings.any { it.contains("JDT type binding selected") }, plan.warnings.toString())
-        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot.hash))
+        assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
 
         assertFalse(Files.exists(root.resolve("src/main/java/com/acme/Audited.java")))
         assertTrue(root.resolve("src/main/java/com/acme/Tracked.java").readText().contains("@interface Tracked"))

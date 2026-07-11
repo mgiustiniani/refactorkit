@@ -513,7 +513,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             val edit = modifiedByPath[file.path]
             if (edit == null) file else file.copy(content = TextEdits.apply(file.content, edit.textEdits))
         }
-        val previewSnapshot = snapshot.copy(files = files, hash = ProjectSnapshot.hashFiles(files))
+        val previewSnapshot = snapshot.copy(files = files)
         return adapter.diagnostics(previewSnapshot)
     }
 

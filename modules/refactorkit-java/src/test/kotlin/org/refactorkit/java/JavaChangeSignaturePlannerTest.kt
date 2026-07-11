@@ -37,7 +37,7 @@ class JavaChangeSignaturePlannerTest {
         assertEquals(RiskLevel.MEDIUM, plan.riskLevel)
         assertTrue(plan.summary.contains("userId"))
 
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val content = root.resolve("src/main/java/com/example/UserService.java").readText()
         assertTrue(content.contains("findName(String userId)"), content)
@@ -80,7 +80,7 @@ class JavaChangeSignaturePlannerTest {
         )
         val snap = JavaProjectScanner().scan(root)
         val plan = planner.previewRenameParameter(snap, "com.example.UserService#findName", "id", "userId")
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val content = root.resolve("src/main/java/com/example/UserService.java").readText()
         assertTrue(content.contains("// id should stay in comment"), content)
@@ -167,7 +167,7 @@ class JavaChangeSignaturePlannerTest {
         val snap = JavaProjectScanner().scan(root)
         val plan = planner.previewRenameParameter(snap, "com.example.UserService#save", "names", "userNames")
         assertEquals(PatchStatus.PREVIEW, plan.status)
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val content = root.resolve("src/main/java/com/example/UserService.java").readText()
         assertTrue(content.contains("List<String> userNames"), content)
@@ -211,7 +211,7 @@ class JavaChangeSignaturePlannerTest {
         assertEquals("changeSignature.addParameter", plan.operation)
         assertTrue(plan.summary.contains("2 in-scope call site"), plan.summary)
 
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val service = root.resolve("src/main/java/com/example/UserService.java").readText()
         val app = root.resolve("src/main/java/com/example/App.java").readText()
@@ -235,7 +235,7 @@ class JavaChangeSignaturePlannerTest {
         val plan = planner.previewAddParameter(snap, "com.example.UserService#findName", "String", "fallback", "\"guest\"")
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val content = root.resolve("src/main/java/com/example/UserService.java").readText()
         assertTrue(content.contains("findName(String fallback)"), content)
@@ -263,7 +263,7 @@ class JavaChangeSignaturePlannerTest {
         val plan = planner.previewAddParameter(snap, "com.example.UserService#findName", "int", "limit", "10")
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val service = root.resolve("src/main/java/com/example/UserService.java").readText()
         val other = root.resolve("src/main/java/com/example/Other.java").readText()
@@ -336,7 +336,7 @@ class JavaChangeSignaturePlannerTest {
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertEquals("changeSignature.reorderParameters", plan.operation)
 
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val service = root.resolve("src/main/java/com/example/UserService.java").readText()
         val app = root.resolve("src/main/java/com/example/App.java").readText()
@@ -466,7 +466,7 @@ class JavaChangeSignaturePlannerTest {
         val plan = planner.previewAddParameter(snap, "com.example.UserService#findName", "int", "limit", "10")
         assertEquals(PatchStatus.PREVIEW, plan.status)
 
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val other = root.resolve("src/main/java/com/example/Other.java").readText()
         assertTrue(other.contains("findName(\"local\")"), other)
@@ -495,7 +495,7 @@ class JavaChangeSignaturePlannerTest {
         assertEquals(PatchStatus.PREVIEW, plan.status)
         assertEquals("changeSignature.removeParameter", plan.operation)
 
-        val applied = PatchEngine(root).apply(plan, snap.hash)
+        val applied = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(applied)
         val service = root.resolve("src/main/java/com/example/UserService.java").readText()
         val app = root.resolve("src/main/java/com/example/App.java").readText()
