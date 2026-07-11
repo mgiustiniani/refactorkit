@@ -44,7 +44,7 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |ADRs 0002 and 0004, transactionality audit
 
 |Transaction Log
-|Versioned write-ahead recovery metadata stored under `.refactorkit/transactions`, durably created before mutation and atomically advanced through apply/rollback/recovery states. Schema-v2 SHA-256 integrity and v1-on-update migration are implemented; quarantine, full metadata, and complete fault evidence remain planned.
+|Versioned write-ahead recovery metadata stored under `.refactorkit/transactions`, durably created before mutation and atomically advanced through apply/rollback/recovery states. Schema-v2 SHA-256 integrity, v1-on-update migration, and blocking owner-only corruption quarantine are implemented; full metadata and complete fault evidence remain planned.
 |Core / workspace
 |`TransactionLog`, transactionality audit
 

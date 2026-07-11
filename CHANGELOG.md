@@ -26,6 +26,8 @@ review safety boundaries before applying refactorings.
 - Added schema-v2 transaction journal SHA-256 integrity checksums covering the
   complete canonical record. Tampering is rejected as `transaction.corrupt`;
   schema-v1 records remain readable and migrate atomically on lifecycle update.
+  Corrupt records move atomically into owner-only quarantine and block managed
+  journal access until manual review.
 - Added a central staged diagnostics gate for production managed Java applies.
   CLI, daemon, managed LSP, MCP, recipes, and golden tests compare JDT errors on
   current versus exact post-image snapshots under lock and refuse regressions or

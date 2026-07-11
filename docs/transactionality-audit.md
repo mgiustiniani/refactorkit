@@ -268,8 +268,12 @@ write and fsync a same-directory temporary file, require atomic replacement, and
 fsync the journal directory. Parsing/schema/path failures remain coded. Still
 Schema-v2 writes include and verify a canonical SHA-256 checksum. Schema-v1
 records remain readable and are atomically migrated to v2 on the next lifecycle
-update. Still open: corrupt-record quarantine, explicit journal-filesystem
-capability reporting, and fault-injected proof for every persistence boundary.
+update. Malformed, ID-mismatched, or checksum-invalid records are atomically moved to an
+owner-only `.quarantine` directory and reported as `transaction.quarantined`.
+Any retained quarantine record blocks list/load/new writes and therefore startup
+recovery until explicit manual review/removal; quarantine failure is separately
+coded. Still open: explicit journal-filesystem capability reporting and
+fault-injected proof for every persistence boundary.
 
 ### TX-013 — Rollback does not restore full filesystem state
 

@@ -184,8 +184,12 @@ class TransactionLogTest {
 
         val error = assertFailsWith<TransactionLogException> { log.loadRecord(transaction.id) }
 
-        assertEquals("transaction.corrupt", error.code)
+        assertEquals("transaction.quarantined", error.code)
         assertTrue(error.cause?.message?.contains("checksum mismatch") == true)
+        val quarantine = logDir.resolve(".quarantine")
+        assertTrue(Files.list(quarantine).use { it.count() == 1L })
+        val blocked = assertFailsWith<TransactionLogException> { log.list() }
+        assertEquals("transaction.quarantined", blocked.code)
     }
 
     @Test
@@ -230,7 +234,19 @@ class TransactionLogTest {
         val id = TransactionId.new()
         Files.writeString(logDir.resolve("${id.value}.json"), "{not-json")
 
-        val error = assertFailsWith<TransactionLogException> { TransactionLog(logDir).load(id) }
-        assertEquals("transaction.corrupt", error.code)
+        val log = TransactionLog(logDir)
+        val error = assertFailsWith<TransactionLogException> { log.load(id) }
+        assertEquals("transaction.quarantined", error.code)
+        assertTrue(!Files.exists(logDir.resolve("${id.value}.json")))
+        assertTrue(Files.list(logDir.resolve(".quarantine")).use { it.findAny().isPresent })
+        val blocked = assertFailsWith<TransactionLogException> { log.prepare(TransactionJournalRecord(
+            transaction = Transaction(planId = PlanId("plan-blocked"), snapshotHashBefore = "hash", rollbackEdit = WorkspaceEdit()),
+            operation = "blocked",
+            forwardEdit = WorkspaceEdit(),
+            preImages = emptyList(),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        )) }
+        assertEquals("transaction.quarantined", blocked.code)
     }
 }

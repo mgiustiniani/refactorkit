@@ -89,7 +89,7 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Transaction Log Store
 |Local file storage
-|Versioned write-ahead records under `.refactorkit/transactions` are persisted before mutation and retained across apply/rollback/recovery lifecycle states. Identifier/path hardening, atomic fsynced updates, pre/post images, and startup compensation are implemented; schema-v2 checksum and v1 migration are implemented; quarantine, full metadata, and fault evidence remain.
+|Versioned write-ahead records under `.refactorkit/transactions` are persisted before mutation and retained across apply/rollback/recovery lifecycle states. Identifier/path hardening, atomic fsynced updates, pre/post images, and startup compensation are implemented; schema-v2 checksum, v1 migration, and blocking corruption quarantine are implemented; full metadata and fault evidence remain.
 |Patch engine/testkit/recipe docs; transactionality audit `TX-002`, `TX-003`, `TX-011`, `TX-012`.
 |implementation-informed limitation
 |===

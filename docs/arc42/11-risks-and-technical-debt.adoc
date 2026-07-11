@@ -143,13 +143,13 @@ Status: implementation-informed, needs human review for prioritization.
 |R-023
 |PatchEngine preflight rejects selected structural/path/overlap errors, symbolic-link traversal, and predictable invalid ordered file-state transitions. Managed writes hold a workspace lock, revalidate affected paths, durably journal pre/post intent, stage all content, require atomic replacement, and flush files/directories (`TX-001`, `TX-002`, `TX-005`, supported-filesystem `TX-006`, and declared-source/classpath `TX-014` closed).
 |Unsupported root capability is refused and per-target atomic-move failure is recoverable, but mounted-store variation and destructive kill/disk-full/power-loss evidence remain; hostile post-validation artifact mutation and editor-managed LSP writes remain outside complete evidence.
-|Retain engine-owned scan scope and schema-v2 journal checksum; add quarantine and fault/kill/restart/mounted-filesystem acceptance evidence.
+|Retain engine-owned scan scope, schema-v2 checksum, and blocking quarantine; add fault/kill/restart/mounted-filesystem acceptance evidence.
 |planned release blocker
 
 |R-024
-|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 checksum, and v1 migration are implemented; quarantine and richer retention/validation metadata remain (`TX-011`, `TX-012`).
+|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 checksum, v1 migration, and corruption quarantine are implemented; richer retention/validation metadata remain (`TX-011`, `TX-012`).
 |Validated UUIDv4 IDs, normalized containment, symbolic-link/non-regular-file refusal, owner-only permissions where supported, and coded corrupt-record failures prevent the audited direct traversal path; truncated or incomplete records can still block recovery and audit.
-|Add corruption quarantine and richer retained history; preserve checksum/migration and durable lifecycle evidence.
+|Add richer retained history and fault evidence; preserve checksum/migration/quarantine and durable lifecycle evidence.
 |remaining journal integrity and release blocker
 
 |R-025

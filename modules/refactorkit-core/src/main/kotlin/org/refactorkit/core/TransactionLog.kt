@@ -61,6 +61,7 @@ class TransactionLog(logDir: Path) {
 
     fun loadRecord(id: TransactionId): TransactionJournalRecord? {
         ensureSecureLogDirectory()
+        ensureNoQuarantinedRecords()
         val file = secureFile(id)
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return null
         requireRegularFile(file)
@@ -87,18 +88,16 @@ class TransactionLog(logDir: Path) {
             }
             record
         } catch (error: TransactionLogException) {
+            if (error.code == "transaction.corrupt") quarantine(file, id, error)
             throw error
         } catch (error: Exception) {
-            throw TransactionLogException(
-                code = "transaction.corrupt",
-                message = "Transaction record is malformed or corrupt: ${id.value}",
-                cause = error,
-            )
+            quarantine(file, id, error)
         }
     }
 
     fun list(): List<TransactionId> {
         ensureSecureLogDirectory()
+        ensureNoQuarantinedRecords()
         if (!Files.exists(logDir, LinkOption.NOFOLLOW_LINKS)) return emptyList()
         return try {
             Files.list(logDir).use { stream ->
@@ -141,6 +140,52 @@ class TransactionLog(logDir: Path) {
                 code = "transaction.deleteFailed",
                 message = "Cannot delete transaction record: ${id.value}",
                 cause = error,
+            )
+        }
+    }
+
+    private fun quarantine(file: Path, id: TransactionId, cause: Throwable): Nothing {
+        val quarantineDir = logDir.resolve(".quarantine")
+        val destination = quarantineDir.resolve(
+            "${id.value}-${Instant.now().toEpochMilli()}-${UUID.randomUUID()}.json.corrupt",
+        )
+        try {
+            ensureNoSymbolicLinkComponents(quarantineDir)
+            Files.createDirectories(quarantineDir)
+            if (!Files.isDirectory(quarantineDir, LinkOption.NOFOLLOW_LINKS)) {
+                throw IllegalStateException("Quarantine path is not a directory")
+            }
+            setOwnerOnlyPermissions(quarantineDir, directory = true)
+            Files.move(file, destination, StandardCopyOption.ATOMIC_MOVE)
+            setOwnerOnlyPermissions(destination, directory = false)
+            forceDirectory(quarantineDir)
+            forceDirectory(logDir)
+        } catch (error: Exception) {
+            throw TransactionLogException(
+                "transaction.quarantineFailed",
+                "Corrupt transaction ${id.value} could not be quarantined",
+                error,
+            )
+        }
+        throw TransactionLogException(
+            "transaction.quarantined",
+            "Corrupt transaction ${id.value} was quarantined at ${destination.fileName}; manual review is required",
+            cause,
+        )
+    }
+
+    private fun ensureNoQuarantinedRecords() {
+        val quarantineDir = logDir.resolve(".quarantine")
+        ensureNoSymbolicLinkComponents(quarantineDir)
+        if (!Files.exists(quarantineDir, LinkOption.NOFOLLOW_LINKS)) return
+        if (!Files.isDirectory(quarantineDir, LinkOption.NOFOLLOW_LINKS)) {
+            throw TransactionLogException("transaction.pathUnsafe", "Transaction quarantine path is unsafe")
+        }
+        val hasRecords = Files.list(quarantineDir).use { it.findAny().isPresent }
+        if (hasRecords) {
+            throw TransactionLogException(
+                "transaction.quarantined",
+                "Quarantined transaction records require manual review: $quarantineDir",
             )
         }
     }
@@ -225,6 +270,7 @@ class TransactionLog(logDir: Path) {
             throw TransactionLogException("transaction.pathUnsafe", "Cannot create transaction log directory", error)
         }
         ensureSecureLogDirectory()
+        ensureNoQuarantinedRecords()
         setOwnerOnlyPermissions(logDir, directory = true)
         forceDirectory(logDir)
         logDir.parent?.let(::forceDirectory)
