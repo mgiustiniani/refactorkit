@@ -10,8 +10,8 @@ Status: implementation-informed, needs human review for prioritization.
 
 |R-001
 |Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations and explicit fallback paths still rely on lexical or structural evidence.
-|Refactorings outside the supported signed `renameMember`, class-rename, and safe-delete type-reference slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Class rename and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable.
-|Follow ADR 0008; retain conservative refusal/warning behavior, keep class-rename and safe-delete lexical fallback explicit, extend representative JDT-backed coverage, and refuse signed member rename when an override family includes external declarations.
+|Refactorings outside the supported signed `renameMember`, class-rename, move-class file-scoping, and safe-delete type-reference slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Class rename, move class, and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable.
+|Follow ADR 0008; retain conservative refusal/warning behavior, keep class-rename, move-class, and safe-delete lexical fallback explicit, extend representative JDT-backed coverage, and refuse signed member rename when an override family includes external declarations.
 |known risk
 
 |R-002
@@ -84,6 +84,12 @@ Status: implementation-informed, needs human review for prioritization.
 |Class rename uses exact JDT bindings only when source analysis is clean and the exact target binding is available; reflection, generated code, framework strings/configuration, and unknown external callers remain outside binding-matched source edits.
 |A rename may require manual follow-up outside analyzed source, while lexical fallback may conflate same-simple-name types.
 |Retain explicit lexical-fallback plus reflection/framework/generated-code warnings, conflict refusals, and same-simple-name binding tests; broaden classpath and non-source reference analysis before lowering risk.
+|known risk
+
+|R-014
+|Move class uses exact JDT bindings only to select referencing files when source analysis is clean; edits inside selected files remain lexical, and reflection, generated code, framework strings/configuration, annotation-processor output, and unknown external callers remain outside this evidence.
+|A move may require manual follow-up outside analyzed source. Parse/classpath warnings or unavailable target binding trigger broader lexical file scoping, which can reintroduce unrelated old-package edits or same-simple-name confusion.
+|Retain explicit lexical-file-scoping and non-source warnings, target conflict/invalid-package refusals, overlap prevention, and binding-scoping tests; broaden classpath and non-source reference analysis before lowering risk.
 |known risk
 |===
 

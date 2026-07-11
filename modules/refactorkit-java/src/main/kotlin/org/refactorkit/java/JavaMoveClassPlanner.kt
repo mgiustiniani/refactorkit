@@ -36,6 +36,9 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         if (oldPkg == targetPackage) {
             return refused(snapshot, "moveClass", "Source and target packages are the same: $targetPackage")
         }
+        if (!isValidPackageName(targetPackage)) {
+            return refused(snapshot, "moveClass", "Invalid target package: $targetPackage")
+        }
 
         val index = adapter.buildSymbols(snapshot)
         val symbol = index.symbols.find { it.id.value == symbolFqn && it.kind in MOVEABLE_KINDS }
@@ -43,6 +46,11 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
 
         val declarationFile = snapshot.files.find { it.path == symbol.location.path }
             ?: return refused(snapshot, "moveClass", "Declaration file not found: ${symbol.location.path}")
+        val newRelativePath = computeNewPath(declarationFile.path, oldPkg, targetPackage, simpleName)
+        if (index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newRelativePath }) {
+            return refused(snapshot, "moveClass", "Move target already exists: $newFqn ($newRelativePath)")
+        }
+        val jdtReferencePaths = findJdtReferencePaths(snapshot, symbolFqn, declarationFile.path)
 
         val edits = mutableListOf<FileEdit>()
         val affectedPaths = mutableSetOf<Path>()
@@ -54,7 +62,6 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         affectedPaths.add(declarationFile.path)
 
         // 2. Rename (move) the file to the new package directory
-        val newRelativePath = computeNewPath(declarationFile.path, oldPkg, targetPackage, simpleName)
         edits += FileEdit.Rename(declarationFile.path, newRelativePath)
         affectedPaths.add(declarationFile.path)
         affectedPaths.add(newRelativePath)
@@ -69,24 +76,34 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             val wasInSamePkg = filePkg == oldPkg && oldPkg.isNotEmpty()
             val nowInSamePkg = filePkg == targetPackage
 
-            if (!hasOldImport && !hasFqn && !wasInSamePkg) continue
+            if (jdtReferencePaths != null) {
+                if (file.path !in jdtReferencePaths) continue
+            } else if (!hasOldImport && !hasFqn && !wasInSamePkg) {
+                continue
+            }
 
             val fileEdits = mutableListOf<TextEdit>()
             val fileContent = file.content
 
-            // Replace old FQN references with new FQN
-            if (hasFqn) {
-                for (range in JavaLexer.findOccurrences(fileContent, symbolFqn)) {
-                    fileEdits += makeEdit(fileContent, range, newFqn)
-                }
-            }
+            val coveredOffsets = mutableSetOf<Int>()
 
-            // Replace old import with new import (or remove if now in same package)
+            // Replace old import with new import (or remove if now in same package).
+            // Mark the entire import so the nested FQN occurrence is not edited twice.
             if (hasOldImport) {
                 val importText = "import $symbolFqn;"
                 val newImportText = if (nowInSamePkg) "" else "import $newFqn;"
                 for (range in JavaLexer.findOccurrences(fileContent, importText)) {
                     fileEdits += makeEdit(fileContent, range, newImportText)
+                    range.forEach(coveredOffsets::add)
+                }
+            }
+
+            // Replace old FQN references outside direct imports.
+            if (hasFqn) {
+                for (range in JavaLexer.findOccurrences(fileContent, symbolFqn)) {
+                    if (range.first !in coveredOffsets) {
+                        fileEdits += makeEdit(fileContent, range, newFqn)
+                    }
                 }
             }
 
@@ -105,6 +122,11 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         }
 
         val frameworkAssessment = JavaFrameworkDetector.assess(declarationFile)
+        warnings += if (jdtReferencePaths != null) {
+            "JDT type binding selected ${jdtReferencePaths.size} referencing file(s); package/import/FQN edits are scoped to those files."
+        } else {
+            "JDT type-binding evidence was unavailable or not clean; move uses lexical file scoping. Review carefully."
+        }
         warnings += "String literals and comments are NOT scanned. Reflection and annotation processor output require manual review."
         warnings += frameworkAssessment.warnings("moveClass")
 
@@ -112,7 +134,7 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             operation = "moveClass",
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 0.90,
+            confidence = if (jdtReferencePaths != null) 0.94 else 0.90,
             requiresUserApproval = true,
             summary = "Move $simpleName from $oldPkg → $targetPackage. ${affectedPaths.size} file(s) affected.",
             affectedFiles = affectedPaths,
@@ -123,6 +145,24 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    private fun findJdtReferencePaths(
+        snapshot: ProjectSnapshot,
+        symbolFqn: String,
+        declarationPath: Path,
+    ): Set<Path>? {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        if (analysis.warnings.isNotEmpty()) return null
+        val target = analysis.symbols.singleOrNull { symbol ->
+            symbol.qualifiedName == symbolFqn && symbol.kind in JDT_MOVEABLE_KINDS
+        } ?: return null
+        val bindingKey = target.bindingKey ?: return null
+        return analysis.references
+            .asSequence()
+            .filter { it.bindingKey == bindingKey && it.path != declarationPath }
+            .map { it.path }
+            .toSet()
+    }
 
     private fun rewritePackageDeclaration(file: SourceFile, oldPkg: String, newPkg: String): FileEdit.Modify {
         val content = file.content
@@ -162,6 +202,13 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         return if (pkgMatch != null) pkgMatch.range.last + 1 else 0
     }
 
+    private fun isValidPackageName(packageName: String): Boolean =
+        packageName.isNotBlank() && packageName.split('.').all { segment ->
+            segment.isNotEmpty() &&
+                (segment.first().isLetter() || segment.first() == '_' || segment.first() == '$') &&
+                segment.all(JavaLexer::isIdentChar)
+        }
+
     private fun refused(snapshot: ProjectSnapshot, operation: String, reason: String) = PatchPlan(
         operation = operation,
         status = PatchStatus.REFUSED,
@@ -181,6 +228,12 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             Symbol.Kind.INTERFACE,
             Symbol.Kind.ENUM,
             Symbol.Kind.RECORD,
+        )
+        private val JDT_MOVEABLE_KINDS = setOf(
+            JdtJavaSemanticSymbolKind.CLASS,
+            JdtJavaSemanticSymbolKind.INTERFACE,
+            JdtJavaSemanticSymbolKind.ENUM,
+            JdtJavaSemanticSymbolKind.RECORD,
         )
     }
 }

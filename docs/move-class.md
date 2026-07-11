@@ -1,8 +1,8 @@
 # Move class
 
-Status: implementation-informed for `v0.2.0-beta` documentation. Move class is a
-lexical Java operation that previews package/path/import updates for one Java
-type.
+Status: implementation-informed for `v0.3.0-SNAPSHOT`. Move class previews
+package/path/import updates for one Java type. Clean JDT analysis scopes edits to
+binding-matched referencing files; unclean analysis reports lexical file scoping.
 
 ## Command
 
@@ -25,8 +25,11 @@ A `moveClass` preview is considered safe enough to review when:
 - the preview rewrites or inserts the package declaration in the moved file;
 - the preview renames/moves the source file to the target package path;
 - direct imports and fully qualified references to the old FQN are updated;
-- same-package source files that previously used the simple name receive an
-  import for the new FQN when needed.
+- same-package source files that actually reference the selected type receive an
+  import for the new FQN when needed;
+- unrelated same-package files and same-simple-name types in other packages remain
+  unchanged when JDT binding evidence is clean;
+- direct import and nested FQN edits do not overlap.
 
 ## Refusal conditions
 
@@ -34,7 +37,9 @@ The planner refuses when:
 
 - source and target packages are the same;
 - the symbol is missing or is not a moveable Java type;
-- the declaration file cannot be found in the current snapshot.
+- the declaration file cannot be found in the current snapshot;
+- the target package is invalid;
+- the target FQN or computed target source file already exists.
 
 A refused move is a safety result. Do not emulate it with filesystem moves plus
 text replacement; request a corrected preview or perform a manually reviewed
@@ -47,6 +52,8 @@ annotations are found. Review these areas:
 
 - source-root detection for the new path is heuristic and should be checked in
   the affected file list;
+- parse/classpath warnings cause explicit lexical file scoping, which requires
+  additional review;
 - comments and string literals are not rewritten;
 - reflection, generated code, annotation-processor output, `ServiceLoader`,
   native-image config, and resource files may still contain the old FQN;

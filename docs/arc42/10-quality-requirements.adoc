@@ -82,6 +82,12 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |`JavaRenameClassPlannerTest`: constructor rename/apply, imports, same-simple-name disambiguation, target conflict refusal, and fallback warning.
 |implementation-informed
 
+|QS-CORR-005
+|Correctness
+|When clean JDT analysis resolves the move-class target binding, RefactorKit scopes package/import/FQN edits to actual referencing files while retaining package-declaration and file-move patch operations. It avoids unrelated old-package imports, preserves unrelated same-simple-name types, removes now-redundant target-package imports, and avoids overlapping direct-import/FQN edits. Invalid target packages and existing target FQNs/files are refused; unavailable clean binding evidence produces an explicit lexical-file-scoping warning.
+|`JavaMoveClassPlannerTest`: apply, used versus unused old-package files, target-package import removal, unrelated same-simple-name preservation, invalid/conflict refusal, and fallback warning.
+|implementation-informed
+
 |QS-AI-001
 |AI safety
 |A local LLM can get focused context through MCP without arbitrary filesystem access and request preview/refactoring tools.
@@ -125,7 +131,7 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |needs-review
 
 |Compiler-backed Java analysis covers selected slices only
-|Signed member rename, class rename, and safe-delete type references use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on class-rename or safe-delete fallback paths, especially for reflection, generated code, and framework configuration.
+|Signed member rename, class rename, move-class file scoping, and safe-delete type references use selected JDT binding evidence, but lexical/structural behavior and false positives/negatives remain elsewhere and on class-rename, move-class, or safe-delete fallback paths, especially for reflection, generated code, and framework configuration.
 |known risk
 
 |No explicit performance targets

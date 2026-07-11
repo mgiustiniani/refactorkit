@@ -40,8 +40,8 @@ RefactorKit is structured as a local, deterministic refactoring engine around a 
 |implementation-informed
 
 |Incremental compiler-backed Java analysis with explicit fallback
-|Proven Java slices use exact Eclipse JDT binding evidence; operations retain explicit lexical fallback or conservative refusal when semantic evidence is unavailable or not clean. Class rename and safe delete use exact type-binding evidence when possible and warn when they fall back.
-|ADR 0008; signed member rename, class-rename, and safe-delete planners and tests.
+|Proven Java slices use exact Eclipse JDT binding evidence; operations retain explicit lexical fallback or conservative refusal when semantic evidence is unavailable or not clean. Class rename and safe delete use exact type-binding evidence when possible. Move class uses exact target-type binding to scope package/import/FQN edits to actual referencing files. These operations warn when they fall back.
+|ADR 0008; signed member rename, class-rename, move-class, and safe-delete planners and tests.
 |implementation-informed
 
 |Framework risk awareness
@@ -105,4 +105,4 @@ These are shown as containers/building blocks in `docs/c4/workspace.dsl`.
 
 == Links to Decisions
 
-No ADR files were found in the repository at the time this baseline was created. Chapter 9 therefore records an empty ADR index and open documentation gap instead of inventing ADR bodies.
+Chapter 9 indexes the repository ADRs. The incremental compiler-backed Java analysis strategy, including the completed JDT-backed v0.3.0 slices, is recorded in link:../adr/0008-compiler-backed-java-analysis-strategy.adoc[ADR 0008].

@@ -46,6 +46,11 @@ review safety boundaries before applying refactorings.
   binding keys, or override families containing declarations outside the scanned
   source workspace. Unsigned member rename remains a lexical fallback with
   overload warnings.
+- Added JDT-scoped move-class when semantic analysis is clean: package/import/FQN
+  edits are restricted to files with binding-matched references, so unrelated
+  old-package files and same-simple-name types remain unchanged. Invalid packages,
+  existing target types/files, and overlapping import/FQN edits are handled
+  safely; unclean analysis reports lexical file scoping.
 - Added JDT-backed class rename when semantic analysis is clean: type declaration,
   constructor declaration, import, qualified/simple type reference, and
   constructor-call edits use exact binding ranges. Same-simple-name types in
