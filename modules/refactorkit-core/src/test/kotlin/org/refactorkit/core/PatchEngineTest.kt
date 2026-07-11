@@ -310,6 +310,10 @@ class PatchEngineTest {
         assertNoWorkspaceStageFiles(root)
         assertEquals("class Modify {}\n", Files.readString(modify))
         assertEquals("class Old {}\n", Files.readString(oldName))
+        if (posix) {
+            assertEquals(modifyPermissions, Files.getPosixFilePermissions(modify))
+            assertEquals(renamePermissions, Files.getPosixFilePermissions(oldName))
+        }
     }
 
     private fun assertNoWorkspaceStageFiles(root: Path) {

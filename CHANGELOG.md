@@ -23,6 +23,8 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Extended schema-v2 pre/post images with POSIX permissions so apply, rollback,
+  force rollback, and startup compensation restore journaled modes exactly.
 - Added schema-v2 transaction journal SHA-256 integrity checksums covering the
   complete canonical record. Tampering is rejected as `transaction.corrupt`;
   schema-v1 records remain readable and migrate atomically on lifecycle update.

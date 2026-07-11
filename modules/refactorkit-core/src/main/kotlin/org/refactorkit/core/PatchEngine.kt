@@ -214,7 +214,7 @@ class PatchEngine(
 
         try {
             val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
-            val permissions = derivePostPermissions(transaction.rollbackEdit)
+            val permissions = record.preImages.associate { it.path to it.posixPermissions }
             transactionLog.update(record.copy(state = JournalState.ROLLING_BACK))
             commitPostImages(currentImages, record.preImages, permissions)
             transactionLog.update(record.copy(
@@ -627,7 +627,11 @@ class PatchEngine(
         }
 
         return try {
-            commitPostImages(record.preImages, record.postImages, derivePostPermissions(plan.workspaceEdit))
+            commitPostImages(
+                record.preImages,
+                record.postImages,
+                record.postImages.associate { it.path to it.posixPermissions },
+            )
             transactionLog.update(record.copy(state = JournalState.APPLIED))
             ApplyResult.Applied(record.transaction)
         } catch (error: Exception) {
@@ -650,6 +654,13 @@ class PatchEngine(
 
     private fun prepareJournalRecord(plan: PatchPlan, approval: ApprovalRecord): TransactionJournalRecord {
         val staged = stageWorkspaceEdit(plan.workspaceEdit)
+        val preImages = staged.preImages.map { image ->
+            image.copy(posixPermissions = readPosixPermissions(image.path))
+        }
+        val postPermissions = derivePostPermissions(plan.workspaceEdit)
+        val postImages = staged.postImages.map { image ->
+            image.copy(posixPermissions = postPermissions[image.path])
+        }
         val transaction = Transaction(
             planId = plan.id,
             snapshotHashBefore = plan.snapshotHash,
@@ -660,8 +671,8 @@ class PatchEngine(
             transaction = transaction,
             operation = plan.operation,
             forwardEdit = plan.workspaceEdit,
-            preImages = staged.preImages,
-            postImages = staged.postImages,
+            preImages = preImages,
+            postImages = postImages,
             state = JournalState.PREPARED,
         )
     }
@@ -710,6 +721,15 @@ class PatchEngine(
             postImages = working.map { FileImage(it.key, it.value) },
             rollbackEdit = WorkspaceEdit(rollbackEdits.asReversed()),
         )
+    }
+
+    private fun readPosixPermissions(path: Path): Set<PosixFilePermission>? {
+        val absolute = resolveInsideWorkspace(path)
+        if (!Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) return null
+        if (Files.getFileAttributeView(absolute, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) == null) {
+            return null
+        }
+        return Files.getPosixFilePermissions(absolute, LinkOption.NOFOLLOW_LINKS)
     }
 
     private fun derivePostPermissions(workspaceEdit: WorkspaceEdit): Map<Path, Set<PosixFilePermission>?> {
@@ -912,7 +932,11 @@ class PatchEngine(
         }
         return try {
             if (current.any { (path, content) -> content != pre[path]?.content }) {
-                commitPostImages(post.values.toList(), pre.values.toList())
+                commitPostImages(
+                    post.values.toList(),
+                    pre.values.toList(),
+                    pre.values.associate { it.path to it.posixPermissions },
+                )
             }
             transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
             true

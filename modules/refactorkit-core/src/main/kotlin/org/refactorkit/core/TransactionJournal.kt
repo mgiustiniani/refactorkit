@@ -5,6 +5,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.attribute.PosixFilePermission
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -20,6 +21,7 @@ enum class JournalState {
 data class FileImage(
     val path: Path,
     val content: String?,
+    val posixPermissions: Set<PosixFilePermission>? = null,
 )
 
 data class TransactionJournalRecord(
@@ -56,6 +58,7 @@ internal data class TransactionJournalDto(
 internal data class FileImageDto(
     val path: String,
     val content: String? = null,
+    val posixPermissions: List<String>? = null,
 )
 
 private val journalJson = Json { prettyPrint = true; ignoreUnknownKeys = true }
@@ -67,8 +70,8 @@ internal fun TransactionJournalRecord.toJson(): String {
         transaction = transaction.toDto(),
         operation = operation,
         forwardEdit = forwardEdit.toDto(),
-        preImages = preImages.map { FileImageDto(it.path.toString(), it.content) },
-        postImages = postImages.map { FileImageDto(it.path.toString(), it.content) },
+        preImages = preImages.map { it.toDto() },
+        postImages = postImages.map { it.toDto() },
         state = state.name,
         updatedAt = updatedAt.toString(),
         failure = failure,
@@ -91,13 +94,25 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
         transaction = dto.transaction.toDomain(),
         operation = dto.operation,
         forwardEdit = dto.forwardEdit.toDomain(),
-        preImages = dto.preImages.map { FileImage(Paths.get(it.path), it.content) },
-        postImages = dto.postImages.map { FileImage(Paths.get(it.path), it.content) },
+        preImages = dto.preImages.map { it.toDomain() },
+        postImages = dto.postImages.map { it.toDomain() },
         state = JournalState.valueOf(dto.state),
         updatedAt = Instant.parse(dto.updatedAt),
         failure = dto.failure,
     )
 }
+
+private fun FileImage.toDto() = FileImageDto(
+    path = path.toString(),
+    content = content,
+    posixPermissions = posixPermissions?.map(PosixFilePermission::name)?.sorted(),
+)
+
+private fun FileImageDto.toDomain() = FileImage(
+    path = Paths.get(path),
+    content = content,
+    posixPermissions = posixPermissions?.map(PosixFilePermission::valueOf)?.toSet(),
+)
 
 private fun checksum(dto: TransactionJournalDto): String {
     val bytes = canonicalJournalJson.encodeToString(dto).toByteArray(Charsets.UTF_8)

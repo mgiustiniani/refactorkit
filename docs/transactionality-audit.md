@@ -275,13 +275,22 @@ recovery until explicit manual review/removal; quarantine failure is separately
 coded. Still open: explicit journal-filesystem capability reporting and
 fault-injected proof for every persistence boundary.
 
-### TX-013 — Rollback does not restore full filesystem state
+### TX-013 — Rollback filesystem metadata and directory state
 
-Delete/recreate rollback restores text content only. It does not restore file
-permissions, ownership, timestamps, ACLs, extended attributes, encoding metadata,
-or created parent-directory state. Implicitly created directories remain after
-rollback. Directory create/rename operations described by requirements are not
-represented in the current `FileEdit` model.
+Status: **partially closed after the audited baseline**.
+
+Schema-v2 pre/post `FileImage`s now retain optional POSIX permission sets.
+Managed apply records permissions before mutation and desired post-image
+permissions; normal/forced rollback and startup compensation restore the
+journaled pre-image permissions rather than deriving them from post-apply files.
+Tests prove modify and rename permissions survive apply and return exactly after
+rollback on POSIX filesystems. Schema-v1 records remain readable with unknown
+permissions.
+
+Ownership, timestamps, ACLs, extended attributes, encoding metadata, and created
+parent-directory state remain open. Implicitly created directories remain after
+rollback, and directory create/rename operations are not represented in the
+current `FileEdit` model.
 
 ### TX-014 — Apply snapshot scope ownership
 
