@@ -291,18 +291,21 @@ directory-force probe results. Deterministic journal hooks prove that a failure
 after new-record force leaves a complete `PREPARED` intent, a lifecycle temp-file
 failure preserves the prior record and cleans the temp, and a post-atomic-move/
 pre-directory-force failure leaves the complete new state readable by restart.
-A real subprocess kill after lifecycle temp-file force additionally proves that
-the prior checksummed record remains authoritative and can advance after restart
-while the uncommitted owner-only temp is ignored. Workspace staging, partial
+Real subprocess kills now cover all three journal write boundaries: after a new
+record is forced the complete `PREPARED` intent is readable; after lifecycle temp
+force the prior checksummed record remains authoritative while the uncommitted
+owner-only temp is ignored; after lifecycle atomic move the complete new
+`APPLYING` record and event history are readable. Workspace staging, partial
 commit, compensation failure, and restart retry also have deterministic evidence.
-Still open: real kill coverage at the other journal boundaries, raw torn-byte
-simulation, and power-loss proof.
+Still open: raw torn-byte simulation and power-loss proof.
 
 ### TX-013 — Rollback filesystem metadata and directory state
 
 Status: **partially closed after the audited baseline**.
 
-Schema-v2 pre/post `FileImage`s now retain optional POSIX permission sets.
+Schema-v4 pre/post `FileImage`s retain optional POSIX permission sets and
+last-modified timestamps. Schema-v2/v3 checksum vocabularies remain backward
+verifiable and migrate on lifecycle update.
 Managed apply records permissions before mutation and desired post-image
 permissions; normal/forced rollback and startup compensation restore the
 journaled pre-image permissions rather than deriving them from post-apply files.
@@ -316,8 +319,7 @@ flushes. Normal rollback refuses before writes when a transaction-created
 directory contains any external path, preventing data loss; tests cover both
 exact cleanup and conflict refusal.
 
-Ownership, timestamps, ACLs, extended attributes, and encoding metadata remain
-open. Explicit directory create/rename operations are not represented in the
+Ownership, ACLs, extended attributes, and encoding metadata remain open. Explicit directory create/rename operations are not represented in the
 current `FileEdit` model.
 
 ### TX-014 — Apply snapshot scope ownership

@@ -273,6 +273,10 @@ class PatchEngineTest {
         val oldName = root.resolve("Old.java")
         Files.writeString(modify, "class Modify {}\n")
         Files.writeString(oldName, "class Old {}\n")
+        val modifyTimestamp = java.nio.file.attribute.FileTime.fromMillis(946684800000L)
+        val renameTimestamp = java.nio.file.attribute.FileTime.fromMillis(978307200000L)
+        Files.setLastModifiedTime(modify, modifyTimestamp)
+        Files.setLastModifiedTime(oldName, renameTimestamp)
         val posix = Files.getFileAttributeView(modify, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) != null
         val modifyPermissions = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
         val renamePermissions = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.GROUP_READ)
@@ -314,6 +318,8 @@ class PatchEngineTest {
         assertNoWorkspaceStageFiles(root)
         assertEquals("class Modify {}\n", Files.readString(modify))
         assertEquals("class Old {}\n", Files.readString(oldName))
+        assertEquals(modifyTimestamp, Files.getLastModifiedTime(modify))
+        assertEquals(renameTimestamp, Files.getLastModifiedTime(oldName))
         assertFalse(Files.exists(root.resolve("nested")))
         if (posix) {
             assertEquals(modifyPermissions, Files.getPosixFilePermissions(modify))

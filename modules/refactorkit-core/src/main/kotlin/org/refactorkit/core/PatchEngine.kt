@@ -704,7 +704,10 @@ class PatchEngine(
     ): TransactionJournalRecord {
         val staged = stageWorkspaceEdit(plan.workspaceEdit)
         val preImages = staged.preImages.map { image ->
-            image.copy(posixPermissions = readPosixPermissions(image.path))
+            image.copy(
+                posixPermissions = readPosixPermissions(image.path),
+                lastModifiedMillis = readLastModifiedMillis(image.path),
+            )
         }
         val postPermissions = derivePostPermissions(plan.workspaceEdit)
         val postImages = staged.postImages.map { image ->
@@ -827,6 +830,13 @@ class PatchEngine(
         }
     }
 
+    private fun readLastModifiedMillis(path: Path): Long? {
+        val absolute = resolveInsideWorkspace(path)
+        return if (Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) {
+            Files.getLastModifiedTime(absolute, LinkOption.NOFOLLOW_LINKS).toMillis()
+        } else null
+    }
+
     private fun readPosixPermissions(path: Path): Set<PosixFilePermission>? {
         val absolute = resolveInsideWorkspace(path)
         if (!Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) return null
@@ -932,6 +942,9 @@ class PatchEngine(
         preByPath: Map<Path, FileImage>,
         postByPath: Map<Path, FileImage>,
     ) {
+        image.lastModifiedMillis?.let { millis ->
+            Files.setLastModifiedTime(temporary, java.nio.file.attribute.FileTime.fromMillis(millis))
+        }
         if (Files.getFileAttributeView(temporary, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) == null) return
         val source = when {
             Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) -> target

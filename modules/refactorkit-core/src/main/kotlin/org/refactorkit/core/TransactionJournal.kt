@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -24,6 +25,7 @@ data class FileImage(
     val path: Path,
     val content: String?,
     val posixPermissions: Set<PosixFilePermission>? = null,
+    val lastModifiedMillis: Long? = null,
 )
 
 data class JournalEvent(
@@ -50,7 +52,7 @@ data class TransactionJournalRecord(
     val failure: String? = null,
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 3
+        const val CURRENT_SCHEMA_VERSION = 4
     }
 }
 
@@ -86,6 +88,7 @@ internal data class FileImageDto(
     val path: String,
     val content: String? = null,
     val posixPermissions: List<String>? = null,
+    val lastModifiedMillis: Long? = null,
 )
 
 private val journalJson = Json { prettyPrint = true; ignoreUnknownKeys = true }
@@ -120,7 +123,11 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
     }
     if (dto.schemaVersion >= 2) {
         require(!dto.checksum.isNullOrBlank()) { "Transaction journal checksum is missing" }
-        val expected = if (dto.schemaVersion == 2) legacyV2Checksum(dto) else checksum(dto.copy(checksum = null))
+        val expected = when (dto.schemaVersion) {
+            2 -> legacyV2Checksum(dto)
+            3 -> legacyV3Checksum(dto)
+            else -> checksum(dto.copy(checksum = null))
+        }
         require(dto.checksum == expected) { "Transaction journal checksum mismatch" }
     }
     return TransactionJournalRecord(
@@ -146,12 +153,14 @@ private fun FileImage.toDto() = FileImageDto(
     path = path.toString(),
     content = content,
     posixPermissions = posixPermissions?.map(PosixFilePermission::name)?.sorted(),
+    lastModifiedMillis = lastModifiedMillis,
 )
 
 private fun FileImageDto.toDomain() = FileImage(
     path = Paths.get(path),
     content = content,
     posixPermissions = posixPermissions?.map(PosixFilePermission::valueOf)?.toSet(),
+    lastModifiedMillis = lastModifiedMillis,
 )
 
 private fun legacyV2Checksum(dto: TransactionJournalDto): String {
@@ -159,11 +168,31 @@ private fun legacyV2Checksum(dto: TransactionJournalDto): String {
         TransactionJournalDto.serializer(),
         dto.copy(checksum = null),
     ).jsonObject
-    val legacy = JsonObject(current.filterKeys { it !in setOf(
-        "implementationVersion", "apiVersion", "preSnapshotHash", "postSnapshotHash", "history",
-    ) })
+    val legacy = JsonObject(
+        current.filterKeys { it !in setOf(
+            "implementationVersion", "apiVersion", "preSnapshotHash", "postSnapshotHash", "history",
+        ) }.mapValues { (key, value) ->
+            if (key == "preImages" || key == "postImages") removeImageMetadata(value, "lastModifiedMillis") else value
+        },
+    )
     return sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), legacy))
 }
+
+private fun legacyV3Checksum(dto: TransactionJournalDto): String {
+    val current = canonicalJournalJson.encodeToJsonElement(
+        TransactionJournalDto.serializer(),
+        dto.copy(checksum = null),
+    ).jsonObject
+    val legacy = JsonObject(current.mapValues { (key, value) ->
+        if (key == "preImages" || key == "postImages") removeImageMetadata(value, "lastModifiedMillis") else value
+    })
+    return sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), legacy))
+}
+
+private fun removeImageMetadata(value: kotlinx.serialization.json.JsonElement, field: String): kotlinx.serialization.json.JsonElement =
+    kotlinx.serialization.json.JsonArray(value.jsonArray.map { element ->
+        JsonObject(element.jsonObject.filterKeys { it != field })
+    })
 
 private fun checksum(dto: TransactionJournalDto): String =
     sha256(canonicalJournalJson.encodeToString(dto))
