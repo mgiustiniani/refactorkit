@@ -1,6 +1,6 @@
 # Safe Delete
 
-Status: implementation-informed for `v0.3.0-SNAPSHOT`. Safe delete is
+Status: implementation-informed for `v0.3.0`. Safe delete is
 preview-first and only removes Java type source files through a `PatchPlan`.
 
 ## Command

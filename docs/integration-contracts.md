@@ -2,16 +2,16 @@
 
 See AGENTS.md for the authoritative initial architecture and implementation rules.
 
-Status: implementation-informed P0 baseline for `v0.2.0-beta` plus the
-post-beta `0.3.0-SNAPSHOT` version/API metadata slice. The beta is not a
+Status: implementation-informed baseline for `v0.3.0`. The release retains the
+API `0.2` beta contract and is not a
 `v1.0.0` API freeze. Compatibility labels, API-version expectations, and
 breaking-change migration-note rules are defined in
 [Compatibility and deprecation policy](compatibility-policy.md).
 
-Current mainline metadata after `v0.2.0-beta`:
+Current `v0.3.0` release metadata:
 
 - implementation name: `RefactorKit`;
-- implementation version: `0.3.0-SNAPSHOT`;
+- implementation version: `0.3.0`;
 - beta contract API version: `0.2`.
 
 ## Compatibility policy
@@ -43,14 +43,14 @@ The command names below are the documented CLI surface for `v0.2.0-beta`.
 `--apply` remains opt-in for mutating operations; preview is the default.
 
 `refactorkit --version` and `refactorkit version` are read-only beta-contract
-metadata surfaces. On main after the beta release they should report the
-implementation version `0.3.0-SNAPSHOT` and API version `0.2`; automation should
+metadata surfaces. In `v0.3.0` they report implementation version `0.3.0` and
+API version `0.2`; automation should
 check the API version when deciding whether a beta-contract integration is
 compatible.
 
 | CLI command | Status | Contract notes |
 |-------------|--------|----------------|
-| `refactorkit --version` / `refactorkit version` | `beta-contract` | Read-only implementation/API metadata; current main reports version `0.3.0-SNAPSHOT` and API version `0.2`. |
+| `refactorkit --version` / `refactorkit version` | `beta-contract` | Read-only implementation/API metadata; `v0.3.0` reports version `0.3.0` and API version `0.2`. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
@@ -118,12 +118,12 @@ It does not open, scan, or modify a workspace.
 
 Request parameters: none.
 
-Current mainline response after `v0.2.0-beta`:
+Current `v0.3.0` response:
 
 ```json
 {
   "name": "RefactorKit",
-  "version": "0.3.0-SNAPSHOT",
+  "version": "0.3.0",
   "apiVersion": "0.2"
 }
 ```
@@ -189,9 +189,8 @@ show the refusal, warnings, affected files when present, and next action.
 `Content-Length` framing. Workspace edits include legacy `changes` for text edits
 and `documentChanges` for file create/delete/rename operations.
 
-The LSP initialize response `serverInfo.version` is read-only metadata and should
-use the centralized implementation version. On main after `v0.2.0-beta`, it
-reports `0.3.0-SNAPSHOT`.
+The LSP initialize response `serverInfo.version` is read-only metadata and uses
+the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 
 | Capability or command | Status | Notes |
 |-----------------------|--------|-------|
@@ -247,9 +246,8 @@ Rollback refusal semantics:
 local LLM/MCP clients. It intentionally does not expose arbitrary filesystem
 access.
 
-The MCP initialize response `serverInfo.version` is read-only metadata and should
-use the centralized implementation version. On main after `v0.2.0-beta`, it
-reports `0.3.0-SNAPSHOT`.
+The MCP initialize response `serverInfo.version` is read-only metadata and uses
+the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 
 ### Tools
 

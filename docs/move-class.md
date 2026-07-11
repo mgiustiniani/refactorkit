@@ -1,6 +1,6 @@
 # Move class
 
-Status: implementation-informed for `v0.3.0-SNAPSHOT`. Move class previews
+Status: implementation-informed for `v0.3.0`. Move class previews
 package/path/import updates for one Java type. Clean JDT analysis scopes edits to
 binding-matched referencing files; unclean analysis reports lexical file scoping.
 

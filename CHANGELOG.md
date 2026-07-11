@@ -7,7 +7,7 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-### Next development (`0.3.0-SNAPSHOT`)
+## [0.3.0] - 2026-07-10
 
 - Activated the detailed `v1.0.0` stable release plan, including the required
   `v0.3.0` → immutable RC → stable sequence, API `1.0` freeze, Java 8–25/JDT
@@ -15,10 +15,10 @@ review safety boundaries before applying refactorings.
   reproducibility, migration, and post-publication verification.
 - Updated release automation so hyphenated tags publish prereleases while stable
   tags publish as the latest non-prerelease GitHub Release.
-- Advanced the main development version to `0.3.0-SNAPSHOT` after the published
-  `v0.2.0-beta` release.
+- Advanced and finalized the implementation version as `0.3.0` after the
+  published `v0.2.0-beta` release.
 - Added centralized version/API metadata: implementation name `RefactorKit`,
-  implementation version `0.3.0-SNAPSHOT`, and beta contract API version `0.2`.
+  implementation version `0.3.0`, and beta contract API version `0.2`.
 - Exposed version metadata through `refactorkit --version`, `refactorkit version`,
   CLI help text, daemon JSON-RPC `server.version`, and LSP/MCP `serverInfo`.
 - Added CLI, daemon, LSP, and MCP tests for the version/API metadata surfaces.

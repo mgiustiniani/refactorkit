@@ -1,6 +1,6 @@
 # Compatibility and deprecation policy
 
-Status: draft for the `v0.3.0` P1 documentation slice.
+Status: accepted for the `v0.3.0` API `0.2` compatibility baseline.
 
 This policy explains how RefactorKit documents compatibility before `v1.0.0`.
 It applies to documented CLI, daemon JSON-RPC, LSP, and MCP integration
@@ -112,8 +112,8 @@ Required migration-note content:
 Clients should detect compatibility through the most specific metadata available:
 
 - **CLI**: use `refactorkit --version` or `refactorkit version`; the documented
-  post-beta baseline reports implementation version `0.3.0-SNAPSHOT` on main and
-  API version `0.2`.
+  `v0.3.0` baseline reports implementation version `0.3.0` and API version
+  `0.2`.
 - **Daemon JSON-RPC**: call `server.version`; it returns `name`, implementation
   `version`, and `apiVersion`.
 - **LSP**: read `initialize` response `serverInfo.version` for the implementation

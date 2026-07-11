@@ -100,18 +100,17 @@ Priority workstreams:
 7. Verify CI artifact publication, checksums, and packaged CLI smoke tests.
 8. Update changelog, release notes, migration notes, and acceptance checklist.
 
-## Phase 2.5 — Post-beta next-development slice (`0.3.0-SNAPSHOT` toward `v0.3.0`)
+## Phase 2.5 — Post-beta compiler-backed slice (`v0.3.0`)
 
-Draft plan: [docs/releases/v0.3.0-plan.md](releases/v0.3.0-plan.md).
+Release-candidate plan: [docs/releases/v0.3.0-plan.md](releases/v0.3.0-plan.md).
 
 Objective: make version/API metadata explicit on all integration surfaces and
 prepare the contract policy and Java analysis path needed before `v1.0.0`.
 
 Initial work items:
 
-1. Keep the root project version on main at `0.3.0-SNAPSHOT` after the published
-   `v0.2.0-beta` release while preserving `apiVersion=0.2` as the current beta
-   contract baseline.
+1. Publish implementation version `0.3.0` while preserving `apiVersion=0.2` as
+   the current beta contract baseline.
 2. Document and test version surfaces for CLI `--version`/`version`, daemon
    JSON-RPC `server.version`, and LSP/MCP `serverInfo.version`.
 3. Draft the semantic versioning and deprecation policy for beta-contract

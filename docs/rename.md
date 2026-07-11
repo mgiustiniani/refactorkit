@@ -1,6 +1,6 @@
 # Rename class and member
 
-Status: implementation-informed for `v0.3.0-SNAPSHOT`. Rename operations are
+Status: implementation-informed for `v0.3.0`. Rename operations are
 previewable Java transformations backed by `PatchPlan`. Proven class and signed
 method slices use JDT binding evidence; unsupported or unclean semantic cases
 remain explicit lexical fallbacks or refusals.

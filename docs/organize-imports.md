@@ -1,6 +1,6 @@
 # Organize imports
 
-Status: implementation-informed for `v0.3.0-SNAPSHOT`. Organize imports is a
+Status: implementation-informed for `v0.3.0`. Organize imports is a
 low-risk Java import-block cleanup. Clean JDT binding evidence additionally
 removes exact imports proven unused; unclean files retain lexical cleanup only.
 
