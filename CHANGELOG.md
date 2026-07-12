@@ -28,6 +28,12 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Completed P2B and accepted ADR 0011: generic credential/build-execution policy
+  allowances are ceilings, not provider capabilities. Current Maven remains
+  credential-free and current Gradle remains non-executable even when allowances
+  are requested. Any future authenticated Maven or executable Gradle support
+  requires a new provider identity, opaque secret custody or isolated worker,
+  provenance, redaction, limits, and separate native hostile-workspace evidence.
 - Added native packaged Build Model acceptance on Linux, Windows x86_64, macOS
   x86_64, and macOS arm64 with `JAVA_HOME` removed: Maven reactor scan, clean
   diagnostics, rename-only `moveSourceRoot` preview, authorized apply, WAL/

@@ -62,9 +62,14 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |ADR 0010
 |Offline Effective Build Models and Source Ownership
 |link:../adr/0010-offline-build-models-and-source-ownership.adoc[docs/adr/0010-offline-build-models-and-source-ownership.adoc]
-|Accepted; Maven reference slice complete, Build Model SPI/Gradle productionization planned
+|Accepted; Maven reference slice and P2B Build Model SPI/Gradle productionization complete
+
+|ADR 0011
+|Credential and Executable Build Provider Boundaries
+|link:../adr/0011-credential-and-executable-build-provider-boundaries.adoc[docs/adr/0011-credential-and-executable-build-provider-boundaries.adoc]
+|Accepted; current providers remain credential-free and non-executable; privileged providers require new identities and separate acceptance
 |===
 
 == Decision Candidate Coverage
 
-The ADR set covers patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, Eclipse JDT evidence-gated semantic authority, offline effective build models/source ownership, and the deferred supreme multi-language `1.0` target. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADR 0009 supersedes the immediate post-`v0.3.0` Java-focused RC sequence without weakening any accepted safety decision. ADRs 0002 and 0004 record WAL-backed managed transaction guarantees, client-managed native LSP limitations, and the staged recipe-wide transaction boundary without claiming one filesystem-wide ACID commit. ADR 0010 separates package identity from module/source-set ownership and requires a shared Build Model SPI before deep JVM adapter expansion.
+The ADR set covers patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, Eclipse JDT evidence-gated semantic authority, offline effective build models/source ownership, and the deferred supreme multi-language `1.0` target. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADR 0009 supersedes the immediate post-`v0.3.0` Java-focused RC sequence without weakening any accepted safety decision. ADRs 0002 and 0004 record WAL-backed managed transaction guarantees, client-managed native LSP limitations, and the staged recipe-wide transaction boundary without claiming one filesystem-wide ACID commit. ADR 0010 separates package identity from module/source-set ownership and requires a shared Build Model SPI before deep JVM adapter expansion. ADR 0011 makes generic policy allowances ceilings rather than capabilities and requires new provider identities, opaque credential custody, process isolation, provenance, redaction, and native hostile-workspace acceptance before authenticated Maven or executable Gradle support can be claimed.

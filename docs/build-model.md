@@ -83,10 +83,10 @@ information without classpath contents.
 
 - retire compatibility `Module` projection after API-versioned migration of
   external library consumers;
-- design credential-safe private repository support if required; explicit Maven
-  profiles, active effective/custom roots, classifiers, `test-jar`, variant
-  mediation, `systemPath`, and checksum-verified anonymous Central opt-in are
-  implemented;
+- implement credential-safe private repository support only if required and only
+  under the new-provider boundary in ADR 0011; explicit Maven profiles, active
+  effective/custom roots, classifiers, `test-jar`, variant mediation,
+  `systemPath`, and checksum-verified anonymous Central opt-in are implemented;
 - decide Gradle executable-model policy and implement integration/custom sets;
 - add provider capability/contract snapshots and pagination/limits;
 - validate the abstraction with Kotlin or another JVM adapter before freezing it.

@@ -19,13 +19,20 @@ class BuildModelProvidersTest {
         val provider = MavenBuildModelProvider()
         val root = Path.of("../../samples/java-maven-reactor-21").toAbsolutePath().normalize()
 
-        val model = provider.discover(BuildModelRequest(root))
+        val model = provider.discover(BuildModelRequest(
+            root,
+            BuildModelDiscoveryPolicy(
+                credentialsAccess = BuildModelDiscoveryPolicy.CredentialsAccess.ALLOW_EXPLICIT_REDACTED,
+                buildCodeExecution = BuildModelDiscoveryPolicy.BuildCodeExecution.ALLOW_EXPLICIT,
+            ),
+        ))
 
         assertIs<BuildModelProvider>(provider)
         assertEquals("maven-effective-v1", model.providerId)
         assertEquals(BuildModelStatus.AVAILABLE, model.status)
         assertEquals("denied", model.attributes["buildCodeExecution"])
         assertEquals("denied", model.attributes["credentialsAccess"])
+        assertEquals("denied", model.attributes["buildCodeExecution"])
         assertTrue(model.modules.any { module ->
             module.sourceSets.any { it.kind == SourceSetKind.MAIN } &&
                 module.sourceSets.any { it.kind == SourceSetKind.TEST }
