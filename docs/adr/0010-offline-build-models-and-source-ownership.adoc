@@ -1,0 +1,96 @@
+= ADR 0010: Offline Effective Build Models and Source Ownership
+:status: accepted
+:date: 2026-07-12
+
+== Context
+
+Reliable semantic Java analysis needs the effective project model, not isolated
+heuristics over each child build descriptor. A Maven reactor may inherit source
+levels, properties, dependency management, BOMs, coordinates, scopes, generated
+roots, and module edges. If those inputs are absent, reporting every derivative
+JDT unresolved type obscures the actual build-model or classpath failure.
+
+Source location is also not Java identity. Moving a compilation unit between
+module source roots while retaining its package and FQCN is different from
+`moveClass`, which changes package identity and updates imports/references.
+Treating both as one operation would make previews ambiguous and encourage raw
+filesystem moves outside the managed transaction boundary.
+
+The Java 21 Maven reactor implementation proved these requirements against the
+committed reactor fixture and the read-only Magrathea reproducer. The resulting
+source-set, dependency-scope, output, generated-root, and evidence concepts are
+also prerequisites for Kotlin, Scala, Groovy, and Clojure interoperability.
+
+== Decision
+
+. Build-model discovery is a first-class semantic input and is separated from
+  refactoring planners and filesystem mutation.
+. Maven discovery uses embedded effective-model processing without executing
+  project plugins or lifecycle goals.
+. Dependency resolution is offline by default. Explicit network opt-in is
+  bounded and credential-free; RefactorKit does not silently read or report
+  Maven settings credentials.
+. Main, test, generated-main, and generated-test roots, outputs, dependency
+  scopes, reactor edges, source level, and external artifacts are modeled per
+  module rather than as one workspace-wide environment.
+. Parent/effective POMs, imported BOMs, local artifacts, source-level inputs,
+  output locations, and module edges participate in hash-bound snapshot and
+  classpath evidence. Drift refuses managed apply before WAL creation.
+. An unavailable build model, classpath, or source level produces one typed root
+  diagnostic per affected module. Derivative JDT type-resolution noise is
+  suppressed by default and remains available only through explicit verbose
+  diagnostics. Genuine syntax errors remain visible.
+. Package/FQCN identity and module/source-root ownership are independent.
+  `moveSourceRoot` preserves bytes, package declarations, imports, and FQCNs and
+  emits only whole-transaction file renames through `PatchEngine`.
+. Build descriptor changes required for a relocation must exist before preview.
+  A future operation that edits Maven/Gradle ownership metadata is a separate,
+  explicitly modeled migration; it must not be hidden inside `moveSourceRoot`.
+. Before additional deep JVM adapters, the proven concepts are generalized into
+  an internal Build Model SPI (`BuildModel`, `ModuleGraph`, `SourceSet`, scoped
+  dependencies/outputs/generated roots, diagnostics, and evidence). This is an
+  internal architecture boundary, not a separately deployed product.
+
+== Consequences
+
+=== Positive
+
+* Java 21 Maven reactors receive module-accurate JDT source/class paths without
+  arbitrary build execution.
+* Missing offline inputs fail concisely instead of producing diagnostic cascades.
+* Parent, BOM, artifact, and source-level drift is covered by the existing
+  snapshot/apply safety boundary.
+* Same-package source ownership changes become deterministic, previewable,
+  atomic/compensatable, and rollbackable.
+* JVM adapters can share one source-set and build-evidence vocabulary instead of
+  reproducing Java-specific scanner logic.
+
+=== Costs and risks
+
+* Effective build models add dependency-resolution, mediation, local-repository,
+  profile, classifier, generated-root, and resource-limit complexity.
+* Maven Central-only anonymous opt-in does not cover private/authenticated
+  repositories; supporting those requires a separate credential-boundary and
+  redaction design.
+* Plugin-defined generated roots are visible only when deterministically declared
+  or already materialized; plugins are never executed implicitly.
+* Gradle, sbt/BSP, and other ecosystems require separate execution-policy and
+  provenance decisions because their build models may involve executable code.
+* A generic SPI extracted too early can encode Java/Maven assumptions; contract
+  snapshots and at least one additional adapter must validate the abstraction.
+
+== Guardrails
+
+* No project plugin, lifecycle, build task, or arbitrary build code executes
+  during default discovery.
+* Network resolution is opt-in, bounded, auditable, and never grants semantic
+  apply authority by itself.
+* Credentials, repository secrets, and Maven settings content never appear in
+  diagnostics, logs, capability responses, or evidence summaries.
+* Main sources never see test-only dependencies; test visibility is explicit.
+* Generated roots remain analysis-visible and rewrite-refused unless a future
+  capability defines stronger ownership evidence.
+* Build-model proposals and source-root migrations still pass preview, exact
+  post-image diagnostics, approval, `PatchEngine`, WAL, and rollback.
+* `moveClass` changes Java package identity; `moveSourceRoot` changes source
+  ownership. Callers must not substitute one for the other.

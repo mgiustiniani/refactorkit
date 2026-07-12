@@ -240,6 +240,12 @@ configuration model
 
 Core must not depend on Java-specific logic.
 
+Roadmap boundary: before additional deep JVM adapters, the proven Maven
+module/source-set concepts must be generalized into an internal language-neutral
+Build Model SPI. Until that extraction is complete, Maven parsing/resolution
+remains owned by `refactorkit-java`; core must not acquire Maven classes or
+plugin-execution assumptions.
+
 Important domain objects:
 
 ```text

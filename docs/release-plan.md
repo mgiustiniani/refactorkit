@@ -46,7 +46,7 @@ credible. Java depth continues in every band.
 
 | Band | Primary focus |
 |---|---|
-| `0.5.x` | Native Windows/macOS self-contained runtime matrix plus multi-language adapter kernel, external semantic-process manager, real structural parsing and generalized evidence |
+| `0.5.x` | Native Windows/macOS self-contained runtime matrix; completed Java 21 Maven reactor/source-ownership reference slice; Build Model SPI and Maven/Gradle productionization; multi-language adapter kernel, external semantic-process manager, real structural parsing and generalized evidence |
 | `0.6.x` | TypeScript and JavaScript deep adapter |
 | `0.7.x` | Kotlin and Java/Kotlin interoperability |
 | `0.8.x` | Python deep adapter |
@@ -59,6 +59,9 @@ credible. Java depth continues in every band.
 | `1.0` development | Clojure and global all-language stabilization |
 
 Active plan: [`docs/releases/v0.5.0-plan.md`](releases/v0.5.0-plan.md).
+ADR 0010 records offline effective build models, typed cascade suppression,
+source-identity/ownership separation, and the Build Model SPI gate added after the
+Java 21 Maven/Magrathea acceptance slice.
 
 The order can change through an explicit roadmap decision. Equivalent quality
 means idiomatic IDE-grade capability, not identical operations for unlike

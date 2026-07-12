@@ -7,7 +7,7 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | Module                    | Status       | Notes                                                     |
 |---------------------------|-------------|------------------------------------------------------------|
 | `refactorkit-core`        | ✅ MVP       | PatchPlan, PatchEngine, TransactionLog, TextEdits, Models  |
-| `refactorkit-java`        | ✅ MVP+      | Scanner, rename, move, organize-imports, safe-delete, extract-method MVP, change-signature MVP, recipe engine, framework-aware risk detection |
+| `refactorkit-java`        | ✅ MVP+      | Offline Maven effective reactor/source-set model, JDT diagnostics, rename/move/move-source-root, organize-imports, safe-delete, formatting, limited extract/change-signature, recipes, framework risk detection |
 | `refactorkit-cli`         | ✅ MVP+      | All Java commands + outline/search/local-rename + jlink runtime packaging |
 | `refactorkit-daemon`      | ✅ MVP       | JSON-RPC over stdio                                        |
 | `refactorkit-lsp`         | ✅ MVP       | definition, references, rename, codeAction, documentSymbol, diagnostics, semanticTokens |
@@ -26,4 +26,8 @@ platform rather than freezing a Java-only stable API. Java remains the reference
 and widest catalogue; TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++,
 Groovy, C#, Rust, and Clojure receive compiler/language-server-backed idiomatic
 catalogues and deterministic project-style-aware formatters with the same preview,
-evidence, diagnostics, managed apply, rollback, and bounded-resource standards. See `docs/releases/v1.0.0-plan.md` and ADR 0009.
+evidence, diagnostics, managed apply, rollback, and bounded-resource standards.
+The completed Maven Java 21 reference slice now feeds the planned internal Build
+Model SPI and Gradle productionization gate in `0.5.x`; package/FQCN identity is
+kept separate from source-set/module ownership. See `docs/releases/v0.5.0-plan.md`,
+`docs/releases/v1.0.0-plan.md`, ADR 0009, and ADR 0010.

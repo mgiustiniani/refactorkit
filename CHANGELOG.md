@@ -28,6 +28,12 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Updated the `0.5.x` roadmap after Maven/Magrathea acceptance: P2A is formally
+  complete with commit/test/native-CI evidence; P2B makes the internal Build Model
+  SPI, Maven production edges, explicit Gradle execution policy, capability
+  schemas, and native packaged reactor/relocation acceptance release gates. ADR
+  0010 fixes offline build-model and source-ownership boundaries without changing
+  the language delivery sequence.
 - Added offline, plugin-free Maven effective-reactor analysis with inherited Java
   21 settings, dependency management/BOMs, local artifacts, reactor main/test
   visibility, generated support roots, hash-bound model evidence, and typed

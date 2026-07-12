@@ -58,8 +58,13 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |Defer v1.0 Until IDE-Grade Multi-Language Completion
 |link:../adr/0009-supreme-multilanguage-v1-roadmap.adoc[docs/adr/0009-supreme-multilanguage-v1-roadmap.adoc]
 |Accepted; `v0.4.0` hardening and long-range all-language acceptance active
+
+|ADR 0010
+|Offline Effective Build Models and Source Ownership
+|link:../adr/0010-offline-build-models-and-source-ownership.adoc[docs/adr/0010-offline-build-models-and-source-ownership.adoc]
+|Accepted; Maven reference slice complete, Build Model SPI/Gradle productionization planned
 |===
 
 == Decision Candidate Coverage
 
-The ADR set covers patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, Eclipse JDT evidence-gated semantic authority, and the deferred supreme multi-language `1.0` target. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADR 0009 supersedes the immediate post-`v0.3.0` Java-focused RC sequence without weakening any accepted safety decision. ADRs 0002 and 0004 record WAL-backed managed transaction guarantees, client-managed native LSP limitations, and the staged recipe-wide transaction boundary without claiming one filesystem-wide ACID commit.
+The ADR set covers patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, Eclipse JDT evidence-gated semantic authority, offline effective build models/source ownership, and the deferred supreme multi-language `1.0` target. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADR 0009 supersedes the immediate post-`v0.3.0` Java-focused RC sequence without weakening any accepted safety decision. ADRs 0002 and 0004 record WAL-backed managed transaction guarantees, client-managed native LSP limitations, and the staged recipe-wide transaction boundary without claiming one filesystem-wide ACID commit. ADR 0010 separates package identity from module/source-set ownership and requires a shared Build Model SPI before deep JVM adapter expansion.
