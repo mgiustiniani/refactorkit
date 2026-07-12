@@ -194,7 +194,8 @@ The response uses the standard patch-plan preview envelope with `planId`,
 `primaryFile`, `resolvedModule`, `resolvedSourceRoot`, `sourceSet`,
 `resolvedPackage`, `packageChanges`, `provenance`, `unresolvedDependencies`,
 `conflicts`, `refusalReasons`, `applyEligible`, `snapshot`, and `provider`.
-All paths are workspace-relative. The `warnings` array must include exactly one
+All plan/file paths are workspace-relative and serialized with `/` separators
+on every host. The `warnings` array must include exactly one
 provenance/license line for source-processed plans with these stable key names:
 
 ```text

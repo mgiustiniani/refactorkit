@@ -165,7 +165,7 @@ class DaemonSession {
                     put("id", sym.id.value)
                     put("name", sym.name)
                     put("kind", sym.kind.name)
-                    put("file", sym.location.path.toString())
+                    put("file", sym.location.path.protocolPath())
                     put("line", sym.location.range.start.line + 1)
                 })
             }
@@ -181,7 +181,7 @@ class DaemonSession {
             put("id", symbol.id.value)
             put("name", symbol.name)
             put("kind", symbol.kind.name)
-            put("file", symbol.location.path.toString())
+            put("file", symbol.location.path.protocolPath())
             put("line", symbol.location.range.start.line + 1)
             put("character", symbol.location.range.start.character)
         }
@@ -193,7 +193,7 @@ class DaemonSession {
         return buildJsonArray {
             refs.forEach { ref ->
                 add(buildJsonObject {
-                    put("file", ref.location.path.toString())
+                    put("file", ref.location.path.protocolPath())
                     put("line", ref.location.range.start.line + 1)
                     put("character", ref.location.range.start.character)
                 })
@@ -213,7 +213,7 @@ class DaemonSession {
                     d.evidence?.let { put("evidence", it.name) }
                     d.category?.let { put("category", it.name) }
                     d.location?.let { loc ->
-                        put("file", loc.path.toString())
+                        put("file", loc.path.protocolPath())
                         put("line", loc.range.start.line + 1)
                     }
                 })
@@ -313,9 +313,9 @@ class DaemonSession {
                     put("transactionId", result.transaction.id.value)
                     put("planId", planId)
                     put("changedFiles", buildJsonArray {
-                        plan.affectedFiles.sortedBy(Path::toString).forEach { add(JsonPrimitive(it.toString())) }
+                        plan.affectedFiles.sortedBy { it.protocolPath() }.forEach { add(JsonPrimitive(it.protocolPath())) }
                     })
-                    pending.importPreview?.primaryFile?.let { put("primaryFile", it.toString()) }
+                    pending.importPreview?.primaryFile?.let { put("primaryFile", it.protocolPath()) }
                     put("snapshotHash", refreshed.hash)
                 }
             }
@@ -426,7 +426,9 @@ class DaemonSession {
         put("confidence", plan.confidence)
         put("riskLevel", plan.riskLevel.name)
         put("evidence", plan.evidence.name)
-        put("affectedFiles", buildJsonArray { plan.affectedFiles.sortedBy(Path::toString).forEach { add(JsonPrimitive(it.toString())) } })
+        put("affectedFiles", buildJsonArray {
+            plan.affectedFiles.sortedBy { it.protocolPath() }.forEach { add(JsonPrimitive(it.protocolPath())) }
+        })
         put("structuredDiff", buildJsonArray {
             plan.workspaceEdit.edits.forEach { edit ->
                 add(buildJsonObject {
@@ -436,8 +438,8 @@ class DaemonSession {
                         is FileEdit.Delete -> "deleteFile"
                         is FileEdit.Rename -> "renameFile"
                     })
-                    put("path", edit.path.toString())
-                    if (edit is FileEdit.Rename) put("newPath", edit.newPath.toString())
+                    put("path", edit.path.protocolPath())
+                    if (edit is FileEdit.Rename) put("newPath", edit.newPath.protocolPath())
                 })
             }
         })
@@ -451,7 +453,7 @@ class DaemonSession {
                     d.evidence?.let { put("evidence", it.name) }
                     d.category?.let { put("category", it.name) }
                     d.location?.let { loc ->
-                        put("file", loc.path.toString())
+                        put("file", loc.path.protocolPath())
                         put("line", loc.range.start.line + 1)
                     }
                 })
@@ -466,9 +468,9 @@ class DaemonSession {
             put("version", RefactorKitVersion.VERSION)
         })
         if (importPreview != null) {
-            importPreview.primaryFile?.let { put("primaryFile", it.toString()) }
+            importPreview.primaryFile?.let { put("primaryFile", it.protocolPath()) }
             importPreview.resolvedModule?.let { put("resolvedModule", it) }
-            importPreview.resolvedSourceRoot?.let { put("resolvedSourceRoot", it.toString()) }
+            importPreview.resolvedSourceRoot?.let { put("resolvedSourceRoot", it.protocolPath()) }
             importPreview.sourceSet?.let { put("sourceSet", it.name) }
             put("resolvedPackage", importPreview.resolvedPackage)
             put("packageChanges", buildJsonArray {
@@ -528,6 +530,8 @@ class DaemonSession {
             applyEligible = false,
         )
     }
+
+    private fun Path.protocolPath(): String = normalize().toString().replace('\\', '/')
 
     private data class PendingPlan(val plan: PatchPlan, val importPreview: ExternalImportPreview? = null)
 

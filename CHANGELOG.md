@@ -23,8 +23,10 @@ review safety boundaries before applying refactorings.
   `refactorkit-daemon` launcher with end-to-end packaged smoke coverage.
 - Canonicalized JDT reference binding keys to their matched source declarations,
   preserving exact qualified overload identity when independent parser
-  environments emit platform-specific keys on Windows. Formatter preference
-  evidence now uses portable workspace-relative separators.
+  environments emit platform-specific keys on Windows. Constructor and override
+  relations use the same canonical declaration identity. Formatter preference
+  evidence and daemon workspace-relative protocol paths now use portable `/`
+  separators.
 
 ## [0.4.0] - 2026-07-12
 
