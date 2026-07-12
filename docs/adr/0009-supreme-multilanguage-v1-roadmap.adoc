@@ -26,7 +26,7 @@ Directory layout must never be silently equated with a language namespace.
 
 == Decision
 
-. Main returns from `1.0.0-rc.1-SNAPSHOT` branding to `0.4.0-SNAPSHOT`.
+. Main returns from `1.0.0-rc.1-SNAPSHOT` branding to `0.4.0`.
 . `v0.4.0` publishes current transaction, Java semantic, diagnostics, protocol,
   resource, packaging, and documentation hardening without freezing API `1.0`.
 . Subsequent `0.x` releases build the multi-language kernel and deep adapters for

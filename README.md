@@ -28,7 +28,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Main develops `0.4.0-SNAPSHOT`; API `0.2` remains the beta compatibility
+Main develops `0.4.0`; API `0.2` remains the beta compatibility
 baseline. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is
 the reference and widest catalogue, while other mature ecosystems target

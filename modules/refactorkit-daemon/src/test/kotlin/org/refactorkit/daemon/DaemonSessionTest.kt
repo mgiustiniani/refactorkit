@@ -1,5 +1,6 @@
 package org.refactorkit.daemon
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -13,6 +14,8 @@ import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.RefactorKitVersion
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.exists
+import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -502,6 +505,22 @@ class DaemonSessionTest {
         assertTrue(warnings.contains("licenseDetected=MIT"), warnings)
         assertTrue(warnings.contains("licenseRisk=LOW"), warnings)
         assertTrue(Regex("originalHash=[0-9a-f]{64}").containsMatchIn(warnings), warnings)
+    }
+
+    @Test
+    fun machineReadableApiContractMatchesDaemonCapabilities() {
+        var root = Paths.get("").toAbsolutePath()
+        while (!root.resolve("docs/api-0.2-contract.json").exists()) {
+            root = root.parent ?: error("Repository root not found")
+        }
+        val contract = Json.parseToJsonElement(root.resolve("docs/api-0.2-contract.json").readText()).jsonObject
+        val expected = contract["daemon"]!!.jsonObject["methods"]!!.jsonArray
+            .map { it.jsonObject["name"]!!.jsonPrimitive.content }
+        val session = DaemonSession()
+        val actual = (session.dispatch("server.capabilities", null) as JsonObject)["methods"]!!.jsonArray
+            .map { it.jsonObject["name"]!!.jsonPrimitive.content }
+        assertEquals(expected, actual)
+        assertEquals(RefactorKitVersion.API_VERSION, contract["apiVersion"]!!.jsonPrimitive.content)
     }
 
     @Test

@@ -140,7 +140,7 @@ Status: implementation-informed, needs-review for priority and completeness.
 |implementation-informed
 
 |C-PROC-005
-|Release order is published immutable `v0.3.0`, `v0.4.0` hardening, incremental deep multi-language `0.x` bands, Clojure-complete `1.0` development, then immutable alpha/beta/RC tags and `v1.0.0`; tags must not be moved or recreated. Main reports `0.4.0-SNAPSHOT`, while API `0.2` remains active until an explicit migration passes.
+|Release order is published immutable `v0.3.0`, `v0.4.0` hardening, incremental deep multi-language `0.x` bands, Clojure-complete `1.0` development, then immutable alpha/beta/RC tags and `v1.0.0`; tags must not be moved or recreated. Main reports `0.4.0`, while API `0.2` remains active until an explicit migration passes.
 |`docs/releases/v1.0.0-plan.md`; ADRs 0004, 0005, and 0008.
 |confirmed; `v0.3.0` step implementation-informed
 

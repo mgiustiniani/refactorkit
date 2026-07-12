@@ -7,7 +7,7 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-### Next development (`0.4.0-SNAPSHOT`)
+## [0.4.0] - 2026-07-12
 
 - Replaced the premature Java-focused `1.0.0-rc.1-SNAPSHOT` trajectory with a
   long-range supreme multi-language `v1.0.0` roadmap. `v0.4.0` now publishes the
@@ -160,7 +160,7 @@ review safety boundaries before applying refactorings.
   symbolic-link component are refused with `path.symbolicLink` before writes.
 - Initially advanced main toward a first stable-contract release candidate after
   verified `v0.3.0` publication. That versioning direction was superseded by ADR
-  0009: main now reports `0.4.0-SNAPSHOT`, API baseline remains `0.2`, and final
+  0009: main now reports `0.4.0`, API baseline remains `0.2`, and final
   API `1.0` is deferred until the deep multi-language acceptance program.
 
 ## [0.3.0] - 2026-07-10

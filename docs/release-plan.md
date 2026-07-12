@@ -24,7 +24,7 @@ Published tags are immutable. Historical detailed plans remain under
 
 Detailed plan: [`docs/releases/v0.4.0-plan.md`](releases/v0.4.0-plan.md).
 
-Main reports `0.4.0-SNAPSHOT`. API `0.2` remains the active beta compatibility
+Main reports `0.4.0`. API `0.2` remains the active beta compatibility
 baseline until an explicit pre-1.0 migration is planned and tested.
 
 The release publishes the already completed transactionality, Java 8–25 JDT,

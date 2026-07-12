@@ -181,7 +181,7 @@ Status: implementation-informed, needs human review for prioritization.
 
 The active stable plan defines the remaining release-hardening workstreams:
 
-* `v0.3.0` publication is complete from immutable tag `v0.3.0`; main now develops `0.4.0-SNAPSHOT` under the hardening plan;
+* `v0.3.0` publication is complete from immutable tag `v0.3.0`; main now develops `0.4.0` under the hardening plan;
 * keep API `0.2` active until normative patch/apply/rollback and API `1.0` CLI/daemon contracts are frozen and accepted;
 * prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
 * preserve the closed TX-001 through TX-018 qualified transactionality evidence during API freeze;

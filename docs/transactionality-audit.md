@@ -1,6 +1,6 @@
 # Transactionality and Requirements Audit
 
-Status: transactionality findings closed for the qualified managed-file contract carried by `0.4.0-SNAPSHOT` and the long-range multi-language roadmap.
+Status: transactionality findings closed for the qualified managed-file contract carried by `0.4.0` and the long-range multi-language roadmap.
 
 Audit baseline: commit `5f47ad0` (`Preflight patch file state safely`).
 
