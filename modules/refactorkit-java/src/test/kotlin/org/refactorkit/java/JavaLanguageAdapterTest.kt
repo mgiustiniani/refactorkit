@@ -181,7 +181,7 @@ class JavaLanguageAdapterTest {
             1,
             references.size,
             "expected only the String overload call site, got $references; " +
-                "JDT warnings=${JdtJavaSemanticAnalyzer().analyze(snapshot).warnings}",
+                "JDT warnings=${JdtJavaSemanticAnalyzer().analyze(snap).warnings}",
         )
         assertTrue(references.single().location.path.toString().endsWith("LookupClient.java"))
         val clientContent = snap.files.single { it.path.toString().endsWith("LookupClient.java") }.content
