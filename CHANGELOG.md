@@ -7,6 +7,11 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
+### Next development (`0.5.0-SNAPSHOT`)
+
+- Started the production multi-language adapter-kernel workstream while retaining
+  API `0.2` until an explicit migration is accepted.
+
 ## [0.4.0] - 2026-07-12
 
 - Replaced the premature Java-focused `1.0.0-rc.1-SNAPSHOT` trajectory with a

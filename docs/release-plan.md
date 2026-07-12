@@ -18,14 +18,16 @@ IDE-grade acceptance gates are satisfied.
 Published tags are immutable. Historical detailed plans remain under
 `docs/releases/`.
 
-## Current release
+## Latest published release
 
 ### `v0.4.0` — hardened Java and transaction foundation
 
 Detailed plan: [`docs/releases/v0.4.0-plan.md`](releases/v0.4.0-plan.md).
 
-Main reports `0.4.0`. API `0.2` remains the active beta compatibility
-baseline until an explicit pre-1.0 migration is planned and tested.
+`v0.4.0` is published from immutable tag/commit
+`v0.4.0`/`32a4e73cd1956528b5593398d02383a5da230e58`. Main reports
+`0.5.0-SNAPSHOT`. API `0.2` remains the active beta compatibility baseline until
+an explicit pre-1.0 migration is planned and tested.
 
 The release publishes the already completed transactionality, Java 8–25 JDT,
 structured evidence, generated-source refusal, module/classpath boundary, and

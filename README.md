@@ -28,13 +28,13 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Main develops `0.4.0`; API `0.2` remains the beta compatibility
-baseline. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
+Latest release is `v0.4.0`; main develops `0.5.0-SNAPSHOT`. API `0.2` remains
+the beta compatibility baseline. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is
 the reference and widest catalogue, while other mature ecosystems target
 equivalent semantic safety and idiomatic depth.
 
-## Install the v0.3.0 runtime package
+## Install the v0.4.0 runtime package
 
 The current release publishes a self-contained Linux x86_64 runtime zip. It includes
 `refactorkit/bin/refactorkit` and an embedded Java runtime at
@@ -44,27 +44,27 @@ runtime to run the CLI.
 Published release metadata:
 
 ```text
-Release page: https://github.com/mgiustiniani/refactorkit/releases/tag/v0.3.0
-Runtime asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip
-Checksum asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip.sha256
-Source tag: v0.3.0
-Release commit: ba114134be605b7b0076e7471f8111c081a8aaa3
-Runtime SHA-256: 0cf054a7eb99a86734f663ca0966da2b47259b8a4658bca97f9044bc2d21ff10
+Release page: https://github.com/mgiustiniani/refactorkit/releases/tag/v0.4.0
+Runtime asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip
+Checksum asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
+Source tag: v0.4.0
+Release commit: 32a4e73cd1956528b5593398d02383a5da230e58
+Runtime SHA-256: 595519dd9c2ce6be7ee623e01717bb396b7008897028dafafdc3524eb12e5017
 ```
 
 Download, verify, and unpack the runtime asset:
 
 ```bash
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.3.0/refactorkit-runtime-0.3.0-linux-x86_64.zip.sha256
-sha256sum -c refactorkit-runtime-0.3.0-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.3.0-linux-x86_64.zip -d /tmp/refactorkit-v0.3.0
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
+sha256sum -c refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.4.0-linux-x86_64.zip -d /tmp/refactorkit-v0.4.0
 ```
 
 Run smoke checks with `JAVA_HOME` unset to prove the embedded runtime is used:
 
 ```bash
-RK=/tmp/refactorkit-v0.3.0/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.4.0/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -86,7 +86,7 @@ env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
 Optionally add the extracted launcher to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.3.0/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.4.0/refactorkit/bin:$PATH
 refactorkit --help
 ```
 
