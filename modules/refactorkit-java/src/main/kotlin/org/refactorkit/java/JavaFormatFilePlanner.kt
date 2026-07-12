@@ -149,7 +149,7 @@ class JavaFormatFilePlanner(
                 .filter { it.startsWith("org.eclipse.jdt.core.formatter.") }
                 .sorted()
                 .forEach { key -> options[key] = properties.getProperty(key) }
-            return FormatterStyle(options, snapshot.workspace.root.relativize(prefs).toString())
+            return FormatterStyle(options, snapshot.workspace.root.relativize(prefs).toString().replace('\\', '/'))
         }
         return FormatterStyle(options, "RefactorKit versioned Eclipse default")
     }

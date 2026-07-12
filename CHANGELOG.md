@@ -21,6 +21,10 @@ review safety boundaries before applying refactorings.
   preview metadata/refusals, exact-plan managed apply and WAL rollback. Added
   explicit capability feature flags and an official self-contained
   `refactorkit-daemon` launcher with end-to-end packaged smoke coverage.
+- Canonicalized JDT reference binding keys to their matched source declarations,
+  preserving exact qualified overload identity when independent parser
+  environments emit platform-specific keys on Windows. Formatter preference
+  evidence now uses portable workspace-relative separators.
 
 ## [0.4.0] - 2026-07-12
 

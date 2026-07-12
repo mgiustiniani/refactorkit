@@ -63,12 +63,16 @@ class JdtJavaSemanticAnalyzer {
             }
         val symbols = fileAnalyses.flatMap { it.symbols }
         val symbolsByKey = symbols.mapNotNull { symbol -> symbol.bindingKey?.let { it to symbol } }.toMap()
-        val symbolsByQualifiedName = symbols.associateBy { it.qualifiedName }
+        val symbolsByQualifiedName = symbols.groupBy { it.qualifiedName }
         val references = fileAnalyses.flatMap { analysis ->
             analysis.rawReferences.mapNotNull { raw ->
                 val target = raw.bindingKey?.let(symbolsByKey::get)
-                    ?: raw.symbolQualifiedName?.let(symbolsByQualifiedName::get)
+                    ?: raw.symbolQualifiedName?.let { symbolsByQualifiedName[it]?.singleOrNull() }
                     ?: return@mapNotNull null
+                // Independent JDT parser environments can assign different source-binding keys,
+                // notably on Windows. Qualified identity selects the exact overload; references
+                // then carry the canonical declaration key consumed by planners.
+                val canonicalBindingKey = target.bindingKey ?: return@mapNotNull null
                 JdtJavaSemanticReference(
                     simpleName = raw.simpleName,
                     symbolQualifiedName = target.qualifiedName,
@@ -77,7 +81,7 @@ class JdtJavaSemanticAnalyzer {
                     path = raw.path,
                     line = raw.line,
                     sourceRange = raw.sourceRange,
-                    bindingKey = raw.bindingKey,
+                    bindingKey = canonicalBindingKey,
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                 )
             }

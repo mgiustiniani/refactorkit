@@ -50,7 +50,9 @@ class JavaFormatFilePlannerTest {
 
         assertTrue(formatted.lines().any { it == "  void run() {" }, formatted)
         assertTrue(plan.warnings.any { it.contains(".settings/org.eclipse.jdt.core.prefs") })
-        assertTrue(snapshot.classpathEvidence.any { it.path.toString().endsWith(".settings/org.eclipse.jdt.core.prefs") })
+        assertTrue(snapshot.classpathEvidence.any {
+            it.path.toString().replace('\\', '/').endsWith(".settings/org.eclipse.jdt.core.prefs")
+        })
     }
 
     @Test

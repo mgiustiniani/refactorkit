@@ -224,6 +224,9 @@ class JdtJavaSemanticAnalyzerTest {
         assertEquals(JdtJavaSemanticSymbolKind.CONSTRUCTOR, noArgConstructor?.kind)
         assertEquals(JdtJavaSemanticSymbolKind.CONSTRUCTOR, stringConstructor?.kind)
         assertTrue(listOf(stringFind, intFind, noArgConstructor, stringConstructor).mapNotNull { it?.bindingKey }.toSet().size == 4)
+        assertTrue(result.references.all { reference ->
+            reference.bindingKey == symbols[reference.symbolQualifiedName]?.bindingKey
+        }, "references must carry the canonical declaration key: ${result.references}")
         assertTrue(result.references.any {
             it.symbolQualifiedName == "com.acme.Lookup#find(java.lang.String)" &&
                 it.symbolSignature == "find(java.lang.String)" &&
