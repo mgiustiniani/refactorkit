@@ -6,7 +6,9 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.java.JavaImportTarget
 import org.refactorkit.java.JavaPackageUtil
+import org.refactorkit.java.JavaSourceSet
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.MessageDigest
@@ -24,7 +26,25 @@ data class ImportRequest(
     val allowRename: Boolean = true,
     val licensePolicy: LicensePolicy = LicensePolicy.WARN,
     val snapshot: ProjectSnapshot? = null,
+    val resolvedTarget: JavaImportTarget? = null,
 )
+
+data class ExternalImportPreview(
+    val plan: PatchPlan,
+    val primaryFile: Path?,
+    val resolvedModule: String?,
+    val resolvedSourceRoot: Path?,
+    val sourceSet: JavaSourceSet?,
+    val resolvedPackage: String,
+    val packageChanges: List<PackageChange>,
+    val provenance: ProvenanceRecord?,
+    val unresolvedDependencies: List<String>,
+    val conflicts: List<String>,
+    val refusalReasons: List<String>,
+    val applyEligible: Boolean,
+)
+
+data class PackageChange(val from: String, val to: String)
 
 data class ProvenanceRecord(
     val sourceUrl: String?,
@@ -51,6 +71,42 @@ data class ProvenanceRecord(
  * 10. Return preview — apply separately via PatchEngine
  */
 class ExternalJavaClassImporter {
+
+    fun previewDetailed(request: ImportRequest): ExternalImportPreview {
+        val rawPlan = preview(request)
+        val plan = if (rawPlan.snapshotHash.isEmpty() && request.snapshot != null) {
+            rawPlan.copy(snapshotHash = request.snapshot.hash)
+        } else rawPlan
+        val cleaned = stripMarkdownFences(request.code)
+        val existingPackage = extractPackage(cleaned)
+        val creates = plan.workspaceEdit.edits.filterIsInstance<FileEdit.Create>()
+        val unresolved = unresolvedImportCandidates(creates.map(FileEdit.Create::content), request.targetPackage)
+        val provenance = plan.warnings.firstOrNull { it.startsWith("Provenance:") }?.let { warning ->
+            val retrievedAt = Regex("retrievedAt=([^ ]+)").find(warning)?.groupValues?.get(1) ?: Instant.EPOCH.toString()
+            val license = LicenseDetector.detect(cleaned)
+            ProvenanceRecord(request.sourceUrl, request.sourceKind, retrievedAt, license.detected, license.risk, sha256(cleaned))
+        }
+        val target = request.resolvedTarget
+        val sourceRoot = target?.sourceRoot ?: selectSourceRoot(request.snapshot, request.targetModule)
+        val moduleName = target?.moduleName ?: selectModuleName(request.snapshot, request.targetModule, sourceRoot)
+        val conflicts = if (plan.status == PatchStatus.REFUSED && plan.summary.startsWith("Naming conflict:")) {
+            Regex("(?m)^  (.+\\.java)$").findAll(plan.summary).map { it.groupValues[1] }.toList()
+        } else emptyList()
+        return ExternalImportPreview(
+            plan = plan,
+            primaryFile = creates.firstOrNull()?.path,
+            resolvedModule = moduleName,
+            resolvedSourceRoot = sourceRoot,
+            sourceSet = target?.sourceSet,
+            resolvedPackage = request.targetPackage,
+            packageChanges = if (existingPackage == request.targetPackage) emptyList() else listOf(PackageChange(existingPackage, request.targetPackage)),
+            provenance = provenance,
+            unresolvedDependencies = unresolved,
+            conflicts = conflicts,
+            refusalReasons = if (plan.status == PatchStatus.REFUSED) listOf(plan.summary) else emptyList(),
+            applyEligible = plan.status == PatchStatus.PREVIEW,
+        )
+    }
 
     fun preview(request: ImportRequest): PatchPlan {
         // Step 1: strip markdown fences
@@ -95,7 +151,7 @@ class ExternalJavaClassImporter {
 
         // Step 6: build per-file contents
         val targetPkg = request.targetPackage
-        val sourceRoot = selectSourceRoot(request.snapshot, request.targetModule)
+        val sourceRoot = request.resolvedTarget?.sourceRoot ?: selectSourceRoot(request.snapshot, request.targetModule)
         val filePlans = mutableListOf<Triple<String, Path, String>>() // (typeName, relativePath, content)
 
         val useSingleFile = publicTypes.size == 1 && types.size > 1
@@ -103,13 +159,13 @@ class ExternalJavaClassImporter {
             // One public type: whole file goes in one file, rewrite package
             val mainType = publicTypes.first()
             val content = normalizeImportedContent(rewritePackage(code, existingPackage, targetPkg), targetPkg)
-            val relPath = toRelativePath(sourceRoot, targetPkg, mainType.name)
+            val relPath = toRelativePath(request.resolvedTarget, sourceRoot, targetPkg, mainType.name)
             filePlans += Triple(mainType.name, relPath, content)
         } else {
             // Multiple public types or only one type: split
             for (t in publicTypes) {
                 val fileContent = normalizeImportedContent(buildSingleFileContent(code, t, existingPackage, targetPkg), targetPkg)
-                val relPath = toRelativePath(sourceRoot, targetPkg, t.name)
+                val relPath = toRelativePath(request.resolvedTarget, sourceRoot, targetPkg, t.name)
                 filePlans += Triple(t.name, relPath, fileContent)
             }
         }
@@ -207,8 +263,12 @@ class ExternalJavaClassImporter {
     }
 
     private fun rewritePackage(code: String, oldPkg: String, newPkg: String): String {
-        if (oldPkg.isEmpty()) return "package $newPkg;\n\n$code"
-        return Regex("""(?m)^\s*package\s+[\w.]+\s*;""").replace(code, "package $newPkg;")
+        if (oldPkg.isEmpty()) return if (newPkg.isEmpty()) code else "package $newPkg;\n\n$code"
+        return if (newPkg.isEmpty()) {
+            Regex("""(?m)^\s*package\s+[\w.]+\s*;\s*""").replace(code, "")
+        } else {
+            Regex("""(?m)^\s*package\s+[\w.]+\s*;""").replace(code, "package $newPkg;")
+        }
     }
 
     private fun buildSingleFileContent(
@@ -222,7 +282,7 @@ class ExternalJavaClassImporter {
             .joinToString("\n") { it.value.trim() }
         val typeContent = type.content
         return buildString {
-            appendLine("package $targetPackage;")
+            if (targetPackage.isNotEmpty()) appendLine("package $targetPackage;")
             if (imports.isNotBlank()) {
                 appendLine()
                 appendLine(imports)
@@ -297,6 +357,13 @@ class ExternalJavaClassImporter {
         }
     }
 
+    private fun selectModuleName(snapshot: ProjectSnapshot?, targetModule: String?, sourceRoot: Path): String? {
+        if (snapshot == null) return null
+        return targetModule?.let { requested ->
+            snapshot.modules.find { it.name == requested || it.root.fileName?.toString() == requested }?.name
+        } ?: snapshot.modules.singleOrNull { sourceRoot in it.sourceRoots }?.name
+    }
+
     private fun selectSourceRoot(snapshot: ProjectSnapshot?, targetModule: String?): Path {
         if (snapshot == null) return DEFAULT_SOURCE_ROOT
         val module = targetModule?.let { requested ->
@@ -308,8 +375,8 @@ class ExternalJavaClassImporter {
             ?: DEFAULT_SOURCE_ROOT
     }
 
-    private fun toRelativePath(sourceRoot: Path, pkg: String, simpleName: String): Path =
-        sourceRoot.resolve(JavaPackageUtil.packageToPath(pkg)).resolve("$simpleName.java")
+    private fun toRelativePath(target: JavaImportTarget?, sourceRoot: Path, pkg: String, simpleName: String): Path =
+        (target?.directory ?: sourceRoot.resolve(JavaPackageUtil.packageToPath(pkg))).resolve("$simpleName.java")
 
     private fun isValidPackageName(pkg: String): Boolean =
         pkg.isEmpty() || pkg.split('.').all(::isValidJavaIdentifier)

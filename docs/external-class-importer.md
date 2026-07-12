@@ -20,7 +20,10 @@ Implemented safety checks:
 - rewrites package declarations;
 - splits multiple public top-level types into separate files while preserving imports;
 - preserves one-public-type files with package-private helper types;
-- selects `targetModule` source roots when a scanned project snapshot is available;
+- selects legacy `targetModule` source roots when a scanned project snapshot is available;
+- resolves an existing workspace-relative `targetDirectory` through the scanned
+  Java module/source-root model, deriving source set and exact package without
+  frontend path heuristics;
 - refuses naming conflicts found in the snapshot or on disk;
 - creates files with `overwrite=false`;
 - sorts/deduplicates imports and removes same-package imports;
@@ -66,6 +69,29 @@ Users see this line in:
 The fields support audit review only. They do not prove license compatibility or
 replace human provenance review before committing imported external code.
 
+## `targetDirectory` versus `targetPackage`
+
+`targetDirectory` is a physical, existing workspace-relative directory such as
+`module-a/src/main/java/com/example/util`. It is never interpreted as a Java
+package. `JavaImportTargetResolver` canonicalizes it against the opened workspace,
+requires one unambiguous module/source-root owner, classifies `MAIN`, `TEST`,
+`GENERATED`, or `CUSTOM`, validates every source-root-relative segment as a Java
+identifier, and derives `com.example.util`. Generated targets are refused because
+they are analysis-owned rather than user-maintained.
+
+`targetPackage` is the legacy logical package selector. The importer retains its
+existing module/source-root selection behavior for compatibility. When both are
+present, `targetPackage` and `targetModule` are assertions checked against the
+directory-derived result; mismatches refuse rather than choosing one silently.
+The source-root directory itself maps to the default package.
+
+Directory resolution rejects absolute and foreign Windows-absolute paths,
+`..`, missing paths, files, workspace/symlink escapes, every symlink component
+(which matches managed apply path policy), paths outside recognized Java roots,
+overlapping source roots, and invalid package directories. It never creates a
+missing directory. Resolution refusals occur before source parsing and do not
+include source text.
+
 ## Operation safety summary
 
 Success conditions for a preview:
@@ -91,8 +117,11 @@ unresolved external imports, copied helper types, multiple public-type splitting
 and any dependency that would need to be added separately. External import is
 code assimilation, not a semantic refactoring.
 
-Rollback expectations: if an approved preview is applied through `PatchEngine`,
-created files and edits are transaction-backed and can be rolled back. Rollback
+Daemon previews retain the exact plan under `planId`; `refactor.apply` delegates
+that plan unchanged to `PatchEngine`, returns changed/primary files and a WAL
+transaction ID, and refreshes project state. `patch.rollback` restores/removes
+its journaled paths. No importer or daemon code writes project files directly.
+Rollback
 does not remove legal/provenance obligations, undo dependency additions made
 outside the plan, or repair manual edits after apply.
 
@@ -101,4 +130,7 @@ Remaining gaps:
 - dependency resolution is warning-only;
 - import unusedness is not type-resolved;
 - class renaming/merge conflict workflows are not implemented yet;
-- applying the preview is still delegated to `PatchEngine`/CLI/MCP after user approval.
+- CLI/MCP directory-target parity is not yet advertised; this additive contract
+  is currently the daemon IDE workflow;
+- custom/generated source-root discovery is limited to roots represented by the
+  current `ProjectSnapshot`; generated targets are deliberately refused.

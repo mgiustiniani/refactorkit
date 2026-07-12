@@ -369,13 +369,15 @@ The beta workflow is: scan the project, generate a preview, inspect affected fil
 
 MVP limitations remain visible: Java analysis is still mostly lexical, `organize-imports` does not fully remove unused imports, `safe-delete` does not inspect every non-source reference, external importer license detection is heuristic, and extract-method/change-signature support is conservative. See [`docs/release-plan.md`](docs/release-plan.md) and ARC42 risks in [`docs/arc42/11-risks-and-technical-debt.adoc`](docs/arc42/11-risks-and-technical-debt.adoc).
 
-## Self-contained CLI package
+## Self-contained CLI and daemon package
 
 Build an unpacked package with an embedded Java runtime:
 
 ```bash
 ./gradlew packageCliRuntime
 modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
+# Official NDJSON JSON-RPC stdio launcher; close stdin to shut down.
+modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit-daemon
 ```
 
 Build a zip distribution:

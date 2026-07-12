@@ -12,6 +12,7 @@ import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.PatchEngine
@@ -19,6 +20,8 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
+import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.SymbolId
@@ -27,6 +30,8 @@ import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
+import org.refactorkit.java.JavaImportTargetResolution
+import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -34,6 +39,7 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.webimporter.ExternalImportPreview
 import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
@@ -54,8 +60,8 @@ class DaemonSession {
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var workspaceRoot: Path? = null
 
-    private val pendingPlans = object : LinkedHashMap<String, PatchPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
+    private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
     }
 
     // ── public dispatcher ─────────────────────────────────────────────────────
@@ -97,6 +103,9 @@ class DaemonSession {
                     put("stability", capability.stability)
                     put("requiresProject", capability.requiresProject)
                     put("writesWorkspace", capability.writesWorkspace)
+                    if (capability.features.isNotEmpty()) put("features", buildJsonObject {
+                        capability.features.forEach { (name, supported) -> put(name, supported) }
+                    })
                 })
             }
         })
@@ -275,7 +284,7 @@ class DaemonSession {
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
-        pendingPlans[plan.id.value] = plan
+        pendingPlans[plan.id.value] = PendingPlan(plan)
         if (plan.status == PatchStatus.REFUSED) {
             throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
         }
@@ -284,8 +293,9 @@ class DaemonSession {
 
     private fun refactorApply(params: JsonObject?): JsonElement {
         val planId = params?.string("planId") ?: missing("planId")
-        val plan = pendingPlans[planId]
+        val pending = pendingPlans[planId]
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+        val plan = pending.plan
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val currentSnap = scanner.scan(root)
         return when (val result = PatchEngine(root).apply(
@@ -302,6 +312,10 @@ class DaemonSession {
                     put("status", "applied")
                     put("transactionId", result.transaction.id.value)
                     put("planId", planId)
+                    put("changedFiles", buildJsonArray {
+                        plan.affectedFiles.sortedBy(Path::toString).forEach { add(JsonPrimitive(it.toString())) }
+                    })
+                    pending.importPreview?.primaryFile?.let { put("primaryFile", it.toString()) }
                     put("snapshotHash", refreshed.hash)
                 }
             }
@@ -315,19 +329,36 @@ class DaemonSession {
     private fun javaImportExternalClass(params: JsonObject?): JsonElement {
         val p = params ?: missing("params")
         val code = p.string("code") ?: missing("code")
-        val targetPackage = p.string("targetPackage") ?: missing("targetPackage")
+        val requestedPackage = p.string("targetPackage")
+        val targetDirectory = p.string("targetDirectory")
+        if (targetDirectory == null && requestedPackage == null) missing("targetDirectory or targetPackage")
         val snap = requireSnapshot()
-        val plan = ExternalJavaClassImporter().preview(ImportRequest(
+        val target = if (targetDirectory != null) {
+            when (val resolution = JavaImportTargetResolver().resolve(
+                snap,
+                targetDirectory,
+                requestedPackage,
+                p.string("targetModule"),
+            )) {
+                is JavaImportTargetResolution.Resolved -> resolution.target
+                is JavaImportTargetResolution.Refused -> {
+                    val detail = refusedImportTarget(snap, resolution.refusal)
+                    return planToJson(detail.plan, detail)
+                }
+            }
+        } else null
+        val detail = ExternalJavaClassImporter().previewDetailed(ImportRequest(
             code = code,
-            targetPackage = targetPackage,
+            targetPackage = target?.packageName ?: requestedPackage.orEmpty(),
             targetModule = p.string("targetModule"),
             sourceUrl = p.string("sourceUrl"),
             sourceKind = parseSourceKind(p.string("sourceKind")),
             licensePolicy = parseLicensePolicy(p.string("licensePolicy")),
             snapshot = snap,
+            resolvedTarget = target,
         ))
-        pendingPlans[plan.id.value] = plan
-        return planToJson(plan)
+        if (detail.applyEligible) pendingPlans[detail.plan.id.value] = PendingPlan(detail.plan, detail)
+        return planToJson(detail.plan, detail)
     }
 
     private fun patchRollback(params: JsonObject?): JsonElement {
@@ -387,7 +418,7 @@ class DaemonSession {
         else -> SourceKind.SNIPPET
     }
 
-    private fun planToJson(plan: PatchPlan): JsonObject = buildJsonObject {
+    private fun planToJson(plan: PatchPlan, importPreview: ExternalImportPreview? = null): JsonObject = buildJsonObject {
         put("planId", plan.id.value)
         put("operation", plan.operation)
         put("status", plan.status.name)
@@ -395,7 +426,21 @@ class DaemonSession {
         put("confidence", plan.confidence)
         put("riskLevel", plan.riskLevel.name)
         put("evidence", plan.evidence.name)
-        put("affectedFiles", buildJsonArray { plan.affectedFiles.forEach { add(JsonPrimitive(it.toString())) } })
+        put("affectedFiles", buildJsonArray { plan.affectedFiles.sortedBy(Path::toString).forEach { add(JsonPrimitive(it.toString())) } })
+        put("structuredDiff", buildJsonArray {
+            plan.workspaceEdit.edits.forEach { edit ->
+                add(buildJsonObject {
+                    put("type", when (edit) {
+                        is FileEdit.Create -> "createFile"
+                        is FileEdit.Modify -> "modifyFile"
+                        is FileEdit.Delete -> "deleteFile"
+                        is FileEdit.Rename -> "renameFile"
+                    })
+                    put("path", edit.path.toString())
+                    if (edit is FileEdit.Rename) put("newPath", edit.newPath.toString())
+                })
+            }
+        })
         put("warnings", buildJsonArray { plan.warnings.forEach { add(JsonPrimitive(it)) } })
         put("diagnosticsAfterPreview", buildJsonArray {
             plan.diagnosticsAfterPreview.forEach { d ->
@@ -412,13 +457,86 @@ class DaemonSession {
                 })
             }
         })
+        put("snapshot", buildJsonObject {
+            put("hash", plan.snapshotHash)
+            put("validatedOnApply", true)
+        })
+        put("provider", buildJsonObject {
+            put("name", if (plan.operation == "importExternalJavaClass") "refactorkit-java-external-importer" else "refactorkit-java")
+            put("version", RefactorKitVersion.VERSION)
+        })
+        if (importPreview != null) {
+            importPreview.primaryFile?.let { put("primaryFile", it.toString()) }
+            importPreview.resolvedModule?.let { put("resolvedModule", it) }
+            importPreview.resolvedSourceRoot?.let { put("resolvedSourceRoot", it.toString()) }
+            importPreview.sourceSet?.let { put("sourceSet", it.name) }
+            put("resolvedPackage", importPreview.resolvedPackage)
+            put("packageChanges", buildJsonArray {
+                importPreview.packageChanges.forEach { change -> add(buildJsonObject {
+                    put("from", change.from)
+                    put("to", change.to)
+                }) }
+            })
+            put("provenance", importPreview.provenance?.let { provenance -> buildJsonObject {
+                provenance.sourceUrl?.let { put("sourceUrl", it) }
+                put("sourceKind", provenance.sourceKind.name)
+                put("retrievedAt", provenance.retrievedAt)
+                put("licenseDetected", provenance.licenseDetected)
+                put("licenseRisk", provenance.licenseRisk.name)
+                put("originalHash", provenance.originalHash)
+            } } ?: buildJsonObject {})
+            put("unresolvedDependencies", buildJsonArray { importPreview.unresolvedDependencies.forEach { add(JsonPrimitive(it)) } })
+            put("conflicts", buildJsonArray { importPreview.conflicts.forEach { add(JsonPrimitive(it)) } })
+            put("refusalReasons", buildJsonArray { importPreview.refusalReasons.forEach { add(JsonPrimitive(it)) } })
+            put("applyEligible", importPreview.applyEligible)
+        }
     }
+
+    private fun refusedImportTarget(
+        snapshot: ProjectSnapshot,
+        refusal: org.refactorkit.java.JavaImportTargetRefusal,
+    ): ExternalImportPreview {
+        val plan = PatchPlan(
+            operation = "importExternalJavaClass",
+            status = PatchStatus.REFUSED,
+            snapshotHash = snapshot.hash,
+            confidence = 0.0,
+            requiresUserApproval = false,
+            summary = refusal.message,
+            affectedFiles = emptySet(),
+            workspaceEdit = WorkspaceEdit(),
+            warnings = listOf("${refusal.code}: ${refusal.message}", "Next action: ${refusal.nextAction}") + refusal.evidence,
+            riskLevel = RiskLevel.HIGH,
+        )
+        val evidence = refusal.evidence.associate { item ->
+            item.substringBefore('=') to item.substringAfter('=', "")
+        }
+        return ExternalImportPreview(
+            plan = plan,
+            primaryFile = null,
+            resolvedModule = evidence["resolvedModule"],
+            resolvedSourceRoot = evidence["sourceRoot"]?.let(Path::of),
+            sourceSet = evidence["sourceSet"]?.let { value ->
+                runCatching { org.refactorkit.java.JavaSourceSet.valueOf(value) }.getOrNull()
+            },
+            resolvedPackage = evidence["resolvedPackage"].orEmpty(),
+            packageChanges = emptyList(),
+            provenance = null,
+            unresolvedDependencies = emptyList(),
+            conflicts = emptyList(),
+            refusalReasons = listOf(refusal.code),
+            applyEligible = false,
+        )
+    }
+
+    private data class PendingPlan(val plan: PatchPlan, val importPreview: ExternalImportPreview? = null)
 
     private data class DaemonMethodCapability(
         val name: String,
         val stability: String,
         val requiresProject: Boolean,
         val writesWorkspace: Boolean,
+        val features: Map<String, Boolean> = emptyMap(),
     )
 
     companion object {
@@ -434,7 +552,13 @@ class DaemonSession {
             DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
             DaemonMethodCapability("refactor.apply", "beta-contract", true, true),
             DaemonMethodCapability("patch.rollback", "beta-contract", true, true),
-            DaemonMethodCapability("java.importExternalClass", "experimental", true, false),
+            DaemonMethodCapability(
+                "java.importExternalClass",
+                "experimental",
+                true,
+                false,
+                mapOf("targetDirectory" to true, "preview" to true, "apply" to true, "rollback" to true),
+            ),
         )
     }
 }

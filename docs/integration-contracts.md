@@ -124,7 +124,10 @@ read-only discovery metadata:
 - `name`, `version`, and `apiVersion`;
 - `protocol` (`json-rpc-2.0`) and `transport` (`stdio`);
 - `methods`, where each entry exposes `name`, `stability`, `requiresProject`, and
-  `writesWorkspace`;
+  `writesWorkspace`; methods may add a `features` object for explicit capability
+  discovery. `java.importExternalClass.features` advertises `targetDirectory`,
+  `preview`, plan-ID `apply`, and transaction-ID `rollback` independently of the
+  implementation version;
 - `safety`, including `previewBeforeApply`, `snapshotValidation`,
   `transactionRollback`, and `workspaceScopedWrites`.
 
@@ -161,23 +164,38 @@ provenance/license warning line is an output contract for beta pilots.
 Required request fields:
 
 - `code`: Java source text to import; may include Markdown fences;
-- `targetPackage`: fully-qualified target package, or an empty string for the
-  default package.
+- one or both of:
+  - `targetDirectory`: an existing workspace-relative directory owned by exactly
+    one recognized Java module/source root; RefactorKit derives source set and
+    package from the project model;
+  - `targetPackage`: fully-qualified target package, or an empty string for the
+    default package (legacy contract).
 
 Optional request fields:
 
-- `targetModule`: module/source-root selector when the scanned workspace has
-  multiple modules;
+- `targetModule`: legacy module/source-root selector; when combined with
+  `targetDirectory` it is a consistency assertion, not a hint;
 - `sourceUrl`: URL or provenance URL for the source text;
 - `sourceKind`: `clipboard`, `url`, `file`, `llm`, or `snippet`; defaults to
   `snippet` for daemon requests;
 - `licensePolicy`: `warn`, `block-unknown`, or `allow`; defaults to `warn`.
 
+When both targets are supplied, their derived packages must match. Absolute,
+Windows-absolute-on-Unix, traversal, missing, non-directory, symlink, outside-
+workspace, outside-source-root, generated, non-package-conforming, overlapping,
+or otherwise ambiguous directory targets return a structured refused plan with
+`refusalReasons` and a next action. Resolution occurs before Java source
+processing, and refusal output never echoes clipboard source.
+
 The response uses the standard patch-plan preview envelope with `planId`,
 `operation=importExternalJavaClass`, `status`, `summary`, `confidence`,
-`riskLevel`, `evidence`, `affectedFiles`, `warnings`, and `diagnosticsAfterPreview`. The
-`warnings` array must include exactly one provenance/license line with these
-stable key names:
+`riskLevel`, `evidence`, `affectedFiles`, `structuredDiff`, `warnings`, and
+`diagnosticsAfterPreview`. Directory-driven previews additionally expose
+`primaryFile`, `resolvedModule`, `resolvedSourceRoot`, `sourceSet`,
+`resolvedPackage`, `packageChanges`, `provenance`, `unresolvedDependencies`,
+`conflicts`, `refusalReasons`, `applyEligible`, `snapshot`, and `provider`.
+All paths are workspace-relative. The `warnings` array must include exactly one
+provenance/license line for source-processed plans with these stable key names:
 
 ```text
 Provenance: sourceKind=... sourceUrl=... retrievedAt=... licenseDetected=... licenseRisk=... originalHash=...
@@ -185,6 +203,14 @@ Provenance: sourceKind=... sourceUrl=... retrievedAt=... licenseDetected=... lic
 
 `sourceUrl` is `(none)` when no URL is known; `retrievedAt` is an ISO-8601
 instant; `originalHash` is the SHA-256 hash of the cleaned source text.
+
+A successful preview performs no write and retains its exact engine-owned plan
+in the daemon session. Only `refactor.apply({planId})` may apply it; apply does
+not regenerate source or target resolution, validates snapshot/classpath
+staleness under the workspace lock, and returns `transactionId`, `changedFiles`,
+`primaryFile` for importer plans, and the refreshed snapshot hash. Rollback uses
+`patch.rollback({transactionId})` and the existing WAL/post-image conflict rules.
+The additive fields retain API `0.2`; method stability remains `experimental`.
 
 ### `refactor.preview` operation classification
 

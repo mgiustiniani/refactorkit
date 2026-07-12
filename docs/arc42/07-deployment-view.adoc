@@ -21,7 +21,7 @@ RefactorKit is a local tool/library, not a hosted service. Current repository ev
 
 |Packaged CLI distribution
 |`bin/refactorkit`, `bin/refactorkit.bat`, module jars under `lib/`, embedded runtime under `runtime/`.
-|Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`; stable promotion additionally verifies checksum, SBOM, provenance/attestation, reproducibility evidence or limits, archive layout, permissions, licenses, version metadata, and `JAVA_HOME`-unset execution.
+|Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`; includes official `refactorkit` and `refactorkit-daemon` launchers, daemon JAR/dependencies, and `java.compiler`. Stable promotion additionally verifies checksum, SBOM, provenance/attestation, reproducibility evidence or limits, archive layout, permissions, licenses, version metadata, `JAVA_HOME`-unset execution, and daemon preview/apply/rollback smoke.
 |implementation-informed; published `v0.3.0` runtime/checksum smoke verified, stable evidence planned
 
 |Editor host process

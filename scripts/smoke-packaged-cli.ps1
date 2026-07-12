@@ -5,8 +5,10 @@ param(
 $ErrorActionPreference = "Stop"
 $PackageRoot = (Resolve-Path $PackageRoot).Path
 $Launcher = Join-Path $PackageRoot "bin/refactorkit.bat"
+$DaemonLauncher = Join-Path $PackageRoot "bin/refactorkit-daemon.bat"
 $RuntimeJava = Join-Path $PackageRoot "runtime/bin/java.exe"
 if (-not (Test-Path $Launcher -PathType Leaf)) { throw "Packaged launcher missing: $Launcher" }
+if (-not (Test-Path $DaemonLauncher -PathType Leaf)) { throw "Packaged daemon launcher missing: $DaemonLauncher" }
 if (-not (Test-Path $RuntimeJava -PathType Leaf)) { throw "Bundled runtime java missing: $RuntimeJava" }
 
 $Modules = & $RuntimeJava --list-modules
@@ -68,7 +70,9 @@ public class ServiceClient {
     $RolledBack = (Get-SourceHashes) -join "`n"
     if ($Before -ne $RolledBack) { throw "Packaged rollback did not restore Java sources" }
 
-    Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources."
+    & python scripts/smoke-packaged-daemon.py $DaemonLauncher
+    if ($LASTEXITCODE -ne 0) { throw "Packaged daemon smoke failed" }
+    Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources; daemon lifecycle verified."
 }
 finally {
     Remove-Item -Recurse -Force $Fixture -ErrorAction SilentlyContinue

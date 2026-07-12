@@ -62,7 +62,12 @@ class DaemonSessionTest {
         assertEquals("stdio", result["transport"]!!.jsonPrimitive.content)
         assertEquals("beta-contract", byName["refactor.apply"]!!["stability"]!!.jsonPrimitive.content)
         assertEquals("true", byName["refactor.apply"]!!["writesWorkspace"]!!.jsonPrimitive.content)
-        assertEquals("experimental", byName["java.importExternalClass"]!!["stability"]!!.jsonPrimitive.content)
+        val importer = byName["java.importExternalClass"]!!
+        assertEquals("experimental", importer["stability"]!!.jsonPrimitive.content)
+        val importerFeatures = importer["features"]!!.jsonObject
+        listOf("targetDirectory", "preview", "apply", "rollback").forEach {
+            assertEquals("true", importerFeatures[it]!!.jsonPrimitive.content)
+        }
         assertEquals("false", byName["server.version"]!!["requiresProject"]!!.jsonPrimitive.content)
         assertEquals("true", safety["previewBeforeApply"]!!.jsonPrimitive.content)
         assertEquals("true", safety["transactionRollback"]!!.jsonPrimitive.content)
@@ -505,6 +510,146 @@ class DaemonSessionTest {
         assertTrue(warnings.contains("licenseDetected=MIT"), warnings)
         assertTrue(warnings.contains("licenseRisk=LOW"), warnings)
         assertTrue(Regex("originalHash=[0-9a-f]{64}").containsMatchIn(warnings), warnings)
+    }
+
+    @Test
+    fun targetDirectoryImportPreviewApplyAndRollbackUsesExactManagedPlan() {
+        val original = "package com.example;\npublic class App {}\n"
+        val root = createProject("module/src/main/java/com/example/App.java" to original)
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val preview = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", "package old.pkg;\npublic class Imported {}")
+            put("targetDirectory", "module/src/main/java/com/example")
+            put("targetPackage", "com.example")
+            put("sourceKind", "clipboard")
+            put("licensePolicy", "warn")
+        }) as JsonObject
+        val target = rootPath.resolve("module/src/main/java/com/example/Imported.java")
+
+        assertEquals("PREVIEW", preview["status"]!!.jsonPrimitive.content)
+        assertEquals("true", preview["applyEligible"]!!.jsonPrimitive.content)
+        assertEquals("module", preview["resolvedModule"]!!.jsonPrimitive.content)
+        assertEquals("module/src/main/java", preview["resolvedSourceRoot"]!!.jsonPrimitive.content.replace('\\', '/'))
+        assertEquals("MAIN", preview["sourceSet"]!!.jsonPrimitive.content)
+        assertEquals("com.example", preview["resolvedPackage"]!!.jsonPrimitive.content)
+        assertEquals("module/src/main/java/com/example/Imported.java", preview["primaryFile"]!!.jsonPrimitive.content.replace('\\', '/'))
+        assertEquals("old.pkg", preview["packageChanges"]!!.jsonArray.single().jsonObject["from"]!!.jsonPrimitive.content)
+        assertFalse(target.exists(), "preview must not write")
+
+        val applied = session.dispatch("refactor.apply", params("planId" to preview["planId"]!!.jsonPrimitive.content)) as JsonObject
+        assertEquals("module/src/main/java/com/example/Imported.java", applied["primaryFile"]!!.jsonPrimitive.content.replace('\\', '/'))
+        assertTrue(applied["changedFiles"]!!.jsonArray.any { it.jsonPrimitive.content.replace('\\', '/').endsWith("Imported.java") })
+        assertTrue(target.readText().startsWith("package com.example;"))
+        val transactionId = applied["transactionId"]!!.jsonPrimitive.content
+
+        session.dispatch("patch.rollback", params("transactionId" to transactionId))
+        assertFalse(target.exists())
+        assertEquals(original, rootPath.resolve("module/src/main/java/com/example/App.java").readText())
+    }
+
+    @Test
+    fun targetDirectorySupportsDefaultAndTestPackageAndLegacyTargetPackage() {
+        val root = createProject(
+            "src/test/java/Marker.java" to "public class Marker {}\n",
+            "src/main/java/com/example/App.java" to "package com.example; public class App {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val defaultPackage = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", "public class DefaultImported {}")
+            put("targetDirectory", "src/test/java")
+            put("licensePolicy", "allow")
+        }).jsonObject
+        assertEquals("", defaultPackage["resolvedPackage"]!!.jsonPrimitive.content)
+        assertEquals("TEST", defaultPackage["sourceSet"]!!.jsonPrimitive.content)
+
+        val legacy = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", "public class LegacyImported {}")
+            put("targetPackage", "com.example.legacy")
+            put("licensePolicy", "allow")
+        }).jsonObject
+        assertEquals("PREVIEW", legacy["status"]!!.jsonPrimitive.content)
+        assertTrue(legacy["affectedFiles"]!!.jsonArray.single().jsonPrimitive.content.replace('\\', '/').endsWith("src/main/java/com/example/legacy/LegacyImported.java"))
+    }
+
+    @Test
+    fun targetDirectoryRefusalsAreStructuredSafeAndDoNotRetainSource() {
+        val secret = "public class SecretClipboardMarker {}"
+        val root = createProject("src/main/java/com/example/App.java" to "package com.example; public class App {}")
+        val rootPath = Paths.get(root)
+        rootPath.resolve("plain-file").writeText("x")
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val badTargets = listOf(
+            "missing" to "targetDirectory.missing",
+            "plain-file" to "targetDirectory.notDirectory",
+            "docs" to "targetDirectory.missing",
+            "../outside" to "targetDirectory.traversal",
+            "C:\\workspace\\src\\main\\java" to "targetDirectory.absolute",
+        )
+        badTargets.forEach { (directory, refusalCode) ->
+            val response = session.dispatch("java.importExternalClass", buildJsonObject {
+                put("code", secret)
+                put("targetDirectory", directory)
+            }).jsonObject
+            assertEquals("REFUSED", response["status"]!!.jsonPrimitive.content)
+            assertEquals("false", response["applyEligible"]!!.jsonPrimitive.content)
+            assertTrue(response["refusalReasons"]!!.jsonArray.any { it.jsonPrimitive.content == refusalCode })
+            assertTrue(!response.toString().contains("SecretClipboardMarker"))
+        }
+        val mismatch = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", secret)
+            put("targetDirectory", "src/main/java/com/example")
+            put("targetPackage", "other.package")
+        }).jsonObject
+        assertTrue(mismatch["refusalReasons"]!!.jsonArray.any { it.jsonPrimitive.content == "targetDirectory.packageMismatch" })
+    }
+
+    @Test
+    fun targetDirectoryReportsMultiFileDependenciesLicenseAndFilenameConflicts() {
+        val root = createProject("src/main/java/com/example/App.java" to "package com.example; public class App {}")
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val multi = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", "import org.acme.Missing;\npublic class Foo {}\npublic class Bar {}")
+            put("targetDirectory", "src/main/java/com/example")
+            put("licensePolicy", "warn")
+        }).jsonObject
+        assertEquals(2, multi["affectedFiles"]!!.jsonArray.size)
+        assertEquals("unknown", multi["provenance"]!!.jsonObject["licenseDetected"]!!.jsonPrimitive.content)
+        assertTrue(multi["unresolvedDependencies"]!!.jsonArray.any { it.jsonPrimitive.content == "org.acme.Missing" })
+
+        val conflict = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", "public class App {}")
+            put("targetDirectory", "src/main/java/com/example")
+            put("licensePolicy", "allow")
+        }).jsonObject
+        assertEquals("REFUSED", conflict["status"]!!.jsonPrimitive.content)
+        assertTrue(conflict["conflicts"]!!.jsonArray.any { it.jsonPrimitive.content.replace('\\', '/').endsWith("App.java") })
+        assertEquals("false", conflict["applyEligible"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun targetDirectoryImportStalePlanIsRefused() {
+        val root = createProject("src/main/java/com/example/App.java" to "package com.example; public class App {}")
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val preview = session.dispatch("java.importExternalClass", buildJsonObject {
+            put("code", "public class Imported {}")
+            put("targetDirectory", "src/main/java/com/example")
+            put("licensePolicy", "allow")
+        }).jsonObject
+        rootPath.resolve("src/main/java/com/example/App.java").writeText("package com.example; public class App { int changed; }")
+
+        val error = assertFailsWith<JsonRpcException> {
+            session.dispatch("refactor.apply", params("planId" to preview["planId"]!!.jsonPrimitive.content))
+        }
+        assertEquals(JsonRpcErrorCodes.SNAPSHOT_CHANGED, error.code)
+        assertFalse(rootPath.resolve("src/main/java/com/example/Imported.java").exists())
     }
 
     @Test

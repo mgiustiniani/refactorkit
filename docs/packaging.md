@@ -31,7 +31,9 @@ Unpacked package:
 modules/refactorkit-cli/build/package/refactorkit/
   bin/refactorkit
   bin/refactorkit.bat
-  lib/*.jar
+  bin/refactorkit-daemon
+  bin/refactorkit-daemon.bat
+  lib/*.jar (including daemon and protocol dependencies)
   runtime/bin/java
 ```
 
@@ -141,6 +143,21 @@ On Windows, use:
 bin\refactorkit.bat
 ```
 
+## Run packaged daemon
+
+The supported daemon entry point is a dedicated launcher; clients never build a
+classpath manually:
+
+```bash
+env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit-daemon
+```
+
+On Windows use `bin\\refactorkit-daemon.bat`. The daemon speaks NDJSON JSON-RPC
+2.0 on stdin/stdout. Stdout is protocol-only; logs go to stderr. Close stdin for
+an orderly shutdown. The packaged launcher uses the same embedded runtime and
+`lib/*` dependency set as the CLI, including `java.compiler` for JDT. See
+[Daemon protocol](daemon-protocol.md) for lifecycle and request examples.
+
 ## Runtime modules
 
 Default `jlink` module set:
@@ -171,6 +188,9 @@ CI packaging verification currently checks:
 - signed JDT-backed `definition` and `references` run through the packaged
   launcher with `JAVA_HOME` unset and leave fixture sources unchanged;
 - the packaged launcher runs with `JAVA_HOME` unset;
+- the packaged daemon launcher completes capability discovery, project open,
+  target-directory import preview with no write, exact-plan apply, and WAL
+  rollback with byte-for-byte restoration;
 - packaged `scan` succeeds for Maven, Gradle, Spring, JPA, and multi-module
   samples;
 - both the zip and checksum are uploaded as the `refactorkit-runtime` artifact.

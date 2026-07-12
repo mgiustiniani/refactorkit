@@ -20,6 +20,7 @@ dependencies {
     implementation(project(":modules:refactorkit-core"))
     implementation(project(":modules:refactorkit-java"))
     implementation(project(":modules:refactorkit-web-importer"))
+    implementation(project(":modules:refactorkit-daemon"))
     implementation(project(":modules:refactorkit-tree-sitter"))
     implementation(project(":modules:refactorkit-testkit"))
     testImplementation(kotlin("test"))
@@ -100,6 +101,17 @@ tasks.register("writeBundledLaunchers") {
             """.trimMargin(),
         )
         unix.setExecutable(true)
+        val daemonUnix = out.resolve("refactorkit-daemon")
+        daemonUnix.writeText(
+            """
+            |#!/usr/bin/env sh
+            |set -e
+            |APP_HOME="${'$'}(CDPATH= cd -- "${'$'}(dirname -- "${'$'}0")/.." && pwd)"
+            |exec "${'$'}APP_HOME/runtime/bin/java" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.daemon.RefactorKitDaemonKt "${'$'}@"
+            |
+            """.trimMargin(),
+        )
+        daemonUnix.setExecutable(true)
 
         out.resolve("refactorkit.bat").writeText(
             """
@@ -107,6 +119,16 @@ tasks.register("writeBundledLaunchers") {
             |setlocal
             |set "APP_HOME=%~dp0.."
             |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.cli.RefactorKitCliKt %*
+            |exit /b %ERRORLEVEL%
+            |
+            """.trimMargin(),
+        )
+        out.resolve("refactorkit-daemon.bat").writeText(
+            """
+            |@echo off
+            |setlocal
+            |set "APP_HOME=%~dp0.."
+            |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.daemon.RefactorKitDaemonKt %*
             |exit /b %ERRORLEVEL%
             |
             """.trimMargin(),
@@ -143,6 +165,7 @@ tasks.register("refactorkitRuntimeDist") {
             into(out.resolve("bin"))
         }
         out.resolve("bin/refactorkit").setExecutable(true)
+        out.resolve("bin/refactorkit-daemon").setExecutable(true)
         println("Self-contained RefactorKit CLI package: ${out.absolutePath}")
     }
 }
@@ -192,6 +215,7 @@ tasks.register<Zip>("refactorkitRuntimeZip") {
     }
     eachFile {
         if (path == "refactorkit/bin/refactorkit" ||
+            path == "refactorkit/bin/refactorkit-daemon" ||
             path.startsWith("refactorkit/runtime/bin/") ||
             path == "refactorkit/runtime/lib/jexec" ||
             path == "refactorkit/runtime/lib/jspawnhelper"

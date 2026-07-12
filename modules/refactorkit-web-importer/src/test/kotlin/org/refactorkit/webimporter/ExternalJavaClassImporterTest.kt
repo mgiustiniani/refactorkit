@@ -314,4 +314,58 @@ class ExternalJavaClassImporterTest {
         val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example", licensePolicy = LicensePolicy.ALLOW))
         assertTrue(plan.warnings.any { it.contains("Potential unresolved external imports") && it.contains("org.acme.External") })
     }
+
+    @Test
+    fun resolvedDirectoryProducesExactPathsAndDetailedMetadataWithoutWrites() {
+        val root = Files.createTempDirectory("rk-importer-target")
+        val directory = root.resolve("module/src/test/java/com/example/util")
+        Files.createDirectories(directory)
+        val snapshot = JavaProjectScanner().scan(root)
+        val target = (org.refactorkit.java.JavaImportTargetResolver().resolve(
+            snapshot,
+            "module/src/test/java/com/example/util",
+        ) as org.refactorkit.java.JavaImportTargetResolution.Resolved).target
+
+        val detail = importer.previewDetailed(ImportRequest(
+            code = "package old.pkg;\nimport org.acme.Missing;\npublic class Foo {}\npublic class Bar {}",
+            targetPackage = target.packageName,
+            snapshot = snapshot,
+            resolvedTarget = target,
+            licensePolicy = LicensePolicy.ALLOW,
+        ))
+
+        assertEquals(PatchStatus.PREVIEW, detail.plan.status)
+        assertEquals("module/src/test/java/com/example/util/Foo.java", detail.primaryFile!!.toString().replace('\\', '/'))
+        assertEquals("module", detail.resolvedModule)
+        assertEquals(org.refactorkit.java.JavaSourceSet.TEST, detail.sourceSet)
+        assertEquals("com.example.util", detail.resolvedPackage)
+        assertEquals(PackageChange("old.pkg", "com.example.util"), detail.packageChanges.single())
+        assertEquals(listOf("org.acme.Missing"), detail.unresolvedDependencies)
+        assertEquals(2, detail.plan.workspaceEdit.edits.size)
+        assertTrue(!Files.exists(directory.resolve("Foo.java")))
+        assertTrue(detail.applyEligible)
+    }
+
+    @Test
+    fun defaultPackageDoesNotRenderInvalidPackageDeclaration() {
+        val plan = importer.preview(ImportRequest(
+            code = "package old.pkg;\npublic class Foo {}",
+            targetPackage = "",
+            licensePolicy = LicensePolicy.ALLOW,
+        ))
+        val content = plan.workspaceEdit.edits.filterIsInstance<FileEdit.Create>().single().content
+        assertTrue(!content.contains("package ;"))
+        assertTrue(!content.contains("package old.pkg"))
+        assertTrue(content.startsWith("public class Foo"))
+    }
+
+    @Test
+    fun coherentExistingPackageProducesNoPackageChange() {
+        val detail = importer.previewDetailed(ImportRequest(
+            code = "package com.example;\npublic class Foo {}",
+            targetPackage = "com.example",
+            licensePolicy = LicensePolicy.ALLOW,
+        ))
+        assertTrue(detail.packageChanges.isEmpty())
+    }
 }

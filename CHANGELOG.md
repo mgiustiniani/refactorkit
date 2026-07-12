@@ -15,6 +15,12 @@ review safety boundaries before applying refactorings.
   macOS Intel, and macOS Apple Silicon jlink packages alongside Linux, with
   native test/package/managed format/apply/rollback smoke, per-platform
   checksums/SBOM/attestations, and aggregate release publication.
+- Extended experimental daemon `java.importExternalClass` additively for API
+  `0.2` with secure workspace-relative `targetDirectory` resolution through the
+  Java module/source-root model, package/source-set derivation, structured
+  preview metadata/refusals, exact-plan managed apply and WAL rollback. Added
+  explicit capability feature flags and an official self-contained
+  `refactorkit-daemon` launcher with end-to-end packaged smoke coverage.
 
 ## [0.4.0] - 2026-07-12
 

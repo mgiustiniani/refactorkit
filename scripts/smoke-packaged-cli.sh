@@ -4,10 +4,15 @@ set -euo pipefail
 package_root="${1:-modules/refactorkit-cli/build/package/refactorkit}"
 package_root="$(cd "$package_root" && pwd)"
 launcher="$package_root/bin/refactorkit"
+daemon_launcher="$package_root/bin/refactorkit-daemon"
 runtime_java="$package_root/runtime/bin/java"
 
 if [[ ! -x "$launcher" ]]; then
   echo "Packaged launcher is not executable: $launcher" >&2
+  exit 1
+fi
+if [[ ! -x "$daemon_launcher" ]]; then
+  echo "Packaged daemon launcher is not executable: $daemon_launcher" >&2
   exit 1
 fi
 if [[ ! -x "$runtime_java" ]]; then
@@ -87,4 +92,5 @@ if [[ "$before" != "$rolled_back" ]]; then
   exit 1
 fi
 
-printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources."
+python3 scripts/smoke-packaged-daemon.py "$daemon_launcher"
+printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources; daemon lifecycle verified."
