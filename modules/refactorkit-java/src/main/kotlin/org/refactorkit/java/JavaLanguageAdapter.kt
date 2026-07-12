@@ -234,7 +234,6 @@ class JavaLanguageAdapter : LanguageAdapter {
     private fun findJdtSignedReferences(project: ProjectSnapshot, symbolId: SymbolId): List<Reference>? {
         if (!symbolId.value.isSignedMemberId()) return null
         val analysis = JdtJavaSemanticAnalyzer().analyze(project)
-        if (analysis.warnings.isNotEmpty()) return null
         val semanticSymbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value } ?: return null
         val bindingKey = semanticSymbol.bindingKey ?: return null
         return analysis.references
