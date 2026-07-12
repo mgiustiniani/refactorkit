@@ -267,6 +267,60 @@ class PatchEngineTest {
     }
 
     @Test
+    fun rollbackRestoresUtf8BomBytesExactly() {
+        val root = Files.createTempDirectory("refactorkit-encoding")
+        val relative = Path.of("Bom.java")
+        val originalBytes = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) +
+            "class Bom {}\n".toByteArray(Charsets.UTF_8)
+        Files.write(root.resolve(relative), originalBytes)
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(FileEdit.Delete(relative)))
+        val plan = PatchPlan(
+            operation = "utf8BomRollback",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "delete and restore UTF-8 BOM source",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(root).apply(plan, snapshot))
+        assertFalse(Files.exists(root.resolve(relative)))
+
+        assertIs<ApplyResult.Applied>(PatchEngine(root).rollback(applied.transaction))
+        assertTrue(originalBytes.contentEquals(Files.readAllBytes(root.resolve(relative))))
+    }
+
+    @Test
+    fun refusesMalformedUtf8BeforeJournalCreation() {
+        val root = Files.createTempDirectory("refactorkit-encoding")
+        val relative = Path.of("Malformed.java")
+        Files.write(root.resolve(relative), byteArrayOf(0xC3.toByte(), 0x28))
+        val snapshot = ProjectSnapshot(
+            Workspace(root),
+            emptyList(),
+            listOf(SourceFile(relative, "invalid", "test")),
+            sourceExtensions = setOf("java"),
+        )
+        val edit = WorkspaceEdit(listOf(FileEdit.Delete(relative)))
+        val plan = PatchPlan(
+            operation = "malformedUtf8",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "refuse malformed UTF-8",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.scopeUnreadable" })
+        assertTrue(Files.exists(root.resolve(relative)))
+        assertFalse(Files.exists(root.resolve(".refactorkit/transactions")))
+    }
+
+    @Test
     fun appliesAndRollsBackWithJournalOnDifferentMountedFileStore() {
         val sharedMemory = Path.of("/dev/shm")
         org.junit.jupiter.api.Assumptions.assumeTrue(

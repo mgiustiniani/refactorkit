@@ -327,8 +327,12 @@ flushes. Normal rollback refuses before writes when a transaction-created
 directory contains any external path, preventing data loss; tests cover both
 exact cleanup and conflict refusal.
 
-Platform ACLs and encoding metadata remain open. Explicit directory create/rename operations are not represented in the
-current `FileEdit` model.
+The v1 managed-text contract is explicitly UTF-8 only. Malformed UTF-8 fails
+closed as `snapshot.scopeUnreadable` before WAL creation; a UTF-8 BOM is retained
+as content, and byte-for-byte BOM restoration is covered through delete/rollback.
+Other encodings require a future explicit adapter/configuration contract rather
+than guessed transcoding. Platform ACLs remain open. Explicit directory create/
+rename operations are not represented in the current `FileEdit` model.
 
 ### TX-014 — Apply snapshot scope ownership
 

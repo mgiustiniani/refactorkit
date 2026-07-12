@@ -135,6 +135,13 @@ is tested at four byte boundaries, and `/dev/shm` provides a conditional distinc
 store WAL apply/rollback test. Actual power-loss remains a separate RC acceptance
 gate.
 
+## Managed text encoding
+
+Core acceptance proves that malformed UTF-8 is refused as
+`snapshot.scopeUnreadable` before WAL creation and that a UTF-8 BOM survives a
+delete/rollback byte-for-byte. Other source encodings are outside the v1 managed-
+text contract and are never guessed or silently transcoded.
+
 ## Packaged CLI and release verification smoke tests
 
 P7 packaging verification now covers the self-contained runtime artifact:

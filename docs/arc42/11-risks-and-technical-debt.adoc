@@ -147,15 +147,15 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-024
-|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 checksum, v1 migration, and corruption quarantine are implemented; versioned snapshot/validation/lifecycle metadata is implemented; separate content hashes, capability reporting, and destructive fault evidence remain (`TX-011`, `TX-012`).
-|Validated UUIDv4 IDs, normalized containment, symbolic-link/non-regular-file refusal, owner-only permissions where supported, and coded corrupt-record failures prevent the audited direct traversal path; truncated or incomplete records can still block recovery and audit.
-|Add richer retained history and fault evidence; preserve checksum/migration/quarantine and durable lifecycle evidence.
+|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 through v6 checksums/migration, corruption quarantine, lifecycle metadata, capability reporting, raw truncation, real process-kill, and cross-store evidence are implemented (`TX-011`, `TX-012`).
+|Validated UUIDv4 IDs, containment, symbolic-link/non-regular-file refusal, owner-only permissions, and blocking quarantine prevent the audited traversal/corruption paths; actual power-loss evidence remains environment-dependent.
+|Preserve checksum/migration/quarantine and durable lifecycle evidence; add actual power-loss infrastructure where CI permits.
 |remaining journal integrity and release blocker
 
 |R-025
-|Versioned normal rollback now verifies exact post-images and explicit force is audited (`TX-004` closed), but restoration remains content/POSIX-permission focused (`TX-013`). Java classpath contents and discovery locations are now fingerprinted before apply.
-|Legacy image-less records require manual recovery; ownership, timestamps, ACLs, extended attributes, encoding metadata, and directory state may not be restored; a hostile writer can still mutate external classpath state after preflight validation; this is outside the cooperative lock boundary.
-|Define full metadata/directory restoration and destructive external-writer fault evidence; keep forced/manual recovery separate and explicit.
+|Versioned rollback verifies post-images and restores content, modes, timestamps, owner/group, user attributes, and transaction-created parents; strict UTF-8/BOM behavior is explicit (`TX-004`, `TX-013`). Java classpath evidence is fingerprinted before apply.
+|Legacy image-less records require manual recovery; platform ACLs and explicit directory operations remain unsupported; a hostile writer can still mutate external classpath state after preflight validation outside the cooperative lock boundary.
+|Add platform ACL support where the filesystem exposes it; keep forced/manual recovery and unsupported directory operations explicit.
 |critical data-loss risk; planned release blocker
 
 |R-026
