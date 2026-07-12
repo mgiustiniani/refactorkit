@@ -710,9 +710,12 @@ class PatchEngine(
     ): TransactionJournalRecord {
         val staged = stageWorkspaceEdit(plan.workspaceEdit)
         val preImages = staged.preImages.map { image ->
+            val ownership = readOwnership(image.path)
             image.copy(
                 posixPermissions = readPosixPermissions(image.path),
                 lastModifiedMillis = readLastModifiedMillis(image.path),
+                ownerName = ownership?.first,
+                groupName = ownership?.second,
             )
         }
         val postPermissions = derivePostPermissions(plan.workspaceEdit)
@@ -836,6 +839,19 @@ class PatchEngine(
         }
     }
 
+    private fun readOwnership(path: Path): Pair<String, String?>? {
+        val absolute = resolveInsideWorkspace(path)
+        if (!Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) return null
+        val owner = Files.getOwner(absolute, LinkOption.NOFOLLOW_LINKS).name
+        val posixView = Files.getFileAttributeView(
+            absolute,
+            PosixFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )
+        val group = posixView?.readAttributes()?.group()?.name
+        return owner to group
+    }
+
     private fun readLastModifiedMillis(path: Path): Long? {
         val absolute = resolveInsideWorkspace(path)
         return if (Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) {
@@ -948,10 +964,20 @@ class PatchEngine(
         preByPath: Map<Path, FileImage>,
         postByPath: Map<Path, FileImage>,
     ) {
+        val lookup = temporary.fileSystem.userPrincipalLookupService
+        image.ownerName?.let { owner -> Files.setOwner(temporary, lookup.lookupPrincipalByName(owner)) }
+        val posixView = Files.getFileAttributeView(
+            temporary,
+            PosixFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )
+        if (posixView != null) {
+            image.groupName?.let { group -> posixView.setGroup(lookup.lookupPrincipalByGroupName(group)) }
+        }
         image.lastModifiedMillis?.let { millis ->
             Files.setLastModifiedTime(temporary, java.nio.file.attribute.FileTime.fromMillis(millis))
         }
-        if (Files.getFileAttributeView(temporary, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) == null) return
+        if (posixView == null) return
         val source = when {
             Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) -> target
             else -> preByPath.values.firstOrNull { candidate ->

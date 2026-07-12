@@ -312,11 +312,17 @@ class PatchEngineTest {
         val oldName = root.resolve("Old.java")
         Files.writeString(modify, "class Modify {}\n")
         Files.writeString(oldName, "class Old {}\n")
+        val modifyOwner = Files.getOwner(modify).name
+        val renameOwner = Files.getOwner(oldName).name
         val modifyTimestamp = java.nio.file.attribute.FileTime.fromMillis(946684800000L)
         val renameTimestamp = java.nio.file.attribute.FileTime.fromMillis(978307200000L)
         Files.setLastModifiedTime(modify, modifyTimestamp)
         Files.setLastModifiedTime(oldName, renameTimestamp)
-        val posix = Files.getFileAttributeView(modify, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS) != null
+        val modifyPosixView = Files.getFileAttributeView(modify, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS)
+        val oldNamePosixView = Files.getFileAttributeView(oldName, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS)
+        val posix = modifyPosixView != null && oldNamePosixView != null
+        val modifyGroup = modifyPosixView?.readAttributes()?.group()?.name
+        val renameGroup = oldNamePosixView?.readAttributes()?.group()?.name
         val modifyPermissions = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
         val renamePermissions = setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.GROUP_READ)
         if (posix) {
@@ -359,10 +365,14 @@ class PatchEngineTest {
         assertEquals("class Old {}\n", Files.readString(oldName))
         assertEquals(modifyTimestamp, Files.getLastModifiedTime(modify))
         assertEquals(renameTimestamp, Files.getLastModifiedTime(oldName))
+        assertEquals(modifyOwner, Files.getOwner(modify).name)
+        assertEquals(renameOwner, Files.getOwner(oldName).name)
         assertFalse(Files.exists(root.resolve("nested")))
         if (posix) {
             assertEquals(modifyPermissions, Files.getPosixFilePermissions(modify))
             assertEquals(renamePermissions, Files.getPosixFilePermissions(oldName))
+            assertEquals(modifyGroup, modifyPosixView?.readAttributes()?.group()?.name)
+            assertEquals(renameGroup, oldNamePosixView?.readAttributes()?.group()?.name)
         }
     }
 

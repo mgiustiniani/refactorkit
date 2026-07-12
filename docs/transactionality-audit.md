@@ -308,9 +308,9 @@ completion across the boundary. Actual power-loss proof remains open.
 
 Status: **partially closed after the audited baseline**.
 
-Schema-v4 pre/post `FileImage`s retain optional POSIX permission sets and
-last-modified timestamps. Schema-v2/v3 checksum vocabularies remain backward
-verifiable and migrate on lifecycle update.
+Schema-v5 pre/post `FileImage`s retain optional POSIX permission sets,
+last-modified timestamps, owner names, and POSIX group names. Schema-v2/v3/v4
+checksum vocabularies remain backward verifiable and migrate on lifecycle update.
 Managed apply records permissions before mutation and desired post-image
 permissions; normal/forced rollback and startup compensation restore the
 journaled pre-image permissions rather than deriving them from post-apply files.
@@ -324,7 +324,7 @@ flushes. Normal rollback refuses before writes when a transaction-created
 directory contains any external path, preventing data loss; tests cover both
 exact cleanup and conflict refusal.
 
-Ownership, ACLs, extended attributes, and encoding metadata remain open. Explicit directory create/rename operations are not represented in the
+ACLs, extended attributes, and encoding metadata remain open. Explicit directory create/rename operations are not represented in the
 current `FileEdit` model.
 
 ### TX-014 — Apply snapshot scope ownership
