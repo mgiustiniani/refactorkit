@@ -163,11 +163,14 @@ class DaemonSession : AutoCloseable {
                 snap.buildModels.sortedBy { it.providerId }.forEach { model ->
                     add(buildJsonObject {
                         put("providerId", model.providerId)
-                        put("status", model.status.name.lowercase())
-                        put("providers", model.attributes["providers"].orEmpty())
+                        put("status", model.status.name.lowercase().replace('_', '-'))
+                        put("ecosystem", model.attributes["ecosystem"].orEmpty())
+                        put("strategy", model.attributes["strategy"].orEmpty())
+                        put("providers", model.attributes["providers"] ?: model.attributes["ecosystem"].orEmpty())
                         put("buildCodeExecution", model.attributes["buildCodeExecution"].orEmpty())
                         put("credentialsAccess", model.attributes["credentialsAccess"].orEmpty())
                         put("networkDefault", model.attributes["networkDefault"].orEmpty())
+                        put("networkAccess", model.attributes["networkAccess"].orEmpty())
                         put("diagnostics", buildJsonArray {
                             model.diagnostics.sortedWith(compareBy({ it.moduleId.orEmpty() }, { it.code })).forEach { diagnostic ->
                                 add(buildJsonObject {
@@ -824,7 +827,13 @@ class DaemonSession : AutoCloseable {
             DaemonMethodCapability("project.open", "beta-contract", false, false),
             DaemonMethodCapability(
                 "project.summary", "beta-contract", true, false,
-                mapOf("buildModelSummary" to true, "sourceSets" to true, "credentialRedaction" to true),
+                mapOf(
+                    "buildModelSummary" to true,
+                    "sourceSets" to true,
+                    "credentialRedaction" to true,
+                    "offlineMissingStatus" to true,
+                    "executionRefusedStatus" to true,
+                ),
             ),
             DaemonMethodCapability("symbol.search", "beta-contract", true, false),
             DaemonMethodCapability("symbol.definition", "beta-contract", true, false),

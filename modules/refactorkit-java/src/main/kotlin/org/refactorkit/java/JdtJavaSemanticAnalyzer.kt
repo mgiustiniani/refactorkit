@@ -23,11 +23,15 @@ import org.eclipse.jdt.core.dom.Modifier
 import org.eclipse.jdt.core.dom.RecordDeclaration
 import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
+import org.refactorkit.core.BuildModel
+import org.refactorkit.core.BuildModule
+import org.refactorkit.core.BuildSourceSet
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
+import org.refactorkit.core.SourceSetKind
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -46,11 +50,15 @@ class JdtJavaSemanticAnalyzer {
                 val owner = snapshot.modules
                     .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
                     .maxByOrNull { module -> module.root.nameCount }
-                val isTestSource = owner?.let { module ->
-                    (module.testSourceRoots + module.generatedTestSourceRoots).any { file.path.normalize().startsWith(it.normalize()) }
+                val buildOwner = owner?.let { findBuildOwner(snapshot.buildModels, it) }
+                val buildEnvironment = buildOwner?.let { buildSemanticEnvironment(file, it.first, it.second) }
+                val isTestSource = buildEnvironment?.testSource ?: owner?.let { module ->
+                    (module.testSourceRoots + module.generatedTestSourceRoots).any {
+                        file.path.normalize().startsWith(it.normalize())
+                    }
                 } == true
                 val visibleModules = owner?.let { visibleModules(it, snapshot.modules, isTestSource) } ?: snapshot.modules
-                val sourceRoots = buildList {
+                val sourceRootPaths = buildEnvironment?.sourceRoots ?: buildList {
                     if (owner != null) {
                         addAll(owner.mainSourceRoots)
                         addAll(owner.generatedSourceRoots)
@@ -64,18 +72,20 @@ class JdtJavaSemanticAnalyzer {
                         addAll(dependency.generatedSourceRoots)
                     }
                 }.ifEmpty { visibleModules.flatMap(Module::sourceRoots) }
-                    .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
-                    .filter { Files.isDirectory(Path.of(it)) }
-                    .distinct().toTypedArray()
-                val classpathEntries = buildList {
+                val classpathPaths = buildEnvironment?.classpathEntries ?: buildList {
                     if (owner != null) addAll(if (isTestSource) owner.testClasspathEntries else owner.mainClasspathEntries)
                     visibleModules.filter { it != owner }.forEach { addAll(it.mainClasspathEntries) }
                 }.ifEmpty { visibleModules.flatMap(Module::classpathEntries) }
+                val sourceRoots = sourceRootPaths
+                    .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
+                    .filter { Files.isDirectory(Path.of(it)) }
+                    .distinct().toTypedArray()
+                val classpathEntries = classpathPaths
                     .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
                     .filter { Files.exists(Path.of(it)) }
                     .distinct().toTypedArray()
-                val sourceLevel = owner?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()
-                    ?.coerceIn(8, 25)
+                val sourceLevel = buildEnvironment?.sourceLevel
+                    ?: owner?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()?.coerceIn(8, 25)
                     ?: 25
                 analyzeFileWithReferences(file, sourceRoots, classpathEntries, sourceLevel)
             }
@@ -130,6 +140,56 @@ class JdtJavaSemanticAnalyzer {
             overrideRelations = overrideRelations,
             bindingUses = bindingUses,
         )
+    }
+
+    private data class BuildSemanticEnvironment(
+        val testSource: Boolean,
+        val sourceRoots: List<Path>,
+        val classpathEntries: List<Path>,
+        val sourceLevel: Int,
+    )
+
+    private fun findBuildOwner(buildModels: List<BuildModel>, owner: Module): Pair<BuildModel, BuildModule>? =
+        buildModels.asSequence().mapNotNull { model ->
+            model.modules.firstOrNull { it.id == owner.name && it.root.normalize() == owner.root.normalize() }
+                ?.let { model to it }
+        }.firstOrNull()
+
+    private fun buildSemanticEnvironment(
+        file: SourceFile,
+        model: BuildModel,
+        owner: BuildModule,
+    ): BuildSemanticEnvironment {
+        val testSet = owner.sourceSets.firstOrNull { it.kind == SourceSetKind.TEST }
+        val testSource = testSet?.sourceRoots.orEmpty().any { file.path.normalize().startsWith(it.normalize()) }
+        val selectedSet = if (testSource) testSet else owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
+        val byId = model.modules.associateBy(BuildModule::id)
+        val visible = linkedMapOf(owner.id to owner)
+        val pending = ArrayDeque(selectedSet?.moduleDependencies.orEmpty().map { it.targetModuleId })
+        while (pending.isNotEmpty()) {
+            val dependencyId = pending.removeFirst()
+            if (dependencyId in visible) continue
+            val dependency = byId[dependencyId] ?: continue
+            visible[dependencyId] = dependency
+            dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
+                ?.moduleDependencies.orEmpty().mapTo(pending) { it.targetModuleId }
+        }
+        val sourceRoots = buildList {
+            owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { addAll(it.sourceRoots) }
+            if (testSource) testSet?.let { addAll(it.sourceRoots) }
+            visible.values.filter { it != owner }.forEach { dependency ->
+                dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { addAll(it.sourceRoots) }
+            }
+        }.distinct()
+        val classpathEntries = buildList {
+            selectedSet?.let { addAll(it.classpathEntries) }
+            visible.values.filter { it != owner }.forEach { dependency ->
+                dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
+                    ?.let { addAll(it.classpathEntries) }
+            }
+        }.distinct()
+        val sourceLevel = selectedSet?.attributes?.get("java.sourceLevel")?.toIntOrNull()?.coerceIn(8, 25) ?: 25
+        return BuildSemanticEnvironment(testSource, sourceRoots, classpathEntries, sourceLevel)
     }
 
     private fun visibleModules(owner: Module, modules: List<Module>, testSource: Boolean): List<Module> {

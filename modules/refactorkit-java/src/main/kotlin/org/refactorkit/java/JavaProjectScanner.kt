@@ -1,18 +1,10 @@
 package org.refactorkit.java
 
 import org.refactorkit.core.ClasspathEvidence
-import org.refactorkit.core.BuildDependency
-import org.refactorkit.core.BuildModel
-import org.refactorkit.core.BuildModelDiagnostic
-import org.refactorkit.core.BuildModelStatus
-import org.refactorkit.core.BuildModule
-import org.refactorkit.core.BuildSourceSet
 import org.refactorkit.core.ClasspathEvidenceKind
-import org.refactorkit.core.DependencyScope
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
-import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.Workspace
 import java.io.File
 import java.nio.file.Files
@@ -26,7 +18,12 @@ class JavaProjectScanner(
     private val allowNetworkDependencyResolution: Boolean = false,
     private val localMavenRepository: Path = Path.of(System.getProperty("user.home"), ".m2", "repository"),
 ) {
-    fun scan(root: Path): ProjectSnapshot {
+    fun scan(root: Path): ProjectSnapshot = scanInternal(root, includeBuildModels = true)
+
+    internal fun scanWithoutBuildModels(root: Path): ProjectSnapshot =
+        scanInternal(root, includeBuildModels = false)
+
+    private fun scanInternal(root: Path, includeBuildModels: Boolean): ProjectSnapshot {
         val normalizedRoot = root.toAbsolutePath().normalize()
         val discoveredModuleRoots = detectModuleRoots(normalizedRoot)
         val pomFiles = findBuildFiles(normalizedRoot, "pom.xml")
@@ -195,93 +192,21 @@ class JavaProjectScanner(
             sourceExtensions = setOf("java"),
             ignoredDirectories = ProjectSnapshot.DEFAULT_IGNORED_DIRECTORIES,
             classpathEvidence = classpathEvidence,
-            buildModels = listOf(toBuildModel(modules)),
+            buildModels = if (includeBuildModels) buildModels(modules) else emptyList(),
         )
     }
 
-    private fun toBuildModel(modules: List<Module>): BuildModel {
-        val diagnostics = modules.flatMap { module ->
-            buildList {
-                when (module.languageSettings["java.buildModel.status"]) {
-                    "unavailable" -> add(BuildModelDiagnostic(
-                        "buildModel.unavailable",
-                        module.languageSettings["java.buildModel.message"] ?: "Build model unavailable",
-                        module.name,
-                    ))
-                    "partial" -> add(BuildModelDiagnostic(
-                        "buildModel.partial",
-                        module.languageSettings["java.buildModel.message"] ?: "Build model is partial",
-                        module.name,
-                        org.refactorkit.core.Diagnostic.Severity.WARNING,
-                    ))
-                }
-                if (module.languageSettings["java.sourceLevel.status"] == "unavailable") add(BuildModelDiagnostic(
-                    "sourceLevel.unavailable",
-                    module.languageSettings["java.sourceLevel.message"] ?: "Source level unavailable",
-                    module.name,
-                ))
-                if (module.languageSettings["java.classpath.status"] == "unavailable") add(BuildModelDiagnostic(
-                    "classpath.unavailable",
-                    module.languageSettings["java.classpath.message"] ?: "Classpath unavailable",
-                    module.name,
-                ))
+    private fun buildModels(modules: List<Module>) = modules
+        .groupBy { it.languageSettings["java.buildSystem"] ?: "conventional" }
+        .toSortedMap()
+        .map { (buildSystem, providerModules) ->
+            when (buildSystem) {
+                "maven" -> MavenBuildModelProvider(localMavenRepository)
+                    .project(providerModules, allowNetworkDependencyResolution)
+                "gradle" -> GradleDeclarativeBuildModelProvider().project(providerModules)
+                else -> ConventionalJavaBuildModelProvider().project(providerModules)
             }
         }
-        val status = when {
-            diagnostics.any { it.code == "buildModel.unavailable" } -> BuildModelStatus.UNAVAILABLE
-            diagnostics.isNotEmpty() -> BuildModelStatus.PARTIAL
-            else -> BuildModelStatus.AVAILABLE
-        }
-        val providerKinds = modules.mapNotNull { it.languageSettings["java.buildSystem"] }.distinct().sorted()
-        return BuildModel(
-            providerId = "java-project-model-v1",
-            status = status,
-            modules = modules.map { module ->
-                val mainDependencies = module.mainDependencies.map { BuildDependency(it, DependencyScope.COMPILE) }
-                val testDependencies = module.testDependencies.map { dependency ->
-                    BuildDependency(
-                        dependency,
-                        if (dependency in module.mainDependencies) DependencyScope.COMPILE else DependencyScope.TEST,
-                    )
-                }
-                BuildModule(
-                    id = module.name,
-                    name = module.name,
-                    root = module.root,
-                    sourceSets = listOf(
-                        BuildSourceSet(
-                            id = "main",
-                            kind = SourceSetKind.MAIN,
-                            sourceRoots = module.mainSourceRoots,
-                            generatedSourceRoots = module.generatedSourceRoots,
-                            outputDirectories = module.mainOutputDirectories,
-                            classpathEntries = module.mainClasspathEntries,
-                            moduleDependencies = mainDependencies,
-                            attributes = mapOf("java.sourceLevel" to module.languageSettings.getValue("java.sourceLevel")),
-                        ),
-                        BuildSourceSet(
-                            id = "test",
-                            kind = SourceSetKind.TEST,
-                            sourceRoots = (module.testSourceRoots + module.generatedTestSourceRoots).distinct(),
-                            generatedSourceRoots = module.generatedTestSourceRoots,
-                            outputDirectories = module.testOutputDirectories,
-                            classpathEntries = module.testClasspathEntries,
-                            moduleDependencies = testDependencies,
-                            attributes = mapOf("java.sourceLevel" to module.languageSettings.getValue("java.sourceLevel")),
-                        ),
-                    ),
-                    attributes = module.languageSettings,
-                )
-            },
-            diagnostics = diagnostics,
-            attributes = mapOf(
-                "providers" to providerKinds.joinToString(","),
-                "buildCodeExecution" to "denied",
-                "credentialsAccess" to "denied",
-                "networkDefault" to "denied",
-            ),
-        )
-    }
 
     fun detectSourceRoots(root: Path): List<Path> {
         val conventionalRoots = conventionalSourceRoots(root)

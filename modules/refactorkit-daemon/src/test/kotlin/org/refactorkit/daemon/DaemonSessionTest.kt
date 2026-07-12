@@ -68,6 +68,8 @@ class DaemonSessionTest {
         assertTrue(summaryFeatures["buildModelSummary"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(summaryFeatures["sourceSets"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(summaryFeatures["credentialRedaction"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(summaryFeatures["offlineMissingStatus"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(summaryFeatures["executionRefusedStatus"]!!.jsonPrimitive.content.toBoolean())
         val importer = byName["java.importExternalClass"]!!
         assertEquals("experimental", importer["stability"]!!.jsonPrimitive.content)
         val importerFeatures = importer["features"]!!.jsonObject
@@ -111,8 +113,10 @@ class DaemonSessionTest {
         val result = session.dispatch("project.summary", null).jsonObject
         val model = result["buildModels"]!!.jsonArray.single().jsonObject
 
-        assertEquals("java-project-model-v1", model["providerId"]!!.jsonPrimitive.content)
+        assertEquals("java-conventional-v1", model["providerId"]!!.jsonPrimitive.content)
         assertEquals("partial", model["status"]!!.jsonPrimitive.content)
+        assertEquals("java", model["ecosystem"]!!.jsonPrimitive.content)
+        assertEquals("conventional-layout", model["strategy"]!!.jsonPrimitive.content)
         assertEquals("denied", model["buildCodeExecution"]!!.jsonPrimitive.content)
         assertEquals("denied", model["credentialsAccess"]!!.jsonPrimitive.content)
         assertTrue(model.toString().contains("src/main/java"))

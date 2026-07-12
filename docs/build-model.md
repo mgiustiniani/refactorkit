@@ -13,7 +13,7 @@ contract lives in `org.refactorkit.core.BuildModels.kt`.
 BuildModelProvider
   -> BuildModel
        providerId
-       status: AVAILABLE | PARTIAL | UNAVAILABLE | EXECUTION_REFUSED
+       status: AVAILABLE | PARTIAL | OFFLINE_MISSING | UNAVAILABLE | EXECUTION_REFUSED
        BuildModule[]
          BuildSourceSet[]
            kind: MAIN | TEST | INTEGRATION_TEST | CUSTOM
@@ -24,6 +24,12 @@ BuildModelProvider
            scoped moduleDependencies
        BuildModelDiagnostic[]
 ```
+
+`OFFLINE_MISSING` distinguishes an otherwise understood model whose required
+artifacts are absent under offline policy from a structurally `UNAVAILABLE`
+model. `EXECUTION_REFUSED` is reserved for providers that cannot produce their
+requested model without denied build-code execution; the Gradle declarative
+provider instead returns `PARTIAL` because it safely produces bounded heuristics.
 
 `BuildModelDiscoveryPolicy` independently controls network, build-code execution,
 and credential access. Defaults deny all three. Providers discover metadata only;
@@ -40,10 +46,23 @@ edges must resolve to a module in the same model.
 while validating pre/post source images, and existing POM/BOM/artifact evidence
 continues to detect on-disk build-input drift under the workspace lock.
 
-API `0.2` keeps the existing `Module` fields for compatibility. The Java scanner
-now projects those proven Maven/Gradle/conventional facts into
-`java-project-model-v1`; consumers migrate incrementally rather than through a
-large breaking rewrite. The current projection is not the final provider split.
+API `0.2` keeps the existing `Module` fields for compatibility. The Java adapter
+now has explicit `BuildModelProvider` implementations and provider identities:
+
+- `maven-effective-v1`: embedded effective model, plugin/lifecycle execution
+  denied, credentials denied, network denied unless anonymous opt-in;
+- `gradle-declarative-v1`: deterministic descriptor heuristics only; Gradle
+  settings/scripts/tasks and Tooling API execution remain denied even if the
+  generic request allows explicit execution;
+- `java-conventional-v1`: conventional source/output layout without an effective
+  ecosystem model.
+
+The scanner projects proven compatibility `Module` facts through these providers.
+JDT parser environments now consume provider source sets for main/test/generated
+roots, classpaths, source levels, and transitive module visibility, with a
+compatibility fallback for snapshots that do not carry build models. Remaining
+ownership/planner consumers migrate incrementally rather than through a breaking
+rewrite.
 
 ## Integration summary
 
@@ -58,9 +77,8 @@ information without classpath contents.
 
 ## Remaining P2B work
 
-- split the Java projection into explicit Maven and declarative Gradle providers;
-- migrate JDT ownership/classpath queries from compatibility `Module` fields to
-  `BuildSourceSet`;
+- migrate remaining ownership/planner queries from compatibility `Module` fields
+  to `BuildSourceSet`;
 - harden Maven production edge cases and repository/checksum policy;
 - decide Gradle executable-model policy and implement integration/custom sets;
 - add provider capability/contract snapshots and pagination/limits;

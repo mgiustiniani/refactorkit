@@ -31,6 +31,7 @@ interface BuildModelProvider {
 enum class BuildModelStatus {
     AVAILABLE,
     PARTIAL,
+    OFFLINE_MISSING,
     UNAVAILABLE,
     EXECUTION_REFUSED,
 }

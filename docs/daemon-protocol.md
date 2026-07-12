@@ -48,9 +48,14 @@ classpath paths and diagnostic messages are intentionally omitted to avoid
 leaking local repository layout or credential-adjacent data. Capability discovery
 advertises `buildModelSummary`, `sourceSets`, and `credentialRedaction`.
 
-The current provider ID is `java-project-model-v1`; it is a compatibility
-projection over API `0.2` `Module` data while explicit Maven/Gradle providers are
-introduced incrementally. See [Build Model SPI](build-model.md).
+Provider identities are `maven-effective-v1`, `gradle-declarative-v1`, and
+`java-conventional-v1`. They currently project API `0.2` compatibility `Module`
+data while semantic consumers migrate source-set by source-set. Summaries include
+`ecosystem`, `strategy`, and effective policy outcomes. Capability discovery
+advertises offline-missing/execution-refused support; summary responses use the
+canonical protocol statuses `available`, `partial`, `offline-missing`,
+`unavailable`, and `execution-refused`. See
+[Build Model SPI](build-model.md).
 
 ## Maven reactor and source-root relocation
 

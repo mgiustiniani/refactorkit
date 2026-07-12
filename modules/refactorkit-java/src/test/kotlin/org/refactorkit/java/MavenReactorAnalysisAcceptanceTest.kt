@@ -44,8 +44,10 @@ class MavenReactorAnalysisAcceptanceTest {
         assertTrue(snapshot.classpathEvidence.any { it.kind == ClasspathEvidenceKind.IMPORTED_BOM })
         assertTrue(snapshot.classpathEvidence.any { it.kind == ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT && it.path == testApi })
         val buildModel = snapshot.buildModels.single()
+        assertEquals("maven-effective-v1", buildModel.providerId)
         assertEquals(BuildModelStatus.AVAILABLE, buildModel.status)
-        assertEquals("maven", buildModel.attributes["providers"])
+        assertEquals("maven", buildModel.attributes["ecosystem"])
+        assertEquals("embedded-effective-model", buildModel.attributes["strategy"])
         val acceptanceBuildModule = buildModel.modules.single { it.id == "acceptance-tests" }
         val mainSourceSet = acceptanceBuildModule.sourceSets.single { it.kind == SourceSetKind.MAIN }
         val testSourceSet = acceptanceBuildModule.sourceSets.single { it.kind == SourceSetKind.TEST }
@@ -64,6 +66,25 @@ class MavenReactorAnalysisAcceptanceTest {
         assertEquals(Path.of("domain/src/main/java/fixture/domain/DomainValue.java"), definition?.location?.path)
         val references = adapter.findReferences(org.refactorkit.core.SymbolId("fixture.domain.DomainValue"))
         assertTrue(references.any { it.location.path.toString().replace('\\', '/').startsWith("application/") })
+
+        val compatibilityStripped = snapshot.copy(modules = snapshot.modules.map { module ->
+            module.copy(
+                mainSourceRoots = emptyList(),
+                testSourceRoots = emptyList(),
+                generatedSourceRoots = emptyList(),
+                generatedTestSourceRoots = emptyList(),
+                mainClasspathEntries = emptyList(),
+                testClasspathEntries = emptyList(),
+                mainDependencies = emptyList(),
+                testDependencies = emptyList(),
+            )
+        })
+        val modelBackedAnalysis = JdtJavaSemanticAnalyzer().analyze(compatibilityStripped)
+        assertTrue(modelBackedAnalysis.symbols.any { it.qualifiedName == "fixture.domain.DomainValue" })
+        assertTrue(modelBackedAnalysis.references.any { reference ->
+            reference.symbolQualifiedName == "fixture.domain.DomainValue" &&
+                reference.path.toString().replace('\\', '/').startsWith("application/")
+        })
     }
 
     @Test
@@ -104,9 +125,12 @@ class MavenReactorAnalysisAcceptanceTest {
         installTestApiAndBom(repository)
         createReactor(root, missingDependency = true)
 
-        val diagnostics = JavaLanguageAdapter().diagnostics(JavaProjectScanner(localMavenRepository = repository).scan(root))
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val diagnostics = JavaLanguageAdapter().diagnostics(snapshot)
             .filter { it.severity == Diagnostic.Severity.ERROR }
 
+        assertEquals(BuildModelStatus.OFFLINE_MISSING, snapshot.buildModels.single().status)
+        assertTrue(snapshot.buildModels.single().diagnostics.any { it.code == "classpath.offlineMissing" })
         assertEquals(1, diagnostics.size, diagnostics.toString())
         assertEquals("classpath.unavailable", diagnostics.single().code)
         assertTrue(diagnostics.single().message.contains("acceptance-tests"))

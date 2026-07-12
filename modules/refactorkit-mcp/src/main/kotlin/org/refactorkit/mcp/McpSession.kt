@@ -211,8 +211,9 @@ class McpSession {
             snap.modules.forEach { appendLine("  - ${it.name} (${it.root})") }
             appendLine("Build models:")
             snap.buildModels.sortedBy { it.providerId }.forEach { model ->
-                appendLine("  - ${model.providerId}: ${model.status} providers=${model.attributes["providers"].orEmpty()}")
-                appendLine("    execution=${model.attributes["buildCodeExecution"].orEmpty()} credentials=${model.attributes["credentialsAccess"].orEmpty()} networkDefault=${model.attributes["networkDefault"].orEmpty()}")
+                val ecosystem = model.attributes["ecosystem"] ?: model.attributes["providers"].orEmpty()
+                appendLine("  - ${model.providerId}: ${model.status} ecosystem=$ecosystem strategy=${model.attributes["strategy"].orEmpty()}")
+                appendLine("    execution=${model.attributes["buildCodeExecution"].orEmpty()} credentials=${model.attributes["credentialsAccess"].orEmpty()} networkDefault=${model.attributes["networkDefault"].orEmpty()} networkAccess=${model.attributes["networkAccess"].orEmpty()}")
                 model.modules.sortedBy { it.id }.forEach { module ->
                     appendLine("    module ${module.id}: ${module.sourceSets.joinToString { "${it.id}:${it.kind}" }}")
                 }

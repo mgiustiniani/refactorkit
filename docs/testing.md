@@ -147,7 +147,7 @@ gate.
 `BuildModelsTest` validates provider/module/source-set graph invariants, rejects
 unknown module edges and unsafe absolute/traversal source metadata, and proves
 that build-model changes alter the project snapshot hash. Maven reactor acceptance
-projects main/test/generated sets into `java-project-model-v1` and proves that a
+projects main/test/generated sets through `maven-effective-v1` and proves that a
 test-scoped artifact is absent from the main source set but available to test and
 generated-test sources. Daemon contract tests verify redacted source-set summary
 and capability flags without exposing the local home/classpath.

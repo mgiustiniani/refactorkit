@@ -32,9 +32,12 @@ review safety boundaries before applying refactorings.
   contracts, deny-by-default discovery policy, validated module/source-set graph,
   scoped dependencies, outputs/generated roots, typed model status/diagnostics,
   hash-bound `ProjectSnapshot` projection, and API `0.2` compatibility. Java now
-  projects Maven/Gradle/conventional metadata as `java-project-model-v1`; daemon
-  and MCP summaries expose redacted capability metadata without external
-  classpath paths or diagnostic messages.
+  projects metadata through explicit `maven-effective-v1`,
+  `gradle-declarative-v1`, and `java-conventional-v1` providers; daemon and MCP
+  summaries expose redacted ecosystem, strategy, and policy metadata without
+  external classpath paths or diagnostic messages. JDT parser environments now
+  consume provider source sets for roots, classpaths, source levels, and
+  transitive module visibility while retaining compatibility fallback.
 - Updated the `0.5.x` roadmap after Maven/Magrathea acceptance: P2A is formally
   complete with commit/test/native-CI evidence; P2B makes the internal Build Model
   SPI, Maven production edges, explicit Gradle execution policy, capability
