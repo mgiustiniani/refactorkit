@@ -37,7 +37,11 @@ review safety boundaries before applying refactorings.
   summaries expose redacted ecosystem, strategy, and policy metadata without
   external classpath paths or diagnostic messages. JDT parser environments now
   consume provider source sets for roots, classpaths, source levels, and
-  transitive module visibility while retaining compatibility fallback.
+  transitive module visibility while retaining compatibility fallback. Shared
+  longest-prefix/exact ownership queries now drive `moveSourceRoot`, external
+  Java import targeting, formatter source-level/module selection, package-path
+  diagnostics, and staged JDT overlay environments independently of legacy
+  `Module.sourceRoots`.
 - Updated the `0.5.x` roadmap after Maven/Magrathea acceptance: P2A is formally
   complete with commit/test/native-CI evidence; P2B makes the internal Build Model
   SPI, Maven production edges, explicit Gradle execution policy, capability

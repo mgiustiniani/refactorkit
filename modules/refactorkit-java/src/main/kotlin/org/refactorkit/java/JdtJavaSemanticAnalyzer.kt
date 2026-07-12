@@ -32,6 +32,7 @@ import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.SourceSetKind
+import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -50,7 +51,8 @@ class JdtJavaSemanticAnalyzer {
                 val owner = snapshot.modules
                     .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
                     .maxByOrNull { module -> module.root.nameCount }
-                val buildOwner = owner?.let { findBuildOwner(snapshot.buildModels, it) }
+                val buildOwner = findBuildOwner(snapshot, file.path)
+                    ?: owner?.let { findCompatibilityBuildOwner(snapshot.buildModels, it) }
                 val buildEnvironment = buildOwner?.let { buildSemanticEnvironment(file, it.first, it.second) }
                 val isTestSource = buildEnvironment?.testSource ?: owner?.let { module ->
                     (module.testSourceRoots + module.generatedTestSourceRoots).any {
@@ -149,7 +151,13 @@ class JdtJavaSemanticAnalyzer {
         val sourceLevel: Int,
     )
 
-    private fun findBuildOwner(buildModels: List<BuildModel>, owner: Module): Pair<BuildModel, BuildModule>? =
+    private fun findBuildOwner(snapshot: ProjectSnapshot, path: Path): Pair<BuildModel, BuildModule>? {
+        val ownership = snapshot.owningBuildSourceRoots(path).singleOrNull() ?: return null
+        val model = snapshot.buildModels.singleOrNull { it.providerId == ownership.providerId } ?: return null
+        return model to ownership.module
+    }
+
+    private fun findCompatibilityBuildOwner(buildModels: List<BuildModel>, owner: Module): Pair<BuildModel, BuildModule>? =
         buildModels.asSequence().mapNotNull { model ->
             model.modules.firstOrNull { it.id == owner.name && it.root.normalize() == owner.root.normalize() }
                 ?.let { model to it }

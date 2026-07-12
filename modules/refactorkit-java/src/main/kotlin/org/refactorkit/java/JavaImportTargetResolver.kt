@@ -2,6 +2,9 @@ package org.refactorkit.java
 
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.SourceSetKind
+import org.refactorkit.core.buildSourceRootOwnerships
+import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption
@@ -84,18 +87,39 @@ class JavaImportTargetResolver {
             )
         }
 
-        val owners = snapshot.modules.flatMap { module ->
-            module.sourceRoots.mapNotNull { sourceRoot ->
-                val absoluteRoot = workspace.resolve(sourceRoot).normalize()
+        val owners = if (snapshot.buildModels.isNotEmpty()) {
+            snapshot.owningBuildSourceRoots(workspace.relativize(candidate)).mapNotNull { ownership ->
+                val absoluteRoot = workspace.resolve(ownership.root).normalize()
                 val realRoot = runCatching { absoluteRoot.toRealPath() }.getOrNull() ?: return@mapNotNull null
-                if (candidateReal.startsWith(realRoot)) Owner(module, sourceRoot.normalize(), realRoot) else null
+                if (candidateReal.startsWith(realRoot)) Owner(
+                    moduleName = ownership.module.name,
+                    moduleRoot = ownership.module.root,
+                    relativeRoot = ownership.root,
+                    realRoot = realRoot,
+                    sourceSet = when {
+                        ownership.generated -> JavaSourceSet.GENERATED
+                        ownership.sourceSet.kind == SourceSetKind.MAIN -> JavaSourceSet.MAIN
+                        ownership.sourceSet.kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST) -> JavaSourceSet.TEST
+                        else -> JavaSourceSet.CUSTOM
+                    },
+                ) else null
+            }
+        } else {
+            snapshot.modules.flatMap { module ->
+                module.sourceRoots.mapNotNull { sourceRoot ->
+                    val absoluteRoot = workspace.resolve(sourceRoot).normalize()
+                    val realRoot = runCatching { absoluteRoot.toRealPath() }.getOrNull() ?: return@mapNotNull null
+                    if (candidateReal.startsWith(realRoot)) Owner(
+                        module.name, module.root, sourceRoot.normalize(), realRoot, sourceSet(sourceRoot),
+                    ) else null
+                }
             }
         }
         if (owners.isEmpty()) {
             return refusal(
                 "targetDirectory.outsideSourceRoot",
                 "targetDirectory is not inside a recognized Java source root",
-                evidence = snapshot.modules.flatMap(Module::sourceRoots).map { "recognizedSourceRoot=$it" }.sorted(),
+                evidence = recognizedSourceRoots(snapshot).map { "recognizedSourceRoot=$it" }.sorted(),
                 nextAction = "Select an existing directory beneath one recognized Java source root.",
             )
         }
@@ -103,17 +127,17 @@ class JavaImportTargetResolver {
             return refusal(
                 "targetDirectory.ambiguousSourceRoot",
                 "targetDirectory is owned by multiple Java module/source-root candidates",
-                evidence = owners.map { "module=${it.module.name} sourceRoot=${it.relativeRoot}" }.sorted(),
+                evidence = owners.map { "module=${it.moduleName} sourceRoot=${it.relativeRoot}" }.sorted(),
                 nextAction = "Correct overlapping source-root configuration before retrying.",
             )
         }
 
         val owner = owners.single()
-        if (requestedModule != null && requestedModule != owner.module.name && requestedModule != owner.module.root.fileName?.toString()) {
+        if (requestedModule != null && requestedModule != owner.moduleName && requestedModule != owner.moduleRoot.fileName?.toString()) {
             return refusal(
                 "targetDirectory.moduleMismatch",
                 "targetModule is inconsistent with targetDirectory ownership",
-                evidence = listOf("resolvedModule=${owner.module.name}", "requestedModule=$requestedModule"),
+                evidence = listOf("resolvedModule=${owner.moduleName}", "requestedModule=$requestedModule"),
                 nextAction = "Remove targetModule or provide the resolved module name.",
             )
         }
@@ -135,7 +159,7 @@ class JavaImportTargetResolver {
                 nextAction = "Remove targetPackage or set it to the resolved package.",
             )
         }
-        val sourceSet = sourceSet(owner.relativeRoot)
+        val sourceSet = owner.sourceSet
         if (sourceSet == JavaSourceSet.GENERATED) {
             return refusal(
                 "targetDirectory.generatedSource",
@@ -147,7 +171,7 @@ class JavaImportTargetResolver {
         return JavaImportTargetResolution.Resolved(
             JavaImportTarget(
                 directory = workspace.relativize(candidate),
-                moduleName = owner.module.name,
+                moduleName = owner.moduleName,
                 sourceRoot = owner.relativeRoot,
                 sourceSet = sourceSet,
                 packageName = packageName,
@@ -163,6 +187,10 @@ class JavaImportTargetResolver {
         }
         return false
     }
+
+    private fun recognizedSourceRoots(snapshot: ProjectSnapshot): List<Path> =
+        if (snapshot.buildModels.isNotEmpty()) snapshot.buildSourceRootOwnerships().map { it.root }
+        else snapshot.modules.flatMap(Module::sourceRoots)
 
     private fun sourceSet(sourceRoot: Path): JavaSourceSet {
         val normalized = sourceRoot.toString().replace('\\', '/').lowercase()
@@ -181,7 +209,13 @@ class JavaImportTargetResolver {
         nextAction: String = "Provide an existing, safe workspace-relative Java source directory.",
     ) = JavaImportTargetResolution.Refused(JavaImportTargetRefusal(code, message, evidence, nextAction))
 
-    private data class Owner(val module: Module, val relativeRoot: Path, val realRoot: Path)
+    private data class Owner(
+        val moduleName: String,
+        val moduleRoot: Path,
+        val relativeRoot: Path,
+        val realRoot: Path,
+        val sourceSet: JavaSourceSet,
+    )
 
     companion object {
         private val WINDOWS_DRIVE_PATH = Regex("^[A-Za-z]:.*")

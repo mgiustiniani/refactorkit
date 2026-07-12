@@ -33,6 +33,27 @@ class JavaFormatFilePlannerTest {
     }
 
     @Test
+    fun formatterUsesBuildSourceSetLevelWithoutCompatibilityOwnership() {
+        val root = project("package example;\npublic record Example(String value){}\n")
+        root.resolve("pom.xml").writeText(
+            "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId>" +
+                "<artifactId>example</artifactId><version>1</version>" +
+                "<properties><maven.compiler.release>21</maven.compiler.release></properties></project>",
+        )
+        val path = Path.of("src/main/java/example/Example.java")
+        val snapshot = JavaProjectScanner().scan(root)
+        val compatibilityStripped = snapshot.copy(modules = snapshot.modules.map { module ->
+            module.copy(sourceRoots = emptyList(), mainSourceRoots = emptyList(), testSourceRoots = emptyList())
+        })
+
+        val plan = JavaFormatFilePlanner().preview(compatibilityStripped, path)
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val formatted = WorkspaceEditSimulator.apply(compatibilityStripped, plan.workspaceEdit).files.single().content
+        assertTrue(formatted.contains("record Example(String value) {"), formatted)
+    }
+
+    @Test
     fun honorsHashBoundEclipseProjectPreferences() {
         val root = project("package example;\npublic class Example{void run(){int x=1;}}\n")
         val settings = root.resolve(".settings/org.eclipse.jdt.core.prefs")

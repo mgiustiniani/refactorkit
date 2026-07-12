@@ -58,11 +58,11 @@ now has explicit `BuildModelProvider` implementations and provider identities:
   ecosystem model.
 
 The scanner projects proven compatibility `Module` facts through these providers.
-JDT parser environments now consume provider source sets for main/test/generated
-roots, classpaths, source levels, and transitive module visibility, with a
-compatibility fallback for snapshots that do not carry build models. Remaining
-ownership/planner consumers migrate incrementally rather than through a breaking
-rewrite.
+Core exact and longest-prefix ownership queries preserve provider, module,
+source-set, generated-root, and status provenance. JDT parser/overlay
+environments, `moveSourceRoot`, external Java import targeting, formatter
+selection, and package-path ownership now consume those queries, with a
+compatibility fallback only for snapshots that do not carry build models.
 
 ## Integration summary
 
@@ -77,8 +77,8 @@ information without classpath contents.
 
 ## Remaining P2B work
 
-- migrate remaining ownership/planner queries from compatibility `Module` fields
-  to `BuildSourceSet`;
+- retire compatibility `Module` projection after API-versioned migration of
+  external library consumers;
 - harden Maven production edge cases and repository/checksum policy;
 - decide Gradle executable-model policy and implement integration/custom sets;
 - add provider capability/contract snapshots and pagination/limits;

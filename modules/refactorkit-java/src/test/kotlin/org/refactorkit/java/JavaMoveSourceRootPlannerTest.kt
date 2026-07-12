@@ -59,6 +59,26 @@ class JavaMoveSourceRootPlannerTest {
     }
 
     @Test
+    fun buildModelOwnershipRemainsAuthoritativeWithoutCompatibilityRoots() {
+        val root = reactorFixture()
+        val snapshot = JavaProjectScanner().scan(root)
+        val compatibilityStripped = snapshot.copy(modules = snapshot.modules.map { module ->
+            module.copy(
+                sourceRoots = emptyList(),
+                mainSourceRoots = emptyList(),
+                testSourceRoots = emptyList(),
+                generatedSourceRoots = emptyList(),
+                generatedTestSourceRoots = emptyList(),
+            )
+        })
+
+        val plan = JavaMoveSourceRootPlanner().preview(compatibilityStripped, FROM, TO)
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, "${plan.refusalCode}: ${plan.summary}")
+        assertEquals(3, plan.workspaceEdit.edits.size)
+    }
+
+    @Test
     fun languageAdapterExposesMoveSourceRootContract() {
         val root = reactorFixture()
         val adapter = JavaLanguageAdapter()

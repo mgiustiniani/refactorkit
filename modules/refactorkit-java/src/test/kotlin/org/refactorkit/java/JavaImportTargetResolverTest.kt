@@ -27,6 +27,29 @@ class JavaImportTargetResolverTest {
     }
 
     @Test
+    fun buildModelOwnershipResolvesTargetWithoutCompatibilityRoots() {
+        val root = project("module-a/src/main/java/com/example/util")
+        val snapshot = JavaProjectScanner().scan(root)
+        val compatibilityStripped = snapshot.copy(modules = snapshot.modules.map { module ->
+            module.copy(
+                sourceRoots = emptyList(),
+                mainSourceRoots = emptyList(),
+                testSourceRoots = emptyList(),
+                generatedSourceRoots = emptyList(),
+                generatedTestSourceRoots = emptyList(),
+            )
+        })
+
+        val target = assertIs<JavaImportTargetResolution.Resolved>(
+            resolver.resolve(compatibilityStripped, "module-a/src/main/java/com/example/util"),
+        ).target
+
+        assertEquals("module-a", target.moduleName)
+        assertEquals(JavaSourceSet.MAIN, target.sourceSet)
+        assertEquals("com.example.util", target.packageName)
+    }
+
+    @Test
     fun resolvesDefaultPackageAndTestSourceSet() {
         val root = project("src/test/java")
         val resolution = resolver.resolve(JavaProjectScanner().scan(root), "src/test/java")

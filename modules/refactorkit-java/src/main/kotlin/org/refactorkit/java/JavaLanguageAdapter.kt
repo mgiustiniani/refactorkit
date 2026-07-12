@@ -24,6 +24,8 @@ import org.refactorkit.core.SymbolResolution
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.Workspace
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.buildSourceRootOwnerships
+import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Comparator
@@ -298,7 +300,7 @@ class JavaLanguageAdapter : LanguageAdapter {
             isResolvedModuleExportWarning(project, warning)
         }.filter { warning ->
             verbose || warning.category == JdtJavaDiagnosticCategory.SYNTAX || unavailableModules.none { module ->
-                module.sourceRoots.any { warning.path.normalize().startsWith(it.normalize()) }
+                sourceRoots(project, module.name, module.root).any { warning.path.normalize().startsWith(it.normalize()) }
             }
         }.map { warning ->
             val syntax = warning.category == JdtJavaDiagnosticCategory.SYNTAX
@@ -329,7 +331,11 @@ class JavaLanguageAdapter : LanguageAdapter {
                 }
             }
 
-        val sourceRoots = project.modules.flatMap { it.sourceRoots }.distinct()
+        val sourceRoots = if (project.buildModels.isNotEmpty()) {
+            project.buildSourceRootOwnerships().map { it.root }.distinct()
+        } else {
+            project.modules.flatMap { it.sourceRoots }.distinct()
+        }
         for (file in project.files.filter { it.languageId == "java" }) {
             val declaredPackage = JavaPackageUtil.extractPackage(file.content)
             val sourceRoot = JavaPackageUtil.detectSourceRoot(file.path, sourceRoots)
@@ -373,12 +379,28 @@ class JavaLanguageAdapter : LanguageAdapter {
             !warning.message.startsWith("The package ") ||
             !warning.message.endsWith(" does not exist or is empty")) return false
         val packageName = warning.message.removePrefix("The package ").removeSuffix(" does not exist or is empty")
-        val owner = project.modules.filter { module -> module.sourceRoots.any { warning.path.startsWith(it) } }
-            .maxByOrNull { it.root.nameCount } ?: return false
+        val buildOwner = project.owningBuildSourceRoots(warning.path).singleOrNull()
+        val ownerRoots = if (buildOwner != null) {
+            buildOwner.module.sourceSets.flatMap { it.sourceRoots }.distinct()
+        } else {
+            val owner = project.modules.filter { module -> module.sourceRoots.any { warning.path.startsWith(it) } }
+                .maxByOrNull { it.root.nameCount } ?: return false
+            owner.sourceRoots
+        }
         return project.files.any { file ->
-            file.path != warning.path && owner.sourceRoots.any(file.path::startsWith) &&
+            file.path != warning.path && ownerRoots.any(file.path::startsWith) &&
                 JavaPackageUtil.extractPackage(file.content) == packageName
         }
+    }
+
+    private fun sourceRoots(project: ProjectSnapshot, moduleName: String, moduleRoot: Path): List<Path> {
+        if (project.buildModels.isNotEmpty()) {
+            return project.buildModels.asSequence().flatMap { it.modules.asSequence() }
+                .firstOrNull { it.id == moduleName && it.root.normalize() == moduleRoot.normalize() }
+                ?.sourceSets?.flatMap { it.sourceRoots }.orEmpty()
+        }
+        return project.modules.firstOrNull { it.name == moduleName && it.root.normalize() == moduleRoot.normalize() }
+            ?.sourceRoots.orEmpty()
     }
 
     private fun analyzeDiagnosticsOverlay(project: ProjectSnapshot): JdtJavaSemanticAnalysisResult {
@@ -391,15 +413,15 @@ class JavaLanguageAdapter : LanguageAdapter {
                 Files.writeString(target, file.content)
             }
             val originalRoot = project.workspace.root.toAbsolutePath().normalize()
+            fun originalClasspath(entries: List<Path>): List<Path> = entries.map { entry ->
+                if (entry.isAbsolute) entry else originalRoot.resolve(entry).normalize()
+            }
             val modules = project.modules.map { module ->
                 val moduleRoot = module.root.toAbsolutePath().normalize()
                 val relativeRoot = if (moduleRoot.startsWith(originalRoot)) {
                     originalRoot.relativize(moduleRoot)
                 } else {
                     Path.of(module.name.replace(':', '/'))
-                }
-                fun originalClasspath(entries: List<Path>): List<Path> = entries.map { entry ->
-                    if (entry.isAbsolute) entry else originalRoot.resolve(entry).normalize()
                 }
                 module.copy(
                     root = overlayRoot.resolve(relativeRoot),
@@ -408,9 +430,26 @@ class JavaLanguageAdapter : LanguageAdapter {
                     testClasspathEntries = originalClasspath(module.testClasspathEntries),
                 )
             }
+            val buildModels = project.buildModels.map { model ->
+                model.copy(modules = model.modules.map { module ->
+                    val moduleRoot = module.root.toAbsolutePath().normalize()
+                    val relativeRoot = if (moduleRoot.startsWith(originalRoot)) {
+                        originalRoot.relativize(moduleRoot)
+                    } else {
+                        Path.of(module.id.replace(':', '/'))
+                    }
+                    module.copy(
+                        root = overlayRoot.resolve(relativeRoot),
+                        sourceSets = module.sourceSets.map { sourceSet ->
+                            sourceSet.copy(classpathEntries = originalClasspath(sourceSet.classpathEntries))
+                        },
+                    )
+                })
+            }
             JdtJavaSemanticAnalyzer().analyze(project.copy(
                 workspace = Workspace(overlayRoot),
                 modules = modules,
+                buildModels = buildModels,
             ))
         } finally {
             Files.walk(overlayRoot).use { stream ->

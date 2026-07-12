@@ -1,5 +1,6 @@
 package org.refactorkit.java
 
+import org.refactorkit.core.BuildSourceRootOwnership
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
@@ -8,8 +9,10 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.exactBuildSourceRootOwnerships
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -24,27 +27,23 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
         if (source == destination || source.startsWith(destination) || destination.startsWith(source)) {
             return refused(snapshot, "sourceRoot.overlap", "Source and destination roots overlap: $source -> $destination")
         }
-        val sourceOwner = snapshot.modules.singleOrNull { source in it.sourceRoots }
+        val sourceOwner = exactOwners(snapshot, source).singleOrNull()
             ?: return refused(snapshot, "sourceRoot.missing", "Source is not an exact recognized Java source root: $source")
-        if (source in sourceOwner.generatedSourceRoots || source in sourceOwner.generatedTestSourceRoots) {
+        if (sourceOwner.generated) {
             return refused(snapshot, "sourceRoot.generated", "Generated source roots are read-only: $source")
         }
-        val sourceSet = if (source in sourceOwner.testSourceRoots) SourceSet.TEST else SourceSet.MAIN
-        val destinationOwners = snapshot.modules.filter { module ->
-            destination in module.sourceRoots || destination == prospectiveRoot(snapshot, module.root, sourceSet)
+        val sourceSet = sourceOwner.sourceSetKind
+        val destinationOwners = exactOwners(snapshot, destination).ifEmpty {
+            prospectiveOwners(snapshot, destination, sourceSet)
         }
         if (destinationOwners.size != 1) {
-            return refused(snapshot, "sourceRoot.destinationUnrecognized", "Destination is not owned by exactly one recognized/prospective Java source root: $destination (owners=${destinationOwners.map { it.name }})")
+            return refused(snapshot, "sourceRoot.destinationUnrecognized", "Destination is not owned by exactly one recognized/prospective Java source root: $destination (owners=${destinationOwners.map { it.moduleId }})")
         }
         val destinationOwner = destinationOwners.single()
-        if (destination in destinationOwner.generatedSourceRoots || destination in destinationOwner.generatedTestSourceRoots) {
+        if (destinationOwner.generated) {
             return refused(snapshot, "sourceRoot.generated", "Generated destination roots are read-only: $destination")
         }
-        val declaredDestinationSet = when {
-            destination in destinationOwner.testSourceRoots -> SourceSet.TEST
-            destination in destinationOwner.mainSourceRoots -> SourceSet.MAIN
-            else -> sourceSet
-        }
+        val declaredDestinationSet = destinationOwner.sourceSetKind
         if (declaredDestinationSet != sourceSet) {
             return refused(snapshot, "sourceRoot.destinationUnrecognized", "Source-set kind must be preserved: $sourceSet -> $declaredDestinationSet")
         }
@@ -104,7 +103,7 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
             diagnosticsBefore = before,
             diagnosticsAfterPreview = after,
             warnings = listOf("Package declarations, imports, FQCNs, and source bytes are unchanged."),
-            riskLevel = if (sourceOwner == destinationOwner) RiskLevel.LOW else RiskLevel.MEDIUM,
+            riskLevel = if (sourceOwner.providerId == destinationOwner.providerId && sourceOwner.moduleId == destinationOwner.moduleId) RiskLevel.LOW else RiskLevel.MEDIUM,
             evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
@@ -117,11 +116,61 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
         return normalized.takeIf { absolute.startsWith(snapshot.workspace.root.toAbsolutePath().normalize()) }
     }
 
-    private fun prospectiveRoot(snapshot: ProjectSnapshot, moduleRoot: Path, sourceSet: SourceSet): Path {
-        val absoluteModule = moduleRoot.toAbsolutePath().normalize()
-        val relativeModule = snapshot.workspace.root.toAbsolutePath().normalize().relativize(absoluteModule)
-        return relativeModule.resolve(if (sourceSet == SourceSet.MAIN) "src/main/java" else "src/test/java").normalize()
+    private data class SourceRootOwner(
+        val providerId: String,
+        val moduleId: String,
+        val sourceSetKind: SourceSetKind,
+        val generated: Boolean,
+    )
+
+    private fun exactOwners(snapshot: ProjectSnapshot, root: Path): List<SourceRootOwner> {
+        if (snapshot.buildModels.isNotEmpty()) {
+            return snapshot.exactBuildSourceRootOwnerships(root).map(::modelOwner)
+        }
+        return snapshot.modules.filter { root in it.sourceRoots }.map { module ->
+            SourceRootOwner(
+                providerId = "module-compatibility",
+                moduleId = module.name,
+                sourceSetKind = if (root in module.testSourceRoots) SourceSetKind.TEST else SourceSetKind.MAIN,
+                generated = root in module.generatedSourceRoots || root in module.generatedTestSourceRoots,
+            )
+        }
     }
+
+    private fun prospectiveOwners(
+        snapshot: ProjectSnapshot,
+        destination: Path,
+        sourceSetKind: SourceSetKind,
+    ): List<SourceRootOwner> {
+        val suffix = when (sourceSetKind) {
+            SourceSetKind.MAIN -> "src/main/java"
+            SourceSetKind.TEST -> "src/test/java"
+            else -> return emptyList()
+        }
+        if (snapshot.buildModels.isNotEmpty()) {
+            return snapshot.buildModels.flatMap { model ->
+                model.modules.mapNotNull { module ->
+                    val relativeModule = snapshot.workspace.root.toAbsolutePath().normalize()
+                        .relativize(module.root.toAbsolutePath().normalize())
+                    SourceRootOwner(model.providerId, module.id, sourceSetKind, false)
+                        .takeIf { destination == relativeModule.resolve(suffix).normalize() }
+                }
+            }
+        }
+        return snapshot.modules.mapNotNull { module ->
+            val relativeModule = snapshot.workspace.root.toAbsolutePath().normalize()
+                .relativize(module.root.toAbsolutePath().normalize())
+            SourceRootOwner("module-compatibility", module.name, sourceSetKind, false)
+                .takeIf { destination == relativeModule.resolve(suffix).normalize() }
+        }
+    }
+
+    private fun modelOwner(owner: BuildSourceRootOwnership) = SourceRootOwner(
+        providerId = owner.providerId,
+        moduleId = owner.module.id,
+        sourceSetKind = owner.sourceSet.kind,
+        generated = owner.generated,
+    )
 
     private fun primaryTypeIdentity(file: org.refactorkit.core.SourceFile): String? {
         val name = file.path.fileName.toString().removeSuffix(".java")
@@ -205,8 +254,6 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
         evidence = RefactoringEvidence.STRUCTURAL,
         refusalCode = code,
     )
-
-    private enum class SourceSet { MAIN, TEST }
 
     companion object {
         private val TYPE_KINDS = setOf(

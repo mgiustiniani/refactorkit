@@ -79,6 +79,9 @@ class MavenReactorAnalysisAcceptanceTest {
                 testDependencies = emptyList(),
             )
         })
+        val modelBackedDiagnostics = adapter.diagnostics(compatibilityStripped)
+            .filter { it.severity == Diagnostic.Severity.ERROR }
+        assertTrue(modelBackedDiagnostics.isEmpty(), modelBackedDiagnostics.toString())
         val modelBackedAnalysis = JdtJavaSemanticAnalyzer().analyze(compatibilityStripped)
         assertTrue(modelBackedAnalysis.symbols.any { it.qualifiedName == "fixture.domain.DomainValue" })
         assertTrue(modelBackedAnalysis.references.any { reference ->

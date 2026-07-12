@@ -18,6 +18,7 @@ import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Properties
@@ -130,16 +131,20 @@ class JavaFormatFilePlanner(
     }
 
     private fun formatterOptions(snapshot: ProjectSnapshot, path: Path): FormatterStyle {
-        val module = snapshot.modules
+        val buildOwner = snapshot.owningBuildSourceRoots(path).singleOrNull()
+        val module = if (buildOwner == null) snapshot.modules
             .filter { module -> module.sourceRoots.any { root -> path.startsWith(root.normalize()) } }
             .maxByOrNull { module -> module.sourceRoots.maxOfOrNull { it.nameCount } ?: 0 }
+        else null
         val options = DefaultCodeFormatterConstants.getEclipseDefaultSettings().toMutableMap()
-        val sourceLevel = module?.languageSettings?.get("java.sourceLevel") ?: JavaCore.VERSION_1_8
+        val sourceLevel = buildOwner?.sourceSet?.attributes?.get("java.sourceLevel")
+            ?: module?.languageSettings?.get("java.sourceLevel")
+            ?: JavaCore.VERSION_1_8
         options[JavaCore.COMPILER_SOURCE] = sourceLevel
         options[JavaCore.COMPILER_COMPLIANCE] = sourceLevel
         options[JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM] = sourceLevel
 
-        val moduleRoot = module?.root?.toAbsolutePath()?.normalize()
+        val moduleRoot = (buildOwner?.module?.root ?: module?.root)?.toAbsolutePath()?.normalize()
         val prefs = moduleRoot?.resolve(".settings/org.eclipse.jdt.core.prefs")
             ?.takeIf { Files.isRegularFile(it) }
         if (prefs != null) {
