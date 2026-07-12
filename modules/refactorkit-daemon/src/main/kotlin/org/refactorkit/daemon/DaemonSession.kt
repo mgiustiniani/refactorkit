@@ -159,6 +159,65 @@ class DaemonSession : AutoCloseable {
             put("root", workspaceRoot.toString())
             put("fileCount", snap.files.size)
             put("snapshotHash", snap.hash)
+            put("buildModels", buildJsonArray {
+                snap.buildModels.sortedBy { it.providerId }.forEach { model ->
+                    add(buildJsonObject {
+                        put("providerId", model.providerId)
+                        put("status", model.status.name.lowercase())
+                        put("providers", model.attributes["providers"].orEmpty())
+                        put("buildCodeExecution", model.attributes["buildCodeExecution"].orEmpty())
+                        put("credentialsAccess", model.attributes["credentialsAccess"].orEmpty())
+                        put("networkDefault", model.attributes["networkDefault"].orEmpty())
+                        put("diagnostics", buildJsonArray {
+                            model.diagnostics.sortedWith(compareBy({ it.moduleId.orEmpty() }, { it.code })).forEach { diagnostic ->
+                                add(buildJsonObject {
+                                    put("code", diagnostic.code)
+                                    put("severity", diagnostic.severity.name.lowercase())
+                                    diagnostic.moduleId?.let { put("moduleId", it) }
+                                })
+                            }
+                        })
+                        put("modules", buildJsonArray {
+                            model.modules.sortedBy { it.id }.forEach { module ->
+                                add(buildJsonObject {
+                                    put("id", module.id)
+                                    put("name", module.name)
+                                    val relativeRoot = snap.workspace.root.toAbsolutePath().normalize()
+                                        .relativize(module.root.toAbsolutePath().normalize())
+                                    put("root", ProtocolPath.serialize(relativeRoot))
+                                    put("sourceSets", buildJsonArray {
+                                        module.sourceSets.sortedBy { it.id }.forEach { sourceSet ->
+                                            add(buildJsonObject {
+                                                put("id", sourceSet.id)
+                                                put("kind", sourceSet.kind.name.lowercase())
+                                                put("sourceRoots", buildJsonArray {
+                                                    sourceSet.sourceRoots.sortedBy(ProtocolPath::serialize)
+                                                        .forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
+                                                })
+                                                put("generatedSourceRoots", buildJsonArray {
+                                                    sourceSet.generatedSourceRoots.sortedBy(ProtocolPath::serialize)
+                                                        .forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
+                                                })
+                                                put("outputDirectories", buildJsonArray {
+                                                    sourceSet.outputDirectories.sortedBy(ProtocolPath::serialize)
+                                                        .forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
+                                                })
+                                                put("moduleDependencies", buildJsonArray {
+                                                    sourceSet.moduleDependencies.sortedWith(compareBy({ it.targetModuleId }, { it.scope.name }))
+                                                        .forEach { dependency -> add(buildJsonObject {
+                                                            put("moduleId", dependency.targetModuleId)
+                                                            put("scope", dependency.scope.name.lowercase())
+                                                        }) }
+                                                })
+                                            })
+                                        }
+                                    })
+                                })
+                            }
+                        })
+                    })
+                }
+            })
             put("modules", buildJsonArray {
                 snap.modules.forEach { mod ->
                     add(buildJsonObject {
@@ -763,7 +822,10 @@ class DaemonSession : AutoCloseable {
             DaemonMethodCapability("server.version", "beta-contract", false, false),
             DaemonMethodCapability("server.capabilities", "beta-contract", false, false),
             DaemonMethodCapability("project.open", "beta-contract", false, false),
-            DaemonMethodCapability("project.summary", "beta-contract", true, false),
+            DaemonMethodCapability(
+                "project.summary", "beta-contract", true, false,
+                mapOf("buildModelSummary" to true, "sourceSets" to true, "credentialRedaction" to true),
+            ),
             DaemonMethodCapability("symbol.search", "beta-contract", true, false),
             DaemonMethodCapability("symbol.definition", "beta-contract", true, false),
             DaemonMethodCapability("symbol.references", "beta-contract", true, false),

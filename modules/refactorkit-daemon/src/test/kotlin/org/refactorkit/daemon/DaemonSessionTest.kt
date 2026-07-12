@@ -64,6 +64,10 @@ class DaemonSessionTest {
         assertEquals("true", byName["refactor.apply"]!!["writesWorkspace"]!!.jsonPrimitive.content)
         assertEquals("beta-contract", byName["refactor.discard"]!!["stability"]!!.jsonPrimitive.content)
         assertEquals("false", byName["refactor.discard"]!!["writesWorkspace"]!!.jsonPrimitive.content)
+        val summaryFeatures = byName["project.summary"]!!["features"]!!.jsonObject
+        assertTrue(summaryFeatures["buildModelSummary"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(summaryFeatures["sourceSets"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(summaryFeatures["credentialRedaction"]!!.jsonPrimitive.content.toBoolean())
         val importer = byName["java.importExternalClass"]!!
         assertEquals("experimental", importer["stability"]!!.jsonPrimitive.content)
         val importerFeatures = importer["features"]!!.jsonObject
@@ -94,6 +98,25 @@ class DaemonSessionTest {
         val session = DaemonSession()
         val ex = assertFailsWith<JsonRpcException> { session.dispatch("project.summary", null) }
         assertEquals(JsonRpcErrorCodes.PROJECT_NOT_OPEN, ex.code)
+    }
+
+    @Test
+    fun projectSummaryExposesBuildModelCapabilityWithoutClasspathSecrets() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example; public class Foo {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val result = session.dispatch("project.summary", null).jsonObject
+        val model = result["buildModels"]!!.jsonArray.single().jsonObject
+
+        assertEquals("java-project-model-v1", model["providerId"]!!.jsonPrimitive.content)
+        assertEquals("partial", model["status"]!!.jsonPrimitive.content)
+        assertEquals("denied", model["buildCodeExecution"]!!.jsonPrimitive.content)
+        assertEquals("denied", model["credentialsAccess"]!!.jsonPrimitive.content)
+        assertTrue(model.toString().contains("src/main/java"))
+        assertFalse(model.toString().contains(System.getProperty("user.home")))
     }
 
     @Test

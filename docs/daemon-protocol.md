@@ -39,6 +39,19 @@ A caller can release a plan immediately without touching the workspace:
 Discard is idempotent: an unknown/already-discarded ID returns `discarded=false`.
 No plan content is logged.
 
+## Build-model summary
+
+`project.summary` additively exposes the first internal Build Model SPI projection:
+provider/status, discovery-policy outcomes, typed diagnostic codes, modules,
+source sets, generated roots, outputs, and scoped reactor edges. External
+classpath paths and diagnostic messages are intentionally omitted to avoid
+leaking local repository layout or credential-adjacent data. Capability discovery
+advertises `buildModelSummary`, `sourceSets`, and `credentialRedaction`.
+
+The current provider ID is `java-project-model-v1`; it is a compatibility
+projection over API `0.2` `Module` data while explicit Maven/Gradle providers are
+introduced incrementally. See [Build Model SPI](build-model.md).
+
 ## Maven reactor and source-root relocation
 
 `project.open` builds Maven effective models offline and does not execute plugins.

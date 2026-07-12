@@ -106,7 +106,7 @@ of the beta baseline for documented methods.
 | `server.version` | `beta-contract` | Read-only implementation/API metadata; does not require an opened project. |
 | `server.capabilities` | `beta-contract` | Read-only protocol/method/safety discovery; does not require an opened project. |
 | `project.open` | `beta-contract` | Workspace lifecycle; requires `root`. |
-| `project.summary` | `beta-contract` | Read-only project metadata. |
+| `project.summary` | `beta-contract` | Read-only project metadata plus additive redacted Build Model SPI summary (`providerId`, status, policy outcomes, typed diagnostic codes, modules/source sets/outputs/edges); external classpath paths and diagnostic messages are omitted. |
 | `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
 | `symbol.definition` | `beta-contract` | Read-only lookup; requires `symbol`. |
 | `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |
@@ -359,7 +359,7 @@ the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 
 | Tool | Status | Notes |
 |------|--------|-------|
-| `project_scan`, `project_summary` | `beta-contract` | Workspace lifecycle and project metadata. |
+| `project_scan`, `project_summary` | `beta-contract` | Workspace lifecycle and project metadata; summary includes high-level Build Model SPI provider/status/source-set information without classpath secrets. |
 | `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries. |
 | `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; rollback refuses post-apply divergence by default and accepts explicit `force=true`. |
 | `available_refactorings` | `experimental` | Descriptor shape may change. |

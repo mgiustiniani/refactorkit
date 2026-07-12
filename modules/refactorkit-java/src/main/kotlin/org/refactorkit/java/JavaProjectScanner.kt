@@ -1,10 +1,18 @@
 package org.refactorkit.java
 
 import org.refactorkit.core.ClasspathEvidence
+import org.refactorkit.core.BuildDependency
+import org.refactorkit.core.BuildModel
+import org.refactorkit.core.BuildModelDiagnostic
+import org.refactorkit.core.BuildModelStatus
+import org.refactorkit.core.BuildModule
+import org.refactorkit.core.BuildSourceSet
 import org.refactorkit.core.ClasspathEvidenceKind
+import org.refactorkit.core.DependencyScope
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
+import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.Workspace
 import java.io.File
 import java.nio.file.Files
@@ -90,6 +98,14 @@ class JavaProjectScanner(
                         val suffix = if (missing.size > 8) " (+${missing.size - 8} more)" else ""
                         put("java.classpath.message", "Offline artifacts unavailable: ${missing.take(8).joinToString(", ")}$suffix")
                     }
+                } else if (listOf(moduleRoot.resolve("build.gradle"), moduleRoot.resolve("build.gradle.kts")).any { it.exists() }) {
+                    put("java.buildSystem", "gradle")
+                    put("java.buildModel.status", "partial")
+                    put("java.buildModel.message", "Gradle metadata uses deterministic declarative heuristics; effective execution is disabled")
+                } else {
+                    put("java.buildSystem", "conventional")
+                    put("java.buildModel.status", "partial")
+                    put("java.buildModel.message", "No effective build descriptor model is available")
                 }
             }
             Module(
@@ -179,6 +195,91 @@ class JavaProjectScanner(
             sourceExtensions = setOf("java"),
             ignoredDirectories = ProjectSnapshot.DEFAULT_IGNORED_DIRECTORIES,
             classpathEvidence = classpathEvidence,
+            buildModels = listOf(toBuildModel(modules)),
+        )
+    }
+
+    private fun toBuildModel(modules: List<Module>): BuildModel {
+        val diagnostics = modules.flatMap { module ->
+            buildList {
+                when (module.languageSettings["java.buildModel.status"]) {
+                    "unavailable" -> add(BuildModelDiagnostic(
+                        "buildModel.unavailable",
+                        module.languageSettings["java.buildModel.message"] ?: "Build model unavailable",
+                        module.name,
+                    ))
+                    "partial" -> add(BuildModelDiagnostic(
+                        "buildModel.partial",
+                        module.languageSettings["java.buildModel.message"] ?: "Build model is partial",
+                        module.name,
+                        org.refactorkit.core.Diagnostic.Severity.WARNING,
+                    ))
+                }
+                if (module.languageSettings["java.sourceLevel.status"] == "unavailable") add(BuildModelDiagnostic(
+                    "sourceLevel.unavailable",
+                    module.languageSettings["java.sourceLevel.message"] ?: "Source level unavailable",
+                    module.name,
+                ))
+                if (module.languageSettings["java.classpath.status"] == "unavailable") add(BuildModelDiagnostic(
+                    "classpath.unavailable",
+                    module.languageSettings["java.classpath.message"] ?: "Classpath unavailable",
+                    module.name,
+                ))
+            }
+        }
+        val status = when {
+            diagnostics.any { it.code == "buildModel.unavailable" } -> BuildModelStatus.UNAVAILABLE
+            diagnostics.isNotEmpty() -> BuildModelStatus.PARTIAL
+            else -> BuildModelStatus.AVAILABLE
+        }
+        val providerKinds = modules.mapNotNull { it.languageSettings["java.buildSystem"] }.distinct().sorted()
+        return BuildModel(
+            providerId = "java-project-model-v1",
+            status = status,
+            modules = modules.map { module ->
+                val mainDependencies = module.mainDependencies.map { BuildDependency(it, DependencyScope.COMPILE) }
+                val testDependencies = module.testDependencies.map { dependency ->
+                    BuildDependency(
+                        dependency,
+                        if (dependency in module.mainDependencies) DependencyScope.COMPILE else DependencyScope.TEST,
+                    )
+                }
+                BuildModule(
+                    id = module.name,
+                    name = module.name,
+                    root = module.root,
+                    sourceSets = listOf(
+                        BuildSourceSet(
+                            id = "main",
+                            kind = SourceSetKind.MAIN,
+                            sourceRoots = module.mainSourceRoots,
+                            generatedSourceRoots = module.generatedSourceRoots,
+                            outputDirectories = module.mainOutputDirectories,
+                            classpathEntries = module.mainClasspathEntries,
+                            moduleDependencies = mainDependencies,
+                            attributes = mapOf("java.sourceLevel" to module.languageSettings.getValue("java.sourceLevel")),
+                        ),
+                        BuildSourceSet(
+                            id = "test",
+                            kind = SourceSetKind.TEST,
+                            sourceRoots = (module.testSourceRoots + module.generatedTestSourceRoots).distinct(),
+                            generatedSourceRoots = module.generatedTestSourceRoots,
+                            outputDirectories = module.testOutputDirectories,
+                            classpathEntries = module.testClasspathEntries,
+                            moduleDependencies = testDependencies,
+                            attributes = mapOf("java.sourceLevel" to module.languageSettings.getValue("java.sourceLevel")),
+                        ),
+                    ),
+                    attributes = module.languageSettings,
+                )
+            },
+            diagnostics = diagnostics,
+            attributes = mapOf(
+                "providers" to providerKinds.joinToString(","),
+                "buildCodeExecution" to "denied",
+                "credentialsAccess" to "denied",
+                "networkDefault" to "denied",
+            ),
         )
     }
 

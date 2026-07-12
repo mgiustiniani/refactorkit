@@ -491,6 +491,7 @@ class PatchEngine(
             snapshot.sourceExtensions,
             snapshot.ignoredDirectories,
             snapshot.classpathEvidence,
+            snapshot.buildModels,
         )
         if (actualHash != snapshot.hash) {
             val expectedByPath = snapshot.files.associateBy { it.path }
@@ -845,6 +846,7 @@ class PatchEngine(
             snapshot.sourceExtensions,
             snapshot.ignoredDirectories,
             snapshot.classpathEvidence,
+            snapshot.buildModels,
         )
     }
 

@@ -2,7 +2,9 @@ package org.refactorkit.java
 
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.ClasspathEvidenceKind
+import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileEdit
@@ -41,6 +43,17 @@ class MavenReactorAnalysisAcceptanceTest {
         assertTrue(acceptance.generatedTestSourceRoots.any { it.toString().replace('\\', '/').contains("generated-test-sources/test-annotations") })
         assertTrue(snapshot.classpathEvidence.any { it.kind == ClasspathEvidenceKind.IMPORTED_BOM })
         assertTrue(snapshot.classpathEvidence.any { it.kind == ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT && it.path == testApi })
+        val buildModel = snapshot.buildModels.single()
+        assertEquals(BuildModelStatus.AVAILABLE, buildModel.status)
+        assertEquals("maven", buildModel.attributes["providers"])
+        val acceptanceBuildModule = buildModel.modules.single { it.id == "acceptance-tests" }
+        val mainSourceSet = acceptanceBuildModule.sourceSets.single { it.kind == SourceSetKind.MAIN }
+        val testSourceSet = acceptanceBuildModule.sourceSets.single { it.kind == SourceSetKind.TEST }
+        assertFalse(testApi in mainSourceSet.classpathEntries)
+        assertTrue(testApi in testSourceSet.classpathEntries)
+        assertTrue(testSourceSet.generatedSourceRoots.any {
+            it.toString().replace('\\', '/').contains("generated-test-sources/test-annotations")
+        })
 
         val adapter = JavaLanguageAdapter()
         val diagnostics = adapter.diagnostics(snapshot).filter { it.severity == Diagnostic.Severity.ERROR }

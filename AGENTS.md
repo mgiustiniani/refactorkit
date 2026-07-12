@@ -223,6 +223,7 @@ file scanner
 source file abstraction
 content hashing
 project snapshot
+build model/source-set provider contract
 text edit model
 file edit model
 workspace edit model
@@ -252,6 +253,10 @@ Important domain objects:
 ProjectSnapshot
 Workspace
 Module
+BuildModel
+BuildModule
+BuildSourceSet
+BuildModelProvider
 SourceFile
 TextEdit
 FileEdit

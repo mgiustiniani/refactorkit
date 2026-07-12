@@ -65,9 +65,9 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Internal Build Model SPI
 |Language-neutral core contracts with ecosystem providers
-|Planned `0.5.x` abstraction for module graphs, source sets, scoped dependencies, outputs, generated roots, typed model diagnostics, and hash-bound evidence. The completed Maven provider remains in the Java adapter until the abstraction is proven; providers never execute arbitrary build code silently or write the workspace.
-|ADR 0010, `docs/releases/v0.5.0-plan.md` P2B.
-|planned release gate
+|Internal `0.5.x` abstraction for module graphs, source sets, scoped dependencies, outputs, generated roots, typed model diagnostics, discovery policy, and hash-bound evidence. The first core contracts and Java compatibility projection are implemented; provider split and consumer migration remain. Providers never execute arbitrary build code silently or write the workspace.
+|`modules/refactorkit-core/.../BuildModels.kt`, `docs/build-model.md`, ADR 0010, `docs/releases/v0.5.0-plan.md` P2B.
+|first implementation slice; release gate remains
 
 |Java Language Adapter
 |Kotlin/JVM library

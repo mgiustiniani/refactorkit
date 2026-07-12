@@ -28,6 +28,13 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Started P2B implementation with language-neutral core Build Model SPI
+  contracts, deny-by-default discovery policy, validated module/source-set graph,
+  scoped dependencies, outputs/generated roots, typed model status/diagnostics,
+  hash-bound `ProjectSnapshot` projection, and API `0.2` compatibility. Java now
+  projects Maven/Gradle/conventional metadata as `java-project-model-v1`; daemon
+  and MCP summaries expose redacted capability metadata without external
+  classpath paths or diagnostic messages.
 - Updated the `0.5.x` roadmap after Maven/Magrathea acceptance: P2A is formally
   complete with commit/test/native-CI evidence; P2B makes the internal Build Model
   SPI, Maven production edges, explicit Gradle execution policy, capability

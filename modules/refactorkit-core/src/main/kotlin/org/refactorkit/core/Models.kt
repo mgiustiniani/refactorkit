@@ -69,8 +69,15 @@ data class ProjectSnapshot(
     val sourceExtensions: Set<String> = inferSourceExtensions(files),
     val ignoredDirectories: Set<String> = DEFAULT_IGNORED_DIRECTORIES,
     val classpathEvidence: List<ClasspathEvidence> = emptyList(),
+    val buildModels: List<BuildModel> = emptyList(),
 ) {
-    val hash: String = hashSnapshot(modules, files, sourceExtensions, ignoredDirectories, classpathEvidence)
+    init {
+        require(buildModels.map(BuildModel::providerId).distinct().size == buildModels.size) {
+            "build-model provider IDs must be unique within a snapshot"
+        }
+    }
+
+    val hash: String = hashSnapshot(modules, files, sourceExtensions, ignoredDirectories, classpathEvidence, buildModels)
 
     companion object {
         val DEFAULT_IGNORED_DIRECTORIES: Set<String> = setOf(
@@ -88,6 +95,7 @@ data class ProjectSnapshot(
             sourceExtensions: Set<String>,
             ignoredDirectories: Set<String>,
             classpathEvidence: List<ClasspathEvidence> = emptyList(),
+            buildModels: List<BuildModel> = emptyList(),
         ): String {
             val digest = MessageDigest.getInstance("SHA-256")
             modules.sortedBy { it.name }.forEach { module ->
@@ -113,6 +121,34 @@ data class ProjectSnapshot(
             ignoredDirectories.sorted().forEach { digest.update("ignored\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
             classpathEvidence.sortedWith(compareBy<ClasspathEvidence> { it.path.toString() }.thenBy { it.kind.name }).forEach { evidence ->
                 digest.update("classpathEvidence\u0000${evidence.path}\u0000${evidence.kind}\u0000${evidence.fingerprint}\u0000".toByteArray(Charsets.UTF_8))
+            }
+            buildModels.sortedBy(BuildModel::providerId).forEach { model ->
+                digest.update("buildModel\u0000${model.providerId}\u0000${model.status}\u0000".toByteArray(Charsets.UTF_8))
+                model.attributes.toSortedMap().forEach { (key, value) ->
+                    digest.update("buildModelAttribute\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
+                }
+                model.diagnostics.sortedWith(compareBy<BuildModelDiagnostic> { it.moduleId.orEmpty() }.thenBy { it.code }.thenBy { it.message }).forEach { diagnostic ->
+                    digest.update("buildModelDiagnostic\u0000${diagnostic.moduleId}\u0000${diagnostic.code}\u0000${diagnostic.severity}\u0000${diagnostic.message}\u0000".toByteArray(Charsets.UTF_8))
+                }
+                model.modules.sortedBy(BuildModule::id).forEach { buildModule ->
+                    digest.update("buildModule\u0000${buildModule.id}\u0000${buildModule.name}\u0000${buildModule.root}\u0000".toByteArray(Charsets.UTF_8))
+                    buildModule.attributes.toSortedMap().forEach { (key, value) ->
+                        digest.update("buildModuleAttribute\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
+                    }
+                    buildModule.sourceSets.sortedBy(BuildSourceSet::id).forEach { sourceSet ->
+                        digest.update("sourceSet\u0000${sourceSet.id}\u0000${sourceSet.kind}\u0000".toByteArray(Charsets.UTF_8))
+                        sourceSet.sourceRoots.sortedBy(Path::toString).forEach { digest.update("sourceSetRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                        sourceSet.generatedSourceRoots.sortedBy(Path::toString).forEach { digest.update("sourceSetGeneratedRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                        sourceSet.outputDirectories.sortedBy(Path::toString).forEach { digest.update("sourceSetOutput\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                        sourceSet.classpathEntries.sortedBy(Path::toString).forEach { digest.update("sourceSetClasspath\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                        sourceSet.moduleDependencies.sortedWith(compareBy<BuildDependency> { it.targetModuleId }.thenBy { it.scope.name }).forEach { dependency ->
+                            digest.update("sourceSetDependency\u0000${dependency.targetModuleId}\u0000${dependency.scope}\u0000".toByteArray(Charsets.UTF_8))
+                        }
+                        sourceSet.attributes.toSortedMap().forEach { (key, value) ->
+                            digest.update("sourceSetAttribute\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
+                        }
+                    }
+                }
             }
             files.sortedBy { it.path.toString() }.forEach { file ->
                 digest.update(file.path.toString().toByteArray(Charsets.UTF_8))

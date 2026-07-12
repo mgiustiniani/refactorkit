@@ -209,6 +209,17 @@ class McpSession {
             appendLine("Files  : ${snap.files.size}")
             appendLine("Modules: ${snap.modules.size}")
             snap.modules.forEach { appendLine("  - ${it.name} (${it.root})") }
+            appendLine("Build models:")
+            snap.buildModels.sortedBy { it.providerId }.forEach { model ->
+                appendLine("  - ${model.providerId}: ${model.status} providers=${model.attributes["providers"].orEmpty()}")
+                appendLine("    execution=${model.attributes["buildCodeExecution"].orEmpty()} credentials=${model.attributes["credentialsAccess"].orEmpty()} networkDefault=${model.attributes["networkDefault"].orEmpty()}")
+                model.modules.sortedBy { it.id }.forEach { module ->
+                    appendLine("    module ${module.id}: ${module.sourceSets.joinToString { "${it.id}:${it.kind}" }}")
+                }
+                if (model.diagnostics.isNotEmpty()) {
+                    appendLine("    diagnostics: ${model.diagnostics.joinToString { "${it.code}:${it.moduleId.orEmpty()}" }}")
+                }
+            }
             appendLine("Snapshot: ${snap.hash}")
         }.trim()
     }
