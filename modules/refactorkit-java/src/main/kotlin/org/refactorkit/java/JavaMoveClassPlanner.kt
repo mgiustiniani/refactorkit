@@ -46,6 +46,9 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
 
         val declarationFile = snapshot.files.find { it.path == symbol.location.path }
             ?: return refused(snapshot, "moveClass", "Declaration file not found: ${symbol.location.path}")
+        JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
+            return refused(snapshot, "moveClass", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)")
+        }
         val newRelativePath = computeNewPath(declarationFile.path, oldPkg, targetPackage, simpleName)
         if (index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newRelativePath }) {
             return refused(snapshot, "moveClass", "Move target already exists: $newFqn ($newRelativePath)")

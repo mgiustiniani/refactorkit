@@ -62,6 +62,11 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         val index = adapter.buildSymbols(snapshot)
         val ownerSymbol = index.symbols.find { it.id.value == ownerFqn && it.kind in TYPE_KINDS }
             ?: return refused(snapshot, "renameMember", "Owner type not found: $ownerFqn")
+        val ownerFile = snapshot.files.find { it.path == ownerSymbol.location.path }
+            ?: return refused(snapshot, "renameMember", "Owner declaration file not found: ${ownerSymbol.location.path}")
+        JavaGeneratedSourcePolicy.reason(ownerFile)?.let { reason ->
+            return refused(snapshot, "renameMember", "Generated source cannot be rewritten: ${ownerFile.path} ($reason)")
+        }
 
         // ── find member(s) ───────────────────────────────────────────────────
         val members = index.symbols.filter { sym ->

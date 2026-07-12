@@ -54,6 +54,9 @@ class JavaExtractMethodPlanner {
         val file = snapshot.files.find { it.path == filePath }
             ?: return refused(snapshot, "File not found in snapshot: $filePath")
         if (file.languageId != "java") return refused(snapshot, "Extract method currently supports Java files only: $filePath")
+        JavaGeneratedSourcePolicy.reason(file)?.let { reason ->
+            return refused(snapshot, "Generated source cannot be rewritten: $filePath ($reason)")
+        }
 
         val content = file.content
         if (Regex("""\b${Regex.escape(methodName)}\s*\(""").containsMatchIn(content)) {

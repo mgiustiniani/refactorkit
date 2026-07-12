@@ -47,6 +47,9 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
 
         val declarationFile = snapshot.files.find { it.path == symbol.location.path }
             ?: return refused(snapshot, "renameClass", "Declaration file not found: ${symbol.location.path}")
+        JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
+            return refused(snapshot, "renameClass", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)")
+        }
         val newFileName = "$newSimpleName.java"
         val newFilePath = declarationFile.path.resolveSibling(newFileName)
         if (index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newFilePath }) {

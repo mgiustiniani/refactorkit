@@ -1,5 +1,13 @@
 # Java adapter
 
+## Generated-source boundary
+
+Generated Java remains analyzable for symbols/references but is never rewritten
+by stable file-rewriter planners. A shared policy detects conventional generated
+paths, `@Generated` variants, and generated/do-not-edit headers. Rename type,
+move type, rename member, safe delete (including force), extract method, change
+signature, and organize imports conservatively refuse before producing edits.
+
 ## Source compatibility
 
 RefactorKit uses Eclipse JDT Core 3.44 with the JLS25 AST to parse Java source

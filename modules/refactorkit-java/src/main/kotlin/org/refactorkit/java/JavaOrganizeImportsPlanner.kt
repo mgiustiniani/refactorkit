@@ -1,5 +1,6 @@
 package org.refactorkit.java
 
+import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -29,6 +30,29 @@ import java.nio.file.Paths
 class JavaOrganizeImportsPlanner {
 
     fun preview(snapshot: ProjectSnapshot, filePaths: List<Path>): PatchPlan {
+        val generated = filePaths.mapNotNull { path ->
+            snapshot.files.find { it.path == path }?.let { file ->
+                JavaGeneratedSourcePolicy.reason(file)?.let { reason -> file.path to reason }
+            }
+        }
+        if (generated.isNotEmpty()) {
+            val detail = generated.joinToString { (path, reason) -> "$path ($reason)" }
+            return PatchPlan(
+                operation = "organizeImports",
+                status = PatchStatus.REFUSED,
+                snapshotHash = snapshot.hash,
+                confidence = 0.0,
+                summary = "Generated source cannot be rewritten: $detail",
+                affectedFiles = emptySet(),
+                workspaceEdit = WorkspaceEdit(),
+                diagnosticsBefore = listOf(Diagnostic(
+                    "Generated source cannot be rewritten: $detail",
+                    Diagnostic.Severity.ERROR,
+                    code = "java.generatedSource",
+                )),
+                riskLevel = RiskLevel.HIGH,
+            )
+        }
         val edits = mutableListOf<FileEdit>()
         val affected = mutableSetOf<Path>()
         val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)

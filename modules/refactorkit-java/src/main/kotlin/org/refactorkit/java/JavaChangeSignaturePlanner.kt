@@ -522,8 +522,8 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         scopedFiles: List<org.refactorkit.core.SourceFile>,
         methodName: String,
     ): String? {
-        if (isGeneratedJava(declarationFile)) {
-            return "Declaration file ${declarationFile.path} appears to be generated code; change-signature refuses generated declarations."
+        JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
+            return "Declaration file ${declarationFile.path} is generated code ($reason); change-signature refuses generated declarations."
         }
         firstStringLiteralContaining(scopedFiles, methodName)?.let { location ->
             return "String literal containing method name '$methodName' found at $location. This may be reflection/framework configuration; change-signature refuses until reviewed."
@@ -606,14 +606,6 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         while (start >= 0 && (JavaLexer.isIdentChar(content[start]) || content[start] == '.')) start--
         if (start == end) return null
         return content.substring(start + 1, end + 1).takeIf { it.isNotBlank() }
-    }
-
-    private fun isGeneratedJava(file: org.refactorkit.core.SourceFile): Boolean {
-        val normalized = file.path.toString().replace('\\', '/').lowercase()
-        return "/generated/" in "/$normalized/" ||
-            normalized.contains("/build/generated/") ||
-            normalized.contains("/target/generated-") ||
-            Regex("""@(?:[\w.]+\.)?Generated\b""").containsMatchIn(file.content)
     }
 
     private fun firstStringLiteralContaining(files: List<org.refactorkit.core.SourceFile>, needle: String): String? {

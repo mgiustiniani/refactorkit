@@ -36,6 +36,9 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
 
         val declarationFile = snapshot.files.find { it.path == symbol.location.path }
             ?: return refused(snapshot, "safeDelete", "Declaration file not found: ${symbol.location.path}")
+        JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
+            return refused(snapshot, "safeDelete", "Generated source cannot be deleted: ${declarationFile.path} ($reason)")
+        }
 
         val frameworkAssessment = JavaFrameworkDetector.assess(declarationFile)
 
