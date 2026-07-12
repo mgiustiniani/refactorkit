@@ -11,8 +11,25 @@ permissions:
   attestations: write
 
 jobs:
-  release-runtime:
-    runs-on: ubuntu-latest
+  build-runtime:
+    name: Build runtime (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            gradle: ./gradlew
+          - os: windows-2022
+            platform: windows-x86_64
+            gradle: ./gradlew.bat
+          - os: macos-15-intel
+            platform: macos-x86_64
+            gradle: ./gradlew
+          - os: macos-15
+            platform: macos-aarch64
+            gradle: ./gradlew
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,73 +44,112 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Build and test
-        run: ./gradlew build
+      - name: Build, test, package and native smoke
+        run: ${{ matrix.gradle }} clean build :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
 
-      - name: Run golden tests
-        run: ./refactorkit test-golden
-
-      - name: Build self-contained CLI runtime
-        run: ./gradlew packageCliRuntime distCliRuntimeZip
-
-      - name: Prepare release assets
+      - name: Prepare platform asset and checksum
+        shell: python
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          cp modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
-            "refactorkit-runtime-${version}-linux-x86_64.zip"
-          asset="refactorkit-runtime-${version}-linux-x86_64.zip"
-          checksum_file="${asset}.sha256"
-          sha256sum "$asset" > "$checksum_file"
-          sha256sum -c "$checksum_file"
-          checksum="$(awk '{print $1}' "$checksum_file")"
-          asset_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${asset}"
+          import hashlib, os, pathlib, shutil
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          source = pathlib.Path("modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip")
+          target = pathlib.Path(f"refactorkit-runtime-{version}-${{ matrix.platform }}.zip")
+          shutil.copyfile(source, target)
+          digest = hashlib.sha256(target.read_bytes()).hexdigest()
+          target.with_suffix(target.suffix + ".sha256").write_text(f"{digest}  {target.name}\n")
 
+      - name: Expand platform runtime for SBOM
+        shell: python
+        run: |
+          import os, pathlib, zipfile
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          asset = pathlib.Path(f"refactorkit-runtime-{version}-${{ matrix.platform }}.zip")
+          with zipfile.ZipFile(asset) as archive:
+              archive.extractall("release-smoke")
+
+      - name: Generate platform SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: release-smoke/refactorkit
+          format: spdx-json
+          output-file: refactorkit-runtime-${{ matrix.platform }}.spdx.json
+          upload-artifact: false
+
+      - name: Attest platform runtime provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: refactorkit-runtime-*-${{ matrix.platform }}.zip
+
+      - name: Attest platform runtime SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: refactorkit-runtime-*-${{ matrix.platform }}.zip
+          sbom-path: refactorkit-runtime-${{ matrix.platform }}.spdx.json
+
+      - name: Upload platform release inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            refactorkit-runtime-*-${{ matrix.platform }}.zip
+            refactorkit-runtime-*-${{ matrix.platform }}.zip.sha256
+            refactorkit-runtime-${{ matrix.platform }}.spdx.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all platform assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Verify checksums and prepare release notes
+        run: |
+          cd release-assets
+          sha256sum -c *.zip.sha256
+          cd ..
+          version="${GITHUB_REF_NAME#v}"
           release_notes=".github/releases/${GITHUB_REF_NAME}.md"
           if [ -f "$release_notes" ]; then
             cp "$release_notes" RELEASE_NOTES.md
           else
             cp .github/RELEASE_TEMPLATE.md RELEASE_NOTES.md
           fi
-
-          python3 - <<PY
+          python3 - <<'PY'
+          import hashlib, os
           from pathlib import Path
+          tag = os.environ["GITHUB_REF_NAME"]
+          sha = os.environ["GITHUB_SHA"]
+          repository = os.environ["GITHUB_REPOSITORY"]
+          assets = sorted(Path("release-assets").glob("*.zip"))
+          rows = []
+          for asset in assets:
+              digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+              url = f"https://github.com/{repository}/releases/download/{tag}/{asset.name}"
+              prefix = f"refactorkit-runtime-{tag.removeprefix('v')}-"
+              platform = asset.name.removesuffix(".zip").removeprefix(prefix)
+              rows.append(f"| `{platform}` | [`{asset.name}`]({url}) | `{digest}` |")
           path = Path("RELEASE_NOTES.md")
           text = path.read_text()
-          text = text.replace("Source tag: _TBD before release_", "Source tag: ${GITHUB_REF_NAME}")
-          text = text.replace("Release commit: _TBD before release_", "Release commit: ${GITHUB_SHA}")
-          text = text.replace("Final URL: _TBD after release artifact is published_", "Final URL: ${asset_url}")
-          text = text.replace("Final SHA-256: _TBD after release artifact is built_", "Final SHA-256: ${checksum}")
+          text = text.replace("Source tag: _TBD before release_", f"Source tag: {tag}")
+          text = text.replace("Release commit: _TBD before release_", f"Release commit: {sha}")
+          if assets:
+              first = assets[0]
+              digest = hashlib.sha256(first.read_bytes()).hexdigest()
+              url = f"https://github.com/{repository}/releases/download/{tag}/{first.name}"
+              text = text.replace("Final URL: _TBD after release artifact is published_", f"Final URL: {url}")
+              text = text.replace("Final SHA-256: _TBD after release artifact is built_", f"Final SHA-256: {digest}")
+          text += "\n\n## Platform assets\n\n| Platform | Runtime | SHA-256 |\n|---|---|---|\n" + "\n".join(rows) + "\n"
           path.write_text(text)
           PY
-
-      - name: Smoke release runtime zip
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          rm -rf release-smoke
-          mkdir release-smoke
-          unzip -q "refactorkit-runtime-${version}-linux-x86_64.zip" -d release-smoke
-          env -u JAVA_HOME bash scripts/smoke-packaged-cli.sh release-smoke/refactorkit
-          env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit --help
-          env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit scan samples/java-maven-simple
-
-      - name: Generate SPDX SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          path: release-smoke/refactorkit
-          format: spdx-json
-          output-file: refactorkit-runtime.spdx.json
-          upload-artifact: false
-
-      - name: Attest runtime provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: refactorkit-runtime-*-linux-x86_64.zip
-
-      - name: Attest runtime SBOM
-        uses: actions/attest-sbom@v2
-        with:
-          subject-path: refactorkit-runtime-*-linux-x86_64.zip
-          sbom-path: refactorkit-runtime.spdx.json
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -102,6 +158,6 @@ jobs:
           make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
           body_path: RELEASE_NOTES.md
           files: |
-            refactorkit-runtime-*-linux-x86_64.zip
-            refactorkit-runtime-*-linux-x86_64.zip.sha256
-            refactorkit-runtime.spdx.json
+            release-assets/*.zip
+            release-assets/*.zip.sha256
+            release-assets/*.spdx.json

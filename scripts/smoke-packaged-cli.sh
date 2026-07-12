@@ -72,4 +72,19 @@ if [[ "$before" != "$after" ]]; then
   exit 1
 fi
 
-printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed definition/references exact; sources unchanged."
+format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
+transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"
+if [[ -z "$transaction_id" ]] || ! grep -Fq 'public String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then
+  echo "Packaged managed format smoke failed:" >&2
+  echo "$format_output" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$transaction_id" --root "$fixture" >/dev/null
+rolled_back="$(source_hashes)"
+if [[ "$before" != "$rolled_back" ]]; then
+  echo "Packaged rollback did not restore Java sources" >&2
+  diff -u <(printf '%s\n' "$before") <(printf '%s\n' "$rolled_back") || true
+  exit 1
+fi
+
+printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources."

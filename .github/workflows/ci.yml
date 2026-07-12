@@ -81,3 +81,55 @@ jobs:
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.spdx.json
           if-no-files-found: error
+
+  cross-platform-runtime:
+    name: Runtime (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: windows-x86_64
+            gradle: ./gradlew.bat
+          - os: macos-15-intel
+            platform: macos-x86_64
+            gradle: ./gradlew
+          - os: macos-15
+            platform: macos-aarch64
+            gradle: ./gradlew
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Build, test, package and native smoke
+        run: ${{ matrix.gradle }} build :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+
+      - name: Name platform artifact and checksum
+        shell: python
+        run: |
+          import hashlib, pathlib, shutil
+          source = pathlib.Path("modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip")
+          target = source.with_name("refactorkit-runtime-${{ matrix.platform }}.zip")
+          shutil.copyfile(source, target)
+          digest = hashlib.sha256(target.read_bytes()).hexdigest()
+          target.with_suffix(target.suffix + ".sha256").write_text(f"{digest}  {target.name}\n")
+
+      - name: Upload native runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: refactorkit-runtime-${{ matrix.platform }}
+          path: |
+            modules/refactorkit-cli/build/distributions/refactorkit-runtime-${{ matrix.platform }}.zip
+            modules/refactorkit-cli/build/distributions/refactorkit-runtime-${{ matrix.platform }}.zip.sha256
+          if-no-files-found: error

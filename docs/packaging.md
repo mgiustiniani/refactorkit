@@ -47,12 +47,18 @@ CI also writes and uploads the matching checksum:
 modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
 ```
 
-Tag builds rename the release asset to:
+Tag builds name each native release asset by platform:
 
 ```text
 refactorkit-runtime-<version>-linux-x86_64.zip
-refactorkit-runtime-<version>-linux-x86_64.zip.sha256
+refactorkit-runtime-<version>-windows-x86_64.zip
+refactorkit-runtime-<version>-macos-x86_64.zip
+refactorkit-runtime-<version>-macos-aarch64.zip
 ```
+
+Every ZIP has a matching `.sha256`, platform-specific SPDX JSON SBOM, build
+provenance attestation, and SBOM attestation. `v0.4.0` published Linux x86_64;
+the expanded matrix is a `v0.5.0` acceptance target.
 
 During a tag release, the workflow computes the final checksum and asset URL and
 injects the source tag, release commit, asset URL, and SHA-256 into the published
@@ -60,24 +66,24 @@ GitHub Release notes.
 
 ## Install and smoke-test a downloaded release asset
 
-For `v0.2.0-beta`, the expected Linux x86_64 release assets are:
+For `v0.4.0`, the expected Linux x86_64 release assets are:
 
 ```text
-refactorkit-runtime-0.2.0-beta-linux-x86_64.zip
-refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
+refactorkit-runtime-0.4.0-linux-x86_64.zip
+refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
 ```
 
 Download both files from the GitHub release page, then verify and unpack the zip:
 
 ```bash
-sha256sum -c refactorkit-runtime-0.2.0-beta-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.2.0-beta-linux-x86_64.zip -d /tmp/refactorkit-v0.2.0-beta
+sha256sum -c refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.4.0-linux-x86_64.zip -d /tmp/refactorkit-v0.4.0
 ```
 
 The package layout after extraction is:
 
 ```text
-/tmp/refactorkit-v0.2.0-beta/refactorkit/
+/tmp/refactorkit-v0.4.0/refactorkit/
   bin/refactorkit
   runtime/bin/java
 ```
@@ -85,7 +91,7 @@ The package layout after extraction is:
 Smoke-test the extracted launcher with `JAVA_HOME` unset:
 
 ```bash
-RK=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.4.0/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -99,7 +105,7 @@ Run sample scans from a RefactorKit source checkout. To make the launcher easier
 to call, add the extracted `bin` directory to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.2.0-beta/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.4.0/refactorkit/bin:$PATH
 refactorkit --help
 ```
 
@@ -169,16 +175,22 @@ CI packaging verification currently checks:
   samples;
 - both the zip and checksum are uploaded as the `refactorkit-runtime` artifact.
 
-Release tag builds additionally verify the tag-named checksum before publishing,
-unzip the runtime zip, smoke-test the extracted launcher with `JAVA_HOME` unset,
-and create the GitHub release with final artifact metadata injected into the
-published release body.
+Release tag builds run natively on Linux x86_64, Windows x86_64, macOS Intel,
+and macOS Apple Silicon. Each job builds/tests, creates a host `jlink` image,
+runs signed-selector and managed format/apply/rollback smoke, verifies source
+restoration, generates checksum/SBOM/attestations, and uploads release inputs. A
+separate job verifies all checksums and publishes one release.
 
 ## Notes
 
 - The application bytecode still targets Java 8 where configured by the root build.
 - The embedded runtime is built from the JDK used to run Gradle.
 - `jlink` requires a JDK, not a JRE, at build time.
-- The runtime package is OS-specific; build one package per target platform.
+- The runtime package is OS/architecture-specific and is built on a native runner;
+  RefactorKit does not claim Linux-to-Windows/macOS cross-built jlink images.
+- Windows/macOS full support requires native transaction/durability acceptance,
+  not only launcher smoke. See `docs/releases/v0.5.0-plan.md`.
+- macOS code signing/notarization and Windows Authenticode/SmartScreen status must
+  be stated by each release until signed distribution is implemented.
 - The runtime zip preserves executable permissions for `bin/refactorkit`,
   `runtime/bin/*`, `runtime/lib/jexec`, and `runtime/lib/jspawnhelper`.

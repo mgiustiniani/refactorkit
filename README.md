@@ -29,12 +29,28 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
 Latest release is `v0.4.0`; main develops `0.5.0-SNAPSHOT`. API `0.2` remains
-the beta compatibility baseline. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
+the beta compatibility baseline. `v0.5.0` adds natively built self-contained
+Windows x86_64, macOS Intel, and macOS Apple Silicon runtimes; platforms are
+marked supported only after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is
 the reference and widest catalogue, while other mature ecosystems target
 equivalent semantic safety and idiomatic depth.
 
-## Install the v0.4.0 runtime package
+## Self-contained runtime platforms
+
+| Platform | Architecture | Published support | Planned asset |
+|---|---|---|---|
+| Linux | x86_64 | `v0.4.0` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
+| Windows | x86_64 | `v0.5.0` acceptance in progress | `refactorkit-runtime-<version>-windows-x86_64.zip` |
+| macOS | Intel x86_64 | `v0.5.0` acceptance in progress | `refactorkit-runtime-<version>-macos-x86_64.zip` |
+| macOS | Apple Silicon arm64 | `v0.5.0` acceptance in progress | `refactorkit-runtime-<version>-macos-aarch64.zip` |
+
+Each package embeds its native Java runtime. A runtime is built on its target OS,
+receives an independent checksum/SBOM/attestation, and must pass packaged
+version, semantic lookup, format/apply/rollback, recovery and filesystem safety
+checks. The IDE does not require a globally installed Java runtime.
+
+## Install the v0.4.0 Linux runtime package
 
 The current release publishes a self-contained Linux x86_64 runtime zip. It includes
 `refactorkit/bin/refactorkit` and an embedded Java runtime at
@@ -92,6 +108,29 @@ refactorkit --help
 
 Run the sample scan commands from a RefactorKit source checkout that contains the
 `samples/` directory.
+
+### Windows and macOS `v0.5.0` artifact usage
+
+After native acceptance and publication, Windows verification uses PowerShell:
+
+```powershell
+Get-FileHash .\refactorkit-runtime-<version>-windows-x86_64.zip -Algorithm SHA256
+Expand-Archive .\refactorkit-runtime-<version>-windows-x86_64.zip
+.\refactorkit\bin\refactorkit.bat --version
+```
+
+macOS Intel users select `macos-x86_64`; Apple Silicon users select
+`macos-aarch64`:
+
+```bash
+shasum -a 256 refactorkit-runtime-<version>-macos-aarch64.zip
+unzip refactorkit-runtime-<version>-macos-aarch64.zip
+./refactorkit/bin/refactorkit --version
+```
+
+Unsigned/notarization or SmartScreen limitations must remain visible in each
+release until platform signing is implemented. Do not substitute a runtime built
+for another OS or architecture.
 
 ## Build
 

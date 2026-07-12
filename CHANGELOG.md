@@ -11,6 +11,10 @@ review safety boundaries before applying refactorings.
 
 - Started the production multi-language adapter-kernel workstream while retaining
   API `0.2` until an explicit migration is accepted.
+- Added the pre-`1.0` cross-platform runtime workstream: native Windows x86_64,
+  macOS Intel, and macOS Apple Silicon jlink packages alongside Linux, with
+  native test/package/managed format/apply/rollback smoke, per-platform
+  checksums/SBOM/attestations, and aggregate release publication.
 
 ## [0.4.0] - 2026-07-12
 

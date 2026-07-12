@@ -46,7 +46,7 @@ credible. Java depth continues in every band.
 
 | Band | Primary focus |
 |---|---|
-| `0.5.x` | Multi-language adapter kernel, external semantic-process manager, real structural parsing, generalized evidence |
+| `0.5.x` | Native Windows/macOS self-contained runtime matrix plus multi-language adapter kernel, external semantic-process manager, real structural parsing and generalized evidence |
 | `0.6.x` | TypeScript and JavaScript deep adapter |
 | `0.7.x` | Kotlin and Java/Kotlin interoperability |
 | `0.8.x` | Python deep adapter |
@@ -57,6 +57,8 @@ credible. Java depth continues in every band.
 | `0.13.x` | C# Roslyn solution/refactoring platform |
 | `0.14.x` | Rust and Cargo/rust-analyzer platform |
 | `1.0` development | Clojure and global all-language stabilization |
+
+Active plan: [`docs/releases/v0.5.0-plan.md`](releases/v0.5.0-plan.md).
 
 The order can change through an explicit roadmap decision. Equivalent quality
 means idiomatic IDE-grade capability, not identical operations for unlike

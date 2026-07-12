@@ -104,11 +104,11 @@ tasks.register("writeBundledLaunchers") {
         out.resolve("refactorkit.bat").writeText(
             """
             |@echo off
-
-            |set APP_HOME=%~dp0..\
-
-            |"%APP_HOME%runtime\bin\java.exe" -cp "%APP_HOME%lib\*" org.refactorkit.cli.RefactorKitCliKt %*
-
+            |setlocal
+            |set "APP_HOME=%~dp0.."
+            |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.cli.RefactorKitCliKt %*
+            |exit /b %ERRORLEVEL%
+            |
             """.trimMargin(),
         )
     }
@@ -154,11 +154,21 @@ tasks.register<Exec>("smokePackagedCli") {
 
     workingDir = rootProject.projectDir
     environment.remove("JAVA_HOME")
-    commandLine(
-        "bash",
-        rootProject.file("scripts/smoke-packaged-cli.sh").absolutePath,
-        packageDir.get().asFile.absolutePath,
-    )
+    if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
+        commandLine(
+            "pwsh",
+            "-NoProfile",
+            "-File",
+            rootProject.file("scripts/smoke-packaged-cli.ps1").absolutePath,
+            packageDir.get().asFile.absolutePath,
+        )
+    } else {
+        commandLine(
+            "bash",
+            rootProject.file("scripts/smoke-packaged-cli.sh").absolutePath,
+            packageDir.get().asFile.absolutePath,
+        )
+    }
 }
 
 tasks.register<Zip>("refactorkitRuntimeZip") {

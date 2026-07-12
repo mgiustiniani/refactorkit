@@ -22,7 +22,7 @@ For stable releases, the runtime archive is a versioned product contract. Publis
 
 * Users can run the packaged CLI without installing Java globally.
 * Distribution artifacts are larger than plain application archives.
-* jlink packaging is OS-specific, so release automation must build per target platform.
+* jlink packaging is OS/architecture-specific, so release automation builds on native Linux x86_64, Windows x86_64, macOS Intel, and macOS Apple Silicon runners. Cross-platform launcher success alone is insufficient: managed transaction/durability semantics must pass natively.
 * A JDK remains required at build time to create the runtime image.
 * Runtime module selection must be maintained as dependencies evolve; packaged-runtime smoke tests must check required modules and execute JDT-backed behavior rather than only `--help` or scans.
 * Release automation must classify prerelease and stable artifacts from immutable tags and must not move or recreate a failed tag.
@@ -34,4 +34,4 @@ The immutable `v0.3.0` tag points to commit `ba114134be605b7b0076e7471f8111c081a
 
 A later signed-selector smoke found that the published `v0.3.0` image omitted `java.compiler`, causing `NoClassDefFoundError: javax/lang/model/SourceVersion`. The development packaging contract now requires that module and runs signed `definition`/`references` against the packaged runtime with source-integrity checks in CI and release workflows.
 
-The original evidence validates the published `v0.3.0` runtime and checksum path for the recorded basic checks, but not signed-selector completeness. It does not establish the remaining SBOM, provenance or attestation, reproducibility, and stable-contract evidence required for `v1.0.0`, so the ADR status remains unchanged.
+The published `v0.4.0` Linux x86_64 artifact corrected `java.compiler`, passed signed-selector and managed formatter checks, added a checksum and SPDX SBOM, published build/SBOM attestations, was independently downloaded and verified, and was deployed locally. `v0.5.0` expands the native matrix to Windows x86_64, macOS Intel, and macOS Apple Silicon. Each new platform remains acceptance-in-progress until its filesystem, apply, WAL, recovery, rollback, archive, SBOM and attestation evidence passes; README support labels follow evidence rather than workflow presence.
