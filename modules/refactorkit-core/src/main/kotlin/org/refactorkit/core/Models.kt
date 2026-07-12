@@ -44,6 +44,16 @@ data class Module(
     val classpathEntries: List<Path> = emptyList(),
     val dependencies: List<String> = emptyList(),
     val languageSettings: Map<String, String> = emptyMap(),
+    val mainSourceRoots: List<Path> = sourceRoots,
+    val testSourceRoots: List<Path> = emptyList(),
+    val generatedSourceRoots: List<Path> = emptyList(),
+    val generatedTestSourceRoots: List<Path> = emptyList(),
+    val mainClasspathEntries: List<Path> = classpathEntries,
+    val testClasspathEntries: List<Path> = classpathEntries,
+    val mainDependencies: List<String> = dependencies,
+    val testDependencies: List<String> = dependencies,
+    val mainOutputDirectories: List<Path> = emptyList(),
+    val testOutputDirectories: List<Path> = emptyList(),
 )
 
 data class SourceFile(
@@ -88,6 +98,16 @@ data class ProjectSnapshot(
                 module.languageSettings.toSortedMap().forEach { (key, value) ->
                     digest.update("languageSetting\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
                 }
+                module.mainSourceRoots.sortedBy(Path::toString).forEach { digest.update("mainSourceRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.testSourceRoots.sortedBy(Path::toString).forEach { digest.update("testSourceRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.generatedSourceRoots.sortedBy(Path::toString).forEach { digest.update("generatedSourceRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.generatedTestSourceRoots.sortedBy(Path::toString).forEach { digest.update("generatedTestSourceRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.mainClasspathEntries.sortedBy(Path::toString).forEach { digest.update("mainClasspath\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.testClasspathEntries.sortedBy(Path::toString).forEach { digest.update("testClasspath\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.mainDependencies.sorted().forEach { digest.update("mainModuleDependency\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.testDependencies.sorted().forEach { digest.update("testModuleDependency\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.mainOutputDirectories.sortedBy(Path::toString).forEach { digest.update("mainOutput\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.testOutputDirectories.sortedBy(Path::toString).forEach { digest.update("testOutput\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
             }
             sourceExtensions.sorted().forEach { digest.update("extension\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
             ignoredDirectories.sorted().forEach { digest.update("ignored\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
@@ -248,6 +268,7 @@ data class PatchPlan(
     val warnings: List<String> = emptyList(),
     val riskLevel: RiskLevel = RiskLevel.LOW,
     val evidence: RefactoringEvidence = RefactoringEvidence.STRUCTURAL,
+    val refusalCode: String? = null,
 )
 
 enum class ApprovalKind {

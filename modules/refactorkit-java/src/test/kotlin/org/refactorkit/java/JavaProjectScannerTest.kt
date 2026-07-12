@@ -15,6 +15,40 @@ import java.nio.file.Path
 
 class JavaProjectScannerTest {
     @Test
+    fun inheritsJava21AndReactorDependenciesFromEffectiveMavenParent() {
+        val root = Files.createTempDirectory("refactorkit-maven-effective-reactor")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion>
+              <groupId>example</groupId><artifactId>reactor</artifactId><version>1</version><packaging>pom</packaging>
+              <properties><java.version>21</java.version><maven.compiler.release>${'$'}{java.version}</maven.compiler.release></properties>
+              <modules><module>domain</module><module>application</module></modules>
+            </project>
+        """.trimIndent())
+        createMavenChild(root, "domain", "", """
+            package example.domain;
+            public record DomainType(String value) {
+                public enum Kind { PRIMARY }
+                public String describe() { return switch (value) { case "" -> "empty"; default -> value; }; }
+            }
+        """.trimIndent())
+        createMavenChild(root, "application", """
+            <dependencies><dependency><groupId>example</groupId><artifactId>domain</artifactId><version>${'$'}{project.version}</version></dependency></dependencies>
+        """.trimIndent(), """
+            package example.application;
+            import example.domain.DomainType;
+            public class ApplicationType { Object run(DomainType value) { return switch (value) { case DomainType(String text) -> text; }; } }
+        """.trimIndent())
+
+        val snapshot = JavaProjectScanner().scan(root)
+        val modules = snapshot.modules.associateBy { it.name }
+
+        assertEquals("21", modules.getValue("domain").languageSettings["java.sourceLevel"])
+        assertEquals("21", modules.getValue("application").languageSettings["java.sourceLevel"])
+        assertEquals(listOf("domain"), modules.getValue("application").dependencies)
+        assertTrue(JavaLanguageAdapter().diagnostics(snapshot).none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
+    }
+
+    @Test
     fun detectsHashBoundMavenAndGradleJavaSourceLevels() {
         val cases = listOf(
             Triple("maven-8", "pom.xml", "<project><properties><maven.compiler.source>1.8</maven.compiler.source></properties></project>"),
@@ -39,6 +73,37 @@ class JavaProjectScannerTest {
             assertEquals(ClasspathEvidenceKind.DECLARATION_FILE, descriptorEvidence.kind)
             assertEquals(64, descriptorEvidence.fingerprint.length)
         }
+    }
+
+    @Test
+    fun missingOfflineMavenParentProducesOneBuildModelRootDiagnostic() {
+        val root = Files.createTempDirectory("refactorkit-build-model-unavailable")
+        val source = root.resolve("src/main/java/example/App.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package example; class App {}\n")
+        Files.writeString(root.resolve("pom.xml"), "<project><modelVersion>4.0.0</modelVersion><parent><groupId>missing</groupId><artifactId>parent</artifactId><version>1</version><relativePath/></parent><artifactId>app</artifactId></project>")
+
+        val diagnostics = JavaLanguageAdapter().diagnostics(
+            JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root),
+        ).filter { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR }
+
+        assertEquals(1, diagnostics.size, diagnostics.toString())
+        assertEquals("buildModel.unavailable", diagnostics.single().code)
+    }
+
+    @Test
+    fun unresolvedEffectiveMavenSourceLevelProducesTypedRootDiagnostic() {
+        val root = Files.createTempDirectory("refactorkit-source-level-unavailable")
+        val source = root.resolve("src/main/java/example/App.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package example; class App {}\n")
+        Files.writeString(root.resolve("pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId><artifactId>app</artifactId><version>1</version><properties><maven.compiler.release>\${missing.level}</maven.compiler.release></properties></project>")
+
+        val diagnostics = JavaLanguageAdapter().diagnostics(JavaProjectScanner().scan(root))
+            .filter { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR }
+
+        assertEquals(1, diagnostics.size, diagnostics.toString())
+        assertEquals("sourceLevel.unavailable", diagnostics.single().code)
     }
 
     @Test
@@ -195,6 +260,18 @@ class JavaProjectScannerTest {
         assertEquals(2, snapshot.files.size)
         assertTrue("com.example.api.UserApi" in symbols)
         assertTrue("com.example.service.UserService" in symbols)
+    }
+
+    private fun createMavenChild(root: Path, module: String, extraPom: String, source: String) {
+        val sourcePath = root.resolve("$module/src/main/java/example/$module/${module.replaceFirstChar(Char::uppercase)}Type.java")
+        Files.createDirectories(sourcePath.parent)
+        Files.writeString(sourcePath, source)
+        Files.writeString(root.resolve("$module/pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion>
+              <parent><groupId>example</groupId><artifactId>reactor</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent>
+              <artifactId>$module</artifactId>$extraPom
+            </project>
+        """.trimIndent())
     }
 
     private fun createModuleSource(root: Path, module: String) {

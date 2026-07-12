@@ -60,7 +60,7 @@ fun main() {
                 val result = session.dispatch(request.method, request.params?.jsonObject)
                 successResponse(request.id, result)
             } catch (e: JsonRpcException) {
-                errorResponse(request.id, e.code, e.message)
+                errorResponse(request.id, e.code, e.message, e.data)
             } catch (_: Exception) {
                 errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, "Internal error")
             }

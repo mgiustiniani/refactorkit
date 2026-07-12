@@ -7,7 +7,12 @@ write-authority inventory.
 
 `JavaLanguageAdapter.diagnostics` reports JDT syntax and type-resolution errors
 with stable codes (`java.jdt.syntax`, `java.jdt.typeResolution`), exact source
-ranges, `COMPILER` evidence, and stable categories. Structural package/file-name/
+ranges, `COMPILER` evidence, and stable categories. Maven model/classpath/source-
+level roots use `buildModel.unavailable`, `classpath.unavailable`, and
+`sourceLevel.unavailable`; derivative unresolved-type cascades are suppressed per
+affected module while genuine syntax errors remain. CLI `diagnostics --verbose`
+and daemon `diagnostics {"verbose":true}` expose unsuppressed JDT details for
+investigation. Structural package/file-name/
 duplicate diagnostics use `STRUCTURAL` evidence and `PROJECT_STRUCTURE`.
 
 For staged validation, Java sources are written to an isolated temporary overlay;
@@ -38,9 +43,15 @@ signature, and organize imports conservatively refuse before producing edits.
 
 RefactorKit uses Eclipse JDT Core 3.44 with the JLS25 AST to parse Java source
 levels 8 through 25 while retaining Java 8-compatible target bytecode for the
-library contract. `JavaProjectScanner` detects per-module compliance from Maven
-`maven.compiler.release`/`source` (including simple property references) and
-Gradle toolchain/source-compatibility declarations. Unconfigured projects default
+library contract. `JavaProjectScanner` builds Maven effective models with embedded Maven
+ModelBuilder, resolving relative parents, inherited/interpolated properties,
+compiler release/source, dependency management, imported BOMs, active-by-default
+profiles, reactor coordinates/edges, and local-repository artifacts. It never
+executes project plugins and is offline by default; explicit network resolution
+is anonymous Maven Central only and never reads Maven settings credentials.
+Independent main/test source and class paths preserve Maven scope visibility,
+including generated read-only roots. Gradle toolchain/source-compatibility
+heuristics remain supported. Unconfigured projects default
 to Java 8 semantics; direct synthetic snapshots without module metadata use the
 latest supported level.
 
@@ -60,7 +71,7 @@ ADR 0008 ([compiler-backed Java analysis strategy](adr/0008-compiler-backed-java
 
 The existing lexical/structural planners remain a safety fallback for areas not yet proven by JDT. Previews must keep fallback evidence visible and must warn or refuse ambiguous cases instead of claiming semantic certainty.
 
-The JDT prototype must prove source-root/classpath discovery, binding-aware class and selected-member identity, reference disambiguation for same-name symbols, clear JDT-backed vs lexical-fallback reporting, and no regression of preview/apply/rollback safety. Representative Maven/Gradle sample tests provide source-root evidence, the Gradle multi-module sample proves cross-module sourcepath interface references and override relations, and the scanner supplies conventional compiled output directories (`target/classes`, `target/test-classes`, `build/classes/java/main`, and `build/classes/java/test`) plus project-local JARs under `lib`/`libs` to JDT. It also reads generated dependency lists from `.refactorkit/classpath`, `target/classpath.txt`, and `build/classpath.txt`; each non-comment line may contain one path or a platform-separated path list, relative entries resolve from the module root, and missing/non-JAR files are ignored. A test-generated Maven-style `target/classpath.txt` proves that an otherwise unresolved external type becomes clean binding evidence. The scanner records SHA-256 evidence for active entries, prospective conventional output directories, local JAR directories, and generated classpath declaration files; `PatchEngine` recomputes it under lock before journaling and refuses stale evidence. RefactorKit does not yet invoke Maven or Gradle to resolve dependencies itself. OpenRewrite remains a possible future recipe/transformation backend, not the first symbol identity source.
+The JDT prototype must prove source-root/classpath discovery, binding-aware class and selected-member identity, reference disambiguation for same-name symbols, clear JDT-backed vs lexical-fallback reporting, and no regression of preview/apply/rollback safety. Representative Maven/Gradle sample tests provide source-root evidence, the Gradle multi-module sample proves cross-module sourcepath interface references and override relations, and the scanner supplies conventional compiled output directories (`target/classes`, `target/test-classes`, `build/classes/java/main`, and `build/classes/java/test`) plus project-local JARs under `lib`/`libs` to JDT. It also reads generated dependency lists from `.refactorkit/classpath`, `target/classpath.txt`, and `build/classpath.txt`; each non-comment line may contain one path or a platform-separated path list, relative entries resolve from the module root, and missing/non-JAR files are ignored. A test-generated Maven-style `target/classpath.txt` proves that an otherwise unresolved external type becomes clean binding evidence. The scanner records SHA-256 evidence for active entries, prospective conventional output directories, local JAR directories, generated classpath declarations, parent/effective POMs, imported BOMs, local artifacts, source-level inputs, and module edges; `PatchEngine` recomputes it under lock before journaling and refuses stale evidence. Maven plugins and arbitrary lifecycle code are never invoked. OpenRewrite remains a possible future recipe/transformation backend, not the first symbol identity source.
 
 ## Current prototype status
 

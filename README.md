@@ -191,6 +191,12 @@ refactorkit java references --symbol com.example.UserManager samples/java-maven-
 
 ### Java refactoring previews
 
+Maven scans build effective reactor models offline without executing project
+plugins. Parent properties, BOMs, reactor edges, and locally cached dependencies
+feed independent main/test JDT environments. `--resolve-dependencies` is an
+explicit anonymous Maven Central opt-in; Maven settings credentials are never
+loaded or reported.
+
 Mutating Java commands are preview-first. Omit `--apply` to inspect the patch plan and warnings without writing files.
 
 ```bash
@@ -211,6 +217,12 @@ refactorkit move-class \
   --symbol com.example.UserManager \
   --to-package com.example.account \
   samples/java-maven-simple
+
+# Move a complete source root between Maven modules without changing bytes/FQCNs.
+refactorkit java move-source-root \
+  --from domain/src/main/java \
+  --to domain-relocated/src/main/java \
+  --root samples/java-maven-reactor-21
 
 # Sort/deduplicate imports for one or more files.
 refactorkit organize-imports \

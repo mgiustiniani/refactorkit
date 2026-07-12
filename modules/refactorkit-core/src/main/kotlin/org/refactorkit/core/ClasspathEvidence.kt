@@ -11,6 +11,9 @@ enum class ClasspathEvidenceKind {
     ENTRY,
     DECLARATION_FILE,
     JAR_DIRECTORY,
+    LOCAL_REPOSITORY_ARTIFACT,
+    EFFECTIVE_MODEL_INPUT,
+    IMPORTED_BOM,
 }
 
 data class ClasspathEvidence(
@@ -33,9 +36,12 @@ data class ClasspathEvidence(
                     Files.isDirectory(path) -> hashDirectory(path) { true }
                     else -> error("Classpath entry is neither a regular file nor directory: $path")
                 }
-                ClasspathEvidenceKind.DECLARATION_FILE -> {
-                    if (!Files.isRegularFile(path)) error("Classpath declaration is not a regular file: $path")
-                    hashFile(path, "declaration")
+                ClasspathEvidenceKind.DECLARATION_FILE,
+                ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT,
+                ClasspathEvidenceKind.EFFECTIVE_MODEL_INPUT,
+                ClasspathEvidenceKind.IMPORTED_BOM -> {
+                    if (!Files.isRegularFile(path)) error("Classpath/model evidence is not a regular file: $path")
+                    hashFile(path, kind.name.lowercase())
                 }
                 ClasspathEvidenceKind.JAR_DIRECTORY -> {
                     if (!Files.isDirectory(path)) error("Classpath JAR location is not a directory: $path")

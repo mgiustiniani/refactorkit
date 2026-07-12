@@ -1,0 +1,1 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><parent><groupId>example.reactor</groupId><artifactId>reactor-21</artifactId><version>1.0.0</version><relativePath>../pom.xml</relativePath></parent><artifactId>test-support</artifactId></project>

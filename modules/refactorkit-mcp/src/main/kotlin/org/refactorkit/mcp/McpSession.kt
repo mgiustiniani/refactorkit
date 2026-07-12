@@ -33,6 +33,7 @@ import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
 import org.refactorkit.webimporter.SourceKind
 import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
@@ -122,7 +123,7 @@ class McpSession {
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation", "symbol"),
                 props = mapOf(
-                    "operation" to "string: renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | organizeImports | formatFile | safeDelete",
+                    "operation" to "string: renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
                     "arguments" to "object: operation-specific arguments (newName, targetPackage, etc.)",
                 )))
@@ -299,19 +300,23 @@ class McpSession {
                 opArgs["name"] ?: opArgs["parameterName"] ?: missing("arguments.name"),
             )
             "moveClass"    -> JavaMoveClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["targetPackage"] ?: missing("arguments.targetPackage"))
+            "moveSourceRoot" -> JavaMoveSourceRootPlanner(adapter).preview(
+                snap, Paths.get(opArgs["from"] ?: missing("arguments.from")), Paths.get(opArgs["to"] ?: missing("arguments.to")),
+            )
             "organizeImports" -> JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
             "formatFile" -> JavaFormatFilePlanner(adapter).preview(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
             "safeDelete"   -> JavaSafeDeletePlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["force"]?.toBoolean() ?: false)
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
-        pendingPlans[plan.id.value] = plan
+        if (plan.status == PatchStatus.PREVIEW) pendingPlans[plan.id.value] = plan
         return buildString {
             appendLine("Plan ID  : ${plan.id.value}")
             appendLine("Status   : ${plan.status}")
             appendLine("Summary  : ${plan.summary}")
             appendLine("Risk     : ${plan.riskLevel}")
             appendLine("Evidence : ${plan.evidence}")
+            plan.refusalCode?.let { appendLine("Refusal  : $it") }
             appendLine("Confidence: ${plan.confidence}")
             appendLine("Affected : ${plan.affectedFiles.size} file(s)")
             plan.affectedFiles.forEach { appendLine("  $it") }

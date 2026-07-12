@@ -267,11 +267,40 @@ class JavaLanguageAdapter : LanguageAdapter {
         languageId = "java",
     )
 
-    override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> {
+    override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> = diagnostics(project, verbose = false)
+
+    fun diagnostics(project: ProjectSnapshot, verbose: Boolean): List<Diagnostic> {
         lastSnapshot = project
         val diagnostics = mutableListOf<Diagnostic>()
+        val unavailableModules = project.modules.filter { module ->
+            module.languageSettings["java.buildModel.status"] == "unavailable" ||
+                module.languageSettings["java.classpath.status"] == "unavailable" ||
+                module.languageSettings["java.sourceLevel.status"] == "unavailable"
+        }
+        unavailableModules.forEach { module ->
+            val (code, message) = when {
+                module.languageSettings["java.buildModel.status"] == "unavailable" ->
+                    "buildModel.unavailable" to module.languageSettings["java.buildModel.message"].orEmpty()
+                module.languageSettings["java.sourceLevel.status"] == "unavailable" ->
+                    "sourceLevel.unavailable" to module.languageSettings["java.sourceLevel.message"].orEmpty()
+                else -> "classpath.unavailable" to module.languageSettings["java.classpath.message"].orEmpty()
+            }
+            diagnostics += Diagnostic(
+                message = "Java analysis unavailable for module '${module.name}': ${message.ifBlank { code }}",
+                severity = Diagnostic.Severity.ERROR,
+                code = code,
+                evidence = DiagnosticEvidence.STRUCTURAL,
+                category = DiagnosticCategory.PROJECT_STRUCTURE,
+            )
+        }
         val semanticAnalysis = analyzeDiagnosticsOverlay(project)
-        diagnostics += semanticAnalysis.warnings.map { warning ->
+        diagnostics += semanticAnalysis.warnings.filterNot { warning ->
+            isResolvedModuleExportWarning(project, warning)
+        }.filter { warning ->
+            verbose || warning.category == JdtJavaDiagnosticCategory.SYNTAX || unavailableModules.none { module ->
+                module.sourceRoots.any { warning.path.normalize().startsWith(it.normalize()) }
+            }
+        }.map { warning ->
             val syntax = warning.category == JdtJavaDiagnosticCategory.SYNTAX
             Diagnostic(
                 message = warning.message,
@@ -339,6 +368,19 @@ class JavaLanguageAdapter : LanguageAdapter {
         return diagnostics
     }
 
+    private fun isResolvedModuleExportWarning(project: ProjectSnapshot, warning: JdtJavaSemanticWarning): Boolean {
+        if (warning.path.fileName.toString() != "module-info.java" ||
+            !warning.message.startsWith("The package ") ||
+            !warning.message.endsWith(" does not exist or is empty")) return false
+        val packageName = warning.message.removePrefix("The package ").removeSuffix(" does not exist or is empty")
+        val owner = project.modules.filter { module -> module.sourceRoots.any { warning.path.startsWith(it) } }
+            .maxByOrNull { it.root.nameCount } ?: return false
+        return project.files.any { file ->
+            file.path != warning.path && owner.sourceRoots.any(file.path::startsWith) &&
+                JavaPackageUtil.extractPackage(file.content) == packageName
+        }
+    }
+
     private fun analyzeDiagnosticsOverlay(project: ProjectSnapshot): JdtJavaSemanticAnalysisResult {
         val overlayRoot = Files.createTempDirectory("refactorkit-jdt-diagnostics-")
         return try {
@@ -356,11 +398,14 @@ class JavaLanguageAdapter : LanguageAdapter {
                 } else {
                     Path.of(module.name.replace(':', '/'))
                 }
+                fun originalClasspath(entries: List<Path>): List<Path> = entries.map { entry ->
+                    if (entry.isAbsolute) entry else originalRoot.resolve(entry).normalize()
+                }
                 module.copy(
                     root = overlayRoot.resolve(relativeRoot),
-                    classpathEntries = module.classpathEntries.map { entry ->
-                        if (entry.isAbsolute) entry else originalRoot.resolve(entry).normalize()
-                    },
+                    classpathEntries = originalClasspath(module.classpathEntries),
+                    mainClasspathEntries = originalClasspath(module.mainClasspathEntries),
+                    testClasspathEntries = originalClasspath(module.testClasspathEntries),
                 )
             }
             JdtJavaSemanticAnalyzer().analyze(project.copy(
@@ -383,6 +428,7 @@ class JavaLanguageAdapter : LanguageAdapter {
         RefactoringDescriptor("changeSignature.reorderParameters", "Reorder Java parameters and call-site arguments", RiskLevel.MEDIUM),
         RefactoringDescriptor("changeSignature.removeParameter", "Remove unused Java parameter and call-site argument", RiskLevel.MEDIUM),
         RefactoringDescriptor("moveClass", "Move Java class", RiskLevel.MEDIUM),
+        RefactoringDescriptor("moveSourceRoot", "Move Java source root without changing FQCNs", RiskLevel.MEDIUM),
         RefactoringDescriptor("organizeImports", "Organize imports", RiskLevel.LOW),
         RefactoringDescriptor("formatFile", "Format Java compilation unit", RiskLevel.LOW),
         RefactoringDescriptor("safeDelete", "Safe delete", RiskLevel.MEDIUM),
@@ -397,10 +443,19 @@ class JavaLanguageAdapter : LanguageAdapter {
         "changeSignature.reorderParameters", "reorderParameters" -> applyReorderParameters(request)
         "changeSignature.removeParameter", "removeParameter" -> applyRemoveParameter(request)
         "moveClass"    -> applyMoveClass(request)
+        "moveSourceRoot" -> applyMoveSourceRoot(request)
         "organizeImports" -> applyOrganizeImports(request)
         "formatFile" -> applyFormatFile(request)
         "safeDelete"   -> applySafeDelete(request)
         else           -> notImplemented(request, "Unknown operation: ${request.operation}")
+    }
+
+    private fun applyMoveSourceRoot(request: RefactoringRequest): PatchPlan {
+        val from = request.arguments["from"]
+            ?: return notImplemented(request, "moveSourceRoot requires arguments.from")
+        val to = request.arguments["to"]
+            ?: return notImplemented(request, "moveSourceRoot requires arguments.to")
+        return JavaMoveSourceRootPlanner(this).preview(request.snapshot, Path.of(from), Path.of(to))
     }
 
     private fun applyRenameMember(request: RefactoringRequest): PatchPlan {

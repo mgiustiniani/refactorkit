@@ -39,6 +39,24 @@ A caller can release a plan immediately without touching the workspace:
 Discard is idempotent: an unknown/already-discarded ID returns `discarded=false`.
 No plan content is logged.
 
+## Maven reactor and source-root relocation
+
+`project.open` builds Maven effective models offline and does not execute plugins.
+Set `resolveDependencies=true` only for explicit anonymous Maven Central
+resolution; Maven settings and credentials are never loaded. `refactor.preview`
+accepts the rename-only relocation contract:
+
+```json
+{"operation":"moveSourceRoot","arguments":{"from":"domain/src/main/java","to":"domain-relocated/src/main/java"}}
+```
+
+A successful result is retained and applied through normal `refactor.apply`; the
+resulting transaction is rolled back through `patch.rollback`. A refused result
+uses `PLAN_REFUSED (-32001)` and `error.data.refusalCode` with a typed
+`sourceRoot.*`, `buildModel.unavailable`, or `classpath.unavailable` value.
+Protocol paths always use `/`. `diagnostics` accepts optional `verbose=true` to
+show derivative JDT errors otherwise suppressed behind a typed module root cause.
+
 ## External Java import preview
 
 `java.importExternalClass` is preview-only. `targetDirectory` is an existing

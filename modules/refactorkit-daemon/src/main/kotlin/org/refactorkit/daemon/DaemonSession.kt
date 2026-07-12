@@ -42,6 +42,7 @@ import org.refactorkit.java.JavaImportTargetResolution
 import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
@@ -63,7 +64,7 @@ import java.nio.file.Paths
  */
 class DaemonSession : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
-    private val scanner = JavaProjectScanner()
+    private var scanner = JavaProjectScanner()
 
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var workspaceRoot: Path? = null
@@ -82,7 +83,7 @@ class DaemonSession : AutoCloseable {
         "symbol.search"     -> symbolSearch(params)
         "symbol.definition" -> symbolDefinition(params)
         "symbol.references" -> symbolReferences(params)
-        "diagnostics"       -> diagnostics()
+        "diagnostics"       -> diagnostics(params)
         "refactor.preview"  -> refactorPreview(params)
         "refactor.apply"    -> refactorApply(params)
         "refactor.discard"  -> refactorDiscard(params)
@@ -131,6 +132,8 @@ class DaemonSession : AutoCloseable {
         snapshot = null
         workspaceRoot = null
         val root = params?.string("root") ?: missing("root")
+        val resolveDependencies = params.string("resolveDependencies")?.toBooleanStrictOrNull() ?: false
+        scanner = JavaProjectScanner(allowNetworkDependencyResolution = resolveDependencies)
         val path = Paths.get(root).toAbsolutePath().normalize()
         val recoveryErrors = PatchEngine(path).recover()
         if (recoveryErrors.isNotEmpty()) {
@@ -213,9 +216,10 @@ class DaemonSession : AutoCloseable {
         }
     }
 
-    private fun diagnostics(): JsonElement {
+    private fun diagnostics(params: JsonObject?): JsonElement {
         val snap = requireSnapshot()
-        val diags = adapter.diagnostics(snap)
+        val verbose = params?.string("verbose")?.toBooleanStrictOrNull() ?: false
+        val diags = adapter.diagnostics(snap, verbose)
         return buildJsonArray {
             diags.forEach { d ->
                 add(buildJsonObject {
@@ -281,6 +285,11 @@ class DaemonSession : AutoCloseable {
                 val pkg = args["targetPackage"] ?: missing("arguments.targetPackage")
                 JavaMoveClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), pkg)
             }
+            "moveSourceRoot" -> {
+                val from = args["from"] ?: missing("arguments.from")
+                val to = args["to"] ?: missing("arguments.to")
+                JavaMoveSourceRootPlanner(adapter).preview(snap, Paths.get(from), Paths.get(to))
+            }
             "organizeImports" -> {
                 val file = args["file"] ?: symbol ?: missing("arguments.file")
                 JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(file))
@@ -297,7 +306,11 @@ class DaemonSession : AutoCloseable {
         }
 
         if (plan.status == PatchStatus.REFUSED) {
-            throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+            throw JsonRpcException(
+                JsonRpcErrorCodes.PLAN_REFUSED,
+                plan.summary,
+                buildJsonObject { plan.refusalCode?.let { put("refusalCode", it) } },
+            )
         }
         pendingPlans[plan.id.value] = PendingPlan(plan)
         return planToJson(plan)

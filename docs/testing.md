@@ -139,6 +139,16 @@ gate.
 
 ## Java diagnostics acceptance
 
+`MavenReactorAnalysisAcceptanceTest` builds an isolated effective-model reactor
+with inherited Java 21, domain/application/infrastructure/acceptance modules,
+records, text blocks, switch/record patterns, imported BOM management, a generated
+local test artifact, main/test scope isolation, cross-module definitions and
+references, one-root missing-artifact diagnostics, and BOM/JAR drift refusal.
+`JavaMoveSourceRootPlannerTest` proves rename-only byte identity, package/module
+info inclusion, post-image diagnostics, atomic apply, exact rollback, and typed
+unsafe/collision/drift refusals. `samples/java-maven-reactor-21` is the committed
+structural acceptance fixture.
+
 JDT syntax/type diagnostics are tested for stable codes, severity, exact ranges,
 compiler evidence, and categories. Maven, Gradle, and declared multi-module
 samples must diagnose cleanly; Spring/JPA samples intentionally expose unresolved

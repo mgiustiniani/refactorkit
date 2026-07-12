@@ -22,6 +22,7 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("RefactorKit ${RefactorKitVersion.VERSION}"))
         assertTrue(result.stdout.contains("refactorkit --version"))
         assertTrue(result.stdout.contains("refactorkit java import-class"))
+        assertTrue(result.stdout.contains("refactorkit java move-source-root"))
         assertTrue(result.stdout.contains("refactorkit format-file"))
         assertTrue(result.stdout.contains("refactorkit recipe run"))
     }
@@ -33,6 +34,24 @@ class RefactorKitCliTest {
         assertEquals(0, result.code)
         assertTrue(result.stdout.contains(RefactorKitVersion.VERSION))
         assertTrue(result.stdout.contains("API ${RefactorKitVersion.API_VERSION}"))
+    }
+
+    @Test
+    fun javaMoveSourceRootProducesRenameOnlyPreview() {
+        val sample = repoRoot().resolve("samples/java-maven-reactor-21").toString()
+
+        val result = captureStdout { RefactorKitCli().run(listOf(
+            "java", "move-source-root",
+            "--from", "domain/src/main/java",
+            "--to", "domain-relocated/src/main/java",
+            "--root", sample,
+        )) }
+
+        assertEquals(0, result.code, result.stdout)
+        assertTrue(result.stdout.contains("moveSourceRoot"), result.stdout)
+        assertTrue(result.stdout.contains("rename domain/src/main/java"), result.stdout)
+        assertTrue(result.stdout.contains("Use --apply"), result.stdout)
+        assertTrue(repoRoot().resolve("samples/java-maven-reactor-21/domain/src/main/java/example/reactor/domain/DomainValue.java").exists())
     }
 
     @Test

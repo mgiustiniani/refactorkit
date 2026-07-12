@@ -268,7 +268,8 @@ Responsibilities:
 
 ```text
 Java parsing for source levels 8 through 25
-Maven project discovery
+offline plugin-free Maven effective-reactor discovery
+per-module Maven main/test classpath and source-level modeling
 Gradle project discovery
 source root detection
 package detection
@@ -293,6 +294,7 @@ rename class
 rename method
 rename field
 move class
+move source root without changing package identity
 move package
 organize imports
 safe delete
@@ -317,6 +319,7 @@ refactorkit references --symbol com.example.UserService
 refactorkit definition --symbol com.example.UserService
 refactorkit rename --symbol com.example.UserService --to AccountService --preview
 refactorkit move-class --symbol com.example.UserService --to-package com.example.account --preview
+refactorkit java move-source-root --from module-a/src/main/java --to module-b/src/main/java --root .
 refactorkit organize-imports src/main/java/com/example/UserService.java
 refactorkit safe-delete --symbol com.example.LegacyUtil --preview
 refactorkit recipe run recipe.yml --preview
@@ -628,6 +631,8 @@ Agents must obey these rules:
 8. Never add Maven/Gradle dependencies without preview and explicit note.
 9. Never assume package paths; compute them.
 10. Never perform global textual search-and-replace for Java symbol refactoring.
+11. Never execute Maven project plugins or lifecycle code during project discovery.
+12. Maven dependency network access is disabled unless the caller explicitly opts in; never load or report Maven settings credentials.
 ```
 
 ---

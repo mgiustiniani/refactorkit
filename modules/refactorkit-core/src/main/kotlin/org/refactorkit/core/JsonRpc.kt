@@ -76,13 +76,17 @@ object JsonRpcErrorCodes {
     }
 }
 
-class JsonRpcException(val code: Int, override val message: String) : RuntimeException(message)
+class JsonRpcException(
+    val code: Int,
+    override val message: String,
+    val data: JsonElement? = null,
+) : RuntimeException(message)
 
 fun successResponse(id: JsonElement?, result: JsonElement): JsonRpcResponse =
     JsonRpcResponse(id = id, result = result)
 
-fun errorResponse(id: JsonElement?, code: Int, message: String): JsonRpcResponse =
-    JsonRpcResponse(id = id, error = JsonRpcError(code = code, message = message))
+fun errorResponse(id: JsonElement?, code: Int, message: String, data: JsonElement? = null): JsonRpcResponse =
+    JsonRpcResponse(id = id, error = JsonRpcError(code = code, message = message, data = data))
 
 fun isNotification(request: JsonRpcRequest): Boolean =
     request.id == null || request.id is JsonNull

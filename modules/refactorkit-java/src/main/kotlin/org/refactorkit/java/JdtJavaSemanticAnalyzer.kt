@@ -28,6 +28,7 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -45,17 +46,34 @@ class JdtJavaSemanticAnalyzer {
                 val owner = snapshot.modules
                     .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
                     .maxByOrNull { module -> module.root.nameCount }
-                val visibleModules = owner?.let { visibleModules(it, snapshot.modules) } ?: snapshot.modules
-                val sourceRoots = visibleModules
-                    .flatMap(Module::sourceRoots)
+                val isTestSource = owner?.let { module ->
+                    (module.testSourceRoots + module.generatedTestSourceRoots).any { file.path.normalize().startsWith(it.normalize()) }
+                } == true
+                val visibleModules = owner?.let { visibleModules(it, snapshot.modules, isTestSource) } ?: snapshot.modules
+                val sourceRoots = buildList {
+                    if (owner != null) {
+                        addAll(owner.mainSourceRoots)
+                        addAll(owner.generatedSourceRoots)
+                        if (isTestSource) {
+                            addAll(owner.testSourceRoots)
+                            addAll(owner.generatedTestSourceRoots)
+                        }
+                    }
+                    visibleModules.filter { it != owner }.forEach { dependency ->
+                        addAll(dependency.mainSourceRoots)
+                        addAll(dependency.generatedSourceRoots)
+                    }
+                }.ifEmpty { visibleModules.flatMap(Module::sourceRoots) }
                     .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
-                    .distinct()
-                    .toTypedArray()
-                val classpathEntries = visibleModules
-                    .flatMap(Module::classpathEntries)
+                    .filter { Files.isDirectory(Path.of(it)) }
+                    .distinct().toTypedArray()
+                val classpathEntries = buildList {
+                    if (owner != null) addAll(if (isTestSource) owner.testClasspathEntries else owner.mainClasspathEntries)
+                    visibleModules.filter { it != owner }.forEach { addAll(it.mainClasspathEntries) }
+                }.ifEmpty { visibleModules.flatMap(Module::classpathEntries) }
                     .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
-                    .distinct()
-                    .toTypedArray()
+                    .filter { Files.exists(Path.of(it)) }
+                    .distinct().toTypedArray()
                 val sourceLevel = owner?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()
                     ?.coerceIn(8, 25)
                     ?: 25
@@ -114,16 +132,16 @@ class JdtJavaSemanticAnalyzer {
         )
     }
 
-    private fun visibleModules(owner: Module, modules: List<Module>): List<Module> {
+    private fun visibleModules(owner: Module, modules: List<Module>, testSource: Boolean): List<Module> {
         val byName = modules.associateBy(Module::name)
         val visible = linkedMapOf(owner.name to owner)
-        val pending = ArrayDeque(owner.dependencies)
+        val pending = ArrayDeque(if (testSource) owner.testDependencies else owner.mainDependencies)
         while (pending.isNotEmpty()) {
             val dependency = pending.removeFirst()
             if (dependency in visible) continue
             val module = byName[dependency] ?: continue
             visible[dependency] = module
-            pending.addAll(module.dependencies)
+            pending.addAll(module.mainDependencies)
         }
         return visible.values.toList()
     }

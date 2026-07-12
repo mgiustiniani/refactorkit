@@ -14,6 +14,12 @@ Status: implementation-informed, needs human review for prioritization.
 |Follow ADR 0008; classify every stable path as JDT-backed, narrowly proven lexical behavior, or refusal. Do not promote prototype lexical fallbacks that can perform an incorrect semantic edit; retain external-family and collision refusals.
 |known risk
 
+|R-001A
+|Offline Maven effective-model analysis cannot resolve a parent, BOM, or dependency that is absent from both the reactor and configured local repository.
+|Semantic JDT analysis for that module would otherwise cascade into misleading unresolved-type errors.
+|Report one typed `buildModel.unavailable`, `classpath.unavailable`, or `sourceLevel.unavailable` root error per module and suppress derivative type-resolution noise. Network access remains explicit opt-in, anonymous, and credential-free.
+|qualified limitation
+
 |R-002
 |`organize-imports` removes unused exact imports only when per-file JDT evidence is clean; wildcard imports are preserved and unresolved files retain lexical sorting, deduplication, and same-package removal.
 |Users may expect IDE-equivalent wildcard analysis and unused-import cleanup even with incomplete classpaths or unresolved source.

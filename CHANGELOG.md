@@ -28,6 +28,14 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Added offline, plugin-free Maven effective-reactor analysis with inherited Java
+  21 settings, dependency management/BOMs, local artifacts, reactor main/test
+  visibility, generated support roots, hash-bound model evidence, and typed
+  cascade-suppressing model/classpath/source-level diagnostics.
+- Added `moveSourceRoot` across Java API, CLI, daemon, and MCP: deterministic
+  rename-only whole-root preview/apply/WAL/rollback preserving bytes/packages/FQCNs
+  with typed collision, generated, overlap, package, duplicate, symlink, model,
+  classpath, and post-image diagnostic refusals.
 - Canonicalized JDT reference binding keys to their matched source declarations,
   preserving exact qualified overload identity when independent parser
   environments emit platform-specific keys on Windows. Constructor and override

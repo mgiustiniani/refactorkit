@@ -9,11 +9,11 @@
       "version", "scan", "index", "symbols", "diagnostics", "references",
       "definition", "rename", "rename-member", "extract-method",
       "change-signature", "move-class", "organize-imports", "format-file",
-      "safe-delete", "patch rollback", "java import-class", "recipe run",
+      "safe-delete", "patch rollback", "java import-class", "java move-source-root", "recipe run",
       "outline", "search", "local-rename", "test-golden"
     ],
     "booleanOptions": [
-      "apply", "force", "stdin", "whole-word", "case-insensitive"
+      "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose"
     ]
   },
   "daemon": {
@@ -39,7 +39,7 @@
       "renameClass", "renameMember", "extractMethod",
       "changeSignature.renameParameter", "changeSignature.addParameter",
       "changeSignature.reorderParameters", "changeSignature.removeParameter",
-      "moveClass", "organizeImports", "formatFile", "safeDelete"
+      "moveClass", "moveSourceRoot", "organizeImports", "formatFile", "safeDelete"
     ]
   },
   "limits": {
@@ -55,7 +55,11 @@
     "maxPreviewDiagnostics": 500,
     "maxPreviewDiagnosticBytes": 262144,
     "maxDiagnosticMessageChars": 4096,
-    "maxDaemonStderrBytes": 65536
+    "maxDaemonStderrBytes": 65536,
+    "maxMavenDependencies": 4096,
+    "maxMavenDependencyDepth": 128,
+    "maxMavenParentDepth": 32,
+    "maxMavenNetworkArtifactBytes": 268435456
   },
   "safety": {
     "previewBeforeApply": true,

@@ -26,6 +26,13 @@ Constants shared by transports live in `ProtocolLimits`. Limits are additive API
 metadata candidates for later capability schemas; changing them requires release
 notes when client behavior can be affected.
 
+## Maven model limits
+
+Offline effective-model traversal is bounded to 4,096 dependency coordinates,
+128 transitive levels, and 32 relative-parent levels. Explicit network opt-in has
+a 15-second connect/read timeout and a 256 MiB per-artifact ceiling. Limit
+exhaustion becomes a concise `classpath.unavailable` root diagnostic.
+
 ## Cancellation
 
 The `v0.4.0` daemon and MCP request loops are synchronous and do not advertise

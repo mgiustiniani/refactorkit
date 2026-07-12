@@ -1,5 +1,9 @@
 # Move class
 
+This operation changes package identity and updates package/import/FQN references.
+For a byte-identical same-package move between module source roots, use
+[`move-source-root`](move-source-root.md); do not overload `moveClass`.
+
 Status: implementation-informed for `v0.3.0`. Move class previews
 package/path/import updates for one Java type. Clean JDT analysis scopes edits to
 binding-matched referencing files; unclean analysis reports lexical file scoping.

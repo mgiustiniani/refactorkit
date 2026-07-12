@@ -17,6 +17,7 @@ import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
@@ -50,7 +51,7 @@ class RefactorKitCli(
     private val javaAdapter: JavaLanguageAdapter = JavaLanguageAdapter(),
 ) {
     private val booleanOptions = setOf(
-        "apply", "force", "stdin", "whole-word", "case-insensitive",
+        "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
     )
 
     fun run(args: List<String>): Int {
@@ -89,10 +90,11 @@ class RefactorKitCli(
     // ── scan ─────────────────────────────────────────────────────────────────
 
     private fun cmdScan(args: List<String>): Int {
-        val root = positional(args, 0) ?: "."
+        val parsed = parseOptions(args)
+        val root = parsed.positionals.firstOrNull() ?: "."
         val path = Paths.get(root)
         if (!path.exists()) { System.err.println("Path does not exist: $path"); return 1 }
-        val snap = scanner.scan(path)
+        val snap = scanner(parsed.flags).scan(path)
         println("Project : ${snap.workspace.root}")
         println("Files   : ${snap.files.size}")
         println("Modules : ${snap.modules.size}")
@@ -115,10 +117,11 @@ class RefactorKitCli(
     // ── diagnostics ───────────────────────────────────────────────────────────
 
     private fun cmdDiagnostics(args: List<String>): Int {
-        val snap = scanFrom(positional(args, 0) ?: ".") ?: return 1
-        val diags = javaAdapter.diagnostics(snap)
+        val parsed = parseOptions(args)
+        val snap = scanFrom(parsed.positionals.firstOrNull() ?: ".", parsed.flags) ?: return 1
+        val diags = javaAdapter.diagnostics(snap, verbose = "verbose" in parsed.flags)
         if (diags.isEmpty()) { println("No diagnostics."); return 0 }
-        diags.forEach { println("${it.severity}: ${it.message}") }
+        diags.forEach { println("${it.severity}${it.code?.let { code -> " [$code]" }.orEmpty()}: ${it.message}") }
         return if (diags.any { it.severity.name == "ERROR" }) 1 else 0
     }
 
@@ -401,11 +404,14 @@ class RefactorKitCli(
         }
     }
 
-    private fun scanFrom(root: String): ProjectSnapshot? {
+    private fun scanFrom(root: String, flags: Set<String> = emptySet()): ProjectSnapshot? {
         val path = Paths.get(root)
         if (!path.exists()) { System.err.println("Path does not exist: $path"); return null }
-        return scanner.scan(path)
+        return scanner(flags).scan(path)
     }
+
+    private fun scanner(flags: Set<String>): JavaProjectScanner =
+        if ("resolve-dependencies" in flags) JavaProjectScanner(allowNetworkDependencyResolution = true) else scanner
 
     private fun positional(args: List<String>, index: Int): String? =
         args.getOrNull(index)?.takeIf { !it.startsWith("-") }
@@ -437,7 +443,7 @@ class RefactorKitCli(
 
     private fun cmdJava(args: List<String>): Int {
         if (args.isEmpty()) {
-            System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, or import-class")
+            System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, or move-source-root")
             return 2
         }
         return when (args.first()) {
@@ -448,8 +454,26 @@ class RefactorKitCli(
             "references"  -> cmdReferences(args.drop(1))
             "definition"  -> cmdDefinition(args.drop(1))
             "import-class" -> cmdJavaImportClass(args.drop(1))
+            "move-source-root" -> cmdJavaMoveSourceRoot(args.drop(1))
             else -> { System.err.println("Unknown java subcommand: ${args.first()}"); 2 }
         }
+    }
+
+    private fun cmdJavaMoveSourceRoot(args: List<String>): Int {
+        val parsed = parseOptions(args)
+        val from = parsed.options["from"] ?: run { System.err.println("move-source-root requires --from"); return 2 }
+        val to = parsed.options["to"] ?: run { System.err.println("move-source-root requires --to"); return 2 }
+        val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
+        val snapshot = scanFrom(root, parsed.flags) ?: return 1
+        val plan = JavaMoveSourceRootPlanner(javaAdapter).preview(snapshot, Paths.get(from), Paths.get(to))
+        println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+        if (plan.status == PatchStatus.REFUSED) {
+            plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+            return 1
+        }
+        if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
+        println("Use --apply to apply this change.")
+        return 0
     }
 
     private fun cmdJavaImportClass(args: List<String>): Int {
@@ -648,6 +672,7 @@ class RefactorKitCli(
           refactorkit java symbols      <path>                                  (alias for symbols)
           refactorkit java diagnostics  <path>                                  (alias for diagnostics)
           refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]
+          refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

@@ -464,8 +464,8 @@ class PatchEngine(
                     stream
                         .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
                         .filter { absolute ->
-                            val relative = normalizedRoot.relativize(absolute)
-                            relative.none { component -> component.toString() in snapshot.ignoredDirectories }
+                            declaredRoots.isNotEmpty() || sourceRoot.relativize(absolute)
+                                .none { component -> component.toString() in snapshot.ignoredDirectories }
                         }
                         .filter { extensionOf(it) in snapshot.sourceExtensions }
                         .map { absolute ->
@@ -556,7 +556,7 @@ class PatchEngine(
         }
 
         val entryEvidencePaths = snapshot.classpathEvidence
-            .filter { it.kind == ClasspathEvidenceKind.ENTRY }
+            .filter { it.kind in setOf(ClasspathEvidenceKind.ENTRY, ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT) }
             .map { it.path.normalize() }
             .toSet()
         val missingEvidence = snapshot.modules.flatMap(Module::classpathEntries)
@@ -574,7 +574,8 @@ class PatchEngine(
         val changed = mutableListOf<Path>()
         try {
             snapshot.classpathEvidence.forEach { evidence ->
-                val absolute = resolveInsideWorkspace(evidence.path)
+                val absolute = if (evidence.path.isAbsolute) evidence.path.toAbsolutePath().normalize()
+                    else resolveInsideWorkspace(evidence.path)
                 val actual = ClasspathEvidence.fingerprint(absolute, evidence.kind)
                 if (actual != evidence.fingerprint) changed.add(evidence.path)
             }

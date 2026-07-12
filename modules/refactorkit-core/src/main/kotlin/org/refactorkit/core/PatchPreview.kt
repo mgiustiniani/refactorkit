@@ -8,6 +8,9 @@ class PatchPreviewRenderer(
     private val workspaceRoot: Path,
 ) {
     fun render(plan: PatchPlan): String = buildString {
+        appendLine("Operation: ${plan.operation}")
+        appendLine("Status: ${plan.status}")
+        plan.refusalCode?.let { appendLine("Refusal code: $it") }
         appendLine(plan.summary)
         appendLine("Evidence: ${plan.evidence}")
         if (plan.warnings.isNotEmpty()) {

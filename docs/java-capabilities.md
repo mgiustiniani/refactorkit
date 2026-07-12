@@ -8,6 +8,7 @@ may be displayed regardless of evidence, but only `JDT_BINDING` and documented
 |---|---|---|
 | Rename type | `JDT_BINDING` | Unclean/unresolved analysis produces review-only `LEXICAL_FALLBACK`; strings, reflection, generated code, and external binaries are not rewritten. |
 | Move type | `JDT_BINDING` | Same review-only fallback; existing target and invalid package refuse. |
+| Move source root | `STRUCTURAL` | Rename-only whole-root relocation preserves bytes/FQCNs; generated, overlapping, unrecognized, colliding, package-inconsistent, duplicate-type, symlink, or diagnostic-regressing plans refuse. |
 | Rename signed method/annotation element | `JDT_BINDING` | Exact overload and complete source-visible override family required; external family declaration refuses. |
 | Rename exact field | `JDT_BINDING` | Exact owner binding and collision checks required. |
 | Unsigned member rename | `LEXICAL_FALLBACK` | Preview only; stable apply requires a signed selector or exact field binding. |
@@ -22,7 +23,8 @@ may be displayed regardless of evidence, but only `JDT_BINDING` and documented
 ## Language and module compatibility
 
 - JDT Core 3.44/JLS25 parses per-module Java compliance from 8 through 25.
-- Maven and Gradle source levels and project-module dependencies are hash-bound.
+- Maven effective parent/BOM/property models, local artifacts, source levels, and reactor edges are hash-bound; Gradle declarations remain hash-bound.
+- Maven analysis is plugin-free and offline by default, with distinct main/test environments and concise root diagnostics when local inputs are missing.
 - JDT source/class paths contain only the owning module and its transitive declared
   module dependencies; unrelated sibling modules are intentionally invisible.
 - JDK bootstrap types, declared/generated dependency classpaths, compiled outputs,

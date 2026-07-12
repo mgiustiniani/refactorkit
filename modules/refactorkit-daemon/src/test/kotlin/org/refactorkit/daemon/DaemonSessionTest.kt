@@ -838,6 +838,42 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun moveSourceRootPreviewUsesStableFromAndToArguments() {
+        val root = createProject(
+            "pom.xml" to "<project><modelVersion>4.0.0</modelVersion><groupId>x</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging><properties><maven.compiler.release>21</maven.compiler.release></properties><modules><module>a</module><module>b</module></modules></project>",
+            "a/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>a</artifactId></project>",
+            "b/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>b</artifactId></project>",
+            "a/src/main/java/x/Value.java" to "package x; public record Value(String text) {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val result = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "moveSourceRoot")
+            put("arguments", buildJsonObject {
+                put("from", "a/src/main/java")
+                put("to", "b/src/main/java")
+            })
+        }).jsonObject
+
+        assertEquals("moveSourceRoot", result["operation"]!!.jsonPrimitive.content)
+        assertEquals("PREVIEW", result["status"]!!.jsonPrimitive.content)
+        assertTrue(result["affectedFiles"]!!.jsonArray.any { it.jsonPrimitive.content == "b/src/main/java/x/Value.java" })
+
+        val refusal = assertFailsWith<JsonRpcException> {
+            session.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "moveSourceRoot")
+                put("arguments", buildJsonObject {
+                    put("from", "a/src/main/java")
+                    put("to", "a/src/main/java")
+                })
+            })
+        }
+        assertEquals(JsonRpcErrorCodes.PLAN_REFUSED, refusal.code)
+        assertEquals("sourceRoot.overlap", refusal.data!!.jsonObject["refusalCode"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun diagnosticsReturnsEmptyListForCleanProject() {
         val root = createProject(
             "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",

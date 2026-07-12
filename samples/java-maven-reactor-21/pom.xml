@@ -1,0 +1,10 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>example.reactor</groupId><artifactId>reactor-21</artifactId><version>1.0.0</version><packaging>pom</packaging>
+  <properties><java.version>21</java.version><maven.compiler.release>${java.version}</maven.compiler.release></properties>
+  <modules>
+    <module>domain</module><module>domain-relocated</module><module>application</module>
+    <module>infrastructure</module><module>test-support</module><module>acceptance-tests</module>
+  </modules>
+  <build><pluginManagement><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version></plugin></plugins></pluginManagement></build>
+</project>

@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class JavaDiagnosticsAcceptanceTest {
     @Test
     fun representativeSamplesExposeDeterministicCompilerDiagnosticsWithoutBuildExecution() {
-        val expectedClean = setOf("java-maven-simple", "java-gradle-simple", "java-multimodule")
+        val expectedClean = setOf("java-maven-simple", "java-gradle-simple", "java-multimodule", "java-maven-reactor-21")
         val frameworkSamples = setOf("java-spring-simple", "java-jpa-simple")
         (expectedClean + frameworkSamples).forEach { sampleName ->
             val snapshot = JavaProjectScanner().scan(repoRoot().resolve("samples/$sampleName"))
