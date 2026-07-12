@@ -152,6 +152,32 @@ class JavaProjectScannerTest {
     }
 
     @Test
+    fun detectsMavenAndGradleProjectModuleDependencies() {
+        val mavenRoot = Files.createTempDirectory("refactorkit-maven-modules")
+        createModuleSource(mavenRoot, "api")
+        createModuleSource(mavenRoot, "service")
+        Files.writeString(mavenRoot.resolve("api/pom.xml"), "<project><artifactId>api</artifactId></project>")
+        Files.writeString(
+            mavenRoot.resolve("service/pom.xml"),
+            "<project><artifactId>service</artifactId><dependencies><dependency><artifactId>api</artifactId></dependency></dependencies></project>",
+        )
+        val mavenModules = JavaProjectScanner().scan(mavenRoot).modules.associateBy { it.name }
+        assertEquals(listOf("api"), mavenModules.getValue("service").dependencies)
+        assertTrue(mavenModules.getValue("api").dependencies.isEmpty())
+
+        val gradleRoot = Files.createTempDirectory("refactorkit-gradle-modules")
+        createModuleSource(gradleRoot, "api")
+        createModuleSource(gradleRoot, "service")
+        Files.writeString(gradleRoot.resolve("api/build.gradle.kts"), "plugins { java }")
+        Files.writeString(
+            gradleRoot.resolve("service/build.gradle.kts"),
+            "plugins { java }; dependencies { implementation(project(\":api\")) }",
+        )
+        val gradleModules = JavaProjectScanner().scan(gradleRoot).modules.associateBy { it.name }
+        assertEquals(listOf("api"), gradleModules.getValue("service").dependencies)
+    }
+
+    @Test
     fun detectsMultiModuleSourceRoots() {
         val root = Files.createTempDirectory("refactorkit-java-multimodule-scan")
         val apiDir = root.resolve("api/src/main/java/com/example/api")
@@ -169,5 +195,11 @@ class JavaProjectScannerTest {
         assertEquals(2, snapshot.files.size)
         assertTrue("com.example.api.UserApi" in symbols)
         assertTrue("com.example.service.UserService" in symbols)
+    }
+
+    private fun createModuleSource(root: Path, module: String) {
+        val source = root.resolve("$module/src/main/java/example/$module/ModuleType.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package example.$module; class ModuleType {}\n")
     }
 }

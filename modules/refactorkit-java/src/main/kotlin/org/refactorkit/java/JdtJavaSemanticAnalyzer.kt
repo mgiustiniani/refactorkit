@@ -22,6 +22,7 @@ import org.eclipse.jdt.core.dom.Modifier
 import org.eclipse.jdt.core.dom.RecordDeclaration
 import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
+import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
@@ -37,23 +38,24 @@ import java.nio.file.Path
  */
 class JdtJavaSemanticAnalyzer {
     fun analyze(snapshot: ProjectSnapshot): JdtJavaSemanticAnalysisResult {
-        val sourceRoots = snapshot.modules
-            .flatMap { it.sourceRoots }
-            .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
-            .distinct()
-            .toTypedArray()
-        val classpathEntries = snapshot.modules
-            .flatMap { it.classpathEntries }
-            .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
-            .distinct()
-            .toTypedArray()
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
             .map { file ->
-                val sourceLevel = snapshot.modules
+                val owner = snapshot.modules
                     .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
                     .maxByOrNull { module -> module.root.nameCount }
-                    ?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()
+                val visibleModules = owner?.let { visibleModules(it, snapshot.modules) } ?: snapshot.modules
+                val sourceRoots = visibleModules
+                    .flatMap(Module::sourceRoots)
+                    .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
+                    .distinct()
+                    .toTypedArray()
+                val classpathEntries = visibleModules
+                    .flatMap(Module::classpathEntries)
+                    .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
+                    .distinct()
+                    .toTypedArray()
+                val sourceLevel = owner?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()
                     ?.coerceIn(8, 25)
                     ?: 25
                 analyzeFileWithReferences(file, sourceRoots, classpathEntries, sourceLevel)
@@ -102,6 +104,20 @@ class JdtJavaSemanticAnalyzer {
             overrideRelations = overrideRelations,
             bindingUses = bindingUses,
         )
+    }
+
+    private fun visibleModules(owner: Module, modules: List<Module>): List<Module> {
+        val byName = modules.associateBy(Module::name)
+        val visible = linkedMapOf(owner.name to owner)
+        val pending = ArrayDeque(owner.dependencies)
+        while (pending.isNotEmpty()) {
+            val dependency = pending.removeFirst()
+            if (dependency in visible) continue
+            val module = byName[dependency] ?: continue
+            visible[dependency] = module
+            pending.addAll(module.dependencies)
+        }
+        return visible.values.toList()
     }
 
     fun analyzeFile(file: SourceFile, sourceLevel: Int = 25): List<JdtJavaSemanticSymbol> =

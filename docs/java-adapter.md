@@ -1,5 +1,8 @@
 # Java adapter
 
+See [Java stable capability matrix](java-capabilities.md) for the normative v1
+write-authority inventory.
+
 ## Evidence and apply authority
 
 Every Java plan classifies itself as `JDT_BINDING`, `STRUCTURAL`, or

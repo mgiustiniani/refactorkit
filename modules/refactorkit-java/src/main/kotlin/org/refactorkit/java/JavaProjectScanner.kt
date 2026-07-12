@@ -18,13 +18,21 @@ class JavaProjectScanner {
     fun scan(root: Path): ProjectSnapshot {
         val normalizedRoot = root.toAbsolutePath().normalize()
         val moduleRoots = detectModuleRoots(normalizedRoot).ifEmpty { listOf(normalizedRoot) }
+        val moduleNames = moduleRoots.associateWith { moduleName(normalizedRoot, it) }
+        val moduleIdentities = buildMap {
+            moduleNames.forEach { (root, name) ->
+                put(name, name)
+                mavenArtifactId(root)?.let { put(it, name) }
+            }
+        }
         val modules = moduleRoots.map { moduleRoot ->
             val sourceRoots = conventionalSourceRoots(moduleRoot)
             Module(
-                name = moduleName(normalizedRoot, moduleRoot),
+                name = moduleNames.getValue(moduleRoot),
                 root = moduleRoot,
                 sourceRoots = sourceRoots.map(normalizedRoot::relativize),
                 classpathEntries = conventionalClasspathEntries(moduleRoot).map(normalizedRoot::relativize),
+                dependencies = detectModuleDependencies(moduleRoot, moduleIdentities),
                 languageSettings = mapOf("java.sourceLevel" to detectJavaSourceLevel(moduleRoot).toString()),
             )
         }
@@ -114,6 +122,39 @@ class JavaProjectScanner {
         root.resolve("build.gradle"),
         root.resolve("build.gradle.kts"),
     )
+
+    private fun mavenArtifactId(root: Path): String? {
+        val pom = root.resolve("pom.xml").takeIf { it.exists() && Files.isRegularFile(it) } ?: return null
+        val text = runCatching { pom.readText() }.getOrDefault("")
+        val withoutParent = text.replace(Regex("(?s)<parent>.*?</parent>"), "")
+        return Regex("<artifactId>\\s*([^<]+)\\s*</artifactId>")
+            .find(withoutParent)?.groupValues?.get(1)?.trim()
+    }
+
+    private fun detectModuleDependencies(root: Path, identities: Map<String, String>): List<String> {
+        val dependencies = linkedSetOf<String>()
+        val pom = root.resolve("pom.xml")
+        if (pom.exists() && Files.isRegularFile(pom)) {
+            val text = runCatching { pom.readText() }.getOrDefault("")
+            Regex("(?s)<dependency>.*?<artifactId>\\s*([^<]+)\\s*</artifactId>.*?</dependency>")
+                .findAll(text)
+                .map { it.groupValues[1].trim() }
+                .mapNotNull(identities::get)
+                .forEach(dependencies::add)
+        }
+        listOf(root.resolve("build.gradle"), root.resolve("build.gradle.kts"))
+            .filter { it.exists() && Files.isRegularFile(it) }
+            .forEach { buildFile ->
+                val text = runCatching { buildFile.readText() }.getOrDefault("")
+                Regex("project\\(\\s*['\"]:([^'\"]+)['\"]\\s*\\)")
+                    .findAll(text)
+                    .map { it.groupValues[1] }
+                    .mapNotNull(identities::get)
+                    .forEach(dependencies::add)
+            }
+        mavenArtifactId(root)?.let(identities::get)?.let(dependencies::remove)
+        return dependencies.sorted()
+    }
 
     private fun detectJavaSourceLevel(root: Path): Int {
         val descriptors = buildDescriptorFiles(root).filter { it.exists() && Files.isRegularFile(it) }

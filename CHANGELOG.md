@@ -23,6 +23,9 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added hash-bound Maven/Gradle project-module dependencies and restricted JDT
+  visibility to the owning module plus transitive declared dependencies.
+- Published the stable Java capability/evidence matrix and completed S2.
 - Added structured `JDT_BINDING`/`STRUCTURAL`/`LEXICAL_FALLBACK` plan evidence;
   lexical fallbacks are review-only and refused before WAL creation.
 - Exposed evidence through daemon, LSP, and MCP previews; recipes retain the

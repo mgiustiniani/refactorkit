@@ -51,7 +51,7 @@ Status: implementation-informed.
 
 == Java Analysis and Refactoring
 
-Eclipse JDT Core 3.44 uses JLS25 ASTs with per-module compliance from hash-bound `java.sourceLevel` settings. Maven release/source properties and Gradle toolchain/source compatibility are detected; build descriptors are fingerprinted so post-preview changes invalidate apply. Unconfigured scanned projects default to Java 8, and acceptance covers representative Java 8, 11, 17, 21, and 25 syntax.
+Eclipse JDT Core 3.44 uses JLS25 ASTs with per-module compliance from hash-bound `java.sourceLevel` settings. Maven release/source properties and Gradle toolchain/source compatibility are detected; build descriptors are fingerprinted so post-preview changes invalidate apply. Unconfigured scanned projects default to Java 8, and acceptance covers representative Java 8, 11, 17, 21, and 25 syntax. Maven/Gradle project dependencies are hash-bound; each JDT parse sees only its owning module and transitive declared dependencies, preventing unrelated sibling modules from supplying accidental bindings. Stable operation authority is inventoried in `docs/java-capabilities.md`.
 
 Generated Java remains available for analysis but a shared path/annotation/header policy prevents stable rename, move, member rename, safe-delete, extract-method, change-signature, and organize-imports planners from rewriting it.
 

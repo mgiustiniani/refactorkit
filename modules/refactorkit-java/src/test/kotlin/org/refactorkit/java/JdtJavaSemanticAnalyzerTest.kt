@@ -41,6 +41,35 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun moduleDependenciesBoundCrossModuleJdtVisibility() {
+        val root = Files.createTempDirectory("refactorkit-jdt-module-visibility")
+        val api = root.resolve("api/src/main/java/example/api/Api.java")
+        val service = root.resolve("service/src/main/java/example/service/Client.java")
+        val isolated = root.resolve("isolated/src/main/java/example/isolated/Rogue.java")
+        listOf(api, service, isolated).forEach { Files.createDirectories(it.parent) }
+        Files.writeString(api, "package example.api; public class Api { public String value() { return \"ok\"; } }\n")
+        Files.writeString(service, "package example.service; import example.api.Api; class Client { String run(Api api) { return api.value(); } }\n")
+        Files.writeString(isolated, "package example.isolated; import example.api.Api; class Rogue { Api value; }\n")
+        Files.writeString(root.resolve("api/pom.xml"), "<project><artifactId>api</artifactId></project>")
+        Files.writeString(
+            root.resolve("service/pom.xml"),
+            "<project><artifactId>service</artifactId><dependencies><dependency><artifactId>api</artifactId></dependency></dependencies></project>",
+        )
+        Files.writeString(root.resolve("isolated/pom.xml"), "<project><artifactId>isolated</artifactId></project>")
+
+        val snapshot = JavaProjectScanner().scan(root)
+        val result = JdtJavaSemanticAnalyzer().analyze(snapshot)
+
+        assertEquals(listOf("api"), snapshot.modules.single { it.name == "service" }.dependencies)
+        assertTrue(result.references.any {
+            it.path.toString().endsWith("Client.java") && it.symbolQualifiedName == "example.api.Api"
+        }, result.references.toString())
+        assertTrue(result.warnings.any {
+            it.path.toString().endsWith("Rogue.java") && it.message.contains("Api")
+        }, "Expected isolated module resolution warning, got ${result.warnings}")
+    }
+
+    @Test
     fun jdtAnalyzerReadsRepresentativeMavenAndGradleSourceRoots() {
         val samples = mapOf(
             "java-maven-simple" to "com.example.UserManager",

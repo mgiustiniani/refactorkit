@@ -42,6 +42,7 @@ data class Module(
     val root: Path,
     val sourceRoots: List<Path> = emptyList(),
     val classpathEntries: List<Path> = emptyList(),
+    val dependencies: List<String> = emptyList(),
     val languageSettings: Map<String, String> = emptyMap(),
 )
 
@@ -83,6 +84,7 @@ data class ProjectSnapshot(
                 digest.update("module\u0000${module.name}\u0000${module.root.toAbsolutePath().normalize()}\u0000".toByteArray(Charsets.UTF_8))
                 module.sourceRoots.sortedBy(Path::toString).forEach { digest.update("sourceRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
                 module.classpathEntries.sortedBy(Path::toString).forEach { digest.update("classpath\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.dependencies.sorted().forEach { digest.update("moduleDependency\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
                 module.languageSettings.toSortedMap().forEach { (key, value) ->
                     digest.update("languageSetting\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
                 }
