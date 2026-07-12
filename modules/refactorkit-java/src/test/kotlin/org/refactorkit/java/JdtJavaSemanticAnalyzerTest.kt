@@ -399,6 +399,12 @@ class JdtJavaSemanticAnalyzerTest {
                 it.overriddenSymbolQualifiedName == "com.acme.LookupApi#find(java.lang.String)" &&
                 it.evidence == JdtJavaSemanticEvidence.JDT_BINDING
         }, "expected interface implementation relation, got ${result.overrideRelations}")
+        val symbolKeys = result.symbols.associate { it.qualifiedName to it.bindingKey }
+        assertTrue(result.overrideRelations.all { relation ->
+            symbolKeys[relation.overridingSymbolQualifiedName] == relation.overridingBindingKey &&
+                (symbolKeys[relation.overriddenSymbolQualifiedName] == null ||
+                    symbolKeys[relation.overriddenSymbolQualifiedName] == relation.overriddenBindingKey)
+        }, "source override relations must carry canonical declaration keys: ${result.overrideRelations}")
     }
 
     @Test
@@ -412,7 +418,7 @@ class JdtJavaSemanticAnalyzerTest {
         assertTrue(result.symbols.any { it.qualifiedName == "com.example.service.UserService" })
         assertTrue(result.references.any {
             it.symbolQualifiedName == "com.example.api.UserApi" &&
-                it.path.toString().endsWith("service/src/main/java/com/example/service/UserService.java")
+                it.path.toString().replace('\\', '/').endsWith("service/src/main/java/com/example/service/UserService.java")
         }, "expected cross-module UserApi reference, got ${result.references}")
         assertTrue(result.overrideRelations.any {
             it.overridingSymbolQualifiedName == "com.example.service.UserService#findName(java.lang.String)" &&

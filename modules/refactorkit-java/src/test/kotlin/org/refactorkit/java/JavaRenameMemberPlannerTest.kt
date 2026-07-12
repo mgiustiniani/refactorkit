@@ -416,7 +416,10 @@ class JavaRenameMemberPlannerTest {
         val member = adapter.findSymbol(snapshot, SymbolId("com.acme.Route#path()"))
         val references = adapter.findReferences(snapshot, SymbolId("com.acme.Route#path()"))
         assertEquals(org.refactorkit.core.Symbol.Kind.METHOD, member?.kind)
-        assertEquals(listOf("src/main/java/com/acme/Service.java"), references.map { it.location.path.toString() })
+        assertEquals(
+            listOf("src/main/java/com/acme/Service.java"),
+            references.map { it.location.path.toString().replace('\\', '/') },
+        )
 
         val plan = planner.preview(snapshot, "com.acme.Route#path()", "value")
 

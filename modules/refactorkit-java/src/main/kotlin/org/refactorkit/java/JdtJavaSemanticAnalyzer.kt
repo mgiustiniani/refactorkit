@@ -395,6 +395,7 @@ class JdtJavaSemanticAnalyzer {
         methods: List<MethodBindingRecord>,
         inheritances: List<TypeInheritanceRecord>,
     ): List<JdtJavaSemanticOverrideRelation> {
+        val sourceMethodsByQualifiedName = methods.groupBy { it.symbol.qualifiedName }
         val parentsBySubtype = inheritances.groupBy { it.subtypeQualifiedName }
             .mapValues { entry -> entry.value.map { it.supertypeQualifiedName }.toSet() }
         fun inheritsFrom(subtype: String?, supertype: String?): Boolean {
@@ -456,12 +457,16 @@ class JdtJavaSemanticAnalyzer {
                         runCatching { sub.binding.overrides(inheritedMethod) }.getOrDefault(false)
                     }
                     .forEach { inheritedMethod ->
-                        val inheritedKey = inheritedMethod.key ?: return@forEach
+                        val inheritedQualifiedName = inheritedMethod.qualifiedName()
+                        val sourceDeclaration = sourceMethodsByQualifiedName[inheritedQualifiedName]?.singleOrNull()
+                        val inheritedKey = sourceDeclaration?.symbol?.bindingKey
+                            ?: inheritedMethod.key
+                            ?: return@forEach
                         val relationKey = "$subKey->$inheritedKey"
                         if (!seen.add(relationKey)) return@forEach
                         relations += JdtJavaSemanticOverrideRelation(
                             overridingSymbolQualifiedName = sub.symbol.qualifiedName,
-                            overriddenSymbolQualifiedName = inheritedMethod.qualifiedName(),
+                            overriddenSymbolQualifiedName = sourceDeclaration?.symbol?.qualifiedName ?: inheritedQualifiedName,
                             overridingBindingKey = subKey,
                             overriddenBindingKey = inheritedKey,
                             evidence = JdtJavaSemanticEvidence.JDT_BINDING,
@@ -492,7 +497,8 @@ class JdtJavaSemanticAnalyzer {
 
     private fun IMethodBinding.qualifiedName(): String {
         val owner = declaringClass?.qualifiedName.orEmpty()
-        val signature = "$name(${parameterTypes.joinToString(",") { it.qualifiedName.takeIf(String::isNotBlank) ?: it.name }})"
+        val canonicalName = if (isConstructor) "<init>" else name
+        val signature = "$canonicalName(${parameterTypes.joinToString(",") { it.qualifiedName.takeIf(String::isNotBlank) ?: it.name }})"
         return "$owner#$signature"
     }
 
