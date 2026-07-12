@@ -177,7 +177,12 @@ class JavaLanguageAdapterTest {
         assertEquals(symbolId, symbol.id)
         assertEquals(org.refactorkit.core.Symbol.Kind.METHOD, symbol.kind)
         assertTrue(symbol.location.path.toString().endsWith("Lookup.java"))
-        assertEquals(1, references.size, "expected only the String overload call site, got $references")
+        assertEquals(
+            1,
+            references.size,
+            "expected only the String overload call site, got $references; " +
+                "JDT warnings=${JdtJavaSemanticAnalyzer().analyze(snapshot).warnings}",
+        )
         assertTrue(references.single().location.path.toString().endsWith("LookupClient.java"))
         val clientContent = snap.files.single { it.path.toString().endsWith("LookupClient.java") }.content
         val referencedLine = clientContent.lines()[references.single().location.range.start.line]
