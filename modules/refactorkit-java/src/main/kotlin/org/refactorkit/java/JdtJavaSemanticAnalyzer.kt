@@ -526,7 +526,12 @@ class JdtJavaSemanticAnalyzer {
         val parser = ASTParser.newParser(AST.JLS25)
         parser.setKind(ASTParser.K_COMPILATION_UNIT)
         parser.setSource(file.content.toCharArray())
-        parser.setUnitName(file.path.toString().replace('\\', '/'))
+        val packageName = JavaPackageUtil.extractPackage(file.content)
+        val unitName = buildString {
+            if (packageName.isNotEmpty()) append(packageName.replace('.', '/')).append('/')
+            append(file.path.fileName.toString())
+        }
+        parser.setUnitName(unitName)
         val compliance = if (sourceLevel == 8) JavaCore.VERSION_1_8 else sourceLevel.toString()
         parser.setCompilerOptions(JavaCore.getOptions().also { JavaCore.setComplianceOptions(compliance, it) })
         if (sourceRoots.isNotEmpty() || classpathEntries.isNotEmpty()) {
