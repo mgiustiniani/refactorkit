@@ -28,6 +28,11 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Hardened offline Maven dependency modeling for classifier variants, Maven
+  `test-jar` default `tests` classifiers, variant-aware mediation, and explicit
+  `systemPath` artifacts. System paths are validated as existing absolute files,
+  redacted in failures, represented by dedicated hash evidence, included in
+  main/test scope correctly, and refuse apply on content drift before WAL.
 - Started P2B implementation with language-neutral core Build Model SPI
   contracts, deny-by-default discovery policy, validated module/source-set graph,
   scoped dependencies, outputs/generated roots, typed model status/diagnostics,

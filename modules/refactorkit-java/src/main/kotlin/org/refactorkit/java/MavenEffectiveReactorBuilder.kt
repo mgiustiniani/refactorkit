@@ -36,6 +36,7 @@ internal data class MavenModuleModel(
     val testDependencies: List<MavenCoordinate>,
     val mainArtifacts: List<Path>,
     val testArtifacts: List<Path>,
+    val systemPathArtifacts: Set<Path>,
     val modelInputs: Set<Path>,
     val importedBoms: Set<Path>,
     val missingArtifacts: List<String>,
@@ -82,6 +83,7 @@ internal class MavenEffectiveReactorBuilder(
                     testDependencies = emptyList(),
                     mainArtifacts = emptyList(),
                     testArtifacts = emptyList(),
+                    systemPathArtifacts = emptySet(),
                     modelInputs = result.inputs + setOf(pom),
                     importedBoms = result.importedBoms,
                     missingArtifacts = emptyList(),
@@ -103,25 +105,34 @@ internal class MavenEffectiveReactorBuilder(
     ): MavenModuleModel {
         val mainDirect = model.dependencies.filter { it.scope.normalizedScope() in MAIN_SCOPES && it.type != "pom" }
         val testDirect = model.dependencies.filter { it.scope.normalizedScope() in TEST_SCOPES && it.type != "pom" }
+        val systemDirect = model.dependencies.filter { it.scope.normalizedScope() == "system" && it.type != "pom" }
+        val mainRepositoryDirect = mainDirect.filterNot { it.scope.normalizedScope() == "system" }
+        val testRepositoryDirect = testDirect.filterNot { it.scope.normalizedScope() == "system" }
         val managedVersions = model.dependencyManagement?.dependencies.orEmpty().mapNotNull { dependency ->
             dependency.coordinate()?.let { it.ga() to it.version }
         }.toMap()
         val missing = linkedSetOf<String>()
         val modelInputs = linkedSetOf<Path>().apply { addAll(effective.inputs); add(pom) }
         val importedBoms = linkedSetOf<Path>().apply { addAll(effective.importedBoms) }
-        val mainArtifacts = resolveGraph(mainDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions)
+        val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, missing)
+        val mainArtifacts = (systemPathArtifacts + resolveGraph(
+            mainRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
+        )).distinct()
         val testArtifacts = (mainArtifacts + resolveGraph(
-            testDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
+            testRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
         )).distinct()
         return MavenModuleModel(
             root = pom.parent,
             coordinate = requireNotNull(model.coordinate()),
             packaging = model.packaging?.takeIf(String::isNotBlank) ?: "jar",
             sourceLevel = sourceLevel(model),
-            mainDependencies = mainDirect.mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
-            testDependencies = testDirect.mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
+            mainDependencies = mainRepositoryDirect.filter(::isReactorSourceDependency)
+                .mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
+            testDependencies = testRepositoryDirect.filter(::isReactorSourceDependency)
+                .mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
             mainArtifacts = mainArtifacts,
             testArtifacts = testArtifacts,
+            systemPathArtifacts = systemPathArtifacts.toSet(),
             modelInputs = modelInputs,
             importedBoms = importedBoms,
             missingArtifacts = missing.toList(),
@@ -131,6 +142,38 @@ internal class MavenEffectiveReactorBuilder(
                 .filter(String::isNotBlank).toSet(),
         )
     }
+
+    private fun resolveSystemPaths(
+        dependencies: List<Dependency>,
+        pom: Path,
+        missing: MutableSet<String>,
+    ): List<Path> = dependencies.mapNotNull { dependency ->
+        val label = listOfNotNull(dependency.groupId, dependency.artifactId, dependency.version).joinToString(":")
+            .ifBlank { "system dependency" }
+        val raw = dependency.systemPath?.takeIf(String::isNotBlank)
+        if (raw == null) {
+            missing += "$label has no systemPath"
+            return@mapNotNull null
+        }
+        val path = runCatching { Path.of(raw).normalize() }.getOrNull()
+        if (path == null || !path.isAbsolute || !path.exists() || !path.isRegularFile()) {
+            missing += "$label systemPath is unavailable: ${conciseSystemPath(raw, pom)}"
+            return@mapNotNull null
+        }
+        path.toAbsolutePath().normalize()
+    }.distinct().sortedBy(Path::toString)
+
+    private fun conciseSystemPath(raw: String, pom: Path): String {
+        val normalized = runCatching { Path.of(raw).toAbsolutePath().normalize() }.getOrNull()
+        return if (normalized != null && normalized.startsWith(pom.parent.toAbsolutePath().normalize())) {
+            pom.parent.toAbsolutePath().normalize().relativize(normalized).toString()
+        } else {
+            normalized?.fileName?.toString() ?: "invalid"
+        }
+    }
+
+    private fun isReactorSourceDependency(dependency: Dependency): Boolean =
+        dependency.type.ifBlank { "jar" } == "jar" && dependency.classifier.isNullOrBlank()
 
     private fun resolveGraph(
         roots: List<Dependency>,
@@ -142,11 +185,11 @@ internal class MavenEffectiveReactorBuilder(
         managedVersions: Map<String, String>,
     ): List<Path> {
         val artifacts = linkedSetOf<Path>()
-        val visitedCoordinates = mutableSetOf<String>()
-        val selectedGroups = mutableSetOf<String>()
+        val visitedArtifacts = mutableSetOf<String>()
+        val selectedArtifacts = mutableSetOf<String>()
         val unresolvedTransitive = linkedMapOf<String, String>()
         fun visit(dependency: Dependency, inheritedExclusions: Set<String>, direct: Boolean, depth: Int) {
-            if (depth > MAX_DEPENDENCY_DEPTH || visitedCoordinates.size >= MAX_DEPENDENCIES) {
+            if (depth > MAX_DEPENDENCY_DEPTH || visitedArtifacts.size >= MAX_DEPENDENCIES) {
                 missing += "dependency graph exceeds safe offline analysis limits"
                 return
             }
@@ -161,15 +204,21 @@ internal class MavenEffectiveReactorBuilder(
             }
             val coordinate = resolver.resolveVersion(requested) ?: requested
             val group = coordinate.ga()
-            if (group in selectedGroups || !visitedCoordinates.add(coordinate.key) ||
-                coordinate in reactorCoordinates || group in inheritedExclusions) return
-            val artifact = resolver.artifactPath(coordinate, dependency.type.ifBlank { "jar" }, dependency.classifier)
+            val type = dependency.type.ifBlank { "jar" }
+            val classifier = dependency.classifier?.takeIf(String::isNotBlank)
+            val artifactIdentity = "$group:$type:${classifier.orEmpty()}"
+            val visitIdentity = "${coordinate.key}:$type:${classifier.orEmpty()}"
+            val representedByReactorSources = coordinate in reactorCoordinates && isReactorSourceDependency(dependency)
+            if (artifactIdentity in selectedArtifacts || !visitedArtifacts.add(visitIdentity) ||
+                representedByReactorSources || group in inheritedExclusions) return
+            val artifact = resolver.artifactPath(coordinate, type, classifier)
             if (artifact == null) {
-                if (direct) missing += requested.key else unresolvedTransitive.putIfAbsent(group, requested.key)
+                val missingIdentity = "${requested.key}:$type:${classifier.orEmpty()}"
+                if (direct) missing += missingIdentity else unresolvedTransitive.putIfAbsent(artifactIdentity, missingIdentity)
                 return
             }
-            selectedGroups += group
-            unresolvedTransitive.remove(group)
+            selectedArtifacts += artifactIdentity
+            unresolvedTransitive.remove(artifactIdentity)
             if (dependency.type != "pom") artifacts.add(artifact)
             val pom = resolver.pomPath(coordinate) ?: return
             modelInputs.add(pom)

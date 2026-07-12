@@ -46,7 +46,12 @@ levels 8 through 25 while retaining Java 8-compatible target bytecode for the
 library contract. `JavaProjectScanner` builds Maven effective models with embedded Maven
 ModelBuilder, resolving relative parents, inherited/interpolated properties,
 compiler release/source, dependency management, imported BOMs, active-by-default
-profiles, reactor coordinates/edges, and local-repository artifacts. It never
+profiles, reactor coordinates/edges, local-repository classifier variants,
+`test-jar` artifacts, and explicit Maven `systemPath` files. Dependency mediation
+uses Maven variant identity (GA + type + classifier), so a normal JAR and tests
+JAR are not incorrectly collapsed. System paths must resolve to existing absolute
+regular files, are not treated as reactor source edges, and receive dedicated
+hash-bound evidence without exposing full paths in model diagnostics. It never
 executes project plugins and is offline by default; explicit network resolution
 is anonymous Maven Central only and never reads Maven settings credentials.
 Independent main/test source and class paths preserve Maven scope visibility,

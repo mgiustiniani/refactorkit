@@ -156,9 +156,16 @@ class JavaProjectScanner(
             }
         }.distinctBy(SourceFile::path).sortedBy { it.path.toString() }
 
+        val systemPathArtifacts = mavenReactor?.modules?.values.orEmpty()
+            .flatMap(MavenModuleModel::systemPathArtifacts).map { it.toAbsolutePath().normalize() }.toSet()
         val classpathEvidence = buildList {
             modules.flatMap(Module::classpathEntries).forEach { path ->
-                val kind = if (path.isAbsolute) ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT else ClasspathEvidenceKind.ENTRY
+                val kind = when {
+                    path.isAbsolute && path.toAbsolutePath().normalize() in systemPathArtifacts ->
+                        ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT
+                    path.isAbsolute -> ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT
+                    else -> ClasspathEvidenceKind.ENTRY
+                }
                 add(ClasspathEvidence.capture(normalizedRoot, path, kind))
             }
             moduleRoots.forEach { moduleRoot ->

@@ -33,8 +33,9 @@ also prerequisites for Kotlin, Scala, Groovy, and Clojure interoperability.
 . Main, test, generated-main, and generated-test roots, outputs, dependency
   scopes, reactor edges, source level, and external artifacts are modeled per
   module rather than as one workspace-wide environment.
-. Parent/effective POMs, imported BOMs, local artifacts, source-level inputs,
-  output locations, and module edges participate in hash-bound snapshot and
+. Parent/effective POMs, imported BOMs, local/classifier/test-JAR/system-path
+  artifacts, source-level inputs, output locations, and module edges participate
+  in hash-bound snapshot and
   classpath evidence. Drift refuses managed apply before WAL creation.
 . An unavailable build model, classpath, or source level produces one typed root
   diagnostic per affected module. Derivative JDT type-resolution noise is
@@ -67,8 +68,9 @@ also prerequisites for Kotlin, Scala, Groovy, and Clojure interoperability.
 
 === Costs and risks
 
-* Effective build models add dependency-resolution, mediation, local-repository,
-  profile, classifier, generated-root, and resource-limit complexity.
+* Effective build models add dependency-resolution, variant-aware mediation,
+  local-repository, profile, classifier/test-JAR/system-path, generated-root, and
+  resource-limit complexity.
 * Maven Central-only anonymous opt-in does not cover private/authenticated
   repositories; supporting those requires a separate credential-boundary and
   redaction design.

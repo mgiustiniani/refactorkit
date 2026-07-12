@@ -122,6 +122,75 @@ class MavenReactorAnalysisAcceptanceTest {
     }
 
     @Test
+    fun classifierTestJarAndSystemPathRemainScopeCorrectAndHashBound() {
+        val root = Files.createTempDirectory("refactorkit-maven-variants")
+        val repository = Files.createTempDirectory("refactorkit-maven-variants-m2")
+        val normalJar = repository.resolve("fixture/external/variant-api/1/variant-api-1.jar")
+        val classifierJar = repository.resolve("fixture/external/variant-api/1/variant-api-1-linux.jar")
+        val testJar = repository.resolve("fixture/external/test-fixtures/1/test-fixtures-1-tests.jar")
+        val systemJar = root.resolve("system-libs/system-api.jar")
+        compileJar(normalJar, "fixture/external/NormalOnly.java", "package fixture.external; public @interface NormalOnly {}\n")
+        compileJar(classifierJar, "fixture/external/LinuxOnly.java", "package fixture.external; public @interface LinuxOnly {}\n")
+        compileJar(testJar, "fixture/external/FixtureOnly.java", "package fixture.external; public @interface FixtureOnly {}\n")
+        compileJar(systemJar, "fixture/system/SystemOnly.java", "package fixture.system; public @interface SystemOnly {}\n")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>variants</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <dependencies>
+                <dependency><groupId>fixture.external</groupId><artifactId>variant-api</artifactId><version>1</version></dependency>
+                <dependency><groupId>fixture.external</groupId><artifactId>variant-api</artifactId><version>1</version><classifier>linux</classifier></dependency>
+                <dependency><groupId>fixture.external</groupId><artifactId>test-fixtures</artifactId><version>1</version><type>test-jar</type><scope>test</scope></dependency>
+                <dependency><groupId>fixture.system</groupId><artifactId>system-api</artifactId><version>1</version><scope>system</scope><systemPath>${systemJar.toAbsolutePath()}</systemPath></dependency>
+              </dependencies>
+            </project>
+        """.trimIndent())
+        val main = root.resolve("src/main/java/fixture/VariantUse.java")
+        Files.createDirectories(main.parent)
+        Files.writeString(main, "package fixture; import fixture.external.LinuxOnly; import fixture.external.NormalOnly; import fixture.system.SystemOnly; @NormalOnly @LinuxOnly @SystemOnly public class VariantUse {}\n")
+        val test = root.resolve("src/test/java/fixture/VariantTest.java")
+        Files.createDirectories(test.parent)
+        Files.writeString(test, "package fixture; import fixture.external.FixtureOnly; @FixtureOnly class VariantTest {}\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val module = snapshot.modules.single()
+
+        assertTrue(normalJar in module.mainClasspathEntries)
+        assertTrue(classifierJar in module.mainClasspathEntries)
+        assertTrue(systemJar in module.mainClasspathEntries)
+        assertFalse(testJar in module.mainClasspathEntries)
+        assertTrue(testJar in module.testClasspathEntries)
+        assertTrue(snapshot.classpathEvidence.any {
+            it.kind == ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT && it.path == systemJar
+        })
+        assertEquals(BuildModelStatus.AVAILABLE, snapshot.buildModels.single().status)
+        val diagnostics = JavaLanguageAdapter().diagnostics(snapshot)
+            .filter { it.severity == Diagnostic.Severity.ERROR }
+        assertTrue(diagnostics.isEmpty(), diagnostics.toString())
+
+        val source = Path.of("src/main/java/fixture/VariantUse.java")
+        val plan = PatchPlan(
+            operation = "systemPathEvidenceDrift",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "prove systemPath artifact drift",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Delete(source))),
+        )
+        Files.write(systemJar, byteArrayOf(0), java.nio.file.StandardOpenOption.APPEND)
+        val result = PatchEngine(root).apply(
+            plan,
+            snapshot,
+            ApplyAuthorization.explicit("system-path-drift-test"),
+            DiagnosticsGate.enabled("java-jdt", JavaLanguageAdapter()::diagnostics),
+        )
+        assertTrue(result is ApplyResult.Refused)
+        val changed = (result as ApplyResult.Refused).diagnostics.single { it.code == "snapshot.classpathChanged" }
+        assertFalse(changed.message.contains(root.toString()), changed.message)
+        assertFalse(changed.message.contains(systemJar.toString()), changed.message)
+        assertTrue(root.resolve(source).exists())
+    }
+
+    @Test
     fun oneMissingDirectArtifactProducesOneTypedRootDiagnosticWithoutJdtCascade() {
         val root = Files.createTempDirectory("refactorkit-reactor-missing")
         val repository = Files.createTempDirectory("refactorkit-missing-m2")
@@ -221,6 +290,26 @@ class MavenReactorAnalysisAcceptanceTest {
         val target = module.resolve(sourcePath)
         Files.createDirectories(target.parent)
         Files.writeString(target, source)
+    }
+
+    private fun compileJar(jarPath: Path, sourcePath: String, content: String) {
+        val sourceDir = Files.createTempDirectory("refactorkit-variant-src")
+        val source = sourceDir.resolve(sourcePath)
+        val classes = sourceDir.resolve("classes")
+        Files.createDirectories(source.parent)
+        Files.createDirectories(classes)
+        Files.writeString(source, content)
+        assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, "-d", classes.toString(), source.toString()))
+        Files.createDirectories(requireNotNull(jarPath.parent))
+        JarOutputStream(Files.newOutputStream(jarPath)).use { jar ->
+            Files.walk(classes).use { stream ->
+                stream.filter(Files::isRegularFile).forEach { classFile ->
+                    jar.putNextEntry(JarEntry(classes.relativize(classFile).toString().replace('\\', '/')))
+                    Files.copy(classFile, jar)
+                    jar.closeEntry()
+                }
+            }
+        }
     }
 
     private fun installTestApiAndBom(repository: Path) {

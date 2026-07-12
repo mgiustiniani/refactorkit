@@ -550,14 +550,18 @@ class PatchEngine(
         val duplicates = evidenceByKey.filterValues { it.size > 1 }.keys
         if (duplicates.isNotEmpty()) {
             return listOf(Diagnostic(
-                "Snapshot contains duplicate classpath evidence: ${duplicates.sortedBy { it.first.toString() }}",
+                "Snapshot contains ${duplicates.size} duplicate classpath evidence key(s)",
                 Diagnostic.Severity.ERROR,
                 code = "snapshot.scopeInvalid",
             ))
         }
 
         val entryEvidencePaths = snapshot.classpathEvidence
-            .filter { it.kind in setOf(ClasspathEvidenceKind.ENTRY, ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT) }
+            .filter { it.kind in setOf(
+                ClasspathEvidenceKind.ENTRY,
+                ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT,
+                ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT,
+            ) }
             .map { it.path.normalize() }
             .toSet()
         val missingEvidence = snapshot.modules.flatMap(Module::classpathEntries)
@@ -566,7 +570,7 @@ class PatchEngine(
             .distinct()
         if (missingEvidence.isNotEmpty()) {
             return listOf(Diagnostic(
-                "Snapshot classpath entries lack content evidence: ${missingEvidence.sortedBy(Path::toString)}",
+                "Snapshot contains ${missingEvidence.size} classpath entry/entries without content evidence",
                 Diagnostic.Severity.ERROR,
                 code = "snapshot.scopeInvalid",
             ))
@@ -580,15 +584,15 @@ class PatchEngine(
                 val actual = ClasspathEvidence.fingerprint(absolute, evidence.kind)
                 if (actual != evidence.fingerprint) changed.add(evidence.path)
             }
-        } catch (error: Exception) {
+        } catch (_: Exception) {
             return listOf(Diagnostic(
-                "Cannot verify classpath evidence under workspace lock: ${error.message}",
+                "Cannot verify classpath evidence under workspace lock; rescan the project",
                 Diagnostic.Severity.ERROR,
                 code = "snapshot.classpathUnreadable",
             ))
         }
         return if (changed.isEmpty()) emptyList() else listOf(Diagnostic(
-            "Classpath changed since the supplied snapshot: ${changed.distinct().sortedBy(Path::toString)}; rescan and regenerate the plan",
+            "${changed.distinct().size} classpath/model input(s) changed since the supplied snapshot; rescan and regenerate the plan",
             Diagnostic.Severity.ERROR,
             code = "snapshot.classpathChanged",
         ))

@@ -12,6 +12,7 @@ enum class ClasspathEvidenceKind {
     DECLARATION_FILE,
     JAR_DIRECTORY,
     LOCAL_REPOSITORY_ARTIFACT,
+    SYSTEM_PATH_ARTIFACT,
     EFFECTIVE_MODEL_INPUT,
     IMPORTED_BOM,
 }
@@ -38,6 +39,7 @@ data class ClasspathEvidence(
                 }
                 ClasspathEvidenceKind.DECLARATION_FILE,
                 ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT,
+                ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT,
                 ClasspathEvidenceKind.EFFECTIVE_MODEL_INPUT,
                 ClasspathEvidenceKind.IMPORTED_BOM -> {
                     if (!Files.isRegularFile(path)) error("Classpath/model evidence is not a regular file: $path")

@@ -79,7 +79,9 @@ information without classpath contents.
 
 - retire compatibility `Module` projection after API-versioned migration of
   external library consumers;
-- harden Maven production edge cases and repository/checksum policy;
+- complete Maven profile/custom-source-set edge cases and repository/checksum
+  policy; classifier, `test-jar`, variant mediation, and `systemPath` coverage is
+  implemented;
 - decide Gradle executable-model policy and implement integration/custom sets;
 - add provider capability/contract snapshots and pagination/limits;
 - validate the abstraction with Kotlin or another JVM adapter before freezing it.
