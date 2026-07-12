@@ -109,7 +109,7 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |ADR 0008
 
 |Release Candidate (RC)
-|Immutable `v1.0.0-rc.N` tag used to freeze and validate proposed stable contracts and artifacts; a failed tagged candidate is replaced by a new commit and RC number.
+|Immutable `v1.0.0-rc.N` tag used only after the deep language roadmap, Clojure integration, alpha/beta validation, and API freeze to validate proposed stable contracts and artifacts; a failed tagged candidate is replaced by a new commit and RC number.
 |Release
 |`docs/releases/v1.0.0-plan.md`
 

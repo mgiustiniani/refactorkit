@@ -1,0 +1,80 @@
+= ADR 0009: Defer v1.0 Until IDE-Grade Multi-Language Completion
+:status: accepted
+:date: 2026-07-12
+
+== Context
+
+After publishing `v0.3.0`, main initially advanced directly toward a Java-focused
+`1.0.0-rc.1-SNAPSHOT`. RefactorKit's product mission is broader: deterministic,
+previewable, rollbackable semantic refactoring across languages. There is no
+schedule pressure requiring an early stable label. Freezing API `1.0` around the
+current Java-centric implementation would constrain the adapter, evidence,
+toolchain, mixed-workspace, and capability models before they are proven.
+
+The desired product is not one deep Java adapter plus shallow wrappers. Java is
+the first, reference, and likely widest catalogue, while other mature ecosystems
+must receive equivalent IDE-grade quality through idiomatic operations. JVM
+languages and C# are top-tier deep targets; TypeScript/JavaScript, Python, Go,
+C/C++, Rust, and Clojure likewise require the strongest practical semantic
+backend and explicit uncertainty boundaries.
+
+C and C++ illustrate why semantic equivalence cannot mean identical syntax. C++
+has namespaces; C does not. A package-equivalent operation may instead relocate a
+logical component across source/header paths, include roots, build targets,
+optional C API prefixes, optional C++ namespaces/modules, and ABI/API boundaries.
+Directory layout must never be silently equated with a language namespace.
+
+== Decision
+
+. Main returns from `1.0.0-rc.1-SNAPSHOT` branding to `0.4.0-SNAPSHOT`.
+. `v0.4.0` publishes current transaction, Java semantic, diagnostics, protocol,
+  resource, packaging, and documentation hardening without freezing API `1.0`.
+. Subsequent `0.x` releases build the multi-language kernel and deep adapters for
+  TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Groovy, C#, and Rust.
+. Clojure is the final planned language integration before the `1.0` stabilization
+  cycle.
+. Java depth advances continuously and remains the reference/widest catalogue.
+  Other adapters target equivalent semantic safety and idiomatic IDE-grade depth,
+  not a deliberately lower permanent tier.
+. Stable capability is classified independently per language and operation.
+. Compiler and language-server edits remain untrusted proposals converted into
+  core `PatchPlan`s and applied only through the managed transaction boundary.
+. API `1.0` freezes only after language, cross-language, protocol, safety,
+  performance, packaging, migration, and distribution acceptance.
+. The normative plans are `docs/releases/v0.4.0-plan.md` and
+  `docs/releases/v1.0.0-plan.md`.
+
+== Consequences
+
+=== Positive
+
+* The stable contract is designed from proven multi-language requirements rather
+  than retrofitted around Java assumptions.
+* Java can pursue an IntelliJ/Eclipse-grade catalogue without making other
+  languages second-class.
+* JVM interoperability, Roslyn, Clang translation-unit/component semantics, and
+  dynamic-language evidence become first-class architectural inputs.
+* The `0.x` series can evolve capabilities honestly while preserving explicit
+  compatibility and migration notes.
+
+=== Costs and risks
+
+* `v1.0.0` becomes a long-range, potentially multi-year milestone.
+* Deep adapters require multiple compiler/runtime/toolchain ecosystems and a
+  larger supply-chain, packaging, performance, and compatibility matrix.
+* Cross-language completeness and generated/macro/framework boundaries make
+  acceptance substantially more expensive.
+* Roadmap breadth can dilute delivery unless each language is completed through
+  explicit milestones before too many parallel adapters begin.
+
+== Guardrails
+
+* One language/ecosystem slice at a time unless independent ownership and full
+  acceptance capacity exist.
+* No language is called stable based only on parsing, outline, or LSP rename.
+* Every stable mutation retains preview, evidence, staged diagnostics, approval,
+  managed apply, rollback, limits, tests, and documentation.
+* Language-specific operations are idiomatic; `NOT_APPLICABLE` is preferable to
+  artificial parity.
+* Changes to the target language set or the Clojure-final integration milestone
+  require an explicit roadmap decision and ADR update.

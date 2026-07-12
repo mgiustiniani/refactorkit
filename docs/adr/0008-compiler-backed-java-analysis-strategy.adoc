@@ -10,7 +10,7 @@ Status: Accepted; stable semantic capability promotion is evidence-gated
 
 ADR 0007 kept the beta Java adapter lexical/structural where conservative and visible, but required a compiler-backed follow-up before RefactorKit can claim v1.0.0-level semantic guarantees.
 
-`v0.3.0` is the post-beta slice for publishing that analysis foundation. After `v0.3.0`, immutable `v1.0.0-rc.N` candidates freeze and validate proposed stable contracts before `v1.0.0`. The analysis strategy must improve parsing, binding-aware symbol identity, diagnostics, and reference precision without weakening the existing preview/apply/rollback safety model.
+`v0.3.0` is the post-beta slice for publishing that analysis foundation. The original immediate `v1.0.0-rc.N` sequence was superseded by ADR 0009: `v0.4.0` publishes the hardened foundation and later `0.x` bands build deep multi-language adapters before the final stable cycle. The analysis strategy must improve parsing, binding-aware symbol identity, diagnostics, and reference precision without weakening the existing preview/apply/rollback safety model.
 
 Stable does not require every Java refactoring to be semantic or supported. It requires each advertised stable operation to have a versioned contract, explicit evidence classification, tested boundaries, and conservative refusal where semantic authority is incomplete.
 

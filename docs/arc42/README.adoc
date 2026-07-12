@@ -3,7 +3,7 @@
 :sectnums:
 :icons: font
 
-Status: implementation-informed baseline aligned with the confirmed `v1.0.0` stable-release target; acceptance evidence remains planned.
+Status: implementation-informed baseline aligned with the `v0.4.0` hardening release and supreme multi-language `v1.0.0` roadmap; all-language acceptance remains planned.
 
 This directory contains the arc42 documentation for RefactorKit, the deterministic refactoring and code-intelligence engine in this repository.
 
@@ -37,7 +37,9 @@ The current baseline was created from repository evidence:
 * `README.md`
 * `AGENTS.md`
 * `docs/*.md`
+* `docs/releases/v0.4.0-plan.md`
 * `docs/releases/v1.0.0-plan.md`
+* `docs/adr/0009-supreme-multilanguage-v1-roadmap.adoc`
 * Gradle module descriptors and source files under `modules/`
 * `samples/`
 * `recipes/`

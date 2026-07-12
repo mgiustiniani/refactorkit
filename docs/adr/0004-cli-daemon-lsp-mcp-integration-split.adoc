@@ -65,4 +65,4 @@ These findings supplement the core-engine limitations in ADR 0002. `TX-002`, `TX
 
 == Implementation Evidence
 
-The published `v0.3.0` release establishes the transition boundary toward `1.0.0-rc.1-SNAPSHOT` development. The advertised API remains `0.2` until the stable contract inventory, compatibility, transaction-boundary, and acceptance-evidence gates in this decision are satisfied; publication of a latest, non-prerelease `v0.3.0` release does not by itself promote the integration contracts to `apiVersion=1.0`.
+The published `v0.3.0` release established the next development boundary. ADR 0009 superseded the immediate `1.0.0-rc.1-SNAPSHOT` direction: main reports `0.4.0-SNAPSHOT` and uses later `0.x` bands for deep multi-language evolution. The advertised API remains `0.2` until an explicit migration and contract acceptance; publication of `v0.3.0` does not promote integration contracts to `apiVersion=1.0`.

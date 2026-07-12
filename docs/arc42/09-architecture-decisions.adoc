@@ -53,8 +53,13 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |Compiler-Backed Java Analysis Strategy
 |link:../adr/0008-compiler-backed-java-analysis-strategy.adoc[docs/adr/0008-compiler-backed-java-analysis-strategy.adoc]
 |Accepted; stable semantic capability promotion is evidence-gated
+
+|ADR 0009
+|Defer v1.0 Until IDE-Grade Multi-Language Completion
+|link:../adr/0009-supreme-multilanguage-v1-roadmap.adoc[docs/adr/0009-supreme-multilanguage-v1-roadmap.adoc]
+|Accepted; `v0.4.0` hardening and long-range all-language acceptance active
 |===
 
 == Decision Candidate Coverage
 
-The existing ADR set covers the stable-release architecture: API `1.0` patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, and Eclipse JDT evidence-gated semantic authority. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADRs 0002 and 0004 now record WAL-backed managed transaction guarantees, client-managed native LSP limitations, and the staged recipe-wide transaction boundary without claiming one filesystem-wide ACID commit.
+The ADR set covers patch safety, integration-surface and transaction-boundary classification, self-contained verifiable packaging, MCP least privilege, Eclipse JDT evidence-gated semantic authority, and the deferred supreme multi-language `1.0` target. ADRs 0003 and 0007 retain historical context but are superseded by ADR 0008. ADR 0009 supersedes the immediate post-`v0.3.0` Java-focused RC sequence without weakening any accepted safety decision. ADRs 0002 and 0004 record WAL-backed managed transaction guarantees, client-managed native LSP limitations, and the staged recipe-wide transaction boundary without claiming one filesystem-wide ACID commit.

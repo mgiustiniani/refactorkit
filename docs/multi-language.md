@@ -1,6 +1,10 @@
 # Multi-language foundation
 
-See AGENTS.md §23 for the authoritative design.
+See AGENTS.md §23 for the original design and
+[`releases/v1.0.0-plan.md`](releases/v1.0.0-plan.md) plus ADR 0009 for the active
+supreme multi-language roadmap. Java is the reference/widest adapter, but mature
+language ecosystems target equivalent IDE-grade semantic safety and idiomatic
+refactoring depth rather than permanent baseline-only support.
 
 ## Level 1: Structural (regex-backed, no external binaries)
 
@@ -55,12 +59,25 @@ Implemented in `modules/refactorkit-tree-sitter`.
 
 ## Level 2: LSP-backed (future)
 
-The `ExternalLspAdapter` is the intended integration point. When a language server
-(e.g., `typescript-language-server`, `pyright`, `rust-analyzer`) is installed,
-start the adapter, and it will forward definition/references/rename requests to it.
+The `ExternalLspAdapter` is the prototype integration point. Production support
+requires a bounded semantic-process manager for lifecycle, capability negotiation,
+overlays, versions, timeout, cancellation, restart, output limits, provenance,
+and shutdown. External workspace edits are untrusted proposals normalized into
+`PatchPlan`; they never bypass `PatchEngine`.
 
-Full feature support (semantic tokens, completions, hover, LSP-backed refactoring)
-is out of scope for the current MVP.
+LSP establishes navigation, native formatting, and common-edit foundations, but
+the final deep adapters also use compiler/native rewrite and formatting facilities: TypeScript compiler API,
+Kotlin Analysis API, SemanticDB/Scalameta/TASTy, Roslyn, Clang tooling, Go APIs,
+Pyright plus concrete-syntax rewriting, Rust tooling, Groovy AST, and
+clojure-lsp/rewrite-clj. Every deep adapter must provide deterministic,
+project-style-aware formatting with idempotence, previewable managed apply/rollback,
+and explicit client-managed LSP ownership; see `docs/formatting.md`.
+
+C and C++ share Clang infrastructure but keep distinct capability matrices. C++
+has namespaces; C does not. Package-equivalent behavior is modeled through
+logical component relocation across source/header paths, includes, build targets,
+optional C API prefixes, optional C++ namespaces/modules, and ABI evidence. Path
+layout is never silently treated as a namespace.
 
 ## CLI commands added
 

@@ -7,8 +7,23 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-### Next development (`1.0.0-rc.1-SNAPSHOT`)
+### Next development (`0.4.0-SNAPSHOT`)
 
+- Replaced the premature Java-focused `1.0.0-rc.1-SNAPSHOT` trajectory with a
+  long-range supreme multi-language `v1.0.0` roadmap. `v0.4.0` now publishes the
+  hardened Java/transaction foundation; later `0.x` bands add the adapter kernel
+  and deep TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Groovy, C#,
+  and Rust support. Clojure is the final planned language integration before
+  all-language alpha/beta/RC stabilization.
+- Defined Java as the reference and widest catalogue while requiring equivalent
+  IDE-grade semantic safety and idiomatic depth from other mature adapters.
+- Defined C/C++ component relocation across paths, headers, includes, build
+  targets, optional C API prefixes, C++ namespaces/modules, and ABI evidence
+  rather than treating directory layout as a namespace.
+- Added the planned deterministic formatter contract: Java single-file JDT
+  formatting enters the `v0.4.x` scope with project-style evidence,
+  idempotence/minimal-diff tests, preview, diagnostics, managed apply/rollback,
+  and explicit client-managed versus managed LSP ownership.
 - Fixed the self-contained jlink runtime for JDT-backed signed selectors by
   adding `java.compiler`. Packaged-runtime smoke coverage now checks the module,
   executes signed `definition`/`references` with `JAVA_HOME` unset, verifies
@@ -142,10 +157,10 @@ review safety boundaries before applying refactorings.
   are simulated before the first write, so predictable later missing/existing-file
   failures cannot leave earlier edits applied. Workspace edits that traverse a
   symbolic-link component are refused with `path.symbolicLink` before writes.
-- Advanced main toward the first stable-contract release candidate after verified
-  `v0.3.0` publication. The implementation version is
-  `1.0.0-rc.1-SNAPSHOT`; API baseline remains `0.2` until the API `1.0` contract
-  inventory and migration gates are complete.
+- Initially advanced main toward a first stable-contract release candidate after
+  verified `v0.3.0` publication. That versioning direction was superseded by ADR
+  0009: main now reports `0.4.0-SNAPSHOT`, API baseline remains `0.2`, and final
+  API `1.0` is deferred until the deep multi-language acceptance program.
 
 ## [0.3.0] - 2026-07-10
 

@@ -1,6 +1,6 @@
 # Transactionality and Requirements Audit
 
-Status: transactionality findings closed for the qualified `1.0.0-rc.1-SNAPSHOT` contract.
+Status: transactionality findings closed for the qualified managed-file contract carried by `0.4.0-SNAPSHOT` and the long-range multi-language roadmap.
 
 Audit baseline: commit `5f47ad0` (`Preflight patch file state safely`).
 
@@ -27,7 +27,7 @@ The qualified v1 contract is deliberately narrower than distributed ACID:
   create/rename operations.
 
 Within those declared boundaries, the transactionality audit no longer blocks
-`v1.0.0-rc.1`. Other release-plan gates remain independent.
+`v0.4.0` hardening release and remains required evidence for every later language adapter. Other release-plan gates remain independent.
 
 ## What is already sound
 
@@ -493,7 +493,7 @@ approval, protocol mapping, and integration state refresh.
 
 ## Stable-release verdict
 
-The transactionality gate is **sufficient for `v1.0.0-rc.1` evaluation** under
+The transactionality gate is **sufficient for the `v0.4.0` qualified managed-file contract** under
 the reported filesystem and cooperative-writer contract. This does not by itself
 authorize the RC: Java compatibility, API/protocol freeze, performance, packaging,
 supply-chain, migration, and full acceptance gates remain governed by the release

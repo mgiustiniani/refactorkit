@@ -8,7 +8,7 @@ plugins {
 
 allprojects {
     group = "org.refactorkit"
-    version = "1.0.0-rc.1-SNAPSHOT"
+    version = "0.4.0-SNAPSHOT"
 }
 
 subprojects {

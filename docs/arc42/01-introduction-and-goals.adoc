@@ -2,19 +2,19 @@
 :toc:
 :sectnums:
 
-Status: confirmed. The baseline was approved on 2026-07-10; the stable-release objective was explicitly confirmed on 2026-07-11; publication progress was confirmed on 2026-07-11.
+Status: confirmed. The baseline was approved on 2026-07-10; publication progress was confirmed on 2026-07-11; the supreme multi-language stable objective superseded the earlier immediate-RC sequence on 2026-07-12.
 
 == Requirements Overview
 
 RefactorKit is a deterministic refactoring and code-intelligence engine for safe, previewable, rollbackable code transformations.
 
-The first supported language is Java. The Java adapter is intended to work with Java 8-era projects while understanding Java language/source constructs and type forms through Java 25. The architecture is adapter-based so that later language support can be added without coupling language-specific logic into the core engine.
+The first supported language is Java. The Java adapter works with Java 8-era projects while understanding Java language/source constructs and type forms through Java 25. Java is the reference and widest catalogue, while the long-range product target provides equivalent IDE-grade semantic safety and idiomatic depth for TypeScript/JavaScript, the JVM language family, Python, Go, C/C++, C#, Rust, and Clojure without coupling language-specific logic into the core engine.
 
 RefactorKit is intended to replace fragile direct text edits, especially in AI-assisted development workflows, with deterministic semantic operations and patch previews.
 
-The `v0.3.0` foundation release has been published from its immutable tag. Main now advances toward `1.0.0-rc.1-SNAPSHOT`, followed by one or more immutable `v1.0.0-rc.N` candidates and then `v1.0.0`. The advertised API remains `0.2` until the stable contract gates are satisfied. Stable means that advertised operations and the core patch, CLI, daemon, packaging, and classified protocol boundaries have versioned contracts, conservative refusal behavior, and acceptance evidence. It does not mean that every possible Java refactoring is implemented.
+The `v0.3.0` foundation release has been published from its immutable tag. Main now develops `0.4.0-SNAPSHOT` as the hardened Java and transaction foundation. Subsequent `0.x` releases build the multi-language kernel and deep language adapters; Clojure is the final planned integration before global `1.0` alpha/beta/RC stabilization. The advertised API remains `0.2` until an explicit migration is accepted. Stable `1.0` means that the core and every advertised language operation have versioned contracts, conservative refusal, IDE-grade idiomatic depth, and all-language acceptance evidence.
 
-Evidence: `README.md`, `AGENTS.md`, `docs/architecture.md`, `docs/releases/v1.0.0-plan.md`.
+Evidence: `README.md`, `AGENTS.md`, `docs/architecture.md`, `docs/releases/v0.4.0-plan.md`, `docs/releases/v1.0.0-plan.md`, ADR 0009.
 
 == Quality Goals
 
@@ -108,4 +108,4 @@ Status: implementation-informed from `AGENTS.md`.
 
 == Confirmation Record
 
-The user explicitly approved this chapter proposal on 2026-07-10, including the stated product direction, stakeholder expectations, quality goals, and scope boundaries. On 2026-07-11, the user explicitly activated the stable-release target and confirmed the release sequence and stable-contract meaning summarized above. Later that day, the user confirmed completion of `v0.3.0` publication and the transition toward `1.0.0-rc.1-SNAPSHOT` while API `0.2` remains in force until the stable contract gates pass.
+The user explicitly approved this chapter proposal on 2026-07-10 and confirmed `v0.3.0` publication on 2026-07-11. On 2026-07-12, the user superseded the immediate Java-focused RC sequence: main returns to `0.4.0-SNAPSHOT`, Java remains the reference/widest adapter, other mature ecosystems target equivalent IDE-grade depth, C/C++ receive component/path/build/namespace-aware equivalents, and stable `1.0` follows Clojure integration plus global acceptance.

@@ -55,7 +55,7 @@ Status: implementation-informed for `v0.3.0`. This does not satisfy the remainin
 
 * Build-time JDK is required for Gradle and `jlink` packaging.
 * The packaged CLI is intended not to require a globally installed Java runtime because it contains an embedded runtime.
-* Stable assets are promoted from immutable `v1.0.0-rc.N` tags only after independent verification; failed tagged candidates are replaced by a new commit and RC number, never by moving a tag.
+* Stable assets are promoted from immutable `v1.0.0-rc.N` tags only after the multi-language roadmap and alpha/beta gates complete and independent verification passes; failed tagged candidates are replaced by a new commit and RC number, never by moving a tag.
 * Release classification, version metadata, checksum, SBOM, provenance/attestation, and packaged smoke results must agree with the promoted artifact.
 * Maven/Gradle projects are scanned from local workspace files.
 * Optional external language servers are outside the current deployment and treated as future/optional integrations.

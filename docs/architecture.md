@@ -17,3 +17,13 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | `refactorkit-testkit`     | ✅ MVP       | GoldenTestLoader/Runner, AgentSimulation scenarios         |
 
 See individual docs/ files for each subsystem.
+
+## Active evolution
+
+`v0.4.0` publishes the hardened Java/transaction foundation. The long-range
+`v1.0.0` roadmap evolves the language-neutral core into a deep multi-language
+platform rather than freezing a Java-only stable API. Java remains the reference
+and widest catalogue; TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++,
+Groovy, C#, Rust, and Clojure receive compiler/language-server-backed idiomatic
+catalogues and deterministic project-style-aware formatters with the same preview,
+evidence, diagnostics, managed apply, rollback, and bounded-resource standards. See `docs/releases/v1.0.0-plan.md` and ADR 0009.
