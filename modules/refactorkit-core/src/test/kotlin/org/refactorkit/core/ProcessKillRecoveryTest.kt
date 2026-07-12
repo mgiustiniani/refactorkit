@@ -45,12 +45,16 @@ class ProcessKillRecoveryTest {
         assertEquals("class ChangedFirst {}\n", Files.readString(root.resolve("First.java")))
         assertEquals("class Second {}\n", Files.readString(root.resolve("Second.java")))
 
-        assertTrue(PatchEngine(root).recover().isEmpty())
+        val recoveryDiagnostics = PatchEngine(root).recover()
+        assertTrue(recoveryDiagnostics.isEmpty(), "Recovery diagnostics: $recoveryDiagnostics; child=${readOutput(output)}")
         assertEquals("class First {}\n", Files.readString(root.resolve("First.java")))
         assertEquals("class Second {}\n", Files.readString(root.resolve("Second.java")))
         val recovered = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single()
         assertEquals(JournalState.ROLLED_BACK, recovered.state)
-        assertTrue(recovered.failure?.contains("interrupted applying") == true)
+        assertTrue(
+            recovered.failure?.contains("interrupted applying") == true,
+            "Unexpected recovery detail: ${recovered.failure}; child=${readOutput(output)}",
+        )
     }
 
     @Test
