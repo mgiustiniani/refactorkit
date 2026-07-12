@@ -3,6 +3,7 @@ package org.refactorkit.core
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 
@@ -37,6 +38,21 @@ class BuildModelsTest {
                 generatedSourceRoots = listOf(Path.of("target/generated-test-sources")),
             )
         }
+    }
+
+    @Test
+    fun providerProfileSelectionIsBoundedAndNonContradictory() {
+        assertFailsWith<IllegalArgumentException> {
+            BuildModelSelection(activeProfiles = setOf("release"), inactiveProfiles = setOf("release"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            BuildModelSelection(activeProfiles = (1..65).map { "profile-$it" }.toSet())
+        }
+        val request = BuildModelRequest(
+            workspaceRoot = Path.of("."),
+            selections = mapOf("maven-effective-v1" to BuildModelSelection(activeProfiles = setOf("release"))),
+        )
+        assertEquals(setOf("release"), request.selections.getValue("maven-effective-v1").activeProfiles)
     }
 
     @Test

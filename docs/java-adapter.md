@@ -57,8 +57,14 @@ uses Maven variant identity (GA + type + classifier), so a normal JAR and tests
 JAR are not incorrectly collapsed. System paths must resolve to existing absolute
 regular files, are not treated as reactor source edges, and receive dedicated
 hash-bound evidence without exposing full paths in model diagnostics. It never
-executes project plugins and is offline by default; explicit network resolution
-is anonymous Maven Central only and never reads Maven settings credentials.
+executes project plugins and is offline by default. Explicit provider-scoped
+active/inactive profile IDs are bounded, validated, passed to ModelBuilder, and
+hash-bound. Explicit network resolution is anonymous HTTPS Maven Central only,
+disables redirects, applies bounded time/size limits, and requires a valid
+bounded `.sha256` sidecar before atomically publishing every downloaded POM/JAR.
+It never reads Maven settings credentials. Pre-existing local artifacts are
+content-hash evidence for drift protection, not a claim of repository
+provenance/authenticity.
 Independent main/test source and class paths preserve Maven scope visibility,
 including generated read-only roots. Gradle toolchain/source-compatibility
 heuristics remain supported. Unconfigured projects default

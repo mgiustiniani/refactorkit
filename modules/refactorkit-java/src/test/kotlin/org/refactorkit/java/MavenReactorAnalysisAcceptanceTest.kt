@@ -134,6 +134,11 @@ class MavenReactorAnalysisAcceptanceTest {
                     <execution><id>test</id><goals><goal>add-test-source</goal></goals><configuration><sources><source>src/verification/java</source></sources></configuration></execution>
                   </executions></plugin>
                 </plugins></build></profile>
+                <profile><id>explicit-custom</id><build><plugins>
+                  <plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><executions>
+                    <execution><goals><goal>add-source</goal></goals><configuration><sources><source>src/explicit/java</source></sources></configuration></execution>
+                  </executions></plugin>
+                </plugins></build></profile>
                 <profile><id>inactive</id><activation><property><name>never.active</name></property></activation><build><plugins>
                   <plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><executions>
                     <execution><goals><goal>add-source</goal></goals><configuration><sources><source>src/inactive/java</source></sources></configuration></execution>
@@ -148,6 +153,9 @@ class MavenReactorAnalysisAcceptanceTest {
         val test = root.resolve("src/verification/java/fixture/FeatureTest.java")
         Files.createDirectories(test.parent)
         Files.writeString(test, "package fixture; class FeatureTest { Feature value = new Feature(\"ok\"); }\n")
+        val explicit = root.resolve("src/explicit/java/fixture/Explicit.java")
+        Files.createDirectories(explicit.parent)
+        Files.writeString(explicit, "package fixture; public class Explicit {}\n")
         val inactive = root.resolve("src/inactive/java/fixture/Inactive.java")
         Files.createDirectories(inactive.parent)
         Files.writeString(inactive, "package fixture; class Inactive { this is not Java }\n")
@@ -157,6 +165,7 @@ class MavenReactorAnalysisAcceptanceTest {
 
         assertTrue(Path.of("src/feature/java") in module.mainSourceRoots)
         assertTrue(Path.of("src/verification/java") in module.testSourceRoots)
+        assertFalse(Path.of("src/explicit/java") in module.sourceRoots)
         assertFalse(Path.of("src/inactive/java") in module.sourceRoots)
         assertFalse(snapshot.files.any { it.path.startsWith(Path.of("src/inactive/java")) })
         val model = snapshot.buildModels.single()
@@ -168,6 +177,19 @@ class MavenReactorAnalysisAcceptanceTest {
         val diagnostics = JavaLanguageAdapter().diagnostics(snapshot)
             .filter { it.severity == Diagnostic.Severity.ERROR }
         assertTrue(diagnostics.isEmpty(), diagnostics.toString())
+
+        val explicitSnapshot = JavaProjectScanner(
+            localMavenRepository = Files.createTempDirectory("empty-explicit-m2"),
+            activeMavenProfiles = setOf("explicit-custom"),
+        ).scan(root)
+        val explicitModule = explicitSnapshot.modules.single()
+        assertTrue(Path.of("src/explicit/java") in explicitModule.mainSourceRoots)
+        assertFalse(
+            Path.of("src/feature/java") in explicitModule.sourceRoots,
+            "explicit activation disables the activeByDefault profile",
+        )
+        assertEquals("explicit-custom", explicitSnapshot.buildModels.single().attributes["activeProfiles"])
+        assertFalse(snapshot.hash == explicitSnapshot.hash)
     }
 
     @Test

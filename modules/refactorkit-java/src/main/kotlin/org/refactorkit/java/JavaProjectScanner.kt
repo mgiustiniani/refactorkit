@@ -17,6 +17,8 @@ import kotlin.io.path.readText
 class JavaProjectScanner(
     private val allowNetworkDependencyResolution: Boolean = false,
     private val localMavenRepository: Path = Path.of(System.getProperty("user.home"), ".m2", "repository"),
+    private val activeMavenProfiles: Set<String> = emptySet(),
+    private val inactiveMavenProfiles: Set<String> = emptySet(),
 ) {
     fun scan(root: Path): ProjectSnapshot = scanInternal(root, includeBuildModels = true)
 
@@ -28,7 +30,12 @@ class JavaProjectScanner(
         val discoveredModuleRoots = detectModuleRoots(normalizedRoot)
         val pomFiles = findBuildFiles(normalizedRoot, "pom.xml")
         val mavenReactor = if (pomFiles.isNotEmpty()) {
-            MavenEffectiveReactorBuilder(localMavenRepository, allowNetworkDependencyResolution).build(normalizedRoot, pomFiles)
+            MavenEffectiveReactorBuilder(
+                localMavenRepository,
+                allowNetworkDependencyResolution,
+                activeMavenProfiles,
+                inactiveMavenProfiles,
+            ).build(normalizedRoot, pomFiles)
         } else null
         val mavenByRoot = mavenReactor?.modules.orEmpty()
         val moduleRoots = (discoveredModuleRoots + mavenByRoot.values.filter { it.packaging != "pom" }.map(MavenModuleModel::root))
@@ -211,7 +218,12 @@ class JavaProjectScanner(
         .map { (buildSystem, providerModules) ->
             when (buildSystem) {
                 "maven" -> MavenBuildModelProvider(localMavenRepository)
-                    .project(providerModules, allowNetworkDependencyResolution)
+                    .project(
+                        providerModules,
+                        allowNetworkDependencyResolution,
+                        activeMavenProfiles,
+                        inactiveMavenProfiles,
+                    )
                 "gradle" -> GradleDeclarativeBuildModelProvider().project(providerModules)
                 else -> ConventionalJavaBuildModelProvider().project(providerModules)
             }

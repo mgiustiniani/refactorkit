@@ -31,7 +31,13 @@ also prerequisites for Kotlin, Scala, Groovy, and Clojure interoperability.
   source-root workspace or symlink escapes make the model unavailable.
 . Dependency resolution is offline by default. Explicit network opt-in is
   bounded and credential-free; RefactorKit does not silently read or report
-  Maven settings credentials.
+  Maven settings credentials. Anonymous downloads are restricted to HTTPS Maven
+  Central with redirects disabled and require a bounded SHA-256 sidecar before
+  atomic cache publication. Existing local artifacts provide content-drift
+  evidence but are not retroactively asserted to have repository provenance.
+. Explicit Maven active/inactive profile IDs are provider-scoped, bounded,
+  validated, passed to embedded ModelBuilder, and included in hash-bound model
+  attributes.
 . Main, test, generated-main, and generated-test roots, outputs, dependency
   scopes, reactor edges, source level, and external artifacts are modeled per
   module rather than as one workspace-wide environment.

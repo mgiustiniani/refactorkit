@@ -32,7 +32,10 @@ requested model without denied build-code execution; the Gradle declarative
 provider instead returns `PARTIAL` because it safely produces bounded heuristics.
 
 `BuildModelDiscoveryPolicy` independently controls network, build-code execution,
-and credential access. Defaults deny all three. Providers discover metadata only;
+and credential access. Defaults deny all three. `BuildModelRequest.selections`
+adds bounded provider-scoped active/inactive profile IDs; Maven accepts only
+safe profile identifiers and records the effective selection in hash-bound model
+attributes. Providers discover metadata only;
 they never mutate workspace files or bypass `PatchEngine`.
 
 Source/generated/output paths are normalized workspace-relative metadata and
@@ -79,9 +82,9 @@ information without classpath contents.
 
 - retire compatibility `Module` projection after API-versioned migration of
   external library consumers;
-- complete explicit non-default Maven profile activation and repository/checksum
-  policy; active effective source directories and declarative build-helper custom
-  roots, classifier, `test-jar`, variant mediation, and `systemPath` coverage are
+- design credential-safe private repository support if required; explicit Maven
+  profiles, active effective/custom roots, classifiers, `test-jar`, variant
+  mediation, `systemPath`, and checksum-verified anonymous Central opt-in are
   implemented;
 - decide Gradle executable-model policy and implement integration/custom sets;
 - add provider capability/contract snapshots and pagination/limits;

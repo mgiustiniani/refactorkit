@@ -23,11 +23,27 @@ internal class MavenBuildModelProvider(
 
     override fun discover(request: BuildModelRequest): BuildModel {
         val allowNetwork = request.policy.networkAccess == BuildModelDiscoveryPolicy.NetworkAccess.ALLOW_ANONYMOUS
-        val snapshot = JavaProjectScanner(allowNetwork, localMavenRepository).scanWithoutBuildModels(request.workspaceRoot)
-        return project(snapshot.modules.filter { it.languageSettings["java.buildSystem"] == "maven" }, allowNetwork)
+        val selection = request.selections[id] ?: org.refactorkit.core.BuildModelSelection()
+        val snapshot = JavaProjectScanner(
+            allowNetwork,
+            localMavenRepository,
+            selection.activeProfiles,
+            selection.inactiveProfiles,
+        ).scanWithoutBuildModels(request.workspaceRoot)
+        return project(
+            snapshot.modules.filter { it.languageSettings["java.buildSystem"] == "maven" },
+            allowNetwork,
+            selection.activeProfiles,
+            selection.inactiveProfiles,
+        )
     }
 
-    internal fun project(modules: List<Module>, allowNetwork: Boolean): BuildModel =
+    internal fun project(
+        modules: List<Module>,
+        allowNetwork: Boolean,
+        activeProfiles: Set<String> = emptySet(),
+        inactiveProfiles: Set<String> = emptySet(),
+    ): BuildModel =
         JavaModuleBuildModelProjector.project(
             providerId = id,
             modules = modules,
@@ -44,6 +60,8 @@ internal class MavenBuildModelProvider(
                 "credentialsAccess" to "denied",
                 "networkDefault" to "denied",
                 "networkAccess" to if (allowNetwork) "anonymous-opt-in" else "denied",
+                "activeProfiles" to activeProfiles.sorted().joinToString(","),
+                "inactiveProfiles" to inactiveProfiles.sorted().joinToString(","),
             ),
         )
 }

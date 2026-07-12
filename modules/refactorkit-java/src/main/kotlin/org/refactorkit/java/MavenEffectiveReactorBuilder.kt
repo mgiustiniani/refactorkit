@@ -14,9 +14,11 @@ import org.apache.maven.model.building.ModelSource
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.apache.maven.artifact.versioning.VersionRange
 import java.net.URI
+import javax.net.ssl.HttpsURLConnection
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.exists
@@ -59,7 +61,17 @@ internal data class MavenReactorModel(
 internal class MavenEffectiveReactorBuilder(
     private val localRepository: Path = Path.of(System.getProperty("user.home"), ".m2", "repository"),
     private val allowNetwork: Boolean = false,
+    activeProfiles: Set<String> = emptySet(),
+    inactiveProfiles: Set<String> = emptySet(),
+    private val artifactTransport: MavenArtifactTransport = MavenCentralHttpsTransport,
 ) {
+    private val activeProfiles = validateProfileIds(activeProfiles)
+    private val inactiveProfiles = validateProfileIds(inactiveProfiles)
+    init {
+        require(this.activeProfiles.intersect(this.inactiveProfiles).isEmpty()) {
+            "Maven profiles cannot be both active and inactive"
+        }
+    }
     private val modelBuilder = DefaultModelBuilderFactory().newInstance()
     private val effectiveCache = ConcurrentHashMap<Path, EffectiveBuild>()
 
@@ -67,7 +79,7 @@ internal class MavenEffectiveReactorBuilder(
         val normalizedPoms = pomFiles.map(Path::toAbsolutePath).map(Path::normalize)
             .filter { it.exists() && it.isRegularFile() }.toSet()
         val rawCoordinates = normalizedPoms.mapNotNull(::rawCoordinate).toMap()
-        val resolver = LocalOnlyModelResolver(localRepository, rawCoordinates, allowNetwork)
+        val resolver = LocalOnlyModelResolver(localRepository, rawCoordinates, allowNetwork, artifactTransport)
         val effective = normalizedPoms.associateWith { pom -> buildEffective(pom, resolver) }
         val effectiveCoordinates = effective.mapNotNull { (pom, result) -> result.model?.coordinate()?.let { it to pom } }.toMap()
         resolver.reactorModels = rawCoordinates + effectiveCoordinates
@@ -307,6 +319,8 @@ internal class MavenEffectiveReactorBuilder(
                     .setModelResolver(resolver.newCopy())
                     .setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL)
                     .setProcessPlugins(false)
+                    .setActiveProfileIds(activeProfiles.toList())
+                    .setInactiveProfileIds(inactiveProfiles.toList())
                     .setSystemProperties(safeSystemProperties())
                     .setUserProperties(Properties())
                 val model = modelBuilder.build(request).effectiveModel
@@ -319,6 +333,12 @@ internal class MavenEffectiveReactorBuilder(
                 EffectiveBuild(null, resolver.resolvedModels.toSet() - before + setOf(normalized) + relativeParents, resolver.importedBoms.toSet(), failure)
             }
         }
+
+    private fun validateProfileIds(profiles: Set<String>): Set<String> {
+        require(profiles.size <= 64) { "Maven profile selection exceeds the bounded limit" }
+        require(profiles.all { SAFE_PROFILE_ID.matches(it) }) { "Maven profile IDs contain unsupported characters" }
+        return profiles.toSortedSet()
+    }
 
     private fun safeSystemProperties(): Properties = Properties().apply {
         setProperty("user.home", System.getProperty("user.home"))
@@ -381,6 +401,7 @@ internal class MavenEffectiveReactorBuilder(
     private fun concise(message: String): String = message.lineSequence().firstOrNull()?.take(300) ?: "unavailable"
 
     companion object {
+        private val SAFE_PROFILE_ID = Regex("[A-Za-z0-9_.-]{1,128}")
         private val MAIN_SCOPES = setOf("compile", "provided", "system")
         private val TEST_SCOPES = setOf("compile", "provided", "system", "runtime", "test")
         private val TRANSITIVE_SCOPES = setOf("compile", "runtime")
@@ -389,10 +410,53 @@ internal class MavenEffectiveReactorBuilder(
     }
 }
 
+internal fun interface MavenArtifactTransport {
+    fun download(uri: URI, target: Path, maxBytes: Long)
+}
+
+private object MavenCentralHttpsTransport : MavenArtifactTransport {
+    override fun download(uri: URI, target: Path, maxBytes: Long) {
+        require(uri.scheme == "https" && uri.host == "repo.maven.apache.org" && uri.userInfo == null) {
+            "Only anonymous HTTPS Maven Central downloads are allowed"
+        }
+        val connection = uri.toURL().openConnection() as HttpsURLConnection
+        connection.instanceFollowRedirects = false
+        connection.connectTimeout = NETWORK_TIMEOUT_MILLIS
+        connection.readTimeout = NETWORK_TIMEOUT_MILLIS
+        connection.requestMethod = "GET"
+        try {
+            require(connection.responseCode == HttpsURLConnection.HTTP_OK) {
+                "Maven Central returned HTTP ${connection.responseCode}"
+            }
+            require(connection.contentLengthLong < 0 || connection.contentLengthLong <= maxBytes) {
+                "Maven Central response exceeds the bounded limit"
+            }
+            connection.inputStream.use { input ->
+                Files.newOutputStream(target).use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= maxBytes) { "Maven Central response exceeds the bounded limit" }
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private const val NETWORK_TIMEOUT_MILLIS = 15_000
+}
+
 private class LocalOnlyModelResolver(
     private val repository: Path,
     reactor: Map<MavenCoordinate, Path>,
     private val allowNetwork: Boolean,
+    private val artifactTransport: MavenArtifactTransport,
 ) : ModelResolver {
     @Volatile var reactorModels: Map<MavenCoordinate, Path> = reactor
     val resolvedModels: MutableSet<Path> = ConcurrentHashMap.newKeySet()
@@ -446,32 +510,45 @@ private class LocalOnlyModelResolver(
         if (target.exists() && target.isRegularFile()) return target
         if (!allowNetwork) return null
         val temporary = target.resolveSibling(".${target.fileName}.refactorkit-download")
+        val checksumTemporary = target.resolveSibling(".${target.fileName}.refactorkit-sha256")
         return runCatching {
             Files.createDirectories(target.parent)
+            Files.deleteIfExists(temporary)
+            Files.deleteIfExists(checksumTemporary)
             val suffix = classifier?.let { "-$it" }.orEmpty()
             val relative = coordinate.groupId.replace('.', '/') + "/${coordinate.artifactId}/${coordinate.version}/" +
                 "${coordinate.artifactId}-${coordinate.version}$suffix.$extension"
-            val connection = URI("https://repo.maven.apache.org/maven2/$relative").toURL().openConnection().apply {
-                connectTimeout = NETWORK_TIMEOUT_MILLIS
-                readTimeout = NETWORK_TIMEOUT_MILLIS
+            val artifactUri = URI("https://repo.maven.apache.org/maven2/$relative")
+            artifactTransport.download(artifactUri, temporary, MAX_NETWORK_ARTIFACT_BYTES)
+            artifactTransport.download(URI("$artifactUri.sha256"), checksumTemporary, MAX_CHECKSUM_BYTES)
+            val expected = Files.readString(checksumTemporary, Charsets.US_ASCII).trim()
+                .substringBefore(' ').lowercase()
+            require(SHA256.matches(expected)) { "Maven Central SHA-256 sidecar is invalid" }
+            val actual = sha256(temporary)
+            require(actual == expected) { "Maven Central SHA-256 verification failed" }
+            runCatching {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE)
+            }.getOrElse {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING)
             }
-            if (connection.contentLengthLong > MAX_NETWORK_ARTIFACT_BYTES) error("Artifact exceeds network limit")
-            connection.getInputStream().use { input ->
-                Files.newOutputStream(temporary).use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var total = 0L
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        if (total > MAX_NETWORK_ARTIFACT_BYTES) error("Artifact exceeds network limit")
-                        output.write(buffer, 0, count)
-                    }
-                }
-            }
-            Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING)
             target
-        }.getOrNull().also { resolved -> if (resolved == null) Files.deleteIfExists(temporary) }
+        }.getOrNull().also {
+            Files.deleteIfExists(temporary)
+            Files.deleteIfExists(checksumTemporary)
+        }
+    }
+
+    private fun sha256(path: Path): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        Files.newInputStream(path).use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     override fun addRepository(repository: Repository) = Unit
@@ -480,7 +557,8 @@ private class LocalOnlyModelResolver(
 
     companion object {
         private val SAFE_COMPONENT = Regex("[A-Za-z0-9_.-]+")
-        private const val NETWORK_TIMEOUT_MILLIS = 15_000
+        private val SHA256 = Regex("[a-f0-9]{64}")
+        private const val MAX_CHECKSUM_BYTES = 4L * 1024L
         private const val MAX_NETWORK_ARTIFACT_BYTES = 256L * 1024L * 1024L
     }
 }

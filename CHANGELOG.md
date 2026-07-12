@@ -28,6 +28,15 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Added bounded provider-scoped active/inactive profile selection to
+  `BuildModelRequest`; Maven profile IDs are validated, forwarded to embedded
+  ModelBuilder, represented in hash-bound provider attributes, and preserve
+  Maven active-by-default deactivation semantics.
+- Anonymous Maven Central opt-in now disables redirects and requires a valid
+  bounded `.sha256` sidecar for every downloaded POM/JAR before atomic cache
+  publication. Mismatch or absent checksum leaves no artifact/temp file and is
+  reported as offline-missing; existing local artifacts remain content-hash
+  bound but are not retroactively claimed as repository-authenticated.
 - Added Maven effective custom-source discovery from active-profile
   `sourceDirectory`/`testSourceDirectory` and declarative
   `build-helper-maven-plugin` `add-source`/`add-test-source` executions without

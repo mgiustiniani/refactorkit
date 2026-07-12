@@ -13,10 +13,35 @@ data class BuildModelDiscoveryPolicy(
     enum class CredentialsAccess { DENY, ALLOW_EXPLICIT_REDACTED }
 }
 
+data class BuildModelSelection(
+    val activeProfiles: Set<String> = emptySet(),
+    val inactiveProfiles: Set<String> = emptySet(),
+) {
+    init {
+        require(activeProfiles.intersect(inactiveProfiles).isEmpty()) {
+            "build profiles cannot be both active and inactive"
+        }
+        require(activeProfiles.size + inactiveProfiles.size <= 64) {
+            "build profile selection exceeds the bounded limit"
+        }
+        require((activeProfiles + inactiveProfiles).all { it.isNotBlank() && it.length <= 128 }) {
+            "build profile IDs must be non-blank and at most 128 characters"
+        }
+    }
+}
+
 data class BuildModelRequest(
     val workspaceRoot: Path,
     val policy: BuildModelDiscoveryPolicy = BuildModelDiscoveryPolicy(),
-)
+    val selections: Map<String, BuildModelSelection> = emptyMap(),
+) {
+    init {
+        require(selections.size <= 16) { "build provider selections exceed the bounded limit" }
+        require(selections.keys.all { it.isNotBlank() && it.length <= 128 }) {
+            "build provider selection IDs must be non-blank and at most 128 characters"
+        }
+    }
+}
 
 /**
  * Provider boundary for Maven, Gradle, BSP, compilation databases, and future

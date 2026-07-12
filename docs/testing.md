@@ -165,10 +165,14 @@ records, text blocks, switch/record patterns, imported BOM management, a generat
 local test artifact, main/test scope isolation, classifier and `test-jar`
 variants, explicit `systemPath` scope/evidence, active-profile effective and
 build-helper custom main/test roots, inactive-profile exclusion, source-root
-workspace/symlink confinement, cross-module definitions and references, one-root
-missing-artifact diagnostics, and BOM/JAR/system-path drift
+workspace/symlink confinement, explicit profile activation and active-by-default
+deactivation, cross-module definitions and references, one-root missing-artifact
+diagnostics, and BOM/JAR/system-path drift
 refusal. Variant acceptance proves that normal and classified artifacts sharing
 GA coordinates are not collapsed and that test JARs never enter main classpaths.
+`MavenNetworkResolutionTest` uses an injected transport to prove offline zero
+requests, mandatory SHA-256 verification, successful verified publication, and
+mismatch cleanup without relying on the network.
 `JavaMoveSourceRootPlannerTest` proves rename-only byte identity, package/module
 info inclusion, post-image diagnostics, atomic apply, exact rollback, and typed
 unsafe/collision/drift refusals. `samples/java-maven-reactor-21` is the committed

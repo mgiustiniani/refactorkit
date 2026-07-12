@@ -30,8 +30,10 @@ notes when client behavior can be affected.
 
 Offline effective-model traversal is bounded to 4,096 dependency coordinates,
 128 transitive levels, and 32 relative-parent levels. Explicit network opt-in has
-a 15-second connect/read timeout and a 256 MiB per-artifact ceiling. Limit
-exhaustion becomes a concise `classpath.unavailable` root diagnostic.
+a 15-second connect/read timeout, a 256 MiB per-artifact ceiling, and a 4 KiB
+SHA-256-sidecar ceiling. Redirects are disabled and unverified downloads are
+removed before cache publication. Limit or verification failure becomes a concise
+`classpath.unavailable` root diagnostic.
 
 ## Cancellation
 

@@ -3,6 +3,7 @@ package org.refactorkit.java
 import org.refactorkit.core.BuildModelDiscoveryPolicy
 import org.refactorkit.core.BuildModelProvider
 import org.refactorkit.core.BuildModelRequest
+import org.refactorkit.core.BuildModelSelection
 import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.SourceSetKind
 import java.nio.file.Files
@@ -29,6 +30,30 @@ class BuildModelProvidersTest {
             module.sourceSets.any { it.kind == SourceSetKind.MAIN } &&
                 module.sourceSets.any { it.kind == SourceSetKind.TEST }
         })
+    }
+
+    @Test
+    fun mavenProviderConsumesBoundedExplicitProfileSelection() {
+        val root = Files.createTempDirectory("refactorkit-maven-profile-provider")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>profile</artifactId><version>1</version>
+              <profiles><profile><id>selected</id><build><plugins><plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><executions>
+                <execution><goals><goal>add-source</goal></goals><configuration><sources><source>src/profile/java</source></sources></configuration></execution>
+              </executions></plugin></plugins></build></profile></profiles>
+            </project>
+        """.trimIndent())
+        Files.createDirectories(root.resolve("src/profile/java/fixture"))
+        Files.writeString(root.resolve("src/profile/java/fixture/ProfileType.java"), "package fixture; class ProfileType {}\n")
+        val provider = MavenBuildModelProvider(Files.createTempDirectory("empty-profile-m2"))
+
+        val model = provider.discover(BuildModelRequest(
+            workspaceRoot = root,
+            selections = mapOf(provider.id to BuildModelSelection(activeProfiles = setOf("selected"))),
+        ))
+
+        assertEquals("selected", model.attributes["activeProfiles"])
+        assertTrue(model.modules.single().sourceSets.single { it.kind == SourceSetKind.MAIN }
+            .sourceRoots.contains(Path.of("src/profile/java")))
     }
 
     @Test
