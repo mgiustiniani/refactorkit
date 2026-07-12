@@ -23,6 +23,8 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Upgraded Eclipse JDT Core to 3.44/JLS25 and added hash-bound per-module Maven/
+  Gradle source-level detection with Java 8/11/17/21/25 syntax acceptance.
 - Closed the TX-001–TX-018 transactionality audit for the qualified managed-file
   contract and narrowed standalone directory operations out of stable v1.
 - Added schema-v8 independently verified SHA-256 hashes for every file-image

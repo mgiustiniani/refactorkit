@@ -15,6 +15,44 @@ import java.nio.file.Path
 
 class JavaProjectScannerTest {
     @Test
+    fun detectsHashBoundMavenAndGradleJavaSourceLevels() {
+        val cases = listOf(
+            Triple("maven-8", "pom.xml", "<project><properties><maven.compiler.source>1.8</maven.compiler.source></properties></project>"),
+            Triple("maven-11", "pom.xml", "<project><properties><maven.compiler.release>11</maven.compiler.release></properties></project>"),
+            Triple("maven-property-21", "pom.xml", "<project><properties><java.version>21</java.version><maven.compiler.release>\${java.version}</maven.compiler.release></properties></project>"),
+            Triple("gradle-17", "build.gradle.kts", "java { toolchain { languageVersion.set(JavaLanguageVersion.of(17)) } }"),
+            Triple("gradle-21", "build.gradle", "sourceCompatibility = JavaVersion.VERSION_21"),
+            Triple("gradle-25", "build.gradle.kts", "java { toolchain.languageVersion.set(JavaLanguageVersion.of(25)) }"),
+        )
+        cases.forEach { (name, descriptor, content) ->
+            val root = Files.createTempDirectory("refactorkit-$name")
+            Files.createDirectories(root.resolve("src/main/java/example"))
+            Files.writeString(root.resolve("src/main/java/example/App.java"), "package example; class App {}\n")
+            Files.writeString(root.resolve(descriptor), content)
+
+            val snapshot = JavaProjectScanner().scan(root)
+
+            assertEquals(name.substringAfterLast('-'), snapshot.modules.single().languageSettings["java.sourceLevel"])
+            val descriptorEvidence = snapshot.classpathEvidence.single {
+                it.path.toString().replace('\\', '/') == descriptor
+            }
+            assertEquals(ClasspathEvidenceKind.DECLARATION_FILE, descriptorEvidence.kind)
+            assertEquals(64, descriptorEvidence.fingerprint.length)
+        }
+    }
+
+    @Test
+    fun defaultsUnconfiguredProjectsToJava8SourceSemantics() {
+        val root = Files.createTempDirectory("refactorkit-java-default-level")
+        Files.createDirectories(root.resolve("src/main/java/example"))
+        Files.writeString(root.resolve("src/main/java/example/App.java"), "package example; class App {}\n")
+
+        val snapshot = JavaProjectScanner().scan(root)
+
+        assertEquals("8", snapshot.modules.single().languageSettings["java.sourceLevel"])
+    }
+
+    @Test
     fun scansConventionalJavaSourceRoot() {
         val root = Files.createTempDirectory("refactorkit-java-scan")
         val sourceDir = root.resolve("src/main/java/com/example")
@@ -59,6 +97,30 @@ class JavaProjectScannerTest {
             "missing",
             evidence.getValue("target/test-classes" to ClasspathEvidenceKind.ENTRY).fingerprint,
         )
+    }
+
+    @Test
+    fun refusesApplyWhenBuildDescriptorChangesAfterScan() {
+        val root = Files.createTempDirectory("refactorkit-java-source-level-evidence")
+        val source = Path.of("src/main/java/com/example/App.java")
+        Files.createDirectories(root.resolve(source).parent)
+        Files.writeString(root.resolve(source), "package com.example; public class App {}\n")
+        Files.writeString(root.resolve("pom.xml"), "<project><properties><maven.compiler.release>17</maven.compiler.release></properties></project>")
+        val snapshot = JavaProjectScanner().scan(root)
+        val plan = PatchPlan(
+            operation = "sourceLevelEvidence",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "refuse stale source level",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Delete(source))),
+        )
+        Files.writeString(root.resolve("pom.xml"), "<project><properties><maven.compiler.release>21</maven.compiler.release></properties></project>")
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "snapshot.classpathChanged" }, result.diagnostics.toString())
     }
 
     @Test

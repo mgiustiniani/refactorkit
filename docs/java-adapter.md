@@ -1,5 +1,23 @@
 # Java adapter
 
+## Source compatibility
+
+RefactorKit uses Eclipse JDT Core 3.44 with the JLS25 AST to parse Java source
+levels 8 through 25 while retaining Java 8-compatible target bytecode for the
+library contract. `JavaProjectScanner` detects per-module compliance from Maven
+`maven.compiler.release`/`source` (including simple property references) and
+Gradle toolchain/source-compatibility declarations. Unconfigured projects default
+to Java 8 semantics; direct synthetic snapshots without module metadata use the
+latest supported level.
+
+The normalized `java.sourceLevel` is stored in hash-bound `Module.languageSettings`.
+Maven/Gradle descriptors are independently fingerprinted as declaration evidence,
+so a compliance change after preview refuses apply as `snapshot.classpathChanged`.
+JDT receives the detected compliance for each source module. Acceptance covers
+representative Java 8, 11, 17, 21, and 25 syntax, including Java 25 module-import
+declarations.
+
+
 See AGENTS.md for the authoritative initial architecture and implementation rules.
 
 ## Compiler-backed analysis roadmap

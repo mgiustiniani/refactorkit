@@ -13,6 +13,34 @@ import kotlin.test.assertTrue
 class JdtJavaSemanticAnalyzerTest {
 
     @Test
+    fun parsesRepresentativeJava8Through25LanguageConstructsAtDetectedCompliance() {
+        val cases = listOf(
+            8 to "package example; interface Feature8 { default int value() { return ((java.util.function.IntUnaryOperator) x -> x + 1).applyAsInt(1); } }",
+            11 to "package example; class Feature11 { int size() { java.util.function.Function<String, Integer> f = (var value) -> value.length(); return f.apply(\"x\"); } }",
+            17 to "package example; sealed interface Feature17 permits Feature17Value {} record Feature17Value(int value) implements Feature17 {}",
+            21 to "package example; record Feature21(int value) { static int read(Object value) { return switch (value) { case Feature21(int number) -> number; default -> 0; }; } }",
+            25 to "package example; import module java.base; class Feature25 { java.util.List<String> values = java.util.List.of(); }",
+        )
+        cases.forEach { (level, source) ->
+            val root = Files.createTempDirectory("refactorkit-java-$level")
+            val sourceDir = root.resolve("src/main/java/example")
+            Files.createDirectories(sourceDir)
+            Files.writeString(sourceDir.resolve("Feature$level.java"), source)
+            Files.writeString(
+                root.resolve("pom.xml"),
+                "<project><properties><maven.compiler.release>$level</maven.compiler.release></properties></project>",
+            )
+
+            val snapshot = JavaProjectScanner().scan(root)
+            val result = JdtJavaSemanticAnalyzer().analyze(snapshot)
+
+            assertEquals(level.toString(), snapshot.modules.single().languageSettings["java.sourceLevel"])
+            assertTrue(result.warnings.isEmpty(), "Java $level parser warnings: ${result.warnings}")
+            assertTrue(result.symbols.any { it.simpleName == "Feature$level" || it.simpleName == "Feature${level}Value" })
+        }
+    }
+
+    @Test
     fun jdtAnalyzerReadsRepresentativeMavenAndGradleSourceRoots() {
         val samples = mapOf(
             "java-maven-simple" to "com.example.UserManager",
@@ -466,6 +494,10 @@ class JdtJavaSemanticAnalyzerTest {
                 record UserRecord(String name) implements Named {}
             """.trimIndent() + "\n")
         }
+        Files.writeString(
+            root.resolve("pom.xml"),
+            "<project><properties><maven.compiler.release>17</maven.compiler.release></properties></project>",
+        )
         val snapshot = JavaProjectScanner().scan(root)
 
         val result = JdtJavaSemanticAnalyzer().analyze(snapshot)

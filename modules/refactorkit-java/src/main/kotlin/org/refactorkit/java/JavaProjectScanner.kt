@@ -25,6 +25,7 @@ class JavaProjectScanner {
                 root = moduleRoot,
                 sourceRoots = sourceRoots.map(normalizedRoot::relativize),
                 classpathEntries = conventionalClasspathEntries(moduleRoot).map(normalizedRoot::relativize),
+                languageSettings = mapOf("java.sourceLevel" to detectJavaSourceLevel(moduleRoot).toString()),
             )
         }
 
@@ -49,7 +50,7 @@ class JavaProjectScanner {
                 localJarDirectories(moduleRoot).forEach { path ->
                     add(ClasspathEvidence.capture(normalizedRoot, normalizedRoot.relativize(path), ClasspathEvidenceKind.JAR_DIRECTORY))
                 }
-                classpathDeclarationFiles(moduleRoot).forEach { path ->
+                (classpathDeclarationFiles(moduleRoot) + buildDescriptorFiles(moduleRoot)).forEach { path ->
                     add(ClasspathEvidence.capture(normalizedRoot, normalizedRoot.relativize(path), ClasspathEvidenceKind.DECLARATION_FILE))
                 }
             }
@@ -107,6 +108,47 @@ class JavaProjectScanner {
     )
 
     private fun localJarDirectories(root: Path): List<Path> = listOf(root.resolve("lib"), root.resolve("libs"))
+
+    private fun buildDescriptorFiles(root: Path): List<Path> = listOf(
+        root.resolve("pom.xml"),
+        root.resolve("build.gradle"),
+        root.resolve("build.gradle.kts"),
+    )
+
+    private fun detectJavaSourceLevel(root: Path): Int {
+        val descriptors = buildDescriptorFiles(root).filter { it.exists() && Files.isRegularFile(it) }
+        val candidates = descriptors.flatMap { descriptor ->
+            val text = runCatching { descriptor.readText() }.getOrDefault("")
+            when (descriptor.fileName.toString()) {
+                "pom.xml" -> listOf(
+                    Regex("<maven\\.compiler\\.release>\\s*([^<]+)\\s*</maven\\.compiler\\.release>"),
+                    Regex("<maven\\.compiler\\.source>\\s*([^<]+)\\s*</maven\\.compiler\\.source>"),
+                    Regex("<release>\\s*([^<]+)\\s*</release>"),
+                    Regex("<source>\\s*([^<]+)\\s*</source>"),
+                ).mapNotNull { regex ->
+                    regex.find(text)?.groupValues?.get(1)?.resolveMavenValue(text)?.toJavaLevelOrNull()
+                }
+                else -> listOf(
+                    Regex("JavaLanguageVersion\\.of\\(\\s*(\\d+)\\s*\\)"),
+                    Regex("JavaVersion\\.VERSION_(\\d+)") ,
+                    Regex("(?:sourceCompatibility|targetCompatibility|options\\.release(?:\\.set)?)\\D{0,20}(\\d+)"),
+                ).mapNotNull { it.find(text)?.groupValues?.get(1)?.toJavaLevelOrNull() }
+            }
+        }
+        return candidates.firstOrNull { it in 8..25 } ?: 8
+    }
+
+    private fun String.resolveMavenValue(pom: String): String {
+        val token = trim()
+        val property = Regex("^\\$\\{([^}]+)}$").matchEntire(token)?.groupValues?.get(1) ?: return token
+        return Regex("<$property>\\s*([^<]+)\\s*</$property>")
+            .find(pom)?.groupValues?.get(1)?.trim() ?: token
+    }
+
+    private fun String.toJavaLevelOrNull(): Int? {
+        val normalized = trim().removePrefix("1.")
+        return normalized.toIntOrNull()
+    }
 
     private fun classpathDeclarationFiles(root: Path): List<Path> = listOf(
         root.resolve(".refactorkit/classpath"),

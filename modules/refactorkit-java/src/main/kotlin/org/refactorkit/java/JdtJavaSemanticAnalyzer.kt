@@ -49,7 +49,15 @@ class JdtJavaSemanticAnalyzer {
             .toTypedArray()
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
-            .map { analyzeFileWithReferences(it, sourceRoots, classpathEntries) }
+            .map { file ->
+                val sourceLevel = snapshot.modules
+                    .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
+                    .maxByOrNull { module -> module.root.nameCount }
+                    ?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()
+                    ?.coerceIn(8, 25)
+                    ?: 25
+                analyzeFileWithReferences(file, sourceRoots, classpathEntries, sourceLevel)
+            }
         val symbols = fileAnalyses.flatMap { it.symbols }
         val symbolsByKey = symbols.mapNotNull { symbol -> symbol.bindingKey?.let { it to symbol } }.toMap()
         val references = fileAnalyses.flatMap { analysis ->
@@ -96,16 +104,17 @@ class JdtJavaSemanticAnalyzer {
         )
     }
 
-    fun analyzeFile(file: SourceFile): List<JdtJavaSemanticSymbol> =
-        analyzeFileWithReferences(file, emptyArray(), emptyArray()).symbols
+    fun analyzeFile(file: SourceFile, sourceLevel: Int = 25): List<JdtJavaSemanticSymbol> =
+        analyzeFileWithReferences(file, emptyArray(), emptyArray(), sourceLevel.coerceIn(8, 25)).symbols
 
     private fun analyzeFileWithReferences(
         file: SourceFile,
         sourceRoots: Array<String>,
         classpathEntries: Array<String>,
+        sourceLevel: Int,
     ): FileAnalysis {
         if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
-        val compilationUnit = parse(file, sourceRoots, classpathEntries)
+        val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel)
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
         val rawReferences = mutableListOf<RawReference>()
@@ -486,12 +495,14 @@ class JdtJavaSemanticAnalyzer {
         file: SourceFile,
         sourceRoots: Array<String>,
         classpathEntries: Array<String>,
+        sourceLevel: Int,
     ): CompilationUnit {
-        val parser = ASTParser.newParser(AST.JLS21)
+        val parser = ASTParser.newParser(AST.JLS25)
         parser.setKind(ASTParser.K_COMPILATION_UNIT)
         parser.setSource(file.content.toCharArray())
         parser.setUnitName(file.path.toString().replace('\\', '/'))
-        parser.setCompilerOptions(JavaCore.getOptions().also { JavaCore.setComplianceOptions(JavaCore.VERSION_21, it) })
+        val compliance = if (sourceLevel == 8) JavaCore.VERSION_1_8 else sourceLevel.toString()
+        parser.setCompilerOptions(JavaCore.getOptions().also { JavaCore.setComplianceOptions(compliance, it) })
         if (sourceRoots.isNotEmpty() || classpathEntries.isNotEmpty()) {
             parser.setEnvironment(classpathEntries, sourceRoots, null, true)
         }
