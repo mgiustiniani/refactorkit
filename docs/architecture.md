@@ -29,6 +29,8 @@ catalogues and deterministic project-style-aware formatters with the same previe
 evidence, diagnostics, managed apply, rollback, and bounded-resource standards.
 The completed Maven Java 21 reference slice now feeds the first implemented
 internal Build Model SPI contract/projection and the remaining Gradle/provider
-productionization gate in `0.5.x`; package/FQCN identity is
+productionization gate in `0.5.x`. The Gradle default is now the bounded,
+non-executable `gradle-declarative-v1` model documented in
+[`gradle-build-model.md`](gradle-build-model.md); package/FQCN identity is
 kept separate from source-set/module ownership. See `docs/releases/v0.5.0-plan.md`,
 `docs/releases/v1.0.0-plan.md`, ADR 0009, and ADR 0010.

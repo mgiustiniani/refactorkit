@@ -5,6 +5,7 @@ import org.refactorkit.core.ClasspathEvidenceKind
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
+import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.Workspace
 import java.io.File
 import java.nio.file.Files
@@ -29,6 +30,10 @@ class JavaProjectScanner(
         val normalizedRoot = root.toAbsolutePath().normalize()
         val discoveredModuleRoots = detectModuleRoots(normalizedRoot)
         val pomFiles = findBuildFiles(normalizedRoot, "pom.xml")
+        val gradleBuildModel = if (
+            findBuildFiles(normalizedRoot, "build.gradle").isNotEmpty() ||
+            findBuildFiles(normalizedRoot, "build.gradle.kts").isNotEmpty()
+        ) GradleDeclarativeModelBuilder().build(normalizedRoot) else null
         val mavenReactor = if (pomFiles.isNotEmpty()) {
             MavenEffectiveReactorBuilder(
                 localMavenRepository,
@@ -38,7 +43,11 @@ class JavaProjectScanner(
             ).build(normalizedRoot, pomFiles)
         } else null
         val mavenByRoot = mavenReactor?.modules.orEmpty()
-        val moduleRoots = (discoveredModuleRoots + mavenByRoot.values.filter { it.packaging != "pom" }.map(MavenModuleModel::root))
+        val moduleRoots = (
+            discoveredModuleRoots +
+                mavenByRoot.values.filter { it.packaging != "pom" }.map(MavenModuleModel::root) +
+                gradleBuildModel?.modules.orEmpty().map(org.refactorkit.core.BuildModule::root)
+        )
             .distinct().sortedBy(Path::toString).ifEmpty { listOf(normalizedRoot) }
         val moduleNames = moduleRoots.associateWith { moduleName(normalizedRoot, it) }
         val coordinateNames = mavenByRoot.values
@@ -53,12 +62,22 @@ class JavaProjectScanner(
 
         val initialModules = moduleRoots.map { moduleRoot ->
             val maven = mavenByRoot[moduleRoot]
+            val gradle = gradleBuildModel?.modules?.firstOrNull { it.root == moduleRoot }
             val mainRoots = if (maven != null) (
                 conventionalMainSourceRoots(moduleRoot) + maven.mainSourceDirectories + listOf(moduleRoot.resolve("src/main/java"))
             ).distinct() else conventionalMainSourceRoots(moduleRoot)
             val testRoots = if (maven != null) (
                 conventionalTestSourceRoots(moduleRoot) + maven.testSourceDirectories + listOf(moduleRoot.resolve("src/test/java"))
             ).distinct() else conventionalTestSourceRoots(moduleRoot)
+            val gradleMainRoots = gradle?.sourceSets.orEmpty()
+                .filter { it.kind == SourceSetKind.MAIN }.flatMap { it.sourceRoots }.map(normalizedRoot::resolve)
+            val gradleTestRoots = gradle?.sourceSets.orEmpty()
+                .filter { it.kind == SourceSetKind.TEST }.flatMap { it.sourceRoots }.map(normalizedRoot::resolve)
+            val gradleCustomRoots = gradle?.sourceSets.orEmpty()
+                .filter { it.kind !in setOf(SourceSetKind.MAIN, SourceSetKind.TEST) }
+                .flatMap { it.sourceRoots }.map(normalizedRoot::resolve)
+            val effectiveMainRoots = (mainRoots + gradleMainRoots).distinct()
+            val effectiveTestRoots = (testRoots + gradleTestRoots).distinct()
             val explicitGeneratedTest = generatedSourceRoots(moduleRoot, test = true)
             val discoveredGeneratedMain = generatedSourceRoots(moduleRoot, test = false)
             val pluginTestGenerated = discoveredGeneratedMain.filter { generatedRoot ->
@@ -68,7 +87,7 @@ class JavaProjectScanner(
             }
             val generatedMain = discoveredGeneratedMain - pluginTestGenerated.toSet()
             val generatedTest = (explicitGeneratedTest + pluginTestGenerated).distinct()
-            val sourceRoots = (mainRoots + testRoots + generatedMain + generatedTest)
+            val sourceRoots = (effectiveMainRoots + effectiveTestRoots + gradleCustomRoots + generatedMain + generatedTest)
                 .map(normalizedRoot::relativize).distinct()
             val conventionalMainOutputs = listOf(moduleRoot.resolve("target/classes"), moduleRoot.resolve("build/classes/java/main"))
                 .filter { it.exists() && it.isDirectory() }
@@ -85,11 +104,18 @@ class JavaProjectScanner(
             } else {
                 (mainClasspath + conventionalTestOutputs.map(normalizedRoot::relativize)).distinct()
             }
+            val gradleMainDependencies = gradle?.sourceSets.orEmpty()
+                .filter { it.kind == SourceSetKind.MAIN }.flatMap { it.moduleDependencies }.map { it.targetModuleId }
+            val gradleTestDependencies = gradle?.sourceSets.orEmpty()
+                .filter { it.kind != SourceSetKind.MAIN }.flatMap { it.moduleDependencies }.map { it.targetModuleId }
             val mainDependencies = maven?.takeIf { it.modelFailure == null }?.mainDependencies?.mapNotNull(coordinateNames::get)
-                ?: detectModuleDependencies(moduleRoot, legacyIdentities)
+                ?: gradleMainDependencies.ifEmpty { detectModuleDependencies(moduleRoot, legacyIdentities) }
             val testDependencies = maven?.takeIf { it.modelFailure == null }?.testDependencies?.mapNotNull(coordinateNames::get)
-                ?: mainDependencies
-            val sourceLevel = maven?.takeIf { it.modelFailure == null }?.sourceLevel ?: detectJavaSourceLevel(moduleRoot)
+                ?: gradleTestDependencies.ifEmpty { mainDependencies }
+            val sourceLevel = maven?.takeIf { it.modelFailure == null }?.sourceLevel
+                ?: gradle?.sourceSets?.firstOrNull { it.kind == SourceSetKind.MAIN }
+                    ?.attributes?.get("java.sourceLevel")?.toIntOrNull()
+                ?: detectJavaSourceLevel(moduleRoot)
             val languageSettings = buildMap {
                 put("java.sourceLevel", sourceLevel.toString())
                 if (maven != null) {
@@ -104,10 +130,8 @@ class JavaProjectScanner(
                         val suffix = if (missing.size > 8) " (+${missing.size - 8} more)" else ""
                         put("java.classpath.message", "Offline artifacts unavailable: ${missing.take(8).joinToString(", ")}$suffix")
                     }
-                } else if (listOf(moduleRoot.resolve("build.gradle"), moduleRoot.resolve("build.gradle.kts")).any { it.exists() }) {
-                    put("java.buildSystem", "gradle")
-                    put("java.buildModel.status", "partial")
-                    put("java.buildModel.message", "Gradle metadata uses deterministic declarative heuristics; effective execution is disabled")
+                } else if (gradle != null) {
+                    putAll(gradle.attributes)
                 } else {
                     put("java.buildSystem", "conventional")
                     put("java.buildModel.status", "partial")
@@ -121,8 +145,8 @@ class JavaProjectScanner(
                 classpathEntries = (mainClasspath + testClasspath).distinct(),
                 dependencies = (mainDependencies + testDependencies).distinct().sorted(),
                 languageSettings = languageSettings,
-                mainSourceRoots = (mainRoots + generatedMain).map(normalizedRoot::relativize),
-                testSourceRoots = testRoots.map(normalizedRoot::relativize),
+                mainSourceRoots = (effectiveMainRoots + generatedMain).map(normalizedRoot::relativize),
+                testSourceRoots = effectiveTestRoots.map(normalizedRoot::relativize),
                 generatedSourceRoots = generatedMain.map(normalizedRoot::relativize),
                 generatedTestSourceRoots = generatedTest.map(normalizedRoot::relativize),
                 mainClasspathEntries = mainClasspath,
@@ -208,11 +232,11 @@ class JavaProjectScanner(
             sourceExtensions = setOf("java"),
             ignoredDirectories = ProjectSnapshot.DEFAULT_IGNORED_DIRECTORIES,
             classpathEvidence = classpathEvidence,
-            buildModels = if (includeBuildModels) buildModels(modules) else emptyList(),
+            buildModels = if (includeBuildModels) buildModels(modules, gradleBuildModel) else emptyList(),
         )
     }
 
-    private fun buildModels(modules: List<Module>) = modules
+    private fun buildModels(modules: List<Module>, gradleBuildModel: org.refactorkit.core.BuildModel?) = modules
         .groupBy { it.languageSettings["java.buildSystem"] ?: "conventional" }
         .toSortedMap()
         .map { (buildSystem, providerModules) ->
@@ -224,10 +248,31 @@ class JavaProjectScanner(
                         activeMavenProfiles,
                         inactiveMavenProfiles,
                     )
-                "gradle" -> GradleDeclarativeBuildModelProvider().project(providerModules)
+                "gradle" -> gradleBuildModel?.let { enrichGradleModel(it, providerModules) }
+                    ?: GradleDeclarativeBuildModelProvider().project(providerModules)
                 else -> ConventionalJavaBuildModelProvider().project(providerModules)
             }
         }
+
+    private fun enrichGradleModel(
+        model: org.refactorkit.core.BuildModel,
+        modules: List<Module>,
+    ): org.refactorkit.core.BuildModel {
+        val compatibility = modules.associateBy(Module::name)
+        return model.copy(modules = model.modules.map { buildModule ->
+            val module = compatibility[buildModule.id] ?: return@map buildModule
+            buildModule.copy(
+                attributes = buildModule.attributes + module.languageSettings,
+                sourceSets = buildModule.sourceSets.map { sourceSet ->
+                    val testVisibility = sourceSet.kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST) ||
+                        sourceSet.attributes["visibility"] == "test"
+                    sourceSet.copy(
+                        classpathEntries = if (testVisibility) module.testClasspathEntries else module.mainClasspathEntries,
+                    )
+                },
+            )
+        })
+    }
 
     fun detectSourceRoots(root: Path): List<Path> {
         val conventionalRoots = conventionalSourceRoots(root)

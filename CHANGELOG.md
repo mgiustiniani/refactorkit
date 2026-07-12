@@ -28,6 +28,13 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Advanced `gradle-declarative-v1` from compatibility projection to a bounded,
+  non-executable model for conventional main/test plus literal integration/custom
+  source sets, generated roots, outputs, Java levels, and project dependencies.
+  JDT consumes per-set visibility and edges; scanner classpath evidence enriches
+  the model. Oversized/unreadable descriptors and workspace/symlink root escapes
+  return `EXECUTION_REFUSED`; Gradle/Wrapper/scripts/tasks/plugins/Tooling API are
+  never invoked.
 - Added bounded provider-scoped active/inactive profile selection to
   `BuildModelRequest`; Maven profile IDs are validated, forwarded to embedded
   ModelBuilder, represented in hash-bound provider attributes, and preserve

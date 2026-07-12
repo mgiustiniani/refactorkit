@@ -65,7 +65,7 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Internal Build Model SPI
 |Language-neutral core contracts with ecosystem providers
-|Internal `0.5.x` abstraction for module graphs, source sets, scoped dependencies, outputs, generated roots, typed model diagnostics, discovery policy, and hash-bound evidence. Core contracts plus explicit Maven-effective, Gradle-declarative, and conventional Java providers are implemented. JDT environments and source ownership/planner consumers use provenance-preserving exact/longest-prefix Build Model queries with compatibility fallback. Providers never execute arbitrary build code silently or write the workspace.
+|Internal `0.5.x` abstraction for module graphs, source sets, scoped dependencies, outputs, generated roots, typed model diagnostics, discovery policy, and hash-bound evidence. Core contracts plus explicit Maven-effective, Gradle-declarative, and conventional Java providers are implemented. The Gradle provider models a bounded literal main/test/integration/custom subset and returns `PARTIAL` or `EXECUTION_REFUSED` without invoking Gradle, scripts, tasks, plugins, or Tooling API. JDT environments and source ownership/planner consumers use provenance-preserving exact/longest-prefix Build Model queries with compatibility fallback. Providers never execute arbitrary build code silently or write the workspace.
 |`modules/refactorkit-core/.../BuildModels.kt`, `docs/build-model.md`, ADR 0010, `docs/releases/v0.5.0-plan.md` P2B.
 |first implementation slice; release gate remains
 

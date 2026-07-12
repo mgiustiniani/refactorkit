@@ -157,6 +157,15 @@ same through staged JDT diagnostics overlays. Daemon contract tests verify
 redacted source-set summary and capability flags without exposing local
 home/classpath paths.
 
+## Gradle declarative model acceptance
+
+`GradleDeclarativeModelAcceptanceTest` proves main/integration/generated source
+sets, literal project edges, Java 21 JDT resolution, and scanner classpath
+enrichment without invoking Gradle. A build-script filesystem side effect remains
+absent. Separate acceptance proves workspace escape refusal, `EXECUTION_REFUSED`,
+path redaction, and exclusion of outside sources. See
+[Gradle declarative build model](gradle-build-model.md).
+
 ## Java diagnostics acceptance
 
 `MavenReactorAnalysisAcceptanceTest` builds an isolated effective-model reactor

@@ -74,10 +74,8 @@ internal class MavenBuildModelProvider(
 internal class GradleDeclarativeBuildModelProvider : BuildModelProvider {
     override val id: String = "gradle-declarative-v1"
 
-    override fun discover(request: BuildModelRequest): BuildModel {
-        val snapshot = JavaProjectScanner().scanWithoutBuildModels(request.workspaceRoot)
-        return project(snapshot.modules.filter { it.languageSettings["java.buildSystem"] == "gradle" })
-    }
+    override fun discover(request: BuildModelRequest): BuildModel =
+        GradleDeclarativeModelBuilder().build(request.workspaceRoot)
 
     internal fun project(modules: List<Module>): BuildModel =
         JavaModuleBuildModelProjector.project(

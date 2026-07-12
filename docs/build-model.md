@@ -54,9 +54,10 @@ now has explicit `BuildModelProvider` implementations and provider identities:
 
 - `maven-effective-v1`: embedded effective model, plugin/lifecycle execution
   denied, credentials denied, network denied unless anonymous opt-in;
-- `gradle-declarative-v1`: deterministic descriptor heuristics only; Gradle
-  settings/scripts/tasks and Tooling API execution remain denied even if the
-  generic request allows explicit execution;
+- `gradle-declarative-v1`: bounded literal main/test/integration/custom source
+  sets, generated roots, outputs, Java levels, and project edges; Gradle
+  settings/scripts/tasks/plugins and Tooling API execution remain denied even if
+  the generic request allows explicit execution;
 - `java-conventional-v1`: conventional source/output layout without an effective
   ecosystem model.
 

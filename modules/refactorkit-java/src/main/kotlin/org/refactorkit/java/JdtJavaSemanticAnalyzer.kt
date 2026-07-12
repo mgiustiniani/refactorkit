@@ -168,9 +168,13 @@ class JdtJavaSemanticAnalyzer {
         model: BuildModel,
         owner: BuildModule,
     ): BuildSemanticEnvironment {
-        val testSet = owner.sourceSets.firstOrNull { it.kind == SourceSetKind.TEST }
-        val testSource = testSet?.sourceRoots.orEmpty().any { file.path.normalize().startsWith(it.normalize()) }
-        val selectedSet = if (testSource) testSet else owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
+        val selectedSet = owner.sourceSets.filter { sourceSet ->
+            sourceSet.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) }
+        }.maxByOrNull { sourceSet -> sourceSet.sourceRoots.maxOfOrNull { it.nameCount } ?: 0 }
+            ?: owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
+        val testSource = selectedSet?.kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST) ||
+            selectedSet?.attributes?.get("visibility") == "test"
+        val mainSet = owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
         val byId = model.modules.associateBy(BuildModule::id)
         val visible = linkedMapOf(owner.id to owner)
         val pending = ArrayDeque(selectedSet?.moduleDependencies.orEmpty().map { it.targetModuleId })
@@ -183,8 +187,8 @@ class JdtJavaSemanticAnalyzer {
                 ?.moduleDependencies.orEmpty().mapTo(pending) { it.targetModuleId }
         }
         val sourceRoots = buildList {
-            owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { addAll(it.sourceRoots) }
-            if (testSource) testSet?.let { addAll(it.sourceRoots) }
+            mainSet?.let { addAll(it.sourceRoots) }
+            if (selectedSet != null && selectedSet != mainSet) addAll(selectedSet.sourceRoots)
             visible.values.filter { it != owner }.forEach { dependency ->
                 dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { addAll(it.sourceRoots) }
             }
