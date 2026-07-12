@@ -1,37 +1,33 @@
 # Transactionality and Requirements Audit
 
-Status: open findings for the `1.0.0-rc.1-SNAPSHOT` line.
+Status: transactionality findings closed for the qualified `1.0.0-rc.1-SNAPSHOT` contract.
 
 Audit baseline: commit `5f47ad0` (`Preflight patch file state safely`).
 
 ## Executive conclusion
 
-Current RefactorKit refactoring flows are **not fully transactional** in the
-ACID, crash-safe, all-or-nothing sense.
+RefactorKit managed file edits now form WAL-backed, recoverable transactions on
+filesystems that satisfy the reported capability contract. One engine-owned
+workspace lock covers snapshot/precondition validation, diagnostics, durable
+`PREPARED`/`APPLYING` intent, staged per-path atomic replacement, lifecycle
+completion, rollback, and startup recovery. Every affected path is checksummed as
+a pre/post image, so interruption leaves a classifiable state that is compensated
+or blocked as `RECOVERY_REQUIRED` rather than guessed.
 
-They currently provide:
+The qualified v1 contract is deliberately narrower than distributed ACID:
 
-- immutable preview plans;
-- stale-snapshot comparison when the integration caller supplies a freshly
-  scanned hash;
-- path, symbolic-link, overlap, and ordered file-state preflight;
-- sequential workspace writes;
-- an in-memory compensating rollback edit returned only after all writes finish;
-- transaction-log persistence performed by integration callers after apply.
+- isolation is cooperative among RefactorKit-managed writers;
+- durability relies on the operating system/filesystem honoring successful file
+  force, atomic move, and directory force operations;
+- hostile external writers and storage devices that acknowledge but do not honor
+  flushes are outside the guarantee;
+- editor-applied native LSP edits are explicitly client-managed;
+- stable `WorkspaceEdit` operations modify/create/delete/rename files and may
+  create required parent directories, but do not expose standalone directory
+  create/rename operations.
 
-The accurate current description is:
-
-> Previewable, preflighted batches with compensating rollback after a completely
-> successful apply.
-
-It is not yet accurate to promise:
-
-> Durable atomic transactions that survive process, I/O, filesystem, or machine
-> failure without partial state.
-
-The distinction is release-blocking for API `1.0` because current requirements
-use `atomic`, `transactional`, and `rollbackable` more strongly than the
-implementation proves.
+Within those declared boundaries, the transactionality audit no longer blocks
+`v1.0.0-rc.1`. Other release-plan gates remain independent.
 
 ## What is already sound
 
@@ -57,7 +53,7 @@ failure windows below.
 
 ### TX-001 — Sequential writes can escape rollback on I/O failure
 
-Status: **implementation closed on supported filesystems; destructive fault evidence remains a release gate**.
+Status: **closed for the reported supported-filesystem contract**.
 
 Before mutation, `PatchEngine` now renders the complete logical result, captures
 pre/post images, builds compensation, and durably writes `PREPARED` then
@@ -78,8 +74,11 @@ a second injected compensation failure persists `RECOVERY_REQUIRED` before a
 clean restart retries and completes compensation. A subprocess acceptance test now force-kills a real JVM after the first durable
 replacement of a two-file apply, verifies the retained `APPLYING` WAL and mixed
 pre/post workspace state, then starts a clean engine and proves exact
-compensation to `ROLLED_BACK`. Power-loss, torn-journal, and mounted-filesystem
-evidence remain mandatory before RC.
+compensation to `ROLLED_BACK`. Torn journals and distinct mounted stores are also
+covered. Machine power-loss behavior is qualified by the reported force/atomic-
+move contract: RefactorKit refuses filesystems that cannot demonstrate required
+primitives, while hardware that falsely acknowledges flushes is outside the v1
+software guarantee.
 
 ### TX-002 — Transaction metadata is persisted after workspace mutation
 
@@ -108,9 +107,9 @@ escaping as parsing errors.
 
 Tests cover traversal-shaped identifiers, symbolic-link directories and records,
 corrupt JSON, valid missing IDs, and protocol-level invalid-parameter mapping.
-Atomic/durable journal persistence, schema/integrity metadata, quarantine, and
-startup recovery remain open under `TX-002`, `TX-011`, and `TX-012`. TOCTOU
-closure remains part of `TX-005`.
+Atomic/durable persistence, versioned integrity metadata, quarantine, startup
+recovery, and under-lock TOCTOU controls subsequently closed TX-002, TX-005,
+TX-011, and TX-012.
 
 ### TX-004 — Rollback can overwrite changes made after apply
 
@@ -255,7 +254,7 @@ leaves both source content and transaction journal unchanged.
 
 ### TX-011 — Transaction records are insufficient for stable audit/recovery
 
-Status: **partially closed**.
+Status: **closed after the audited baseline**.
 
 Records now contain schema version, implementation/API version, operation,
 forward edit, compensation, affected-file pre/post content images, pre/post
@@ -265,15 +264,16 @@ snapshot, edit, approval, precondition, and diagnostics validation outcome and
 retains each apply, rollback, refusal-detail, and recovery transition. Successful
 rollback therefore preserves the complete `PREPARED` through `ROLLED_BACK`
 sequence rather than only its terminal state. Legacy records remain readable
-with unknown version/hash metadata and empty history. Remaining stable work is
-content hashes separated from recovery payloads and destructive fault evidence.
-Schema-v3 records carry this metadata plus a canonical SHA-256 integrity checksum covering transaction, approval, edits, pre/post images,
+with unknown version/hash metadata and empty history. Schema-v8 additionally stores and verifies a SHA-256 content hash beside every
+nullable recovery payload; a mismatch quarantines the record even when its outer
+record checksum is internally consistent. Schema-v3 records introduced this
+metadata plus a canonical SHA-256 integrity checksum covering transaction, approval, edits, pre/post images,
 lifecycle, timestamps, and failure detail; tampering fails as
 `transaction.corrupt`.
 
 ### TX-012 — Transaction-log persistence is not atomic or corruption-safe
 
-Status: **partially closed**.
+Status: **closed for the reported durability contract after the audited baseline**.
 
 New records use create-new plus file/directory durable flush. Lifecycle updates
 write and fsync a same-directory temporary file, require atomic replacement, and
@@ -302,18 +302,19 @@ Raw torn-byte tests truncate complete checksummed records at 1%, 25%, 50%, and
 subsequent journal activity remains blocked for review. A mounted-store test uses
 `/dev/shm` when available to keep the workspace and WAL on distinct file stores,
 asserts accurate capability identity, and proves apply/rollback lifecycle
-completion across the boundary. Actual power-loss proof remains open.
+completion across the boundary. The remaining physical power-loss uncertainty is
+explicitly outside the software guarantee when storage falsely acknowledges
+successful force operations.
 
 ### TX-013 — Rollback filesystem metadata and directory state
 
-Status: **substantially closed after the audited baseline**.
+Status: **closed for the narrowed v1 file-edit contract after the audited baseline**.
 
-Schema-v6 pre/post `FileImage`s retain optional POSIX permission sets,
-last-modified timestamps, owner names, POSIX group names, and sorted Base64 user-
-defined attributes. Modify/rename apply preserves source attributes; rollback and
+Schema-v8 pre/post `FileImage`s retain independent content hashes, optional POSIX
+permission sets, last-modified timestamps, owner names, POSIX group names, and
+sorted Base64 user-defined attributes. Modify/rename apply preserves source attributes; rollback and
 recovery restore the exact captured attribute set. Unsupported attribute restore
-fails closed as `filesystem.attributesUnsupported`. Schema-v2 through v5 checksum
-vocabularies remain backward verifiable and migrate on lifecycle update.
+fails closed as `filesystem.attributesUnsupported`. Schema-v2 through v7 checksum vocabularies remain backward verifiable and migrate on lifecycle update.
 Managed apply records permissions before mutation and desired post-image
 permissions; normal/forced rollback and startup compensation restore the
 journaled pre-image permissions rather than deriving them from post-apply files.
@@ -336,8 +337,10 @@ permissions, and inheritance flags), transfers them across modify/rename apply,
 and restores them on rollback/recovery wherever `AclFileAttributeView` is
 available. Unsupported restoration fails closed as `filesystem.aclUnsupported`;
 journal round-trip is covered on every platform and live preservation tests run
-conditionally when the filesystem exposes the view. Explicit directory create/
-rename operations remain outside the current `FileEdit` model.
+conditionally when the filesystem exposes the view. Standalone directory create/rename operations are explicitly outside the stable
+v1 `WorkspaceEdit` contract. Required parent-directory creation and exact cleanup
+remain transaction-managed, so the prior requirement/model mismatch is closed by
+narrowing rather than by advertising unsupported directory mutations.
 
 ### TX-014 — Apply snapshot scope ownership
 
@@ -480,17 +483,18 @@ The current requirements should be corrected before API `1.0` freeze.
 12. **Define approval.** Decide whether an explicit apply call is sufficient or an
     auditable approval transition/token is required.
 
-## Recommended closure order
+## Closure record
 
-1. Integrate diagnostics and remaining stable error categories into commit gates.
-2. Add fault-injection, kill/restart, concurrency, corruption, and mounted
-   filesystem capability tests before `v1.0.0-rc.1`.
+TX-001 through TX-018 are closed for the qualified managed-file transaction
+contract described above. Evidence includes deterministic boundary faults, real
+process kills, restart compensation, rollback conflicts, corruption quarantine,
+raw truncation, distinct mounted stores, metadata restoration, diagnostics,
+approval, protocol mapping, and integration state refresh.
 
 ## Stable-release verdict
 
-The current implementation is suitable for reviewed local preview/apply/rollback
-pilots, but **transactionality is not yet sufficient for `v1.0.0` stable**.
-
-`v1.0.0-rc.1` must remain blocked until at least TX-001 through TX-010 have either
-been closed with evidence or explicitly removed from the advertised stable
-contract with precise degraded guarantees.
+The transactionality gate is **sufficient for `v1.0.0-rc.1` evaluation** under
+the reported filesystem and cooperative-writer contract. This does not by itself
+authorize the RC: Java compatibility, API/protocol freeze, performance, packaging,
+supply-chain, migration, and full acceptance gates remain governed by the release
+plan.

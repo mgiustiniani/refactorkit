@@ -147,9 +147,9 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-024
-|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 through v6 checksums/migration, corruption quarantine, lifecycle metadata, capability reporting, raw truncation, real process-kill, and cross-store evidence are implemented (`TX-011`, `TX-012`).
-|Validated UUIDv4 IDs, containment, symbolic-link/non-regular-file refusal, owner-only permissions, and blocking quarantine prevent the audited traversal/corruption paths; actual power-loss evidence remains environment-dependent.
-|Preserve checksum/migration/quarantine and durable lifecycle evidence; add actual power-loss infrastructure where CI permits.
+|Transaction-log identifier/path hardening, atomic durable persistence, schema-v2 through v8 checksums/migration, corruption quarantine, lifecycle metadata, capability reporting, raw truncation, real process-kill, and cross-store evidence are implemented (`TX-011`, `TX-012`).
+|Validated UUIDv4 IDs, containment, symbolic-link/non-regular-file refusal, owner-only permissions, and blocking quarantine prevent the audited traversal/corruption paths; physical devices that falsely acknowledge successful force operations remain outside the qualified software contract.
+|Preserve checksum/migration/quarantine and durable lifecycle evidence; retain explicit filesystem qualification and add hardware power-loss evidence when dedicated infrastructure permits.
 |remaining journal integrity and release blocker
 
 |R-025
@@ -184,7 +184,7 @@ The active stable plan defines the remaining release-hardening workstreams:
 * `v0.3.0` publication is complete from immutable tag `v0.3.0`; main now advances toward `1.0.0-rc.1-SNAPSHOT`;
 * keep API `0.2` active until normative patch/apply/rollback and API `1.0` CLI/daemon contracts are frozen and accepted;
 * prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
-* close or explicitly narrow `TX-001` through `TX-010` before stable transactionality claims, and resolve `TX-011` through `TX-018` contract/recovery gaps;
+* preserve the closed TX-001 through TX-018 qualified transactionality evidence during API freeze;
 * retain precise qualification for WAL-backed managed transactions, the staged recipe-wide boundary, client-managed native LSP edits, and unsupported/destructive filesystem failure models;
 * complete diagnostic regression gates and representative project acceptance;
 * classify and test stable LSP/MCP boundaries;

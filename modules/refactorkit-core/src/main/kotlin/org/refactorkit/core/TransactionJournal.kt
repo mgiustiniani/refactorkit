@@ -32,6 +32,7 @@ data class FileAclEntryImage(
 data class FileImage(
     val path: Path,
     val content: String?,
+    val contentSha256: String? = content?.let(::sha256),
     val posixPermissions: Set<PosixFilePermission>? = null,
     val lastModifiedMillis: Long? = null,
     val ownerName: String? = null,
@@ -64,7 +65,7 @@ data class TransactionJournalRecord(
     val failure: String? = null,
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 7
+        const val CURRENT_SCHEMA_VERSION = 8
     }
 }
 
@@ -99,6 +100,7 @@ internal data class JournalEventDto(
 internal data class FileImageDto(
     val path: String,
     val content: String? = null,
+    val contentSha256: String? = null,
     val posixPermissions: List<String>? = null,
     val lastModifiedMillis: Long? = null,
     val ownerName: String? = null,
@@ -145,9 +147,18 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
             4 -> legacyV4Checksum(dto)
             5 -> legacyV5Checksum(dto)
             6 -> legacyV6Checksum(dto)
+            7 -> legacyV7Checksum(dto)
             else -> checksum(dto.copy(checksum = null))
         }
         require(dto.checksum == expected) { "Transaction journal checksum mismatch" }
+    }
+    if (dto.schemaVersion >= 8) {
+        (dto.preImages + dto.postImages).forEach { image ->
+            val expectedContentHash = image.content?.let(::sha256)
+            require(image.contentSha256 == expectedContentHash) {
+                "Transaction journal file-image content hash mismatch: ${image.path}"
+            }
+        }
     }
     return TransactionJournalRecord(
         schemaVersion = dto.schemaVersion,
@@ -171,6 +182,7 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
 private fun FileImage.toDto() = FileImageDto(
     path = path.toString(),
     content = content,
+    contentSha256 = contentSha256,
     posixPermissions = posixPermissions?.map(PosixFilePermission::name)?.sorted(),
     lastModifiedMillis = lastModifiedMillis,
     ownerName = ownerName,
@@ -182,6 +194,7 @@ private fun FileImage.toDto() = FileImageDto(
 private fun FileImageDto.toDomain() = FileImage(
     path = Paths.get(path),
     content = content,
+    contentSha256 = contentSha256 ?: content?.let(::sha256),
     posixPermissions = posixPermissions?.map(PosixFilePermission::valueOf)?.toSet(),
     lastModifiedMillis = lastModifiedMillis,
     ownerName = ownerName,
@@ -242,12 +255,23 @@ private fun legacyV6Checksum(dto: TransactionJournalDto): String {
     return sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), legacy))
 }
 
+private fun legacyV7Checksum(dto: TransactionJournalDto): String {
+    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto.copy(checksum = null)).jsonObject
+    val legacy = JsonObject(current.mapValues { (key, value) ->
+        if (key == "preImages" || key == "postImages") removeImageMetadata(value) else value
+    })
+    return sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), legacy))
+}
+
 private fun removeImageMetadata(
     value: kotlinx.serialization.json.JsonElement,
     vararg fields: String,
-): kotlinx.serialization.json.JsonElement = kotlinx.serialization.json.JsonArray(value.jsonArray.map { element ->
-    JsonObject(element.jsonObject.filterKeys { it !in fields })
-})
+): kotlinx.serialization.json.JsonElement {
+    val excluded = fields.toSet() + "contentSha256"
+    return kotlinx.serialization.json.JsonArray(value.jsonArray.map { element ->
+        JsonObject(element.jsonObject.filterKeys { it !in excluded })
+    })
+}
 
 private fun checksum(dto: TransactionJournalDto): String =
     sha256(canonicalJournalJson.encodeToString(dto))

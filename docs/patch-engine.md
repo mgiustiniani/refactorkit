@@ -2,6 +2,14 @@
 
 See AGENTS.md for the authoritative architecture and implementation rules.
 
+## Stable v1 edit scope
+
+`WorkspaceEdit` supports file create, modify, delete, and rename. The engine may
+create missing parent directories required by those file edits and journals them
+for conflict-safe rollback cleanup. Standalone directory create or rename is not
+a stable v1 operation and must be refused by integrations rather than represented
+as an implicit file edit.
+
 ## Managed text encoding
 
 The v1 patch contract accepts valid UTF-8 text only. RefactorKit never guesses or

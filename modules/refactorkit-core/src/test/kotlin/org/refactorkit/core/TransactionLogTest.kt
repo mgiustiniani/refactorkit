@@ -55,6 +55,34 @@ class TransactionLogTest {
     }
 
     @Test
+    fun quarantinesFileImageWithMismatchedIndependentContentHash() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-image-hash")
+        val log = TransactionLog(logDir)
+        val transaction = Transaction(
+            planId = PlanId("plan-image-hash"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        log.prepare(TransactionJournalRecord(
+            transaction = transaction,
+            operation = "contentHashMismatch",
+            forwardEdit = WorkspaceEdit(),
+            preImages = listOf(FileImage(
+                Paths.get("Example.java"),
+                "class Example {}\n",
+                contentSha256 = "0".repeat(64),
+            )),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        ))
+
+        val error = assertFailsWith<TransactionLogException> { log.loadRecord(transaction.id) }
+
+        assertEquals("transaction.quarantined", error.code)
+        assertTrue(error.cause?.message?.contains("content hash mismatch") == true)
+    }
+
+    @Test
     fun roundTripsPlatformAclImages() {
         val logDir = Files.createTempDirectory("refactorkit-txlog-acl")
         val log = TransactionLog(logDir)
@@ -365,7 +393,7 @@ class TransactionLogTest {
         log.prepare(prepared)
         val file = logDir.resolve("${transaction.id.value}.json")
         val schemaOne = Files.readString(file)
-            .replace("\"schemaVersion\": 7", "\"schemaVersion\": 1")
+            .replace("\"schemaVersion\": 8", "\"schemaVersion\": 1")
             .lineSequence()
             .filterNot { it.trimStart().startsWith("\"checksum\"") }
             .joinToString("\n")

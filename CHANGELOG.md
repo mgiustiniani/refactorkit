@@ -23,6 +23,10 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Closed the TX-001–TX-018 transactionality audit for the qualified managed-file
+  contract and narrowed standalone directory operations out of stable v1.
+- Added schema-v8 independently verified SHA-256 hashes for every file-image
+  recovery payload; mismatches quarantine the journal.
 - Added schema-v7 ordered platform ACL images with apply preservation,
   rollback/recovery restoration, and fail-closed unsupported handling.
 - Defined the v1 managed-text contract as strict UTF-8: malformed input refuses
