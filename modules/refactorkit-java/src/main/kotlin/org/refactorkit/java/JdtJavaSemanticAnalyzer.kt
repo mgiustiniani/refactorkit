@@ -1,6 +1,7 @@
 package org.refactorkit.java
 
 import org.eclipse.jdt.core.JavaCore
+import org.eclipse.jdt.core.compiler.IProblem
 import org.eclipse.jdt.core.dom.AST
 import org.eclipse.jdt.core.dom.ASTParser
 import org.eclipse.jdt.core.dom.ASTVisitor
@@ -343,10 +344,19 @@ class JdtJavaSemanticAnalyzer {
         val warnings = compilationUnit.problems
             .filter { it.isError }
             .map { problem ->
+                val start = problem.sourceStart.coerceAtLeast(0)
+                val length = (problem.sourceEnd - problem.sourceStart + 1).coerceAtLeast(1)
                 JdtJavaSemanticWarning(
                     path = file.path,
                     line = (problem.sourceLineNumber - 1).coerceAtLeast(0),
+                    sourceRange = rangeFor(compilationUnit, start, length),
                     message = problem.message,
+                    category = if ((problem.id and IProblem.Syntax) != 0) {
+                        JdtJavaDiagnosticCategory.SYNTAX
+                    } else {
+                        JdtJavaDiagnosticCategory.TYPE_RESOLUTION
+                    },
+                    problemId = problem.id,
                     evidence = JdtJavaSemanticEvidence.JDT_PARSE,
                 )
             }
@@ -672,10 +682,18 @@ data class JdtJavaSemanticBindingUse(
     val evidence: JdtJavaSemanticEvidence,
 )
 
+enum class JdtJavaDiagnosticCategory {
+    SYNTAX,
+    TYPE_RESOLUTION,
+}
+
 data class JdtJavaSemanticWarning(
     val path: Path,
     val line: Int,
+    val sourceRange: SourceRange,
     val message: String,
+    val category: JdtJavaDiagnosticCategory,
+    val problemId: Int,
     val evidence: JdtJavaSemanticEvidence,
 )
 

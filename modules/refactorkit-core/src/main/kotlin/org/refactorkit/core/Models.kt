@@ -205,11 +205,26 @@ enum class RefactoringEvidence {
     LEXICAL_FALLBACK,
 }
 
+enum class DiagnosticEvidence {
+    COMPILER,
+    STRUCTURAL,
+    TRANSACTION,
+}
+
+enum class DiagnosticCategory {
+    SYNTAX,
+    TYPE_RESOLUTION,
+    PROJECT_STRUCTURE,
+    SAFETY,
+}
+
 data class Diagnostic(
     val message: String,
     val severity: Severity,
     val location: SourceLocation? = null,
     val code: String? = null,
+    val evidence: DiagnosticEvidence? = null,
+    val category: DiagnosticCategory? = null,
 ) {
     enum class Severity {
         INFO,

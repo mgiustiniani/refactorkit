@@ -16,6 +16,36 @@ import kotlin.test.assertTrue
 class JavaLanguageAdapterTest {
 
     @Test
+    fun diagnosticsExposeCompilerRangeEvidenceAndStableCategories() {
+        val root = Files.createTempDirectory("refactorkit-java-diagnostics")
+        val sourceDir = root.resolve("src/main/java/example")
+        Files.createDirectories(sourceDir)
+        Files.writeString(
+            sourceDir.resolve("Broken.java"),
+            "package example; class Broken { void run( { } }\n",
+        )
+        Files.writeString(
+            sourceDir.resolve("Unresolved.java"),
+            "package example; class Unresolved { MissingType value; }\n",
+        )
+
+        val diagnostics = JavaLanguageAdapter().diagnostics(JavaProjectScanner().scan(root))
+        val compilerDiagnostics = diagnostics.filter { it.evidence == org.refactorkit.core.DiagnosticEvidence.COMPILER }
+
+        assertTrue(compilerDiagnostics.any {
+            it.code == "java.jdt.syntax" && it.category == org.refactorkit.core.DiagnosticCategory.SYNTAX
+        }, compilerDiagnostics.toString())
+        assertTrue(compilerDiagnostics.any {
+            it.code == "java.jdt.typeResolution" && it.category == org.refactorkit.core.DiagnosticCategory.TYPE_RESOLUTION
+        }, compilerDiagnostics.toString())
+        assertTrue(compilerDiagnostics.all { diagnostic ->
+            diagnostic.location?.range?.let { range ->
+                range.end.line > range.start.line || range.end.character > range.start.character
+            } == true
+        }, compilerDiagnostics.toString())
+    }
+
+    @Test
     fun findsReferencesAcrossImportsSamePackageAndQualifiedNames() {
         val root = createTempProject(
             "src/main/java/com/example/UserManager.java" to """

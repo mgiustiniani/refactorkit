@@ -2,6 +2,8 @@ package org.refactorkit.java
 
 import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.Diagnostic
+import org.refactorkit.core.DiagnosticCategory
+import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.LanguageAdapter
 import org.refactorkit.core.ParseResult
 import org.refactorkit.core.PatchPlan
@@ -20,7 +22,11 @@ import org.refactorkit.core.SymbolId
 import org.refactorkit.core.SymbolIndex
 import org.refactorkit.core.SymbolResolution
 import org.refactorkit.core.TextEdit
+import org.refactorkit.core.Workspace
 import org.refactorkit.core.WorkspaceEdit
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Comparator
 
 class JavaLanguageAdapter : LanguageAdapter {
     @Volatile private var lastSnapshot: ProjectSnapshot? = null
@@ -265,6 +271,18 @@ class JavaLanguageAdapter : LanguageAdapter {
     override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> {
         lastSnapshot = project
         val diagnostics = mutableListOf<Diagnostic>()
+        val semanticAnalysis = analyzeDiagnosticsOverlay(project)
+        diagnostics += semanticAnalysis.warnings.map { warning ->
+            val syntax = warning.category == JdtJavaDiagnosticCategory.SYNTAX
+            Diagnostic(
+                message = warning.message,
+                severity = Diagnostic.Severity.ERROR,
+                location = SourceLocation(warning.path, warning.sourceRange),
+                code = if (syntax) "java.jdt.syntax" else "java.jdt.typeResolution",
+                evidence = DiagnosticEvidence.COMPILER,
+                category = if (syntax) DiagnosticCategory.SYNTAX else DiagnosticCategory.TYPE_RESOLUTION,
+            )
+        }
         val symbols = buildSymbols(project).symbols
 
         symbols.filter { it.kind in TYPE_KINDS }
@@ -277,6 +295,8 @@ class JavaLanguageAdapter : LanguageAdapter {
                         severity = Diagnostic.Severity.ERROR,
                         location = symbol.location,
                         code = "java.duplicateSymbol",
+                        evidence = DiagnosticEvidence.STRUCTURAL,
+                        category = DiagnosticCategory.PROJECT_STRUCTURE,
                     )
                 }
             }
@@ -293,6 +313,8 @@ class JavaLanguageAdapter : LanguageAdapter {
                         severity = Diagnostic.Severity.WARNING,
                         location = startOfFile(file),
                         code = "java.packagePathMismatch",
+                        evidence = DiagnosticEvidence.STRUCTURAL,
+                        category = DiagnosticCategory.PROJECT_STRUCTURE,
                     )
                 }
             }
@@ -308,12 +330,49 @@ class JavaLanguageAdapter : LanguageAdapter {
                         severity = Diagnostic.Severity.ERROR,
                         location = symbol.location,
                         code = "java.publicTypeFileNameMismatch",
+                        evidence = DiagnosticEvidence.STRUCTURAL,
+                        category = DiagnosticCategory.PROJECT_STRUCTURE,
                     )
                 }
             }
         }
 
         return diagnostics
+    }
+
+    private fun analyzeDiagnosticsOverlay(project: ProjectSnapshot): JdtJavaSemanticAnalysisResult {
+        val overlayRoot = Files.createTempDirectory("refactorkit-jdt-diagnostics-")
+        return try {
+            project.files.filter { it.languageId == "java" }.forEach { file ->
+                val target = overlayRoot.resolve(file.path).normalize()
+                require(target.startsWith(overlayRoot)) { "Diagnostic overlay path escapes root: ${file.path}" }
+                Files.createDirectories(requireNotNull(target.parent))
+                Files.writeString(target, file.content)
+            }
+            val originalRoot = project.workspace.root.toAbsolutePath().normalize()
+            val modules = project.modules.map { module ->
+                val moduleRoot = module.root.toAbsolutePath().normalize()
+                val relativeRoot = if (moduleRoot.startsWith(originalRoot)) {
+                    originalRoot.relativize(moduleRoot)
+                } else {
+                    Path.of(module.name.replace(':', '/'))
+                }
+                module.copy(
+                    root = overlayRoot.resolve(relativeRoot),
+                    classpathEntries = module.classpathEntries.map { entry ->
+                        if (entry.isAbsolute) entry else originalRoot.resolve(entry).normalize()
+                    },
+                )
+            }
+            JdtJavaSemanticAnalyzer().analyze(project.copy(
+                workspace = Workspace(overlayRoot),
+                modules = modules,
+            ))
+        } finally {
+            Files.walk(overlayRoot).use { stream ->
+                stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+            }
+        }
     }
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = listOf(

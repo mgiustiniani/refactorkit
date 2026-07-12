@@ -23,6 +23,12 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added planner-approved post-preview diagnostic multisets while continuing to
+  block every additional unapproved regression (including forced-delete flows).
+- Added ranged JDT syntax/type diagnostics with stable compiler evidence and
+  categories, using isolated exact post-image overlays for validation.
+- Added sample diagnostics/lifecycle acceptance and completed S3 without running
+  Maven or Gradle build scripts.
 - Added hash-bound Maven/Gradle project-module dependencies and restricted JDT
   visibility to the owning module plus transitive declared dependencies.
 - Published the stable Java capability/evidence matrix and completed S2.

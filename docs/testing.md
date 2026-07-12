@@ -135,6 +135,15 @@ is tested at four byte boundaries, and `/dev/shm` provides a conditional distinc
 store WAL apply/rollback test. Actual power-loss remains a separate RC acceptance
 gate.
 
+## Java diagnostics acceptance
+
+JDT syntax/type diagnostics are tested for stable codes, severity, exact ranges,
+compiler evidence, and categories. Maven, Gradle, and declared multi-module
+samples must diagnose cleanly; Spring/JPA samples intentionally expose unresolved
+external framework types without executing builds. A managed rename lifecycle is
+re-diagnosed after apply and rollback. Staged diagnostics use an isolated exact
+source overlay to avoid resolving against stale pre-edit files.
+
 ## Managed text encoding
 
 Core acceptance proves that malformed UTF-8 is refused as

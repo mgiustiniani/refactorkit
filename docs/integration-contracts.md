@@ -203,6 +203,15 @@ instant; `originalHash` is the SHA-256 hash of the cleaned source text.
 A refused preview must not silently fall back to text replacement. Clients should
 show the refusal, warnings, affected files when present, and next action.
 
+## Diagnostic evidence contract
+
+Diagnostics may expose `evidence` (`COMPILER`, `STRUCTURAL`, `TRANSACTION`) and
+`category` (`SYNTAX`, `TYPE_RESOLUTION`, `PROJECT_STRUCTURE`, `SAFETY`) alongside
+stable code, severity, message, and range. Apply compares the exact staged error
+multiset against current errors plus explicit `diagnosticsAfterPreview`; any
+additional error is `diagnostics.regression`. Daemon JSON includes these fields;
+LSP carries them in diagnostic `data`.
+
 ## Refactoring evidence contract
 
 Every plan exposes one stable evidence category:

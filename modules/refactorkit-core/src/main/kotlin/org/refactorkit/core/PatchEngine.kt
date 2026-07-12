@@ -201,7 +201,12 @@ class PatchEngine(
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(diagnostics)
         } else {
-            val gateDiagnostics = validateDiagnosticsGate(currentSnapshot, normalizedEdit, diagnosticsGate)
+            val gateDiagnostics = validateDiagnosticsGate(
+                currentSnapshot,
+                normalizedEdit,
+                normalizedPlan.diagnosticsAfterPreview,
+                diagnosticsGate,
+            )
             if (gateDiagnostics.isNotEmpty()) return@withWorkspaceLock ApplyResult.Refused(gateDiagnostics)
             val approval = ApprovalRecord(
                 kind = if (normalizedPlan.requiresUserApproval) ApprovalKind.EXPLICIT_APPLY else ApprovalKind.NOT_REQUIRED,
@@ -514,6 +519,7 @@ class PatchEngine(
     private fun validateDiagnosticsGate(
         snapshot: ProjectSnapshot,
         edit: WorkspaceEdit,
+        approvedAfterDiagnostics: List<Diagnostic>,
         gate: DiagnosticsGate,
     ): List<Diagnostic> {
         val provider = gate.provider ?: return emptyList()
@@ -522,9 +528,10 @@ class PatchEngine(
             val staged = WorkspaceEditSimulator.apply(snapshot, edit)
             val after = provider(staged)
             val regressions = diagnosticsRegression(before, after)
-            if (regressions.isEmpty()) emptyList() else listOf(Diagnostic(
-                "Diagnostics gate '${gate.id}' found ${regressions.size} new error(s): " +
-                    regressions.joinToString("; ") { it.message },
+            val unapprovedRegressions = diagnosticsRegression(approvedAfterDiagnostics, regressions)
+            if (unapprovedRegressions.isEmpty()) emptyList() else listOf(Diagnostic(
+                "Diagnostics gate '${gate.id}' found ${unapprovedRegressions.size} unapproved new error(s): " +
+                    unapprovedRegressions.joinToString("; ") { it.message },
                 Diagnostic.Severity.ERROR,
                 code = "diagnostics.regression",
             ))

@@ -811,6 +811,12 @@ class LspSession {
         put("severity", lspDiagnosticSeverity(diagnostic.severity))
         put("source", "refactorkit")
         diagnostic.code?.let { put("code", it) }
+        if (diagnostic.evidence != null || diagnostic.category != null) {
+            put("data", buildJsonObject {
+                diagnostic.evidence?.let { put("evidence", it.name) }
+                diagnostic.category?.let { put("category", it.name) }
+            })
+        }
         put("message", diagnostic.message)
     }
 

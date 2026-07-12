@@ -3,6 +3,20 @@
 See [Java stable capability matrix](java-capabilities.md) for the normative v1
 write-authority inventory.
 
+## Compiler diagnostics
+
+`JavaLanguageAdapter.diagnostics` reports JDT syntax and type-resolution errors
+with stable codes (`java.jdt.syntax`, `java.jdt.typeResolution`), exact source
+ranges, `COMPILER` evidence, and stable categories. Structural package/file-name/
+duplicate diagnostics use `STRUCTURAL` evidence and `PROJECT_STRUCTURE`.
+
+For staged validation, Java sources are written to an isolated temporary overlay;
+JDT resolves the exact post-image against that overlay and original external
+classpath entries. No Maven/Gradle build script is executed. Explicit planner-declared post-preview
+errors (for example forced safe delete) are treated as approved diagnostics;
+`PatchEngine` still blocks every additional unapproved regression. Daemon responses and
+LSP diagnostic `data` expose evidence/category fields.
+
 ## Evidence and apply authority
 
 Every Java plan classifies itself as `JDT_BINDING`, `STRUCTURAL`, or

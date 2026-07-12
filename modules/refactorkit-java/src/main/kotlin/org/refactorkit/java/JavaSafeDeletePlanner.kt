@@ -72,6 +72,9 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
         }
         warnings += "Build configuration (pom.xml, build.gradle) is not scanned for references."
         warnings += frameworkAssessment.warnings("safeDelete")
+        val diagnosticsAfterDelete = adapter.diagnostics(snapshot.copy(
+            files = snapshot.files.filterNot { it.path == declarationFile.path },
+        ))
 
         return PatchPlan(
             operation = "safeDelete",
@@ -82,6 +85,7 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
             summary = "Delete $symbolFqn (${declarationFile.path}).",
             affectedFiles = setOf(declarationFile.path),
             workspaceEdit = WorkspaceEdit(listOf(FileEdit.Delete(declarationFile.path))),
+            diagnosticsAfterPreview = diagnosticsAfterDelete,
             warnings = warnings,
             riskLevel = if (references.isNotEmpty() || frameworkAssessment.hasFindings) RiskLevel.HIGH else RiskLevel.LOW,
             evidence = if (semanticReferences != null) RefactoringEvidence.JDT_BINDING else RefactoringEvidence.LEXICAL_FALLBACK,

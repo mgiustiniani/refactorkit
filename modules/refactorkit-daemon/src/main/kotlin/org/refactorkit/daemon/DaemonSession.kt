@@ -199,6 +199,8 @@ class DaemonSession {
                     put("severity", d.severity.name)
                     put("message", d.message)
                     d.code?.let { put("code", it) }
+                    d.evidence?.let { put("evidence", it.name) }
+                    d.category?.let { put("category", it.name) }
                     d.location?.let { loc ->
                         put("file", loc.path.toString())
                         put("line", loc.range.start.line + 1)
@@ -395,6 +397,8 @@ class DaemonSession {
                     put("severity", d.severity.name)
                     put("message", d.message)
                     d.code?.let { put("code", it) }
+                    d.evidence?.let { put("evidence", it.name) }
+                    d.category?.let { put("category", it.name) }
                     d.location?.let { loc ->
                         put("file", loc.path.toString())
                         put("line", loc.range.start.line + 1)
