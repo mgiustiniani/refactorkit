@@ -33,7 +33,9 @@ review safety boundaries before applying refactorings.
   SPI, Maven production edges, explicit Gradle execution policy, capability
   schemas, and native packaged reactor/relocation acceptance release gates. ADR
   0010 fixes offline build-model and source-ownership boundaries without changing
-  the language delivery sequence.
+  the language delivery sequence. Native Windows process-kill acceptance now
+  retries only transient `workspace.locked` results for a bounded interval after
+  confirmed child exit, while every non-lock recovery error still fails immediately.
 - Added offline, plugin-free Maven effective-reactor analysis with inherited Java
   21 settings, dependency management/BOMs, local artifacts, reactor main/test
   visibility, generated support roots, hash-bound model evidence, and typed

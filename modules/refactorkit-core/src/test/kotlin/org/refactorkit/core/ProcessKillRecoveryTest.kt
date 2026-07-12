@@ -45,7 +45,7 @@ class ProcessKillRecoveryTest {
         assertEquals("class ChangedFirst {}\n", Files.readString(root.resolve("First.java")))
         assertEquals("class Second {}\n", Files.readString(root.resolve("Second.java")))
 
-        val recoveryDiagnostics = PatchEngine(root).recover()
+        val recoveryDiagnostics = awaitRecoveryAfterProcessExit(PatchEngine(root))
         assertTrue(recoveryDiagnostics.isEmpty(), "Recovery diagnostics: $recoveryDiagnostics; child=${readOutput(output)}")
         assertEquals("class First {}\n", Files.readString(root.resolve("First.java")))
         assertEquals("class Second {}\n", Files.readString(root.resolve("Second.java")))
@@ -104,7 +104,8 @@ class ProcessKillRecoveryTest {
         assertTrue(Files.list(logDir).use { stream ->
             stream.anyMatch { it.fileName.toString().startsWith(".${transaction.id.value}.json.tmp-") }
         })
-        assertTrue(PatchEngine(root, TransactionLog(logDir)).recover().isEmpty())
+        val recoveryDiagnostics = awaitRecoveryAfterProcessExit(PatchEngine(root, TransactionLog(logDir)))
+        assertTrue(recoveryDiagnostics.isEmpty(), "Journal recovery diagnostics: $recoveryDiagnostics; child=${readOutput(output)}")
         assertTrue(Files.list(logDir).use { stream ->
             stream.noneMatch { it.fileName.toString().startsWith(".${transaction.id.value}.json.tmp-") }
         })
@@ -186,6 +187,17 @@ class ProcessKillRecoveryTest {
         assertTrue(Files.exists(marker), "Child did not reach $boundary: ${readOutput(output)}")
         child.destroyForcibly()
         assertTrue(child.waitFor(10, TimeUnit.SECONDS), "Killed child did not terminate at $boundary")
+    }
+
+    private fun awaitRecoveryAfterProcessExit(engine: PatchEngine): List<Diagnostic> {
+        val deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos()
+        var diagnostics: List<Diagnostic>
+        do {
+            diagnostics = engine.recover()
+            if (diagnostics.isEmpty() || diagnostics.any { it.code != "workspace.locked" }) return diagnostics
+            Thread.sleep(50)
+        } while (System.nanoTime() < deadline)
+        return diagnostics
     }
 
     private fun readOutput(path: Path): String =

@@ -126,6 +126,11 @@ file cleanup on staging disk-full, full compensation after a partial multi-file
 commit, durable `RECOVERY_REQUIRED` after compensation failure, and successful
 compensation retry by a clean `PatchEngine` restart.
 
+On Windows, OS release of a killed process's file lock can lag successful
+`Process.waitFor`; subprocess acceptance therefore retries only
+`workspace.locked` for a bounded five-second post-exit interval. Any other
+recovery diagnostic fails immediately, so this does not weaken recovery checks.
+
 Journal subprocess tests force-kill real JVMs after new-record force, lifecycle
 temp-file force, and lifecycle atomic move. They prove respectively that complete
 `PREPARED`, prior-authoritative, and complete new `APPLYING` records survive.
