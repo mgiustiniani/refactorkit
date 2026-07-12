@@ -9,6 +9,11 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.AclEntry
+import java.nio.file.attribute.AclEntryFlag
+import java.nio.file.attribute.AclEntryPermission
+import java.nio.file.attribute.AclEntryType
+import java.nio.file.attribute.AclFileAttributeView
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.UserDefinedFileAttributeView
@@ -720,6 +725,7 @@ class PatchEngine(
                 ownerName = ownership?.first,
                 groupName = ownership?.second,
                 userDefinedAttributes = readUserDefinedAttributes(image.path),
+                aclEntries = readAclEntries(image.path),
             )
         }
         val postPermissions = derivePostPermissions(plan.workspaceEdit)
@@ -731,6 +737,7 @@ class PatchEngine(
             image.copy(
                 posixPermissions = postPermissions[image.path],
                 userDefinedAttributes = sourceImage?.userDefinedAttributes,
+                aclEntries = sourceImage?.aclEntries,
             )
         }
         val transaction = Transaction(
@@ -847,6 +854,24 @@ class PatchEngine(
                 Files.delete(directory)
                 directory.parent?.let(::forceWorkspaceDirectory)
             }
+        }
+    }
+
+    private fun readAclEntries(path: Path): List<FileAclEntryImage>? {
+        val absolute = resolveInsideWorkspace(path)
+        if (!Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) return null
+        val view = Files.getFileAttributeView(
+            absolute,
+            AclFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        ) ?: return null
+        return view.acl.map { entry ->
+            FileAclEntryImage(
+                type = entry.type().name,
+                principal = entry.principal().name,
+                permissions = entry.permissions().map(AclEntryPermission::name).sorted(),
+                flags = entry.flags().map(AclEntryFlag::name).sorted(),
+            )
         }
     }
 
@@ -1002,6 +1027,24 @@ class PatchEngine(
         )
         if (posixView != null) {
             image.groupName?.let { group -> posixView.setGroup(lookup.lookupPrincipalByGroupName(group)) }
+        }
+        image.aclEntries?.let { entries ->
+            val view = Files.getFileAttributeView(
+                temporary,
+                AclFileAttributeView::class.java,
+                LinkOption.NOFOLLOW_LINKS,
+            ) ?: throw WorkspaceWriteException(
+                "filesystem.aclUnsupported",
+                "Filesystem cannot restore ACLs for ${image.path}",
+            )
+            view.acl = entries.map { entry ->
+                AclEntry.newBuilder()
+                    .setType(AclEntryType.valueOf(entry.type))
+                    .setPrincipal(lookup.lookupPrincipalByName(entry.principal))
+                    .setPermissions(entry.permissions.map(AclEntryPermission::valueOf).toSet())
+                    .setFlags(entry.flags.map(AclEntryFlag::valueOf).toSet())
+                    .build()
+            }
         }
         image.userDefinedAttributes?.let { attributes ->
             val view = Files.getFileAttributeView(

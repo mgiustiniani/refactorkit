@@ -23,6 +23,8 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added schema-v7 ordered platform ACL images with apply preservation,
+  rollback/recovery restoration, and fail-closed unsupported handling.
 - Defined the v1 managed-text contract as strict UTF-8: malformed input refuses
   before WAL creation and UTF-8 BOM bytes are restored exactly on rollback.
 - Added schema-v6 sorted Base64 user-defined file attributes, preserving them on

@@ -306,7 +306,7 @@ completion across the boundary. Actual power-loss proof remains open.
 
 ### TX-013 — Rollback filesystem metadata and directory state
 
-Status: **partially closed after the audited baseline**.
+Status: **substantially closed after the audited baseline**.
 
 Schema-v6 pre/post `FileImage`s retain optional POSIX permission sets,
 last-modified timestamps, owner names, POSIX group names, and sorted Base64 user-
@@ -331,8 +331,13 @@ The v1 managed-text contract is explicitly UTF-8 only. Malformed UTF-8 fails
 closed as `snapshot.scopeUnreadable` before WAL creation; a UTF-8 BOM is retained
 as content, and byte-for-byte BOM restoration is covered through delete/rollback.
 Other encodings require a future explicit adapter/configuration contract rather
-than guessed transcoding. Platform ACLs remain open. Explicit directory create/
-rename operations are not represented in the current `FileEdit` model.
+than guessed transcoding. Schema-v7 also records ordered platform ACL entries (type, principal,
+permissions, and inheritance flags), transfers them across modify/rename apply,
+and restores them on rollback/recovery wherever `AclFileAttributeView` is
+available. Unsupported restoration fails closed as `filesystem.aclUnsupported`;
+journal round-trip is covered on every platform and live preservation tests run
+conditionally when the filesystem exposes the view. Explicit directory create/
+rename operations remain outside the current `FileEdit` model.
 
 ### TX-014 — Apply snapshot scope ownership
 

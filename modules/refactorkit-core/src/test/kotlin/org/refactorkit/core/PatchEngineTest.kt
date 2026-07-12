@@ -368,6 +368,16 @@ class PatchEngineTest {
         Files.writeString(oldName, "class Old {}\n")
         val modifyOwner = Files.getOwner(modify).name
         val renameOwner = Files.getOwner(oldName).name
+        val modifyAcl = Files.getFileAttributeView(
+            modify,
+            java.nio.file.attribute.AclFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )?.acl
+        val renameAcl = Files.getFileAttributeView(
+            oldName,
+            java.nio.file.attribute.AclFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )?.acl
         val attributeName = "refactorkit.test"
         val modifyAttribute = "modify-metadata".toByteArray()
         val renameAttribute = "rename-metadata".toByteArray()
@@ -433,6 +443,18 @@ class PatchEngineTest {
             assertTrue(modifyAttribute.contentEquals(readUserAttribute(modify, attributeName)))
             assertTrue(renameAttribute.contentEquals(readUserAttribute(root.resolve("New.java"), attributeName)))
         }
+        if (modifyAcl != null && renameAcl != null) {
+            assertEquals(modifyAcl, Files.getFileAttributeView(
+                modify,
+                java.nio.file.attribute.AclFileAttributeView::class.java,
+                LinkOption.NOFOLLOW_LINKS,
+            )?.acl)
+            assertEquals(renameAcl, Files.getFileAttributeView(
+                root.resolve("New.java"),
+                java.nio.file.attribute.AclFileAttributeView::class.java,
+                LinkOption.NOFOLLOW_LINKS,
+            )?.acl)
+        }
 
         assertIs<ApplyResult.Applied>(PatchEngine(root).rollback(applied.transaction))
         assertNoWorkspaceStageFiles(root)
@@ -445,6 +467,18 @@ class PatchEngineTest {
         if (modifyAttributes != null && renameAttributes != null) {
             assertTrue(modifyAttribute.contentEquals(readUserAttribute(modify, attributeName)))
             assertTrue(renameAttribute.contentEquals(readUserAttribute(oldName, attributeName)))
+        }
+        if (modifyAcl != null && renameAcl != null) {
+            assertEquals(modifyAcl, Files.getFileAttributeView(
+                modify,
+                java.nio.file.attribute.AclFileAttributeView::class.java,
+                LinkOption.NOFOLLOW_LINKS,
+            )?.acl)
+            assertEquals(renameAcl, Files.getFileAttributeView(
+                oldName,
+                java.nio.file.attribute.AclFileAttributeView::class.java,
+                LinkOption.NOFOLLOW_LINKS,
+            )?.acl)
         }
         assertFalse(Files.exists(root.resolve("nested")))
         if (posix) {

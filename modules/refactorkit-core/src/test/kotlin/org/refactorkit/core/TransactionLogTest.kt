@@ -55,6 +55,33 @@ class TransactionLogTest {
     }
 
     @Test
+    fun roundTripsPlatformAclImages() {
+        val logDir = Files.createTempDirectory("refactorkit-txlog-acl")
+        val log = TransactionLog(logDir)
+        val transaction = Transaction(
+            planId = PlanId("plan-acl"),
+            snapshotHashBefore = "hash",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        val acl = listOf(FileAclEntryImage(
+            type = "ALLOW",
+            principal = "test-principal",
+            permissions = listOf("READ_DATA", "WRITE_DATA"),
+            flags = listOf("FILE_INHERIT"),
+        ))
+        log.prepare(TransactionJournalRecord(
+            transaction = transaction,
+            operation = "aclRoundTrip",
+            forwardEdit = WorkspaceEdit(),
+            preImages = listOf(FileImage(Paths.get("Example.java"), "content", aclEntries = acl)),
+            postImages = emptyList(),
+            state = JournalState.PREPARED,
+        ))
+
+        assertEquals(acl, log.loadRecord(transaction.id)?.preImages?.single()?.aclEntries)
+    }
+
+    @Test
     fun atomicallyAdvancesJournalLifecycleWithoutTemporaryFiles() {
         val logDir = Files.createTempDirectory("refactorkit-txlog-lifecycle")
         val log = TransactionLog(logDir)
@@ -338,7 +365,7 @@ class TransactionLogTest {
         log.prepare(prepared)
         val file = logDir.resolve("${transaction.id.value}.json")
         val schemaOne = Files.readString(file)
-            .replace("\"schemaVersion\": 6", "\"schemaVersion\": 1")
+            .replace("\"schemaVersion\": 7", "\"schemaVersion\": 1")
             .lineSequence()
             .filterNot { it.trimStart().startsWith("\"checksum\"") }
             .joinToString("\n")

@@ -154,8 +154,8 @@ Status: implementation-informed, needs human review for prioritization.
 
 |R-025
 |Versioned rollback verifies post-images and restores content, modes, timestamps, owner/group, user attributes, and transaction-created parents; strict UTF-8/BOM behavior is explicit (`TX-004`, `TX-013`). Java classpath evidence is fingerprinted before apply.
-|Legacy image-less records require manual recovery; platform ACLs and explicit directory operations remain unsupported; a hostile writer can still mutate external classpath state after preflight validation outside the cooperative lock boundary.
-|Add platform ACL support where the filesystem exposes it; keep forced/manual recovery and unsupported directory operations explicit.
+|Legacy image-less records require manual recovery; platform ACLs are restored where exposed and fail closed otherwise; explicit directory operations remain unsupported; a hostile writer can still mutate external classpath state after preflight validation outside the cooperative lock boundary.
+|Keep forced/manual recovery, fail-closed metadata capability behavior, and unsupported directory operations explicit.
 |critical data-loss risk; planned release blocker
 
 |R-026
