@@ -28,6 +28,12 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Added Maven effective custom-source discovery from active-profile
+  `sourceDirectory`/`testSourceDirectory` and declarative
+  `build-helper-maven-plugin` `add-source`/`add-test-source` executions without
+  running plugins. Inactive-profile roots remain excluded; roots escaping the
+  workspace or traversing external symlinks make the model unavailable with
+  path-redacted diagnostics.
 - Hardened offline Maven dependency modeling for classifier variants, Maven
   `test-jar` default `tests` classifiers, variant-aware mediation, and explicit
   `systemPath` artifacts. System paths are validated as existing absolute files,

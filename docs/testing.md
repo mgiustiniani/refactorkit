@@ -163,8 +163,10 @@ home/classpath paths.
 with inherited Java 21, domain/application/infrastructure/acceptance modules,
 records, text blocks, switch/record patterns, imported BOM management, a generated
 local test artifact, main/test scope isolation, classifier and `test-jar`
-variants, explicit `systemPath` scope/evidence, cross-module definitions and
-references, one-root missing-artifact diagnostics, and BOM/JAR/system-path drift
+variants, explicit `systemPath` scope/evidence, active-profile effective and
+build-helper custom main/test roots, inactive-profile exclusion, source-root
+workspace/symlink confinement, cross-module definitions and references, one-root
+missing-artifact diagnostics, and BOM/JAR/system-path drift
 refusal. Variant acceptance proves that normal and classified artifacts sharing
 GA coordinates are not collapsed and that test JARs never enter main classpaths.
 `JavaMoveSourceRootPlannerTest` proves rename-only byte identity, package/module

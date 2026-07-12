@@ -79,8 +79,9 @@ information without classpath contents.
 
 - retire compatibility `Module` projection after API-versioned migration of
   external library consumers;
-- complete Maven profile/custom-source-set edge cases and repository/checksum
-  policy; classifier, `test-jar`, variant mediation, and `systemPath` coverage is
+- complete explicit non-default Maven profile activation and repository/checksum
+  policy; active effective source directories and declarative build-helper custom
+  roots, classifier, `test-jar`, variant mediation, and `systemPath` coverage are
   implemented;
 - decide Gradle executable-model policy and implement integration/custom sets;
 - add provider capability/contract snapshots and pagination/limits;

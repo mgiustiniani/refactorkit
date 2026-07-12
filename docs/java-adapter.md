@@ -47,7 +47,12 @@ library contract. `JavaProjectScanner` builds Maven effective models with embedd
 ModelBuilder, resolving relative parents, inherited/interpolated properties,
 compiler release/source, dependency management, imported BOMs, active-by-default
 profiles, reactor coordinates/edges, local-repository classifier variants,
-`test-jar` artifacts, and explicit Maven `systemPath` files. Dependency mediation
+`test-jar` artifacts, explicit Maven `systemPath` files, effective
+`sourceDirectory`/`testSourceDirectory`, and active-profile declarative
+`build-helper-maven-plugin` add-source roots. Build-helper configuration is read
+as metadata only; no goal or plugin executes. Inactive-profile roots are absent,
+and source declarations outside the workspace or through external symlinks fail
+closed without disclosing host paths. Dependency mediation
 uses Maven variant identity (GA + type + classifier), so a normal JAR and tests
 JAR are not incorrectly collapsed. System paths must resolve to existing absolute
 regular files, are not treated as reactor source edges, and receive dedicated

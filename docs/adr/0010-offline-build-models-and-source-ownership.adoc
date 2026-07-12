@@ -26,7 +26,9 @@ also prerequisites for Kotlin, Scala, Groovy, and Clojure interoperability.
 . Build-model discovery is a first-class semantic input and is separated from
   refactoring planners and filesystem mutation.
 . Maven discovery uses embedded effective-model processing without executing
-  project plugins or lifecycle goals.
+  project plugins or lifecycle goals. Effective source directories and active
+  profile build-helper add-source declarations may be read as metadata only;
+  source-root workspace or symlink escapes make the model unavailable.
 . Dependency resolution is offline by default. Explicit network opt-in is
   bounded and credential-free; RefactorKit does not silently read or report
   Maven settings credentials.

@@ -122,6 +122,78 @@ class MavenReactorAnalysisAcceptanceTest {
     }
 
     @Test
+    fun activeProfileBuildHelperRootsAreModeledWithoutExecutingPlugins() {
+        val root = Files.createTempDirectory("refactorkit-maven-custom-roots")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>custom-roots</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <profiles>
+                <profile><id>default-custom-roots</id><activation><activeByDefault>true</activeByDefault></activation><build><plugins>
+                  <plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><executions>
+                    <execution><id>main</id><goals><goal>add-source</goal></goals><configuration><sources><source>src/feature/java</source></sources></configuration></execution>
+                    <execution><id>test</id><goals><goal>add-test-source</goal></goals><configuration><sources><source>src/verification/java</source></sources></configuration></execution>
+                  </executions></plugin>
+                </plugins></build></profile>
+                <profile><id>inactive</id><activation><property><name>never.active</name></property></activation><build><plugins>
+                  <plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><executions>
+                    <execution><goals><goal>add-source</goal></goals><configuration><sources><source>src/inactive/java</source></sources></configuration></execution>
+                  </executions></plugin>
+                </plugins></build></profile>
+              </profiles>
+            </project>
+        """.trimIndent())
+        val main = root.resolve("src/feature/java/fixture/Feature.java")
+        Files.createDirectories(main.parent)
+        Files.writeString(main, "package fixture; public record Feature(String value) {}\n")
+        val test = root.resolve("src/verification/java/fixture/FeatureTest.java")
+        Files.createDirectories(test.parent)
+        Files.writeString(test, "package fixture; class FeatureTest { Feature value = new Feature(\"ok\"); }\n")
+        val inactive = root.resolve("src/inactive/java/fixture/Inactive.java")
+        Files.createDirectories(inactive.parent)
+        Files.writeString(inactive, "package fixture; class Inactive { this is not Java }\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
+        val module = snapshot.modules.single()
+
+        assertTrue(Path.of("src/feature/java") in module.mainSourceRoots)
+        assertTrue(Path.of("src/verification/java") in module.testSourceRoots)
+        assertFalse(Path.of("src/inactive/java") in module.sourceRoots)
+        assertFalse(snapshot.files.any { it.path.startsWith(Path.of("src/inactive/java")) })
+        val model = snapshot.buildModels.single()
+        assertEquals(BuildModelStatus.AVAILABLE, model.status)
+        assertTrue(model.modules.single().sourceSets.single { it.kind == SourceSetKind.MAIN }
+            .sourceRoots.contains(Path.of("src/feature/java")))
+        assertTrue(model.modules.single().sourceSets.single { it.kind == SourceSetKind.TEST }
+            .sourceRoots.contains(Path.of("src/verification/java")))
+        val diagnostics = JavaLanguageAdapter().diagnostics(snapshot)
+            .filter { it.severity == Diagnostic.Severity.ERROR }
+        assertTrue(diagnostics.isEmpty(), diagnostics.toString())
+    }
+
+    @Test
+    fun sourceRootsOutsideWorkspaceAreRejectedWithoutPathDisclosure() {
+        val parent = Files.createTempDirectory("refactorkit-maven-root-boundary")
+        val root = parent.resolve("workspace")
+        val outside = parent.resolve("outside/fixture/Outside.java")
+        Files.createDirectories(root)
+        Files.createDirectories(outside.parent)
+        Files.writeString(outside, "package fixture; public class Outside {}\n")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>unsafe-root</artifactId><version>1</version>
+              <build><sourceDirectory>${'$'}{project.basedir}/../outside</sourceDirectory></build>
+            </project>
+        """.trimIndent())
+
+        val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
+
+        assertEquals(BuildModelStatus.UNAVAILABLE, snapshot.buildModels.single().status)
+        assertFalse(snapshot.files.any { it.path.toString().contains("Outside.java") })
+        val diagnostic = snapshot.buildModels.single().diagnostics.single { it.code == "buildModel.unavailable" }
+        assertFalse(diagnostic.message.contains(parent.toString()), diagnostic.message)
+        assertTrue(diagnostic.message.contains("source root declaration"), diagnostic.message)
+    }
+
+    @Test
     fun classifierTestJarAndSystemPathRemainScopeCorrectAndHashBound() {
         val root = Files.createTempDirectory("refactorkit-maven-variants")
         val repository = Files.createTempDirectory("refactorkit-maven-variants-m2")

@@ -46,10 +46,12 @@ class JavaProjectScanner(
 
         val initialModules = moduleRoots.map { moduleRoot ->
             val maven = mavenByRoot[moduleRoot]
-            val mainRoots = if (maven != null) (conventionalMainSourceRoots(moduleRoot) + listOf(moduleRoot.resolve("src/main/java"))).distinct()
-                else conventionalMainSourceRoots(moduleRoot)
-            val testRoots = if (maven != null) (conventionalTestSourceRoots(moduleRoot) + listOf(moduleRoot.resolve("src/test/java"))).distinct()
-                else conventionalTestSourceRoots(moduleRoot)
+            val mainRoots = if (maven != null) (
+                conventionalMainSourceRoots(moduleRoot) + maven.mainSourceDirectories + listOf(moduleRoot.resolve("src/main/java"))
+            ).distinct() else conventionalMainSourceRoots(moduleRoot)
+            val testRoots = if (maven != null) (
+                conventionalTestSourceRoots(moduleRoot) + maven.testSourceDirectories + listOf(moduleRoot.resolve("src/test/java"))
+            ).distinct() else conventionalTestSourceRoots(moduleRoot)
             val explicitGeneratedTest = generatedSourceRoots(moduleRoot, test = true)
             val discoveredGeneratedMain = generatedSourceRoots(moduleRoot, test = false)
             val pluginTestGenerated = discoveredGeneratedMain.filter { generatedRoot ->

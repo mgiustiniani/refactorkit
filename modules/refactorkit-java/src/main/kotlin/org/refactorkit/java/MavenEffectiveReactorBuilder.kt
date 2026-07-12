@@ -32,6 +32,8 @@ internal data class MavenModuleModel(
     val coordinate: MavenCoordinate,
     val packaging: String,
     val sourceLevel: Int?,
+    val mainSourceDirectories: List<Path>,
+    val testSourceDirectories: List<Path>,
     val mainDependencies: List<MavenCoordinate>,
     val testDependencies: List<MavenCoordinate>,
     val mainArtifacts: List<Path>,
@@ -79,6 +81,8 @@ internal class MavenEffectiveReactorBuilder(
                     coordinate = fallback,
                     packaging = "jar",
                     sourceLevel = null,
+                    mainSourceDirectories = emptyList(),
+                    testSourceDirectories = emptyList(),
                     mainDependencies = emptyList(),
                     testDependencies = emptyList(),
                     mainArtifacts = emptyList(),
@@ -91,12 +95,13 @@ internal class MavenEffectiveReactorBuilder(
                     modelFailure = concise(result.failure ?: "effective Maven model unavailable"),
                 )
             }
-            resolveModule(model, pom, resolver, effectiveCoordinates.keys, result)
+            resolveModule(workspaceRoot, model, pom, resolver, effectiveCoordinates.keys, result)
         }.mapKeys { it.key.parent.toAbsolutePath().normalize() }
         return MavenReactorModel(modules, normalizedPoms)
     }
 
     private fun resolveModule(
+        workspaceRoot: Path,
         model: Model,
         pom: Path,
         resolver: LocalOnlyModelResolver,
@@ -114,6 +119,7 @@ internal class MavenEffectiveReactorBuilder(
         val missing = linkedSetOf<String>()
         val modelInputs = linkedSetOf<Path>().apply { addAll(effective.inputs); add(pom) }
         val importedBoms = linkedSetOf<Path>().apply { addAll(effective.importedBoms) }
+        val sourceDirectories = sourceDirectories(workspaceRoot, model, pom)
         val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, missing)
         val mainArtifacts = (systemPathArtifacts + resolveGraph(
             mainRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
@@ -126,6 +132,8 @@ internal class MavenEffectiveReactorBuilder(
             coordinate = requireNotNull(model.coordinate()),
             packaging = model.packaging?.takeIf(String::isNotBlank) ?: "jar",
             sourceLevel = sourceLevel(model),
+            mainSourceDirectories = sourceDirectories.main,
+            testSourceDirectories = sourceDirectories.test,
             mainDependencies = mainRepositoryDirect.filter(::isReactorSourceDependency)
                 .mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
             testDependencies = testRepositoryDirect.filter(::isReactorSourceDependency)
@@ -140,6 +148,54 @@ internal class MavenEffectiveReactorBuilder(
                 .filter { plugin -> plugin.executions.any { it.phase?.contains("test", ignoreCase = true) == true } }
                 .map { it.artifactId.removeSuffix("-maven-plugin").removeSuffix("-plugin") }
                 .filter(String::isNotBlank).toSet(),
+            modelFailure = sourceDirectories.failure,
+        )
+    }
+
+    private data class SourceDirectories(
+        val main: List<Path>,
+        val test: List<Path>,
+        val failure: String?,
+    )
+
+    private fun sourceDirectories(workspaceRoot: Path, model: Model, pom: Path): SourceDirectories {
+        val main = mutableListOf<String>()
+        val test = mutableListOf<String>()
+        model.build?.sourceDirectory?.takeIf(String::isNotBlank)?.let(main::add)
+        model.build?.testSourceDirectory?.takeIf(String::isNotBlank)?.let(test::add)
+        model.build?.plugins.orEmpty()
+            .filter { it.groupId in setOf(null, "org.codehaus.mojo") && it.artifactId == "build-helper-maven-plugin" }
+            .flatMap { it.executions }
+            .forEach { execution ->
+                val target = when {
+                    "add-source" in execution.goals -> main
+                    "add-test-source" in execution.goals -> test
+                    else -> return@forEach
+                }
+                val configuration = execution.configuration as? org.codehaus.plexus.util.xml.Xpp3Dom
+                    ?: return@forEach
+                configuration.getChild("sources")?.children.orEmpty()
+                    .filter { it.name == "source" }
+                    .mapNotNull { it.value?.trim()?.takeIf(String::isNotBlank) }
+                    .forEach(target::add)
+            }
+        val workspace = workspaceRoot.toAbsolutePath().normalize()
+        val workspaceReal = runCatching { workspace.toRealPath() }.getOrDefault(workspace)
+        var unsafe = 0
+        fun normalize(raw: String): Path? {
+            val parsed = runCatching { Path.of(raw) }.getOrNull() ?: run { unsafe++; return null }
+            val absolute = (if (parsed.isAbsolute) parsed else pom.parent.resolve(parsed)).toAbsolutePath().normalize()
+            if (!absolute.startsWith(workspace)) { unsafe++; return null }
+            if (absolute.exists()) {
+                val real = runCatching { absolute.toRealPath() }.getOrNull()
+                if (real == null || !real.startsWith(workspaceReal)) { unsafe++; return null }
+            }
+            return absolute
+        }
+        return SourceDirectories(
+            main = main.mapNotNull(::normalize).distinct().sortedBy(Path::toString),
+            test = test.mapNotNull(::normalize).distinct().sortedBy(Path::toString),
+            failure = if (unsafe == 0) null else "$unsafe Maven source root declaration(s) escape or cannot be validated inside the workspace",
         )
     }
 
