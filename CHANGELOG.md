@@ -28,6 +28,13 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Completed the P3 distribution-trust baseline with a hostile archive verifier:
+  checksum/name binding, bounded safe extraction vocabulary, traversal/symlink/
+  duplicate/case-collision refusal, reproducible timestamps, executable metadata,
+  required jlink modules, and ELF/PE/Mach-O architecture validation. Native CI
+  executes extracted archives without `JAVA_HOME`; release publication verifies
+  independently downloaded job artifacts again. Documented current unsigned
+  macOS Gatekeeper/notarization and Windows Authenticode/SmartScreen status.
 - Completed P2B and accepted ADR 0011: generic credential/build-execution policy
   allowances are ceilings, not provider capabilities. Current Maven remains
   credential-free and current Gradle remains non-executable even when allowances

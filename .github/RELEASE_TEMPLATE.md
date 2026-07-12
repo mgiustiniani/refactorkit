@@ -16,7 +16,10 @@ Complete before publishing the release:
 - [ ] `./gradlew packageCliRuntime`
 - [ ] Packaged CLI smoke test: `modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help`
 - [ ] Packaged CLI smoke test: `modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/java-maven-simple`
+- [ ] `scripts/verify-runtime-archive.py` passes for every platform asset.
 - [ ] Release notes list known limitations and risks for this version.
+- [ ] macOS Developer ID/notarization status is stated explicitly.
+- [ ] Windows Authenticode/SmartScreen publisher status is stated explicitly.
 
 ## Artifacts
 
@@ -24,6 +27,9 @@ Complete before publishing the release:
 - Commit: `<commit-sha>`
 - CLI distribution: `<artifact-name-or-link>`
 - Checksums/signatures: `<checksum-or-signature-location>`
+- macOS signing/notarization: `<signed-and-notarized|unsigned>`
+- Windows Authenticode: `<signed|unsigned>`
+- Build/SBOM attestations: `<attestation-location>`
 - Additional artifacts: `<optional>`
 
 ## Limitations and known risks

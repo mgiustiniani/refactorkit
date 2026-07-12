@@ -34,6 +34,9 @@ jobs:
       - name: Run golden tests
         run: ./refactorkit test-golden
 
+      - name: Test runtime archive verifier
+        run: python3 scripts/test-verify-runtime-archive.py
+
       - name: Validate architecture documentation
         run: |
           test -f docs/arc42/README.adoc
@@ -51,6 +54,10 @@ jobs:
           sha256sum modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
             > modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
           sha256sum -c modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
+          python3 scripts/verify-runtime-archive.py \
+            modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
+            modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256 \
+            --platform linux-x86_64
 
       - name: Smoke packaged CLI
         run: |
@@ -172,6 +179,17 @@ jobs:
           shutil.copyfile(source, target)
           digest = hashlib.sha256(target.read_bytes()).hexdigest()
           target.with_suffix(target.suffix + ".sha256").write_text(f"{digest}  {target.name}\n")
+
+      - name: Verify native runtime archive
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          archive = pathlib.Path("modules/refactorkit-cli/build/distributions/refactorkit-runtime-${{ matrix.platform }}.zip")
+          subprocess.run([
+              sys.executable, "scripts/verify-runtime-archive.py", str(archive),
+              str(archive.with_suffix(archive.suffix + ".sha256")),
+              "--platform", "${{ matrix.platform }}",
+          ], check=True)
 
       - name: Upload native runtime
         uses: actions/upload-artifact@v4

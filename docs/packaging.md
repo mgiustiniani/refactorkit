@@ -191,6 +191,11 @@ transactional support.
 
 ## Verification
 
+Archive trust details and unsigned platform status are normative in
+[`distribution-trust.md`](distribution-trust.md). CI runs
+`scripts/verify-runtime-archive.py` natively and again after release-job artifact
+download before publication.
+
 CI packaging verification currently checks:
 
 - `refactorkit-runtime.zip` is built;

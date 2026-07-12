@@ -63,6 +63,18 @@ jobs:
           digest = hashlib.sha256(target.read_bytes()).hexdigest()
           target.with_suffix(target.suffix + ".sha256").write_text(f"{digest}  {target.name}\n")
 
+      - name: Verify platform runtime archive
+        shell: python
+        run: |
+          import os, pathlib, subprocess, sys
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          archive = pathlib.Path(f"refactorkit-runtime-{version}-${{ matrix.platform }}.zip")
+          subprocess.run([
+              sys.executable, "scripts/verify-runtime-archive.py", str(archive),
+              str(archive.with_suffix(archive.suffix + ".sha256")),
+              "--platform", "${{ matrix.platform }}",
+          ], check=True)
+
       - name: Expand platform runtime for SBOM
         shell: python
         run: |
@@ -154,6 +166,19 @@ jobs:
               text = text.replace("Final SHA-256: _TBD after release artifact is built_", f"Final SHA-256: {digest}")
           text += "\n\n## Platform assets\n\n| Platform | Runtime | SHA-256 |\n|---|---|---|\n" + "\n".join(rows) + "\n"
           path.write_text(text)
+          PY
+
+      - name: Independently verify downloaded release inputs
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, sys
+          for archive in sorted(pathlib.Path("release-assets").glob("*.zip")):
+              platform = archive.stem.rsplit("-", 2)[-2] + "-" + archive.stem.rsplit("-", 2)[-1]
+              subprocess.run([
+                  sys.executable, "scripts/verify-runtime-archive.py", str(archive),
+                  str(archive.with_suffix(archive.suffix + ".sha256")),
+                  "--platform", platform, "--no-execute",
+              ], check=True)
           PY
 
       - name: Publish GitHub release

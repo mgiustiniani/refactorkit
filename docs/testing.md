@@ -158,6 +158,16 @@ versioned DTO/schema keys, workspace-relative module paths, canonical statuses,
 capability flags, deterministic bounded root truncation, and redaction without
 exposing local home/classpath paths.
 
+## Runtime archive trust acceptance
+
+`scripts/verify-runtime-archive.py` validates checksums before extraction, bounded
+safe layout, traversal/symlink/case-collision refusal, reproducible timestamps,
+Unix executable metadata, required jlink modules, ELF/PE/Mach-O architecture,
+and native launcher execution without `JAVA_HOME`. CI runs it on every native
+archive; the release publish job runs it again after downloading job artifacts.
+`scripts/test-verify-runtime-archive.py` supplies malicious traversal,
+case-collision, checksum-mismatch, and architecture fixtures.
+
 ## Native packaged Build Model acceptance
 
 `scripts/smoke-packaged-build-model.py` runs in the Linux and native
