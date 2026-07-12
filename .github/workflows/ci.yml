@@ -118,6 +118,25 @@ jobs:
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
 
+      - name: Summarize native test failures
+        if: failure()
+        shell: python
+        run: |
+          import pathlib, xml.etree.ElementTree as ET
+          found = False
+          for report in pathlib.Path("modules").glob("*/build/test-results/test/TEST-*.xml"):
+              root = ET.parse(report).getroot()
+              for case in root.findall("testcase"):
+                  failure = case.find("failure")
+                  if failure is None:
+                      failure = case.find("error")
+                  if failure is not None:
+                      found = True
+                      message = failure.attrib.get("message", "test failure").replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error file={report}::{case.attrib.get('classname')}.{case.attrib.get('name')}: {message}")
+          if not found:
+              print("No JUnit XML failure was available; inspect the build step.")
+
       - name: Upload native test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
