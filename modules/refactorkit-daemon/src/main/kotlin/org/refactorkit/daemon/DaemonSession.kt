@@ -155,81 +155,106 @@ class DaemonSession : AutoCloseable {
 
     private fun projectSummary(): JsonElement {
         val snap = requireSnapshot()
-        return buildJsonObject {
-            put("root", workspaceRoot.toString())
-            put("fileCount", snap.files.size)
-            put("snapshotHash", snap.hash)
-            put("buildModels", buildJsonArray {
-                snap.buildModels.sortedBy { it.providerId }.forEach { model ->
-                    add(buildJsonObject {
-                        put("providerId", model.providerId)
-                        put("status", model.status.name.lowercase().replace('_', '-'))
-                        put("ecosystem", model.attributes["ecosystem"].orEmpty())
-                        put("strategy", model.attributes["strategy"].orEmpty())
-                        put("providers", model.attributes["providers"] ?: model.attributes["ecosystem"].orEmpty())
-                        put("buildCodeExecution", model.attributes["buildCodeExecution"].orEmpty())
-                        put("credentialsAccess", model.attributes["credentialsAccess"].orEmpty())
-                        put("networkDefault", model.attributes["networkDefault"].orEmpty())
-                        put("networkAccess", model.attributes["networkAccess"].orEmpty())
-                        put("diagnostics", buildJsonArray {
-                            model.diagnostics.sortedWith(compareBy({ it.moduleId.orEmpty() }, { it.code })).forEach { diagnostic ->
-                                add(buildJsonObject {
-                                    put("code", diagnostic.code)
-                                    put("severity", diagnostic.severity.name.lowercase())
-                                    diagnostic.moduleId?.let { put("moduleId", it) }
-                                })
-                            }
-                        })
-                        put("modules", buildJsonArray {
-                            model.modules.sortedBy { it.id }.forEach { module ->
-                                add(buildJsonObject {
-                                    put("id", module.id)
-                                    put("name", module.name)
-                                    val relativeRoot = snap.workspace.root.toAbsolutePath().normalize()
-                                        .relativize(module.root.toAbsolutePath().normalize())
-                                    put("root", ProtocolPath.serialize(relativeRoot))
-                                    put("sourceSets", buildJsonArray {
-                                        module.sourceSets.sortedBy { it.id }.forEach { sourceSet ->
-                                            add(buildJsonObject {
-                                                put("id", sourceSet.id)
-                                                put("kind", sourceSet.kind.name.lowercase())
-                                                put("sourceRoots", buildJsonArray {
-                                                    sourceSet.sourceRoots.sortedBy(ProtocolPath::serialize)
-                                                        .forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
-                                                })
-                                                put("generatedSourceRoots", buildJsonArray {
-                                                    sourceSet.generatedSourceRoots.sortedBy(ProtocolPath::serialize)
-                                                        .forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
-                                                })
-                                                put("outputDirectories", buildJsonArray {
-                                                    sourceSet.outputDirectories.sortedBy(ProtocolPath::serialize)
-                                                        .forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
-                                                })
-                                                put("moduleDependencies", buildJsonArray {
-                                                    sourceSet.moduleDependencies.sortedWith(compareBy({ it.targetModuleId }, { it.scope.name }))
-                                                        .forEach { dependency -> add(buildJsonObject {
-                                                            put("moduleId", dependency.targetModuleId)
-                                                            put("scope", dependency.scope.name.lowercase())
-                                                        }) }
-                                                })
-                                            })
-                                        }
-                                    })
-                                })
-                            }
-                        })
-                    })
+        val sortedModels = snap.buildModels.sortedBy { it.providerId }
+        var remainingModules = ProtocolLimits.MAX_BUILD_MODULES
+        var remainingDiagnostics = ProtocolLimits.MAX_BUILD_MODEL_DIAGNOSTICS
+        val models = sortedModels.take(ProtocolLimits.MAX_BUILD_MODELS).map { model ->
+            val sortedDiagnostics = model.diagnostics.sortedWith(compareBy({ it.moduleId.orEmpty() }, { it.code }))
+            val diagnostics = sortedDiagnostics.take(remainingDiagnostics).map { diagnostic ->
+                BuildModelDiagnosticSummaryDto(
+                    diagnostic.code,
+                    diagnostic.severity.name.lowercase(),
+                    diagnostic.moduleId,
+                )
+            }
+            remainingDiagnostics -= diagnostics.size
+            val sortedModules = model.modules.sortedBy { it.id }
+            val modules = sortedModules.take(remainingModules).map { module ->
+                val sortedSourceSets = module.sourceSets.sortedBy { it.id }
+                val sourceSets = sortedSourceSets.take(ProtocolLimits.MAX_BUILD_SOURCE_SETS_PER_MODULE).map { sourceSet ->
+                    val sourceRoots = sourceSet.sourceRoots.sortedBy(ProtocolPath::serialize)
+                    val generatedRoots = sourceSet.generatedSourceRoots.sortedBy(ProtocolPath::serialize)
+                    val outputs = sourceSet.outputDirectories.sortedBy(ProtocolPath::serialize)
+                    val dependencies = sourceSet.moduleDependencies
+                        .sortedWith(compareBy({ it.targetModuleId }, { it.scope.name }))
+                    BuildSourceSetSummaryDto(
+                        id = sourceSet.id,
+                        kind = sourceSet.kind.name.lowercase().replace('_', '-'),
+                        sourceRoots = sourceRoots.take(ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET)
+                            .map(ProtocolPath::serialize),
+                        generatedSourceRoots = generatedRoots.take(ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET)
+                            .map(ProtocolPath::serialize),
+                        outputDirectories = outputs.take(ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET)
+                            .map(ProtocolPath::serialize),
+                        moduleDependencies = dependencies
+                            .take(ProtocolLimits.MAX_BUILD_MODULE_DEPENDENCIES_PER_SOURCE_SET)
+                            .map { BuildModuleDependencySummaryDto(it.targetModuleId, it.scope.name.lowercase()) },
+                        truncated = sourceRoots.size > ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET ||
+                            generatedRoots.size > ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET ||
+                            outputs.size > ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET ||
+                            dependencies.size > ProtocolLimits.MAX_BUILD_MODULE_DEPENDENCIES_PER_SOURCE_SET,
+                    )
                 }
-            })
-            put("modules", buildJsonArray {
-                snap.modules.forEach { mod ->
-                    add(buildJsonObject {
-                        put("name", mod.name)
-                        put("root", mod.root.toString())
-                    })
-                }
-            })
+                BuildModuleSummaryDto(
+                    id = module.id,
+                    name = module.name,
+                    root = relativeModuleRoot(snap, module.root),
+                    sourceSets = sourceSets,
+                    truncated = sortedSourceSets.size > ProtocolLimits.MAX_BUILD_SOURCE_SETS_PER_MODULE ||
+                        sourceSets.any(BuildSourceSetSummaryDto::truncated),
+                )
+            }
+            remainingModules -= modules.size
+            BuildModelSummaryDto(
+                providerId = model.providerId,
+                status = model.status.name.lowercase().replace('_', '-'),
+                ecosystem = model.attributes["ecosystem"].orEmpty(),
+                strategy = model.attributes["strategy"].orEmpty(),
+                providers = model.attributes["providers"] ?: model.attributes["ecosystem"].orEmpty(),
+                buildCodeExecution = model.attributes["buildCodeExecution"].orEmpty(),
+                credentialsAccess = model.attributes["credentialsAccess"].orEmpty(),
+                networkDefault = model.attributes["networkDefault"].orEmpty(),
+                networkAccess = model.attributes["networkAccess"].orEmpty(),
+                activeProfiles = csvAttribute(model.attributes["activeProfiles"]),
+                inactiveProfiles = csvAttribute(model.attributes["inactiveProfiles"]),
+                diagnostics = diagnostics,
+                modules = modules,
+                truncated = sortedDiagnostics.size > diagnostics.size || sortedModules.size > modules.size ||
+                    modules.any(BuildModuleSummaryDto::truncated),
+            )
         }
+        val sortedModules = snap.modules.sortedBy { it.name }
+        val legacyModules = sortedModules.take(ProtocolLimits.MAX_BUILD_MODULES).map { module ->
+            ProjectModuleSummaryDto(module.name, relativeModuleRoot(snap, module.root))
+        }
+        return PROTOCOL_JSON.encodeToJsonElement(ProjectSummaryResponseDto(
+            root = workspaceRoot.toString(),
+            fileCount = snap.files.size,
+            snapshotHash = snap.hash,
+            buildModels = models,
+            buildModelsTruncated = sortedModels.size > models.size || models.any(BuildModelSummaryDto::truncated),
+            buildModelLimits = BuildModelSummaryLimitsDto(
+                maxModels = ProtocolLimits.MAX_BUILD_MODELS,
+                maxModules = ProtocolLimits.MAX_BUILD_MODULES,
+                maxSourceSetsPerModule = ProtocolLimits.MAX_BUILD_SOURCE_SETS_PER_MODULE,
+                maxRootsPerSourceSet = ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET,
+                maxModuleDependenciesPerSourceSet = ProtocolLimits.MAX_BUILD_MODULE_DEPENDENCIES_PER_SOURCE_SET,
+                maxDiagnostics = ProtocolLimits.MAX_BUILD_MODEL_DIAGNOSTICS,
+            ),
+            modules = legacyModules,
+            modulesTruncated = sortedModules.size > legacyModules.size,
+        ))
+    }
+
+    private fun csvAttribute(value: String?): List<String> = value.orEmpty().split(',')
+        .map(String::trim).filter(String::isNotEmpty).sorted()
+
+    private fun relativeModuleRoot(snapshot: ProjectSnapshot, moduleRoot: Path): String {
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val module = moduleRoot.toAbsolutePath().normalize()
+        if (!module.startsWith(root)) return "<outside-workspace>"
+        val relative = ProtocolPath.serialize(root.relativize(module))
+        return relative.ifBlank { "." }
     }
 
     private fun symbolSearch(params: JsonObject?): JsonElement {
@@ -831,6 +856,8 @@ class DaemonSession : AutoCloseable {
                     "buildModelSummary" to true,
                     "sourceSets" to true,
                     "credentialRedaction" to true,
+                    "boundedBuildModelSummary" to true,
+                    "typedBuildModelSchema" to true,
                     "offlineMissingStatus" to true,
                     "executionRefusedStatus" to true,
                 ),

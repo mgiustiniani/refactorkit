@@ -5,12 +5,14 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -68,6 +70,8 @@ class DaemonSessionTest {
         assertTrue(summaryFeatures["buildModelSummary"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(summaryFeatures["sourceSets"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(summaryFeatures["credentialRedaction"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(summaryFeatures["boundedBuildModelSummary"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(summaryFeatures["typedBuildModelSchema"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(summaryFeatures["offlineMissingStatus"]!!.jsonPrimitive.content.toBoolean())
         assertTrue(summaryFeatures["executionRefusedStatus"]!!.jsonPrimitive.content.toBoolean())
         val importer = byName["java.importExternalClass"]!!
@@ -121,6 +125,68 @@ class DaemonSessionTest {
         assertEquals("denied", model["credentialsAccess"]!!.jsonPrimitive.content)
         assertTrue(model.toString().contains("src/main/java"))
         assertFalse(model.toString().contains(System.getProperty("user.home")))
+    }
+
+    @Test
+    fun projectSummaryMatchesVersionedBuildModelSchemaAndLimits() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example; public class Foo {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val result = session.dispatch("project.summary", null).jsonObject
+        val schema = Json.parseToJsonElement(
+            requireNotNull(javaClass.getResource("/build-model-summary-schema-keys.json")).readText(),
+        ).jsonObject
+        fun expected(name: String) = schema[name]!!.jsonArray.map { it.jsonPrimitive.content }.toSet()
+        fun assertKeys(name: String, value: JsonObject) = assertEquals(expected(name), value.keys, name)
+
+        assertKeys("response", result)
+        assertKeys("limits", result["buildModelLimits"]!!.jsonObject)
+        val model = result["buildModels"]!!.jsonArray.single().jsonObject
+        assertKeys("model", model)
+        assertKeys("diagnostic", model["diagnostics"]!!.jsonArray.single().jsonObject)
+        val module = model["modules"]!!.jsonArray.single().jsonObject
+        assertKeys("module", module)
+        assertKeys("sourceSet", module["sourceSets"]!!.jsonArray.first().jsonObject)
+        assertKeys("legacyModule", result["modules"]!!.jsonArray.single().jsonObject)
+        val limits = result["buildModelLimits"]!!.jsonObject
+        assertEquals(ProtocolLimits.MAX_BUILD_MODELS, limits["maxModels"]!!.jsonPrimitive.content.toInt())
+        assertEquals(ProtocolLimits.MAX_BUILD_MODULES, limits["maxModules"]!!.jsonPrimitive.content.toInt())
+        assertFalse(result["buildModelsTruncated"]!!.jsonPrimitive.content.toBoolean())
+        assertFalse(result["modulesTruncated"]!!.jsonPrimitive.content.toBoolean())
+        assertEquals(".", result["modules"]!!.jsonArray.single().jsonObject["root"]!!.jsonPrimitive.content)
+
+        val dependency = Json.encodeToJsonElement(
+            BuildModuleDependencySummaryDto("upstream", "compile"),
+        ).jsonObject
+        assertKeys("dependency", dependency)
+    }
+
+    @Test
+    fun projectSummaryTruncatesOversizedBuildModelCollectionsDeterministically() {
+        val declarations = (0..ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET).joinToString("\n") { index ->
+            "sourceSets[\"main\"].java.srcDir(\"roots/r$index\")"
+        }
+        val root = createProject(
+            "build.gradle.kts" to "plugins { java }\n$declarations\n",
+            "src/main/java/example/App.java" to "package example; class App {}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val result = session.dispatch("project.summary", null).jsonObject
+        val model = result["buildModels"]!!.jsonArray.single().jsonObject
+        val main = model["modules"]!!.jsonArray.single().jsonObject["sourceSets"]!!.jsonArray
+            .map { it.jsonObject }.single { it["id"]!!.jsonPrimitive.content == "main" }
+
+        assertEquals(
+            ProtocolLimits.MAX_BUILD_ROOTS_PER_SOURCE_SET,
+            main["sourceRoots"]!!.jsonArray.size,
+        )
+        assertTrue(main["truncated"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(model["truncated"]!!.jsonPrimitive.content.toBoolean())
+        assertTrue(result["buildModelsTruncated"]!!.jsonPrimitive.content.toBoolean())
     }
 
     @Test

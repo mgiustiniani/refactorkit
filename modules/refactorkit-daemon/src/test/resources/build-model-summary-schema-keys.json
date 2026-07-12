@@ -1,0 +1,10 @@
+{
+  "response": ["root", "fileCount", "snapshotHash", "buildModels", "buildModelsTruncated", "buildModelLimits", "modules", "modulesTruncated"],
+  "limits": ["maxModels", "maxModules", "maxSourceSetsPerModule", "maxRootsPerSourceSet", "maxModuleDependenciesPerSourceSet", "maxDiagnostics"],
+  "model": ["providerId", "status", "ecosystem", "strategy", "providers", "buildCodeExecution", "credentialsAccess", "networkDefault", "networkAccess", "activeProfiles", "inactiveProfiles", "diagnostics", "modules", "truncated"],
+  "diagnostic": ["code", "severity", "moduleId"],
+  "module": ["id", "name", "root", "sourceSets", "truncated"],
+  "sourceSet": ["id", "kind", "sourceRoots", "generatedSourceRoots", "outputDirectories", "moduleDependencies", "truncated"],
+  "dependency": ["moduleId", "scope"],
+  "legacyModule": ["name", "root"]
+}

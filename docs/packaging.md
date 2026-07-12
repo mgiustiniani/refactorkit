@@ -181,6 +181,14 @@ Override if needed:
   -Prefactorkit.runtime.modules=java.base,java.compiler,java.logging,java.xml,jdk.unsupported
 ```
 
+## Packaged Build Model acceptance
+
+Every supported native runtime runs `scripts/smoke-packaged-build-model.py` with
+`JAVA_HOME` removed. Acceptance covers Maven reactor scan/diagnostics and managed
+`moveSourceRoot` preview/apply/WAL/rollback byte identity plus case-folded
+collision refusal. A launcher-only smoke is not sufficient for Build Model or
+transactional support.
+
 ## Verification
 
 CI packaging verification currently checks:

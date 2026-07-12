@@ -106,7 +106,7 @@ of the beta baseline for documented methods.
 | `server.version` | `beta-contract` | Read-only implementation/API metadata; does not require an opened project. |
 | `server.capabilities` | `beta-contract` | Read-only protocol/method/safety discovery; does not require an opened project. |
 | `project.open` | `beta-contract` | Workspace lifecycle; requires `root`. |
-| `project.summary` | `beta-contract` | Read-only project metadata plus additive redacted Build Model SPI summary (`providerId`, status, policy outcomes, typed diagnostic codes, modules/source sets/outputs/edges); external classpath paths and diagnostic messages are omitted. |
+| `project.summary` | `beta-contract` | Read-only project metadata plus typed, deterministically ordered, bounded and truncation-signaled Build Model SPI summary (`providerId`, canonical status, policy outcomes, selected profiles, typed diagnostic codes, modules/source sets/outputs/edges); module paths are workspace-relative, while external classpath paths and diagnostic messages are omitted. Shape is guarded by `build-model-summary-schema-keys.json`. |
 | `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
 | `symbol.definition` | `beta-contract` | Read-only lookup; requires `symbol`. |
 | `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |

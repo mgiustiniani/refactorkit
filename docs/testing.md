@@ -153,9 +153,20 @@ projects main/test/generated sets through `maven-effective-v1` and proves that a
 test-scoped artifact is absent from the main source set but available to test and
 generated-test sources. Planner/importer/formatter tests clear compatibility
 ownership fields and prove Build Model authority; reactor acceptance does the
-same through staged JDT diagnostics overlays. Daemon contract tests verify
-redacted source-set summary and capability flags without exposing local
-home/classpath paths.
+same through staged JDT diagnostics overlays. Daemon contract tests verify exact
+versioned DTO/schema keys, workspace-relative module paths, canonical statuses,
+capability flags, deterministic bounded root truncation, and redaction without
+exposing local home/classpath paths.
+
+## Native packaged Build Model acceptance
+
+`scripts/smoke-packaged-build-model.py` runs in the Linux and native
+Windows/macOS runtime matrix with `JAVA_HOME` removed. It copies the committed
+Java 21 Maven reactor, verifies packaged scan and zero diagnostics, proves
+rename-only preview does not mutate, applies through approval/PatchEngine, checks
+transaction/WAL evidence and post-image diagnostics, rolls back to byte-identical
+Java hashes, and refuses a case-folded destination collision. The same script is
+runnable locally after `packageCliRuntime`.
 
 ## Gradle declarative model acceptance
 

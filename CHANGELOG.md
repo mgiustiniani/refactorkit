@@ -28,6 +28,16 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Added native packaged Build Model acceptance on Linux, Windows x86_64, macOS
+  x86_64, and macOS arm64 with `JAVA_HOME` removed: Maven reactor scan, clean
+  diagnostics, rename-only `moveSourceRoot` preview, authorized apply, WAL/
+  transaction evidence, post-apply diagnostics, rollback byte identity, and
+  case-folded destination collision refusal.
+- Versioned daemon `project.summary` with typed serializable Build Model DTOs,
+  exact schema-key snapshots, canonical hyphenated statuses/kinds, workspace-
+  relative module paths, active/inactive profile lists, deterministic ordering,
+  explicit truncation flags, and defensive model/module/source-set/root/edge/
+  diagnostic limits. External classpaths and diagnostic messages remain omitted.
 - Advanced `gradle-declarative-v1` from compatibility projection to a bounded,
   non-executable model for conventional main/test plus literal integration/custom
   source sets, generated roots, outputs, Java levels, and project dependencies.

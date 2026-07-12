@@ -56,6 +56,7 @@ jobs:
         run: |
           env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
           env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
+          env -u JAVA_HOME python3 scripts/smoke-packaged-build-model.py
           for sample in \
             samples/java-maven-simple \
             samples/java-gradle-simple \
@@ -128,6 +129,12 @@ jobs:
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+
+      - name: Native packaged build-model acceptance
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-build-model.py"], check=True)
 
       - name: Summarize native test failures
         if: failure()

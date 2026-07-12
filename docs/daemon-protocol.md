@@ -48,6 +48,15 @@ classpath paths and diagnostic messages are intentionally omitted to avoid
 leaking local repository layout or credential-adjacent data. Capability discovery
 advertises `buildModelSummary`, `sourceSets`, and `credentialRedaction`.
 
+The response is encoded from versioned typed DTOs and includes
+`buildModelLimits`, `buildModelsTruncated`, per-model/module/source-set
+`truncated`, and `modulesTruncated`. Ordering is deterministic. Limits are 16
+models, 1,024 total model modules, 64 source sets per module, 256 roots per root
+category, 1,024 module edges per source set, and 500 typed model diagnostics.
+Module paths are workspace-relative (`.` for the root); outside-workspace module
+roots are redacted. A checked-in schema-key snapshot prevents accidental shape
+drift.
+
 Provider identities are `maven-effective-v1`, `gradle-declarative-v1`, and
 `java-conventional-v1`. They currently project API `0.2` compatibility `Module`
 data while semantic consumers migrate source-set by source-set. Summaries include

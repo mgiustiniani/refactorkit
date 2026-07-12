@@ -35,6 +35,14 @@ SHA-256-sidecar ceiling. Redirects are disabled and unverified downloads are
 removed before cache publication. Limit or verification failure becomes a concise
 `classpath.unavailable` root diagnostic.
 
+## Build-model summary limits
+
+Daemon `project.summary` emits at most 16 models, 1,024 total model modules, 64
+source sets per module, 256 roots in each source/generated/output list, 1,024
+module dependencies per source set, and 500 typed model diagnostics. Every level
+that can truncate carries an explicit flag and the response includes the active
+limits. Ordering is deterministic before truncation.
+
 ## Cancellation
 
 The `v0.4.0` daemon and MCP request loops are synchronous and do not advertise
