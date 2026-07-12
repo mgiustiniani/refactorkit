@@ -112,8 +112,19 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Build, test, package and native smoke
-        run: ${{ matrix.gradle }} build :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+      - name: Build and test
+        run: ${{ matrix.gradle }} build --no-daemon
+
+      - name: Package and native smoke
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+
+      - name: Upload native test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refactorkit-test-reports-${{ matrix.platform }}
+          path: modules/*/build/test-results/test/**
+          if-no-files-found: ignore
 
       - name: Name platform artifact and checksum
         shell: python
