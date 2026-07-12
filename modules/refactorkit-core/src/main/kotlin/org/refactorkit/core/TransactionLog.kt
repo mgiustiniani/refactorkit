@@ -307,7 +307,7 @@ class TransactionLog(
 
     private fun forceDirectory(path: Path = logDir) {
         try {
-            FileChannel.open(path, StandardOpenOption.READ).use { it.force(true) }
+            FilesystemDurability.forceDirectory(path)
         } catch (error: Exception) {
             throw TransactionLogException(
                 "transaction.durabilityFailed",
@@ -369,7 +369,17 @@ class TransactionLog(
 
     private fun ensureNoSymbolicLinkComponents(path: Path) {
         val absolute = path.toAbsolutePath().normalize()
-        var current = absolute.root ?: return
+        var trustedAncestor: Path? = absolute
+        while (trustedAncestor != null && !Files.exists(trustedAncestor, LinkOption.NOFOLLOW_LINKS)) {
+            trustedAncestor = trustedAncestor.parent
+        }
+        var current = trustedAncestor ?: absolute.root ?: return
+        if (Files.isSymbolicLink(current)) {
+            throw TransactionLogException(
+                "transaction.pathUnsafe",
+                "Transaction log path traverses a symbolic link: $current",
+            )
+        }
         for (component in current.relativize(absolute)) {
             current = current.resolve(component)
             if (Files.isSymbolicLink(current)) {

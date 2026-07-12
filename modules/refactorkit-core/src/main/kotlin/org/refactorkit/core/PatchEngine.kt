@@ -1113,7 +1113,7 @@ class PatchEngine(
 
     private fun forceWorkspaceDirectory(directory: Path) {
         try {
-            FileChannel.open(directory, StandardOpenOption.READ).use { it.force(true) }
+            FilesystemDurability.forceDirectory(directory)
         } catch (error: Exception) {
             throw WorkspaceWriteException(
                 "filesystem.directoryForceFailed",
