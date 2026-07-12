@@ -111,8 +111,9 @@ of the beta baseline for documented methods.
 | `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |
 | `diagnostics` | `beta-contract` | Read-only diagnostics query. |
 | `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
-| `refactor.apply` | `beta-contract` | Requires `planId`; rejects stale snapshots/plans, refreshes session state, clears stale pending plans, and returns `snapshotHash`. |
-| `patch.rollback` | `beta-contract` | Requires `transactionId`; stays inside workspace root, refreshes session state, clears stale pending plans, and returns `snapshotHash`. |
+| `refactor.apply` | `beta-contract` | Requires `planId`; applies the exact retained plan, rejects stale snapshots/plans, refreshes session state, clears pending plans, and returns structured changes/diagnostics/snapshot evidence. |
+| `refactor.discard` | `beta-contract` | Idempotently removes a pending source-bearing plan without workspace writes; returns `discarded=false` when absent. |
+| `patch.rollback` | `beta-contract` | Requires `transactionId`; stays inside workspace root, refreshes session state, clears pending plans, and returns inverse WAL changes/diagnostics/snapshot evidence. |
 | `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |
 
@@ -126,8 +127,8 @@ read-only discovery metadata:
 - `methods`, where each entry exposes `name`, `stability`, `requiresProject`, and
   `writesWorkspace`; methods may add a `features` object for explicit capability
   discovery. `java.importExternalClass.features` advertises `targetDirectory`,
-  `preview`, plan-ID `apply`, and transaction-ID `rollback` independently of the
-  implementation version;
+  rendered/structured diff, virtual preview diagnostics, discard, plan-ID apply,
+  and transaction-ID rollback independently of the implementation version;
 - `safety`, including `previewBeforeApply`, `snapshotValidation`,
   `transactionRollback`, and `workspaceScopedWrites`.
 
@@ -187,13 +188,16 @@ or otherwise ambiguous directory targets return a structured refused plan with
 `refusalReasons` and a next action. Resolution occurs before Java source
 processing, and refusal output never echoes clipboard source.
 
-The response uses the standard patch-plan preview envelope with `planId`,
-`operation=importExternalJavaClass`, `status`, `summary`, `confidence`,
-`riskLevel`, `evidence`, `affectedFiles`, `structuredDiff`, `warnings`, and
-`diagnosticsAfterPreview`. Directory-driven previews additionally expose
-`primaryFile`, `resolvedModule`, `resolvedSourceRoot`, `sourceSet`,
-`resolvedPackage`, `packageChanges`, `provenance`, `unresolvedDependencies`,
-`conflicts`, `refusalReasons`, `applyEligible`, `snapshot`, and `provider`.
+The typed response uses lower-case `status`, risk and evidence values and exposes
+`affectedFiles` change objects, `placement`, `renderedDiff`, bounded
+`structuredDiff` hunks, `diagnosticsAfterPreview`, structured provenance,
+`applyEligibility`, `staleness`, snapshot evidence, and provider identity.
+Temporary API `0.2` compatibility aliases include `legacyStatus`,
+`legacyRiskLevel`, `legacyEvidence`, `affectedFilePaths`, `applyEligible`, and
+legacy provenance names. Diff and diagnostic overflow is always
+reported through truncation fields and versioned limits. See
+[Daemon protocol](daemon-protocol.md) for the complete schema.
+
 All plan/file paths are workspace-relative and serialized with `/` separators
 on every host. The `warnings` array must include exactly one
 provenance/license line for source-processed plans with these stable key names:
@@ -205,13 +209,24 @@ Provenance: sourceKind=... sourceUrl=... retrievedAt=... licenseDetected=... lic
 `sourceUrl` is `(none)` when no URL is known; `retrievedAt` is an ISO-8601
 instant; `originalHash` is the SHA-256 hash of the cleaned source text.
 
-A successful preview performs no write and retains its exact engine-owned plan
-in the daemon session. Only `refactor.apply({planId})` may apply it; apply does
-not regenerate source or target resolution, validates snapshot/classpath
-staleness under the workspace lock, and returns `transactionId`, `changedFiles`,
-`primaryFile` for importer plans, and the refreshed snapshot hash. Rollback uses
-`patch.rollback({transactionId})` and the existing WAL/post-image conflict rules.
-The additive fields retain API `0.2`; method stability remains `experimental`.
+A successful preview performs no workspace write and retains its exact
+engine-owned plan in a bounded 128-entry LRU. Project switch, apply, rollback,
+EOF/shutdown, explicit `refactor.discard`, and eviction release pending plan
+references; refused/diagnostics-blocked plans are never retained. Only
+`refactor.apply({planId})` may apply a retained plan. Apply does not regenerate
+source or target resolution, validates snapshot/classpath staleness and reruns
+JDT diagnostics under lock, then returns transaction, typed changes, primary
+file, post-apply diagnostics, and refreshed snapshot evidence. Rollback derives
+inverse changes from the WAL forward edit and retains conflict-safe semantics.
+
+Virtual preview diagnostics come from `WorkspaceEditSimulator` plus JDT and are
+not planner-approved errors: new ERROR diagnostics block eligibility. Apply-time
+diagnostics remain authoritative and independent. Unknown/high license under
+`warn` requires explicit-apply acknowledgement and uses conservative HIGH risk;
+`block-unknown` refuses and stores no plan.
+
+The changes retain API `0.2`; importer shape remains `experimental` while
+`refactor.discard` is additive beta-contract lifecycle control.
 
 ### `refactor.preview` operation classification
 

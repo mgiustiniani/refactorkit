@@ -21,6 +21,13 @@ review safety boundaries before applying refactorings.
   preview metadata/refusals, exact-plan managed apply and WAL rollback. Added
   explicit capability feature flags and an official self-contained
   `refactorkit-daemon` launcher with end-to-end packaged smoke coverage.
+- Completed daemon path-driven import protocol hardening with bounded real and
+  structured diffs derived from the retained `WorkspaceEdit`, virtual JDT preview
+  diagnostics and blockers, typed apply/rollback changes, portable protocol
+  paths, deterministic primary-file rules, pending-plan project-switch/discard/
+  LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
+  packaged daemon smoke from paths containing spaces. Golden comparison paths
+  and repository line endings are normalized for native Windows acceptance.
 - Canonicalized JDT reference binding keys to their matched source declarations,
   preserving exact qualified overload identity when independent parser
   environments emit platform-specific keys on Windows. Constructor and override

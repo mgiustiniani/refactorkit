@@ -155,7 +155,11 @@ env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactork
 On Windows use `bin\\refactorkit-daemon.bat`. The daemon speaks NDJSON JSON-RPC
 2.0 on stdin/stdout. Stdout is protocol-only; logs go to stderr. Close stdin for
 an orderly shutdown. The packaged launcher uses the same embedded runtime and
-`lib/*` dependency set as the CLI, including `java.compiler` for JDT. See
+`lib/*` dependency set as the CLI, including `java.compiler` for JDT. Native CI
+configures Python 3.12 explicitly for the bounded smoke harness. The harness
+copies the complete distribution beneath a path containing spaces, enforces
+startup/per-response/shutdown timeouts, bounds captured stderr, rejects non-JSON
+stdout, kills hung processes, and verifies EOF termination. See
 [Daemon protocol](daemon-protocol.md) for lifecycle and request examples.
 
 ## Runtime modules
@@ -189,8 +193,10 @@ CI packaging verification currently checks:
   launcher with `JAVA_HOME` unset and leave fixture sources unchanged;
 - the packaged launcher runs with `JAVA_HOME` unset;
 - the packaged daemon launcher completes capability discovery, project open,
-  target-directory import preview with no write, exact-plan apply, and WAL
-  rollback with byte-for-byte restoration;
+  real diff/virtual diagnostics preview with no workspace write, exact-plan
+  apply, and WAL rollback with byte-for-byte restoration;
+- a hanging fake daemon proves the smoke's startup timeout; the real package is
+  launched from a path containing spaces with bounded stderr and strict NDJSON;
 - packaged `scan` succeeds for Maven, Gradle, Spring, JPA, and multi-module
   samples;
 - both the zip and checksum are uploaded as the `refactorkit-runtime` artifact.

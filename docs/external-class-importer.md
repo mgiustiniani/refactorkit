@@ -117,11 +117,25 @@ unresolved external imports, copied helper types, multiple public-type splitting
 and any dependency that would need to be added separately. External import is
 code assimilation, not a semantic refactoring.
 
-Daemon previews retain the exact plan under `planId`; `refactor.apply` delegates
-that plan unchanged to `PatchEngine`, returns changed/primary files and a WAL
-transaction ID, and refreshes project state. `patch.rollback` restores/removes
-its journaled paths. No importer or daemon code writes project files directly.
-Rollback
+Daemon previews retain the exact plan under `planId`; rendered and structured
+hunk diffs are bounded projections of that plan's `WorkspaceEdit`, not a second
+planning pass. The daemon applies the edit virtually and runs JDT diagnostics;
+new ERROR diagnostics become apply blockers and are not copied into the plan as
+approved errors. `refactor.apply` delegates the unchanged retained plan to
+`PatchEngine`, reruns the authoritative diagnostics gate, and returns typed
+changed/primary files plus a WAL transaction ID. `patch.rollback` reports inverse
+WAL changes and restores/removes journaled paths. No importer or daemon code
+writes project files directly during preview.
+
+Pending source-bearing plans are held in a 128-entry LRU. Project switch,
+explicit idempotent `refactor.discard`, successful apply/rollback, eviction, and
+EOF release them; refused or diagnostics-blocked plans are never retained. For
+multiple public types, primary is the first source declaration.
+
+Unknown/high-risk license under `warn` stays previewable with a structured
+explicit-apply acknowledgement requirement. Unknown risk maps conservatively to
+HIGH while API `0.2` lacks an UNKNOWN core risk enum. `block-unknown` refuses and
+stores no plan. Rollback
 does not remove legal/provenance obligations, undo dependency additions made
 outside the plan, or repair manual edits after apply.
 

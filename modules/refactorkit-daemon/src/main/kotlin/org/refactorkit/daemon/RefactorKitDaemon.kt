@@ -31,39 +31,43 @@ fun main() {
 
     System.err.println("RefactorKit daemon ready (JSON-RPC / NDJSON)")
 
-    reader.forEachLine { line ->
-        if (line.isBlank()) return@forEachLine
-        if (line.toByteArray(Charsets.UTF_8).size > ProtocolLimits.MAX_REQUEST_BYTES) {
-            out.println(json.encodeToString(errorResponse(
-                JsonNull,
-                JsonRpcErrorCodes.INVALID_REQUEST,
-                "Request exceeds ${ProtocolLimits.MAX_REQUEST_BYTES} bytes",
-            )))
-            return@forEachLine
-        }
+    try {
+        reader.forEachLine { line ->
+            if (line.isBlank()) return@forEachLine
+            if (line.toByteArray(Charsets.UTF_8).size > ProtocolLimits.MAX_REQUEST_BYTES) {
+                out.println(json.encodeToString(errorResponse(
+                    JsonNull,
+                    JsonRpcErrorCodes.INVALID_REQUEST,
+                    "Request exceeds ${ProtocolLimits.MAX_REQUEST_BYTES} bytes",
+                )))
+                return@forEachLine
+            }
 
-        val request = try {
-            json.decodeFromString<JsonRpcRequest>(line)
-        } catch (e: Exception) {
-            out.println(json.encodeToString(errorResponse(JsonNull, JsonRpcErrorCodes.PARSE_ERROR, "Parse error: ${e.message}")))
-            return@forEachLine
-        }
+            val request = try {
+                json.decodeFromString<JsonRpcRequest>(line)
+            } catch (_: Exception) {
+                out.println(json.encodeToString(errorResponse(JsonNull, JsonRpcErrorCodes.PARSE_ERROR, "Parse error")))
+                return@forEachLine
+            }
 
-        // Notifications: process but don't respond
-        if (isNotification(request)) {
-            runCatching { session.dispatch(request.method, request.params?.jsonObject) }
-            return@forEachLine
-        }
+            // Notifications: process but don't respond
+            if (isNotification(request)) {
+                runCatching { session.dispatch(request.method, request.params?.jsonObject) }
+                return@forEachLine
+            }
 
-        val response = try {
-            val result = session.dispatch(request.method, request.params?.jsonObject)
-            successResponse(request.id, result)
-        } catch (e: JsonRpcException) {
-            errorResponse(request.id, e.code, e.message)
-        } catch (e: Exception) {
-            errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, e.message ?: "Internal error")
-        }
+            val response = try {
+                val result = session.dispatch(request.method, request.params?.jsonObject)
+                successResponse(request.id, result)
+            } catch (e: JsonRpcException) {
+                errorResponse(request.id, e.code, e.message)
+            } catch (_: Exception) {
+                errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, "Internal error")
+            }
 
-        out.println(json.encodeToString(response))
+            out.println(json.encodeToString(response))
+        }
+    } finally {
+        session.close()
     }
 }

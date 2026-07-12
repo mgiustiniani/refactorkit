@@ -61,10 +61,12 @@ refactorkit test-golden --golden-dir path/to/golden
 ### Run from Gradle
 
 ```bash
+./gradlew goldenTest
+# Equivalent focused module task:
 ./gradlew :modules:refactorkit-testkit:test
 ```
 
-### Current 22 golden cases
+### Current 23 golden cases
 
 | Case name | Operation | Status | Coverage focus |
 |-----------|-----------|--------|----------------|

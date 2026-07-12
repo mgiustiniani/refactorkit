@@ -1,27 +1,35 @@
 package org.refactorkit.daemon
 
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.core.FileChangeKind
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.PatchDiffRenderer
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
+import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.SymbolId
@@ -53,7 +61,7 @@ import java.nio.file.Paths
  * One session per daemon process. Each call is synchronous; the stdio loop
  * serialises concurrent requests naturally.
  */
-class DaemonSession {
+class DaemonSession : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
     private val scanner = JavaProjectScanner()
 
@@ -77,6 +85,7 @@ class DaemonSession {
         "diagnostics"       -> diagnostics()
         "refactor.preview"  -> refactorPreview(params)
         "refactor.apply"    -> refactorApply(params)
+        "refactor.discard"  -> refactorDiscard(params)
         "patch.rollback"    -> patchRollback(params)
         "java.importExternalClass" -> javaImportExternalClass(params)
         else -> throw JsonRpcException(JsonRpcErrorCodes.METHOD_NOT_FOUND, "Method not found: $method")
@@ -118,6 +127,9 @@ class DaemonSession {
     }
 
     private fun projectOpen(params: JsonObject?): JsonElement {
+        pendingPlans.clear()
+        snapshot = null
+        workspaceRoot = null
         val root = params?.string("root") ?: missing("root")
         val path = Paths.get(root).toAbsolutePath().normalize()
         val recoveryErrors = PatchEngine(path).recover()
@@ -165,7 +177,7 @@ class DaemonSession {
                     put("id", sym.id.value)
                     put("name", sym.name)
                     put("kind", sym.kind.name)
-                    put("file", sym.location.path.protocolPath())
+                    put("file", ProtocolPath.serialize(sym.location.path))
                     put("line", sym.location.range.start.line + 1)
                 })
             }
@@ -181,7 +193,7 @@ class DaemonSession {
             put("id", symbol.id.value)
             put("name", symbol.name)
             put("kind", symbol.kind.name)
-            put("file", symbol.location.path.protocolPath())
+            put("file", ProtocolPath.serialize(symbol.location.path))
             put("line", symbol.location.range.start.line + 1)
             put("character", symbol.location.range.start.character)
         }
@@ -193,7 +205,7 @@ class DaemonSession {
         return buildJsonArray {
             refs.forEach { ref ->
                 add(buildJsonObject {
-                    put("file", ref.location.path.protocolPath())
+                    put("file", ProtocolPath.serialize(ref.location.path))
                     put("line", ref.location.range.start.line + 1)
                     put("character", ref.location.range.start.character)
                 })
@@ -213,7 +225,7 @@ class DaemonSession {
                     d.evidence?.let { put("evidence", it.name) }
                     d.category?.let { put("category", it.name) }
                     d.location?.let { loc ->
-                        put("file", loc.path.protocolPath())
+                        put("file", ProtocolPath.serialize(loc.path))
                         put("line", loc.range.start.line + 1)
                     }
                 })
@@ -284,11 +296,17 @@ class DaemonSession {
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
-        pendingPlans[plan.id.value] = PendingPlan(plan)
         if (plan.status == PatchStatus.REFUSED) {
             throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
         }
+        pendingPlans[plan.id.value] = PendingPlan(plan)
         return planToJson(plan)
+    }
+
+    private fun refactorDiscard(params: JsonObject?): JsonElement {
+        val planId = params?.string("planId") ?: missing("planId")
+        val discarded = pendingPlans.remove(planId) != null
+        return PROTOCOL_JSON.encodeToJsonElement(DiscardResponseDto(planId, discarded))
     }
 
     private fun refactorApply(params: JsonObject?): JsonElement {
@@ -306,20 +324,26 @@ class DaemonSession {
         )) {
             is ApplyResult.Applied -> {
                 val refreshed = scanner.scan(root)
+                val diagnostics = boundedDiagnostics(adapter.diagnostics(refreshed))
                 snapshot = refreshed
                 pendingPlans.clear()
-                buildJsonObject {
-                    put("status", "applied")
-                    put("transactionId", result.transaction.id.value)
-                    put("planId", planId)
-                    put("changedFiles", buildJsonArray {
-                        plan.affectedFiles.sortedBy { it.protocolPath() }.forEach { add(JsonPrimitive(it.protocolPath())) }
-                    })
-                    pending.importPreview?.primaryFile?.let { put("primaryFile", it.protocolPath()) }
-                    put("snapshotHash", refreshed.hash)
-                }
+                val primary = pending.importPreview?.primaryFile
+                val changes = fileChanges(plan.workspaceEdit, primary)
+                PROTOCOL_JSON.encodeToJsonElement(ApplyResponseDto(
+                    status = "applied",
+                    planId = planId,
+                    transactionId = result.transaction.id.value,
+                    changedFiles = changes,
+                    changedFilePaths = changes.map(ProtocolFileChangeDto::path),
+                    primaryFile = primary?.let(ProtocolPath::serialize),
+                    diagnostics = diagnostics.items,
+                    diagnosticsTruncated = diagnostics.truncated,
+                    snapshotHash = refreshed.hash,
+                    provider = ProtocolProviderDto(RefactorKitVersion.NAME, RefactorKitVersion.VERSION),
+                ))
             }
             is ApplyResult.Refused -> {
+                pendingPlans.remove(planId)
                 val msg = result.diagnostics.joinToString("; ") { it.message }
                 throw JsonRpcException(JsonRpcErrorCodes.applyRefusalCode(result.diagnostics), msg)
             }
@@ -343,11 +367,11 @@ class DaemonSession {
                 is JavaImportTargetResolution.Resolved -> resolution.target
                 is JavaImportTargetResolution.Refused -> {
                     val detail = refusedImportTarget(snap, resolution.refusal)
-                    return planToJson(detail.plan, detail)
+                    return importPreviewToJson(detail, snap)
                 }
             }
         } else null
-        val detail = ExternalJavaClassImporter().previewDetailed(ImportRequest(
+        val imported = ExternalJavaClassImporter().previewDetailed(ImportRequest(
             code = code,
             targetPackage = target?.packageName ?: requestedPackage.orEmpty(),
             targetModule = p.string("targetModule"),
@@ -357,8 +381,9 @@ class DaemonSession {
             snapshot = snap,
             resolvedTarget = target,
         ))
+        val detail = withPreviewDiagnostics(imported, snap)
         if (detail.applyEligible) pendingPlans[detail.plan.id.value] = PendingPlan(detail.plan, detail)
-        return planToJson(detail.plan, detail)
+        return importPreviewToJson(detail, snap)
     }
 
     private fun patchRollback(params: JsonObject?): JsonElement {
@@ -370,18 +395,26 @@ class DaemonSession {
         val transactionId = TransactionId.parseOrNull(txId)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid transaction ID: $txId")
         val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-        val tx = log.load(transactionId)
+        val record = log.loadRecord(transactionId)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $txId")
-        return when (val result = PatchEngine(root).rollback(tx, mode)) {
+        return when (val result = PatchEngine(root).rollback(record.transaction, mode)) {
             is ApplyResult.Applied -> {
                 val refreshed = scanner.scan(root)
+                val diagnostics = boundedDiagnostics(adapter.diagnostics(refreshed))
                 snapshot = refreshed
                 pendingPlans.clear()
-                buildJsonObject {
-                    put("status", "rolledBack")
-                    put("transactionId", txId)
-                    put("snapshotHash", refreshed.hash)
-                }
+                val changes = fileChanges(record.forwardEdit, rollback = true)
+                PROTOCOL_JSON.encodeToJsonElement(RollbackResponseDto(
+                    status = "rolledBack",
+                    transactionId = txId,
+                    rolledBack = true,
+                    changedFiles = changes,
+                    changedFilePaths = changes.map(ProtocolFileChangeDto::path),
+                    diagnostics = diagnostics.items,
+                    diagnosticsTruncated = diagnostics.truncated,
+                    snapshotHash = refreshed.hash,
+                    provider = ProtocolProviderDto(RefactorKitVersion.NAME, RefactorKitVersion.VERSION),
+                ))
             }
             is ApplyResult.Refused -> {
                 val msg = result.diagnostics.joinToString("; ") { it.message }
@@ -418,7 +451,195 @@ class DaemonSession {
         else -> SourceKind.SNIPPET
     }
 
-    private fun planToJson(plan: PatchPlan, importPreview: ExternalImportPreview? = null): JsonObject = buildJsonObject {
+    private fun withPreviewDiagnostics(detail: ExternalImportPreview, snapshot: ProjectSnapshot): ExternalImportPreview {
+        if (detail.plan.status != PatchStatus.PREVIEW) return detail.copy(applyEligible = false)
+        return try {
+            val before = adapter.diagnostics(snapshot)
+            val staged = WorkspaceEditSimulator.apply(snapshot, detail.plan.workspaceEdit)
+            val after = adapter.diagnostics(staged)
+            val existingErrors = before.filter { it.severity == Diagnostic.Severity.ERROR }
+                .groupingBy(::diagnosticIdentity).eachCount().toMutableMap()
+            val regressions = after.filter { diagnostic ->
+                if (diagnostic.severity != Diagnostic.Severity.ERROR) return@filter false
+                val identity = diagnosticIdentity(diagnostic)
+                val count = existingErrors[identity] ?: 0
+                if (count > 0) {
+                    existingErrors[identity] = count - 1
+                    false
+                } else true
+            }
+            val blockers = regressions.map { diagnostic ->
+                "${diagnostic.code ?: "diagnostics.regression"}: ${diagnostic.message}"
+            }.distinct()
+            detail.copy(
+                diagnosticsAfterPreview = after,
+                applyBlockers = blockers,
+                applyEligible = detail.applyEligible && blockers.isEmpty(),
+            )
+        } catch (error: Exception) {
+            detail.copy(
+                diagnosticsAfterPreview = emptyList(),
+                applyBlockers = listOf("diagnostics.unavailable: virtual preview diagnostics failed"),
+                applyEligible = false,
+            )
+        }
+    }
+
+    private fun diagnosticIdentity(diagnostic: Diagnostic): String =
+        "${diagnostic.code.orEmpty()}\u0000${diagnostic.message}"
+
+    private fun importPreviewToJson(detail: ExternalImportPreview, snapshot: ProjectSnapshot): JsonElement {
+        val plan = detail.plan
+        val diff = PatchDiffRenderer.render(snapshot, plan.workspaceEdit)
+        val diagnostics = boundedDiagnostics(detail.diagnosticsAfterPreview)
+        val changes = fileChanges(plan.workspaceEdit, detail.primaryFile)
+        val provenance = detail.provenance
+        val response = ImportPreviewResponseDto(
+            planId = plan.id.value,
+            operation = plan.operation,
+            status = plan.status.name.lowercase(),
+            legacyStatus = plan.status.name,
+            summary = plan.summary,
+            confidence = plan.confidence,
+            riskLevel = plan.riskLevel.name.lowercase(),
+            legacyRiskLevel = plan.riskLevel.name,
+            evidence = listOf(plan.evidence.name.lowercase()),
+            legacyEvidence = plan.evidence.name,
+            affectedFiles = changes,
+            affectedFilePaths = changes.map(ProtocolFileChangeDto::path),
+            primaryFile = detail.primaryFile?.let(ProtocolPath::serialize),
+            placement = PlacementDto(
+                moduleName = detail.resolvedModule,
+                sourceRoot = detail.resolvedSourceRoot?.let(ProtocolPath::serialize),
+                sourceSet = detail.sourceSet?.name?.lowercase(),
+                packageName = detail.resolvedPackage,
+            ),
+            resolvedModule = detail.resolvedModule,
+            resolvedSourceRoot = detail.resolvedSourceRoot?.let(ProtocolPath::serialize),
+            sourceSet = detail.sourceSet?.name,
+            resolvedPackage = detail.resolvedPackage,
+            packageChanges = detail.packageChanges.map { PackageChangeDto(it.from, it.to) },
+            renderedDiff = diff.renderedDiff,
+            structuredDiff = diff.files.map { file -> ProtocolFileDiffDto(
+                path = ProtocolPath.serialize(file.path),
+                change = file.change.name.lowercase(),
+                previousPath = file.previousPath?.let(ProtocolPath::serialize),
+                hunks = file.hunks.map { hunk -> ProtocolDiffHunkDto(
+                    hunk.oldStart, hunk.oldLines, hunk.newStart, hunk.newLines, hunk.lines, hunk.truncated,
+                ) },
+                truncated = file.truncated,
+            ) },
+            diffTruncated = diff.truncated,
+            diffTruncationReasons = diff.truncationReasons,
+            diffLimits = ProtocolDiffLimitsDto(
+                ProtocolLimits.MAX_PREVIEW_DIFF_BYTES,
+                ProtocolLimits.MAX_PREVIEW_DIFF_FILES,
+                ProtocolLimits.MAX_PREVIEW_HUNKS_PER_FILE,
+                ProtocolLimits.MAX_PREVIEW_LINES_PER_HUNK,
+            ),
+            warnings = plan.warnings.map(::portableEvidence),
+            diagnosticsAfterPreview = diagnostics.items,
+            diagnosticsTruncated = diagnostics.truncated,
+            provenance = ImportProvenanceDto(
+                sourceKind = provenance?.sourceKind?.name?.lowercase(),
+                legacySourceKind = provenance?.sourceKind?.name,
+                sourceUrl = provenance?.sourceUrl,
+                retrievedAt = provenance?.retrievedAt,
+                detectedLicense = provenance?.licenseDetected?.takeUnless { it == "unknown" },
+                licenseDetected = provenance?.licenseDetected,
+                licenseRisk = provenance?.licenseRisk?.name?.lowercase(),
+                licensePolicy = detail.licensePolicy.name.lowercase().replace('_', '-'),
+                originalHash = provenance?.originalHash,
+                notices = detail.acknowledgementRequirements,
+            ),
+            unresolvedDependencies = detail.unresolvedDependencies,
+            conflicts = detail.conflicts.map(::portableEvidence),
+            refusalReasons = detail.refusalReasons.map(::portableEvidence),
+            applyEligibility = ApplyEligibilityDto(
+                detail.applyEligible,
+                detail.applyBlockers.map(::portableEvidence),
+                detail.acknowledgementRequirements,
+            ),
+            applyEligible = detail.applyEligible,
+            staleness = StalenessDto(false, emptyList()),
+            snapshot = SnapshotEvidenceDto(plan.snapshotHash, true),
+            provider = ProtocolProviderDto("refactorkit-java-external-importer", RefactorKitVersion.VERSION),
+        )
+        return PROTOCOL_JSON.encodeToJsonElement(response)
+    }
+
+    private fun boundedDiagnostics(diagnostics: List<Diagnostic>): BoundedDiagnostics {
+        val items = mutableListOf<ProtocolDiagnosticDto>()
+        var bytes = 0
+        for (diagnostic in diagnostics.take(ProtocolLimits.MAX_PREVIEW_DIAGNOSTICS)) {
+            val item = diagnosticDto(diagnostic)
+            val itemBytes = PROTOCOL_JSON.encodeToString(item).toByteArray(Charsets.UTF_8).size
+            if (bytes + itemBytes > ProtocolLimits.MAX_PREVIEW_DIAGNOSTIC_BYTES) break
+            items += item
+            bytes += itemBytes
+        }
+        return BoundedDiagnostics(
+            items,
+            diagnostics.size > items.size || diagnostics.size > ProtocolLimits.MAX_PREVIEW_DIAGNOSTICS,
+        )
+    }
+
+    private fun diagnosticDto(diagnostic: Diagnostic): ProtocolDiagnosticDto = ProtocolDiagnosticDto(
+        severity = when (diagnostic.severity) {
+            Diagnostic.Severity.ERROR -> "error"
+            Diagnostic.Severity.WARNING -> "warning"
+            Diagnostic.Severity.INFO -> "information"
+        },
+        message = if (diagnostic.message.length <= ProtocolLimits.MAX_DIAGNOSTIC_MESSAGE_CHARS) {
+            diagnostic.message
+        } else {
+            diagnostic.message.take(ProtocolLimits.MAX_DIAGNOSTIC_MESSAGE_CHARS) + "… [truncated]"
+        },
+        code = diagnostic.code,
+        path = diagnostic.location?.path?.let(ProtocolPath::serialize),
+        line = diagnostic.location?.range?.start?.line?.plus(1),
+        column = diagnostic.location?.range?.start?.character?.plus(1),
+        evidence = diagnostic.evidence?.name?.lowercase(),
+        category = diagnostic.category?.name?.lowercase(),
+    )
+
+    private data class BoundedDiagnostics(
+        val items: List<ProtocolDiagnosticDto>,
+        val truncated: Boolean,
+    )
+
+    private fun fileChanges(
+        edit: WorkspaceEdit,
+        primaryFile: Path? = null,
+        rollback: Boolean = false,
+    ): List<ProtocolFileChangeDto> = edit.edits.map { fileEdit ->
+        val (kind, path, previous) = if (!rollback) {
+            when (fileEdit) {
+                is FileEdit.Create -> Triple(FileChangeKind.CREATE, fileEdit.path, null)
+                is FileEdit.Modify -> Triple(FileChangeKind.MODIFY, fileEdit.path, null)
+                is FileEdit.Delete -> Triple(FileChangeKind.DELETE, fileEdit.path, null)
+                is FileEdit.Rename -> Triple(FileChangeKind.MOVE, fileEdit.newPath, fileEdit.path)
+            }
+        } else {
+            when (fileEdit) {
+                is FileEdit.Create -> Triple(FileChangeKind.DELETE, fileEdit.path, null)
+                is FileEdit.Modify -> Triple(FileChangeKind.MODIFY, fileEdit.path, null)
+                is FileEdit.Delete -> Triple(FileChangeKind.CREATE, fileEdit.path, null)
+                is FileEdit.Rename -> Triple(FileChangeKind.MOVE, fileEdit.path, fileEdit.newPath)
+            }
+        }
+        ProtocolFileChangeDto(
+            change = kind.name.lowercase(),
+            path = ProtocolPath.serialize(path),
+            previousPath = previous?.let(ProtocolPath::serialize),
+            primary = primaryFile?.normalize() == path.normalize(),
+        )
+    }.distinctBy { "${it.change}\u0000${it.previousPath.orEmpty()}\u0000${it.path}" }
+        .sortedWith(compareBy(ProtocolFileChangeDto::path, ProtocolFileChangeDto::change))
+
+    private fun portableEvidence(value: String): String = value.replace('\\', '/')
+
+    private fun planToJson(plan: PatchPlan): JsonObject = buildJsonObject {
         put("planId", plan.id.value)
         put("operation", plan.operation)
         put("status", plan.status.name)
@@ -427,7 +648,7 @@ class DaemonSession {
         put("riskLevel", plan.riskLevel.name)
         put("evidence", plan.evidence.name)
         put("affectedFiles", buildJsonArray {
-            plan.affectedFiles.sortedBy { it.protocolPath() }.forEach { add(JsonPrimitive(it.protocolPath())) }
+            plan.affectedFiles.sortedBy(ProtocolPath::serialize).forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
         })
         put("structuredDiff", buildJsonArray {
             plan.workspaceEdit.edits.forEach { edit ->
@@ -438,8 +659,8 @@ class DaemonSession {
                         is FileEdit.Delete -> "deleteFile"
                         is FileEdit.Rename -> "renameFile"
                     })
-                    put("path", edit.path.protocolPath())
-                    if (edit is FileEdit.Rename) put("newPath", edit.newPath.protocolPath())
+                    put("path", ProtocolPath.serialize(edit.path))
+                    if (edit is FileEdit.Rename) put("newPath", ProtocolPath.serialize(edit.newPath))
                 })
             }
         })
@@ -453,7 +674,7 @@ class DaemonSession {
                     d.evidence?.let { put("evidence", it.name) }
                     d.category?.let { put("category", it.name) }
                     d.location?.let { loc ->
-                        put("file", loc.path.protocolPath())
+                        put("file", ProtocolPath.serialize(loc.path))
                         put("line", loc.range.start.line + 1)
                     }
                 })
@@ -467,31 +688,6 @@ class DaemonSession {
             put("name", if (plan.operation == "importExternalJavaClass") "refactorkit-java-external-importer" else "refactorkit-java")
             put("version", RefactorKitVersion.VERSION)
         })
-        if (importPreview != null) {
-            importPreview.primaryFile?.let { put("primaryFile", it.protocolPath()) }
-            importPreview.resolvedModule?.let { put("resolvedModule", it) }
-            importPreview.resolvedSourceRoot?.let { put("resolvedSourceRoot", it.protocolPath()) }
-            importPreview.sourceSet?.let { put("sourceSet", it.name) }
-            put("resolvedPackage", importPreview.resolvedPackage)
-            put("packageChanges", buildJsonArray {
-                importPreview.packageChanges.forEach { change -> add(buildJsonObject {
-                    put("from", change.from)
-                    put("to", change.to)
-                }) }
-            })
-            put("provenance", importPreview.provenance?.let { provenance -> buildJsonObject {
-                provenance.sourceUrl?.let { put("sourceUrl", it) }
-                put("sourceKind", provenance.sourceKind.name)
-                put("retrievedAt", provenance.retrievedAt)
-                put("licenseDetected", provenance.licenseDetected)
-                put("licenseRisk", provenance.licenseRisk.name)
-                put("originalHash", provenance.originalHash)
-            } } ?: buildJsonObject {})
-            put("unresolvedDependencies", buildJsonArray { importPreview.unresolvedDependencies.forEach { add(JsonPrimitive(it)) } })
-            put("conflicts", buildJsonArray { importPreview.conflicts.forEach { add(JsonPrimitive(it)) } })
-            put("refusalReasons", buildJsonArray { importPreview.refusalReasons.forEach { add(JsonPrimitive(it)) } })
-            put("applyEligible", importPreview.applyEligible)
-        }
     }
 
     private fun refusedImportTarget(
@@ -531,7 +727,11 @@ class DaemonSession {
         )
     }
 
-    private fun Path.protocolPath(): String = normalize().toString().replace('\\', '/')
+    override fun close() {
+        pendingPlans.clear()
+        snapshot = null
+        workspaceRoot = null
+    }
 
     private data class PendingPlan(val plan: PatchPlan, val importPreview: ExternalImportPreview? = null)
 
@@ -544,6 +744,8 @@ class DaemonSession {
     )
 
     companion object {
+        private val PROTOCOL_JSON = Json { encodeDefaults = true; explicitNulls = true }
+
         private val DAEMON_METHODS = listOf(
             DaemonMethodCapability("server.version", "beta-contract", false, false),
             DaemonMethodCapability("server.capabilities", "beta-contract", false, false),
@@ -555,13 +757,23 @@ class DaemonSession {
             DaemonMethodCapability("diagnostics", "beta-contract", true, false),
             DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
             DaemonMethodCapability("refactor.apply", "beta-contract", true, true),
+            DaemonMethodCapability("refactor.discard", "beta-contract", false, false),
             DaemonMethodCapability("patch.rollback", "beta-contract", true, true),
             DaemonMethodCapability(
                 "java.importExternalClass",
                 "experimental",
                 true,
                 false,
-                mapOf("targetDirectory" to true, "preview" to true, "apply" to true, "rollback" to true),
+                mapOf(
+                    "targetDirectory" to true,
+                    "preview" to true,
+                    "renderedDiff" to true,
+                    "structuredDiff" to true,
+                    "previewDiagnostics" to true,
+                    "apply" to true,
+                    "discard" to true,
+                    "rollback" to true,
+                ),
             ),
         )
     }

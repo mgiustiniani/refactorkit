@@ -70,6 +70,8 @@ public class ServiceClient {
     $RolledBack = (Get-SourceHashes) -join "`n"
     if ($Before -ne $RolledBack) { throw "Packaged rollback did not restore Java sources" }
 
+    & python scripts/test-smoke-packaged-daemon-timeout.py
+    if ($LASTEXITCODE -ne 0) { throw "Packaged daemon timeout self-test failed" }
     & python scripts/smoke-packaged-daemon.py $DaemonLauncher
     if ($LASTEXITCODE -ne 0) { throw "Packaged daemon smoke failed" }
     Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources; daemon lifecycle verified."

@@ -16,6 +16,10 @@ heap exhaustion.
 | LSP frame | 1,048,576 bytes | JSON-RPC `INVALID_REQUEST`; connection closes because the rejected body is not buffered |
 | Pending plans per daemon/MCP/LSP session | 128 | Least-recently-used plan is evicted; applying an evicted ID returns deterministic invalid-params/not-found |
 | Daemon symbol-search result | 200 | Results are truncated deterministically |
+| Import preview combined rendered/structured diff source lines | 524,288 UTF-8 bytes | `diffTruncated=true` with reasons; never silent |
+| Import preview diff files / hunks per file / lines per hunk | 128 / 64 / 2,000 | Deterministic path ordering and explicit truncation reasons |
+| Import preview/apply/rollback diagnostics | 500 entries, 262,144 UTF-8 bytes, 4,096 characters/message | `diagnosticsTruncated=true`; blockers are evaluated before truncation |
+| Packaged daemon smoke captured stderr | 65,536 UTF-8 bytes | Additional stderr is discarded; source-marker leakage still fails within the retained bound |
 | MCP symbol/reference context output | Operation-specific caps, no more than 200 symbols or 100 displayed references | Output is truncated deterministically |
 
 Constants shared by transports live in `ProtocolLimits`. Limits are additive API

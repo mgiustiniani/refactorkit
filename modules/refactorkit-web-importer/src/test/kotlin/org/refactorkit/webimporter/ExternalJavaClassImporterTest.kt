@@ -131,6 +131,7 @@ class ExternalJavaClassImporterTest {
         val code = "public class Foo {}"
         val plan = importer.preview(ImportRequest(code = code, targetPackage = "com.example", licensePolicy = LicensePolicy.WARN))
         assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertEquals(RiskLevel.HIGH, plan.riskLevel)
         assertTrue(plan.warnings.any { it.contains("No license detected") || it.contains("unknown") })
     }
 

@@ -29,9 +29,11 @@
       {"name": "diagnostics", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
       {"name": "refactor.preview", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
       {"name": "refactor.apply", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": true},
+      {"name": "refactor.discard", "stability": "beta-contract", "requiresProject": false, "writesWorkspace": false},
       {"name": "patch.rollback", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": true},
       {"name": "java.importExternalClass", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"targetDirectory": true, "preview": true, "apply": true, "rollback": true}}
+       "features": {"targetDirectory": true, "preview": true, "renderedDiff": true, "structuredDiff": true,
+                    "previewDiagnostics": true, "apply": true, "discard": true, "rollback": true}}
     ],
     "refactorOperations": [
       "renameClass", "renameMember", "extractMethod",
@@ -45,7 +47,15 @@
     "maxLspFrameBytes": 1048576,
     "maxPendingPlans": 128,
     "maxSymbolResults": 200,
-    "maxReferenceResults": 1000
+    "maxReferenceResults": 1000,
+    "maxPreviewDiffBytes": 524288,
+    "maxPreviewDiffFiles": 128,
+    "maxPreviewHunksPerFile": 64,
+    "maxPreviewLinesPerHunk": 2000,
+    "maxPreviewDiagnostics": 500,
+    "maxPreviewDiagnosticBytes": 262144,
+    "maxDiagnosticMessageChars": 4096,
+    "maxDaemonStderrBytes": 65536
   },
   "safety": {
     "previewBeforeApply": true,

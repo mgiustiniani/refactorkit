@@ -1,5 +1,6 @@
 package org.refactorkit.webimporter
 
+import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -41,6 +42,10 @@ data class ExternalImportPreview(
     val unresolvedDependencies: List<String>,
     val conflicts: List<String>,
     val refusalReasons: List<String>,
+    val diagnosticsAfterPreview: List<Diagnostic> = emptyList(),
+    val applyBlockers: List<String> = emptyList(),
+    val acknowledgementRequirements: List<String> = emptyList(),
+    val licensePolicy: LicensePolicy = LicensePolicy.WARN,
     val applyEligible: Boolean,
 )
 
@@ -104,6 +109,12 @@ class ExternalJavaClassImporter {
             unresolvedDependencies = unresolved,
             conflicts = conflicts,
             refusalReasons = if (plan.status == PatchStatus.REFUSED) listOf(plan.summary) else emptyList(),
+            acknowledgementRequirements = when (provenance?.licenseRisk) {
+                LicenseRisk.UNKNOWN -> listOf("Explicit apply acknowledges unknown license/provenance risk.")
+                LicenseRisk.HIGH -> listOf("Explicit apply acknowledges high-risk license compatibility review.")
+                else -> emptyList()
+            },
+            licensePolicy = request.licensePolicy,
             applyEligible = plan.status == PatchStatus.PREVIEW,
         )
     }
@@ -237,9 +248,9 @@ class ExternalJavaClassImporter {
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
             riskLevel = when (license.risk) {
-                LicenseRisk.HIGH -> RiskLevel.HIGH
+                LicenseRisk.HIGH, LicenseRisk.UNKNOWN -> RiskLevel.HIGH
                 LicenseRisk.MEDIUM -> RiskLevel.MEDIUM
-                else -> RiskLevel.LOW
+                LicenseRisk.LOW -> RiskLevel.LOW
             },
         )
     }

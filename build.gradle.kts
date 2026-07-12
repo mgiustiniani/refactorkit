@@ -26,6 +26,12 @@ subprojects {
     }
 }
 
+tasks.register("goldenTest") {
+    group = "verification"
+    description = "Run the RefactorKit golden refactoring acceptance suite."
+    dependsOn(":modules:refactorkit-testkit:test")
+}
+
 tasks.register("packageCliRuntime") {
     group = "distribution"
     description = "Build the self-contained RefactorKit CLI package with embedded Java runtime."

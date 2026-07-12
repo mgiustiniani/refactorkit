@@ -110,6 +110,48 @@ class JavaImportTargetResolverTest {
         assertTrue(!refusal.message.contains("public class Secret"))
     }
 
+    @Test
+    fun refusesInternalSymlinkAndSymlinkSourceRoot() {
+        val root = project("src/main/java/com/real")
+        val internalLink = root.resolve("src/main/java/com/linked")
+        if (runCatching { Files.createSymbolicLink(internalLink, root.resolve("src/main/java/com/real")) }.isSuccess) {
+            assertRefusal(
+                JavaProjectScanner().scan(root),
+                "src/main/java/com/linked",
+                "targetDirectory.symbolicLink",
+            )
+        }
+
+        val sourceRootTarget = root.resolve("real-source/com/example")
+        Files.createDirectories(sourceRootTarget)
+        val sourceRootLink = root.resolve("linked-source")
+        if (runCatching { Files.createSymbolicLink(sourceRootLink, root.resolve("real-source")) }.isSuccess) {
+            val snapshot = ProjectSnapshot(
+                Workspace(root),
+                listOf(Module("linked", root, listOf(Path.of("linked-source")))),
+                emptyList(),
+                setOf("java"),
+            )
+            assertRefusal(snapshot, "linked-source/com/example", "targetDirectory.symbolicLink")
+        }
+    }
+
+    @Test
+    fun refusesDuplicateCanonicalSourceRoots() {
+        val root = project("src/main/java/com/example")
+        val snapshot = ProjectSnapshot(
+            Workspace(root),
+            listOf(Module(
+                "duplicate",
+                root,
+                listOf(Path.of("src/main/java"), Path.of("src/main/./java")),
+            )),
+            emptyList(),
+            setOf("java"),
+        )
+        assertRefusal(snapshot, "src/main/java/com/example", "targetDirectory.ambiguousSourceRoot")
+    }
+
     private fun assertRefusal(
         snapshot: ProjectSnapshot,
         directory: String,

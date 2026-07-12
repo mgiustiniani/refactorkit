@@ -92,5 +92,6 @@ if [[ "$before" != "$rolled_back" ]]; then
   exit 1
 fi
 
+python3 scripts/test-smoke-packaged-daemon-timeout.py
 python3 scripts/smoke-packaged-daemon.py "$daemon_launcher"
 printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources; daemon lifecycle verified."

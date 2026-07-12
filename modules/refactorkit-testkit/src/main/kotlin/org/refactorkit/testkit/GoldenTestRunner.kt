@@ -6,6 +6,7 @@ import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.ProtocolPath
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
@@ -252,9 +253,10 @@ class GoldenTestRunner(
         expectedDir.toFile().walkTopDown()
             .filter { it.isFile }
             .forEach { expectedFile ->
-                val rel = expectedDir.relativize(expectedFile.toPath()).toString()
+                val relativePath = expectedDir.relativize(expectedFile.toPath())
+                val rel = ProtocolPath.serialize(relativePath)
                 expectedFiles += rel
-                val actualFile = actualDir.resolve(rel)
+                val actualFile = actualDir.resolve(relativePath)
                 when {
                     !actualFile.toFile().exists() ->
                         errors += "Missing expected file: $rel"
@@ -268,7 +270,7 @@ class GoldenTestRunner(
             .onEnter { dir -> !isIgnoredDir(dir.name) }
             .filter { it.isFile }
             .forEach { actualFile ->
-                val rel = actualDir.relativize(actualFile.toPath()).toString().replace('\\', '/')
+                val rel = ProtocolPath.serialize(actualDir.relativize(actualFile.toPath()))
                 if (rel !in expectedFiles) {
                     errors += "Unexpected file in actual output: $rel"
                 }
