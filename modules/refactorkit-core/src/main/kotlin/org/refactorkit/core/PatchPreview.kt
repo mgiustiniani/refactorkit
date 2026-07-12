@@ -28,7 +28,7 @@ class PatchPreviewRenderer(
         }
         appendLine()
         appendLine("Affected files:")
-        plan.affectedFiles.sortedBy { it.toString() }.forEach { appendLine("- $it") }
+        plan.affectedFiles.sortedBy(ProtocolPath::serialize).forEach { appendLine("- ${ProtocolPath.serialize(it)}") }
         appendLine()
         appendLine("Patch:")
         plan.workspaceEdit.edits.forEach { edit ->
@@ -38,9 +38,9 @@ class PatchPreviewRenderer(
     }
 
     private fun renderEdit(edit: FileEdit): String = when (edit) {
-        is FileEdit.Create -> "create ${edit.path}\n"
-        is FileEdit.Delete -> "delete ${edit.path}\n"
-        is FileEdit.Rename -> "rename ${edit.path} -> ${edit.newPath}\n"
+        is FileEdit.Create -> "create ${ProtocolPath.serialize(edit.path)}\n"
+        is FileEdit.Delete -> "delete ${ProtocolPath.serialize(edit.path)}\n"
+        is FileEdit.Rename -> "rename ${ProtocolPath.serialize(edit.path)} -> ${ProtocolPath.serialize(edit.newPath)}\n"
         is FileEdit.Modify -> renderModify(edit)
     }
 
@@ -48,7 +48,7 @@ class PatchPreviewRenderer(
         val absolute = workspaceRoot.toAbsolutePath().normalize().resolve(edit.path).normalize()
         val before = if (absolute.exists()) absolute.readText() else ""
         val after = TextEdits.apply(before, edit.textEdits)
-        return simpleUnifiedDiff(edit.path.toString(), before, after)
+        return simpleUnifiedDiff(ProtocolPath.serialize(edit.path), before, after)
     }
 
     private fun simpleUnifiedDiff(path: String, before: String, after: String): String {

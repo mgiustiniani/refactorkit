@@ -5,6 +5,7 @@ import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.WorkspaceEdit
@@ -97,7 +98,7 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
             snapshotHash = snapshot.hash,
             confidence = 1.0,
             requiresUserApproval = true,
-            summary = "Move ${movedFiles.size} Java compilation unit(s) from $source to $destination without changing bytes or FQCNs.",
+            summary = "Move ${movedFiles.size} Java compilation unit(s) from ${ProtocolPath.serialize(source)} to ${ProtocolPath.serialize(destination)} without changing bytes or FQCNs.",
             affectedFiles = affected,
             workspaceEdit = edit,
             diagnosticsBefore = before,
