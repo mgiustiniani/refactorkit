@@ -385,6 +385,7 @@ class JavaLanguageAdapter : LanguageAdapter {
         RefactoringDescriptor("changeSignature.removeParameter", "Remove unused Java parameter and call-site argument", RiskLevel.MEDIUM),
         RefactoringDescriptor("moveClass", "Move Java class", RiskLevel.MEDIUM),
         RefactoringDescriptor("organizeImports", "Organize imports", RiskLevel.LOW),
+        RefactoringDescriptor("formatFile", "Format Java compilation unit", RiskLevel.LOW),
         RefactoringDescriptor("safeDelete", "Safe delete", RiskLevel.MEDIUM),
     )
 
@@ -398,6 +399,7 @@ class JavaLanguageAdapter : LanguageAdapter {
         "changeSignature.removeParameter", "removeParameter" -> applyRemoveParameter(request)
         "moveClass"    -> applyMoveClass(request)
         "organizeImports" -> applyOrganizeImports(request)
+        "formatFile" -> applyFormatFile(request)
         "safeDelete"   -> applySafeDelete(request)
         else           -> notImplemented(request, "Unknown operation: ${request.operation}")
     }
@@ -487,6 +489,12 @@ class JavaLanguageAdapter : LanguageAdapter {
         val file = request.arguments["file"]
             ?: return notImplemented(request, "organizeImports requires arguments.file")
         return JavaOrganizeImportsPlanner().previewSingleFile(request.snapshot, java.nio.file.Paths.get(file))
+    }
+
+    private fun applyFormatFile(request: RefactoringRequest): PatchPlan {
+        val file = request.arguments["file"]
+            ?: return notImplemented(request, "formatFile requires arguments.file")
+        return JavaFormatFilePlanner(this).preview(request.snapshot, java.nio.file.Paths.get(file))
     }
 
     private fun applySafeDelete(request: RefactoringRequest): PatchPlan {

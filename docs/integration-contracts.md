@@ -81,6 +81,7 @@ compatible.
 | `refactorkit rename-member --symbol <FQN#member> --to <name> [--apply] [path]` | `beta-contract` | Signed method selectors use JDT exact-overload and scanned-source override-family propagation; external family members, constructors, or ambiguous evidence are refused. Unsigned member rename remains lexical. |
 | `refactorkit move-class --symbol <fqcn> --to-package <pkg> [--apply] [path]` | `beta-contract` | Clean JDT evidence scopes package/import/FQN edits to binding-matched files; lexical scoping is explicit otherwise. Invalid packages and existing targets are refused; framework/string warnings remain. |
 | `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; clean JDT evidence also removes binding-proven unused exact imports, while wildcard/unresolved imports and unclean files remain conservative. |
+| `refactorkit format-file <file> [--apply] [--root <path>]` | `beta-contract` | Formats one non-generated, syntactically valid Java compilation unit through Eclipse JDT using hash-bound project preferences or deterministic defaults; preview/apply/rollback remains mandatory. |
 | `refactorkit safe-delete --symbol <fqcn> [--force] [--apply] [path]` | `beta-contract` | Refuses referenced symbols by default; forced behavior requires explicit risk note. |
 | `refactorkit patch rollback <transaction-id> [--force] --root <path>` | `beta-contract` | Normal rollback validates exact post-images and refuses conflicts; `--force` is an explicit destructive pre-image restore. |
 | `refactorkit test-golden [case] [--golden-dir <path>]` | `beta-contract` | CI/test harness command for documented golden fixtures. |
@@ -193,6 +194,7 @@ instant; `originalHash` is the SHA-256 hash of the cleaned source text.
 | `renameMember` | `beta-contract` | `symbol`, `arguments.newName` |
 | `moveClass` | `beta-contract` | `symbol`, `arguments.targetPackage` |
 | `organizeImports` | `beta-contract` | `arguments.file` or `symbol` as file path |
+| `formatFile` | `beta-contract` | `arguments.file`; whole-file Java formatting only in API `0.2` |
 | `safeDelete` | `beta-contract` | `symbol`, optional `arguments.force` |
 | `extractMethod` | `experimental` | `arguments.file`, `startLine`, `endLine`, `methodName` |
 | `changeSignature.renameParameter` / `renameParameter` | `experimental` | `symbol`, `oldName`, `newName` |
@@ -240,8 +242,10 @@ the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 | `textDocument/definition`, `references`, `documentSymbol`, `diagnostic` | `beta-contract` | Read-only editor integration; definition/references may use JDT binding evidence for clean exact overloaded member call sites. |
 | `textDocument/prepareRename`, `textDocument/rename` | `beta-contract` | Must use RefactorKit previews and refusal handling; rename-position resolution may produce signed method selectors for the proven JDT exact-overload slice. |
 | `textDocument/codeAction`, `workspace/executeCommand` envelope | `beta-contract` | Command transport and refusal categories are baseline. |
+| `textDocument/formatting` | `beta-contract` | Returns client-managed Java formatting edits with no RefactorKit transaction; managed rollback requires `refactorkit.formatFile` plus `refactorkit.applyPlan`. |
 | `textDocument/semanticTokens/full` | `experimental` | Token shape may change. |
 | `refactorkit.renameClass`, `refactorkit.renameMember`, `refactorkit.moveClass`, `refactorkit.organizeImports`, `refactorkit.safeDelete`, `refactorkit.applyPlan`, `refactorkit.rollback` | `beta-contract` | Command names, preview metadata, and safety semantics are stable for beta pilots. |
+| `refactorkit.formatFile` | `beta-contract` | Produces a preview workspace edit and plan ID for optional managed apply. |
 | `refactorkit.extractMethod` | `experimental` | Limited MVP. |
 | `refactorkit.changeSignature.renameParameter`, `refactorkit.changeSignature.addParameter`, `refactorkit.changeSignature.reorderParameters`, `refactorkit.changeSignature.removeParameter` | `experimental` | Limited MVP. |
 | Alias `refactorkit.renameParameter` | `experimental` | Compatibility alias, not preferred for new clients. |

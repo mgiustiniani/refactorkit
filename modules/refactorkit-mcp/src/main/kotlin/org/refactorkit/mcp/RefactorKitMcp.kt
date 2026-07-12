@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonObject
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.JsonRpcRequest
+import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.errorResponse
 import org.refactorkit.core.isNotification
 import org.refactorkit.core.successResponse
@@ -34,6 +35,14 @@ fun main() {
     while (running) {
         val line = reader.readLine() ?: break
         if (line.isBlank()) continue
+        if (line.toByteArray(Charsets.UTF_8).size > ProtocolLimits.MAX_REQUEST_BYTES) {
+            out.println(json.encodeToString(errorResponse(
+                JsonNull,
+                JsonRpcErrorCodes.INVALID_REQUEST,
+                "Request exceeds ${ProtocolLimits.MAX_REQUEST_BYTES} bytes",
+            )))
+            continue
+        }
 
         val request = try {
             json.decodeFromString<JsonRpcRequest>(line)

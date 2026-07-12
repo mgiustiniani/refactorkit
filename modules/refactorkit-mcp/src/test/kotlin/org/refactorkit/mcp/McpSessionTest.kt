@@ -311,6 +311,29 @@ class McpSessionTest {
     }
 
     @Test
+    fun previewFormatFileReturnsManagedPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/Example.java" to
+                "package com.example;\npublic class Example{void run(){int value=1;}}\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "formatFile")
+                put("arguments", buildJsonObject { put("file", "src/main/java/com/example/Example.java") })
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Plan ID"), text)
+        assertTrue(text.contains("Format Java compilation unit"), text)
+    }
+
+    @Test
     fun importExternalJavaClassToolReturnsProvenanceAndLicenseFields() {
         val root = createProject(
             "src/main/java/com/example/App.java" to "package com.example;\npublic class App {}\n",

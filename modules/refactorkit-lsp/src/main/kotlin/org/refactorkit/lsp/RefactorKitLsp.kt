@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonObject
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.JsonRpcRequest
+import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.errorResponse
 import org.refactorkit.core.isNotification
 import org.refactorkit.core.successResponse
@@ -33,7 +34,16 @@ fun main() {
     }
 
     while (running) {
-        val message = readLspMessage(input) ?: break
+        val message = try {
+            readLspMessage(input) ?: break
+        } catch (error: IllegalArgumentException) {
+            writeLspMessage(output, json, errorResponse(
+                JsonNull,
+                JsonRpcErrorCodes.INVALID_REQUEST,
+                error.message ?: "Invalid LSP frame",
+            ))
+            break
+        }
 
         val request = try {
             json.decodeFromString<JsonRpcRequest>(message)
@@ -67,6 +77,9 @@ private fun readLspMessage(input: InputStream): String? {
         .firstOrNull { it.startsWith("Content-Length:", ignoreCase = true) }
         ?.substringAfter(":")?.trim()?.toIntOrNull()
         ?: return null
+    require(contentLength in 0..ProtocolLimits.MAX_LSP_FRAME_BYTES) {
+        "LSP frame exceeds ${ProtocolLimits.MAX_LSP_FRAME_BYTES} bytes"
+    }
     val bytes = ByteArray(contentLength)
     var offset = 0
     while (offset < contentLength) {

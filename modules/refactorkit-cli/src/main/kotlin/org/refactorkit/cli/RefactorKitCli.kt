@@ -14,6 +14,7 @@ import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.TransactionLogException
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -48,6 +49,10 @@ class RefactorKitCli(
     private val scanner: JavaProjectScanner = JavaProjectScanner(),
     private val javaAdapter: JavaLanguageAdapter = JavaLanguageAdapter(),
 ) {
+    private val booleanOptions = setOf(
+        "apply", "force", "stdin", "whole-word", "case-insensitive",
+    )
+
     fun run(args: List<String>): Int {
         if (args.isEmpty() || args.first() in listOf("--help", "-h", "help")) {
             printHelp(); return 0
@@ -68,6 +73,7 @@ class RefactorKitCli(
             "change-signature"-> cmdChangeSignature(args.drop(1))
             "move-class"      -> cmdMoveClass(args.drop(1))
             "organize-imports"-> cmdOrganizeImports(args.drop(1))
+            "format-file"     -> cmdFormatFile(args.drop(1))
             "safe-delete"     -> cmdSafeDelete(args.drop(1))
             "patch"           -> cmdPatch(args.drop(1))
             "java"            -> cmdJava(args.drop(1))
@@ -292,6 +298,29 @@ class RefactorKitCli(
         return 0
     }
 
+    // ── format-file ───────────────────────────────────────────────────────────
+
+    private fun cmdFormatFile(args: List<String>): Int {
+        val parsed = parseOptions(args)
+        val requested = parsed.positionals.firstOrNull()
+            ?: parsed.options["file"]
+            ?: run { System.err.println("format-file requires a Java file path"); return 2 }
+        val root = parsed.options["root"] ?: "."
+        val snap = scanFrom(root) ?: return 1
+        val requestedPath = Paths.get(requested)
+        val absolute = if (requestedPath.isAbsolute) requestedPath.normalize()
+            else Paths.get("").toAbsolutePath().resolve(requestedPath).normalize()
+        val relative = if (absolute.startsWith(snap.workspace.root)) {
+            snap.workspace.root.relativize(absolute)
+        } else requestedPath.normalize()
+        val plan = JavaFormatFilePlanner(javaAdapter).preview(snap, relative)
+        println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+        if (plan.status == PatchStatus.REFUSED) return 1
+        if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
+        println("Use --apply to apply this change.")
+        return 0
+    }
+
     // ── safe-delete ───────────────────────────────────────────────────────────
 
     private fun cmdSafeDelete(args: List<String>): Int {
@@ -391,7 +420,7 @@ class RefactorKitCli(
             if (arg.startsWith("--")) {
                 val key = arg.removePrefix("--")
                 val next = args.getOrNull(i + 1)
-                if (next == null || next.startsWith("--")) { flags += key; i++ }
+                if (key in booleanOptions || next == null || next.startsWith("--")) { flags += key; i++ }
                 else { options[key] = next; i += 2 }
             } else {
                 positionals += arg; i++
@@ -613,6 +642,7 @@ class RefactorKitCli(
           refactorkit change-signature  --operation remove-parameter --symbol <FQN#method> --name <param> [--apply] [<path>]
           refactorkit move-class        --symbol <fqcn> --to-package <pkg>        [--apply] [<path>]
           refactorkit organize-imports  <file...>                               [--apply] [--root <path>]
+          refactorkit format-file       <file>                                  [--apply] [--root <path>]
           refactorkit safe-delete       --symbol <fqcn>                        [--apply] [--force] [<path>]
           refactorkit patch rollback    <transaction-id> [--force]              [--root <path>]
           refactorkit java symbols      <path>                                  (alias for symbols)

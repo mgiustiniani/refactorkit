@@ -8,6 +8,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -130,6 +131,10 @@ class GoldenTestRunner(
                     }
                 JavaOrganizeImportsPlanner().preview(snap, filePaths)
             }
+            "formatFile" -> JavaFormatFilePlanner(adapter).preview(
+                snap,
+                Paths.get(requireArgument(request, "file")),
+            )
             "safeDelete" -> {
                 val force = request.arguments["force"]?.toBoolean() ?: false
                 JavaSafeDeletePlanner(adapter).preview(snap, requireSymbol(request), force)

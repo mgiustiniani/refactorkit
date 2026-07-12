@@ -175,7 +175,12 @@ refactorkit move-class \
 
 # Sort/deduplicate imports for one or more files.
 refactorkit organize-imports \
-  samples/java-maven-simple/src/main/java/com/example/UserManager.java \
+  src/main/java/com/example/UserManager.java \
+  --root samples/java-maven-simple
+
+# Format one Java compilation unit using project JDT preferences or deterministic defaults.
+refactorkit format-file \
+  src/main/java/com/example/UserManager.java \
   --root samples/java-maven-simple
 
 # Refuse deletion when source references are found; use --force only after manual review.

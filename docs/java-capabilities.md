@@ -13,6 +13,7 @@ may be displayed regardless of evidence, but only `JDT_BINDING` and documented
 | Unsigned member rename | `LEXICAL_FALLBACK` | Preview only; stable apply requires a signed selector or exact field binding. |
 | Safe delete type | `JDT_BINDING` | Unclean analysis is review-only; generated declarations always refuse. |
 | Organize imports | `JDT_BINDING` or `STRUCTURAL` | JDT removes proven unused exact imports; structural mode only sorts/deduplicates/removes same-package imports and preserves unresolved/wildcard imports. |
+| Format Java file | `STRUCTURAL` | Eclipse JDT formats one non-generated, syntactically valid compilation unit using hash-bound project preferences or versioned defaults; import organization remains separate. |
 | Extract method, limited | `STRUCTURAL` | Only documented straight-line/control-flow-safe selections; ambiguity refuses. |
 | Change signature, limited | `STRUCTURAL` | Supported parameter operations only; overload/override/generated/reflection-risk boundaries refuse. |
 | Package move recipe | `STRUCTURAL` | Owns and stages the complete old-package source set as one transaction. |

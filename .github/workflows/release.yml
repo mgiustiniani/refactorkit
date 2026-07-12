@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release-runtime:
@@ -74,6 +76,25 @@ jobs:
           env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit --help
           env -u JAVA_HOME release-smoke/refactorkit/bin/refactorkit scan samples/java-maven-simple
 
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: release-smoke/refactorkit
+          format: spdx-json
+          output-file: refactorkit-runtime.spdx.json
+          upload-artifact: false
+
+      - name: Attest runtime provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: refactorkit-runtime-*-linux-x86_64.zip
+
+      - name: Attest runtime SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: refactorkit-runtime-*-linux-x86_64.zip
+          sbom-path: refactorkit-runtime.spdx.json
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -83,3 +104,4 @@ jobs:
           files: |
             refactorkit-runtime-*-linux-x86_64.zip
             refactorkit-runtime-*-linux-x86_64.zip.sha256
+            refactorkit-runtime.spdx.json

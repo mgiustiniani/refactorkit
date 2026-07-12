@@ -58,7 +58,7 @@ class JavaProjectScanner {
                 localJarDirectories(moduleRoot).forEach { path ->
                     add(ClasspathEvidence.capture(normalizedRoot, normalizedRoot.relativize(path), ClasspathEvidenceKind.JAR_DIRECTORY))
                 }
-                (classpathDeclarationFiles(moduleRoot) + buildDescriptorFiles(moduleRoot)).forEach { path ->
+                (classpathDeclarationFiles(moduleRoot) + buildDescriptorFiles(moduleRoot) + formatterConfigurationFiles(moduleRoot)).forEach { path ->
                     add(ClasspathEvidence.capture(normalizedRoot, normalizedRoot.relativize(path), ClasspathEvidenceKind.DECLARATION_FILE))
                 }
             }
@@ -122,6 +122,10 @@ class JavaProjectScanner {
         root.resolve("build.gradle"),
         root.resolve("build.gradle.kts"),
     )
+
+    private fun formatterConfigurationFiles(root: Path): List<Path> = listOf(
+        root.resolve(".settings/org.eclipse.jdt.core.prefs"),
+    ).filter { it.exists() && Files.isRegularFile(it) }
 
     private fun mavenArtifactId(root: Path): String? {
         val pom = root.resolve("pom.xml").takeIf { it.exists() && Files.isRegularFile(it) } ?: return null

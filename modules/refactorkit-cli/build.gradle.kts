@@ -163,6 +163,8 @@ tasks.register<Exec>("smokePackagedCli") {
 
 tasks.register<Zip>("refactorkitRuntimeZip") {
     group = "distribution"
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
     description = "Zip the self-contained RefactorKit CLI runtime distribution."
     dependsOn("refactorkitRuntimeDist")
 

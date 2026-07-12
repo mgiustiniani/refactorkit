@@ -41,6 +41,10 @@ Directory layout must never be silently equated with a language namespace.
   core `PatchPlan`s and applied only through the managed transaction boundary.
 . API `1.0` freezes only after language, cross-language, protocol, safety,
   performance, packaging, migration, and distribution acceptance.
+. Any language or functionality subsequently requested and approved by the
+  product owner is assigned to the pre-`1.0` roadmap and completed before stable
+  publication; there is no deadline-driven post-`1.0` deferral without an
+  explicit superseding decision.
 . The normative plans are `docs/releases/v0.4.0-plan.md` and
   `docs/releases/v1.0.0-plan.md`.
 

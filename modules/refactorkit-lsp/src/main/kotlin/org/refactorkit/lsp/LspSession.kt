@@ -22,6 +22,7 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.SourceFile
@@ -33,6 +34,7 @@ import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaMoveClassPlanner
@@ -64,7 +66,7 @@ class LspSession {
     @Volatile private var supportsDocumentChanges: Boolean = false
     private val openDocuments = linkedMapOf<String, OpenDocument>()
     private val pendingPlans = object : LinkedHashMap<String, PatchPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > 128
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
     }
 
     var onExit: () -> Unit = {}
@@ -93,6 +95,7 @@ class LspSession {
         "textDocument/documentSymbol"   -> documentSymbol(params)
         "textDocument/semanticTokens/full" -> semanticTokensFull(params)
         "textDocument/diagnostic"       -> documentDiagnostic(params)
+        "textDocument/formatting"       -> formatting(params)
         "workspace/executeCommand"      -> executeCommand(params)
         else -> throw JsonRpcException(JsonRpcErrorCodes.METHOD_NOT_FOUND, "Method not found: $method")
     }
@@ -128,6 +131,7 @@ class LspSession {
                 put("documentSymbolProvider", true)
                 put("codeActionProvider", true)
                 put("renameProvider", buildJsonObject { put("prepareProvider", true) })
+                put("documentFormattingProvider", true)
                 put("semanticTokensProvider", buildJsonObject {
                     put("legend", buildJsonObject {
                         put("tokenTypes", buildJsonArray { TOKEN_TYPES.forEach { add(JsonPrimitive(it)) } })
@@ -151,6 +155,7 @@ class LspSession {
                         add(JsonPrimitive("refactorkit.changeSignature.reorderParameters"))
                         add(JsonPrimitive("refactorkit.changeSignature.removeParameter"))
                         add(JsonPrimitive("refactorkit.organizeImports"))
+                        add(JsonPrimitive("refactorkit.formatFile"))
                         add(JsonPrimitive("refactorkit.safeDelete"))
                         add(JsonPrimitive("refactorkit.applyPlan"))
                         add(JsonPrimitive("refactorkit.rollback"))
@@ -457,6 +462,32 @@ class LspSession {
         }
     }
 
+    private fun formatting(params: JsonObject?): JsonElement {
+        val uri = params?.obj("textDocument")?.string("uri") ?: missing("textDocument.uri")
+        val snap = snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val file = fileForUri(snap, uri)
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Java source not found: $uri")
+        val plan = JavaFormatFilePlanner(adapter).preview(snap, file.path)
+        if (plan.status == PatchStatus.REFUSED) {
+            throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+        }
+        val modify = WorkspaceEditSimulator.normalize(plan.workspaceEdit).edits
+            .filterIsInstance<FileEdit.Modify>()
+            .singleOrNull { it.path.normalize() == file.path.normalize() }
+            ?: return JsonArray(emptyList())
+        return JsonArray(modify.textEdits.map { edit ->
+            buildJsonObject {
+                put("range", rangeJson(
+                    edit.range.start.line,
+                    edit.range.start.character,
+                    edit.range.end.line,
+                    edit.range.end.character,
+                ))
+                put("newText", edit.newText)
+            }
+        })
+    }
+
     private fun executeCommand(params: JsonObject?): JsonElement {
         val command = params?.string("command") ?: missing("command")
         val args = (params?.get("arguments") as? JsonArray)?.let { arr ->
@@ -520,6 +551,11 @@ class LspSession {
             "refactorkit.organizeImports" -> {
                 val file = args?.string("file") ?: missing("file")
                 val plan = JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(file))
+                planToLspWorkspaceEdit(plan, snap)
+            }
+            "refactorkit.formatFile" -> {
+                val file = args?.string("file") ?: missing("file")
+                val plan = JavaFormatFilePlanner(adapter).preview(snap, Paths.get(file))
                 planToLspWorkspaceEdit(plan, snap)
             }
             "refactorkit.renameMember" -> {

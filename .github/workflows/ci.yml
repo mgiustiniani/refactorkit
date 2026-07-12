@@ -61,6 +61,14 @@ jobs:
             env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan "$sample"
           done
 
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: modules/refactorkit-cli/build/package/refactorkit
+          format: spdx-json
+          output-file: modules/refactorkit-cli/build/distributions/refactorkit-runtime.spdx.json
+          upload-artifact: false
+
       - name: Upload CLI runtime distribution
         uses: actions/upload-artifact@v4
         with:
@@ -68,4 +76,5 @@ jobs:
           path: |
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
+            modules/refactorkit-cli/build/distributions/refactorkit-runtime.spdx.json
           if-no-files-found: error

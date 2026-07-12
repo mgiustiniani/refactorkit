@@ -19,12 +19,14 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
@@ -58,7 +60,7 @@ class McpSession {
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var workspaceRoot: Path? = null
     private val pendingPlans = object : LinkedHashMap<String, PatchPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > 128
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
     }
 
     var onExit: () -> Unit = {}
@@ -120,7 +122,7 @@ class McpSession {
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation", "symbol"),
                 props = mapOf(
-                    "operation" to "string: renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | organizeImports | safeDelete",
+                    "operation" to "string: renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
                     "arguments" to "object: operation-specific arguments (newName, targetPackage, etc.)",
                 )))
@@ -298,6 +300,7 @@ class McpSession {
             )
             "moveClass"    -> JavaMoveClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["targetPackage"] ?: missing("arguments.targetPackage"))
             "organizeImports" -> JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
+            "formatFile" -> JavaFormatFilePlanner(adapter).preview(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
             "safeDelete"   -> JavaSafeDeletePlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["force"]?.toBoolean() ?: false)
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }

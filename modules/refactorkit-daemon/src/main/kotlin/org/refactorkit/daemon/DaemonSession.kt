@@ -18,6 +18,7 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.SymbolId
@@ -25,6 +26,7 @@ import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -53,7 +55,7 @@ class DaemonSession {
     @Volatile private var workspaceRoot: Path? = null
 
     private val pendingPlans = object : LinkedHashMap<String, PatchPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > MAX_PENDING_PLANS
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
     }
 
     // ── public dispatcher ─────────────────────────────────────────────────────
@@ -262,6 +264,10 @@ class DaemonSession {
                 val file = args["file"] ?: symbol ?: missing("arguments.file")
                 JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(file))
             }
+            "formatFile" -> {
+                val file = args["file"] ?: symbol ?: missing("arguments.file")
+                JavaFormatFilePlanner(adapter).preview(snap, Paths.get(file))
+            }
             "safeDelete" -> {
                 val force = args["force"]?.toBoolean() ?: false
                 JavaSafeDeletePlanner(adapter).preview(snap, symbol ?: missing("symbol"), force)
@@ -416,7 +422,6 @@ class DaemonSession {
     )
 
     companion object {
-        private const val MAX_PENDING_PLANS = 128
         private val DAEMON_METHODS = listOf(
             DaemonMethodCapability("server.version", "beta-contract", false, false),
             DaemonMethodCapability("server.capabilities", "beta-contract", false, false),

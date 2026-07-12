@@ -1,6 +1,6 @@
 # Deterministic source formatting
 
-Status: planned for Java in `v0.4.x`; required per stable language adapter by the
+Status: implemented for Java whole-file formatting in `v0.4.0`; required per stable language adapter by the
 supreme `v1.0.0` roadmap.
 
 ## Goal
@@ -15,7 +15,7 @@ content; `PatchEngine` remains the only managed filesystem writer.
 ## Initial Java scope
 
 The first implementation formats one complete Java compilation unit through the
-Eclipse JDT formatter. Planned command:
+Eclipse JDT formatter. Commands:
 
 ```bash
 refactorkit format-file path/to/Example.java --root .
@@ -25,7 +25,10 @@ refactorkit format-file path/to/Example.java --root . --apply
 The preview reports formatter backend/version, style source, affected file,
 content diff, evidence, warnings, and staged diagnostics.
 
-Later additive operations may include:
+The implementation refuses generated or syntactically invalid Java, preserves
+UTF-8 BOM and LF/CRLF policy, discovers hash-bound Eclipse project preferences,
+reports exact staged diagnostics, and leaves imports unchanged. Later additive
+operations may include:
 
 - selected-range formatting;
 - changed-lines formatting;

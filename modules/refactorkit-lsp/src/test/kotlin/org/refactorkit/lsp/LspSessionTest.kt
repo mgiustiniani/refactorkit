@@ -65,6 +65,7 @@ class LspSessionTest {
         assertEquals("true", sync["save"]!!.jsonObject["includeText"]!!.jsonPrimitive.content)
         assertTrue(capabilities["semanticTokensProvider"]!!.jsonObject["legend"]!!.jsonObject["tokenTypes"]!!.jsonArray.isNotEmpty())
         assertEquals("refactorkit", capabilities["diagnosticProvider"]!!.jsonObject["identifier"]!!.jsonPrimitive.content)
+        assertEquals("true", capabilities["documentFormattingProvider"]!!.jsonPrimitive.content)
         val commands = capabilities["executeCommandProvider"]!!.jsonObject["commands"]!!.jsonArray
             .map { it.jsonPrimitive.content }
         assertTrue(commands.contains("refactorkit.extractMethod"))
@@ -72,6 +73,23 @@ class LspSessionTest {
         assertTrue(commands.contains("refactorkit.changeSignature.addParameter"))
         assertTrue(commands.contains("refactorkit.changeSignature.reorderParameters"))
         assertTrue(commands.contains("refactorkit.changeSignature.removeParameter"))
+        assertTrue(commands.contains("refactorkit.formatFile"))
+    }
+
+    @Test
+    fun nativeFormattingReturnsClientManagedEditsWithoutWritingWorkspace() {
+        val file = "src/main/java/com/example/Example.java"
+        val root = createProject(
+            file to "package com.example;\npublic class Example{void run(){int value=1;}}\n",
+        )
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+
+        val edits = session.dispatch("textDocument/formatting", textDocumentParams(root, file)) as JsonArray
+
+        assertTrue(edits.isNotEmpty())
+        assertTrue(edits.any { it.jsonObject["newText"]!!.jsonPrimitive.content.isNotEmpty() })
+        assertTrue(Paths.get(root).resolve(file).toFile().readText().contains("Example{"))
     }
 
     @Test

@@ -20,10 +20,11 @@ review safety boundaries before applying refactorings.
 - Defined C/C++ component relocation across paths, headers, includes, build
   targets, optional C API prefixes, C++ namespaces/modules, and ABI evidence
   rather than treating directory layout as a namespace.
-- Added the planned deterministic formatter contract: Java single-file JDT
-  formatting enters the `v0.4.x` scope with project-style evidence,
-  idempotence/minimal-diff tests, preview, diagnostics, managed apply/rollback,
-  and explicit client-managed versus managed LSP ownership.
+- Implemented deterministic Java single-file JDT formatting with hash-bound
+  Eclipse project preferences or versioned defaults, UTF-8 BOM and LF/CRLF
+  preservation, generated/syntax refusal, idempotence, exact staged diagnostics,
+  CLI/daemon/LSP/MCP previews, managed apply/rollback, native client-managed LSP
+  edits, and golden acceptance.
 - Fixed the self-contained jlink runtime for JDT-backed signed selectors by
   adding `java.compiler`. Packaged-runtime smoke coverage now checks the module,
   executes signed `definition`/`references` with `JAVA_HOME` unset, verifies

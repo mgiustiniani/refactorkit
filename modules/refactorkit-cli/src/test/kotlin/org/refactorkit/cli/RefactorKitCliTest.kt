@@ -7,6 +7,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.exists
+import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -21,6 +22,7 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("RefactorKit ${RefactorKitVersion.VERSION}"))
         assertTrue(result.stdout.contains("refactorkit --version"))
         assertTrue(result.stdout.contains("refactorkit java import-class"))
+        assertTrue(result.stdout.contains("refactorkit format-file"))
         assertTrue(result.stdout.contains("refactorkit recipe run"))
     }
 
@@ -94,6 +96,29 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("licenseDetected=MIT"), result.stdout)
         assertTrue(result.stdout.contains("licenseRisk=LOW"), result.stdout)
         assertTrue(Regex("originalHash=[0-9a-f]{64}").containsMatchIn(result.stdout), result.stdout)
+    }
+
+    @Test
+    fun formatFilePreviewsAndAppliesThroughManagedCli() {
+        val root = createProject(
+            "src/main/java/com/example/Example.java" to
+                "package com.example;\npublic class Example{void run(){int value=1;}}\n",
+        )
+        val relative = "src/main/java/com/example/Example.java"
+
+        val preview = captureStdout {
+            RefactorKitCli().run(listOf("format-file", relative, "--root", root.toString()))
+        }
+        assertEquals(0, preview.code, preview.stdout)
+        assertTrue(preview.stdout.contains("Format Java compilation unit"), preview.stdout)
+        assertTrue(root.resolve(relative).readText().contains("Example{"))
+
+        val apply = captureStdout {
+            RefactorKitCli().run(listOf("format-file", relative, "--apply", "--root", root.toString()))
+        }
+        assertEquals(0, apply.code, apply.stdout)
+        assertTrue(apply.stdout.contains("Transaction:"), apply.stdout)
+        assertTrue(root.resolve(relative).readText().contains("Example {"))
     }
 
     @Test

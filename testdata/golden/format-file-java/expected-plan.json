@@ -1,0 +1,6 @@
+{
+  "operation": "formatFile",
+  "status": "preview",
+  "summary": "Format Java compilation unit",
+  "minAffectedFiles": "1"
+}

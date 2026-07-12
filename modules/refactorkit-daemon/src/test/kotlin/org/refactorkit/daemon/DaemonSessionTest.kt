@@ -245,6 +245,26 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun formatFilePreviewAndApplyUsesManagedTransaction() {
+        val root = createProject(
+            "src/main/java/com/example/Example.java" to
+                "package com.example;\npublic class Example{void run(){int value=1;}}\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val preview = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "formatFile")
+            put("arguments", buildJsonObject { put("file", "src/main/java/com/example/Example.java") })
+        }) as JsonObject
+
+        assertEquals("formatFile", preview["operation"]!!.jsonPrimitive.content)
+        assertEquals("PREVIEW", preview["status"]!!.jsonPrimitive.content)
+        val applied = session.dispatch("refactor.apply", params("planId" to preview["planId"]!!.jsonPrimitive.content)) as JsonObject
+        assertEquals("applied", applied["status"]!!.jsonPrimitive.content)
+        assertTrue(Paths.get(root).resolve("src/main/java/com/example/Example.java").toFile().readText().contains("Example {"))
+    }
+
+    @Test
     fun rollbackConflictUsesStableCodeAndForceRestores() {
         val root = createProject(
             "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",

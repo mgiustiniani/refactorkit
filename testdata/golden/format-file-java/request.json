@@ -1,0 +1,6 @@
+{
+  "operation": "formatFile",
+  "arguments": {
+    "file": "src/main/java/com/example/Example.java"
+  }
+}
