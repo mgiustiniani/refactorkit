@@ -28,6 +28,7 @@ data class FileImage(
     val lastModifiedMillis: Long? = null,
     val ownerName: String? = null,
     val groupName: String? = null,
+    val userDefinedAttributes: Map<String, String>? = null,
 )
 
 data class JournalEvent(
@@ -54,7 +55,7 @@ data class TransactionJournalRecord(
     val failure: String? = null,
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 5
+        const val CURRENT_SCHEMA_VERSION = 6
     }
 }
 
@@ -93,6 +94,7 @@ internal data class FileImageDto(
     val lastModifiedMillis: Long? = null,
     val ownerName: String? = null,
     val groupName: String? = null,
+    val userDefinedAttributes: Map<String, String>? = null,
 )
 
 private val journalJson = Json { prettyPrint = true; ignoreUnknownKeys = true }
@@ -131,6 +133,7 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
             2 -> legacyV2Checksum(dto)
             3 -> legacyV3Checksum(dto)
             4 -> legacyV4Checksum(dto)
+            5 -> legacyV5Checksum(dto)
             else -> checksum(dto.copy(checksum = null))
         }
         require(dto.checksum == expected) { "Transaction journal checksum mismatch" }
@@ -161,6 +164,7 @@ private fun FileImage.toDto() = FileImageDto(
     lastModifiedMillis = lastModifiedMillis,
     ownerName = ownerName,
     groupName = groupName,
+    userDefinedAttributes = userDefinedAttributes?.toSortedMap(),
 )
 
 private fun FileImageDto.toDomain() = FileImage(
@@ -170,6 +174,7 @@ private fun FileImageDto.toDomain() = FileImage(
     lastModifiedMillis = lastModifiedMillis,
     ownerName = ownerName,
     groupName = groupName,
+    userDefinedAttributes = userDefinedAttributes?.toSortedMap(),
 )
 
 private fun legacyV2Checksum(dto: TransactionJournalDto): String {
@@ -182,7 +187,7 @@ private fun legacyV2Checksum(dto: TransactionJournalDto): String {
             "implementationVersion", "apiVersion", "preSnapshotHash", "postSnapshotHash", "history",
         ) }.mapValues { (key, value) ->
             if (key == "preImages" || key == "postImages") {
-                removeImageMetadata(value, "lastModifiedMillis", "ownerName", "groupName")
+                removeImageMetadata(value, "lastModifiedMillis", "ownerName", "groupName", "userDefinedAttributes")
             } else value
         },
     )
@@ -196,7 +201,7 @@ private fun legacyV3Checksum(dto: TransactionJournalDto): String {
     ).jsonObject
     val legacy = JsonObject(current.mapValues { (key, value) ->
         if (key == "preImages" || key == "postImages") {
-            removeImageMetadata(value, "lastModifiedMillis", "ownerName", "groupName")
+            removeImageMetadata(value, "lastModifiedMillis", "ownerName", "groupName", "userDefinedAttributes")
         } else value
     })
     return sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), legacy))
@@ -209,7 +214,20 @@ private fun legacyV4Checksum(dto: TransactionJournalDto): String {
     ).jsonObject
     val legacy = JsonObject(current.mapValues { (key, value) ->
         if (key == "preImages" || key == "postImages") {
-            removeImageMetadata(value, "ownerName", "groupName")
+            removeImageMetadata(value, "ownerName", "groupName", "userDefinedAttributes")
+        } else value
+    })
+    return sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), legacy))
+}
+
+private fun legacyV5Checksum(dto: TransactionJournalDto): String {
+    val current = canonicalJournalJson.encodeToJsonElement(
+        TransactionJournalDto.serializer(),
+        dto.copy(checksum = null),
+    ).jsonObject
+    val legacy = JsonObject(current.mapValues { (key, value) ->
+        if (key == "preImages" || key == "postImages") {
+            removeImageMetadata(value, "userDefinedAttributes")
         } else value
     })
     return sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), legacy))

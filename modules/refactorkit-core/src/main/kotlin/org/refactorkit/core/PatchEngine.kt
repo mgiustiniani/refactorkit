@@ -1,5 +1,6 @@
 package org.refactorkit.core
 
+import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.AtomicMoveNotSupportedException
@@ -10,7 +11,9 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.UserDefinedFileAttributeView
 import java.time.Instant
+import java.util.Base64
 import java.util.UUID
 import java.util.stream.Collectors
 
@@ -716,11 +719,19 @@ class PatchEngine(
                 lastModifiedMillis = readLastModifiedMillis(image.path),
                 ownerName = ownership?.first,
                 groupName = ownership?.second,
+                userDefinedAttributes = readUserDefinedAttributes(image.path),
             )
         }
         val postPermissions = derivePostPermissions(plan.workspaceEdit)
         val postImages = staged.postImages.map { image ->
-            image.copy(posixPermissions = postPermissions[image.path])
+            val sourceImage = preImages.firstOrNull { it.path == image.path && it.content != null }
+                ?: preImages.firstOrNull { candidate ->
+                    candidate.content == image.content && staged.postImages.firstOrNull { it.path == candidate.path }?.content == null
+                }
+            image.copy(
+                posixPermissions = postPermissions[image.path],
+                userDefinedAttributes = sourceImage?.userDefinedAttributes,
+            )
         }
         val transaction = Transaction(
             planId = plan.id,
@@ -836,6 +847,24 @@ class PatchEngine(
                 Files.delete(directory)
                 directory.parent?.let(::forceWorkspaceDirectory)
             }
+        }
+    }
+
+    private fun readUserDefinedAttributes(path: Path): Map<String, String>? {
+        val absolute = resolveInsideWorkspace(path)
+        if (!Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) return null
+        val view = Files.getFileAttributeView(
+            absolute,
+            UserDefinedFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        ) ?: return null
+        return view.list().sorted().associateWith { name ->
+            val buffer = ByteBuffer.allocate(view.size(name))
+            view.read(name, buffer)
+            buffer.flip()
+            val bytes = ByteArray(buffer.remaining())
+            buffer.get(bytes)
+            Base64.getEncoder().encodeToString(bytes)
         }
     }
 
@@ -973,6 +1002,20 @@ class PatchEngine(
         )
         if (posixView != null) {
             image.groupName?.let { group -> posixView.setGroup(lookup.lookupPrincipalByGroupName(group)) }
+        }
+        image.userDefinedAttributes?.let { attributes ->
+            val view = Files.getFileAttributeView(
+                temporary,
+                UserDefinedFileAttributeView::class.java,
+                LinkOption.NOFOLLOW_LINKS,
+            ) ?: throw WorkspaceWriteException(
+                "filesystem.attributesUnsupported",
+                "Filesystem cannot restore user-defined attributes for ${image.path}",
+            )
+            view.list().forEach(view::delete)
+            attributes.toSortedMap().forEach { (name, encoded) ->
+                view.write(name, ByteBuffer.wrap(Base64.getDecoder().decode(encoded)))
+            }
         }
         image.lastModifiedMillis?.let { millis ->
             Files.setLastModifiedTime(temporary, java.nio.file.attribute.FileTime.fromMillis(millis))

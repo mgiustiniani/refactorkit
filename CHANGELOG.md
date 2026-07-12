@@ -23,6 +23,8 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added schema-v6 sorted Base64 user-defined file attributes, preserving them on
+  modify/rename apply and restoring them exactly on rollback/recovery.
 - Added schema-v5 journaled owner/POSIX-group identity and exact ownership
   restoration during rollback/recovery with v2/v3/v4 checksum compatibility.
 - Added lock-scoped durable cleanup of strictly named orphan lifecycle temp files

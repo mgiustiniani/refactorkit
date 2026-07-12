@@ -314,6 +314,23 @@ class PatchEngineTest {
         Files.writeString(oldName, "class Old {}\n")
         val modifyOwner = Files.getOwner(modify).name
         val renameOwner = Files.getOwner(oldName).name
+        val attributeName = "refactorkit.test"
+        val modifyAttribute = "modify-metadata".toByteArray()
+        val renameAttribute = "rename-metadata".toByteArray()
+        val modifyAttributes = Files.getFileAttributeView(
+            modify,
+            java.nio.file.attribute.UserDefinedFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )
+        val renameAttributes = Files.getFileAttributeView(
+            oldName,
+            java.nio.file.attribute.UserDefinedFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )
+        if (modifyAttributes != null && renameAttributes != null) {
+            modifyAttributes.write(attributeName, java.nio.ByteBuffer.wrap(modifyAttribute))
+            renameAttributes.write(attributeName, java.nio.ByteBuffer.wrap(renameAttribute))
+        }
         val modifyTimestamp = java.nio.file.attribute.FileTime.fromMillis(946684800000L)
         val renameTimestamp = java.nio.file.attribute.FileTime.fromMillis(978307200000L)
         Files.setLastModifiedTime(modify, modifyTimestamp)
@@ -358,6 +375,10 @@ class PatchEngineTest {
             assertEquals(modifyPermissions, Files.getPosixFilePermissions(modify))
             assertEquals(renamePermissions, Files.getPosixFilePermissions(root.resolve("New.java")))
         }
+        if (modifyAttributes != null && renameAttributes != null) {
+            assertTrue(modifyAttribute.contentEquals(readUserAttribute(modify, attributeName)))
+            assertTrue(renameAttribute.contentEquals(readUserAttribute(root.resolve("New.java"), attributeName)))
+        }
 
         assertIs<ApplyResult.Applied>(PatchEngine(root).rollback(applied.transaction))
         assertNoWorkspaceStageFiles(root)
@@ -367,6 +388,10 @@ class PatchEngineTest {
         assertEquals(renameTimestamp, Files.getLastModifiedTime(oldName))
         assertEquals(modifyOwner, Files.getOwner(modify).name)
         assertEquals(renameOwner, Files.getOwner(oldName).name)
+        if (modifyAttributes != null && renameAttributes != null) {
+            assertTrue(modifyAttribute.contentEquals(readUserAttribute(modify, attributeName)))
+            assertTrue(renameAttribute.contentEquals(readUserAttribute(oldName, attributeName)))
+        }
         assertFalse(Files.exists(root.resolve("nested")))
         if (posix) {
             assertEquals(modifyPermissions, Files.getPosixFilePermissions(modify))
@@ -402,6 +427,18 @@ class PatchEngineTest {
         assertTrue(rollback.diagnostics.any { it.code == "rollback.conflict" })
         assertTrue(Files.exists(root.resolve("generated/New.java")))
         assertTrue(Files.exists(root.resolve("generated/external.txt")))
+    }
+
+    private fun readUserAttribute(path: Path, name: String): ByteArray {
+        val view = requireNotNull(Files.getFileAttributeView(
+            path,
+            java.nio.file.attribute.UserDefinedFileAttributeView::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        ))
+        val buffer = java.nio.ByteBuffer.allocate(view.size(name))
+        view.read(name, buffer)
+        buffer.flip()
+        return ByteArray(buffer.remaining()).also(buffer::get)
     }
 
     private fun assertNoWorkspaceStageFiles(root: Path) {

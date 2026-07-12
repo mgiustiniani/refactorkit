@@ -338,7 +338,7 @@ class TransactionLogTest {
         log.prepare(prepared)
         val file = logDir.resolve("${transaction.id.value}.json")
         val schemaOne = Files.readString(file)
-            .replace("\"schemaVersion\": 5", "\"schemaVersion\": 1")
+            .replace("\"schemaVersion\": 6", "\"schemaVersion\": 1")
             .lineSequence()
             .filterNot { it.trimStart().startsWith("\"checksum\"") }
             .joinToString("\n")
