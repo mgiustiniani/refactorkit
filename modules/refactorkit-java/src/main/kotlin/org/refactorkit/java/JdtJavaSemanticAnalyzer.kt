@@ -63,9 +63,12 @@ class JdtJavaSemanticAnalyzer {
             }
         val symbols = fileAnalyses.flatMap { it.symbols }
         val symbolsByKey = symbols.mapNotNull { symbol -> symbol.bindingKey?.let { it to symbol } }.toMap()
+        val symbolsByQualifiedName = symbols.associateBy { it.qualifiedName }
         val references = fileAnalyses.flatMap { analysis ->
             analysis.rawReferences.mapNotNull { raw ->
-                val target = raw.bindingKey?.let(symbolsByKey::get) ?: return@mapNotNull null
+                val target = raw.bindingKey?.let(symbolsByKey::get)
+                    ?: raw.symbolQualifiedName?.let(symbolsByQualifiedName::get)
+                    ?: return@mapNotNull null
                 JdtJavaSemanticReference(
                     simpleName = raw.simpleName,
                     symbolQualifiedName = target.qualifiedName,
@@ -300,6 +303,7 @@ class JdtJavaSemanticAnalyzer {
             }
 
             override fun visit(node: ImportDeclaration): Boolean {
+                val binding = node.resolveBinding()
                 val importedName = node.name.fullyQualifiedName
                 val simpleName = importedName.substringAfterLast('.')
                 val simpleNameStart = node.name.startPosition + node.name.length - simpleName.length
@@ -308,7 +312,8 @@ class JdtJavaSemanticAnalyzer {
                     path = file.path,
                     line = (compilationUnit.getLineNumber(simpleNameStart) - 1).coerceAtLeast(0),
                     sourceRange = rangeFor(compilationUnit, simpleNameStart, simpleName.length),
-                    bindingKey = declarationBindingKey(node.resolveBinding()),
+                    bindingKey = declarationBindingKey(binding),
+                    symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = true,
                 )
                 return false
@@ -322,6 +327,7 @@ class JdtJavaSemanticAnalyzer {
                     line = (compilationUnit.getLineNumber(node.startPosition) - 1).coerceAtLeast(0),
                     sourceRange = rangeFor(compilationUnit, node.type.startPosition, node.type.length),
                     bindingKey = declarationBindingKey(binding),
+                    symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = false,
                 )
                 return true
@@ -329,12 +335,14 @@ class JdtJavaSemanticAnalyzer {
 
             override fun visit(node: SimpleName): Boolean {
                 if (node.isDeclarationName()) return true
+                val binding = node.resolveBinding()
                 rawReferences += RawReference(
                     simpleName = node.identifier,
                     path = file.path,
                     line = (compilationUnit.getLineNumber(node.startPosition) - 1).coerceAtLeast(0),
                     sourceRange = rangeFor(compilationUnit, node.startPosition, node.length),
-                    bindingKey = declarationBindingKey(node.resolveBinding()),
+                    bindingKey = declarationBindingKey(binding),
+                    symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = false,
                 )
                 return true
@@ -368,6 +376,15 @@ class JdtJavaSemanticAnalyzer {
         is IMethodBinding -> binding.methodDeclaration.key
         is IVariableBinding -> binding.variableDeclaration.key
         else -> binding?.key
+    }
+
+    private fun bindingQualifiedName(binding: IBinding?): String? = when (binding) {
+        is ITypeBinding -> binding.typeDeclaration.qualifiedName.takeIf(String::isNotBlank)
+        is IMethodBinding -> binding.methodDeclaration.qualifiedName()
+        is IVariableBinding -> binding.variableDeclaration.let { variable ->
+            variable.declaringClass?.qualifiedName?.takeIf(String::isNotBlank)?.let { "$it#${variable.name}" }
+        }
+        else -> null
     }
 
     private fun buildOverrideRelations(
@@ -640,6 +657,7 @@ class JdtJavaSemanticAnalyzer {
         val line: Int,
         val sourceRange: SourceRange,
         val bindingKey: String?,
+        val symbolQualifiedName: String?,
         val isImport: Boolean,
     )
 }
