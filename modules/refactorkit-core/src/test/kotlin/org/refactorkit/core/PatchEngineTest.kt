@@ -15,6 +15,31 @@ import java.nio.file.attribute.PosixFilePermission
 
 class PatchEngineTest {
     @Test
+    fun refusesReviewOnlyLexicalFallbackBeforeJournalCreation() {
+        val root = Files.createTempDirectory("refactorkit-evidence")
+        val relative = Path.of("Example.java")
+        Files.writeString(root.resolve(relative), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val edit = WorkspaceEdit(listOf(FileEdit.Delete(relative)))
+        val plan = PatchPlan(
+            operation = "lexicalFallback",
+            snapshotHash = snapshot.hash,
+            confidence = 0.5,
+            summary = "review-only lexical fallback",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+            evidence = RefactoringEvidence.LEXICAL_FALLBACK,
+        )
+
+        val result = PatchEngine(root).apply(plan, snapshot)
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "evidence.insufficient" })
+        assertTrue(Files.exists(root.resolve(relative)))
+        assertFalse(Files.exists(root.resolve(".refactorkit/transactions")))
+    }
+
+    @Test
     fun refusesApplyWhenSnapshotChanged() {
         val root = Files.createTempDirectory("refactorkit-test")
         val file = root.resolve("Example.java")

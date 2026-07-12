@@ -88,7 +88,7 @@ class AgentSimulationTest {
                         "package com.example;\npublic class UserClient { String show(UserManager manager) { return manager.displayName(\"Ada\"); } }\n",
                 )
                 val snap = scanner.scan(root)
-                Triple(root, JavaRenameMemberPlanner(adapter).preview(snap, "com.example.UserManager#displayName", "renderName"), snap)
+                Triple(root, JavaRenameMemberPlanner(adapter).preview(snap, "com.example.UserManager#displayName(java.lang.String)", "renderName"), snap)
             },
             rollbackCase("safeDelete") {
                 val root = project(

@@ -260,8 +260,9 @@ class JavaRenameMemberPlannerTest {
             """.trimIndent(),
         )
         val snap = JavaProjectScanner().scan(root)
-        val plan = planner.preview(snap, "com.example.UserManager#displayName", "getDisplayName")
+        val plan = planner.preview(snap, "com.example.UserManager#displayName(java.lang.String)", "getDisplayName")
         assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertEquals(org.refactorkit.core.RefactoringEvidence.JDT_BINDING, plan.evidence)
 
         val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)

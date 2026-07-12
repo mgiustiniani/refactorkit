@@ -61,7 +61,7 @@ object JsonRpcErrorCodes {
             codes.any { it == "approval.required" } -> APPROVAL_REQUIRED
             codes.any { it.startsWith("diagnostics.") } -> DIAGNOSTICS_FAILED
             codes.any { it.startsWith("snapshot.") || it.startsWith("file.precondition") } -> SNAPSHOT_CHANGED
-            codes.any { it.startsWith("edit.") || it == "plan.notPreview" } -> PLAN_VALIDATION_FAILED
+            codes.any { it.startsWith("edit.") || it == "plan.notPreview" || it == "evidence.insufficient" } -> PLAN_VALIDATION_FAILED
             codes.any { it.startsWith("transaction.") } -> APPLY_FAILED
             else -> INTERNAL_ERROR
         }

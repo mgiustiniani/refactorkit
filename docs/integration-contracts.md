@@ -174,7 +174,7 @@ Optional request fields:
 
 The response uses the standard patch-plan preview envelope with `planId`,
 `operation=importExternalJavaClass`, `status`, `summary`, `confidence`,
-`riskLevel`, `affectedFiles`, `warnings`, and `diagnosticsAfterPreview`. The
+`riskLevel`, `evidence`, `affectedFiles`, `warnings`, and `diagnosticsAfterPreview`. The
 `warnings` array must include exactly one provenance/license line with these
 stable key names:
 
@@ -202,6 +202,17 @@ instant; `originalHash` is the SHA-256 hash of the cleaned source text.
 
 A refused preview must not silently fall back to text replacement. Clients should
 show the refusal, warnings, affected files when present, and next action.
+
+## Refactoring evidence contract
+
+Every plan exposes one stable evidence category:
+
+- `JDT_BINDING`: edits use clean exact JDT binding/source-range evidence;
+- `STRUCTURAL`: deterministic local transformation without semantic identity claims;
+- `LEXICAL_FALLBACK`: review-only preview when semantic evidence is unavailable.
+
+`PatchEngine` refuses `LEXICAL_FALLBACK` before WAL creation with
+`evidence.insufficient`. Recipes retain the weakest evidence of any composed step.
 
 ## LSP server baseline
 
@@ -234,7 +245,7 @@ Preview commands such as `refactorkit.renameClass`, `refactorkit.renameMember`,
 RefactorKit metadata:
 
 - `refactorkitPlanId`: pending plan id to pass to `refactorkit.applyPlan`;
-- `operation`, `status`, `summary`, `riskLevel`, and `warnings`;
+- `operation`, `status`, `summary`, `riskLevel`, `evidence`, and `warnings`;
 - `refactorkitEditOwnership: "client-managed"` and
   `refactorkitRollbackAvailable: false` for editor-applied WorkspaceEdits;
 - `refactorkitDocumentVersionsChecked`, indicating negotiated versionable-edit support;

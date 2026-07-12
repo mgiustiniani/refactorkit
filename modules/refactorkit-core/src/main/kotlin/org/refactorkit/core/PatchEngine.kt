@@ -125,6 +125,13 @@ class PatchEngine(
         if (plan.snapshotHash != currentSnapshotHash) {
             add(Diagnostic("Project changed since preview; regenerate the plan", Diagnostic.Severity.ERROR, code = "snapshot.changed"))
         }
+        if (plan.evidence == RefactoringEvidence.LEXICAL_FALLBACK) {
+            add(Diagnostic(
+                "Lexical fallback previews are review-only and cannot be applied through the stable managed-write contract",
+                Diagnostic.Severity.ERROR,
+                code = "evidence.insufficient",
+            ))
+        }
         addAll(validateEdits(normalizedEdit))
         addAll(validateRuntimeState(normalizedEdit))
         if (none { it.severity == Diagnostic.Severity.ERROR }) {

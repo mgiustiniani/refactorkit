@@ -9,6 +9,7 @@ class PatchPreviewRenderer(
 ) {
     fun render(plan: PatchPlan): String = buildString {
         appendLine(plan.summary)
+        appendLine("Evidence: ${plan.evidence}")
         if (plan.warnings.isNotEmpty()) {
             appendLine()
             appendLine("Warnings:")

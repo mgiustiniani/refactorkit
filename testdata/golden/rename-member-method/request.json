@@ -1,6 +1,6 @@
 {
   "operation": "renameMember",
-  "symbol": "com.example.UserManager#displayName",
+  "symbol": "com.example.UserManager#displayName(java.lang.String)",
   "arguments": {
     "newName": "renderName"
   }

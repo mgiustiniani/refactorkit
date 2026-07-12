@@ -1,5 +1,14 @@
 # Java adapter
 
+## Evidence and apply authority
+
+Every Java plan classifies itself as `JDT_BINDING`, `STRUCTURAL`, or
+`LEXICAL_FALLBACK`. Exact type/member binding operations use `JDT_BINDING`;
+syntax-local transforms use `STRUCTURAL`. An unclean/unresolved analysis may still
+produce a `LEXICAL_FALLBACK` diff for review, but core apply refuses it as
+`evidence.insufficient` before WAL creation. This prevents a visible fallback
+warning from becoming accidental semantic write authority.
+
 ## Generated-source boundary
 
 Generated Java remains analyzable for symbols/references but is never rewritten

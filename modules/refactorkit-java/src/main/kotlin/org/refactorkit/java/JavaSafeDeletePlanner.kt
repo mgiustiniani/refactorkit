@@ -5,6 +5,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -83,6 +84,7 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
             workspaceEdit = WorkspaceEdit(listOf(FileEdit.Delete(declarationFile.path))),
             warnings = warnings,
             riskLevel = if (references.isNotEmpty() || frameworkAssessment.hasFindings) RiskLevel.HIGH else RiskLevel.LOW,
+            evidence = if (semanticReferences != null) RefactoringEvidence.JDT_BINDING else RefactoringEvidence.LEXICAL_FALLBACK,
         )
     }
 

@@ -707,6 +707,7 @@ class LspSession {
             put("status", plan.status.name)
             put("summary", plan.summary)
             put("riskLevel", plan.riskLevel.name)
+            put("evidence", plan.evidence.name)
             put("warnings", buildJsonArray { plan.warnings.forEach { add(JsonPrimitive(it)) } })
             put("refactorkitEditOwnership", "client-managed")
             put("refactorkitRollbackAvailable", false)

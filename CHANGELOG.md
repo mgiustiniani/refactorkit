@@ -23,6 +23,10 @@ review safety boundaries before applying refactorings.
   traversal and non-regular records are rejected, owner-only permissions are
   applied where supported, and corrupt records produce coded errors. CLI, daemon,
   LSP, and MCP reject malformed rollback IDs before filesystem access.
+- Added structured `JDT_BINDING`/`STRUCTURAL`/`LEXICAL_FALLBACK` plan evidence;
+  lexical fallbacks are review-only and refused before WAL creation.
+- Exposed evidence through daemon, LSP, and MCP previews; recipes retain the
+  weakest composed evidence.
 - Centralized generated-source detection and made stable Java file rewriters
   refuse generated paths, annotations, and generated/do-not-edit headers.
 - Upgraded Eclipse JDT Core to 3.44/JLS25 and added hash-bound per-module Maven/

@@ -10,6 +10,7 @@ class JsonRpcErrorCodesTest {
             "snapshot.scopeChanged" to JsonRpcErrorCodes.SNAPSHOT_CHANGED,
             "file.preconditionChanged" to JsonRpcErrorCodes.SNAPSHOT_CHANGED,
             "edit.overlap" to JsonRpcErrorCodes.PLAN_VALIDATION_FAILED,
+            "evidence.insufficient" to JsonRpcErrorCodes.PLAN_VALIDATION_FAILED,
             "path.outsideWorkspace" to JsonRpcErrorCodes.UNSAFE_PATH,
             "file.exists" to JsonRpcErrorCodes.FILE_CONFLICT,
             "approval.required" to JsonRpcErrorCodes.APPROVAL_REQUIRED,

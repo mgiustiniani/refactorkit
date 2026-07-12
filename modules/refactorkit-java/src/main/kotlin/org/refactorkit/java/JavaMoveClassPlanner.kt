@@ -5,6 +5,7 @@ import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
@@ -144,6 +145,7 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
             riskLevel = if (frameworkAssessment.hasFindings) RiskLevel.HIGH else RiskLevel.MEDIUM,
+            evidence = if (jdtReferencePaths != null) RefactoringEvidence.JDT_BINDING else RefactoringEvidence.LEXICAL_FALLBACK,
         )
     }
 

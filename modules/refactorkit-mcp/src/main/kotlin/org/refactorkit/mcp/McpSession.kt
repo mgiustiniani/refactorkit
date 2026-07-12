@@ -308,6 +308,7 @@ class McpSession {
             appendLine("Status   : ${plan.status}")
             appendLine("Summary  : ${plan.summary}")
             appendLine("Risk     : ${plan.riskLevel}")
+            appendLine("Evidence : ${plan.evidence}")
             appendLine("Confidence: ${plan.confidence}")
             appendLine("Affected : ${plan.affectedFiles.size} file(s)")
             plan.affectedFiles.forEach { appendLine("  $it") }
@@ -398,6 +399,7 @@ class McpSession {
             appendLine("Status   : ${plan.status}")
             appendLine("Summary  : ${plan.summary}")
             appendLine("Risk     : ${plan.riskLevel}")
+            appendLine("Evidence : ${plan.evidence}")
             appendLine("Confidence: ${plan.confidence}")
             appendLine("Affected : ${plan.affectedFiles.size} file(s)")
             plan.affectedFiles.forEach { appendLine("  $it") }

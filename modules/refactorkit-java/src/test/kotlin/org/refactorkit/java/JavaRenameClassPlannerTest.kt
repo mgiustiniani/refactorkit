@@ -94,6 +94,7 @@ class JavaRenameClassPlannerTest {
         val plan = planner.preview(snap, "com.acme.left.Service", "Worker")
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertEquals(org.refactorkit.core.RefactoringEvidence.JDT_BINDING, plan.evidence)
         assertTrue(plan.warnings.any { it.contains("JDT type binding selected") }, plan.warnings.toString())
         val result = PatchEngine(root).apply(plan, snap)
         assertIs<ApplyResult.Applied>(result)
@@ -133,7 +134,11 @@ class JavaRenameClassPlannerTest {
         val plan = planner.preview(JavaProjectScanner().scan(root), "com.example.UserManager", "AccountManager")
 
         assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertEquals(org.refactorkit.core.RefactoringEvidence.LEXICAL_FALLBACK, plan.evidence)
         assertTrue(plan.warnings.any { it.contains("lexical fallback") }, plan.warnings.toString())
+        val apply = PatchEngine(root).apply(plan, JavaProjectScanner().scan(root))
+        assertIs<ApplyResult.Refused>(apply)
+        assertTrue(apply.diagnostics.any { it.code == "evidence.insufficient" })
     }
 
     @Test

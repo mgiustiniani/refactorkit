@@ -6,6 +6,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.PlanId
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
@@ -82,6 +83,7 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
                     affectedPaths.size > 10 -> RiskLevel.MEDIUM
                     else -> RiskLevel.LOW
                 },
+                evidence = RefactoringEvidence.JDT_BINDING,
             )
         }
 
@@ -143,6 +145,7 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
             riskLevel = riskLevel,
+            evidence = RefactoringEvidence.LEXICAL_FALLBACK,
         )
     }
 

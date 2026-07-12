@@ -9,6 +9,7 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TextEdit
@@ -230,6 +231,10 @@ class RecipeEngine(
             warnings = plans.flatMap(PatchPlan::warnings).distinct(),
             riskLevel = plans.map(PatchPlan::riskLevel).maxByOrNull { it.ordinal }
                 ?: org.refactorkit.core.RiskLevel.LOW,
+            // The package operation owns the complete old-package source set and
+            // stages every class against the prior move, so its authority is
+            // structural rather than the evidence of any intermediate class move.
+            evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
 
@@ -254,6 +259,8 @@ class RecipeEngine(
             warnings = plans.flatMap(PatchPlan::warnings).distinct(),
             riskLevel = plans.map(PatchPlan::riskLevel).maxByOrNull { it.ordinal }
                 ?: org.refactorkit.core.RiskLevel.LOW,
+            evidence = plans.map(PatchPlan::evidence).maxByOrNull { it.ordinal }
+                ?: RefactoringEvidence.STRUCTURAL,
         )
     }
 

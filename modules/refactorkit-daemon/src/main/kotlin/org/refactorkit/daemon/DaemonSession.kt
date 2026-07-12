@@ -386,6 +386,7 @@ class DaemonSession {
         put("summary", plan.summary)
         put("confidence", plan.confidence)
         put("riskLevel", plan.riskLevel.name)
+        put("evidence", plan.evidence.name)
         put("affectedFiles", buildJsonArray { plan.affectedFiles.forEach { add(JsonPrimitive(it.toString())) } })
         put("warnings", buildJsonArray { plan.warnings.forEach { add(JsonPrimitive(it)) } })
         put("diagnosticsAfterPreview", buildJsonArray {

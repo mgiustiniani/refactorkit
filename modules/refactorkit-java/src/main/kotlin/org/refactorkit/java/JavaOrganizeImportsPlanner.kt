@@ -5,6 +5,7 @@ import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
@@ -93,6 +94,7 @@ class JavaOrganizeImportsPlanner {
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
             riskLevel = RiskLevel.LOW,
+            evidence = if (fallbackFiles == 0) RefactoringEvidence.JDT_BINDING else RefactoringEvidence.STRUCTURAL,
         )
     }
 

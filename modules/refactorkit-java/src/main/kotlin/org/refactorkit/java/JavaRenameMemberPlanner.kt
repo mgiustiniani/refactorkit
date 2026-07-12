@@ -4,6 +4,7 @@ import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.Symbol
 import org.refactorkit.core.SymbolId
@@ -158,6 +159,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
             riskLevel = if (members.size > 1) RiskLevel.MEDIUM else RiskLevel.LOW,
+            evidence = RefactoringEvidence.LEXICAL_FALLBACK,
         )
     }
 
@@ -233,6 +235,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
                 "Reflection, serialization names, framework strings, and annotation-processor output are NOT updated. Review manually.",
             ),
             riskLevel = RiskLevel.LOW,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 
@@ -328,6 +331,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
             riskLevel = if (familySymbols.size > 1) RiskLevel.MEDIUM else RiskLevel.LOW,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 

@@ -197,6 +197,12 @@ enum class RiskLevel {
     HIGH,
 }
 
+enum class RefactoringEvidence {
+    JDT_BINDING,
+    STRUCTURAL,
+    LEXICAL_FALLBACK,
+}
+
 data class Diagnostic(
     val message: String,
     val severity: Severity,
@@ -224,6 +230,7 @@ data class PatchPlan(
     val diagnosticsAfterPreview: List<Diagnostic> = emptyList(),
     val warnings: List<String> = emptyList(),
     val riskLevel: RiskLevel = RiskLevel.LOW,
+    val evidence: RefactoringEvidence = RefactoringEvidence.STRUCTURAL,
 )
 
 enum class ApprovalKind {
