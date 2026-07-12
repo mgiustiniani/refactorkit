@@ -311,7 +311,7 @@ class TransactionLog(
         } catch (error: Exception) {
             throw TransactionLogException(
                 "transaction.durabilityFailed",
-                "Cannot durably flush transaction journal directory: $path",
+                "Cannot durably flush transaction journal directory: $path (${error.message})",
                 error,
             )
         }

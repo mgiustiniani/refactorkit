@@ -21,7 +21,7 @@ internal object FilesystemDurability {
     private fun forceWindowsDirectory(directory: Path) {
         val handle = Kernel32.INSTANCE.CreateFile(
             directory.toAbsolutePath().normalize().toString(),
-            WinNT.GENERIC_READ,
+            WinNT.GENERIC_READ or WinNT.GENERIC_WRITE,
             WinNT.FILE_SHARE_READ or WinNT.FILE_SHARE_WRITE or WinNT.FILE_SHARE_DELETE,
             null,
             WinNT.OPEN_EXISTING,

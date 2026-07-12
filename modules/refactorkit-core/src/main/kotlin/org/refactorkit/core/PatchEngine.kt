@@ -1117,7 +1117,7 @@ class PatchEngine(
         } catch (error: Exception) {
             throw WorkspaceWriteException(
                 "filesystem.directoryForceFailed",
-                "Cannot durably flush workspace directory: $directory",
+                "Cannot durably flush workspace directory: $directory (${error.message})",
                 error,
             )
         }
