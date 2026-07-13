@@ -147,6 +147,30 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun managedApplyRevalidatesToolchainEvidenceUnderWorkspaceLock() {
+        val fixture = fixture()
+        val client = FakeClient()
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+        val plan = adapter.applyRefactoring(RefactoringRequest(
+            operation = "renameSymbol",
+            selection = org.refactorkit.core.CodeSelection(location()),
+            arguments = mapOf("newName" to "AccountService"),
+            snapshot = fixture.snapshot,
+        ))
+        fixture.toolchain.languageServerEntrypoint.writeText("drift after preview")
+
+        val refused = assertIs<ApplyResult.Refused>(PatchEngine(fixture.root).apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("typescript-test"), adapter.diagnosticsGate(),
+        ))
+        assertEquals(listOf("diagnostics.unavailable"), refused.diagnostics.map(Diagnostic::code))
+        assertTrue(refused.diagnostics.single().message.contains("typescript.toolchainEvidenceChanged"))
+        assertEquals("export class Service {}\n", Files.readString(fixture.root.resolve("src/service.ts")))
+        val transactionDirectory = fixture.root.resolve(".refactorkit/transactions")
+        assertTrue(!Files.exists(transactionDirectory) || Files.list(transactionDirectory).use { it.findAny().isEmpty })
+    }
+
+    @Test
     fun exactDiagnosticsUnavailabilityRefusesRenamePreview() {
         val fixture = fixture()
         val unavailable = Diagnostic("missing exact version", Diagnostic.Severity.ERROR, code = "semantic.diagnosticsIncomplete")

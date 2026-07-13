@@ -59,9 +59,11 @@ parser and core normalizer. A successful result is a `PatchPlan` preview with
 `LANGUAGE_SERVER` evidence, explicit approval requirement and medium TypeScript
 or high JavaScript risk. Preview performs no filesystem write. The experimental
 adapter now has JVM acceptance for exact staged diagnostics, explicit authorization,
-managed apply, WAL and rollback. Stable mutation authority still requires
-lock-time toolchain/config revalidation plus packaged real-toolchain acceptance
-for apply, recovery and rollback on every supported native platform.
+managed apply, WAL and rollback. Its diagnostics gate re-hashes toolchain and
+project-model evidence while `PatchEngine` holds the workspace writer lock and
+refuses before WAL on drift. Stable mutation authority still requires packaged
+real-toolchain acceptance for apply, recovery and rollback on every supported
+native platform.
 
 ## Refusal examples
 

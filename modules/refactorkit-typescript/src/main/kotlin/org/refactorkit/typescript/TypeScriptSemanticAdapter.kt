@@ -175,6 +175,12 @@ class TypeScriptSemanticAdapter(
     /** Exact-version semantic gate required by PatchEngine for managed TypeScript apply. */
     fun diagnosticsGate(): DiagnosticsGate = DiagnosticsGate.enabled("typescript-lsp-exact") { snapshot ->
         check(semanticScopeCompatible(snapshot)) { "TypeScript diagnostics snapshot is outside the active semantic scope" }
+        check(toolchain.provenance.evidence.all(::verifyEvidence)) {
+            "typescript.toolchainEvidenceChanged: TypeScript semantic toolchain changed before managed apply"
+        }
+        check(projectEvidenceUnchanged(snapshot.workspace.root)) {
+            "typescript.modelEvidenceChanged: TypeScript project evidence changed before managed apply"
+        }
         when (val result = client.synchronizedDiagnostics(snapshot)) {
             is ExternalSemanticDiagnostics.Available -> result.diagnostics
             is ExternalSemanticDiagnostics.Unavailable -> error("${result.diagnostic.code}: ${result.diagnostic.message}")
@@ -309,6 +315,17 @@ class TypeScriptSemanticAdapter(
         evidence = DiagnosticEvidence.STRUCTURAL,
         category = DiagnosticCategory.SAFETY,
     )
+
+    private fun projectEvidenceUnchanged(workspaceRoot: Path): Boolean {
+        val root = workspaceRoot.toAbsolutePath().normalize()
+        return projectModel.evidence.all { item ->
+            val absolute = root.resolve(item.path).normalize()
+            if (!absolute.startsWith(root) || !Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS) ||
+                Files.isSymbolicLink(absolute) || runCatching { Files.size(absolute) }.getOrNull() != item.size) {
+                false
+            } else runCatching { sha256(Files.readAllBytes(absolute)) == item.sha256 }.getOrDefault(false)
+        }
+    }
 
     private fun verifyEvidence(item: ToolchainFileEvidence): Boolean {
         if (!Files.isRegularFile(item.path, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(item.path)) return false
