@@ -63,11 +63,16 @@ overlay/workspace, symlink traversal, generated roots, invalid ranges, overlap,
 structural conflicts, and bounded-size violations are refused. Accepted output is
 still only an unapproved `LANGUAGE_SERVER` proposal.
 
+The experimental TypeScript adapter adds backend-specific full-document
+synchronization, exact-version diagnostics, and explicit crash restart. Restart
+is capped at three attempts per rolling 60 seconds and refuses changed server
+version, capability hash, executable hash or argument hash. It is never implicit.
+
 Future production language-server/compiler adapters still require:
 
-- real backend-specific capability matrices and document synchronization;
 - diagnostics/provenance schema exposure across CLI/daemon/LSP/MCP;
-- hostile-workspace, restart, and packaged process-kill acceptance.
+- hostile-workspace and packaged real-toolchain process-kill acceptance;
+- operating-system memory isolation where stable support requires it.
 
 No process output bypasses `PatchPlan`, evidence validation, diagnostics,
 approval, `PatchEngine`, WAL, or rollback.

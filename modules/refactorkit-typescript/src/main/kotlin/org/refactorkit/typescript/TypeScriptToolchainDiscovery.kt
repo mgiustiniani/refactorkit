@@ -195,7 +195,10 @@ class TypeScriptToolchainDiscoverer(
             nodeExecutable = node,
             languageServerEntrypoint = languageServerEntrypoint,
             typeScriptServerEntrypoint = typeScriptEntrypoint,
-            command = listOf(node.toString(), languageServerEntrypoint.toString(), "--stdio"),
+            command = listOf(
+                node.toString(), "--max-old-space-size=$LANGUAGE_SERVER_HEAP_MIB",
+                languageServerEntrypoint.toString(), "--stdio",
+            ),
             provenance = TypeScriptToolchainProvenance(
                 nodeVersion = nodeVersion.toString(),
                 languageServerVersion = languageServerPackage.version.toString(),
@@ -377,6 +380,7 @@ class TypeScriptToolchainDiscoverer(
     private data class PackageMetadata(val manifest: Path, val version: SemanticVersion, val binEntrypoint: String)
 
     companion object {
+        const val LANGUAGE_SERVER_HEAP_MIB = 512
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = true }
         private const val EXPECTED_LANGUAGE_SERVER_PACKAGE = "typescript-language-server"
         private const val EXPECTED_TYPESCRIPT_PACKAGE = "typescript"

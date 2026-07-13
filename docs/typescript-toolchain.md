@@ -49,8 +49,8 @@ An available toolchain records:
 - canonical Node and entrypoint paths;
 - SHA-256 and size for Node, both package manifests, the language-server
   entrypoint and TypeScript `tsserver.js`;
-- the exact future LSP command vector (`node`, language-server entrypoint,
-  `--stdio`).
+- the exact LSP command vector (`node`, constant 512 MiB V8 old-space limit,
+  language-server entrypoint, `--stdio`).
 
 No environment value, credential or package script is serialized. Evidence must
 be hash-bound into the future TypeScript project snapshot before stable preview
@@ -58,8 +58,11 @@ or apply.
 
 ## Current refusal boundary
 
-This slice does not yet launch the language server for project semantics. Stable
-support still requires bounded JSONC project modeling, source/config overlay,
-document synchronization, capability negotiation, TypeScript version selection,
-exact diagnostics, proposal normalization, managed mutation acceptance, license/
-SBOM policy and native hostile-workspace testing.
+The experimental semantic adapter launches this command only after project-model
+and snapshot evidence agree. Crashed sessions require explicit restart, allow at
+most three attempts per rolling 60 seconds, and must preserve server version,
+capability hash, executable hash and argument hash. The V8 old-space flag bounds
+the primary JavaScript heap but is not an operating-system RSS sandbox.
+
+Stable support still requires license/SBOM policy, real-toolchain packaged native
+crash/recovery acceptance and a supported server-version matrix.

@@ -56,7 +56,11 @@ headers to 8 MiB, pending diagnostic notifications to 500, and request deadlines
 to the configured 100 ms..120 s range (10 s default).
 
 Source-only semantic overlays default to 100,000 files and 512 MiB of UTF-8
-source content. External workspace-edit normalization defaults to 1,000 file
+source content. The experimental TypeScript provider adds a constant 512 MiB V8
+old-space argument, 256 synchronized documents of at most 4 MiB each, 500
+compiler diagnostics, 10,000 document symbols, and no more than three explicit
+restart attempts per rolling 60 seconds. The V8 limit is not an OS RSS sandbox.
+External workspace-edit normalization defaults to 1,000 file
 operations, 10,000 text edits, and 16 MiB replacement content. Exceeding any
 limit is an explicit refusal, never truncation into an applicable proposal.
 

@@ -35,7 +35,13 @@ class TypeScriptToolchainDiscoveryTest {
             toolchain.provenance.evidence.map { it.role },
         )
         assertTrue(toolchain.provenance.evidence.all { it.sha256.length == 64 && it.size > 0 })
-        assertEquals(listOf(toolchain.nodeExecutable.toString(), toolchain.languageServerEntrypoint.toString(), "--stdio"), toolchain.command)
+        assertEquals(
+            listOf(
+                toolchain.nodeExecutable.toString(), "--max-old-space-size=512",
+                toolchain.languageServerEntrypoint.toString(), "--stdio",
+            ),
+            toolchain.command,
+        )
         assertEquals("not executed", Files.readString(fixture.marker))
     }
 

@@ -30,7 +30,10 @@ The external LSP bridge now supports bounded full-document lifecycle:
 - non-negative, strictly increasing versions;
 - `didOpen`, full-sync `didChange`, and `didClose`;
 - content SHA-256 tracking and automatic resynchronization before rename;
-- UTF-16 position validation with surrogate-pair split refusal.
+- UTF-16 position validation with surrogate-pair split refusal;
+- explicit crash restart only, capped at three attempts per rolling 60 seconds;
+- restart provenance continuity for server version, capabilities, executable and
+  argument hashes.
 
 Server capabilities are reduced to a deterministic known-capability map in
 session provenance. Diagnostics retain bounded message, code, severity, exact
@@ -68,6 +71,8 @@ native platform.
 ## Refusal examples
 
 - stale or absent project model in the snapshot;
+- implicit restart, restart snapshot mismatch, restart-rate overflow or changed
+  server provenance;
 - changed toolchain/config/package evidence;
 - missing server capabilities;
 - stale, missing, unversioned or non-monotonic diagnostic/document versions;

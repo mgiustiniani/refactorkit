@@ -88,8 +88,12 @@ class TypeScriptSemanticAdapter(
     private val toolchain: TypeScriptSemanticToolchain,
     private val projectModel: TypeScriptProjectModel,
     private val client: TypeScriptSemanticClient = ExternalTypeScriptSemanticClient(languageId, toolchain),
+    private val currentTimeMillis: () -> Long = System::currentTimeMillis,
 ) : LanguageAdapter, AutoCloseable {
     private var activeSnapshot: ProjectSnapshot? = null
+    private var acceptedServerProvenance: ServerProvenanceSignature? = null
+    private val restartAttempts = ArrayDeque<Long>()
+    private var lastRestartMillis: Long? = null
 
     init {
         require(languageId in setOf("typescript", "javascript")) { "TypeScript semantic adapter language is invalid" }
@@ -97,6 +101,9 @@ class TypeScriptSemanticAdapter(
 
     fun start(snapshot: ProjectSnapshot): TypeScriptSemanticStart {
         if (client.isRunning) return refusedStart("typescript.semanticAlreadyStarted", "TypeScript semantic adapter is already started")
+        if (activeSnapshot != null) return refusedStart(
+            "typescript.semanticRestartRequired", "Crashed TypeScript semantic sessions must use bounded restart",
+        )
         if (projectModel.status != TypeScriptProjectModelStatus.AVAILABLE) {
             return TypeScriptSemanticStart.Refused(projectModel.diagnostics.ifEmpty {
                 listOf(diagnostic("typescript.modelUnavailable", "TypeScript project model is unavailable"))
@@ -142,13 +149,54 @@ class TypeScriptSemanticAdapter(
                     "TypeScript language server lacks required capabilities: ${missing.joinToString(",")}",
                 )
             } else {
-                activeSnapshot = snapshot
-                TypeScriptSemanticStart.Started(client.provenance)
+                val actualProvenance = client.provenance?.let(::provenanceSignature)
+                if (acceptedServerProvenance != null && actualProvenance != acceptedServerProvenance) {
+                    client.close()
+                    refusedStart(
+                        "typescript.serverProvenanceChanged",
+                        "TypeScript language-server provenance changed across restart",
+                    )
+                } else {
+                    if (acceptedServerProvenance == null) acceptedServerProvenance = actualProvenance
+                    activeSnapshot = snapshot
+                    TypeScriptSemanticStart.Started(client.provenance)
+                }
             }
         } catch (failure: Exception) {
             client.close()
             refusedStart("typescript.serverStartFailed", failure.message ?: "TypeScript language server failed to start")
         }
+    }
+
+    /** Explicit, bounded crash recovery; callers never get an implicit process restart. */
+    fun restart(snapshot: ProjectSnapshot): TypeScriptSemanticStart {
+        val previous = activeSnapshot ?: return refusedStart(
+            "typescript.semanticNotStarted", "TypeScript semantic adapter has no session to restart",
+        )
+        if (client.isRunning) return refusedStart(
+            "typescript.semanticAlreadyStarted", "TypeScript semantic adapter is still running",
+        )
+        if (previous.hash != snapshot.hash) return refusedStart(
+            "typescript.restartSnapshotMismatch", "TypeScript semantic restart requires the original snapshot",
+        )
+        val now = currentTimeMillis()
+        if (lastRestartMillis?.let { now < it } == true) return refusedStart(
+            "typescript.restartClockInvalid", "TypeScript semantic restart clock moved backwards",
+        )
+        lastRestartMillis = now
+        while (restartAttempts.firstOrNull()?.let { now - it >= RESTART_WINDOW_MILLIS } == true) {
+            restartAttempts.removeFirst()
+        }
+        if (restartAttempts.size >= MAX_RESTARTS_PER_WINDOW) return refusedStart(
+            "typescript.restartLimitExceeded",
+            "TypeScript semantic restart limit of $MAX_RESTARTS_PER_WINDOW per ${RESTART_WINDOW_MILLIS / 1_000}s was exceeded",
+        )
+        restartAttempts.addLast(now)
+        client.close()
+        activeSnapshot = null
+        val result = start(snapshot)
+        if (result is TypeScriptSemanticStart.Refused) activeSnapshot = previous
+        return result
     }
 
     override fun languageId(): String = languageId
@@ -262,6 +310,9 @@ class TypeScriptSemanticAdapter(
 
     override fun close() {
         activeSnapshot = null
+        acceptedServerProvenance = null
+        restartAttempts.clear()
+        lastRestartMillis = null
         client.close()
     }
 
@@ -316,6 +367,14 @@ class TypeScriptSemanticAdapter(
         category = DiagnosticCategory.SAFETY,
     )
 
+    private fun provenanceSignature(provenance: ExternalSemanticSessionProvenance) = ServerProvenanceSignature(
+        provenance.serverName,
+        provenance.serverVersion,
+        provenance.capabilitiesSha256,
+        provenance.process.executableSha256,
+        provenance.process.argumentsSha256,
+    )
+
     private fun projectEvidenceUnchanged(workspaceRoot: Path): Boolean {
         val root = workspaceRoot.toAbsolutePath().normalize()
         return projectModel.evidence.all { item ->
@@ -357,7 +416,18 @@ class TypeScriptSemanticAdapter(
     private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
         .digest(bytes).joinToString("") { "%02x".format(it) }
 
+    private data class ServerProvenanceSignature(
+        val serverName: String?,
+        val serverVersion: String?,
+        val capabilitiesSha256: String,
+        val executableSha256: String,
+        val argumentsSha256: String,
+    )
+
     companion object {
+        const val MAX_RESTARTS_PER_WINDOW = 3
+        const val RESTART_WINDOW_MILLIS = 60_000L
+
         private val REQUIRED_CAPABILITIES = listOf(
             "definitionProvider", "referencesProvider", "renameProvider",
             "documentSymbolProvider", "textDocumentSync",

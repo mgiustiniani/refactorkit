@@ -15,6 +15,7 @@ import org.refactorkit.core.Reference
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SemanticProcessProvenance
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -30,6 +31,7 @@ import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.time.Instant
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -54,6 +56,49 @@ class TypeScriptSemanticAdapterTest {
         assertEquals(1, adapter.findReferences(SymbolId("src/service.ts::Service")).size)
         assertTrue(adapter.diagnostics(fixture.snapshot).isEmpty())
         adapter.close()
+        assertFalse(client.isRunning)
+    }
+
+    @Test
+    fun crashRestartIsExplicitBoundedAndWindowed() {
+        val fixture = fixture()
+        val client = FakeClient()
+        var now = 10_000L
+        val adapter = TypeScriptSemanticAdapter(
+            "typescript", fixture.toolchain, fixture.model, client,
+            currentTimeMillis = { now },
+        )
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+        client.crash()
+        assertEquals(
+            "typescript.semanticRestartRequired",
+            assertIs<TypeScriptSemanticStart.Refused>(adapter.start(fixture.snapshot)).diagnostics.single().code,
+        )
+
+        repeat(TypeScriptSemanticAdapter.MAX_RESTARTS_PER_WINDOW) {
+            assertIs<TypeScriptSemanticStart.Started>(adapter.restart(fixture.snapshot))
+            client.crash()
+        }
+        val limited = assertIs<TypeScriptSemanticStart.Refused>(adapter.restart(fixture.snapshot))
+        assertEquals("typescript.restartLimitExceeded", limited.diagnostics.single().code)
+
+        now += TypeScriptSemanticAdapter.RESTART_WINDOW_MILLIS
+        assertIs<TypeScriptSemanticStart.Started>(adapter.restart(fixture.snapshot))
+        assertEquals(5, client.startCount)
+    }
+
+    @Test
+    fun restartRefusesChangedServerProvenance() {
+        val fixture = fixture()
+        val initial = sessionProvenance(fixture.toolchain.nodeExecutable, "1.0.0")
+        val client = FakeClient(sessionProvenance = initial)
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+        client.crash()
+        client.sessionProvenance = sessionProvenance(fixture.toolchain.nodeExecutable, "2.0.0")
+
+        val refused = assertIs<TypeScriptSemanticStart.Refused>(adapter.restart(fixture.snapshot))
+        assertEquals("typescript.serverProvenanceChanged", refused.diagnostics.single().code)
         assertFalse(client.isRunning)
     }
 
@@ -246,6 +291,18 @@ class TypeScriptSemanticAdapterTest {
         )
     }
 
+    private fun sessionProvenance(executable: Path, version: String) = ExternalSemanticSessionProvenance(
+        SemanticProcessProvenance(
+            "typescript-lsp", executable, "a".repeat(64), "b".repeat(64), executable.parent,
+            1L, Instant.EPOCH,
+        ),
+        "typescript-language-server", version, "c".repeat(64),
+        mapOf(
+            "definitionProvider" to true, "referencesProvider" to true, "renameProvider" to true,
+            "documentSymbolProvider" to true, "textDocumentSync" to true,
+        ),
+    )
+
     private fun evidence(role: String, path: Path): ToolchainFileEvidence {
         val bytes = Files.readAllBytes(path)
         return ToolchainFileEvidence(
@@ -274,16 +331,22 @@ class TypeScriptSemanticAdapterTest {
         ),
         private val renameRefused: Boolean = false,
         private val exactDiagnostics: ExternalSemanticDiagnostics = ExternalSemanticDiagnostics.Available(emptyList()),
+        sessionProvenance: ExternalSemanticSessionProvenance? = null,
     ) : TypeScriptSemanticClient {
         override var isRunning: Boolean = false
-        override val provenance: ExternalSemanticSessionProvenance? = null
+        var sessionProvenance: ExternalSemanticSessionProvenance? = sessionProvenance
+        override val provenance: ExternalSemanticSessionProvenance? get() = sessionProvenance
         var startedSnapshot: ProjectSnapshot? = null
         val synchronizedSnapshots = mutableListOf<ProjectSnapshot>()
+        var startCount: Int = 0
 
         override fun start(snapshot: ProjectSnapshot) {
             startedSnapshot = snapshot
+            startCount++
             isRunning = true
         }
+
+        fun crash() { isRunning = false }
 
         override fun supports(capability: String): Boolean = capability in capabilities
         override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex = SymbolIndex(listOf(symbol()))
