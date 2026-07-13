@@ -69,6 +69,12 @@ jobs:
           import subprocess, sys
           subprocess.run([sys.executable, "scripts/smoke-packaged-typescript.py"], check=True)
 
+      - name: Native packaged kill-during-write recovery
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-kill-recovery.py"], check=True)
+
       - name: Prepare platform asset and checksum
         shell: python
         run: |

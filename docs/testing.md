@@ -277,7 +277,10 @@ sessions, path-alias project definition/reference reads, source immutability,
 exact `typescript-compiler-exact-v1` before/after diagnostics, forced termination
 of the owned real language-server process, provenance-preserving bounded daemon
 restart, three-file semantic rename through an alias and re-export, explicit apply,
-WAL creation and exact rollback. CI installs packages with
+WAL creation and exact rollback. `scripts/smoke-packaged-kill-recovery.py` additionally
+builds a 111-file semantic rename, kills the packaged daemon only after the durable
+journal reaches `APPLYING`, and verifies that a fresh packaged daemon restores the
+exact pre-image and records `ROLLED_BACK`. CI installs packages with
 `npm ci --ignore-scripts`; runtime code never
 invokes npm. Upstream unversioned LSP diagnostics are not trusted or relabelled.
 

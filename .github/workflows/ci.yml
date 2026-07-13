@@ -89,6 +89,9 @@ jobs:
       - name: Run packaged real TypeScript qualification
         run: python3 scripts/smoke-packaged-typescript.py
 
+      - name: Run packaged kill-during-write recovery
+        run: python3 scripts/smoke-packaged-kill-recovery.py
+
       - name: Run reference workspace budgets
         run: scripts/benchmark-reference.sh modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit
 
@@ -173,6 +176,12 @@ jobs:
         run: |
           import subprocess, sys
           subprocess.run([sys.executable, "scripts/smoke-packaged-typescript.py"], check=True)
+
+      - name: Native packaged kill-during-write recovery
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-kill-recovery.py"], check=True)
 
       - name: Summarize native test failures
         if: failure()

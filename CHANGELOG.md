@@ -53,8 +53,10 @@ review safety boundaries before applying refactorings.
   staged diagnostics reject new errors and are re-run under the writer lock.
   Packaged native qualification now covers path aliases, cross-file re-export
   rename, forced real language-server termination, provenance-preserving bounded
-  daemon restart, explicit apply, WAL and exact rollback; upstream unversioned LSP
-  diagnostics remain untrusted.
+  daemon restart, explicit apply, WAL and exact rollback. A separate packaged
+  111-file acceptance kills the daemon at durable `APPLYING` and verifies exact
+  startup compensation to `ROLLED_BACK` on Linux, Windows and macOS; upstream
+  unversioned LSP diagnostics remain untrusted.
   Added one-shot CLI TypeScript/JavaScript search, definition, references,
   diagnostics and rename with explicit toolchain flags, JSON output, preview by
   default and managed apply only under `--apply`. Completed LSP language routing

@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Kill the packaged daemon in JournalState.APPLYING and verify startup recovery."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import queue
+import shutil
+import subprocess
+import tempfile
+import threading
+import time
+
+
+class Daemon:
+    def __init__(self, launcher: Path):
+        command = (["cmd.exe", "/d", "/s", "/c", str(launcher)] if os.name == "nt" else [str(launcher)])
+        self.process = subprocess.Popen(
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8",
+        )
+        self.responses: queue.Queue[str | None] = queue.Queue()
+        threading.Thread(target=self._read, daemon=True).start()
+        self.next_id = 0
+
+    def _read(self) -> None:
+        try:
+            for line in self.process.stdout:
+                self.responses.put(line)
+        finally:
+            self.responses.put(None)
+
+    def send(self, method: str, params: dict | None = None) -> int:
+        self.next_id += 1
+        request = {"jsonrpc": "2.0", "id": self.next_id, "method": method}
+        if params is not None:
+            request["params"] = params
+        self.process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+        self.process.stdin.flush()
+        return self.next_id
+
+    def receive(self, request_id: int, timeout: float = 120) -> dict:
+        try:
+            raw = self.responses.get(timeout=timeout)
+        except queue.Empty as error:
+            raise AssertionError(f"daemon response timeout for request {request_id}") from error
+        if raw is None:
+            raise AssertionError(f"daemon exited before response {request_id}")
+        response = json.loads(raw)
+        if response.get("id") != request_id or response.get("error") is not None:
+            raise AssertionError(f"daemon request failed: {response}")
+        return response["result"]
+
+    def call(self, method: str, params: dict | None = None, timeout: float = 120) -> dict:
+        return self.receive(self.send(method, params), timeout)
+
+    def kill_tree(self) -> None:
+        if self.process.poll() is not None:
+            return
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(self.process.pid), "/T", "/F"], check=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        else:
+            self.process.kill()
+        self.process.wait(timeout=20)
+
+    def close(self) -> None:
+        if self.process.poll() is not None:
+            return
+        self.process.stdin.close()
+        try:
+            self.process.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            self.kill_tree()
+
+
+def source_hash(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted((root / "src").rglob("*.ts")):
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def create_workspace(root: Path, consumers: int = 110) -> None:
+    source = root / "src"
+    source.mkdir(parents=True)
+    (root / "tsconfig.json").write_text(json.dumps({
+        "compilerOptions": {
+            "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler",
+            "strict": True, "rootDir": "src",
+        },
+        "include": ["src/**/*.ts"],
+    }))
+    (source / "service.ts").write_text("export class Service { value(): number { return 1; } }\n")
+    padding = "// bounded acceptance padding " + ("x" * 2048) + "\n"
+    for index in range(consumers):
+        (source / f"consumer-{index:03d}.ts").write_text(
+            'import { Service } from "./service";\n' +
+            f"export const value{index:03d} = new Service().value();\n" + padding
+        )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--runtime", default="modules/refactorkit-cli/build/package/refactorkit")
+    parser.add_argument("--node", default=shutil.which("node"))
+    parser.add_argument("--toolchain", default="qualification/typescript-toolchain")
+    options = parser.parse_args()
+    if not options.node:
+        raise AssertionError("node executable is required")
+
+    repository = Path.cwd()
+    runtime = (repository / options.runtime).resolve()
+    daemon_launcher = runtime / "bin" / ("refactorkit-daemon.bat" if os.name == "nt" else "refactorkit-daemon")
+    toolchain = (repository / options.toolchain).resolve()
+    server = toolchain / "node_modules" / "typescript-language-server"
+    compiler = toolchain / "node_modules" / "typescript"
+    node = Path(options.node).resolve()
+
+    with tempfile.TemporaryDirectory(prefix="refactorkit-kill-recovery-") as temporary:
+        workspace = Path(temporary) / "workspace"
+        create_workspace(workspace)
+        expected = source_hash(workspace)
+        daemon = Daemon(daemon_launcher)
+        try:
+            daemon.call("project.open", {"root": str(workspace)})
+            daemon.call("typescript.semantic.start", {
+                "languageId": "typescript", "nodeExecutable": str(node),
+                "languageServerPackageRoot": str(server), "typeScriptPackageRoot": str(compiler),
+            })
+            preview = daemon.call("refactor.preview", {
+                "operation": "renameSymbol", "languageId": "typescript",
+                "arguments": {"newName": "AccountService", "file": "src/service.ts", "line": 0, "character": 13},
+            })
+            if str(preview.get("status", "")).lower() != "preview" or len(preview.get("affectedFiles", [])) != 111:
+                raise AssertionError(f"unexpected wide rename preview: {preview}")
+            daemon.send("refactor.apply", {"planId": preview["planId"]})
+
+            deadline = time.monotonic() + 30
+            applying_journal = None
+            while time.monotonic() < deadline and daemon.process.poll() is None:
+                for journal in (workspace / ".refactorkit" / "transactions").glob("transaction-*.json"):
+                    try:
+                        if json.loads(journal.read_text()).get("state") == "APPLYING":
+                            applying_journal = journal
+                            break
+                    except (OSError, json.JSONDecodeError):
+                        pass
+                if applying_journal is not None:
+                    break
+                time.sleep(0.001)
+            if applying_journal is None:
+                raise AssertionError("packaged apply never exposed a durable APPLYING journal boundary")
+            daemon.kill_tree()
+        finally:
+            daemon.kill_tree()
+
+        recovery = Daemon(daemon_launcher)
+        try:
+            recovery.call("project.open", {"root": str(workspace)}, timeout=60)
+        finally:
+            recovery.close()
+        if source_hash(workspace) != expected:
+            raise AssertionError("startup recovery did not restore the pre-apply TypeScript source image")
+        record = json.loads(applying_journal.read_text())
+        if record.get("state") != "ROLLED_BACK" or "interrupted applying" not in (record.get("failure") or ""):
+            raise AssertionError(f"unexpected recovered journal state: {record.get('state')} {record.get('failure')}")
+
+    print("Packaged kill-during-write recovery passed: durable APPLYING intent restored exactly on restart.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

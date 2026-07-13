@@ -101,6 +101,8 @@ the writer lock.
 Native qualification now proves stable reads, forced language-server termination,
 provenance-preserving bounded restart, path-alias and re-export rename, exact
 before/after compiler diagnostics, explicit apply, WAL creation and exact rollback.
-`typescript-language-server` remains a proposal provider; stable mutation authority
-still requires packaged process-kill-during-write recovery acceptance, OS RSS policy
-and expansion of the supported server-version matrix.
+`typescript-language-server` remains a proposal provider. Packaged native acceptance
+also kills the daemon at the durable `APPLYING` boundary of a 111-file semantic
+rename and verifies exact startup compensation to `ROLLED_BACK`. Stable mutation
+authority still requires an OS RSS policy and expansion of the supported
+server-version matrix.
