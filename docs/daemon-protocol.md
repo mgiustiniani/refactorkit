@@ -57,8 +57,12 @@ Module paths are workspace-relative (`.` for the root); outside-workspace module
 roots are redacted. A checked-in schema-key snapshot prevents accidental shape
 drift.
 
-Provider identities are `maven-effective-v1`, `gradle-declarative-v1`, and
-`java-conventional-v1`. They currently project API `0.2` compatibility `Module`
+Provider identities include `maven-effective-v1`, `gradle-declarative-v1`,
+`java-conventional-v1`, and `typescript-config-declarative-v1`. Project open and
+all post-apply/rollback rescans preserve `.ts`, `.tsx`, `.js`, and `.jsx` beside
+Java sources; when script sources exist the declarative TypeScript project graph
+is attached without executing Node, package managers or project code. Providers
+currently project API `0.2` compatibility `Module`
 data while semantic consumers migrate source-set by source-set. Summaries include
 `ecosystem`, `strategy`, and effective policy outcomes. Capability discovery
 advertises offline-missing/execution-refused support; summary responses use the

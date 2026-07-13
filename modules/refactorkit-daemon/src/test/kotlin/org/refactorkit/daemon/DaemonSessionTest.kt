@@ -14,6 +14,7 @@ import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.typescript.TypeScriptProjectModel
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.exists
@@ -114,6 +115,28 @@ class DaemonSessionTest {
         val result = session.dispatch("project.open", params("root" to root)) as JsonObject
         assertEquals(root, result["root"]!!.jsonPrimitive.content)
         assertTrue((result["fileCount"]?.jsonPrimitive?.content?.toInt() ?: 0) >= 1)
+    }
+
+    @Test
+    fun projectOpenBuildsMixedJavaTypeScriptSnapshotAndDeclarativeModel() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example; public class Foo {}\n",
+            "src/client.ts" to "export class Client {}\n",
+            "tsconfig.json" to """{"compilerOptions":{"rootDir":"src"},"include":["src/**/*.ts"]}""",
+        )
+        val session = DaemonSession()
+        val opened = session.dispatch("project.open", params("root" to root)).jsonObject
+        assertEquals(2, opened["fileCount"]!!.jsonPrimitive.content.toInt())
+
+        val summary = session.dispatch("project.summary", null).jsonObject
+        val models = summary["buildModels"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(
+            listOf("java-conventional-v1", TypeScriptProjectModel.PROVIDER_ID),
+            models.map { it["providerId"]!!.jsonPrimitive.content },
+        )
+        val typescript = models.single { it["providerId"]!!.jsonPrimitive.content == TypeScriptProjectModel.PROVIDER_ID }
+        assertEquals("available", typescript["status"]!!.jsonPrimitive.content)
+        assertTrue(typescript.toString().contains("src"))
     }
 
     @Test

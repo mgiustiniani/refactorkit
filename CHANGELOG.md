@@ -31,7 +31,9 @@ review safety boundaries before applying refactorings.
   unknown/constructor/package/module and no-op targets fail before edit requests.
   Layered TypeScript/JavaScript capabilities are now exposed through library,
   CLI, daemon, LSP and MCP with per-operation backend/runtime provenance, including
-  explicit TSX/JSX ownership.
+  explicit TSX/JSX ownership. Daemon project open and every managed rescan now
+  preserve mixed Java/TypeScript/JavaScript source images and attach the
+  declarative TypeScript Build Model when script sources are present.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

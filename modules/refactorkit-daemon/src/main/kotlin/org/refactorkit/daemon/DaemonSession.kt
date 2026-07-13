@@ -43,7 +43,9 @@ import org.refactorkit.java.JavaImportTargetResolution
 import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
+import org.refactorkit.typescript.TypeScriptBuildModelIntegration
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -148,7 +150,7 @@ class DaemonSession : AutoCloseable {
                 "Workspace recovery required: ${recoveryErrors.joinToString("; ") { it.message }}",
             )
         }
-        val snap = scanner.scan(path)
+        val snap = scanWorkspace(path)
         snapshot = snap
         workspaceRoot = path
         return buildJsonObject {
@@ -250,6 +252,19 @@ class DaemonSession : AutoCloseable {
             modules = legacyModules,
             modulesTruncated = sortedModules.size > legacyModules.size,
         ))
+    }
+
+    private fun scanWorkspace(root: Path): ProjectSnapshot {
+        val javaSnapshot = scanner.scan(root)
+        val scriptSnapshot = GenericProjectScanner(SCRIPT_EXTENSIONS).scan(root)
+        val mergedFiles = (javaSnapshot.files + scriptSnapshot.files)
+            .associateBy { it.path.normalize() }.values.sortedBy { it.path.toString() }
+        val merged = javaSnapshot.copy(
+            files = mergedFiles,
+            sourceExtensions = javaSnapshot.sourceExtensions + SCRIPT_EXTENSIONS.keys,
+            ignoredDirectories = javaSnapshot.ignoredDirectories + scriptSnapshot.ignoredDirectories,
+        )
+        return if (scriptSnapshot.files.isEmpty()) merged else TypeScriptBuildModelIntegration.attach(merged)
     }
 
     private fun csvAttribute(value: String?): List<String> = value.orEmpty().split(',')
@@ -421,7 +436,7 @@ class DaemonSession : AutoCloseable {
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val plan = pending.plan
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
-        val currentSnap = scanner.scan(root)
+        val currentSnap = scanWorkspace(root)
         return when (val result = PatchEngine(root).apply(
             plan,
             currentSnap,
@@ -429,7 +444,7 @@ class DaemonSession : AutoCloseable {
             DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
         )) {
             is ApplyResult.Applied -> {
-                val refreshed = scanner.scan(root)
+                val refreshed = scanWorkspace(root)
                 val diagnostics = boundedDiagnostics(adapter.diagnostics(refreshed))
                 snapshot = refreshed
                 pendingPlans.clear()
@@ -505,7 +520,7 @@ class DaemonSession : AutoCloseable {
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $txId")
         return when (val result = PatchEngine(root).rollback(record.transaction, mode)) {
             is ApplyResult.Applied -> {
-                val refreshed = scanner.scan(root)
+                val refreshed = scanWorkspace(root)
                 val diagnostics = boundedDiagnostics(adapter.diagnostics(refreshed))
                 snapshot = refreshed
                 pendingPlans.clear()
@@ -851,6 +866,11 @@ class DaemonSession : AutoCloseable {
 
     companion object {
         private val PROTOCOL_JSON = Json { encodeDefaults = true; explicitNulls = true }
+
+        private val SCRIPT_EXTENSIONS = mapOf(
+            "ts" to "typescript", "tsx" to "typescript",
+            "js" to "javascript", "jsx" to "javascript",
+        )
 
         private val DAEMON_METHODS = listOf(
             DaemonMethodCapability("server.version", "beta-contract", false, false),
