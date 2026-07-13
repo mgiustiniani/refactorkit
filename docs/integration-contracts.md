@@ -108,7 +108,10 @@ future enum values under the pre-1.0 compatibility policy. Capability schema v1
 is exposed by CLI `capabilities`, daemon `server.capabilities.languageKernel`, LSP
 initialize `capabilities.experimental.refactorkitLanguageKernel`, and MCP
 initialize `refactorkitLanguageKernel`. Adapter and operation arrays are sorted;
-nullable limit fields remain explicit.
+nullable limit fields remain explicit. Each capability also carries its effective
+`backend`, `runtime`, and extension subset, so a layered adapter cannot falsely
+apply an in-process structural claim to an external semantic operation (or grant
+`.tsx`/`.jsx` native-AST evidence from the `.ts`/`.js` grammar layer).
 
 External LSP processes are internal proposal providers. They run under the
 bounded semantic process lifecycle with explicit environment and provenance,

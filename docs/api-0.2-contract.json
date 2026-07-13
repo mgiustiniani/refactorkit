@@ -48,7 +48,8 @@
   "languageKernel": {
     "schemaVersion": 1,
     "surfaces": ["cli", "daemon", "lsp-experimental", "mcp-extension"],
-    "packagedAdapters": ["java", "javascript", "typescript"]
+    "packagedAdapters": ["java", "javascript", "typescript"],
+    "capabilityLayerFields": ["backend", "runtime", "extensions"]
   },
   "limits": {
     "maxRequestBytes": 1048576,

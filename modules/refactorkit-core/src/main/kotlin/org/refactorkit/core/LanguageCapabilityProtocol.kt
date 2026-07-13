@@ -37,19 +37,7 @@ object LanguageCapabilityProtocol {
         put("languageId", descriptor.languageId)
         put("extensions", JsonArray(descriptor.extensions.sorted().map(::JsonPrimitive)))
         put("backend", descriptor.backend)
-        put("runtime", buildJsonObject {
-            put("executionMode", descriptor.runtime.executionMode.protocolName())
-            put("supportsTimeout", descriptor.runtime.supportsTimeout)
-            put("supportsCancellation", descriptor.runtime.supportsCancellation)
-            put("usesWorkspaceOverlay", descriptor.runtime.usesWorkspaceOverlay)
-            put("recordsProcessProvenance", descriptor.runtime.recordsProcessProvenance)
-            put("limits", buildJsonObject {
-                nullableLong("requestTimeoutMillis", descriptor.runtime.limits.requestTimeoutMillis)
-                nullableLong("maxInputBytes", descriptor.runtime.limits.maxInputBytes)
-                nullableLong("maxOutputBytes", descriptor.runtime.limits.maxOutputBytes)
-                nullableLong("maxProcesses", descriptor.runtime.limits.maxProcesses?.toLong())
-            })
-        })
+        put("runtime", renderRuntime(descriptor.runtime))
         put("capabilities", buildJsonArray {
             descriptor.capabilities.sortedBy(LanguageCapability::operation).forEach { capability ->
                 add(buildJsonObject {
@@ -57,8 +45,25 @@ object LanguageCapabilityProtocol {
                     put("stability", capability.stability.protocolName())
                     put("evidence", capability.evidence.protocolName())
                     put("mutationAuthority", capability.mutationAuthority.protocolName())
+                    put("backend", capability.backend ?: descriptor.backend)
+                    put("runtime", renderRuntime(capability.runtime ?: descriptor.runtime))
+                    put("extensions", JsonArray((capability.extensions ?: descriptor.extensions).sorted().map(::JsonPrimitive)))
                 })
             }
+        })
+    }
+
+    private fun renderRuntime(runtime: LanguageAdapterRuntime) = buildJsonObject {
+        put("executionMode", runtime.executionMode.protocolName())
+        put("supportsTimeout", runtime.supportsTimeout)
+        put("supportsCancellation", runtime.supportsCancellation)
+        put("usesWorkspaceOverlay", runtime.usesWorkspaceOverlay)
+        put("recordsProcessProvenance", runtime.recordsProcessProvenance)
+        put("limits", buildJsonObject {
+            nullableLong("requestTimeoutMillis", runtime.limits.requestTimeoutMillis)
+            nullableLong("maxInputBytes", runtime.limits.maxInputBytes)
+            nullableLong("maxOutputBytes", runtime.limits.maxOutputBytes)
+            nullableLong("maxProcesses", runtime.limits.maxProcesses?.toLong())
         })
     }
 

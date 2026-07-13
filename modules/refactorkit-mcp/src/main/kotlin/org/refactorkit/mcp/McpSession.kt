@@ -41,7 +41,7 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
-import org.refactorkit.treesitter.TreeSitterAdapterDescriptors
+import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.file.Files
@@ -99,7 +99,7 @@ class McpSession {
             put("version", RefactorKitVersion.VERSION)
         })
         put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
-            listOf(JavaAdapterRegistration.create().descriptor) + TreeSitterAdapterDescriptors.descriptors(),
+            listOf(JavaAdapterRegistration.create().descriptor) + TypeScriptAdapterDescriptors.descriptors(),
         ))
     }
 

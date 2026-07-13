@@ -88,9 +88,21 @@ class DaemonSessionTest {
         assertEquals("true", safety["previewBeforeApply"]!!.jsonPrimitive.content)
         assertEquals("true", safety["transactionRollback"]!!.jsonPrimitive.content)
         assertEquals("1", languageKernel["schemaVersion"]!!.jsonPrimitive.content)
-        assertEquals(listOf("java", "javascript", "typescript"), languageKernel["adapters"]!!.jsonArray.map {
-            it.jsonObject["languageId"]!!.jsonPrimitive.content
+        val languageAdapters = languageKernel["adapters"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("java", "javascript", "typescript"), languageAdapters.map {
+            it["languageId"]!!.jsonPrimitive.content
         })
+        val typescript = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "typescript" }
+        val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(
+            listOf("definition", "diagnostics", "identifierSearch", "localRename", "outline", "references", "renameSymbol"),
+            capabilities.map { it["operation"]!!.jsonPrimitive.content },
+        )
+        val outline = capabilities.single { it["operation"]!!.jsonPrimitive.content == "outline" }
+        assertEquals("in-process", outline["runtime"]!!.jsonObject["executionMode"]!!.jsonPrimitive.content)
+        val rename = capabilities.single { it["operation"]!!.jsonPrimitive.content == "renameSymbol" }
+        assertEquals("external-process", rename["runtime"]!!.jsonObject["executionMode"]!!.jsonPrimitive.content)
+        assertEquals("proposal-only", rename["mutationAuthority"]!!.jsonPrimitive.content)
     }
 
     @Test

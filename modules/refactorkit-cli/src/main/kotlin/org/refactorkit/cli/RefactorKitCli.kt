@@ -34,7 +34,7 @@ import org.refactorkit.treesitter.GenericLocalRenamePlanner
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.treesitter.GenericStructuralSearch
 import org.refactorkit.treesitter.TreeSitterAdapter
-import org.refactorkit.treesitter.TreeSitterAdapterDescriptors
+import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
@@ -544,7 +544,7 @@ class RefactorKitCli(
 
     private fun cmdCapabilities(): Int {
         println(LanguageCapabilityProtocol.render(
-            listOf(JavaAdapterRegistration.create(javaAdapter).descriptor) + TreeSitterAdapterDescriptors.descriptors(),
+            listOf(JavaAdapterRegistration.create(javaAdapter).descriptor) + TypeScriptAdapterDescriptors.descriptors(),
         ))
         return 0
     }

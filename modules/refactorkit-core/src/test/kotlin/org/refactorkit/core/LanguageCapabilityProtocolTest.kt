@@ -44,6 +44,10 @@ class LanguageCapabilityProtocolTest {
         assertEquals(listOf("definition", "references"), typescript["capabilities"]!!.jsonArray.map {
             it.jsonObject["operation"]!!.jsonPrimitive.content
         })
+        val definition = typescript["capabilities"]!!.jsonArray.first().jsonObject
+        assertEquals("external-lsp", definition["backend"]!!.jsonPrimitive.content)
+        assertEquals("external-process", definition["runtime"]!!.jsonObject["executionMode"]!!.jsonPrimitive.content)
+        assertEquals(listOf("ts", "tsx"), definition["extensions"]!!.jsonArray.map { it.jsonPrimitive.content })
         val runtime = typescript["runtime"]!!.jsonObject
         assertEquals("external-process", runtime["executionMode"]!!.jsonPrimitive.content)
         assertTrue(runtime["recordsProcessProvenance"]!!.jsonPrimitive.content.toBoolean())

@@ -41,8 +41,9 @@ native parser deadline, and 1,024-byte identifiers.
 
 The bridge is loaded reflectively only on the bundled Java 21 runtime, preserving
 Java-8-compatible RefactorKit library bytecode. `.ts` and `.js` receive native
-structural evidence in this first slice. TSX/JSX and other languages continue to
-use the documented heuristic fallback and do not inherit native evidence.
+structural evidence. TSX/JSX are owned by the semantic layer but do not falsely
+inherit native structural evidence until dedicated grammar acceptance exists.
+Other languages continue to use the documented heuristic fallback.
 
 | Language   | Extension(s)  | Current structural backend |
 |------------|---------------|----------------------------|
@@ -50,7 +51,7 @@ use the documented heuristic fallback and do not inherit native evidence.
 | JavaScript | `.js`         | packaged Tree-sitter grammar |
 | Java       | `.java`       | Java adapter/JDT or generic fallback |
 | Kotlin     | `.kt`, `.kts` | generic fallback |
-| TSX/JSX    | `.tsx`, `.jsx`| generic fallback |
+| TSX/JSX    | `.tsx`, `.jsx`| semantic layer only; structural acceptance pending |
 | Python     | `.py`         | generic fallback |
 | Rust       | `.rs`         | generic fallback |
 | Go         | `.go`         | generic fallback |
@@ -63,9 +64,9 @@ mutation and never receives stable semantic authority. Native packaged smoke
 requires TypeScript outline extraction and proves that a class-like comment is
 not reported.
 
-## Level 2: LSP-backed (future)
+## Level 2: LSP-backed (experimental)
 
-The `ExternalLspAdapter` is the prototype integration point.
+The `ExternalLspAdapter` is the bounded integration point.
 `ExternalSemanticProcessManager` now provides the core bounded lifecycle:
 executable/argument provenance hashes, cleared explicit environment, process
 capacity, bounded stdout/stderr, natural-exit cleanup, cancellation, and
@@ -78,9 +79,9 @@ bounded source-only workspace overlays. Both LSP WorkspaceEdit forms are strictl
 parsed and normalized through `ExternalWorkspaceEditNormalizer`, including path,
 range, overlap, version, generated-source, symlink, content-limit, and structural
 conflict refusal. The overlay and lifecycle primitives are explicitly not an OS
-sandbox. Backend-specific document synchronization, restart policy, real
-capability matrices, packaged acceptance, and integration-surface schemas remain
-open. External workspace edits are untrusted proposals normalized into
+sandbox. The TypeScript adapter now supplies full-document synchronization, exact-version
+diagnostics, bounded restart and layered capability schemas across all integration
+surfaces. Packaged real-toolchain acceptance remains open. External workspace edits are untrusted proposals normalized into
 `PatchPlan`; they never bypass `PatchEngine`.
 
 LSP establishes navigation, native formatting, and common-edit foundations, but

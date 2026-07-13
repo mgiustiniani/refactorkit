@@ -565,7 +565,7 @@ class TypeScriptSemanticAdapter(
 
         fun descriptor(languageId: String) = LanguageAdapterDescriptor(
             languageId = languageId,
-            extensions = if (languageId == "typescript") setOf("ts") else setOf("js"),
+            extensions = if (languageId == "typescript") setOf("ts", "tsx") else setOf("js", "jsx"),
             backend = TypeScriptToolchainProvenance.PROVIDER_ID,
             capabilities = listOf(
                 LanguageCapability("definition", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
@@ -576,7 +576,10 @@ class TypeScriptSemanticAdapter(
                     SemanticEvidenceKind.LANGUAGE_SERVER, MutationAuthority.PROPOSAL_ONLY,
                 ),
             ),
-            runtime = ExternalLspAdapter.descriptor(languageId, if (languageId == "typescript") setOf("ts") else setOf("js")).runtime,
+            runtime = ExternalLspAdapter.descriptor(
+                languageId,
+                if (languageId == "typescript") setOf("ts", "tsx") else setOf("js", "jsx"),
+            ).runtime,
         )
     }
 }

@@ -29,6 +29,9 @@ review safety boundaries before applying refactorings.
   missing or ambiguous TypeScript Build Model ownership. Semantic rename now
   requires an exact supported symbol and a safe non-reserved Unicode identifier;
   unknown/constructor/package/module and no-op targets fail before edit requests.
+  Layered TypeScript/JavaScript capabilities are now exposed through library,
+  CLI, daemon, LSP and MCP with per-operation backend/runtime provenance, including
+  explicit TSX/JSX ownership.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

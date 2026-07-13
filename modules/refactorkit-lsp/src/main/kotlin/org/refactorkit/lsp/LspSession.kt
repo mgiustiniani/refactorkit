@@ -38,7 +38,7 @@ import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
-import org.refactorkit.treesitter.TreeSitterAdapterDescriptors
+import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -150,7 +150,7 @@ class LspSession {
                 })
                 put("experimental", buildJsonObject {
                     put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
-                        listOf(JavaAdapterRegistration.create().descriptor) + TreeSitterAdapterDescriptors.descriptors(),
+                        listOf(JavaAdapterRegistration.create().descriptor) + TypeScriptAdapterDescriptors.descriptors(),
                     ))
                 })
                 put("executeCommandProvider", buildJsonObject {

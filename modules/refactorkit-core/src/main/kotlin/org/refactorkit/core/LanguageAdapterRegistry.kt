@@ -71,9 +71,16 @@ data class LanguageCapability(
     val stability: CapabilityStability,
     val evidence: SemanticEvidenceKind,
     val mutationAuthority: MutationAuthority = MutationAuthority.NONE,
+    val backend: String? = null,
+    val runtime: LanguageAdapterRuntime? = null,
+    val extensions: Set<String>? = null,
 ) {
     init {
         require(operation.isNotBlank()) { "language capability operation must not be blank" }
+        require(backend == null || backend.isNotBlank()) { "capability backend must not be blank" }
+        require(extensions == null || extensions.isNotEmpty() && extensions.all { EXTENSION.matches(it) }) {
+            "capability extensions must be lowercase and omit the dot"
+        }
         require(mutationAuthority != MutationAuthority.MANAGED_STABLE || stability == CapabilityStability.STABLE) {
             "managed stable authority requires STABLE capability"
         }
@@ -81,6 +88,10 @@ data class LanguageCapability(
             SemanticEvidenceKind.LEXICAL,
             SemanticEvidenceKind.NONE,
         )) { "lexical/no evidence cannot receive managed stable authority" }
+    }
+
+    companion object {
+        private val EXTENSION = Regex("[a-z0-9][a-z0-9+_-]{0,15}")
     }
 }
 

@@ -1,7 +1,8 @@
 # Experimental TypeScript/JavaScript semantic adapter
 
 Status: `v0.6.0` T3/T4 foundation; proposal-only and not yet a stable managed
-mutation capability.
+mutation capability. Layered descriptors are published by the library, CLI,
+daemon, LSP and MCP capability schemas.
 
 ## Startup gate
 
@@ -47,6 +48,16 @@ publication is accepted only when every source file publishes the exact expected
 version. Missing, stale, unversioned or over-limit results fail closed. Preview
 stores both original and staged diagnostic images; managed apply must pass
 `TypeScriptSemanticAdapter.diagnosticsGate()` to `PatchEngine`.
+
+## Layered capability schema
+
+`TypeScriptAdapterDescriptors` composes the in-process Tree-sitter layer with the
+external semantic layer without conflating their trust boundaries. Every
+capability reports its own backend and runtime: outline, identifier search and
+local rename remain native/structural, while definition, references, diagnostics
+and semantic rename report external-process execution, source overlay and process
+provenance. Capability-level extension sets make TSX/JSX semantic ownership
+explicit without falsely granting them the `.ts`/`.js` structural grammar claim.
 
 ## Current operations
 
