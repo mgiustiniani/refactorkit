@@ -1,6 +1,6 @@
 # Move Java source root
 
-Status: beta contract for `0.5.0-SNAPSHOT`.
+Status: beta contract for `v0.5.0`.
 
 `moveSourceRoot` transfers every Java compilation unit from one recognized source
 root to another while preserving package identity, FQCNs, imports, and UTF-8

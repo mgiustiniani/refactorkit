@@ -24,11 +24,11 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
-- Current `v0.4.0` hardening plan: [`docs/releases/v0.4.0-plan.md`](docs/releases/v0.4.0-plan.md)
+- Current `v0.5.0` platform plan: [`docs/releases/v0.5.0-plan.md`](docs/releases/v0.5.0-plan.md)
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Latest release is `v0.4.0`; main develops `0.5.0-SNAPSHOT`. API `0.2` remains
+Latest release line is `v0.5.0`. API `0.2` remains
 the beta compatibility baseline. `v0.5.0` adds natively built self-contained
 Windows x86_64, macOS Intel, and macOS Apple Silicon runtimes; platforms are
 marked supported only after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
@@ -40,47 +40,37 @@ equivalent semantic safety and idiomatic depth.
 
 | Platform | Architecture | Published support | Planned asset |
 |---|---|---|---|
-| Linux | x86_64 | `v0.4.0` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
-| Windows | x86_64 | `v0.5.0` acceptance in progress | `refactorkit-runtime-<version>-windows-x86_64.zip` |
-| macOS | Intel x86_64 | `v0.5.0` acceptance in progress | `refactorkit-runtime-<version>-macos-x86_64.zip` |
-| macOS | Apple Silicon arm64 | `v0.5.0` acceptance in progress | `refactorkit-runtime-<version>-macos-aarch64.zip` |
+| Linux | x86_64 | `v0.5.0` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
+| Windows | x86_64 | `v0.5.0` supported | `refactorkit-runtime-<version>-windows-x86_64.zip` |
+| macOS | Intel x86_64 | `v0.5.0` supported | `refactorkit-runtime-<version>-macos-x86_64.zip` |
+| macOS | Apple Silicon arm64 | `v0.5.0` supported | `refactorkit-runtime-<version>-macos-aarch64.zip` |
 
 Each package embeds its native Java runtime. A runtime is built on its target OS,
 receives an independent checksum/SBOM/attestation, and must pass packaged
 version, semantic lookup, format/apply/rollback, recovery and filesystem safety
 checks. The IDE does not require a globally installed Java runtime.
 
-## Install the v0.4.0 Linux runtime package
+## Install a v0.5.0 self-contained runtime
 
-The current release publishes a self-contained Linux x86_64 runtime zip. It includes
-`refactorkit/bin/refactorkit` and an embedded Java runtime at
-`refactorkit/runtime/bin/java`, so users do not need a globally installed Java
-runtime to run the CLI.
+Select `linux-x86_64`, `windows-x86_64`, `macos-x86_64`, or `macos-aarch64`.
+Every package includes its native launcher and embedded Java runtime, so users do
+not need a globally installed Java runtime.
 
-Published release metadata:
+Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.5.0>
 
-```text
-Release page: https://github.com/mgiustiniani/refactorkit/releases/tag/v0.4.0
-Runtime asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip
-Checksum asset: https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
-Source tag: v0.4.0
-Release commit: 32a4e73cd1956528b5593398d02383a5da230e58
-Runtime SHA-256: 595519dd9c2ce6be7ee623e01717bb396b7008897028dafafdc3524eb12e5017
-```
-
-Download, verify, and unpack the runtime asset:
+Linux x86_64 example:
 
 ```bash
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.4.0/refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
-sha256sum -c refactorkit-runtime-0.4.0-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.4.0-linux-x86_64.zip -d /tmp/refactorkit-v0.4.0
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.5.0/refactorkit-runtime-0.5.0-linux-x86_64.zip
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.5.0/refactorkit-runtime-0.5.0-linux-x86_64.zip.sha256
+sha256sum -c refactorkit-runtime-0.5.0-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.5.0-linux-x86_64.zip -d /tmp/refactorkit-v0.5.0
 ```
 
 Run smoke checks with `JAVA_HOME` unset to prove the embedded runtime is used:
 
 ```bash
-RK=/tmp/refactorkit-v0.4.0/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.5.0/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -102,7 +92,7 @@ env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
 Optionally add the extracted launcher to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.4.0/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.5.0/refactorkit/bin:$PATH
 refactorkit --help
 ```
 
@@ -111,7 +101,7 @@ Run the sample scan commands from a RefactorKit source checkout that contains th
 
 ### Windows and macOS `v0.5.0` artifact usage
 
-After native acceptance and publication, Windows verification uses PowerShell:
+Windows verification uses PowerShell:
 
 ```powershell
 Get-FileHash .\refactorkit-runtime-<version>-windows-x86_64.zip -Algorithm SHA256

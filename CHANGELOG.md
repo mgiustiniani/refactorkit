@@ -7,7 +7,7 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-### Next development (`0.5.0-SNAPSHOT`)
+## 0.5.0 - 2026-07-13
 
 - Started the production multi-language adapter-kernel workstream while retaining
   API `0.2` until an explicit migration is accepted.

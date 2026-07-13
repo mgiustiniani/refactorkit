@@ -18,25 +18,23 @@ IDE-grade acceptance gates are satisfied.
 Published tags are immutable. Historical detailed plans remain under
 `docs/releases/`.
 
-## Latest published release
+## Latest release line
 
-### `v0.4.0` — hardened Java and transaction foundation
+### `v0.5.0` — cross-platform runtime and multi-language kernel
 
-Detailed plan: [`docs/releases/v0.4.0-plan.md`](releases/v0.4.0-plan.md).
+Detailed plan: [`docs/releases/v0.5.0-plan.md`](releases/v0.5.0-plan.md).
 
-`v0.4.0` is published from immutable tag/commit
-`v0.4.0`/`32a4e73cd1956528b5593398d02383a5da230e58`. Main reports
-`0.5.0-SNAPSHOT`. API `0.2` remains the active beta compatibility baseline until
-an explicit pre-1.0 migration is planned and tested.
+`v0.5.0` publishes native self-contained Linux, Windows, and macOS runtimes,
+transaction parity, Build Model SPI productionization, distribution trust,
+mixed-language routing, bounded external semantic processes and edits, real
+TypeScript/JavaScript Tree-sitter bindings, and capability schema v1. API `0.2`
+remains the active beta compatibility baseline until an explicit migration is
+planned and tested.
 
-The release publishes the already completed transactionality, Java 8–25 JDT,
-structured evidence, generated-source refusal, module/classpath boundary, and
-exact staged diagnostics work. Remaining gates cover contract/protocol
-hardening, bounded resources, supply chain, packaging, migration, documentation,
-and release acceptance.
-
-`v0.4.0` is not an API `1.0` freeze and does not claim final multi-language or
-IDE-grade catalogue completion.
+The immutable release commit and downloaded-asset evidence are recorded in
+[`docs/releases/v0.5.0-acceptance.md`](releases/v0.5.0-acceptance.md).
+`v0.5.0` is not an API `1.0` freeze and does not claim completion of the deep
+language-adapter sequence.
 
 ## Long-range 0.x sequence
 
