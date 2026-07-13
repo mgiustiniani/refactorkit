@@ -41,6 +41,19 @@ import java.nio.charset.CodingErrorAction
 import java.nio.file.Path
 import java.security.MessageDigest
 
+enum class TypeScriptSemanticCompletenessMode {
+    FULL_TYPESCRIPT,
+    CHECKED_JAVASCRIPT,
+    DYNAMIC_JAVASCRIPT,
+    MIXED_JAVASCRIPT,
+}
+
+data class TypeScriptSemanticCompleteness(
+    val mode: TypeScriptSemanticCompletenessMode,
+    val managedMutationEligible: Boolean,
+    val summary: String,
+)
+
 sealed interface TypeScriptSemanticStart {
     data class Started(val provenance: ExternalSemanticSessionProvenance?) : TypeScriptSemanticStart
     data class Refused(val diagnostics: List<Diagnostic>) : TypeScriptSemanticStart
@@ -212,6 +225,28 @@ class TypeScriptSemanticAdapter(
     override fun findReferences(symbolId: SymbolId): List<Reference> =
         if (activeSnapshot != null && client.isRunning) client.findReferences(symbolId) else emptyList()
 
+    fun semanticCompleteness(): TypeScriptSemanticCompleteness {
+        if (languageId == "typescript") return TypeScriptSemanticCompleteness(
+            TypeScriptSemanticCompletenessMode.FULL_TYPESCRIPT, true,
+            "TypeScript sources use compiler-backed semantic checking.",
+        )
+        val states = projectModel.projects.map { it.compilerOptions.checkJs == true }.toSet()
+        return when (states) {
+            setOf(true) -> TypeScriptSemanticCompleteness(
+                TypeScriptSemanticCompletenessMode.CHECKED_JAVASCRIPT, true,
+                "JavaScript sources are compiler-checked with checkJs=true.",
+            )
+            setOf(false) -> TypeScriptSemanticCompleteness(
+                TypeScriptSemanticCompletenessMode.DYNAMIC_JAVASCRIPT, false,
+                "JavaScript compiler checking is disabled; dynamic references may be incomplete.",
+            )
+            else -> TypeScriptSemanticCompleteness(
+                TypeScriptSemanticCompletenessMode.MIXED_JAVASCRIPT, false,
+                "JavaScript projects mix checked and dynamic compiler completeness.",
+            )
+        }
+    }
+
     override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> = when {
         !active(project) -> listOf(diagnostic("typescript.semanticNotStarted", "TypeScript semantic adapter is not started for this snapshot"))
         else -> when (val result = client.synchronizedDiagnostics(project)) {
@@ -223,6 +258,9 @@ class TypeScriptSemanticAdapter(
     /** Exact-version semantic gate required by PatchEngine for managed TypeScript apply. */
     fun diagnosticsGate(): DiagnosticsGate = DiagnosticsGate.enabled("typescript-lsp-exact") { snapshot ->
         check(semanticScopeCompatible(snapshot)) { "TypeScript diagnostics snapshot is outside the active semantic scope" }
+        check(semanticCompleteness().managedMutationEligible) {
+            "typescript.semanticCompletenessInsufficient: ${semanticCompleteness().summary}"
+        }
         check(toolchain.provenance.evidence.all(::verifyEvidence)) {
             "typescript.toolchainEvidenceChanged: TypeScript semantic toolchain changed before managed apply"
         }
@@ -284,11 +322,17 @@ class TypeScriptSemanticAdapter(
                         diagnostics.diagnostic.message, listOf(diagnostics.diagnostic),
                     )
                 }
+                val completeness = semanticCompleteness()
                 PatchPlan(
                     operation = request.operation,
                     status = PatchStatus.PREVIEW,
                     snapshotHash = request.snapshot.hash,
-                    confidence = if (languageId == "typescript") 0.9 else 0.7,
+                    confidence = when (completeness.mode) {
+                        TypeScriptSemanticCompletenessMode.FULL_TYPESCRIPT -> 0.9
+                        TypeScriptSemanticCompletenessMode.CHECKED_JAVASCRIPT -> 0.75
+                        TypeScriptSemanticCompletenessMode.MIXED_JAVASCRIPT -> 0.6
+                        TypeScriptSemanticCompletenessMode.DYNAMIC_JAVASCRIPT -> 0.5
+                    },
                     requiresUserApproval = true,
                     summary = "Rename ${languageId} symbol to $newName in ${edit.edits.size} file operation(s).",
                     affectedFiles = affectedPaths(edit),
@@ -297,6 +341,7 @@ class TypeScriptSemanticAdapter(
                     diagnosticsAfterPreview = after,
                     warnings = listOf(
                         "Experimental language-server proposal; apply requires the exact TypeScript diagnostics gate.",
+                        completeness.summary,
                         "Provider=${toolchain.provenance.providerId} TypeScript=${toolchain.provenance.typeScriptVersion}",
                     ),
                     riskLevel = if (languageId == "typescript") RiskLevel.MEDIUM else RiskLevel.HIGH,

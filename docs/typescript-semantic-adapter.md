@@ -60,7 +60,10 @@ active. Cross-project stable compiler identity/workspace search remains T3 work.
 `renameSymbol` converts the server WorkspaceEdit through the strict external edit
 parser and core normalizer. A successful result is a `PatchPlan` preview with
 `LANGUAGE_SERVER` evidence, explicit approval requirement and medium TypeScript
-or high JavaScript risk. Preview performs no filesystem write. The experimental
+or high JavaScript risk. The plan reports one of `FULL_TYPESCRIPT`,
+`CHECKED_JAVASCRIPT`, `DYNAMIC_JAVASCRIPT` or `MIXED_JAVASCRIPT`; dynamic and
+mixed JavaScript receive lower confidence and cannot obtain the managed diagnostics
+gate. Preview performs no filesystem write. The experimental
 adapter now has JVM acceptance for exact staged diagnostics, explicit authorization,
 managed apply, WAL and rollback. Its diagnostics gate re-hashes toolchain and
 project-model evidence while `PatchEngine` holds the workspace writer lock and

@@ -36,10 +36,35 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class TypeScriptSemanticAdapterTest {
+    @Test
+    fun reportsTypedCheckedAndDynamicCompletenessAndBlocksDynamicManagedGate() {
+        val fixture = fixture()
+        val typed = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, FakeClient())
+        assertEquals(TypeScriptSemanticCompletenessMode.FULL_TYPESCRIPT, typed.semanticCompleteness().mode)
+        assertTrue(typed.semanticCompleteness().managedMutationEligible)
+
+        val checkedModel = fixture.model.copy(projects = fixture.model.projects.map { project ->
+            project.copy(compilerOptions = project.compilerOptions.copy(checkJs = true, allowJs = true))
+        })
+        val checked = TypeScriptSemanticAdapter("javascript", fixture.toolchain, checkedModel, FakeClient())
+        assertEquals(TypeScriptSemanticCompletenessMode.CHECKED_JAVASCRIPT, checked.semanticCompleteness().mode)
+        assertTrue(checked.semanticCompleteness().managedMutationEligible)
+
+        val dynamic = TypeScriptSemanticAdapter("javascript", fixture.toolchain, fixture.model, FakeClient())
+        assertEquals(TypeScriptSemanticCompletenessMode.DYNAMIC_JAVASCRIPT, dynamic.semanticCompleteness().mode)
+        assertFalse(dynamic.semanticCompleteness().managedMutationEligible)
+        assertIs<TypeScriptSemanticStart.Started>(dynamic.start(fixture.snapshot))
+        val failure = assertFailsWith<IllegalStateException> {
+            dynamic.diagnosticsGate().provider!!(fixture.snapshot)
+        }
+        assertTrue(failure.message.orEmpty().contains("typescript.semanticCompletenessInsufficient"))
+    }
+
     @Test
     fun startsOnlyWithHashBoundModelToolchainAndRequiredCapabilities() {
         val fixture = fixture()

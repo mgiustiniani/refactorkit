@@ -22,7 +22,9 @@ review safety boundaries before applying refactorings.
   managed apply, WAL and rollback; stable identity and packaged native
   real-toolchain acceptance remain open. Added a constant 512 MiB Node/V8
   old-space limit and explicit provenance-preserving crash restart capped at
-  three attempts per rolling 60 seconds; implicit restart is refused.
+  three attempts per rolling 60 seconds; implicit restart is refused. Semantic
+  completeness now distinguishes full TypeScript, checked JavaScript, dynamic
+  JavaScript and mixed JavaScript; dynamic/mixed managed gates fail closed.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the
