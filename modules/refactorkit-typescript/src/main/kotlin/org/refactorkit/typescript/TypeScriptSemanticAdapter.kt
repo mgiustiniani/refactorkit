@@ -636,7 +636,7 @@ class TypeScriptSemanticAdapter(
             "try", "typeof", "var", "void", "while", "with", "yield",
         )
         private val REQUIRED_CAPABILITIES = listOf(
-            "definitionProvider", "referencesProvider", "renameProvider",
+            "definitionProvider", "referencesProvider", "renameProvider", "prepareRenameProvider",
             "documentSymbolProvider", "workspaceSymbolProvider", "textDocumentSync",
         )
 

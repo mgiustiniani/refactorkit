@@ -192,7 +192,11 @@ class ExternalLspAdapter(
             serverVersion = serverInfo?.let { LspJson.extractField(it, "version") }?.let(LspJson::unquote),
             capabilitiesSha256 = sha256(capabilities),
             advertisedCapabilities = KNOWN_SERVER_CAPABILITIES.associateWith { capability ->
-                capabilityAdvertised(capability, LspJson.extractField(capabilities, capability))
+                val raw = if (capability == "prepareRenameProvider") {
+                    LspJson.extractField(capabilities, "renameProvider")
+                        ?.let { LspJson.extractField(it, "prepareProvider") }
+                } else LspJson.extractField(capabilities, capability)
+                capabilityAdvertised(capability, raw)
             }.toSortedMap(),
         )
         sendNotification("initialized", "{}")
@@ -532,12 +536,48 @@ class ExternalLspAdapter(
             "externalEdit.pathOutsideOverlay", "Rename document is outside the semantic overlay",
         )))
         val position = location.range.start
+        val prepared = prepareRename(file, semantic, position)
+        if (prepared != null) return ExternalWorkspaceEditNormalization.Refused(listOf(prepared))
         return requestWorkspaceEdit(
             "textDocument/rename",
             """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}},"newName":${LspJson.quote(newName)}}""",
             snapshot,
         )
     }
+
+    private fun prepareRename(file: SourceFile, semantic: Path, position: SourcePosition): Diagnostic? {
+        if (!supportsServerCapability("prepareRenameProvider")) return externalDiagnostic(
+            "semantic.prepareRenameUnavailable", "External semantic server does not advertise prepareRename support",
+        )
+        val response = sendRequest(
+            "textDocument/prepareRename",
+            """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}}}""",
+        ) ?: return externalDiagnostic(
+            lastFailure?.code ?: "semantic.prepareRenameMissing",
+            lastFailure?.message ?: "External semantic server returned no prepareRename response",
+        )
+        val result = LspJson.extractField(response, "result")
+            ?: return externalDiagnostic("semantic.prepareRenameInvalid", "prepareRename response has no result")
+        if (result.trim() == "null") return externalDiagnostic(
+            "semantic.prepareRenameRefused", "External semantic server refused prepareRename at the selected position",
+        )
+        val rangeJson = LspJson.extractField(result, "range") ?: result
+        val parsed = LspJson.parseLocation(
+            """{"uri":${LspJson.quote(LspJson.pathToUri(semantic))},"range":$rangeJson}""",
+        ) ?: return externalDiagnostic("semantic.prepareRenameInvalid", "prepareRename result has no valid range")
+        val start = SourcePosition(parsed.startLine, parsed.startChar)
+        val end = SourcePosition(parsed.endLine, parsed.endChar)
+        if (!validPosition(file.content, start) || !validPosition(file.content, end) ||
+            comparePosition(position, start) < 0 || comparePosition(position, end) > 0) {
+            return externalDiagnostic(
+                "semantic.prepareRenameInvalid", "prepareRename range is outside the exact document image",
+            )
+        }
+        return null
+    }
+
+    private fun comparePosition(left: SourcePosition, right: SourcePosition): Int =
+        compareValuesBy(left, right, SourcePosition::line, SourcePosition::character)
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = listOf(
         RefactoringDescriptor("localRename", "Local rename (textual)", RiskLevel.LOW),
@@ -926,7 +966,7 @@ class ExternalLspAdapter(
         const val SHUTDOWN_TIMEOUT_MILLIS = 2_000L
         private val PROCESS_SEQUENCE = AtomicInteger(1)
         private val KNOWN_SERVER_CAPABILITIES = sortedSetOf(
-            "definitionProvider", "referencesProvider", "renameProvider",
+            "definitionProvider", "referencesProvider", "renameProvider", "prepareRenameProvider",
             "documentSymbolProvider", "workspaceSymbolProvider", "textDocumentSync",
         )
         private val LSP_METHOD = Regex("[A-Za-z0-9_" + '$' + "./-]{1,128}")

@@ -45,7 +45,8 @@ review safety boundaries before applying refactorings.
   candidates in computed properties, decorators, reflection and framework
   registries likewise refuse unless an explicit dynamic-reference override lowers
   confidence and records high risk. Managed JVM acceptance now also covers atomic
-  cross-file re-export updates and server-required file renames, with exact staged
+  cross-file re-export updates and server-required file renames, with mandatory
+  prepare-rename range validation against the exact UTF-16 source image and exact staged
   file-set hashes bounded to 128 retained previews plus WAL/rollback restoration.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,

@@ -92,6 +92,25 @@ class ExternalLspAdapterLifecycleTest {
     }
 
     @Test
+    fun renameRefusesPrepareRangeOutsideExactDocument() {
+        val workspace = Files.createTempDirectory("refactorkit-lsp-invalid-prepare")
+        val snapshot = org.refactorkit.core.ProjectSnapshot(
+            org.refactorkit.core.Workspace(workspace), emptyList(),
+            listOf(org.refactorkit.core.SourceFile(Path.of("sample.ts"), "const value = 1;\n", "typescript")),
+        )
+        val adapter = adapter("invalid-prepare")
+        adapter.start(snapshot)
+        val location = SourceLocation(
+            Path.of("sample.ts"), SourceRange(SourcePosition(0, 6), SourcePosition(0, 11)),
+        )
+        val refused = assertIs<ExternalWorkspaceEditNormalization.Refused>(
+            adapter.requestRename(snapshot, location, "renamed"),
+        )
+        assertEquals(listOf("semantic.prepareRenameInvalid"), refused.diagnostics.map(Diagnostic::code))
+        adapter.close()
+    }
+
+    @Test
     fun exactDiagnosticsRefuseUnversionedPublications() {
         val workspace = Files.createTempDirectory("refactorkit-lsp-unversioned")
         val snapshot = org.refactorkit.core.ProjectSnapshot(
@@ -199,6 +218,9 @@ object ExternalLspFixture {
                     lastDocumentUri = uri
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"uri":$uri,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}""")
                 }
+                "textDocument/prepareRename" -> if (mode == "invalid-prepare") {
+                    writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"range":{"start":{"line":99,"character":0},"end":{"line":99,"character":1}}}}""")
+                } else writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"placeholder":"c"}}""")
                 "textDocument/rename" -> {
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"changes":{$lastDocumentUri:[{"range":{"start":{"line":0,"character":6},"end":{"line":0,"character":9}},"newText":"bar"}]}}}""")
                 }

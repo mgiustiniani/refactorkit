@@ -18,8 +18,9 @@ unavailable Build Model or snapshot mismatch refuses without starting a process.
 Config and package inputs are materialized in the source-only semantic overlay;
 the real workspace remains outside the server root.
 
-The initialized server must advertise document symbols, definition, references,
-rename and text synchronization. Missing capability terminates the owned process tree and returns
+The initialized server must advertise document/workspace symbols, definition,
+references, rename, prepare-rename and text synchronization. Missing capability
+terminates the owned process tree and returns
 `typescript.serverCapabilityMissing`.
 
 ## Document synchronization
@@ -73,8 +74,11 @@ remapping, a 256-file request cap and 10,000-symbol result cap. Structural
 Tree-sitter symbols are used only when no semantic document-symbol capability is
 active. Cross-project stable compiler identity/workspace search remains T3 work.
 
-`renameSymbol` first builds the exact semantic index and resolves the selected
-symbol. Safe non-reserved Unicode identifiers (including private `#` identifiers)
+`renameSymbol` first builds the exact semantic index, resolves the selected
+symbol, and requires `textDocument/prepareRename` to return a bounded range that
+contains the requested UTF-16 position in the exact source image. Null, malformed
+or out-of-image prepare results refuse before requesting edits. Safe non-reserved
+Unicode identifiers (including private `#` identifiers)
 are accepted for class/interface/enum/function/method/property/field/variable/
 constant/type-parameter/namespace symbols. Unresolved, unknown, constructor,
 package, module, invalid and no-op targets refuse before requesting an edit. The
@@ -120,6 +124,7 @@ native platform.
 - invalid UTF-16 positions;
 - edit path outside overlay/workspace;
 - generated source, symlink, overlap, invalid range or structural conflict;
+- unavailable/refused/invalid prepare-rename range;
 - unsupported symbol kind, unresolved symbol, invalid/reserved identifier or
   unchanged rename target;
 - unsupported operation or missing rename selection/target.
