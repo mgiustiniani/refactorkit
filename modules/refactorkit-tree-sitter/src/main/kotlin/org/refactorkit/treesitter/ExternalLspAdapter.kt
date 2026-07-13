@@ -267,6 +267,17 @@ class ExternalLspAdapter(
         return index
     }
 
+    fun searchWorkspaceSymbols(query: String): List<Symbol> {
+        if (!isRunning || !supportsServerCapability("workspaceSymbolProvider") ||
+            query.length > 1_024 || '\u0000' in query) return emptyList()
+        val response = sendRequest("workspace/symbol", """{"query":${LspJson.quote(query)}}""") ?: return emptyList()
+        val result = LspJson.extractField(response, "result") ?: return emptyList()
+        if (result.trim() == "null") return emptyList()
+        return LspDocumentSymbolParser.parse(result, Path.of("."), languageId) { returned ->
+            workspaceOverlay?.toWorkspacePath(returned) ?: returned
+        }.take(org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS)
+    }
+
     private fun requestDocumentSymbols(file: SourceFile): List<Symbol> {
         val semantic = semanticPath(file.path) ?: return emptyList()
         val response = sendRequest(
@@ -916,7 +927,7 @@ class ExternalLspAdapter(
         private val PROCESS_SEQUENCE = AtomicInteger(1)
         private val KNOWN_SERVER_CAPABILITIES = sortedSetOf(
             "definitionProvider", "referencesProvider", "renameProvider",
-            "documentSymbolProvider", "textDocumentSync",
+            "documentSymbolProvider", "workspaceSymbolProvider", "textDocumentSync",
         )
         private val LSP_METHOD = Regex("[A-Za-z0-9_" + '$' + "./-]{1,128}")
 

@@ -14,7 +14,10 @@ class TypeScriptAdapterDescriptorsTest {
 
         assertEquals(setOf("ts", "tsx"), descriptor.extensions)
         assertEquals(
-            listOf("definition", "diagnostics", "identifierSearch", "localRename", "outline", "references", "renameSymbol"),
+            listOf(
+                "definition", "diagnostics", "identifierSearch", "localRename", "outline", "references",
+                "renameSymbol", "workspaceSymbols",
+            ),
             descriptor.capabilities.map { it.operation },
         )
         val outline = descriptor.capabilities.single { it.operation == "outline" }

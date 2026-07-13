@@ -66,6 +66,7 @@ interface TypeScriptSemanticClient : AutoCloseable {
     fun start(snapshot: ProjectSnapshot)
     fun supports(capability: String): Boolean
     fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex
+    fun searchWorkspaceSymbols(query: String): List<org.refactorkit.core.Symbol>
     fun resolveSymbol(location: SourceLocation): SymbolResolution
     fun findReferences(symbolId: SymbolId): List<Reference>
     fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic>
@@ -83,6 +84,8 @@ class ExternalTypeScriptSemanticClient(
     override fun start(snapshot: ProjectSnapshot) = adapter.start(snapshot)
     override fun supports(capability: String): Boolean = adapter.supportsServerCapability(capability)
     override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex = adapter.buildSymbols(snapshot)
+    override fun searchWorkspaceSymbols(query: String): List<org.refactorkit.core.Symbol> =
+        adapter.searchWorkspaceSymbols(query)
     override fun resolveSymbol(location: SourceLocation): SymbolResolution = adapter.resolveSymbol(location)
     override fun findReferences(symbolId: SymbolId): List<Reference> = adapter.findReferences(symbolId)
     override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = adapter.diagnostics(snapshot)
@@ -218,6 +221,9 @@ class TypeScriptSemanticAdapter(
 
     override fun buildSymbols(project: ProjectSnapshot): SymbolIndex =
         if (active(project)) client.buildSymbols(project) else SymbolIndex(emptyList())
+
+    fun searchWorkspaceSymbols(project: ProjectSnapshot, query: String): List<org.refactorkit.core.Symbol> =
+        if (active(project)) client.searchWorkspaceSymbols(query) else emptyList()
 
     override fun resolveSymbol(location: SourceLocation): SymbolResolution =
         if (activeSnapshot != null && client.isRunning) client.resolveSymbol(location)
@@ -560,7 +566,7 @@ class TypeScriptSemanticAdapter(
         )
         private val REQUIRED_CAPABILITIES = listOf(
             "definitionProvider", "referencesProvider", "renameProvider",
-            "documentSymbolProvider", "textDocumentSync",
+            "documentSymbolProvider", "workspaceSymbolProvider", "textDocumentSync",
         )
 
         fun descriptor(languageId: String) = LanguageAdapterDescriptor(
@@ -569,6 +575,7 @@ class TypeScriptSemanticAdapter(
             backend = TypeScriptToolchainProvenance.PROVIDER_ID,
             capabilities = listOf(
                 LanguageCapability("definition", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
+                LanguageCapability("workspaceSymbols", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("references", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("diagnostics", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability(

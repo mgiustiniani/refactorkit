@@ -305,14 +305,14 @@ class DaemonSession(
         val snap = requireSnapshot()
         val languageId = params?.string("languageId") ?: "java"
         val results = if (languageId == "java") adapter.searchSymbols(snap, query) else
-            requireSemanticAdapter(languageId).buildSymbols(snap).search(query)
+            requireSemanticAdapter(languageId).searchWorkspaceSymbols(snap, query)
         return buildJsonArray {
             results.take(200).forEach { sym ->
                 add(buildJsonObject {
                     put("id", sym.id.value)
                     put("name", sym.name)
                     put("kind", sym.kind.name)
-                    put("file", ProtocolPath.serialize(sym.location.path))
+                    put("file", protocolSourcePath(snap, sym.location.path))
                     put("line", sym.location.range.start.line + 1)
                 })
             }
@@ -330,7 +330,7 @@ class DaemonSession(
             put("id", symbol.id.value)
             put("name", symbol.name)
             put("kind", symbol.kind.name)
-            put("file", ProtocolPath.serialize(symbol.location.path))
+            put("file", protocolSourcePath(snap, symbol.location.path))
             put("line", symbol.location.range.start.line + 1)
             put("character", symbol.location.range.start.character)
         }
@@ -348,7 +348,7 @@ class DaemonSession(
         return buildJsonArray {
             refs.take(ProtocolLimits.MAX_REFERENCE_RESULTS).forEach { ref ->
                 add(buildJsonObject {
-                    put("file", ProtocolPath.serialize(ref.location.path))
+                    put("file", protocolSourcePath(snap, ref.location.path))
                     put("line", ref.location.range.start.line + 1)
                     put("character", ref.location.range.start.character)
                 })
@@ -371,7 +371,7 @@ class DaemonSession(
                     d.evidence?.let { put("evidence", it.name) }
                     d.category?.let { put("category", it.name) }
                     d.location?.let { loc ->
-                        put("file", ProtocolPath.serialize(loc.path))
+                        put("file", protocolSourcePath(snap, loc.path))
                         put("line", loc.range.start.line + 1)
                     }
                 })
@@ -690,6 +690,13 @@ class DaemonSession(
     private fun closeSemanticAdapters() {
         semanticAdapters.values.forEach { runCatching { it.close() } }
         semanticAdapters.clear()
+    }
+
+    private fun protocolSourcePath(snapshot: ProjectSnapshot, path: Path): String {
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val normalized = if (path.isAbsolute) path.toAbsolutePath().normalize() else root.resolve(path).normalize()
+        return if (normalized.startsWith(root)) ProtocolPath.serialize(root.relativize(normalized))
+        else "<outside-workspace>"
     }
 
     private fun requireSemanticAdapter(languageId: String): TypeScriptSemanticAdapter {

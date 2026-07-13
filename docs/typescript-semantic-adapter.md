@@ -61,8 +61,10 @@ explicit without falsely granting them the `.ts`/`.js` structural grammar claim.
 
 ## Current operations
 
-Experimental read operations delegate document symbols, definition and
-references to the bounded language server. Both nested `DocumentSymbol` and
+Experimental read operations delegate document symbols, workspace-symbol search,
+definition and references to the bounded language server. Workspace search is
+capped at 200 results and daemon paths are normalized relative to the active
+workspace. Both nested `DocumentSymbol` and
 `SymbolInformation` forms are normalized with exact UTF-16 ranges, portable path
 remapping, a 256-file request cap and 10,000-symbol result cap. Structural
 Tree-sitter symbols are used only when no semantic document-symbol capability is

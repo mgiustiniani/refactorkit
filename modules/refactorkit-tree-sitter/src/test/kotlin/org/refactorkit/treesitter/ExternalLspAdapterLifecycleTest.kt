@@ -53,6 +53,7 @@ class ExternalLspAdapterLifecycleTest {
         )
         val resolved = assertNotNull(adapter.resolveSymbol(position).symbol)
         assertEquals(position.path.toAbsolutePath().normalize(), resolved.location.path.toAbsolutePath().normalize())
+        assertEquals(listOf("Service"), adapter.searchWorkspaceSymbols("Serv").map { it.name })
         val diagnostics = adapter.diagnostics(projectSnapshot())
         assertEquals(listOf("échec contrôlé"), diagnostics.map(Diagnostic::message))
         assertEquals("TS1001", diagnostics.single().code)
@@ -177,7 +178,7 @@ object ExternalLspFixture {
                         output.flush()
                         Thread.sleep(30_000)
                     }
-                    else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"renameProvider":{"prepareProvider":true},"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
+                    else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"renameProvider":{"prepareProvider":true},"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
                 }
                 "textDocument/didOpen", "textDocument/didChange" -> {
                     val params = LspJson.extractField(request, "params").orEmpty()
@@ -189,6 +190,7 @@ object ExternalLspFixture {
                 }
                 "initialized", "textDocument/didClose" -> Unit
                 "textDocument/documentSymbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":21}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}]}""")
+                "workspace/symbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"location":{"uri":$lastDocumentUri,"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}}]}""")
                 "textDocument/definition" -> {
                     val params = LspJson.extractField(request, "params").orEmpty()
                     val document = LspJson.extractField(params, "textDocument").orEmpty()

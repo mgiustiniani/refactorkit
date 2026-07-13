@@ -414,7 +414,7 @@ class TypeScriptSemanticAdapterTest {
     private class FakeClient(
         private val capabilities: Set<String> = setOf(
             "definitionProvider", "referencesProvider", "renameProvider",
-            "documentSymbolProvider", "textDocumentSync",
+            "documentSymbolProvider", "workspaceSymbolProvider", "textDocumentSync",
         ),
         private val renameRefused: Boolean = false,
         private val exactDiagnostics: ExternalSemanticDiagnostics = ExternalSemanticDiagnostics.Available(emptyList()),
@@ -439,6 +439,7 @@ class TypeScriptSemanticAdapterTest {
 
         override fun supports(capability: String): Boolean = capability in capabilities
         override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex = SymbolIndex(listOf(symbol()))
+        override fun searchWorkspaceSymbols(query: String): List<Symbol> = listOf(symbol()).filter { query in it.name }
         override fun resolveSymbol(location: SourceLocation): SymbolResolution =
             if (unresolvedSymbol) SymbolResolution(null) else SymbolResolution(symbol())
         override fun findReferences(symbolId: SymbolId): List<Reference> = listOf(Reference(symbolId, symbolLocation()))

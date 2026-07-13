@@ -96,7 +96,10 @@ class DaemonSessionTest {
         val typescript = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "typescript" }
         val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }
         assertEquals(
-            listOf("definition", "diagnostics", "identifierSearch", "localRename", "outline", "references", "renameSymbol"),
+            listOf(
+                "definition", "diagnostics", "identifierSearch", "localRename", "outline", "references",
+                "renameSymbol", "workspaceSymbols",
+            ),
             capabilities.map { it["operation"]!!.jsonPrimitive.content },
         )
         val outline = capabilities.single { it["operation"]!!.jsonPrimitive.content == "outline" }

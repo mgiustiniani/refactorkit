@@ -134,9 +134,11 @@ class TypeScriptDaemonIntegrationTest {
         override val provenance: ExternalSemanticSessionProvenance? = null
         override fun start(snapshot: ProjectSnapshot) { isRunning = true }
         override fun supports(capability: String) = capability in setOf(
-            "definitionProvider", "referencesProvider", "renameProvider", "documentSymbolProvider", "textDocumentSync",
+            "definitionProvider", "referencesProvider", "renameProvider", "documentSymbolProvider",
+            "workspaceSymbolProvider", "textDocumentSync",
         )
         override fun buildSymbols(snapshot: ProjectSnapshot) = SymbolIndex(listOf(symbol()))
+        override fun searchWorkspaceSymbols(query: String) = listOf(symbol()).filter { query in it.name }
         override fun resolveSymbol(location: SourceLocation) = SymbolResolution(symbol())
         override fun findReferences(symbolId: SymbolId) = listOf(Reference(symbolId, location()))
         override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = emptyList()
