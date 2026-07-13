@@ -41,6 +41,22 @@ references, rename, prepare-rename and text synchronization. Missing capability
 terminates the owned process tree and returns
 `typescript.serverCapabilityMissing`.
 
+## Stable semantic identity
+
+LSP does not standardize compiler symbol handles. RefactorKit therefore emits opaque
+`lsp-symbol-v1:<sha256>` IDs derived from the language, normalized declaration path,
+semantic parent/container hierarchy, LSP symbol kind, name and bounded `detail`
+signature. Source lines and UTF-16 columns are intentionally excluded, so the same
+symbol retains its ID across process sessions and unrelated line movement when the
+same hash-bound toolchain is used. Parent hierarchy separates equal members in
+different declarations; signature detail distinguishes overload shapes when the
+server reports it. Exact duplicate declarations intentionally collapse to one
+semantic identity, matching TypeScript declaration merging.
+
+The key is a RefactorKit portability layer rather than a claim that LSP exposes a
+native TypeScript compiler ID. File moves, declaration renames, hierarchy changes or
+server-reported signature changes create a new identity.
+
 ## Document synchronization
 
 The external LSP bridge now supports bounded full-document lifecycle:

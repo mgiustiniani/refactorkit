@@ -10,7 +10,6 @@ import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.Symbol
-import org.refactorkit.core.SymbolId
 import java.net.URI
 import java.nio.file.Path
 
@@ -29,7 +28,7 @@ internal object LspDocumentSymbolParser {
         val output = mutableListOf<Symbol>()
         array.forEach { element ->
             if (output.size >= MAX_SYMBOLS) return@forEach
-            parseElement(element, requestedPath, languageId, remapPath, output, 0)
+            parseElement(element, requestedPath, languageId, remapPath, output, 0, emptyList())
         }
         return output.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line }, { it.location.range.start.character }, { it.name }))
     }
@@ -41,6 +40,7 @@ internal object LspDocumentSymbolParser {
         remapPath: (Path) -> Path?,
         output: MutableList<Symbol>,
         depth: Int,
+        parentHierarchy: List<LspSemanticSymbolId.Component>,
     ) {
         if (depth > MAX_DEPTH || output.size >= MAX_SYMBOLS) return
         val value = element as? JsonObject ?: return
@@ -58,15 +58,23 @@ internal object LspDocumentSymbolParser {
             path = requestedPath
             range = parseRange(value["selectionRange"] ?: value["range"]) ?: return
         }
+        val detail = value.string("detail")?.takeIf { it.length <= MAX_DETAIL_LENGTH }
+        val container = value.string("containerName")?.takeIf { it.isNotBlank() && it.length <= MAX_DETAIL_LENGTH }
+        val hierarchy = if (locationObject != null) {
+            listOfNotNull(container?.let { LspSemanticSymbolId.Component(3, it) }) +
+                LspSemanticSymbolId.Component(kind, name, detail)
+        } else {
+            parentHierarchy + LspSemanticSymbolId.Component(kind, name, detail)
+        }
         output += Symbol(
-            id = SymbolId("${path}::$name@${range.start.line}:${range.start.character}"),
+            id = LspSemanticSymbolId.create(languageId, path, hierarchy),
             name = name,
             kind = symbolKind(kind),
             location = SourceLocation(path, range),
             languageId = languageId,
         )
         (value["children"] as? JsonArray)?.forEach { child ->
-            parseElement(child, path, languageId, remapPath, output, depth + 1)
+            parseElement(child, path, languageId, remapPath, output, depth + 1, hierarchy)
         }
     }
 
@@ -103,6 +111,8 @@ internal object LspDocumentSymbolParser {
         26 -> Symbol.Kind.TYPE_PARAMETER
         else -> Symbol.Kind.UNKNOWN
     }
+
+    private const val MAX_DETAIL_LENGTH = 4_096
 
     private fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)
         ?.takeIf(JsonPrimitive::isString)?.content

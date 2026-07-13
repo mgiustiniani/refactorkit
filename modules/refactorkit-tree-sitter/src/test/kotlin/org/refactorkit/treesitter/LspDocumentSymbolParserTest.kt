@@ -21,7 +21,22 @@ class LspDocumentSymbolParserTest {
         assertEquals(listOf("Service", "run"), symbols.map(Symbol::name))
         assertEquals(listOf(Symbol.Kind.CLASS, Symbol.Kind.METHOD), symbols.map(Symbol::kind))
         assertEquals(13, symbols.first().location.range.start.character)
-        assertEquals("src/service.ts::Service@0:13", symbols.first().id.value)
+        assertTrue(symbols.first().id.value.startsWith("lsp-symbol-v1:"))
+    }
+
+    @Test
+    fun semanticIdsRemainStableAcrossLineMovementAndSeparateHierarchies() {
+        fun parse(line: Int, parent: String) = LspDocumentSymbolParser.parse(
+            """[{"name":"$parent","kind":5,"selectionRange":{"start":{"line":$line,"character":0},"end":{"line":$line,"character":6}},"children":[{"name":"run","detail":"(): void","kind":6,"selectionRange":{"start":{"line":${line + 1},"character":2},"end":{"line":${line + 1},"character":5}}}]}]""",
+            Path.of("src/service.ts"), "typescript",
+        ) { it }
+
+        val original = parse(0, "First")
+        val moved = parse(20, "First")
+        val otherParent = parse(0, "Second")
+
+        assertEquals(original.map { it.id }, moved.map { it.id })
+        assertTrue(original.last().id != otherParent.last().id)
     }
 
     @Test
@@ -33,6 +48,16 @@ class LspDocumentSymbolParserTest {
 
         assertEquals(Path.of("src/value.ts"), symbols.single().location.path)
         assertEquals(Symbol.Kind.VARIABLE, symbols.single().kind)
+        val moved = LspDocumentSymbolParser.parse(
+            """[{"name":"value","kind":13,"containerName":"scope","location":{"uri":"file:///overlay/src/value.ts","range":{"start":{"line":40,"character":6},"end":{"line":40,"character":11}}}}]""",
+            Path.of("ignored.ts"), "typescript",
+        ) { Path.of("src/value.ts") }
+        val scoped = LspDocumentSymbolParser.parse(
+            """[{"name":"value","kind":13,"containerName":"scope","location":{"uri":"file:///overlay/src/value.ts","range":{"start":{"line":2,"character":6},"end":{"line":2,"character":11}}}}]""",
+            Path.of("ignored.ts"), "typescript",
+        ) { Path.of("src/value.ts") }
+        assertEquals(scoped.single().id, moved.single().id)
+        assertTrue(symbols.single().id != scoped.single().id)
     }
 
     @Test
