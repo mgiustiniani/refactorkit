@@ -80,14 +80,17 @@ After `project.open`, callers may start one explicit language session:
 
 No PATH lookup or workspace-local executable/package root is accepted unless the
 corresponding explicit boolean policy is supplied. The response reports bounded
-server/capability/executable/argument hashes and semantic completeness, never raw
-arguments or environment values. `typescript.semantic.stop` is idempotent.
+server/capability/executable/argument hashes, the owned local process ID, and
+semantic completeness, never raw arguments or environment values. If that process
+crashes, `typescript.semantic.restart` is the only restart path: it requires the
+original snapshot, preserves provenance, and enforces the three-per-60-second
+limit. `typescript.semantic.stop` is idempotent.
 
 Once started, `symbol.search`, `symbol.definition`, `symbol.references`, and
 `diagnostics` accept `languageId=typescript|javascript`. Semantic rename uses:
 
 ```json
-{"jsonrpc":"2.0","id":21,"method":"refactor.preview","params":{"operation":"renameSymbol","languageId":"typescript","symbol":"src/service.ts::Service@0:13","arguments":{"newName":"AccountService","allowExternalConsumers":"false","allowDynamicReferences":"false"}}}
+{"jsonrpc":"2.0","id":21,"method":"refactor.preview","params":{"operation":"renameSymbol","languageId":"typescript","symbol":"lsp-symbol-v1:<sha256>","arguments":{"newName":"AccountService","allowExternalConsumers":"false","allowDynamicReferences":"false"}}}
 ```
 
 A caller may provide zero-based `arguments.file`, `arguments.line`, and

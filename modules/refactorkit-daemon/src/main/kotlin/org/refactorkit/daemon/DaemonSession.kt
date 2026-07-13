@@ -105,6 +105,7 @@ class DaemonSession(
         "project.open"        -> projectOpen(params)
         "project.summary"   -> projectSummary()
         "typescript.semantic.start" -> typeScriptSemanticStart(params)
+        "typescript.semantic.restart" -> typeScriptSemanticRestart(params)
         "typescript.semantic.stop" -> typeScriptSemanticStop(params)
         "symbol.search"     -> symbolSearch(params)
         "symbol.definition" -> symbolDefinition(params)
@@ -667,7 +668,34 @@ class DaemonSession(
                         put("capabilitiesSha256", provenance.capabilitiesSha256)
                         put("executableSha256", provenance.process.executableSha256)
                         put("argumentsSha256", provenance.process.argumentsSha256)
+                        put("processId", provenance.process.pid)
                     }
+                }
+            }
+        }
+    }
+
+    private fun typeScriptSemanticRestart(params: JsonObject?): JsonElement {
+        val languageId = params?.string("languageId") ?: "typescript"
+        val semantic = semanticAdapters[languageId] ?: throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "Semantic adapter for $languageId is not started",
+        )
+        return when (val restarted = semantic.restart(requireSnapshot())) {
+            is TypeScriptSemanticStart.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                restarted.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" },
+            )
+            is TypeScriptSemanticStart.Started -> buildJsonObject {
+                put("languageId", languageId)
+                put("status", "restarted")
+                restarted.provenance?.let { provenance ->
+                    put("serverName", provenance.serverName ?: "")
+                    put("serverVersion", provenance.serverVersion ?: "")
+                    put("capabilitiesSha256", provenance.capabilitiesSha256)
+                    put("executableSha256", provenance.process.executableSha256)
+                    put("argumentsSha256", provenance.process.argumentsSha256)
+                    put("processId", provenance.process.pid)
                 }
             }
         }
@@ -1057,6 +1085,7 @@ class DaemonSession(
                 "typescript.semantic.start", "experimental", true, false,
                 mapOf("explicitToolchain" to true, "hashBoundProvenance" to true, "noPackageScripts" to true),
             ),
+            DaemonMethodCapability("typescript.semantic.restart", "experimental", true, false),
             DaemonMethodCapability("typescript.semantic.stop", "experimental", true, false),
             DaemonMethodCapability("symbol.search", "beta-contract", true, false),
             DaemonMethodCapability("symbol.definition", "beta-contract", true, false),

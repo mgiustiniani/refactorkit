@@ -98,8 +98,9 @@ compiler-library root, forces no-emit/non-incremental analysis, returns the
 requested snapshot hash and structured bounded diagnostics, and is re-run under
 the writer lock.
 
-Native qualification now proves stable reads, path-alias and re-export rename,
-exact before/after compiler diagnostics, explicit apply, WAL creation and exact
-rollback. `typescript-language-server` remains a proposal provider; stable mutation
-authority still requires native process-kill/recovery acceptance, OS RSS policy and
-expansion of the supported server-version matrix.
+Native qualification now proves stable reads, forced language-server termination,
+provenance-preserving bounded restart, path-alias and re-export rename, exact
+before/after compiler diagnostics, explicit apply, WAL creation and exact rollback.
+`typescript-language-server` remains a proposal provider; stable mutation authority
+still requires packaged process-kill-during-write recovery acceptance, OS RSS policy
+and expansion of the supported server-version matrix.

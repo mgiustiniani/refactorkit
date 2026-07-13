@@ -8,10 +8,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import queue
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 
 
 def command_for(cli: Path, args: list[str]) -> list[str]:
@@ -36,6 +40,92 @@ def run(cli: Path, common: list[str], operation: list[str], expected: int = 0) -
             f"command exited {result.returncode}, expected {expected}\nstdout={result.stdout}\nstderr={result.stderr}"
         )
     return result
+
+
+def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Path, compiler: Path) -> None:
+    daemon = runtime / "bin" / ("refactorkit-daemon.bat" if os.name == "nt" else "refactorkit-daemon")
+    command = command_for(daemon, [])
+    process = subprocess.Popen(
+        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, encoding="utf-8",
+    )
+    responses: queue.Queue[str | None] = queue.Queue()
+
+    def read_stdout() -> None:
+        try:
+            for line in process.stdout:
+                responses.put(line)
+        finally:
+            responses.put(None)
+
+    threading.Thread(target=read_stdout, daemon=True).start()
+    request_id = 100
+
+    def exchange(method: str, params: dict | None = None) -> dict:
+        nonlocal request_id
+        request_id += 1
+        request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+        if params is not None:
+            request["params"] = params
+        process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+        process.stdin.flush()
+        try:
+            raw = responses.get(timeout=45)
+        except queue.Empty as error:
+            raise AssertionError(f"daemon timeout for {method}") from error
+        if raw is None:
+            raise AssertionError(f"daemon exited during {method}")
+        response = json.loads(raw)
+        if response.get("id") != request_id:
+            raise AssertionError(f"invalid daemon response for {method}: {response}")
+        return response
+
+    try:
+        opened = exchange("project.open", {"root": str(workspace)})
+        if opened.get("error"):
+            raise AssertionError(f"daemon project open failed: {opened}")
+        parameters = {
+            "languageId": "typescript", "nodeExecutable": str(node),
+            "languageServerPackageRoot": str(server), "typeScriptPackageRoot": str(compiler),
+        }
+        started_response = exchange("typescript.semantic.start", parameters)
+        if started_response.get("error"):
+            raise AssertionError(f"semantic start failed: {started_response}")
+        started = started_response["result"]
+        old_pid = int(started["processId"])
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(old_pid), "/T", "/F"], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            os.kill(old_pid, signal.SIGKILL)
+
+        deadline = time.monotonic() + 10
+        restarted_response = None
+        while time.monotonic() < deadline:
+            restarted_response = exchange("typescript.semantic.restart", {"languageId": "typescript"})
+            if restarted_response.get("error") is None:
+                break
+            time.sleep(0.1)
+        if restarted_response is None or restarted_response.get("error") is not None:
+            raise AssertionError(f"bounded semantic restart failed: {restarted_response}")
+        restarted = restarted_response["result"]
+        if int(restarted["processId"]) == old_pid:
+            raise AssertionError("semantic restart reused the killed process ID")
+        for field in ("serverVersion", "capabilitiesSha256", "executableSha256", "argumentsSha256"):
+            if restarted.get(field) != started.get(field):
+                raise AssertionError(f"semantic restart changed provenance field {field}")
+        diagnosed = exchange("diagnostics", {"languageId": "typescript"})
+        if diagnosed.get("error") or diagnosed.get("result") != []:
+            raise AssertionError(f"restarted semantic diagnostics failed: {diagnosed}")
+        exchange("typescript.semantic.stop", {"languageId": "typescript"})
+    finally:
+        if process.poll() is None:
+            process.stdin.close()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
 
 
 def tree_hash(root: Path) -> str:
@@ -69,8 +159,10 @@ def main() -> int:
         workspace = Path(temporary) / "workspace"
         shutil.copytree(repository / "samples" / "typescript-semantic", workspace)
         before = tree_hash(workspace)
+        node = Path(options.node).resolve()
+        qualify_crash_restart(runtime, workspace, node, server, compiler)
         common = [
-            str(workspace), "--node", str(Path(options.node).resolve()),
+            str(workspace), "--node", str(node),
             "--language-server-package", str(server), "--typescript-package", str(compiler),
         ]
 

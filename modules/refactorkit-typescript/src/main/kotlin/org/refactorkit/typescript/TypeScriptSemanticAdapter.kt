@@ -238,6 +238,8 @@ class TypeScriptSemanticAdapter(
         return result
     }
 
+    fun sessionProvenance(): ExternalSemanticSessionProvenance? = client.provenance
+
     override fun languageId(): String = languageId
     override fun parse(file: SourceFile): ParseResult = ParseResult(file)
 

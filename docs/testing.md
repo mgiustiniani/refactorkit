@@ -274,9 +274,11 @@ represented by golden, unit, or protocol tests:
 RefactorKit package and the lockfile-pinned CI toolchain in
 `qualification/typescript-toolchain`. It verifies stable IDs across fresh server
 sessions, path-alias project definition/reference reads, source immutability,
-exact `typescript-compiler-exact-v1` before/after diagnostics, three-file semantic
-rename through an alias and re-export, explicit apply, WAL creation and exact
-rollback. CI installs packages with `npm ci --ignore-scripts`; runtime code never
+exact `typescript-compiler-exact-v1` before/after diagnostics, forced termination
+of the owned real language-server process, provenance-preserving bounded daemon
+restart, three-file semantic rename through an alias and re-export, explicit apply,
+WAL creation and exact rollback. CI installs packages with
+`npm ci --ignore-scripts`; runtime code never
 invokes npm. Upstream unversioned LSP diagnostics are not trusted or relabelled.
 
 ## Agent simulation tests

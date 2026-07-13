@@ -50,7 +50,8 @@ review safety boundaries before applying refactorings.
   no-emit bridge over the hash-bound TypeScript compiler API: request-correlated
   staged diagnostics reject new errors and are re-run under the writer lock.
   Packaged native qualification now covers path aliases, cross-file re-export
-  rename, explicit apply, WAL and exact rollback; upstream unversioned LSP
+  rename, forced real language-server termination, provenance-preserving bounded
+  daemon restart, explicit apply, WAL and exact rollback; upstream unversioned LSP
   diagnostics remain untrusted.
   Added one-shot CLI TypeScript/JavaScript search, definition, references,
   diagnostics and rename with explicit toolchain flags, JSON output, preview by

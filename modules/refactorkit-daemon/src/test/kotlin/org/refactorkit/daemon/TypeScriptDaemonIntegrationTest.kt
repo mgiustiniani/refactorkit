@@ -63,6 +63,11 @@ class TypeScriptDaemonIntegrationTest {
         ).jsonObject
         assertEquals("started", started["status"]!!.jsonPrimitive.content)
         assertEquals("full-typescript", started["completeness"]!!.jsonPrimitive.content)
+        client.isRunning = false
+        val restarted = session.dispatch(
+            "typescript.semantic.restart", objectParams("languageId" to "typescript"),
+        ).jsonObject
+        assertEquals("restarted", restarted["status"]!!.jsonPrimitive.content)
 
         val symbols = session.dispatch(
             "symbol.search", objectParams("languageId" to "typescript", "query" to "Service"),
