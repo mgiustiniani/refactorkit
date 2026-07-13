@@ -381,6 +381,22 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun nativeAstClassifiesSemanticUnknownParameterForRenameCatalogue() {
+        val fixture = fixture()
+        val snapshot = fixture.snapshot.copy(files = fixture.snapshot.files.map {
+            it.copy(content = "function run(Service: string): void {}\n")
+        })
+        val adapter = TypeScriptSemanticAdapter(
+            "typescript", fixture.toolchain, fixture.model, FakeClient(symbolKind = Symbol.Kind.UNKNOWN),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(snapshot))
+
+        val plan = adapter.applyRefactoring(renameRequest(snapshot, "accountService"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.summary.startsWith("Rename parameter"))
+    }
+
+    @Test
     fun renameRequiresSafeIdentifierExactSymbolAndSupportedKind() {
         val fixture = fixture()
         val invalidAdapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, FakeClient())

@@ -1,5 +1,7 @@
 package org.refactorkit.treesitter
 
+import org.refactorkit.core.Symbol
+
 /**
  * Packaged real Tree-sitter bindings for the first JavaScript/TypeScript slice.
  * Reflection keeps the public RefactorKit bytecode Java-8-compatible while the
@@ -34,6 +36,31 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
             }
             items.sortedWith(compareBy({ it.line }, { it.character }, { it.name }))
         } ?: emptyList()
+
+    fun symbolKindAt(content: String, line: Int, character: Int, languageId: String): Symbol.Kind? {
+        if (line < 0 || character < 0) return null
+        val sourceLine = content.lineSequence().elementAtOrNull(line)?.removeSuffix("\r") ?: return null
+        if (character > sourceLine.length || character > 0 && character < sourceLine.length &&
+            sourceLine[character].isLowSurrogate() && sourceLine[character - 1].isHighSurrogate()) return null
+        val utf8Column = sourceLine.substring(0, character).toByteArray(Charsets.UTF_8).size
+        return parse(content, languageId) { reflection, root, _ ->
+            var resolved: Symbol.Kind? = null
+            walkNamed(reflection, root) { node ->
+                if (resolved != null || reflection.type(node) !in IDENTIFIER_NODE_TYPES ||
+                    reflection.startRow(node) != line || reflection.startColumn(node) != utf8Column) return@walkNamed
+                var current: Any? = node
+                repeat(MAX_KIND_ANCESTORS) {
+                    current = current?.let(reflection::parent)
+                    val kind = current?.let { STRUCTURAL_SYMBOL_TYPES[reflection.type(it)] }
+                    if (kind != null) {
+                        resolved = kind
+                        return@walkNamed
+                    }
+                }
+            }
+            resolved
+        }
+    }
 
     override fun findIdentifier(
         content: String,
@@ -115,6 +142,7 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
         private val startByte = nodeClass.getMethod("getStartByte")
         private val endByte = nodeClass.getMethod("getEndByte")
         private val startPoint = nodeClass.getMethod("getStartPoint")
+        private val parent = nodeClass.getMethod("getParent")
         private val pointRow = pointClass.getMethod("getRow")
         private val pointColumn = pointClass.getMethod("getColumn")
 
@@ -131,6 +159,7 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
         fun endByte(node: Any): Int = endByte.invoke(node) as Int
         fun startRow(node: Any): Int = pointRow.invoke(startPoint.invoke(node)) as Int
         fun startColumn(node: Any): Int = pointColumn.invoke(startPoint.invoke(node)) as Int
+        fun parent(node: Any): Any? = parent.invoke(node)
     }
 
     companion object {
@@ -139,11 +168,20 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
         const val MAX_NODES = 100_000
         const val MAX_IDENTIFIER_BYTES = 1_024
         const val PARSE_TIMEOUT_MICROS = 2_000_000L
+        const val MAX_KIND_ANCESTORS = 8
 
         private val IDENTIFIER = Regex("[" + '$' + "_\\p{L}][" + '$' + "_\\p{L}\\p{N}]*")
         private val IDENTIFIER_NODE_TYPES = setOf(
             "identifier", "property_identifier", "private_property_identifier",
             "shorthand_property_identifier", "shorthand_property_identifier_pattern", "type_identifier",
+        )
+        private val STRUCTURAL_SYMBOL_TYPES = mapOf(
+            "required_parameter" to Symbol.Kind.PARAMETER,
+            "optional_parameter" to Symbol.Kind.PARAMETER,
+            "rest_pattern" to Symbol.Kind.PARAMETER,
+            "type_alias_declaration" to Symbol.Kind.TYPE_ALIAS,
+            "internal_module" to Symbol.Kind.NAMESPACE,
+            "module" to Symbol.Kind.MODULE,
         )
         private val OUTLINE_TYPES = mapOf(
             "class_declaration" to GenericOutline.OutlineItem.Kind.CLASS,

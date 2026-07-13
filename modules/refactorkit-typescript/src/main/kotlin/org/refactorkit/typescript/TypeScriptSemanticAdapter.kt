@@ -32,6 +32,7 @@ import org.refactorkit.core.SymbolResolution
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.treesitter.BonedeTreeSitterBinding
 import org.refactorkit.treesitter.ExternalLspAdapter
 import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
@@ -303,11 +304,19 @@ class TypeScriptSemanticAdapter(
         )
         client.buildSymbols(request.snapshot)
         val resolution = client.resolveSymbol(location)
-        val symbol = resolution.symbol ?: return refusedPlan(
+        val resolvedSymbol = resolution.symbol ?: return refusedPlan(
             request, "typescript.renameSymbolUnresolved", "TypeScript rename target could not be resolved exactly",
             resolution.diagnostics.ifEmpty {
                 listOf(diagnostic("typescript.renameSymbolUnresolved", "TypeScript rename target could not be resolved exactly"))
             },
+        )
+        val symbol = if (resolvedSymbol.kind == org.refactorkit.core.Symbol.Kind.UNKNOWN) {
+            val classified = structuralSymbolKind(request.snapshot, resolvedSymbol.location)
+            if (classified == null) resolvedSymbol else resolvedSymbol.copy(kind = classified)
+        } else resolvedSymbol
+        if (symbol.kind == org.refactorkit.core.Symbol.Kind.UNKNOWN) return refusedPlan(
+            request, "typescript.renameKindUnclassified",
+            "TypeScript rename target has semantic identity but no supported structural kind",
         )
         if (symbol.kind in UNSUPPORTED_RENAME_KINDS) return refusedPlan(
             request, "typescript.renameKindUnsupported",
@@ -507,6 +516,18 @@ class TypeScriptSemanticAdapter(
         evidence = DiagnosticEvidence.STRUCTURAL,
         category = DiagnosticCategory.SAFETY,
     )
+
+    private fun structuralSymbolKind(snapshot: ProjectSnapshot, location: SourceLocation): org.refactorkit.core.Symbol.Kind? {
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val relative = if (location.path.isAbsolute) {
+            val absolute = location.path.toAbsolutePath().normalize()
+            if (!absolute.startsWith(root)) return null else root.relativize(absolute)
+        } else location.path.normalize()
+        val source = snapshot.files.singleOrNull { it.path.normalize() == relative } ?: return null
+        return BonedeTreeSitterBinding().symbolKindAt(
+            source.content, location.range.start.line, location.range.start.character, languageId,
+        )
+    }
 
     private fun dynamicStringReferences(snapshot: ProjectSnapshot, symbolName: String): List<String> {
         val quotedName = Regex("(['\\\"`])${Regex.escape(symbolName)}\\1")
