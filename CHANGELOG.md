@@ -11,6 +11,11 @@ review safety boundaries before applying refactorings.
 
 - Begin the TypeScript/JavaScript semantic adapter band on top of the published
   `v0.5.0` kernel; no new stable capability is claimed yet.
+- Add declarative `typescript-config-declarative-v1` JSONC project modeling for
+  local extends, project references, files/globs, compiler paths/options, aliases,
+  JS/package modes, typed refusals and SHA-256 evidence, projected into the
+  language-neutral Build Model SPI and `ProjectSnapshot` hash without executing
+  Node or build/package code.
 - Add `refactorkit-typescript` with explicit `typescript-lsp-explicit-v1`
   toolchain discovery: opt-in PATH/workspace-local trust, bounded declarative
   package identity/version/entrypoint validation, managed constant `node
