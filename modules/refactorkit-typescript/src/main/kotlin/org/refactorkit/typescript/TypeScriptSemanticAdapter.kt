@@ -6,6 +6,7 @@ import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
+import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.LanguageAdapter
@@ -29,7 +30,9 @@ import org.refactorkit.core.SymbolIndex
 import org.refactorkit.core.SymbolResolution
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.treesitter.ExternalLspAdapter
+import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -52,6 +55,7 @@ interface TypeScriptSemanticClient : AutoCloseable {
     fun resolveSymbol(location: SourceLocation): SymbolResolution
     fun findReferences(symbolId: SymbolId): List<Reference>
     fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic>
+    fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics
     fun requestRename(snapshot: ProjectSnapshot, location: SourceLocation, newName: String): ExternalWorkspaceEditNormalization
 }
 
@@ -68,6 +72,8 @@ class ExternalTypeScriptSemanticClient(
     override fun resolveSymbol(location: SourceLocation): SymbolResolution = adapter.resolveSymbol(location)
     override fun findReferences(symbolId: SymbolId): List<Reference> = adapter.findReferences(symbolId)
     override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = adapter.diagnostics(snapshot)
+    override fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics =
+        adapter.synchronizedDiagnostics(snapshot)
     override fun requestRename(
         snapshot: ProjectSnapshot,
         location: SourceLocation,
@@ -83,7 +89,7 @@ class TypeScriptSemanticAdapter(
     private val projectModel: TypeScriptProjectModel,
     private val client: TypeScriptSemanticClient = ExternalTypeScriptSemanticClient(languageId, toolchain),
 ) : LanguageAdapter, AutoCloseable {
-    private var activeSnapshotHash: String? = null
+    private var activeSnapshot: ProjectSnapshot? = null
 
     init {
         require(languageId in setOf("typescript", "javascript")) { "TypeScript semantic adapter language is invalid" }
@@ -136,7 +142,7 @@ class TypeScriptSemanticAdapter(
                     "TypeScript language server lacks required capabilities: ${missing.joinToString(",")}",
                 )
             } else {
-                activeSnapshotHash = snapshot.hash
+                activeSnapshot = snapshot
                 TypeScriptSemanticStart.Started(client.provenance)
             }
         } catch (failure: Exception) {
@@ -152,15 +158,27 @@ class TypeScriptSemanticAdapter(
         if (active(project)) client.buildSymbols(project) else SymbolIndex(emptyList())
 
     override fun resolveSymbol(location: SourceLocation): SymbolResolution =
-        if (activeSnapshotHash != null && client.isRunning) client.resolveSymbol(location)
+        if (activeSnapshot != null && client.isRunning) client.resolveSymbol(location)
         else SymbolResolution(null, listOf(diagnostic("typescript.semanticNotStarted", "TypeScript semantic adapter is not started")))
 
     override fun findReferences(symbolId: SymbolId): List<Reference> =
-        if (activeSnapshotHash != null && client.isRunning) client.findReferences(symbolId) else emptyList()
+        if (activeSnapshot != null && client.isRunning) client.findReferences(symbolId) else emptyList()
 
     override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> = when {
         !active(project) -> listOf(diagnostic("typescript.semanticNotStarted", "TypeScript semantic adapter is not started for this snapshot"))
-        else -> client.diagnostics(project)
+        else -> when (val result = client.synchronizedDiagnostics(project)) {
+            is ExternalSemanticDiagnostics.Available -> result.diagnostics
+            is ExternalSemanticDiagnostics.Unavailable -> listOf(result.diagnostic)
+        }
+    }
+
+    /** Exact-version semantic gate required by PatchEngine for managed TypeScript apply. */
+    fun diagnosticsGate(): DiagnosticsGate = DiagnosticsGate.enabled("typescript-lsp-exact") { snapshot ->
+        check(semanticScopeCompatible(snapshot)) { "TypeScript diagnostics snapshot is outside the active semantic scope" }
+        when (val result = client.synchronizedDiagnostics(snapshot)) {
+            is ExternalSemanticDiagnostics.Available -> result.diagnostics
+            is ExternalSemanticDiagnostics.Unavailable -> error("${result.diagnostic.code}: ${result.diagnostic.message}")
+        }
     }
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = listOf(
@@ -192,6 +210,26 @@ class TypeScriptSemanticAdapter(
             }
             is ExternalWorkspaceEditNormalization.Accepted -> {
                 val edit = result.normalized.workspaceEdit
+                val before = when (val diagnostics = client.synchronizedDiagnostics(request.snapshot)) {
+                    is ExternalSemanticDiagnostics.Available -> diagnostics.diagnostics
+                    is ExternalSemanticDiagnostics.Unavailable -> return refusedPlan(
+                        request, diagnostics.diagnostic.code ?: "typescript.diagnosticsUnavailable",
+                        diagnostics.diagnostic.message, listOf(diagnostics.diagnostic),
+                    )
+                }
+                val staged = runCatching { WorkspaceEditSimulator.apply(request.snapshot, edit) }.getOrElse { failure ->
+                    return refusedPlan(
+                        request, "typescript.previewSimulationFailed",
+                        failure.message ?: "TypeScript rename preview could not be simulated",
+                    )
+                }
+                val after = when (val diagnostics = client.synchronizedDiagnostics(staged)) {
+                    is ExternalSemanticDiagnostics.Available -> diagnostics.diagnostics
+                    is ExternalSemanticDiagnostics.Unavailable -> return refusedPlan(
+                        request, diagnostics.diagnostic.code ?: "typescript.diagnosticsUnavailable",
+                        diagnostics.diagnostic.message, listOf(diagnostics.diagnostic),
+                    )
+                }
                 PatchPlan(
                     operation = request.operation,
                     status = PatchStatus.PREVIEW,
@@ -201,8 +239,10 @@ class TypeScriptSemanticAdapter(
                     summary = "Rename ${languageId} symbol to $newName in ${edit.edits.size} file operation(s).",
                     affectedFiles = affectedPaths(edit),
                     workspaceEdit = edit,
+                    diagnosticsBefore = before,
+                    diagnosticsAfterPreview = after,
                     warnings = listOf(
-                        "Experimental language-server proposal; stable managed TypeScript mutation acceptance is not complete.",
+                        "Experimental language-server proposal; apply requires the exact TypeScript diagnostics gate.",
                         "Provider=${toolchain.provenance.providerId} TypeScript=${toolchain.provenance.typeScriptVersion}",
                     ),
                     riskLevel = if (languageId == "typescript") RiskLevel.MEDIUM else RiskLevel.HIGH,
@@ -215,12 +255,22 @@ class TypeScriptSemanticAdapter(
     override fun formatEdits(edits: List<TextEdit>): List<TextEdit> = edits
 
     override fun close() {
-        activeSnapshotHash = null
+        activeSnapshot = null
         client.close()
     }
 
     private fun active(snapshot: ProjectSnapshot): Boolean =
-        activeSnapshotHash == snapshot.hash && client.isRunning
+        activeSnapshot?.hash == snapshot.hash && client.isRunning
+
+    private fun semanticScopeCompatible(snapshot: ProjectSnapshot): Boolean {
+        val active = activeSnapshot ?: return false
+        return client.isRunning &&
+            active.workspace.root.toAbsolutePath().normalize() == snapshot.workspace.root.toAbsolutePath().normalize() &&
+            active.modules == snapshot.modules && active.buildModels == snapshot.buildModels &&
+            active.classpathEvidence == snapshot.classpathEvidence &&
+            active.files.map { it.path.normalize() to it.languageId }.toSet() ==
+                snapshot.files.map { it.path.normalize() to it.languageId }.toSet()
+    }
 
     private fun affectedPaths(edit: WorkspaceEdit): Set<Path> = edit.edits.flatMap { operation ->
         when (operation) {

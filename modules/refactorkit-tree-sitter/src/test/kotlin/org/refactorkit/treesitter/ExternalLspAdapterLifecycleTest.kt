@@ -44,6 +44,8 @@ class ExternalLspAdapterLifecycleTest {
         assertEquals(true, provenance.advertisedCapabilities["renameProvider"])
         assertEquals(false, provenance.advertisedCapabilities["referencesProvider"])
         assertEquals(listOf("Service"), adapter.buildSymbols(snapshot).symbols.map { it.name })
+        val exact = assertIs<ExternalSemanticDiagnostics.Available>(adapter.synchronizedDiagnostics(snapshot))
+        assertTrue(exact.diagnostics.isEmpty())
 
         val position = SourceLocation(
             workspace.resolve("sample.ts"),
@@ -57,8 +59,8 @@ class ExternalLspAdapterLifecycleTest {
         assertEquals(source.toAbsolutePath().normalize(), diagnostics.single().location?.path)
         assertEquals(DiagnosticEvidence.COMPILER, diagnostics.single().evidence)
 
-        assertTrue(adapter.openDocument(snapshot.files.single(), 3))
-        assertFalse(adapter.changeDocument(snapshot.files.single(), 3), "document versions must increase")
+        assertFalse(adapter.openDocument(snapshot.files.single(), 3), "unchanged documents are not resent")
+        assertFalse(adapter.changeDocument(snapshot.files.single(), 3), "unchanged documents are not resent")
         assertTrue(adapter.changeDocument(snapshot.files.single().copy(content = "const foo = 2;\n"), 4))
         val normalized = adapter.requestRename(snapshot, position, "bar")
         val accepted = assertIs<ExternalWorkspaceEditNormalization.Accepted>(normalized, normalized.toString()).normalized
@@ -81,6 +83,21 @@ class ExternalLspAdapterLifecycleTest {
         adapter.stop()
         assertFalse(adapter.isRunning)
         assertEquals(null, adapter.lastFailure)
+    }
+
+    @Test
+    fun exactDiagnosticsRefuseUnversionedPublications() {
+        val workspace = Files.createTempDirectory("refactorkit-lsp-unversioned")
+        val snapshot = org.refactorkit.core.ProjectSnapshot(
+            org.refactorkit.core.Workspace(workspace), emptyList(),
+            listOf(org.refactorkit.core.SourceFile(Path.of("sample.ts"), "const value = 1;\n", "typescript")),
+        )
+        val adapter = adapter("unversioned")
+        adapter.start(snapshot)
+
+        val refused = assertIs<ExternalSemanticDiagnostics.Unavailable>(adapter.synchronizedDiagnostics(snapshot))
+        assertEquals("semantic.diagnosticsIncomplete", refused.diagnostic.code)
+        adapter.close()
     }
 
     @Test
@@ -157,7 +174,15 @@ object ExternalLspFixture {
                     }
                     else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"renameProvider":{"prepareProvider":true},"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
                 }
-                "initialized", "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose" -> Unit
+                "textDocument/didOpen", "textDocument/didChange" -> {
+                    val params = LspJson.extractField(request, "params").orEmpty()
+                    val document = LspJson.extractField(params, "textDocument").orEmpty()
+                    val uri = LspJson.extractField(document, "uri") ?: "\"file:///sample.ts\""
+                    val version = LspJson.extractField(document, "version") ?: "0"
+                    val versionField = if (mode == "unversioned") "" else "\"version\":$version,"
+                    writeFrame(output, """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":$uri,$versionField"diagnostics":[]}}""")
+                }
+                "initialized", "textDocument/didClose" -> Unit
                 "textDocument/documentSymbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":21}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}]}""")
                 "textDocument/definition" -> {
                     val params = LspJson.extractField(request, "params").orEmpty()

@@ -17,8 +17,10 @@ review safety boundaries before applying refactorings.
   compiler diagnostics, bounded nested LSP document symbols, semantic
   definition/references delegation, and
   approval-required normalized `LANGUAGE_SERVER` rename previews with no direct
-  writes. Exact semantic symbols and TypeScript staged/apply acceptance remain
-  open.
+  writes. Added exact-version fail-closed staged diagnostics and JVM acceptance
+  for explicit authorization, managed apply, WAL and rollback; stable identity,
+  lock-time evidence revalidation and packaged native real-toolchain acceptance
+  remain open.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

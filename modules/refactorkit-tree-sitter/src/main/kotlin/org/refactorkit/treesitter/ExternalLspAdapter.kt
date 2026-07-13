@@ -89,6 +89,11 @@ data class ExternalSemanticSessionProvenance(
 
 data class ExternalSemanticFailure(val code: String, val message: String)
 
+sealed interface ExternalSemanticDiagnostics {
+    data class Available(val diagnostics: List<Diagnostic>) : ExternalSemanticDiagnostics
+    data class Unavailable(val diagnostic: Diagnostic) : ExternalSemanticDiagnostics
+}
+
 class ExternalLspAdapter(
     private val languageId: String,
     private val command: List<String>,
@@ -365,6 +370,73 @@ class ExternalLspAdapter(
         return result
     }
 
+    /**
+     * Synchronizes every source document to the supplied immutable image and
+     * accepts diagnostics only when every document publishes the exact version.
+     * Missing or unversioned publications fail closed for managed apply gates.
+     */
+    @Synchronized
+    fun synchronizedDiagnostics(project: ProjectSnapshot): ExternalSemanticDiagnostics {
+        if (!isRunning) return unavailableDiagnostics("semantic.notRunning", "External semantic server is not running")
+        if (!supportsServerCapability("documentSymbolProvider")) return unavailableDiagnostics(
+            "semantic.diagnosticsBarrierUnavailable", "Exact diagnostics require documentSymbolProvider",
+        )
+        val files = project.files.filter { it.languageId == languageId }.sortedBy { it.path.toString() }
+        if (files.size > MAX_OPEN_DOCUMENTS) return unavailableDiagnostics(
+            "semantic.diagnosticsDocumentLimit", "Exact diagnostics exceed $MAX_OPEN_DOCUMENTS source documents",
+        )
+        val desired = files.associateBy { it.path.normalize() }
+        openDocuments.keys.filter { it !in desired }.toList().forEach(::closeDocument)
+        pendingDiagParams.clear()
+        for (file in files) {
+            val state = openDocuments[file.path.normalize()]
+            val synchronized = if (state == null) openDocument(file, 1) else {
+                if (state.version == Long.MAX_VALUE) false else forceChangeDocument(file, state.version + 1)
+            }
+            if (!synchronized) return unavailableDiagnostics(
+                "semantic.diagnosticsSynchronizationFailed",
+                "Exact diagnostics could not synchronize '${file.path}'",
+            )
+        }
+        if (files.isEmpty()) return ExternalSemanticDiagnostics.Available(emptyList())
+
+        // Requests are ordered after didChange notifications and act as bounded
+        // protocol barriers while publishDiagnostics notifications are consumed.
+        repeat(2) {
+            files.forEach(::requestDocumentSymbols)
+            if (!isRunning) return unavailableDiagnostics(
+                lastFailure?.code ?: "semantic.diagnosticsBarrierFailed",
+                lastFailure?.message ?: "Exact diagnostics barrier failed",
+            )
+        }
+
+        val expectedRoot = project.workspace.root.toAbsolutePath().normalize()
+        val latest = linkedMapOf<Path, String>()
+        while (pendingDiagParams.isNotEmpty()) {
+            val params = pendingDiagParams.removeFirst()
+            val rawUri = LspJson.extractField(params, "uri")?.let(LspJson::unquote) ?: continue
+            val overlayPath = runCatching { LspJson.uriToPath(rawUri) }.getOrNull() ?: continue
+            val workspacePath = workspaceOverlay?.toWorkspacePath(overlayPath) ?: continue
+            if (!workspacePath.startsWith(expectedRoot)) continue
+            val relative = expectedRoot.relativize(workspacePath).normalize()
+            val state = openDocuments[relative] ?: continue
+            val version = LspJson.extractField(params, "version")?.trim()?.toLongOrNull()
+            if (version == state.version) latest[relative] = params
+        }
+        val missing = desired.keys - latest.keys
+        if (missing.isNotEmpty()) return unavailableDiagnostics(
+            "semantic.diagnosticsIncomplete",
+            "Exact versioned diagnostics were not published for ${missing.size} source document(s)",
+        )
+        val result = mutableListOf<Diagnostic>()
+        latest.toSortedMap(compareBy(Path::toString)).values.forEach { params ->
+            val diagnostics = LspJson.extractField(params, "diagnostics") ?: return@forEach
+            val uri = LspJson.extractField(params, "uri")?.let(LspJson::unquote)
+            result += parseDiagnosticsArray(diagnostics, uri).take(MAX_DIAGNOSTICS - result.size)
+        }
+        return ExternalSemanticDiagnostics.Available(result.take(MAX_DIAGNOSTICS))
+    }
+
     fun supportsServerCapability(name: String): Boolean =
         sessionProvenance?.advertisedCapabilities?.get(name) == true
 
@@ -383,6 +455,12 @@ class ExternalLspAdapter(
 
     @Synchronized
     fun changeDocument(file: SourceFile, version: Long): Boolean {
+        val current = openDocuments[file.path.normalize()] ?: return false
+        if (current.contentSha256 == sha256(file.content)) return false
+        return forceChangeDocument(file, version)
+    }
+
+    private fun forceChangeDocument(file: SourceFile, version: Long): Boolean {
         if (!isRunning || file.content.toByteArray(Charsets.UTF_8).size > MAX_DOCUMENT_BYTES) return false
         val path = file.path.normalize()
         val current = openDocuments[path] ?: return false
@@ -687,6 +765,10 @@ class ExternalLspAdapter(
         }
         return proposal.copy(edits = remapped)
     }
+
+    private fun unavailableDiagnostics(code: String, message: String) = ExternalSemanticDiagnostics.Unavailable(
+        externalDiagnostic(code, message),
+    )
 
     private fun externalDiagnostic(code: String, message: String) = Diagnostic(
         message = message,

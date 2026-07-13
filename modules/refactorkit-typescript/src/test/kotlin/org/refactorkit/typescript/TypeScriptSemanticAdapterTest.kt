@@ -1,11 +1,14 @@
 package org.refactorkit.typescript
 
+import org.refactorkit.core.ApplyAuthorization
+import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.ExternalFileEditProposal
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.ExternalWorkspaceEditNormalizer
 import org.refactorkit.core.ExternalWorkspaceEditProposal
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
@@ -22,6 +25,7 @@ import org.refactorkit.core.SymbolIndex
 import org.refactorkit.core.SymbolResolution
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.Workspace
+import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
 import java.nio.file.Files
 import java.nio.file.Path
@@ -111,7 +115,53 @@ class TypeScriptSemanticAdapterTest {
         assertEquals(setOf(Path.of("src/service.ts")), plan.affectedFiles)
         val modification = assertIs<FileEdit.Modify>(plan.workspaceEdit.edits.single())
         assertEquals("AccountService", modification.textEdits.single().newText)
+        assertEquals(
+            listOf("export class Service {}\n", "export class AccountService {}\n"),
+            client.synchronizedSnapshots.map { it.files.single { file -> file.languageId == "typescript" }.content },
+        )
         assertEquals("export class Service {}\n", Files.readString(fixture.root.resolve("src/service.ts")))
+    }
+
+    @Test
+    fun managedRenamePassesExactDiagnosticsAuthorizationWalAndRollback() {
+        val fixture = fixture()
+        val client = FakeClient()
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+        val plan = adapter.applyRefactoring(RefactoringRequest(
+            operation = "renameSymbol",
+            selection = org.refactorkit.core.CodeSelection(location()),
+            arguments = mapOf("newName" to "AccountService"),
+            snapshot = fixture.snapshot,
+        ))
+
+        val engine = PatchEngine(fixture.root)
+        val applied = assertIs<ApplyResult.Applied>(engine.apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("typescript-test"), adapter.diagnosticsGate(),
+        ))
+        assertEquals("export class AccountService {}\n", Files.readString(fixture.root.resolve("src/service.ts")))
+        assertTrue(Files.isRegularFile(fixture.root.resolve(".refactorkit/transactions/${applied.transaction.id.value}.json")))
+
+        assertIs<ApplyResult.Applied>(engine.rollback(applied.transaction))
+        assertEquals("export class Service {}\n", Files.readString(fixture.root.resolve("src/service.ts")))
+    }
+
+    @Test
+    fun exactDiagnosticsUnavailabilityRefusesRenamePreview() {
+        val fixture = fixture()
+        val unavailable = Diagnostic("missing exact version", Diagnostic.Severity.ERROR, code = "semantic.diagnosticsIncomplete")
+        val client = FakeClient(exactDiagnostics = ExternalSemanticDiagnostics.Unavailable(unavailable))
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+
+        val plan = adapter.applyRefactoring(RefactoringRequest(
+            operation = "renameSymbol",
+            selection = org.refactorkit.core.CodeSelection(location()),
+            arguments = mapOf("newName" to "AccountService"),
+            snapshot = fixture.snapshot,
+        ))
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("semantic.diagnosticsIncomplete", plan.refusalCode)
     }
 
     @Test
@@ -199,10 +249,12 @@ class TypeScriptSemanticAdapterTest {
             "documentSymbolProvider", "textDocumentSync",
         ),
         private val renameRefused: Boolean = false,
+        private val exactDiagnostics: ExternalSemanticDiagnostics = ExternalSemanticDiagnostics.Available(emptyList()),
     ) : TypeScriptSemanticClient {
         override var isRunning: Boolean = false
         override val provenance: ExternalSemanticSessionProvenance? = null
         var startedSnapshot: ProjectSnapshot? = null
+        val synchronizedSnapshots = mutableListOf<ProjectSnapshot>()
 
         override fun start(snapshot: ProjectSnapshot) {
             startedSnapshot = snapshot
@@ -214,6 +266,10 @@ class TypeScriptSemanticAdapterTest {
         override fun resolveSymbol(location: SourceLocation): SymbolResolution = SymbolResolution(symbol())
         override fun findReferences(symbolId: SymbolId): List<Reference> = listOf(Reference(symbolId, symbolLocation()))
         override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = emptyList()
+        override fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics {
+            synchronizedSnapshots += snapshot
+            return exactDiagnostics
+        }
         override fun requestRename(
             snapshot: ProjectSnapshot,
             location: SourceLocation,
