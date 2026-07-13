@@ -76,16 +76,25 @@ session provenance. Diagnostics retain bounded message, code, severity, exact
 range and overlay-to-workspace path and are classified as compiler/type-resolution
 evidence.
 
-Managed preview/apply uses a stricter exact-version diagnostics path. Every source
-file is synchronized with a monotonically increasing full-document version and
-bounded document-symbol requests provide protocol barriers. A clean or non-clean
-publication is accepted only when every source file publishes the exact expected
-version. Missing, stale, unversioned or over-limit results fail closed. Preview
-stores both original and staged diagnostic images; managed apply must pass
-`TypeScriptSemanticAdapter.diagnosticsGate()` to `PatchEngine`. File-set-changing
-proposals such as semantic file rename are authorized only by their exact staged
-snapshot hash in a bounded 128-entry session allowlist. This permits diagnostics
-for the new path without accepting arbitrary scope changes.
+Managed preview/apply uses `typescript-compiler-exact-v1`, a request-correlated
+compiler diagnostics provider independent of optional LSP publication versions.
+RefactorKit materializes the exact immutable snapshot plus hash-bound config evidence
+in a source-only overlay and launches the explicit Node binary against the
+hash-bound `lib/typescript.js` compiler API through a fixed bundled bridge. The
+bridge forces `noEmit`, disables incremental output, executes no package scripts or
+plugins, restricts compiler reads to the overlay and explicit compiler-library root,
+returns the requested snapshot hash and at most 500 structured diagnostics,
+and is bounded to 30 seconds, 512 MiB V8 old space, 8 MiB stdout and 64 KiB stderr.
+Overlay mutation, process failure, malformed/incomplete output or snapshot mismatch
+fails closed.
+
+Upstream unversioned `publishDiagnostics` notifications remain unacceptable; they
+are not promoted by inference. Preview stores original and staged compiler images
+and now refuses immediately when a semantic proposal introduces a new compiler
+error. Managed apply reruns the same provider under the writer lock through
+`TypeScriptSemanticAdapter.diagnosticsGate()` and `PatchEngine`. File-set-changing
+proposals are authorized only by their exact staged snapshot hash in a bounded
+128-entry session allowlist.
 
 ## Layered capability schema
 
@@ -106,7 +115,7 @@ workspace. Both nested `DocumentSymbol` and
 `SymbolInformation` forms are normalized with exact UTF-16 ranges, portable path
 remapping, a 256-file request cap and 10,000-symbol result cap. Structural
 Tree-sitter symbols are used only when no semantic document-symbol capability is
-active. Cross-project stable compiler identity/workspace search remains T3 work.
+active. Cross-session semantic IDs use the `lsp-symbol-v1` scheme described above.
 
 `renameSymbol` first builds the exact semantic index, resolves the selected
 symbol, and requires `textDocument/prepareRename` to return a bounded range that

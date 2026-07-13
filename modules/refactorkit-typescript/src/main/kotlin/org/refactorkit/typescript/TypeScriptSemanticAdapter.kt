@@ -80,6 +80,7 @@ interface TypeScriptSemanticClient : AutoCloseable {
 class ExternalTypeScriptSemanticClient(
     languageId: String,
     toolchain: TypeScriptSemanticToolchain,
+    projectModel: TypeScriptProjectModel,
 ) : TypeScriptSemanticClient {
     private val adapter = ExternalLspAdapter(
         languageId,
@@ -90,9 +91,15 @@ class ExternalTypeScriptSemanticClient(
             })
         }.toString(),
     )
+    private val compilerDiagnostics = TypeScriptCompilerDiagnostics(toolchain, projectModel)
+    private val evidencePaths = projectModel.evidence.map { it.path.normalize() }.toSet()
+    private var auxiliaryFiles: List<SourceFile> = emptyList()
     override val isRunning: Boolean get() = adapter.isRunning
     override val provenance: ExternalSemanticSessionProvenance? get() = adapter.sessionProvenance
-    override fun start(snapshot: ProjectSnapshot) = adapter.start(snapshot)
+    override fun start(snapshot: ProjectSnapshot) {
+        auxiliaryFiles = snapshot.files.filter { it.path.normalize() in evidencePaths }
+        adapter.start(snapshot)
+    }
     override fun supports(capability: String): Boolean = adapter.supportsServerCapability(capability)
     override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex = adapter.buildSymbols(snapshot)
     override fun searchWorkspaceSymbols(query: String): List<org.refactorkit.core.Symbol> =
@@ -101,13 +108,16 @@ class ExternalTypeScriptSemanticClient(
     override fun findReferences(symbolId: SymbolId): List<Reference> = adapter.findReferences(symbolId)
     override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = adapter.diagnostics(snapshot)
     override fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics =
-        adapter.synchronizedDiagnostics(snapshot)
+        compilerDiagnostics.analyze(snapshot, auxiliaryFiles)
     override fun requestRename(
         snapshot: ProjectSnapshot,
         location: SourceLocation,
         newName: String,
     ): ExternalWorkspaceEditNormalization = adapter.requestRename(snapshot, location, newName)
-    override fun close() = adapter.close()
+    override fun close() {
+        auxiliaryFiles = emptyList()
+        adapter.close()
+    }
 }
 
 /** Experimental compiler/LSP-backed adapter. It returns proposals, never direct writes. */
@@ -115,7 +125,7 @@ class TypeScriptSemanticAdapter(
     private val languageId: String,
     private val toolchain: TypeScriptSemanticToolchain,
     private val projectModel: TypeScriptProjectModel,
-    private val client: TypeScriptSemanticClient = ExternalTypeScriptSemanticClient(languageId, toolchain),
+    private val client: TypeScriptSemanticClient = ExternalTypeScriptSemanticClient(languageId, toolchain, projectModel),
     private val currentTimeMillis: () -> Long = System::currentTimeMillis,
 ) : LanguageAdapter, AutoCloseable {
     private var activeSnapshot: ProjectSnapshot? = null
@@ -285,7 +295,7 @@ class TypeScriptSemanticAdapter(
     }
 
     /** Exact-version semantic gate required by PatchEngine for managed TypeScript apply. */
-    fun diagnosticsGate(): DiagnosticsGate = DiagnosticsGate.enabled("typescript-lsp-exact") { snapshot ->
+    fun diagnosticsGate(): DiagnosticsGate = DiagnosticsGate.enabled("typescript-compiler-exact-v1") { snapshot ->
         check(semanticScopeCompatible(snapshot)) { "TypeScript diagnostics snapshot is outside the active semantic scope" }
         check(semanticCompleteness().managedMutationEligible) {
             "typescript.semanticCompletenessInsufficient: ${semanticCompleteness().summary}"
@@ -352,6 +362,22 @@ class TypeScriptSemanticAdapter(
             "typescript.externalConsumersUnknown",
             "Exported TypeScript/JavaScript symbol may have consumers outside the bounded workspace; explicit allowExternalConsumers=true is required",
         )
+        // Real TypeScript servers load configured projects lazily. A bounded
+        // workspace-symbol request is a semantic project barrier before rename;
+        // without it some servers return a declaration-only syntactic edit.
+        repeat(3) { attempt ->
+            client.buildSymbols(request.snapshot)
+            client.searchWorkspaceSymbols(symbol.name)
+            if (attempt < 2) try {
+                Thread.sleep(50)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return refusedPlan(
+                    request, "typescript.semanticBarrierInterrupted",
+                    "TypeScript semantic project barrier was interrupted",
+                )
+            }
+        }
         val dynamicReferences = dynamicStringReferences(request.snapshot, symbol.name)
         val dynamicReferenceOverride = request.arguments["allowDynamicReferences"]?.toBooleanStrictOrNull() == true
         if (dynamicReferences.isNotEmpty() && !dynamicReferenceOverride) return refusedPlan(
@@ -396,6 +422,14 @@ class TypeScriptSemanticAdapter(
                         diagnostics.diagnostic.message, listOf(diagnostics.diagnostic),
                     )
                 }
+                val regressions = diagnosticsRegression(before, after)
+                if (regressions.isNotEmpty()) return refusedPlan(
+                    request,
+                    "typescript.diagnosticsRegression",
+                    "TypeScript rename introduces ${regressions.size} new compiler error(s): " +
+                        regressions.take(3).joinToString("; ") { it.message },
+                    regressions,
+                )
                 rememberApprovedStagedSnapshot(staged.hash)
                 val completeness = semanticCompleteness()
                 PatchPlan(
@@ -498,6 +532,17 @@ class TypeScriptSemanticAdapter(
             }
         }
     }
+
+    private fun diagnosticsRegression(before: List<Diagnostic>, after: List<Diagnostic>): List<Diagnostic> {
+        val existing = before.filter { it.severity == Diagnostic.Severity.ERROR }.map(::diagnosticKey).toSet()
+        return after.filter { it.severity == Diagnostic.Severity.ERROR && diagnosticKey(it) !in existing }
+    }
+
+    private fun diagnosticKey(value: Diagnostic): String = listOf(
+        value.code.orEmpty(), value.message, value.location?.path?.normalize()?.toString().orEmpty(),
+        value.location?.range?.start?.line?.toString().orEmpty(),
+        value.location?.range?.start?.character?.toString().orEmpty(),
+    ).joinToString("|")
 
     private fun affectedPaths(edit: WorkspaceEdit): Set<Path> = edit.edits.flatMap { operation ->
         when (operation) {
@@ -688,7 +733,7 @@ class TypeScriptSemanticAdapter(
                 LanguageCapability("definition", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("workspaceSymbols", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("references", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
-                LanguageCapability("diagnostics", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
+                LanguageCapability("diagnostics", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.COMPILER),
                 LanguageCapability(
                     "renameSymbol", CapabilityStability.EXPERIMENTAL,
                     SemanticEvidenceKind.LANGUAGE_SERVER, MutationAuthority.PROPOSAL_ONLY,

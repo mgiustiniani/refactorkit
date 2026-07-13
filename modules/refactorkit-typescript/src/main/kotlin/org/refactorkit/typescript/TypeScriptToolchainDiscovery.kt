@@ -61,6 +61,7 @@ data class TypeScriptSemanticToolchain(
     val typeScriptServerEntrypoint: Path,
     val command: List<String>,
     val provenance: TypeScriptToolchainProvenance,
+    val typeScriptCompilerEntrypoint: Path = typeScriptServerEntrypoint.resolveSibling("typescript.js"),
 )
 
 sealed interface TypeScriptToolchainDiscovery {
@@ -173,7 +174,13 @@ class TypeScriptToolchainDiscoverer(
             "TypeScript server entrypoint",
             diagnostics,
         )
-        if (languageServerEntrypoint == null || typeScriptEntrypoint == null) {
+        val typeScriptCompilerEntrypoint = resolvePackageFile(
+            typeScriptRoot,
+            "lib/typescript.js",
+            "TypeScript compiler API entrypoint",
+            diagnostics,
+        )
+        if (languageServerEntrypoint == null || typeScriptEntrypoint == null || typeScriptCompilerEntrypoint == null) {
             return TypeScriptToolchainDiscovery.Refused(diagnostics)
         }
 
@@ -183,6 +190,7 @@ class TypeScriptToolchainDiscoverer(
             evidence("language-server-entrypoint", languageServerEntrypoint, MAX_ENTRYPOINT_BYTES),
             evidence("typescript-package", typeScriptPackage.manifest, MAX_MANIFEST_BYTES),
             evidence("typescript-server-entrypoint", typeScriptEntrypoint, MAX_ENTRYPOINT_BYTES),
+            evidence("typescript-compiler-entrypoint", typeScriptCompilerEntrypoint, MAX_ENTRYPOINT_BYTES),
         ).mapNotNull { result ->
             result.getOrElse {
                 diagnostics += refusal("typescript.toolchainEvidenceUnavailable", it.message ?: "Toolchain evidence unavailable")
@@ -195,6 +203,7 @@ class TypeScriptToolchainDiscoverer(
             nodeExecutable = node,
             languageServerEntrypoint = languageServerEntrypoint,
             typeScriptServerEntrypoint = typeScriptEntrypoint,
+            typeScriptCompilerEntrypoint = typeScriptCompilerEntrypoint,
             command = listOf(
                 node.toString(), "--max-old-space-size=$LANGUAGE_SERVER_HEAP_MIB",
                 languageServerEntrypoint.toString(), "--stdio",

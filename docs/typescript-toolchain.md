@@ -48,7 +48,8 @@ An available toolchain records:
 - normalized Node, language-server and TypeScript versions;
 - canonical Node and entrypoint paths;
 - SHA-256 and size for Node, both package manifests, the language-server
-  entrypoint and TypeScript `tsserver.js`;
+  entrypoint, TypeScript `tsserver.js`, and TypeScript compiler API
+  `typescript.js`;
 - the exact LSP command vector (`node`, constant 512 MiB V8 old-space limit,
   language-server entrypoint, `--stdio`).
 
@@ -72,7 +73,7 @@ Node `22.18.0`:
 
 | Node | `typescript-language-server` | TypeScript | Qualification |
 |------|------------------------------|------------|---------------|
-| 22.18.0 | 5.1.3 | 5.9.3 | Linux x86-64, Windows x86-64, macOS x86-64 and arm64 packaged read operations and fail-closed mutation boundary |
+| 22.18.0 | 5.1.3 | 5.9.3 | Linux x86-64, Windows x86-64, macOS x86-64 and arm64 packaged reads, exact compiler diagnostics, path-alias/re-export rename, apply/WAL/rollback |
 
 Both packages declare Apache-2.0. Their exact npm integrity hashes and transitive
 package graph are committed in
@@ -89,12 +90,16 @@ source document before compiler document/workspace symbol requests.
 
 Upstream `typescript-language-server` 5.1.3 publishes diagnostics without LSP
 `version`, even when the client advertises `publishDiagnostics.versionSupport`.
-RefactorKit deliberately rejects those publications as
-`semantic.diagnosticsIncomplete`. Native qualification therefore proves stable
-search/definition/references and that rename reaches the exact diagnostics gate
-without creating a WAL, but does **not** promote managed mutation support. Stable
-apply/WAL/recovery/rollback remains blocked until a qualified diagnostics provider
-can prove the exact snapshot version.
+RefactorKit does not infer a version for those notifications. Managed flows instead
+use `typescript-compiler-exact-v1`: a bundled fixed bridge invokes only the
+hash-bound `lib/typescript.js` compiler API against an immutable source/config
+overlay, restricts compiler filesystem reads to that overlay and the explicit
+compiler-library root, forces no-emit/non-incremental analysis, returns the
+requested snapshot hash and structured bounded diagnostics, and is re-run under
+the writer lock.
 
-Stable support also requires native crash/recovery acceptance and expansion of the
-supported server-version matrix.
+Native qualification now proves stable reads, path-alias and re-export rename,
+exact before/after compiler diagnostics, explicit apply, WAL creation and exact
+rollback. `typescript-language-server` remains a proposal provider; stable mutation
+authority still requires native process-kill/recovery acceptance, OS RSS policy and
+expansion of the supported server-version matrix.

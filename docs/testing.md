@@ -273,11 +273,11 @@ represented by golden, unit, or protocol tests:
 `scripts/smoke-packaged-typescript.py` runs only against the self-contained
 RefactorKit package and the lockfile-pinned CI toolchain in
 `qualification/typescript-toolchain`. It verifies stable IDs across fresh server
-sessions, path-alias project definition/reference reads, source immutability, and
-that upstream unversioned diagnostics refuse managed rename before any transaction
-journal exists. CI installs packages with `npm ci --ignore-scripts`; runtime code
-never invokes npm. This is a fail-closed read/proposal qualification, not managed
-TypeScript mutation acceptance.
+sessions, path-alias project definition/reference reads, source immutability,
+exact `typescript-compiler-exact-v1` before/after diagnostics, three-file semantic
+rename through an alias and re-export, explicit apply, WAL creation and exact
+rollback. CI installs packages with `npm ci --ignore-scripts`; runtime code never
+invokes npm. Upstream unversioned LSP diagnostics are not trusted or relabelled.
 
 ## Agent simulation tests
 

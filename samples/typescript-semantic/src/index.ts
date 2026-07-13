@@ -1,1 +1,1 @@
-export { UserService } from "@core/UserService";
+export { UserService } from "./core/UserService";

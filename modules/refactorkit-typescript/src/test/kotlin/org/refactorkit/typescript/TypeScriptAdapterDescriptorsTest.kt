@@ -24,6 +24,10 @@ class TypeScriptAdapterDescriptorsTest {
         assertEquals(SemanticEvidenceKind.NATIVE_AST, outline.evidence)
         assertEquals(AdapterExecutionMode.IN_PROCESS, outline.runtime?.executionMode)
         assertEquals(setOf("ts"), outline.extensions)
+        assertEquals(
+            SemanticEvidenceKind.COMPILER,
+            descriptor.capabilities.single { it.operation == "diagnostics" }.evidence,
+        )
         val rename = descriptor.capabilities.single { it.operation == "renameSymbol" }
         assertEquals(SemanticEvidenceKind.LANGUAGE_SERVER, rename.evidence)
         assertEquals(MutationAuthority.PROPOSAL_ONLY, rename.mutationAuthority)

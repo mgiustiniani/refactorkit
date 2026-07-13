@@ -59,10 +59,11 @@ Source-only semantic overlays default to 100,000 files and 512 MiB of UTF-8
 source content. The experimental TypeScript provider adds a constant 512 MiB V8
 old-space argument, 256 synchronized documents of at most 4 MiB each, 500
 compiler diagnostics, 10,000 document symbols, and no more than three explicit
-restart attempts per rolling 60 seconds. Exact diagnostics permit at most 20
-additional 50 ms protocol barriers to consume a server's bounded debounce queue;
-missing or unversioned publications still fail closed. The V8 limit is not an OS
-RSS sandbox.
+restart attempts per rolling 60 seconds. LSP publication collection permits at
+most 20 additional 50 ms protocol barriers; missing or unversioned publications
+remain untrusted. Managed `typescript-compiler-exact-v1` analysis separately uses
+a 30-second process timeout, 512 MiB V8 old-space limit, 8 MiB stdout, 64 KiB
+stderr, 64 projects and 500 diagnostics. The V8 limits are not an OS RSS sandbox.
 External workspace-edit normalization defaults to 1,000 file
 operations, 10,000 text edits, and 16 MiB replacement content. Exceeding any
 limit is an explicit refusal, never truncation into an applicable proposal.

@@ -31,7 +31,7 @@ class TypeScriptToolchainDiscoveryTest {
         assertEquals("4.3.3", toolchain.provenance.languageServerVersion)
         assertEquals("5.7.2", toolchain.provenance.typeScriptVersion)
         assertEquals(
-            listOf("node-executable", "typescript-package", "typescript-server-entrypoint", "language-server-entrypoint", "language-server-package").sorted(),
+            listOf("node-executable", "typescript-package", "typescript-server-entrypoint", "typescript-compiler-entrypoint", "language-server-entrypoint", "language-server-package").sorted(),
             toolchain.provenance.evidence.map { it.role },
         )
         assertTrue(toolchain.provenance.evidence.all { it.sha256.length == 64 && it.size > 0 })
@@ -185,6 +185,7 @@ class TypeScriptToolchainDiscoveryTest {
         val typeScriptRoot = packageBase.resolve("typescript").createDirectories()
         typeScriptRoot.resolve("lib").createDirectories()
         typeScriptRoot.resolve("lib/tsserver.js").writeText("// compiler server")
+        typeScriptRoot.resolve("lib/typescript.js").writeText("// compiler api")
         typeScriptRoot.resolve("package.json").writeText(
             """{"name":"typescript","version":"$typeScriptVersion","scripts":{"prepare":"touch SHOULD_NOT_EXIST"}}""",
         )

@@ -17,7 +17,7 @@ review safety boundaries before applying refactorings.
   compiler diagnostics, bounded nested LSP document symbols, semantic
   definition/references delegation, and
   approval-required normalized `LANGUAGE_SERVER` rename previews with no direct
-  writes. Added exact-version fail-closed staged diagnostics and JVM acceptance
+  writes. Added fail-closed exact staged diagnostics and JVM acceptance
   for lock-time toolchain/project evidence revalidation, explicit authorization,
   managed apply, WAL and rollback; stable identity and packaged native
   real-toolchain acceptance remain open. Added a constant 512 MiB Node/V8
@@ -45,9 +45,13 @@ review safety boundaries before applying refactorings.
   Real-toolchain packaged qualification pins Node 22.18.0,
   `typescript-language-server` 5.1.3 and TypeScript 5.9.3 under a script-disabled
   npm lockfile on Linux, Windows and macOS CI. Explicit `tsserver.js`
-  initialization, lazy project opening and bounded diagnostic debounce barriers
-  make real read operations deterministic; upstream unversioned diagnostics remain
-  fail-closed, so managed mutation is not promoted.
+  initialization, lazy project opening and bounded semantic barriers make real
+  operations deterministic. Added `typescript-compiler-exact-v1`, a fixed bundled
+  no-emit bridge over the hash-bound TypeScript compiler API: request-correlated
+  staged diagnostics reject new errors and are re-run under the writer lock.
+  Packaged native qualification now covers path aliases, cross-file re-export
+  rename, explicit apply, WAL and exact rollback; upstream unversioned LSP
+  diagnostics remain untrusted.
   Added one-shot CLI TypeScript/JavaScript search, definition, references,
   diagnostics and rename with explicit toolchain flags, JSON output, preview by
   default and managed apply only under `--apply`. Completed LSP language routing

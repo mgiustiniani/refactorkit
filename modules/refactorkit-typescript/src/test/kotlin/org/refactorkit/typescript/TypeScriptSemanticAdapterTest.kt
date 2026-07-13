@@ -381,6 +381,27 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun newCompilerErrorsRefuseRenamePreviewBeforeManagedApply() {
+        val fixture = fixture()
+        val regression = Diagnostic(
+            "Module has no exported member", Diagnostic.Severity.ERROR,
+            code = "TS2305", evidence = org.refactorkit.core.DiagnosticEvidence.COMPILER,
+        )
+        val client = FakeClient(exactDiagnosticsProvider = { snapshot ->
+            if (snapshot.hash == fixture.snapshot.hash) ExternalSemanticDiagnostics.Available(emptyList())
+            else ExternalSemanticDiagnostics.Available(listOf(regression))
+        })
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+
+        val plan = adapter.applyRefactoring(renameRequest(fixture.snapshot))
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("typescript.diagnosticsRegression", plan.refusalCode)
+        assertEquals(listOf("TS2305"), plan.diagnosticsAfterPreview.map(Diagnostic::code))
+    }
+
+    @Test
     fun nativeAstClassifiesSemanticUnknownParameterForRenameCatalogue() {
         val fixture = fixture()
         val snapshot = fixture.snapshot.copy(files = fixture.snapshot.files.map {
@@ -555,6 +576,7 @@ class TypeScriptSemanticAdapterTest {
         ),
         private val renameRefused: Boolean = false,
         private val exactDiagnostics: ExternalSemanticDiagnostics = ExternalSemanticDiagnostics.Available(emptyList()),
+        private val exactDiagnosticsProvider: ((ProjectSnapshot) -> ExternalSemanticDiagnostics)? = null,
         sessionProvenance: ExternalSemanticSessionProvenance? = null,
         private val unresolvedSymbol: Boolean = false,
         private val symbolKind: Symbol.Kind = Symbol.Kind.CLASS,
@@ -585,7 +607,7 @@ class TypeScriptSemanticAdapterTest {
         override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = emptyList()
         override fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics {
             synchronizedSnapshots += snapshot
-            return exactDiagnostics
+            return exactDiagnosticsProvider?.invoke(snapshot) ?: exactDiagnostics
         }
         override fun requestRename(
             snapshot: ProjectSnapshot,

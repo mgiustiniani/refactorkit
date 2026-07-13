@@ -91,21 +91,38 @@ def main() -> int:
             raise AssertionError(f"real-server references omitted the declaration: {references}")
 
         diagnostics = json.loads(run(cli, common, ["diagnostics"]).stdout)
-        if not any(item.get("code") == "semantic.diagnosticsIncomplete" for item in diagnostics):
-            raise AssertionError(f"upstream unversioned diagnostics did not fail closed: {diagnostics}")
-        refusal = run(
+        if diagnostics:
+            raise AssertionError(f"exact compiler diagnostics unexpectedly failed: {diagnostics}")
+        applied = json.loads(run(
             cli, common,
-            ["rename", "--file", "src/core/UserService.ts", "--line", "1", "--character", "13", "--to", "AccountService"],
-            expected=1,
+            ["rename", "--file", "src/core/UserService.ts", "--line", "1", "--character", "13", "--to", "AccountService", "--apply"],
+        ).stdout)
+        if applied.get("status") != "applied" or len(applied.get("changedFilePaths", [])) != 3:
+            raise AssertionError(f"managed real-toolchain rename was incomplete: {applied}")
+        expected_fragments = {
+            "src/app.ts": ("import { AccountService }", "new AccountService()"),
+            "src/index.ts": ("export { AccountService as UserService }",),
+            "src/core/UserService.ts": ("class AccountService",),
+        }
+        for relative, fragments in expected_fragments.items():
+            content = (workspace / relative).read_text()
+            if not all(fragment in content for fragment in fragments):
+                raise AssertionError(f"managed rename did not update {relative}: {content}")
+        transaction_id = applied.get("transactionId")
+        journal = workspace / ".refactorkit" / "transactions" / f"{transaction_id}.json"
+        if not transaction_id or not journal.is_file():
+            raise AssertionError("managed rename did not create its WAL transaction journal")
+        rollback = subprocess.run(
+            command_for(cli, ["patch", "rollback", transaction_id, "--root", str(workspace)]),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45,
+            env={key: value for key, value in os.environ.items() if key != "JAVA_HOME"},
         )
-        if "Exact versioned diagnostics were not published" not in refusal.stderr:
-            raise AssertionError(f"managed rename did not preserve exact-version refusal: {refusal.stderr}")
+        if rollback.returncode != 0:
+            raise AssertionError(f"rollback failed: {rollback.stdout}\n{rollback.stderr}")
         if tree_hash(workspace) != before:
-            raise AssertionError("proposal/refusal acceptance changed source files")
-        if (workspace / ".refactorkit" / "transactions").exists():
-            raise AssertionError("refused real-toolchain rename created a transaction journal")
+            raise AssertionError("real-toolchain rollback did not restore the exact source image")
 
-    print("Packaged TypeScript acceptance passed: real search/definition/references and exact-version fail-closed rename.")
+    print("Packaged TypeScript acceptance passed: real reads, exact compiler diagnostics, apply/WAL and rollback.")
     return 0
 
 
