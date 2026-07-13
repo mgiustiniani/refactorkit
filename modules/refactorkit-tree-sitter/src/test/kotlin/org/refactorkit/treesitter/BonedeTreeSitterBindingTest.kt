@@ -43,12 +43,13 @@ class BonedeTreeSitterBindingTest {
 
     @Test
     fun classifiesTypeAliasesParametersAndNamespacesAtExactUtf16Positions() {
-        val code = "type UserId = string;\nfunction find(id: UserId): void {}\nnamespace Api {}\n"
+        val code = "type UserId = string;\nfunction find(id: UserId): void {}\nnamespace Api {}\nmodule Legacy {}\n"
         val binding = BonedeTreeSitterBinding()
 
         assertEquals(Symbol.Kind.TYPE_ALIAS, binding.symbolKindAt(code, 0, 5, "typescript"))
         assertEquals(Symbol.Kind.PARAMETER, binding.symbolKindAt(code, 1, 14, "typescript"))
         assertEquals(Symbol.Kind.NAMESPACE, binding.symbolKindAt(code, 2, 10, "typescript"))
+        assertEquals(Symbol.Kind.MODULE, binding.symbolKindAt(code, 3, 7, "typescript"))
     }
 
     @Test

@@ -647,7 +647,6 @@ class TypeScriptSemanticAdapter(
             org.refactorkit.core.Symbol.Kind.UNKNOWN,
             org.refactorkit.core.Symbol.Kind.CONSTRUCTOR,
             org.refactorkit.core.Symbol.Kind.PACKAGE,
-            org.refactorkit.core.Symbol.Kind.MODULE,
         )
         private val RESERVED_IDENTIFIERS = setOf(
             "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",

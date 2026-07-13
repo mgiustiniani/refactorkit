@@ -48,7 +48,8 @@ review safety boundaries before applying refactorings.
   cross-file re-export updates and server-required file renames, with mandatory
   prepare-rename range validation against the exact UTF-16 source image. Native
   Tree-sitter ancestor classification safely promotes generic semantic symbols
-  for type aliases, parameters and namespaces; unclassified kinds remain refused.
+  for type aliases, parameters, namespaces and identifier-based internal modules;
+  ambient external string-module names and unclassified kinds remain refused.
   File-changing plans retain exact staged file-set hashes bounded to 128 retained
   previews plus WAL/rollback restoration.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for

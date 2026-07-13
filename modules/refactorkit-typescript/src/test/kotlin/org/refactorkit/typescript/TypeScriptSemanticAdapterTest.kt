@@ -397,6 +397,22 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun nativeAstDistinguishesInternalModuleFromNamespace() {
+        val fixture = fixture()
+        val snapshot = fixture.snapshot.copy(files = fixture.snapshot.files.map {
+            it.copy(content = "module       Service {}\n")
+        })
+        val adapter = TypeScriptSemanticAdapter(
+            "typescript", fixture.toolchain, fixture.model, FakeClient(symbolKind = Symbol.Kind.UNKNOWN),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(snapshot))
+
+        val plan = adapter.applyRefactoring(renameRequest(snapshot, "AccountModule"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.summary.startsWith("Rename module"))
+    }
+
+    @Test
     fun renameRequiresSafeIdentifierExactSymbolAndSupportedKind() {
         val fixture = fixture()
         val invalidAdapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, FakeClient())

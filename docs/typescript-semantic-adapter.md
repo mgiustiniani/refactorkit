@@ -80,12 +80,13 @@ contains the requested UTF-16 position in the exact source image. Null, malforme
 or out-of-image prepare results refuse before requesting edits. Safe non-reserved
 Unicode identifiers (including private `#` identifiers)
 are accepted for class/interface/enum/function/method/property/field/variable/
-constant/type-alias/type-parameter/parameter/namespace symbols. When the LSP
+constant/type-alias/type-parameter/parameter/namespace/internal-module symbols. When the LSP
 returns a session-exact but generic `UNKNOWN` kind, bounded native Tree-sitter
 ancestor classification may promote only recognized type-alias, parameter or
-namespace declarations; an unclassified kind remains refused. Unresolved,
-unknown, constructor,
-package, module, invalid and no-op targets refuse before requesting an edit. The
+namespace/module declarations; `module Identifier` and `namespace Identifier`
+are distinguished from bounded node text. Ambient external string-module names
+are intentionally not identifiers and remain refused. An unclassified kind,
+unresolved symbol, constructor, package, invalid or no-op target refuses before requesting an edit. The
 For declaration/composite/project-reference library surfaces, an exported symbol
 is treated as having potentially unbounded external consumers. Preview refuses
 with `typescript.externalConsumersUnknown` unless

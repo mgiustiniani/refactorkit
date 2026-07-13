@@ -43,7 +43,7 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
         if (character > sourceLine.length || character > 0 && character < sourceLine.length &&
             sourceLine[character].isLowSurrogate() && sourceLine[character - 1].isHighSurrogate()) return null
         val utf8Column = sourceLine.substring(0, character).toByteArray(Charsets.UTF_8).size
-        return parse(content, languageId) { reflection, root, _ ->
+        return parse(content, languageId) { reflection, root, bytes ->
             var resolved: Symbol.Kind? = null
             walkNamed(reflection, root) { node ->
                 if (resolved != null || reflection.type(node) !in IDENTIFIER_NODE_TYPES ||
@@ -51,7 +51,7 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
                 var current: Any? = node
                 repeat(MAX_KIND_ANCESTORS) {
                     current = current?.let(reflection::parent)
-                    val kind = current?.let { STRUCTURAL_SYMBOL_TYPES[reflection.type(it)] }
+                    val kind = current?.let { structuralSymbolKind(reflection, it, bytes) }
                     if (kind != null) {
                         resolved = kind
                         return@walkNamed
@@ -60,6 +60,18 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
             }
             resolved
         }
+    }
+
+    private fun structuralSymbolKind(reflection: ReflectionApi, node: Any, bytes: ByteArray): Symbol.Kind? {
+        val type = reflection.type(node)
+        if (type != "internal_module") return STRUCTURAL_SYMBOL_TYPES[type]
+        val start = reflection.startByte(node)
+        val end = (start + MAX_MODULE_KEYWORD_BYTES).coerceAtMost(reflection.endByte(node)).coerceAtMost(bytes.size)
+        if (start !in 0 until end) return null
+        val prefix = bytes.copyOfRange(start, end).toString(Charsets.UTF_8).trimStart()
+        return if (prefix.startsWith("module") && prefix.drop(6).firstOrNull()?.isWhitespace() == true) {
+            Symbol.Kind.MODULE
+        } else Symbol.Kind.NAMESPACE
     }
 
     override fun findIdentifier(
@@ -169,6 +181,7 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
         const val MAX_IDENTIFIER_BYTES = 1_024
         const val PARSE_TIMEOUT_MICROS = 2_000_000L
         const val MAX_KIND_ANCESTORS = 8
+        const val MAX_MODULE_KEYWORD_BYTES = 64
 
         private val IDENTIFIER = Regex("[" + '$' + "_\\p{L}][" + '$' + "_\\p{L}\\p{N}]*")
         private val IDENTIFIER_NODE_TYPES = setOf(
@@ -180,7 +193,6 @@ class BonedeTreeSitterBinding : TreeSitterNativeBinding {
             "optional_parameter" to Symbol.Kind.PARAMETER,
             "rest_pattern" to Symbol.Kind.PARAMETER,
             "type_alias_declaration" to Symbol.Kind.TYPE_ALIAS,
-            "internal_module" to Symbol.Kind.NAMESPACE,
             "module" to Symbol.Kind.MODULE,
         )
         private val OUTLINE_TYPES = mapOf(
