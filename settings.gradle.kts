@@ -23,5 +23,6 @@ include(
     ":modules:refactorkit-mcp",
     ":modules:refactorkit-web-importer",
     ":modules:refactorkit-tree-sitter",
+    ":modules:refactorkit-typescript",
     ":modules:refactorkit-testkit",
 )

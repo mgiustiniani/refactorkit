@@ -11,6 +11,12 @@ review safety boundaries before applying refactorings.
 
 - Begin the TypeScript/JavaScript semantic adapter band on top of the published
   `v0.5.0` kernel; no new stable capability is claimed yet.
+- Add `refactorkit-typescript` with explicit `typescript-lsp-explicit-v1`
+  toolchain discovery: opt-in PATH/workspace-local trust, bounded declarative
+  package identity/version/entrypoint validation, managed constant `node
+  --version` probe, and SHA-256 provenance for Node, manifests, language-server
+  entrypoint and `tsserver.js`; package scripts and project code are never
+  executed during discovery.
 - Add Objective-C/Objective-C++ to the shared Clang roadmap band and Swift to a
   dedicated compiler/SourceKit-LSP/SwiftSyntax plus SwiftPM/Xcode band. Both are
   mandatory pre-`1.0` targets with independent capability and interoperability

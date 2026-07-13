@@ -13,7 +13,8 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | `refactorkit-lsp`         | ✅ MVP       | definition, references, rename, codeAction, documentSymbol, diagnostics, semanticTokens |
 | `refactorkit-mcp`         | ✅ MVP       | Tools, resources (including templates), prompts            |
 | `refactorkit-web-importer`| ✅ MVP       | ExternalJavaClassImporter with provenance + conflict detection |
-| `refactorkit-tree-sitter` | ✅ Level 1   | GenericOutline, GenericStructuralSearch, GenericLocalRenamePlanner, GenericProjectScanner, ExternalLspAdapter stub |
+| `refactorkit-tree-sitter` | ✅ Kernel    | Packaged TypeScript/JavaScript Tree-sitter JNI, bounded external LSP lifecycle, overlays and untrusted edit normalization |
+| `refactorkit-typescript`  | 🚧 v0.6     | Explicit bounded Node/TypeScript/language-server discovery and hash provenance; semantic project adapter in progress |
 | `refactorkit-testkit`     | ✅ MVP       | GoldenTestLoader/Runner, AgentSimulation scenarios         |
 
 See individual docs/ files for each subsystem.

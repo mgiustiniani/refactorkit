@@ -193,6 +193,7 @@ refactorkit-lsp/
 refactorkit-mcp/
 refactorkit-web-importer/
 refactorkit-tree-sitter/
+refactorkit-typescript/
 refactorkit-testkit/
 samples/
 java-maven-simple/
