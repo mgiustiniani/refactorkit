@@ -2,7 +2,9 @@
 
 Status: `v0.6.0` T3/T4 foundation; proposal-only and not yet a stable managed
 mutation capability. Layered descriptors are published by the library, CLI,
-daemon, LSP and MCP capability schemas.
+daemon, LSP and MCP capability schemas. CLI one-shot search, definition,
+references, diagnostics and rename use the same explicit-toolchain daemon
+orchestration in-process and close the session on every exit path.
 
 ## Startup gate
 

@@ -38,6 +38,9 @@ review safety boundaries before applying refactorings.
   TypeScript/JavaScript search, definition, references and exact diagnostics, plus
   rename preview/apply/WAL/rollback through the language-specific diagnostics gate.
   MCP project scans are mixed-language and EOF closes owned semantic process trees.
+  Added one-shot CLI TypeScript/JavaScript search, definition, references,
+  diagnostics and rename with explicit toolchain flags, JSON output, preview by
+  default and managed apply only under `--apply`.
   Compiler workspace-symbol search is capability-negotiated, bounded to 200
   results, and emits workspace-relative daemon paths. Exported symbols on
   package-exports/types, declaration/composite, or project-reference library

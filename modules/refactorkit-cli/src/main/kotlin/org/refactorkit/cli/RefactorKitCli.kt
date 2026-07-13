@@ -1,5 +1,12 @@
 package org.refactorkit.cli
 
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.DiagnosticsGate
@@ -13,6 +20,7 @@ import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.TransactionLogException
+import org.refactorkit.daemon.DaemonSession
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
@@ -52,9 +60,12 @@ fun main(args: Array<String>) {
 class RefactorKitCli(
     private val scanner: JavaProjectScanner = JavaProjectScanner(),
     private val javaAdapter: JavaLanguageAdapter = JavaLanguageAdapter(),
+    private val semanticSessionFactory: () -> DaemonSession = ::DaemonSession,
 ) {
+    private val semanticJson = Json { prettyPrint = true }
     private val booleanOptions = setOf(
         "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
+        "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references",
     )
 
     fun run(args: List<String>): Int {
@@ -82,6 +93,7 @@ class RefactorKitCli(
             "safe-delete"     -> cmdSafeDelete(args.drop(1))
             "patch"           -> cmdPatch(args.drop(1))
             "java"            -> cmdJava(args.drop(1))
+            "typescript"      -> cmdTypeScript(args.drop(1))
             "recipe"          -> cmdRecipe(args.drop(1))
             "outline"         -> cmdOutline(args.drop(1))
             "search"          -> cmdSearch(args.drop(1))
@@ -445,6 +457,87 @@ class RefactorKitCli(
         val positionals: List<String>,
     )
 
+    private fun cmdTypeScript(args: List<String>): Int {
+        if (args.isEmpty()) {
+            System.err.println("typescript requires a subcommand: search, definition, references, diagnostics, or rename")
+            return 2
+        }
+        val operation = args.first()
+        if (operation !in setOf("search", "definition", "references", "diagnostics", "rename")) {
+            System.err.println("Unknown typescript subcommand: $operation")
+            return 2
+        }
+        val parsed = parseOptions(args.drop(1))
+        val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
+        val languageId = parsed.options["language"] ?: "typescript"
+        val node = parsed.options["node"] ?: run { System.err.println("--node required"); return 2 }
+        val serverPackage = parsed.options["language-server-package"]
+            ?: run { System.err.println("--language-server-package required"); return 2 }
+        val compilerPackage = parsed.options["typescript-package"]
+            ?: run { System.err.println("--typescript-package required"); return 2 }
+        if (operation in setOf("definition", "references") && parsed.options["symbol"] == null) {
+            System.err.println("--symbol required")
+            return 2
+        }
+        if (operation == "rename" && parsed.options["to"] == null) {
+            System.err.println("--to required")
+            return 2
+        }
+        val session = semanticSessionFactory()
+        return try {
+            session.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
+            session.dispatch("typescript.semantic.start", buildJsonObject {
+                put("languageId", languageId)
+                put("nodeExecutable", node)
+                put("languageServerPackageRoot", serverPackage)
+                put("typeScriptPackageRoot", compilerPackage)
+                put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
+            })
+            val result = when (operation) {
+                "search" -> session.dispatch("symbol.search", buildJsonObject {
+                    put("languageId", languageId)
+                    put("query", parsed.options["query"].orEmpty())
+                })
+                "definition", "references" -> {
+                    val symbol = parsed.options.getValue("symbol")
+                    session.dispatch("symbol.$operation", buildJsonObject {
+                        put("languageId", languageId)
+                        put("symbol", symbol)
+                    })
+                }
+                "diagnostics" -> session.dispatch("diagnostics", buildJsonObject { put("languageId", languageId) })
+                else -> {
+                    val newName = parsed.options.getValue("to")
+                    val preview = session.dispatch("refactor.preview", buildJsonObject {
+                        put("operation", "renameSymbol")
+                        put("languageId", languageId)
+                        parsed.options["symbol"]?.let { put("symbol", it) }
+                        put("arguments", buildJsonObject {
+                            put("newName", newName)
+                            parsed.options["file"]?.let { put("file", it) }
+                            parsed.options["line"]?.toIntOrNull()?.let { put("line", it - 1) }
+                            parsed.options["character"]?.toIntOrNull()?.let { put("character", it) }
+                            put("allowExternalConsumers", "allow-external-consumers" in parsed.flags)
+                            put("allowDynamicReferences", "allow-dynamic-references" in parsed.flags)
+                        })
+                    })
+                    if ("apply" in parsed.flags) {
+                        session.dispatch("refactor.apply", buildJsonObject {
+                            put("planId", preview.jsonObject["planId"]!!.jsonPrimitive.content)
+                        })
+                    } else preview
+                }
+            }
+            println(semanticJson.encodeToString(result))
+            0
+        } catch (failure: Exception) {
+            System.err.println("TypeScript semantic command failed: ${failure.message}")
+            1
+        } finally {
+            session.close()
+        }
+    }
+
     private fun cmdJava(args: List<String>): Int {
         if (args.isEmpty()) {
             System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, or move-source-root")
@@ -685,6 +778,7 @@ class RefactorKitCli(
           refactorkit java diagnostics  <path>                                  (alias for diagnostics)
           refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]
           refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
+          refactorkit typescript <search|definition|references|diagnostics|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--apply]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

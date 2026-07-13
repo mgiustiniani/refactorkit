@@ -17,6 +17,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RefactorKitCliTest {
+    @Test
+    fun typescriptSemanticCommandRequiresExplicitSubcommandAndToolchain() {
+        val cli = RefactorKitCli()
+        assertEquals(2, cli.run(listOf("typescript")))
+        assertEquals(2, cli.run(listOf("typescript", "diagnostics", ".")))
+    }
+
 
     @Test
     fun helpListsJavaImportClassRecipeAndVersionCommands() {

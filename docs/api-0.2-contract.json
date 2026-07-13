@@ -10,10 +10,11 @@
       "definition", "rename", "rename-member", "extract-method",
       "change-signature", "move-class", "organize-imports", "format-file",
       "safe-delete", "patch rollback", "java import-class", "java move-source-root", "recipe run",
-      "outline", "search", "local-rename", "test-golden"
+      "outline", "search", "local-rename", "typescript", "test-golden"
     ],
     "booleanOptions": [
-      "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose"
+      "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
+      "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references"
     ]
   },
   "daemon": {

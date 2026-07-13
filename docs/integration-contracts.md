@@ -72,6 +72,7 @@ compatible.
 |-------------|--------|----------------|
 | `refactorkit --version` / `refactorkit version` | `beta-contract` | Read-only implementation/API metadata; `v0.3.0` reports version `0.3.0` and API version `0.2`. |
 | `refactorkit capabilities` | `experimental` | Emits language-kernel capability schema v1 with deterministic adapter, backend, operation, evidence, authority, execution, timeout/cancellation, overlay, provenance, and resource-limit fields. |
+| `refactorkit typescript <search|definition|references|diagnostics|rename>` | `experimental` | One-shot explicit-toolchain semantic session; JSON output, preview by default, managed apply only with `--apply`. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
