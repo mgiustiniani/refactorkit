@@ -620,11 +620,34 @@ class ExternalLspAdapter(
                     val proposal = if (overlay == null) parsed.proposal else remapOverlayProposal(parsed.proposal, overlay)
                     if (proposal == null) ExternalWorkspaceEditNormalization.Refused(listOf(externalDiagnostic(
                         "externalEdit.pathOutsideOverlay", "External semantic edit contains a path outside its workspace overlay",
-                    ))) else normalizer.normalize(snapshot, proposal)
+                    ))) else when (val normalized = normalizer.normalize(snapshot, proposal)) {
+                        is ExternalWorkspaceEditNormalization.Refused -> normalized
+                        is ExternalWorkspaceEditNormalization.Accepted -> validateDocumentVersions(normalized)
+                    }
                 }
             }
             is ExternalLspWorkspaceEditParsing.Refused -> ExternalWorkspaceEditNormalization.Refused(parsed.diagnostics)
         }
+    }
+
+    private fun validateDocumentVersions(
+        accepted: ExternalWorkspaceEditNormalization.Accepted,
+    ): ExternalWorkspaceEditNormalization {
+        accepted.normalized.documentVersions.forEach { (path, returnedVersion) ->
+            val current = openDocuments[path.normalize()] ?: return ExternalWorkspaceEditNormalization.Refused(listOf(
+                externalDiagnostic(
+                    "externalEdit.documentNotSynchronized",
+                    "External edit returned a version for a document that is not synchronized",
+                ),
+            ))
+            if (returnedVersion != current.version) return ExternalWorkspaceEditNormalization.Refused(listOf(
+                externalDiagnostic(
+                    "externalEdit.documentVersionStale",
+                    "External edit document version $returnedVersion does not match synchronized version ${current.version}",
+                ),
+            ))
+        }
+        return accepted
     }
 
     /** Send a JSON-RPC notification (no `id`, no response expected). */

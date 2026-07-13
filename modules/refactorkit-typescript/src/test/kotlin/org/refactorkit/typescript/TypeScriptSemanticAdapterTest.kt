@@ -193,6 +193,30 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun renameRefusesMissingOrAmbiguousTypeScriptProjectOwnership() {
+        val fixture = fixture()
+        val buildModel = fixture.snapshot.buildModels.single { it.providerId == TypeScriptProjectModel.PROVIDER_ID }
+        val missingSnapshot = fixture.snapshot.copy(buildModels = listOf(buildModel.copy(modules = emptyList())))
+        val missingAdapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, FakeClient())
+        assertIs<TypeScriptSemanticStart.Started>(missingAdapter.start(missingSnapshot))
+        val missing = missingAdapter.applyRefactoring(renameRequest(missingSnapshot))
+        assertEquals(PatchStatus.REFUSED, missing.status)
+        assertEquals("typescript.projectOwnershipMissing", missing.refusalCode)
+        missingAdapter.close()
+
+        val originalModule = buildModel.modules.single()
+        val duplicate = originalModule.copy(id = originalModule.id + ":duplicate", name = originalModule.name + " duplicate")
+        val ambiguousSnapshot = fixture.snapshot.copy(
+            buildModels = listOf(buildModel.copy(modules = buildModel.modules + duplicate)),
+        )
+        val ambiguousAdapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, FakeClient())
+        assertIs<TypeScriptSemanticStart.Started>(ambiguousAdapter.start(ambiguousSnapshot))
+        val ambiguous = ambiguousAdapter.applyRefactoring(renameRequest(ambiguousSnapshot))
+        assertEquals(PatchStatus.REFUSED, ambiguous.status)
+        assertEquals("typescript.projectOwnershipAmbiguous", ambiguous.refusalCode)
+    }
+
+    @Test
     fun managedRenamePassesExactDiagnosticsAuthorizationWalAndRollback() {
         val fixture = fixture()
         val client = FakeClient()
@@ -336,6 +360,13 @@ class TypeScriptSemanticAdapterTest {
             bytes.size.toLong(),
         )
     }
+
+    private fun renameRequest(snapshot: ProjectSnapshot) = RefactoringRequest(
+        operation = "renameSymbol",
+        selection = org.refactorkit.core.CodeSelection(location()),
+        arguments = mapOf("newName" to "AccountService"),
+        snapshot = snapshot,
+    )
 
     private fun location() = SourceLocation(
         Path.of("src/service.ts"),

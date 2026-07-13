@@ -63,7 +63,10 @@ parser and core normalizer. A successful result is a `PatchPlan` preview with
 or high JavaScript risk. The plan reports one of `FULL_TYPESCRIPT`,
 `CHECKED_JAVASCRIPT`, `DYNAMIC_JAVASCRIPT` or `MIXED_JAVASCRIPT`; dynamic and
 mixed JavaScript receive lower confidence and cannot obtain the managed diagnostics
-gate. Preview performs no filesystem write. The experimental
+gate. Every affected path must have one authoritative longest-prefix ownership in
+the TypeScript Build Model; missing or equally specific owners refuse. Versioned
+server edits must exactly match the synchronized open-document version. Preview
+performs no filesystem write. The experimental
 adapter now has JVM acceptance for exact staged diagnostics, explicit authorization,
 managed apply, WAL and rollback. Its diagnostics gate re-hashes toolchain and
 project-model evidence while `PatchEngine` holds the workspace writer lock and
@@ -79,6 +82,7 @@ native platform.
 - changed toolchain/config/package evidence;
 - missing server capabilities;
 - stale, missing, unversioned or non-monotonic diagnostic/document versions;
+- missing or equally specific TypeScript project ownership;
 - oversized documents;
 - invalid UTF-16 positions;
 - edit path outside overlay/workspace;

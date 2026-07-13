@@ -1,6 +1,7 @@
 package org.refactorkit.typescript
 
 import org.refactorkit.core.BuildModelStatus
+import org.refactorkit.core.buildSourceRootOwnerships
 import org.refactorkit.core.CapabilityStability
 import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.Diagnostic
@@ -302,6 +303,11 @@ class TypeScriptSemanticAdapter(
             }
             is ExternalWorkspaceEditNormalization.Accepted -> {
                 val edit = result.normalized.workspaceEdit
+                val ownershipFailure = validateProjectOwnership(request.snapshot, edit).firstOrNull()
+                if (ownershipFailure != null) return refusedPlan(
+                    request, ownershipFailure.code ?: "typescript.projectOwnershipUnavailable",
+                    ownershipFailure.message, listOf(ownershipFailure),
+                )
                 val before = when (val diagnostics = client.synchronizedDiagnostics(request.snapshot)) {
                     is ExternalSemanticDiagnostics.Available -> diagnostics.diagnostics
                     is ExternalSemanticDiagnostics.Unavailable -> return refusedPlan(
@@ -372,6 +378,33 @@ class TypeScriptSemanticAdapter(
             active.classpathEvidence == snapshot.classpathEvidence &&
             active.files.map { it.path.normalize() to it.languageId }.toSet() ==
                 snapshot.files.map { it.path.normalize() to it.languageId }.toSet()
+    }
+
+    private fun validateProjectOwnership(snapshot: ProjectSnapshot, edit: WorkspaceEdit): List<Diagnostic> {
+        val roots = snapshot.buildSourceRootOwnerships().filter {
+            it.providerId == TypeScriptProjectModel.PROVIDER_ID && it.modelStatus == BuildModelStatus.AVAILABLE
+        }
+        return affectedPaths(edit).sortedBy(Path::toString).mapNotNull { path ->
+            val normalized = path.normalize()
+            val candidates = roots.filter { normalized.startsWith(it.root) }
+            val longest = candidates.maxOfOrNull { it.root.nameCount }
+            val owners = if (longest == null) emptyList() else candidates.filter { it.root.nameCount == longest }
+            when {
+                owners.isEmpty() -> diagnostic(
+                    "typescript.projectOwnershipMissing",
+                    "TypeScript edit path '$normalized' has no authoritative project ownership",
+                )
+                owners.size > 1 -> diagnostic(
+                    "typescript.projectOwnershipAmbiguous",
+                    "TypeScript edit path '$normalized' has ${owners.size} equally specific project owners",
+                )
+                owners.single().generated -> diagnostic(
+                    "typescript.generatedSourceReadOnly",
+                    "TypeScript edit path '$normalized' is generated and read-only",
+                )
+                else -> null
+            }
+        }
     }
 
     private fun affectedPaths(edit: WorkspaceEdit): Set<Path> = edit.edits.flatMap { operation ->

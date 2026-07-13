@@ -25,6 +25,8 @@ review safety boundaries before applying refactorings.
   three attempts per rolling 60 seconds; implicit restart is refused. Semantic
   completeness now distinguishes full TypeScript, checked JavaScript, dynamic
   JavaScript and mixed JavaScript; dynamic/mixed managed gates fail closed.
+  Versioned edits must match synchronized documents exactly, and rename refuses
+  missing or ambiguous TypeScript Build Model ownership.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

@@ -62,6 +62,11 @@ class ExternalLspAdapterLifecycleTest {
         assertFalse(adapter.openDocument(snapshot.files.single(), 3), "unchanged documents are not resent")
         assertFalse(adapter.changeDocument(snapshot.files.single(), 3), "unchanged documents are not resent")
         assertTrue(adapter.changeDocument(snapshot.files.single().copy(content = "const foo = 2;\n"), 4))
+        val stale = adapter.requestWorkspaceEdit("workspace/versionedStale", "{}", snapshot)
+        assertEquals(
+            listOf("externalEdit.documentVersionStale"),
+            assertIs<ExternalWorkspaceEditNormalization.Refused>(stale).diagnostics.map(Diagnostic::code),
+        )
         val normalized = adapter.requestRename(snapshot, position, "bar")
         val accepted = assertIs<ExternalWorkspaceEditNormalization.Accepted>(normalized, normalized.toString()).normalized
         val modification = assertIs<FileEdit.Modify>(accepted.workspaceEdit.edits.single())
@@ -196,6 +201,7 @@ object ExternalLspFixture {
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"changes":{$lastDocumentUri:[{"range":{"start":{"line":0,"character":6},"end":{"line":0,"character":9}},"newText":"bar"}]}}}""")
                 }
                 "workspace/outside" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"changes":{"file:///outside.ts":[]}}}""")
+                "workspace/versionedStale" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"documentChanges":[{"textDocument":{"uri":$lastDocumentUri,"version":0},"edits":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"newText":"x"}]}]}}""")
                 "shutdown" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":null}""")
                 "exit" -> return
             }
