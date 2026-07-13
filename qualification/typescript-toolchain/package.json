@@ -1,0 +1,11 @@
+{
+  "name": "refactorkit-typescript-toolchain-qualification",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Pinned real-toolchain inputs used only by RefactorKit native acceptance",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "typescript": "5.9.3",
+    "typescript-language-server": "5.1.3"
+  }
+}

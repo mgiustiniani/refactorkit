@@ -1,5 +1,7 @@
 package org.refactorkit.typescript
 
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.buildSourceRootOwnerships
 import org.refactorkit.core.CapabilityStability
@@ -79,7 +81,15 @@ class ExternalTypeScriptSemanticClient(
     languageId: String,
     toolchain: TypeScriptSemanticToolchain,
 ) : TypeScriptSemanticClient {
-    private val adapter = ExternalLspAdapter(languageId, toolchain.command)
+    private val adapter = ExternalLspAdapter(
+        languageId,
+        toolchain.command,
+        initializationOptionsJson = buildJsonObject {
+            put("tsserver", buildJsonObject {
+                put("path", toolchain.typeScriptServerEntrypoint.toAbsolutePath().normalize().toString())
+            })
+        }.toString(),
+    )
     override val isRunning: Boolean get() = adapter.isRunning
     override val provenance: ExternalSemanticSessionProvenance? get() = adapter.sessionProvenance
     override fun start(snapshot: ProjectSnapshot) = adapter.start(snapshot)
@@ -225,7 +235,17 @@ class TypeScriptSemanticAdapter(
         if (active(project)) client.buildSymbols(project) else SymbolIndex(emptyList())
 
     fun searchWorkspaceSymbols(project: ProjectSnapshot, query: String): List<org.refactorkit.core.Symbol> =
-        if (active(project)) client.searchWorkspaceSymbols(query) else emptyList()
+        if (active(project)) {
+            // Real TypeScript servers discover configured projects lazily after a
+            // text document is opened. Build the bounded document index first so
+            // workspace/symbol observes the exact snapshot rather than an empty
+            // unopened project.
+            val index = client.buildSymbols(project)
+            (client.searchWorkspaceSymbols(query) +
+                index.symbols.filter { it.name.contains(query, ignoreCase = true) })
+                .distinctBy { it.id }
+                .take(org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS)
+        } else emptyList()
 
     override fun resolveSymbol(location: SourceLocation): SymbolResolution =
         if (activeSnapshot != null && client.isRunning) client.resolveSymbol(location)

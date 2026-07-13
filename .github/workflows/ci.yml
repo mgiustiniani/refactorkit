@@ -25,6 +25,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up pinned TypeScript qualification runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.18.0'
+          cache: npm
+          cache-dependency-path: qualification/typescript-toolchain/package-lock.json
+
+      - name: Install pinned TypeScript qualification packages without scripts
+        working-directory: qualification/typescript-toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
@@ -74,6 +85,9 @@ jobs:
           do
             env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan "$sample"
           done
+
+      - name: Run packaged real TypeScript qualification
+        run: python3 scripts/smoke-packaged-typescript.py
 
       - name: Run reference workspace budgets
         run: scripts/benchmark-reference.sh modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit
@@ -128,6 +142,17 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up pinned TypeScript qualification runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.18.0'
+          cache: npm
+          cache-dependency-path: qualification/typescript-toolchain/package-lock.json
+
+      - name: Install pinned TypeScript qualification packages without scripts
+        working-directory: qualification/typescript-toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
@@ -142,6 +167,12 @@ jobs:
         run: |
           import subprocess, sys
           subprocess.run([sys.executable, "scripts/smoke-packaged-build-model.py"], check=True)
+
+      - name: Native packaged real TypeScript qualification
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-typescript.py"], check=True)
 
       - name: Summarize native test failures
         if: failure()

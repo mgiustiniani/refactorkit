@@ -18,6 +18,10 @@ import java.nio.file.Path
 internal object LspJson {
     private val parser = Json { isLenient = false; ignoreUnknownKeys = false }
 
+    fun isObject(value: String): Boolean = runCatching {
+        parser.parseToJsonElement(value) is JsonObject
+    }.getOrDefault(false)
+
     data class Location(
         val uri: String,
         val startLine: Int,

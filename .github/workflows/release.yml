@@ -46,11 +46,28 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up pinned TypeScript qualification runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.18.0'
+          cache: npm
+          cache-dependency-path: qualification/typescript-toolchain/package-lock.json
+
+      - name: Install pinned TypeScript qualification packages without scripts
+        working-directory: qualification/typescript-toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
       - name: Build, test, package and native smoke
         run: ${{ matrix.gradle }} clean build :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+
+      - name: Native packaged real TypeScript qualification
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-typescript.py"], check=True)
 
       - name: Prepare platform asset and checksum
         shell: python

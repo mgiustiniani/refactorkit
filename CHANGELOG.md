@@ -42,6 +42,12 @@ review safety boundaries before applying refactorings.
   TypeScript/JavaScript search, definition, references and exact diagnostics, plus
   rename preview/apply/WAL/rollback through the language-specific diagnostics gate.
   MCP project scans are mixed-language and EOF closes owned semantic process trees.
+  Real-toolchain packaged qualification pins Node 22.18.0,
+  `typescript-language-server` 5.1.3 and TypeScript 5.9.3 under a script-disabled
+  npm lockfile on Linux, Windows and macOS CI. Explicit `tsserver.js`
+  initialization, lazy project opening and bounded diagnostic debounce barriers
+  make real read operations deterministic; upstream unversioned diagnostics remain
+  fail-closed, so managed mutation is not promoted.
   Added one-shot CLI TypeScript/JavaScript search, definition, references,
   diagnostics and rename with explicit toolchain flags, JSON output, preview by
   default and managed apply only under `--apply`. Completed LSP language routing

@@ -97,6 +97,7 @@ sealed interface ExternalSemanticDiagnostics {
 class ExternalLspAdapter(
     private val languageId: String,
     private val command: List<String>,
+    private val initializationOptionsJson: String? = null,
     private val processManager: ExternalSemanticProcessManager = ExternalSemanticProcessManager(),
     private val requestTimeoutMillis: Long = DEFAULT_REQUEST_TIMEOUT_MILLIS,
     private val environment: Map<String, String> = safeEnvironment(),
@@ -104,6 +105,9 @@ class ExternalLspAdapter(
 
     init {
         require(command.isNotEmpty()) { "external LSP command must not be empty" }
+        require(initializationOptionsJson == null || LspJson.isObject(initializationOptionsJson)) {
+            "external LSP initialization options must be one strict JSON object"
+        }
         require(requestTimeoutMillis in 100..MAX_REQUEST_TIMEOUT_MILLIS) { "external LSP timeout is outside the safe range" }
     }
 
@@ -173,10 +177,14 @@ class ExternalLspAdapter(
             Thread(runnable, "refactorkit-lsp-read-$languageId").apply { isDaemon = true }
         }
 
-        val initialize = sendRequest(
-            "initialize",
-            """{"processId":${ProcessHandle.current().pid()},"rootUri":${LspJson.quote(rootUri)},"capabilities":{}}""",
-        )
+        val initializeParams = buildString {
+            append("{\"processId\":").append(ProcessHandle.current().pid())
+            append(",\"rootUri\":").append(LspJson.quote(rootUri))
+            append(",\"capabilities\":{\"textDocument\":{\"documentSymbol\":{\"hierarchicalDocumentSymbolSupport\":true},\"publishDiagnostics\":{\"versionSupport\":true}}}")
+            initializationOptionsJson?.let { append(",\"initializationOptions\":").append(it) }
+            append('}')
+        }
+        val initialize = sendRequest("initialize", initializeParams)
         val result = initialize?.let { LspJson.extractField(it, "result") }
         val capabilities = result?.let { LspJson.extractField(it, "capabilities") }
         if (result == null || capabilities == null) {
@@ -193,8 +201,9 @@ class ExternalLspAdapter(
             capabilitiesSha256 = sha256(capabilities),
             advertisedCapabilities = KNOWN_SERVER_CAPABILITIES.associateWith { capability ->
                 val raw = if (capability == "prepareRenameProvider") {
-                    LspJson.extractField(capabilities, "renameProvider")
-                        ?.let { LspJson.extractField(it, "prepareProvider") }
+                    val renameProvider = LspJson.extractField(capabilities, "renameProvider")
+                    renameProvider?.let { LspJson.extractField(it, "prepareProvider") }
+                        ?: renameProvider
                 } else LspJson.extractField(capabilities, capability)
                 capabilityAdvertised(capability, raw)
             }.toSortedMap(),
@@ -246,7 +255,12 @@ class ExternalLspAdapter(
                     "Document-symbol request exceeds $MAX_DOCUMENT_SYMBOL_FILES files",
                 )
                 emptyList()
-            } else files.flatMap { file -> requestDocumentSymbols(file) }
+            } else {
+                val synchronized = files.all { file ->
+                    openDocuments[file.path.normalize()] != null || openDocument(file, 1)
+                }
+                if (!synchronized) emptyList() else files.flatMap(::requestDocumentSymbols)
+            }
         } else {
             files.flatMap { file ->
                 structuralAdapter.outline(file.content, languageId).map { item ->
@@ -320,8 +334,9 @@ class ExternalLspAdapter(
 
         // Try to look up a richer Symbol from the cached index
         val cached = lastIndex.get()?.symbols?.find { sym ->
-            sym.location.path == filePath &&
-            sym.location.range.start.line == first.startLine
+            (sym.location.path == filePath || filePath.endsWith(sym.location.path.normalize())) &&
+            sym.location.range.start.line == first.startLine &&
+            first.startChar in sym.location.range.start.character..sym.location.range.end.character
         }
 
         val sym = cached ?: Symbol(
@@ -419,6 +434,25 @@ class ExternalLspAdapter(
         // protocol barriers while publishDiagnostics notifications are consumed.
         repeat(2) {
             files.forEach(::requestDocumentSymbols)
+            if (!isRunning) return unavailableDiagnostics(
+                lastFailure?.code ?: "semantic.diagnosticsBarrierFailed",
+                lastFailure?.message ?: "Exact diagnostics barrier failed",
+            )
+        }
+        // typescript-language-server debounces publishDiagnostics. Continue with
+        // bounded protocol barriers so queued notifications are consumed without
+        // accepting an unbounded or timing-only wait.
+        repeat(MAX_DIAGNOSTIC_BARRIER_ATTEMPTS) { attempt ->
+            if (pendingDiagParams.size >= files.size) return@repeat
+            try {
+                Thread.sleep(DIAGNOSTIC_BARRIER_DELAY_MILLIS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return unavailableDiagnostics(
+                    "semantic.diagnosticsBarrierInterrupted", "Exact diagnostics barrier was interrupted",
+                )
+            }
+            requestDocumentSymbols(files[attempt % files.size])
             if (!isRunning) return unavailableDiagnostics(
                 lastFailure?.code ?: "semantic.diagnosticsBarrierFailed",
                 lastFailure?.message ?: "Exact diagnostics barrier failed",
@@ -957,6 +991,8 @@ class ExternalLspAdapter(
         const val MAX_STDERR_BYTES = 64 * 1024
         const val MAX_PENDING_DIAGNOSTIC_NOTIFICATIONS = 500
         const val MAX_DIAGNOSTICS = 500
+        private const val MAX_DIAGNOSTIC_BARRIER_ATTEMPTS = 20
+        private const val DIAGNOSTIC_BARRIER_DELAY_MILLIS = 50L
         const val MAX_DIAGNOSTIC_MESSAGE_CHARS = 4_096
         const val MAX_OPEN_DOCUMENTS = 256
         const val MAX_DOCUMENT_BYTES = 4 * 1024 * 1024

@@ -64,5 +64,37 @@ most three attempts per rolling 60 seconds, and must preserve server version,
 capability hash, executable hash and argument hash. The V8 old-space flag bounds
 the primary JavaScript heap but is not an operating-system RSS sandbox.
 
-Stable support still requires license/SBOM policy, real-toolchain packaged native
-crash/recovery acceptance and a supported server-version matrix.
+## Qualification matrix and package policy
+
+Native CI now installs the lockfile-pinned qualification pair with
+`npm ci --ignore-scripts --no-audit --no-fund` after `actions/setup-node` selects
+Node `22.18.0`:
+
+| Node | `typescript-language-server` | TypeScript | Qualification |
+|------|------------------------------|------------|---------------|
+| 22.18.0 | 5.1.3 | 5.9.3 | Linux x86-64, Windows x86-64, macOS x86-64 and arm64 packaged read operations and fail-closed mutation boundary |
+
+Both packages declare Apache-2.0. Their exact npm integrity hashes and transitive
+package graph are committed in
+`qualification/typescript-toolchain/package-lock.json`; they are CI inputs only
+and are not bundled into RefactorKit runtime archives or runtime SBOMs. Runtime
+discovery never invokes npm or reads npm configuration. CI is the only networked
+acquisition path, uses the public npm registry selected by setup-node, disables
+package scripts, and runs before the hostile sample workspace is opened.
+
+The real server is passed the already hash-bound `lib/tsserver.js` path through
+strict JSON `initializationOptions.tsserver.path`; no workspace TypeScript lookup
+is trusted. Real servers lazily open projects, so RefactorKit opens every bounded
+source document before compiler document/workspace symbol requests.
+
+Upstream `typescript-language-server` 5.1.3 publishes diagnostics without LSP
+`version`, even when the client advertises `publishDiagnostics.versionSupport`.
+RefactorKit deliberately rejects those publications as
+`semantic.diagnosticsIncomplete`. Native qualification therefore proves stable
+search/definition/references and that rename reaches the exact diagnostics gate
+without creating a WAL, but does **not** promote managed mutation support. Stable
+apply/WAL/recovery/rollback remains blocked until a qualified diagnostics provider
+can prove the exact snapshot version.
+
+Stable support also requires native crash/recovery acceptance and expansion of the
+supported server-version matrix.

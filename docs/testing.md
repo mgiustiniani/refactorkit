@@ -268,6 +268,17 @@ represented by golden, unit, or protocol tests:
   instructions recording the verified artifact names, checksums, source tag,
   release commit, and verification commands.
 
+## Real TypeScript toolchain qualification
+
+`scripts/smoke-packaged-typescript.py` runs only against the self-contained
+RefactorKit package and the lockfile-pinned CI toolchain in
+`qualification/typescript-toolchain`. It verifies stable IDs across fresh server
+sessions, path-alias project definition/reference reads, source immutability, and
+that upstream unversioned diagnostics refuse managed rename before any transaction
+journal exists. CI installs packages with `npm ci --ignore-scripts`; runtime code
+never invokes npm. This is a fail-closed read/proposal qualification, not managed
+TypeScript mutation acceptance.
+
 ## Agent simulation tests
 
 `AgentSimulationTest` in `refactorkit-testkit` simulates full AI-agent workflows:

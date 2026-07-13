@@ -5,6 +5,7 @@ build/
 out/
 .idea/
 .ide/
+node_modules/
 *.iml
 .DS_Store
 __pycache__/

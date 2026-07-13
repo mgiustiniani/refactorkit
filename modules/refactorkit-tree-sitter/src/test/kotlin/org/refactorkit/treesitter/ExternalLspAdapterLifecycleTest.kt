@@ -149,6 +149,25 @@ class ExternalLspAdapterLifecycleTest {
     }
 
     @Test
+    fun booleanRenameCapabilityStillRequiresAnActualPrepareRenameProbe() {
+        val adapter = adapter("boolean-rename")
+        adapter.start(projectSnapshot())
+        assertEquals(true, adapter.sessionProvenance?.advertisedCapabilities?.get("renameProvider"))
+        assertEquals(true, adapter.sessionProvenance?.advertisedCapabilities?.get("prepareRenameProvider"))
+        adapter.close()
+    }
+
+    @Test
+    fun initializationOptionsMustBeAStrictJsonObject() {
+        assertFailsWith<IllegalArgumentException> {
+            ExternalLspAdapter("typescript", listOf("server"), initializationOptionsJson = "[]")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ExternalLspAdapter("typescript", listOf("server"), initializationOptionsJson = "{invalid")
+        }
+    }
+
+    @Test
     fun rootMustBeAnExistingFileUri() {
         val adapter = adapter("normal")
         assertFailsWith<IllegalArgumentException> { adapter.start("https://example.invalid/workspace") }
@@ -197,7 +216,10 @@ object ExternalLspFixture {
                         output.flush()
                         Thread.sleep(30_000)
                     }
-                    else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"renameProvider":{"prepareProvider":true},"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
+                    else -> {
+                        val rename = if (mode == "boolean-rename") "true" else "{\"prepareProvider\":true}"
+                        writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"renameProvider":$rename,"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
+                    }
                 }
                 "textDocument/didOpen", "textDocument/didChange" -> {
                     val params = LspJson.extractField(request, "params").orEmpty()
