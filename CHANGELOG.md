@@ -44,7 +44,9 @@ review safety boundaries before applying refactorings.
   external-consumer override records high risk. Exact quoted symbol-name
   candidates in computed properties, decorators, reflection and framework
   registries likewise refuse unless an explicit dynamic-reference override lowers
-  confidence and records high risk.
+  confidence and records high risk. Managed JVM acceptance now also covers atomic
+  cross-file re-export updates and server-required file renames, with exact staged
+  file-set hashes bounded to 128 retained previews plus WAL/rollback restoration.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

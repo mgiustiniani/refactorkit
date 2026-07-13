@@ -47,7 +47,10 @@ bounded document-symbol requests provide protocol barriers. A clean or non-clean
 publication is accepted only when every source file publishes the exact expected
 version. Missing, stale, unversioned or over-limit results fail closed. Preview
 stores both original and staged diagnostic images; managed apply must pass
-`TypeScriptSemanticAdapter.diagnosticsGate()` to `PatchEngine`.
+`TypeScriptSemanticAdapter.diagnosticsGate()` to `PatchEngine`. File-set-changing
+proposals such as semantic file rename are authorized only by their exact staged
+snapshot hash in a bounded 128-entry session allowlist. This permits diagnostics
+for the new path without accepting arbitrary scope changes.
 
 ## Layered capability schema
 

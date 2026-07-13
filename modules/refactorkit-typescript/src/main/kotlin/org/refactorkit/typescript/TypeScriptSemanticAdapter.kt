@@ -111,6 +111,7 @@ class TypeScriptSemanticAdapter(
     private var acceptedServerProvenance: ServerProvenanceSignature? = null
     private val restartAttempts = ArrayDeque<Long>()
     private var lastRestartMillis: Long? = null
+    private val approvedStagedSnapshotHashes = linkedSetOf<String>()
 
     init {
         require(languageId in setOf("typescript", "javascript")) { "TypeScript semantic adapter language is invalid" }
@@ -366,6 +367,7 @@ class TypeScriptSemanticAdapter(
                         diagnostics.diagnostic.message, listOf(diagnostics.diagnostic),
                     )
                 }
+                rememberApprovedStagedSnapshot(staged.hash)
                 val completeness = semanticCompleteness()
                 PatchPlan(
                     operation = request.operation,
@@ -415,6 +417,7 @@ class TypeScriptSemanticAdapter(
         acceptedServerProvenance = null
         restartAttempts.clear()
         lastRestartMillis = null
+        approvedStagedSnapshotHashes.clear()
         client.close()
     }
 
@@ -424,12 +427,21 @@ class TypeScriptSemanticAdapter(
     private fun semanticScopeCompatible(snapshot: ProjectSnapshot): Boolean {
         val active = activeSnapshot ?: return false
         return client.isRunning &&
+            snapshot.hash in approvedSemanticSnapshotHashes(active.hash) &&
             active.workspace.root.toAbsolutePath().normalize() == snapshot.workspace.root.toAbsolutePath().normalize() &&
             active.modules == snapshot.modules && active.buildModels == snapshot.buildModels &&
-            active.classpathEvidence == snapshot.classpathEvidence &&
-            active.files.map { it.path.normalize() to it.languageId }.toSet() ==
-                snapshot.files.map { it.path.normalize() to it.languageId }.toSet()
+            active.classpathEvidence == snapshot.classpathEvidence
     }
+
+    private fun rememberApprovedStagedSnapshot(hash: String) {
+        approvedStagedSnapshotHashes += hash
+        while (approvedStagedSnapshotHashes.size > MAX_APPROVED_STAGED_SNAPSHOTS) {
+            approvedStagedSnapshotHashes.remove(approvedStagedSnapshotHashes.first())
+        }
+    }
+
+    private fun approvedSemanticSnapshotHashes(activeHash: String): Set<String> =
+        approvedStagedSnapshotHashes + activeHash
 
     private fun validateProjectOwnership(snapshot: ProjectSnapshot, edit: WorkspaceEdit): List<Diagnostic> {
         val roots = snapshot.buildSourceRootOwnerships().filter {
@@ -606,6 +618,7 @@ class TypeScriptSemanticAdapter(
     companion object {
         const val MAX_RESTARTS_PER_WINDOW = 3
         const val MAX_DYNAMIC_REFERENCE_CANDIDATES = 50
+        const val MAX_APPROVED_STAGED_SNAPSHOTS = 128
         const val RESTART_WINDOW_MILLIS = 60_000L
 
         private val EXPORT_MARKER = Regex("(?:^|\\s)export(?:\\s|$)")

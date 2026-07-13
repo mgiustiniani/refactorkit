@@ -32,6 +32,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
+import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -285,6 +286,59 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun managedRenameUpdatesCrossFileReExportAndRollsBackAtomically() {
+        val fixture = fixture()
+        val indexContent = "export { Service } from './service';\n"
+        fixture.root.resolve("src/index.ts").writeText(indexContent)
+        val snapshot = fixture.snapshot.copy(files = fixture.snapshot.files + SourceFile(
+            Path.of("src/index.ts"), indexContent, "typescript",
+        ))
+        val adapter = TypeScriptSemanticAdapter(
+            "typescript", fixture.toolchain, fixture.model, FakeClient(crossFile = true),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(snapshot))
+        val plan = adapter.applyRefactoring(renameRequest(snapshot))
+        assertEquals(setOf(Path.of("src/service.ts"), Path.of("src/index.ts")), plan.affectedFiles)
+
+        val engine = PatchEngine(fixture.root)
+        val applied = assertIs<ApplyResult.Applied>(engine.apply(
+            plan, snapshot, ApplyAuthorization.explicit("typescript-test"), adapter.diagnosticsGate(),
+        ))
+        assertEquals("export { AccountService } from './service';\n", fixture.root.resolve("src/index.ts").readText())
+        assertEquals("export class AccountService {}\n", fixture.root.resolve("src/service.ts").readText())
+
+        assertIs<ApplyResult.Applied>(engine.rollback(applied.transaction))
+        assertEquals(indexContent, fixture.root.resolve("src/index.ts").readText())
+        assertEquals("export class Service {}\n", fixture.root.resolve("src/service.ts").readText())
+    }
+
+    @Test
+    fun managedRenameCanApplyAndRollbackServerRequiredFileRename() {
+        val fixture = fixture()
+        val adapter = TypeScriptSemanticAdapter(
+            "typescript", fixture.toolchain, fixture.model, FakeClient(renameFile = true),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+        val plan = adapter.applyRefactoring(renameRequest(fixture.snapshot))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.workspaceEdit.edits.any { it is FileEdit.Rename })
+
+        val engine = PatchEngine(fixture.root)
+        val applied = assertIs<ApplyResult.Applied>(engine.apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("typescript-test"), adapter.diagnosticsGate(),
+        ))
+        assertFalse(Files.exists(fixture.root.resolve("src/service.ts")))
+        assertEquals(
+            "export class AccountService {}\n",
+            Files.readString(fixture.root.resolve("src/account-service.ts")),
+        )
+
+        assertIs<ApplyResult.Applied>(engine.rollback(applied.transaction))
+        assertEquals("export class Service {}\n", Files.readString(fixture.root.resolve("src/service.ts")))
+        assertFalse(Files.exists(fixture.root.resolve("src/account-service.ts")))
+    }
+
+    @Test
     fun managedApplyRevalidatesToolchainEvidenceUnderWorkspaceLock() {
         val fixture = fixture()
         val client = FakeClient()
@@ -472,6 +526,8 @@ class TypeScriptSemanticAdapterTest {
         sessionProvenance: ExternalSemanticSessionProvenance? = null,
         private val unresolvedSymbol: Boolean = false,
         private val symbolKind: Symbol.Kind = Symbol.Kind.CLASS,
+        private val renameFile: Boolean = false,
+        private val crossFile: Boolean = false,
     ) : TypeScriptSemanticClient {
         override var isRunning: Boolean = false
         var sessionProvenance: ExternalSemanticSessionProvenance? = sessionProvenance
@@ -507,13 +563,23 @@ class TypeScriptSemanticAdapterTest {
             if (renameRefused) return ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
                 "test refusal", Diagnostic.Severity.ERROR, code = "externalEdit.testRefusal",
             )))
-            return ExternalWorkspaceEditNormalizer().normalize(snapshot, ExternalWorkspaceEditProposal(
-                "lsp-typescript", "test",
-                listOf(ExternalFileEditProposal.Modify(
+            val edits = buildList {
+                add(ExternalFileEditProposal.Modify(
                     Path.of("src/service.ts"),
                     listOf(TextEdit(SourceRange(SourcePosition(0, 13), SourcePosition(0, 20)), newName)),
                     documentVersion = 1,
-                )),
+                ))
+                if (crossFile) add(ExternalFileEditProposal.Modify(
+                    Path.of("src/index.ts"),
+                    listOf(TextEdit(SourceRange(SourcePosition(0, 9), SourcePosition(0, 16)), newName)),
+                    documentVersion = 1,
+                ))
+                if (renameFile) add(ExternalFileEditProposal.Rename(
+                    Path.of("src/service.ts"), Path.of("src/account-service.ts"),
+                ))
+            }
+            return ExternalWorkspaceEditNormalizer().normalize(snapshot, ExternalWorkspaceEditProposal(
+                "lsp-typescript", "test", edits,
             ))
         }
 
