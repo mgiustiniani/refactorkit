@@ -27,7 +27,8 @@ The initial declarative subset models:
 - `allowJs`, `checkJs`, `declaration`, `composite`, `rootDir`, `outDir`,
   `baseUrl`, `jsx`, `module`, and `moduleResolution`;
 - bounded `paths` aliases and targets;
-- nearest strict bounded `package.json` `type` (`module`/`commonjs`);
+- nearest strict bounded `package.json` `type` (`module`/`commonjs`) plus
+  publication markers for `exports` and `types`/`typings`;
 - TypeScript versus JavaScript config identity.
 
 Package-based `extends` is deliberately refused in this slice because resolving
@@ -44,7 +45,7 @@ Glob patterns are modeled but not executed or expanded by the provider.
 - `rootDir` (or config directory) becomes the source root;
 - `outDir` becomes an output directory;
 - project references become compile-scope module edges;
-- config kind, JS checking, package type and config path are typed attributes;
+- config kind, JS checking, package type/publication markers and config path are typed attributes;
 - network, credentials and build-code execution remain `denied` even if caller
   allowances are broader.
 

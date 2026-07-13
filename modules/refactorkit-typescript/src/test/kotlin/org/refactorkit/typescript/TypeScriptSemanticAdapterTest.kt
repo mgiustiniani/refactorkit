@@ -217,6 +217,26 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun exportedLibrarySymbolRequiresExplicitExternalConsumerOverride() {
+        val fixture = fixture(declaration = true)
+        val client = FakeClient()
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+
+        val refused = adapter.applyRefactoring(renameRequest(fixture.snapshot))
+        assertEquals("typescript.externalConsumersUnknown", refused.refusalCode)
+        val accepted = adapter.applyRefactoring(renameRequest(
+            fixture.snapshot, arguments = mapOf(
+                "newName" to "AccountService", "allowExternalConsumers" to "true",
+            ),
+        ))
+        assertEquals(PatchStatus.PREVIEW, accepted.status)
+        assertEquals(RiskLevel.HIGH, accepted.riskLevel)
+        assertEquals(0.65, accepted.confidence)
+        assertTrue(accepted.warnings.any { "external-consumer override" in it })
+    }
+
+    @Test
     fun managedRenamePassesExactDiagnosticsAuthorizationWalAndRollback() {
         val fixture = fixture()
         val client = FakeClient()
@@ -335,11 +355,14 @@ class TypeScriptSemanticAdapterTest {
         assertEquals("typescript.semanticNotStarted", stalePlan.refusalCode)
     }
 
-    private fun fixture(): Fixture {
+    private fun fixture(declaration: Boolean = false): Fixture {
         val root = Files.createTempDirectory("refactorkit-ts-semantic")
         Files.createDirectories(root.resolve("src"))
         root.resolve("src/service.ts").writeText("export class Service {}\n")
-        root.resolve("tsconfig.json").writeText("""{"compilerOptions":{"rootDir":"src"},"include":["src/**/*.ts"]}""")
+        val declarationOption = if (declaration) ",\"declaration\":true" else ""
+        root.resolve("tsconfig.json").writeText(
+            """{"compilerOptions":{"rootDir":"src"$declarationOption},"include":["src/**/*.ts"]}""",
+        )
         root.resolve("package.json").writeText("""{"type":"module"}""")
         val model = TypeScriptProjectModelBuilder().build(root)
         val base = ProjectSnapshot(
@@ -392,10 +415,14 @@ class TypeScriptSemanticAdapterTest {
         )
     }
 
-    private fun renameRequest(snapshot: ProjectSnapshot, newName: String = "AccountService") = RefactoringRequest(
+    private fun renameRequest(
+        snapshot: ProjectSnapshot,
+        newName: String = "AccountService",
+        arguments: Map<String, String> = mapOf("newName" to newName),
+    ) = RefactoringRequest(
         operation = "renameSymbol",
         selection = org.refactorkit.core.CodeSelection(location()),
-        arguments = mapOf("newName" to newName),
+        arguments = arguments,
         snapshot = snapshot,
     )
 

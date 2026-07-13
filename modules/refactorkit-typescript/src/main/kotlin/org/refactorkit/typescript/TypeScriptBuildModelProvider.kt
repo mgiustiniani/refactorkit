@@ -76,6 +76,8 @@ class TypeScriptBuildModelProvider(
                         "config" to ProtocolPath.serialize(project.configPath),
                         "configKind" to project.kind.name.lowercase(),
                         "packageType" to project.packageType.name.lowercase(),
+                        "packageExportsDeclared" to project.packageExportsDeclared.toString(),
+                        "packageTypesDeclared" to project.packageTypesDeclared.toString(),
                     ),
                 )),
                 attributes = sortedMapOf(

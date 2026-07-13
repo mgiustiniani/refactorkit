@@ -51,6 +51,8 @@ data class TypeScriptProject(
     val compilerOptions: TypeScriptCompilerOptions,
     val packageType: JavaScriptPackageType,
     val packageManifest: Path?,
+    val packageExportsDeclared: Boolean,
+    val packageTypesDeclared: Boolean,
 )
 
 data class TypeScriptConfigEvidence(val path: Path, val sha256: String, val size: Long)
@@ -131,6 +133,8 @@ class TypeScriptProjectModelBuilder(
                 compilerOptions = effective.options,
                 packageType = packageMetadata?.type ?: JavaScriptPackageType.UNSPECIFIED,
                 packageManifest = packageMetadata?.path?.let { relativePath(root, it) },
+                packageExportsDeclared = packageMetadata?.exportsDeclared == true,
+                packageTypesDeclared = packageMetadata?.typesDeclared == true,
             )
         }
         if (diagnostics.isNotEmpty()) return refused(diagnostics, evidence.values)
@@ -509,7 +513,11 @@ class TypeScriptProjectModelBuilder(
                         return null
                     }
                 }
-                return PackageMetadata(file, type)
+                return PackageMetadata(
+                    file, type,
+                    exportsDeclared = json.containsKey("exports"),
+                    typesDeclared = json.containsKey("types") || json.containsKey("typings"),
+                )
             }
             if (directory == root) break
             directory = directory.parent
@@ -636,7 +644,10 @@ class TypeScriptProjectModelBuilder(
             digest.update(value.toByteArray(Charsets.UTF_8)); digest.update(0)
         }
         projects.forEach { project ->
-            add("project", ProtocolPath.serialize(project.configPath), project.kind.name, project.packageType.name)
+            add(
+                "project", ProtocolPath.serialize(project.configPath), project.kind.name, project.packageType.name,
+                project.packageExportsDeclared.toString(), project.packageTypesDeclared.toString(),
+            )
             project.extendsConfigs.forEach { add("extends", ProtocolPath.serialize(it)) }
             project.references.forEach { add("reference", ProtocolPath.serialize(it)) }
             project.files.forEach { add("file", ProtocolPath.serialize(it)) }
@@ -689,7 +700,12 @@ class TypeScriptProjectModelBuilder(
         val ownPaths: Boolean,
     )
 
-    private data class PackageMetadata(val path: Path, val type: JavaScriptPackageType)
+    private data class PackageMetadata(
+        val path: Path,
+        val type: JavaScriptPackageType,
+        val exportsDeclared: Boolean,
+        val typesDeclared: Boolean,
+    )
 
     companion object {
         private val STRICT_JSON = Json { isLenient = false; ignoreUnknownKeys = true }

@@ -38,7 +38,10 @@ review safety boundaries before applying refactorings.
   TypeScript/JavaScript search, definition, references and exact diagnostics, plus
   rename preview/apply/WAL/rollback through the language-specific diagnostics gate.
   Compiler workspace-symbol search is capability-negotiated, bounded to 200
-  results, and emits workspace-relative daemon paths.
+  results, and emits workspace-relative daemon paths. Exported symbols on
+  package-exports/types, declaration/composite, or project-reference library
+  surfaces now refuse exported rename by default unless an explicit
+  external-consumer override records high risk.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

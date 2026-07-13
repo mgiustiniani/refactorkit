@@ -15,7 +15,7 @@ class TypeScriptProjectModelTest {
     @Test
     fun buildsEffectiveJsoncProjectsReferencesAliasesAndPackageType() {
         val root = workspace(
-            "package.json" to """{"name":"workspace","type":"module"}""",
+            "package.json" to """{"name":"workspace","type":"module","exports":{".":"./dist/index.js"},"types":"./dist/index.d.ts"}""",
             "configs/base.json" to """
                 {
                   // inherited compiler policy
@@ -59,6 +59,8 @@ class TypeScriptProjectModelTest {
         assertEquals(listOf("apps/web", "apps/web"), web.include.map { slash(it.baseDirectory) })
         assertEquals(JavaScriptPackageType.MODULE, web.packageType)
         assertEquals("package.json", slash(web.packageManifest!!))
+        assertTrue(web.packageExportsDeclared)
+        assertTrue(web.packageTypesDeclared)
         assertEquals(4, model.evidence.size)
         assertTrue(model.evidence.all { it.sha256.length == 64 && it.size > 0 })
         assertEquals(64, model.projectionHash.length)

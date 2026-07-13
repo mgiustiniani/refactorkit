@@ -75,8 +75,13 @@ symbol. Safe non-reserved Unicode identifiers (including private `#` identifiers
 are accepted for class/interface/enum/function/method/property/field/variable/
 constant/type-parameter/namespace symbols. Unresolved, unknown, constructor,
 package, module, invalid and no-op targets refuse before requesting an edit. The
-server WorkspaceEdit then passes through the strict external edit parser and core
-normalizer. A successful result is a `PatchPlan` preview with
+For declaration/composite/project-reference library surfaces, an exported symbol
+is treated as having potentially unbounded external consumers. Preview refuses
+with `typescript.externalConsumersUnknown` unless
+`allowExternalConsumers=true`; the override lowers confidence, raises risk to
+high and records an explicit warning. Package `exports` and `types`/`typings`
+publication markers are hash-bound project-model evidence. The server WorkspaceEdit then passes through the strict external edit parser
+and core normalizer. A successful result is a `PatchPlan` preview with
 `LANGUAGE_SERVER` evidence, explicit approval requirement and medium TypeScript
 or high JavaScript risk. The plan reports one of `FULL_TYPESCRIPT`,
 `CHECKED_JAVASCRIPT`, `DYNAMIC_JAVASCRIPT` or `MIXED_JAVASCRIPT`; dynamic and
@@ -101,6 +106,7 @@ native platform.
 - missing server capabilities;
 - stale, missing, unversioned or non-monotonic diagnostic/document versions;
 - missing or equally specific TypeScript project ownership;
+- exported library surface without explicit external-consumer override;
 - oversized documents;
 - invalid UTF-16 positions;
 - edit path outside overlay/workspace;

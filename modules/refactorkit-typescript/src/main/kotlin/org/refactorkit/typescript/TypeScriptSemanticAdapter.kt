@@ -315,6 +315,13 @@ class TypeScriptSemanticAdapter(
         if (newName == symbol.name) return refusedPlan(
             request, "typescript.renameNoChange", "TypeScript rename target is unchanged",
         )
+        val externalConsumerRisk = exportedDeclaration(request.snapshot, symbol.location)
+        val externalConsumerOverride = request.arguments["allowExternalConsumers"]?.toBooleanStrictOrNull() == true
+        if (externalConsumerRisk && !externalConsumerOverride) return refusedPlan(
+            request,
+            "typescript.externalConsumersUnknown",
+            "Exported TypeScript/JavaScript symbol may have consumers outside the bounded workspace; explicit allowExternalConsumers=true is required",
+        )
         return when (val result = client.requestRename(request.snapshot, location, newName)) {
             is ExternalWorkspaceEditNormalization.Refused -> {
                 val first = result.diagnostics.firstOrNull()
@@ -357,11 +364,14 @@ class TypeScriptSemanticAdapter(
                     operation = request.operation,
                     status = PatchStatus.PREVIEW,
                     snapshotHash = request.snapshot.hash,
-                    confidence = when (completeness.mode) {
-                        TypeScriptSemanticCompletenessMode.FULL_TYPESCRIPT -> 0.9
-                        TypeScriptSemanticCompletenessMode.CHECKED_JAVASCRIPT -> 0.75
-                        TypeScriptSemanticCompletenessMode.MIXED_JAVASCRIPT -> 0.6
-                        TypeScriptSemanticCompletenessMode.DYNAMIC_JAVASCRIPT -> 0.5
+                    confidence = when {
+                        externalConsumerRisk -> 0.65
+                        else -> when (completeness.mode) {
+                            TypeScriptSemanticCompletenessMode.FULL_TYPESCRIPT -> 0.9
+                            TypeScriptSemanticCompletenessMode.CHECKED_JAVASCRIPT -> 0.75
+                            TypeScriptSemanticCompletenessMode.MIXED_JAVASCRIPT -> 0.6
+                            TypeScriptSemanticCompletenessMode.DYNAMIC_JAVASCRIPT -> 0.5
+                        }
                     },
                     requiresUserApproval = true,
                     summary = "Rename ${symbol.kind.name.lowercase()} '${symbol.name}' to '$newName' in ${edit.edits.size} file operation(s).",
@@ -372,9 +382,12 @@ class TypeScriptSemanticAdapter(
                     warnings = listOf(
                         "Experimental language-server proposal; apply requires the exact TypeScript diagnostics gate.",
                         completeness.summary,
+                        if (externalConsumerRisk) {
+                            "Explicit external-consumer override accepted; callers outside the workspace are not proven updated."
+                        } else "No exported declaration marker was detected at the selected symbol.",
                         "Provider=${toolchain.provenance.providerId} TypeScript=${toolchain.provenance.typeScriptVersion}",
                     ),
-                    riskLevel = if (languageId == "typescript") RiskLevel.MEDIUM else RiskLevel.HIGH,
+                    riskLevel = if (languageId == "typescript" && !externalConsumerRisk) RiskLevel.MEDIUM else RiskLevel.HIGH,
                     evidence = RefactoringEvidence.LANGUAGE_SERVER,
                 )
             }
@@ -469,6 +482,22 @@ class TypeScriptSemanticAdapter(
         category = DiagnosticCategory.SAFETY,
     )
 
+    private fun exportedDeclaration(snapshot: ProjectSnapshot, location: SourceLocation): Boolean {
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val relative = if (location.path.isAbsolute) {
+            val absolute = location.path.toAbsolutePath().normalize()
+            if (!absolute.startsWith(root)) return true else root.relativize(absolute)
+        } else location.path.normalize()
+        val source = snapshot.files.singleOrNull { it.path.normalize() == relative } ?: return true
+        val line = source.content.lineSequence().elementAtOrNull(location.range.start.line) ?: return true
+        val declarationPrefix = line.take(location.range.start.character.coerceAtMost(line.length))
+        val librarySurface = projectModel.projects.any {
+            it.compilerOptions.declaration == true || it.compilerOptions.composite == true ||
+                it.packageExportsDeclared || it.packageTypesDeclared
+        } || projectModel.projects.flatMap { it.references }.isNotEmpty()
+        return librarySurface && EXPORT_MARKER.containsMatchIn(declarationPrefix)
+    }
+
     private fun isSafeIdentifier(value: String): Boolean {
         if (value.isBlank() || value.length > 1_024 || '\u0000' in value || value in RESERVED_IDENTIFIERS) return false
         val identifier = value.removePrefix("#")
@@ -551,6 +580,7 @@ class TypeScriptSemanticAdapter(
         const val MAX_RESTARTS_PER_WINDOW = 3
         const val RESTART_WINDOW_MILLIS = 60_000L
 
+        private val EXPORT_MARKER = Regex("(?:^|\\s)export(?:\\s|$)")
         private val UNSUPPORTED_RENAME_KINDS = setOf(
             org.refactorkit.core.Symbol.Kind.UNKNOWN,
             org.refactorkit.core.Symbol.Kind.CONSTRUCTOR,
