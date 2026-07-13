@@ -1,3 +1,4 @@
+import org.gradle.api.attributes.java.TargetJvmVersion
 import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -12,6 +13,19 @@ allprojects {
 }
 
 subprojects {
+    dependencies {
+        components {
+            listOf("tree-sitter", "tree-sitter-typescript", "tree-sitter-javascript").forEach { artifact ->
+                withModule("io.github.bonede:$artifact") {
+                    allVariants {
+                        // Loaded reflectively only by the bundled Java 21 runtime; keeps RefactorKit API bytecode at 8.
+                        attributes.attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 8)
+                    }
+                }
+            }
+        }
+    }
+
     tasks.withType<JavaCompile>().configureEach {
         sourceCompatibility = "8"
         targetCompatibility = "8"

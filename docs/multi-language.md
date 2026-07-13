@@ -28,56 +28,40 @@ parse, lexical, and none. Existing `PatchPlan` evidence now includes explicit
 language-server and native-AST values while retaining JDT/structural/lexical
 compatibility.
 
-## Level 1: Structural (regex-backed, no external binaries)
+## Level 1: Structural parsing
 
 Implemented in `modules/refactorkit-tree-sitter`.
 
-### Supported languages (outline + search)
+The self-contained runtime packages Tree-sitter JNI 0.25.3 plus TypeScript and
+JavaScript grammars for Linux x86_64, Windows x86_64, macOS x86_64, and macOS
+arm64. `BonedeTreeSitterBinding` uses real bounded parse trees for declaration
+outlines and identifier-node search, structurally excluding comments and string
+literals. Limits are 16 MiB source, 100,000 visited named nodes, a two-second
+native parser deadline, and 1,024-byte identifiers.
 
-| Language   | Extension(s)  | Outline items                                     |
-|------------|---------------|---------------------------------------------------|
-| Java       | `.java`       | class, interface, enum, record                    |
-| Kotlin     | `.kt`, `.kts` | class, interface, object, fun, enum class         |
-| TypeScript | `.ts`, `.tsx` | class, interface, function, const/let arrow, enum |
-| JavaScript | `.js`, `.jsx` | (same as TypeScript)                              |
-| Python     | `.py`         | class, function (top-level + indented method)     |
-| Rust       | `.rs`         | struct, enum, trait, fn, impl                     |
-| Go         | `.go`         | struct, interface, type, func                     |
-| C#         | `.cs`         | class, interface, enum, method                    |
+The bridge is loaded reflectively only on the bundled Java 21 runtime, preserving
+Java-8-compatible RefactorKit library bytecode. `.ts` and `.js` receive native
+structural evidence in this first slice. TSX/JSX and other languages continue to
+use the documented heuristic fallback and do not inherit native evidence.
 
-### Classes
+| Language   | Extension(s)  | Current structural backend |
+|------------|---------------|----------------------------|
+| TypeScript | `.ts`         | packaged Tree-sitter grammar |
+| JavaScript | `.js`         | packaged Tree-sitter grammar |
+| Java       | `.java`       | Java adapter/JDT or generic fallback |
+| Kotlin     | `.kt`, `.kts` | generic fallback |
+| TSX/JSX    | `.tsx`, `.jsx`| generic fallback |
+| Python     | `.py`         | generic fallback |
+| Rust       | `.rs`         | generic fallback |
+| Go         | `.go`         | generic fallback |
+| C#         | `.cs`         | generic fallback |
 
-**`GenericOutline`** — regex outline extraction, sorted by line number.
-
-**`GenericStructuralSearch`** — plain text and wildcard pattern search within a file.
-- `search(content, pattern, languageId, wholeWord, caseSensitive)` — return all matches
-- `findIdentifier(content, identifier)` — whole-word identifier search
-- `localRename(content, from, to)` — textual whole-word replacement (no comment/string filtering)
-
-**`GenericLocalRenamePlanner`** — PatchPlan-producing local rename for any language.
-- Validates identifier syntax
-- Skips occurrences inside line comments (`//`, `#`), block comments (`/* */`), string/char literals, and triple-quoted strings
-- Returns REFUSED plan for missing file, invalid identifiers, or same-name rename
-- Returns PREVIEW plan with `riskLevel = MEDIUM` and warnings that rename is file-scoped and textual
-
-**`GenericProjectScanner`** — lightweight multi-language workspace scanner.
-- Maps file extensions to language IDs
-- Ignores `.git`, `build`, `target`, `node_modules`, `__pycache__`, etc.
-- Detects standard source roots (`src/main/java`, `src`, `lib`)
-- Produces a `ProjectSnapshot` compatible with the core patch engine
-
-**`TreeSitterAdapter`** — façade.
-- `isAvailable()` → always `false` (stub; real JNI bindings not bundled)
-- `outline(content, languageId)` → delegates to `GenericOutline`
-- `search(content, pattern, languageId, wholeWord)` → delegates to `GenericStructuralSearch`
-- `applyRefactoring(request)` → handles `localRename`; refuses all others
-
-**`ExternalLspAdapter`** — Level 2 LSP-backed adapter (MVP).
-- Launches an external language server via stdio
-- Sends `initialize` + `initialized` on start
-- `buildSymbols` uses `GenericOutline` for structural symbols
-- `resolveSymbol` forwards `textDocument/definition` (response parsing is future work)
-- `applyRefactoring` always returns REFUSED (full LSP refactoring is future work)
+`TreeSitterAdapter` selects the native binding only when its grammar is loaded;
+`GenericOutline`, `GenericStructuralSearch`, and `CommentLiteralFilter` remain
+explicit fallbacks. `GenericLocalRenamePlanner` remains review-only structural
+mutation and never receives stable semantic authority. Native packaged smoke
+requires TypeScript outline extraction and proves that a class-like comment is
+not reported.
 
 ## Level 2: LSP-backed (future)
 

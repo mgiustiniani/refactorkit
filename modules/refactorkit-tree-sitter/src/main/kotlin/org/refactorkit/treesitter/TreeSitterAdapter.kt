@@ -14,21 +14,17 @@ import java.nio.file.Paths
  *
  * | Condition                          | [isAvailable] | Outline / Search source           |
  * |------------------------------------|---------------|-----------------------------------|
- * | No binding, no system property     | `false`       | [GenericOutline] regex fallback   |
- * | System property `…native=true`     | `true`        | [GenericOutline] regex fallback   |
- * | [setNativeBinding] called          | `true`        | [TreeSitterNativeBinding]         |
+ * | Packaged TypeScript/JavaScript grammar | `true`    | [BonedeTreeSitterBinding]         |
+ * | Unsupported language              | `true`        | [GenericOutline] fallback         |
+ * | [setNativeBinding] called          | `true`        | supplied [TreeSitterNativeBinding]|
  *
  * When a [TreeSitterNativeBinding] is registered and [TreeSitterNativeBinding.supports]
  * returns true for the requested language, the native binding is preferred for both
  * outline extraction and identifier search (bypassing [CommentLiteralFilter]).
  *
- * ## System property
- *
- * Set `-Drefactorkit.treesitter.native=true` to advertise native availability without
- * a concrete binding (useful for integration tests or future dynamic loading).
  */
 class TreeSitterAdapter(
-    private var nativeBinding: TreeSitterNativeBinding? = null,
+    private var nativeBinding: TreeSitterNativeBinding? = BonedeTreeSitterBinding(),
 ) {
     /**
      * Register a [TreeSitterNativeBinding]. Must be called before the first
@@ -39,11 +35,9 @@ class TreeSitterAdapter(
     }
 
     /**
-     * Returns true when a native binding is registered or the system property
-     * [SYSTEM_PROPERTY_NATIVE] is set to `"true"`.
+     * Returns true when a native binding implementation is registered.
      */
-    fun isAvailable(): Boolean =
-        nativeBinding != null || System.getProperty(SYSTEM_PROPERTY_NATIVE).toBoolean()
+    fun isAvailable(): Boolean = nativeBinding != null
 
     /**
      * Extract a structural outline from [content] for [languageId].
@@ -128,11 +122,8 @@ class TreeSitterAdapter(
     )
 
     companion object {
-        /**
-         * System property that signals native Tree-sitter availability externally.
-         * Set to `"true"` to make [isAvailable] return true without a binding.
-         * Value: `"refactorkit.treesitter.native"`.
-         */
+        /** Legacy experimental key retained for source compatibility; packaged binding discovery is authoritative. */
+        @Deprecated("Packaged grammar discovery is automatic")
         const val SYSTEM_PROPERTY_NATIVE = "refactorkit.treesitter.native"
     }
 }

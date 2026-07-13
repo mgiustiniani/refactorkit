@@ -34,6 +34,17 @@ public class ServiceClient {
     String number(Service service) { return service.find(7); }
 }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "ServiceClient.java")
+    @'
+// class FakeNativeBinding {}
+export interface NativeService { run(): void }
+export class RealNativeBinding { run(): void {} }
+'@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $Fixture "structural.ts")
+
+    $Outline = (& $Launcher outline (Join-Path $Fixture "structural.ts") --language typescript) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Outline -notmatch 'INTERFACE\s+NativeService' -or
+        $Outline -notmatch 'CLASS\s+RealNativeBinding' -or $Outline -match 'FakeNativeBinding') {
+        throw "Packaged native Tree-sitter outline failed: $Outline"
+    }
 
     function Get-SourceHashes {
         Get-ChildItem -Path $Fixture -Filter *.java -Recurse |

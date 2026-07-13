@@ -43,6 +43,20 @@ public class ServiceClient {
     String number(Service service) { return service.find(7); }
 }
 JAVA
+cat >"$fixture/structural.ts" <<'TS'
+// class FakeNativeBinding {}
+export interface NativeService { run(): void }
+export class RealNativeBinding { run(): void {} }
+TS
+
+outline="$(env -u JAVA_HOME "$launcher" outline "$fixture/structural.ts" --language typescript)"
+if ! grep -Fq 'INTERFACE    NativeService' <<<"$outline" ||
+   ! grep -Fq 'CLASS        RealNativeBinding' <<<"$outline" ||
+   grep -Fq 'FakeNativeBinding' <<<"$outline"; then
+  echo "Packaged native Tree-sitter outline failed:" >&2
+  echo "$outline" >&2
+  exit 1
+fi
 
 source_hashes() {
   find "$fixture" -type f -name '*.java' -print0 \

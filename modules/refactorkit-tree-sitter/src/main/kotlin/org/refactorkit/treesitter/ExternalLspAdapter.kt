@@ -111,6 +111,7 @@ class ExternalLspAdapter(
 
     /** Pending `textDocument/publishDiagnostics` payloads (params JSON). */
     private val pendingDiagParams = ArrayDeque<String>()
+    private val structuralAdapter = TreeSitterAdapter()
 
     // ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -216,7 +217,7 @@ class ExternalLspAdapter(
     override fun buildSymbols(project: ProjectSnapshot): SymbolIndex {
         val items = project.files.filter { it.languageId == languageId }
             .flatMap { file ->
-                GenericOutline.outline(file.content, languageId).map { item ->
+                structuralAdapter.outline(file.content, languageId).map { item ->
                     Symbol(
                         id = SymbolId("${file.path}::${item.name}"),
                         name = item.name,

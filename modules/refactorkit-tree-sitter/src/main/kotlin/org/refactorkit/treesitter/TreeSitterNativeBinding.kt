@@ -3,23 +3,20 @@ package org.refactorkit.treesitter
 /**
  * Extension point for native Tree-sitter language bindings.
  *
- * Implement this interface and register it with [TreeSitterAdapter.setNativeBinding]
- * to enable parse-tree-accurate structural analysis that replaces the regex/heuristic
- * fallback in [GenericOutline] and [CommentLiteralFilter].
+ * [BonedeTreeSitterBinding] is packaged for TypeScript and JavaScript. Additional
+ * grammars implement this interface and register through
+ * [TreeSitterAdapter.setNativeBinding] to replace regex/heuristic fallback in
+ * [GenericOutline] and [CommentLiteralFilter].
  *
- * ## How to plug in native bindings
+ * ## How to plug in additional bindings
  *
- * 1. Add a JNI or JNA library that wraps the Tree-sitter C library and one or more
- *    language grammars (e.g., `tree-sitter-java`, `tree-sitter-python`).
+ * 1. Add a bounded, provenance-recorded grammar for every supported native target.
  * 2. Implement [TreeSitterNativeBinding].
  * 3. Register the binding before first use:
  *    ```kotlin
  *    val adapter = TreeSitterAdapter()
  *    adapter.setNativeBinding(MyNativeBinding())
  *    ```
- * 4. Alternatively, set the system property `refactorkit.treesitter.native=true` to
- *    signal availability externally (e.g., for testing without real bindings).
- *
  * ## Contract
  *
  * - [supports] must return quickly (no I/O).

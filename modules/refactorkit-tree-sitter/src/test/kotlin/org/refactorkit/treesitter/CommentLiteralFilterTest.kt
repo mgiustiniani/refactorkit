@@ -158,9 +158,9 @@ class CommentLiteralFilterTest {
     // ── TreeSitterAdapter integration ─────────────────────────────────────────
 
     @Test
-    fun adapterIsNotAvailableByDefault() {
+    fun packagedNativeAdapterIsAvailableByDefault() {
         val adapter = TreeSitterAdapter()
-        assertFalse(adapter.isAvailable())
+        assertTrue(adapter.isAvailable())
     }
 
     @Test
@@ -208,13 +208,4 @@ class CommentLiteralFilterTest {
         assertTrue(results.isNotEmpty(), "Heuristic fallback should find Foo")
     }
 
-    @Test
-    fun systemPropertySignalsAvailability() {
-        try {
-            System.setProperty(TreeSitterAdapter.SYSTEM_PROPERTY_NATIVE, "true")
-            assertTrue(TreeSitterAdapter().isAvailable())
-        } finally {
-            System.clearProperty(TreeSitterAdapter.SYSTEM_PROPERTY_NATIVE)
-        }
-    }
 }

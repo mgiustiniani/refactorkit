@@ -28,6 +28,11 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Replaced the Tree-sitter stub for `.ts`/`.js` with packaged real JNI 0.25.3
+  TypeScript/JavaScript grammars on every native runtime target. Native bounded
+  parse trees now drive outlines and identifier search while excluding
+  comments/string literals; reflection preserves Java-8-compatible public
+  bytecode and packaged smoke proves native loading without global Java.
 - Integrated `ExternalLspAdapter` with managed external processes, byte-counted
   bounded LSP frames, request deadlines and cancellation, validated initialize
   handshake, server/capability provenance, source-only workspace overlays, URI
