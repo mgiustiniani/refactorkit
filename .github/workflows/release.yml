@@ -60,8 +60,11 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Build, test, package and native smoke
-        run: ${{ matrix.gradle }} clean build :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+      - name: Clean build and test
+        run: ${{ matrix.gradle }} clean build --no-daemon
+
+      - name: Package and native smoke
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
 
       - name: Native packaged real TypeScript qualification
         shell: python

@@ -9,7 +9,13 @@ review safety boundaries before applying refactorings.
 
 No changes yet.
 
-## 0.6.0 - 2026-07-13
+## 0.6.1 - 2026-07-13
+
+- Publication patch for the completed `v0.6.0` feature scope. Separates release
+  `clean build` from package/native smoke after the immutable `v0.6.0` tag's
+  Windows job failed before asset publication. No API or product semantics change.
+
+## 0.6.0 - 2026-07-13 (tagged, not published)
 
 - Begin the TypeScript/JavaScript semantic adapter band on top of the published
   `v0.5.0` kernel; no new stable capability is claimed yet.

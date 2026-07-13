@@ -59,7 +59,7 @@ refactorkit-runtime-<version>-macos-aarch64.zip
 ```
 
 Every ZIP has a matching `.sha256`, platform-specific SPDX JSON SBOM, build
-provenance attestation, and SBOM attestation. `v0.6.0` retains native acceptance
+provenance attestation, and SBOM attestation. `v0.6.1` retains native acceptance
 for the complete four-platform matrix and adds real-toolchain/kill-recovery gates.
 
 During a tag release, the workflow computes the final checksum and asset URL and
@@ -68,24 +68,24 @@ GitHub Release notes.
 
 ## Install and smoke-test a downloaded release asset
 
-For `v0.6.0`, select the matching platform pair, for example:
+For `v0.6.1`, select the matching platform pair, for example:
 
 ```text
-refactorkit-runtime-0.6.0-linux-x86_64.zip
-refactorkit-runtime-0.6.0-linux-x86_64.zip.sha256
+refactorkit-runtime-0.6.1-linux-x86_64.zip
+refactorkit-runtime-0.6.1-linux-x86_64.zip.sha256
 ```
 
 Download both files from the GitHub release page, then verify and unpack the zip:
 
 ```bash
-sha256sum -c refactorkit-runtime-0.6.0-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.6.0-linux-x86_64.zip -d /tmp/refactorkit-v0.6.0
+sha256sum -c refactorkit-runtime-0.6.1-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.6.1-linux-x86_64.zip -d /tmp/refactorkit-v0.6.1
 ```
 
 The package layout after extraction is:
 
 ```text
-/tmp/refactorkit-v0.6.0/refactorkit/
+/tmp/refactorkit-v0.6.1/refactorkit/
   bin/refactorkit
   runtime/bin/java
 ```
@@ -93,7 +93,7 @@ The package layout after extraction is:
 Smoke-test the extracted launcher with `JAVA_HOME` unset:
 
 ```bash
-RK=/tmp/refactorkit-v0.6.0/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.6.1/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -107,7 +107,7 @@ Run sample scans from a RefactorKit source checkout. To make the launcher easier
 to call, add the extracted `bin` directory to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.6.0/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.6.1/refactorkit/bin:$PATH
 refactorkit --help
 ```
 

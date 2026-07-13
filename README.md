@@ -28,8 +28,8 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Latest release is `v0.6.0`. API `0.2` remains the beta compatibility baseline.
-`v0.6.0` adds the first managed TypeScript/JavaScript semantic foundation on the
+Latest release is `v0.6.1`. API `0.2` remains the beta compatibility baseline.
+The `v0.6.1` publication patch delivers the `v0.6.0` managed TypeScript/JavaScript semantic foundation on the
 natively built self-contained runtime matrix; platforms are marked supported only
 after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is
@@ -40,41 +40,41 @@ equivalent semantic safety and idiomatic depth.
 
 | Platform | Architecture | Published support | Planned asset |
 |---|---|---|---|
-| Linux | x86_64 | `v0.6.0` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
-| Windows | x86_64 | `v0.6.0` supported | `refactorkit-runtime-<version>-windows-x86_64.zip` |
-| macOS | Intel x86_64 | `v0.6.0` supported | `refactorkit-runtime-<version>-macos-x86_64.zip` |
-| macOS | Apple Silicon arm64 | `v0.6.0` supported | `refactorkit-runtime-<version>-macos-aarch64.zip` |
+| Linux | x86_64 | `v0.6.1` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
+| Windows | x86_64 | `v0.6.1` supported | `refactorkit-runtime-<version>-windows-x86_64.zip` |
+| macOS | Intel x86_64 | `v0.6.1` supported | `refactorkit-runtime-<version>-macos-x86_64.zip` |
+| macOS | Apple Silicon arm64 | `v0.6.1` supported | `refactorkit-runtime-<version>-macos-aarch64.zip` |
 
 Each package embeds its native Java runtime. A runtime is built on its target OS,
 receives an independent checksum/SBOM/attestation, and must pass packaged
 version, semantic lookup, format/apply/rollback, recovery and filesystem safety
 checks. The IDE does not require a globally installed Java runtime.
 
-## Install a v0.6.0 self-contained runtime
+## Install a v0.6.1 self-contained runtime
 
 Select `linux-x86_64`, `windows-x86_64`, `macos-x86_64`, or `macos-aarch64`.
 Every package includes its native launcher and embedded Java runtime, so users do
 not need a globally installed Java runtime.
 
-Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.6.0>
+Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.6.1>
 
 The immutable release commit and final asset hashes are recorded in
-[`docs/releases/v0.6.0-acceptance.md`](docs/releases/v0.6.0-acceptance.md); use
+[`docs/releases/v0.6.1-acceptance.md`](docs/releases/v0.6.1-acceptance.md); use
 each platform asset's adjacent checksum as authoritative.
 
 Linux x86_64 example:
 
 ```bash
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.0/refactorkit-runtime-0.6.0-linux-x86_64.zip
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.0/refactorkit-runtime-0.6.0-linux-x86_64.zip.sha256
-sha256sum -c refactorkit-runtime-0.6.0-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.6.0-linux-x86_64.zip -d /tmp/refactorkit-v0.6.0
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.1/refactorkit-runtime-0.6.1-linux-x86_64.zip
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.1/refactorkit-runtime-0.6.1-linux-x86_64.zip.sha256
+sha256sum -c refactorkit-runtime-0.6.1-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.6.1-linux-x86_64.zip -d /tmp/refactorkit-v0.6.1
 ```
 
 Run smoke checks with `JAVA_HOME` unset to prove the embedded runtime is used:
 
 ```bash
-RK=/tmp/refactorkit-v0.6.0/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.6.1/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -96,14 +96,14 @@ env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
 Optionally add the extracted launcher to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.6.0/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.6.1/refactorkit/bin:$PATH
 refactorkit --help
 ```
 
 Run the sample scan commands from a RefactorKit source checkout that contains the
 `samples/` directory.
 
-### Windows and macOS `v0.6.0` artifact usage
+### Windows and macOS `v0.6.1` artifact usage
 
 Windows verification uses PowerShell:
 

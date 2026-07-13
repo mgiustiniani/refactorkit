@@ -48,8 +48,8 @@ Example:
 
 ```bash
 python3 scripts/verify-runtime-archive.py \
-  refactorkit-runtime-0.6.0-linux-x86_64.zip \
-  refactorkit-runtime-0.6.0-linux-x86_64.zip.sha256 \
+  refactorkit-runtime-0.6.1-linux-x86_64.zip \
+  refactorkit-runtime-0.6.1-linux-x86_64.zip.sha256 \
   --platform linux-x86_64
 ```
 
