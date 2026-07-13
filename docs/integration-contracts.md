@@ -93,6 +93,18 @@ compatible.
 | `refactorkit outline`, `search`, `local-rename` | `experimental` | Multi-language structural features, not semantic Java refactoring contracts. |
 | Any unlisted/debug subcommand | `internal` | Not supported for external automation. |
 
+## Multi-language adapter kernel
+
+The internal registry uses canonical `languageId` plus unique extension ownership.
+Mixed routing requires explicit language, scanned selection, or unique symbol
+ownership; ambiguity is a typed refusal. Capability descriptors separate
+stability, evidence (`COMPILER`, `LANGUAGE_SERVER`, `NATIVE_AST`,
+`STRUCTURAL_PARSE`, `LEXICAL`, `NONE`), and mutation authority. Stable managed
+authority cannot be lexical, and a returned plan with weaker evidence is replaced
+by `language.evidenceInsufficient` refusal. `RefactoringEvidence` additively
+includes `LANGUAGE_SERVER` and `NATIVE_AST`; integrations must tolerate unknown
+future enum values under the pre-1.0 compatibility policy.
+
 ## Daemon JSON-RPC compatibility baseline
 
 `modules/refactorkit-daemon` exposes JSON-RPC 2.0 over newline-delimited stdio.
@@ -263,6 +275,8 @@ LSP carries them in diagnostic `data`.
 Every plan exposes one stable evidence category:
 
 - `JDT_BINDING`: edits use clean exact JDT binding/source-range evidence;
+- `LANGUAGE_SERVER`: edits are normalized from a bounded semantic-server proposal;
+- `NATIVE_AST`: edits use a native parser/compiler rewrite representation;
 - `STRUCTURAL`: deterministic local transformation without semantic identity claims;
 - `LEXICAL_FALLBACK`: review-only preview when semantic evidence is unavailable.
 

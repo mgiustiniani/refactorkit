@@ -6,6 +6,28 @@ supreme multi-language roadmap. Java is the reference/widest adapter, but mature
 language ecosystems target equivalent IDE-grade semantic safety and idiomatic
 refactoring depth rather than permanent baseline-only support.
 
+## Multi-language kernel
+
+`refactorkit-core` now owns `LanguageAdapterRegistry`,
+`LanguageAdapterDescriptor`, and `LanguageCapability`. Registration is bounded to
+64 adapters and refuses duplicate language IDs or extension ownership. Scanned
+`SourceFile.languageId` is authoritative; extension routing is used only when no
+scanned file exists. Refactoring routing requires an explicit language, selected
+file, or uniquely owned symbol and refuses cross-language symbol ambiguity.
+
+The registry deterministically aggregates symbols and diagnostics across mixed
+snapshots. Capability metadata independently declares stability, semantic
+evidence, and mutation authority. `MANAGED_STABLE` requires `STABLE` plus
+non-lexical evidence. Returned plans are checked against the declared evidence;
+a weaker plan is replaced with `language.evidenceInsufficient` refusal rather
+than inheriting authority. `JavaAdapterRegistration` is the reference production
+descriptor.
+
+Generalized evidence kinds are compiler, language server, native AST, structural
+parse, lexical, and none. Existing `PatchPlan` evidence now includes explicit
+language-server and native-AST values while retaining JDT/structural/lexical
+compatibility.
+
 ## Level 1: Structural (regex-backed, no external binaries)
 
 Implemented in `modules/refactorkit-tree-sitter`.

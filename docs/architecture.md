@@ -6,7 +6,7 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 
 | Module                    | Status       | Notes                                                     |
 |---------------------------|-------------|------------------------------------------------------------|
-| `refactorkit-core`        | ✅ MVP+      | Patch/transaction engine plus internal Build Model SPI contracts and hash-bound snapshot projection |
+| `refactorkit-core`        | ✅ MVP+      | Patch/transaction engine, Build Model SPI, bounded language-adapter registry, mixed routing, generalized evidence and hash-bound snapshots |
 | `refactorkit-java`        | ✅ MVP+      | Offline Maven effective reactor/source-set model, JDT diagnostics, rename/move/move-source-root, organize-imports, safe-delete, formatting, limited extract/change-signature, recipes, framework risk detection |
 | `refactorkit-cli`         | ✅ MVP+      | All Java commands + outline/search/local-rename + jlink runtime packaging |
 | `refactorkit-daemon`      | ✅ MVP       | JSON-RPC over stdio                                        |

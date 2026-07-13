@@ -257,6 +257,8 @@ enum class RiskLevel {
 
 enum class RefactoringEvidence {
     JDT_BINDING,
+    LANGUAGE_SERVER,
+    NATIVE_AST,
     STRUCTURAL,
     LEXICAL_FALLBACK,
 }

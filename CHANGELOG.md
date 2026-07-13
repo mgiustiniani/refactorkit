@@ -28,6 +28,14 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Started P4 with a bounded core `LanguageAdapterRegistry`, canonical adapter
+  descriptors, unique language/extension ownership, deterministic mixed-language
+  symbol/diagnostic aggregation, selection/symbol/explicit-language routing,
+  typed ambiguity/refusal diagnostics, and operation capability negotiation.
+  Added generalized compiler/language-server/native-AST/structural/lexical
+  evidence vocabulary and fail-closed enforcement preventing weaker plans from
+  inheriting managed stable authority. Java now publishes its reference
+  capability registration.
 - Completed the P3 distribution-trust baseline with a hostile archive verifier:
   checksum/name binding, bounded safe extraction vocabulary, traversal/symlink/
   duplicate/case-collision refusal, reproducible timestamps, executable metadata,

@@ -257,6 +257,9 @@ BuildModel
 BuildModule
 BuildSourceSet
 BuildModelProvider
+LanguageAdapterRegistry
+LanguageAdapterDescriptor
+LanguageCapability
 SourceFile
 TextEdit
 FileEdit

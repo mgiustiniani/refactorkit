@@ -14,6 +14,24 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class JavaLanguageAdapterTest {
+    @Test
+    fun registrationPublishesEvidenceGatedManagedCapabilities() {
+        val registration = JavaAdapterRegistration.create()
+
+        assertEquals("java", registration.descriptor.languageId)
+        assertEquals(setOf("java"), registration.descriptor.extensions)
+        assertTrue(registration.descriptor.capabilities.any {
+            it.operation == "renameClass" &&
+                it.stability == org.refactorkit.core.CapabilityStability.STABLE &&
+                it.mutationAuthority == org.refactorkit.core.MutationAuthority.MANAGED_STABLE &&
+                it.evidence == org.refactorkit.core.SemanticEvidenceKind.COMPILER
+        })
+        assertTrue(registration.descriptor.capabilities.none {
+            it.mutationAuthority == org.refactorkit.core.MutationAuthority.MANAGED_STABLE &&
+                it.evidence == org.refactorkit.core.SemanticEvidenceKind.LEXICAL
+        })
+    }
+
 
     @Test
     fun diagnosticsExposeCompilerRangeEvidenceAndStableCategories() {
