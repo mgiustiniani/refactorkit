@@ -14,27 +14,29 @@ IDE-grade acceptance gates are satisfied.
 | `v0.1.0-alpha` | First CLI/library preview, patch engine and Java MVP |
 | `v0.2.0-beta` | Broader Java operations, integration contracts, golden and rollback workflows |
 | `v0.3.0` | JDT analysis foundation, explicit version/API metadata, capability discovery and compatibility policy |
+| `v0.4.0` | Transaction hardening, exact Java diagnostics and managed integration parity |
+| `v0.5.0` | Native runtime matrix, Build Model SPI and bounded multi-language kernel |
 
 Published tags are immutable. Historical detailed plans remain under
 `docs/releases/`.
 
 ## Latest release line
 
-### `v0.5.0` — cross-platform runtime and multi-language kernel
+### `v0.6.0` — managed TypeScript/JavaScript semantic foundation
 
-Detailed plan: [`docs/releases/v0.5.0-plan.md`](releases/v0.5.0-plan.md).
+Detailed plan: [`docs/releases/v0.6.0-plan.md`](releases/v0.6.0-plan.md).
 
-`v0.5.0` publishes native self-contained Linux, Windows, and macOS runtimes,
-transaction parity, Build Model SPI productionization, distribution trust,
-mixed-language routing, bounded external semantic processes and edits, real
-TypeScript/JavaScript Tree-sitter bindings, and capability schema v1. API `0.2`
-remains the active beta compatibility baseline until an explicit migration is
-planned and tested.
+`v0.6.0` adds explicit hash-bound TypeScript tooling, declarative project models,
+compiler/LSP semantic reads, stable opaque symbol identity, exact no-emit compiler
+diagnostics, managed identifier rename, native apply/WAL/rollback, semantic
+process restart and packaged kill-during-write startup recovery. API `0.2` remains
+the active beta compatibility baseline.
 
-The immutable release commit and downloaded-asset evidence are recorded in
-[`docs/releases/v0.5.0-acceptance.md`](releases/v0.5.0-acceptance.md).
-`v0.5.0` is not an API `1.0` freeze and does not claim completion of the deep
-language-adapter sequence.
+Acceptance and migration evidence are recorded in
+[`docs/releases/v0.6.0-acceptance.md`](releases/v0.6.0-acceptance.md) and
+[`docs/releases/v0.6.0-migration.md`](releases/v0.6.0-migration.md). Advanced
+TypeScript move/import/signature/extraction/recipe operations are explicitly
+post-`v0.6.0` scope.
 
 ## Long-range 0.x sequence
 

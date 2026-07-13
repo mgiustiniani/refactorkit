@@ -14,15 +14,16 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | `refactorkit-mcp`         | ✅ MVP       | Tools, resources (including templates), prompts            |
 | `refactorkit-web-importer`| ✅ MVP       | ExternalJavaClassImporter with provenance + conflict detection |
 | `refactorkit-tree-sitter` | ✅ Kernel    | Packaged TypeScript/JavaScript Tree-sitter JNI, bounded external LSP lifecycle, overlays and untrusted edit normalization |
-| `refactorkit-typescript`  | 🚧 v0.6     | Explicit bounded Node/TypeScript/language-server discovery and hash provenance; semantic project adapter in progress |
+| `refactorkit-typescript`  | ✅ v0.6     | Explicit bounded toolchain/project models, semantic reads, exact compiler diagnostics and managed identifier rename |
 | `refactorkit-testkit`     | ✅ MVP       | GoldenTestLoader/Runner, AgentSimulation scenarios         |
 
 See individual docs/ files for each subsystem.
 
 ## Active evolution
 
-`v0.5.0` publishes the cross-platform runtime and first multi-language kernel on
-the hardened Java/transaction foundation. The long-range `v1.0.0` roadmap evolves
+`v0.6.0` adds the managed TypeScript/JavaScript semantic foundation to the
+`v0.5.0` cross-platform multi-language kernel and hardened Java/transaction base.
+The long-range `v1.0.0` roadmap evolves
 the language-neutral core into a deep multi-language platform rather than
 freezing a Java-only stable API. Java remains the reference and widest catalogue;
 TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Objective-C, Swift,
@@ -34,5 +35,5 @@ internal Build Model SPI and completed P2B Maven/Gradle productionization gate i
 `0.5.x`. The Gradle default is the bounded,
 non-executable `gradle-declarative-v1` model documented in
 [`gradle-build-model.md`](gradle-build-model.md); package/FQCN identity is
-kept separate from source-set/module ownership. See `docs/releases/v0.5.0-plan.md`,
+kept separate from source-set/module ownership. See `docs/releases/v0.6.0-plan.md`,
 `docs/releases/v1.0.0-plan.md`, ADR 0009, ADR 0010, and ADR 0011.

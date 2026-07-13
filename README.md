@@ -28,10 +28,10 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Latest release is `v0.5.0`; main develops `0.6.0-SNAPSHOT`. API `0.2` remains
-the beta compatibility baseline. `v0.5.0` adds natively built self-contained
-Windows x86_64, macOS Intel, and macOS Apple Silicon runtimes; platforms are
-marked supported only after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
+Latest release is `v0.6.0`. API `0.2` remains the beta compatibility baseline.
+`v0.6.0` adds the first managed TypeScript/JavaScript semantic foundation on the
+natively built self-contained runtime matrix; platforms are marked supported only
+after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is
 the reference and widest catalogue, while other mature ecosystems target
 equivalent semantic safety and idiomatic depth.
@@ -40,42 +40,41 @@ equivalent semantic safety and idiomatic depth.
 
 | Platform | Architecture | Published support | Planned asset |
 |---|---|---|---|
-| Linux | x86_64 | `v0.5.0` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
-| Windows | x86_64 | `v0.5.0` supported | `refactorkit-runtime-<version>-windows-x86_64.zip` |
-| macOS | Intel x86_64 | `v0.5.0` supported | `refactorkit-runtime-<version>-macos-x86_64.zip` |
-| macOS | Apple Silicon arm64 | `v0.5.0` supported | `refactorkit-runtime-<version>-macos-aarch64.zip` |
+| Linux | x86_64 | `v0.6.0` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
+| Windows | x86_64 | `v0.6.0` supported | `refactorkit-runtime-<version>-windows-x86_64.zip` |
+| macOS | Intel x86_64 | `v0.6.0` supported | `refactorkit-runtime-<version>-macos-x86_64.zip` |
+| macOS | Apple Silicon arm64 | `v0.6.0` supported | `refactorkit-runtime-<version>-macos-aarch64.zip` |
 
 Each package embeds its native Java runtime. A runtime is built on its target OS,
 receives an independent checksum/SBOM/attestation, and must pass packaged
 version, semantic lookup, format/apply/rollback, recovery and filesystem safety
 checks. The IDE does not require a globally installed Java runtime.
 
-## Install a v0.5.0 self-contained runtime
+## Install a v0.6.0 self-contained runtime
 
 Select `linux-x86_64`, `windows-x86_64`, `macos-x86_64`, or `macos-aarch64`.
 Every package includes its native launcher and embedded Java runtime, so users do
 not need a globally installed Java runtime.
 
-Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.5.0>
+Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.6.0>
 
-Release commit: `175a5a42cce9f2f8d75685d599ff2eabdcd92847`.
-The Linux x86_64 asset SHA-256 is
-`3554a312103e3e5c59ad73e89f4ade03d2e5e762018ceb83927dc88795de13e2`;
-use each platform asset's adjacent checksum as authoritative.
+The immutable release commit and final asset hashes are recorded in
+[`docs/releases/v0.6.0-acceptance.md`](docs/releases/v0.6.0-acceptance.md); use
+each platform asset's adjacent checksum as authoritative.
 
 Linux x86_64 example:
 
 ```bash
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.5.0/refactorkit-runtime-0.5.0-linux-x86_64.zip
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.5.0/refactorkit-runtime-0.5.0-linux-x86_64.zip.sha256
-sha256sum -c refactorkit-runtime-0.5.0-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.5.0-linux-x86_64.zip -d /tmp/refactorkit-v0.5.0
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.0/refactorkit-runtime-0.6.0-linux-x86_64.zip
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.0/refactorkit-runtime-0.6.0-linux-x86_64.zip.sha256
+sha256sum -c refactorkit-runtime-0.6.0-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.6.0-linux-x86_64.zip -d /tmp/refactorkit-v0.6.0
 ```
 
 Run smoke checks with `JAVA_HOME` unset to prove the embedded runtime is used:
 
 ```bash
-RK=/tmp/refactorkit-v0.5.0/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.6.0/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -97,14 +96,14 @@ env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
 Optionally add the extracted launcher to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.5.0/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.6.0/refactorkit/bin:$PATH
 refactorkit --help
 ```
 
 Run the sample scan commands from a RefactorKit source checkout that contains the
 `samples/` directory.
 
-### Windows and macOS `v0.5.0` artifact usage
+### Windows and macOS `v0.6.0` artifact usage
 
 Windows verification uses PowerShell:
 
@@ -126,6 +125,22 @@ unzip refactorkit-runtime-<version>-macos-aarch64.zip
 Unsigned/notarization or SmartScreen limitations must remain visible in each
 release until platform signing is implemented. Do not substitute a runtime built
 for another OS or architecture.
+
+### TypeScript/JavaScript semantic toolchain
+
+The Java runtime is self-contained; TypeScript semantics use an explicit external
+Node/toolchain. The `v0.6.0` managed row is Node 22.18.0,
+`typescript-language-server` 5.1.3 and TypeScript 5.9.3. RefactorKit never installs
+or runs npm implicitly. See the
+[`v0.6.0` support matrix](docs/releases/v0.6.0-support-matrix.md) and
+[migration guide](docs/releases/v0.6.0-migration.md).
+
+```bash
+refactorkit typescript search /workspace --query UserService \
+  --node /tools/node \
+  --language-server-package /tools/node_modules/typescript-language-server \
+  --typescript-package /tools/node_modules/typescript
+```
 
 ## Build
 

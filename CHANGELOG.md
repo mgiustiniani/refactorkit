@@ -7,7 +7,9 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-### Next development (`0.6.0-SNAPSHOT`)
+No changes yet.
+
+## 0.6.0 - 2026-07-13
 
 - Begin the TypeScript/JavaScript semantic adapter band on top of the published
   `v0.5.0` kernel; no new stable capability is claimed yet.

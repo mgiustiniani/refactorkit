@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts", "src/**/*.js"]
+}

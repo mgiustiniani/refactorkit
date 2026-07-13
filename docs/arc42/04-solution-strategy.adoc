@@ -8,7 +8,7 @@ Status: implementation-informed with planned items explicitly marked.
 
 RefactorKit is structured as a local, deterministic refactoring engine around a language-independent patch core and pluggable language/integration adapters. The primary strategy is to make changes previewable and diagnosable, with managed compensation after completely successful apply, for humans, CI, editors, and local AI agents. The audited current flows are preflighted compensatable batches, not ACID or crash-safe transactions; stronger rollback, isolation, durability, and recovery properties remain planned.
 
-The release strategy published the hardened Java, transaction, diagnostics, protocol, resource, formatting, and packaging foundation as `v0.4.0`; `v0.5.0` completes the first cross-platform runtime and multi-language kernel band. Later `0.x` bands build deep adapters. API `1.0` freezes only after Clojure completes the planned language sequence and global alpha/beta/RC acceptance passes; active API remains `0.2` until an explicit migration. Stability is evidence-gated per language and operation; unsupported shapes remain conservative refusals.
+The release strategy published the hardened Java/transaction foundation as `v0.4.0`, the cross-platform runtime and multi-language kernel as `v0.5.0`, and the managed TypeScript/JavaScript semantic foundation as `v0.6.0`. Later `0.x` bands build deep adapters. API `1.0` freezes only after Clojure completes the planned language sequence and global alpha/beta/RC acceptance passes; active API remains `0.2` until an explicit migration. Stability is evidence-gated per language and operation; unsupported shapes remain conservative refusals.
 
 == Fundamental Decisions
 

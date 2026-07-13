@@ -171,6 +171,26 @@ class TypeScriptProjectModelTest {
     }
 
     @Test
+    fun releaseSamplesCoverReferencesCheckedDynamicAndMixedProjects() {
+        val references = TypeScriptProjectModelBuilder().build(releaseSample("typescript-project-references"))
+        assertEquals(TypeScriptProjectModelStatus.AVAILABLE, references.status, references.diagnostics.toString())
+        assertEquals(3, references.projects.size)
+        assertTrue(references.projects.any { it.references.isNotEmpty() })
+
+        val checked = TypeScriptProjectModelBuilder().build(releaseSample("javascript-checked"))
+        assertEquals(TypeScriptProjectModelStatus.AVAILABLE, checked.status, checked.diagnostics.toString())
+        assertTrue(checked.projects.single().compilerOptions.checkJs == true)
+
+        val dynamic = TypeScriptProjectModelBuilder().build(releaseSample("javascript-dynamic"))
+        assertEquals(TypeScriptProjectModelStatus.AVAILABLE, dynamic.status, dynamic.diagnostics.toString())
+        assertTrue(dynamic.projects.single().compilerOptions.checkJs == false)
+
+        val mixed = TypeScriptProjectModelBuilder().build(releaseSample("typescript-javascript-mixed"))
+        assertEquals(TypeScriptProjectModelStatus.AVAILABLE, mixed.status, mixed.diagnostics.toString())
+        assertTrue(mixed.projects.single().compilerOptions.allowJs == true)
+    }
+
+    @Test
     fun ignoresNodeModulesConfigsAndRejectsSymlinkTraversal() {
         val root = workspace(
             "tsconfig.json" to "{}",
@@ -187,6 +207,8 @@ class TypeScriptProjectModelTest {
             assertCodes(TypeScriptProjectModelBuilder().build(root), "typescript.extendsUnsupported")
         }
     }
+
+    private fun releaseSample(name: String): Path = Path.of("../..", "samples", name).toAbsolutePath().normalize()
 
     private fun assertCodes(model: TypeScriptProjectModel, vararg expected: String) {
         assertEquals(TypeScriptProjectModelStatus.REFUSED, model.status)

@@ -51,10 +51,10 @@ Status: implementation-informed, needs human review for prioritization.
 |known risk
 
 |R-007
-|External LSP-backed multi-language support is currently stub/future work.
-|Users may overestimate non-Java semantic refactoring capability.
-|Keep docs explicit; expose only structural/local operations as MVP.
-|implementation-informed
+|External LSP-backed support is implemented as a bounded proposal provider; `v0.6.0` qualifies TypeScript semantic reads and managed identifier rename, while other languages and advanced TypeScript operations remain future work.
+|Users may overgeneralize the qualified TypeScript slice into stable arbitrary multi-language mutation authority.
+|Keep capability evidence and mutation authority operation-specific; preserve exact diagnostics, refusal boundaries and the published support matrix.
+|known limitation
 
 |R-008
 |ADR status and stable capability classification can drift from contracts and implementation evidence.
@@ -69,10 +69,10 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release review
 
 |R-010
-|The confirmed stable artifact is Linux x86_64; additional OS and artifact-repository targets remain undefined.
-|Consumers may assume portability beyond the verified self-contained archive.
-|Publish the exact artifact matrix and verification commands; classify other targets as unsupported or experimental.
-|known limitation
+|Self-contained assets are natively qualified for Linux x86_64, Windows x86_64, macOS x86_64 and macOS arm64; other architectures and artifact repositories remain undefined.
+|Consumers may assume portability beyond the four verified archives or mistake unsigned assets for platform-signed publishers.
+|Publish the exact matrix and verification commands; classify other targets as unsupported and retain `TD-DIST-001` signing disclosure.
+|controlled limitation
 
 |R-011
 |Security threat model is incomplete.
@@ -123,16 +123,16 @@ Status: implementation-informed, needs human review for prioritization.
 |planned release blocker
 
 |R-019
-|Stable diagnostics and before/simulation/after/rollback validation gates are not yet evidenced as one versioned contract.
-|An apply could introduce unapproved regressions or clients could interpret diagnostics inconsistently.
-|Freeze diagnostic fields/categories and enforce operation-specific regression gates before RC promotion.
-|planned release blocker
+|Managed Java and TypeScript flows enforce before/staged/apply diagnostics gates, but diagnostic DTO fields and all-language API `1.0` semantics are not frozen.
+|Pre-1.0 clients could interpret future category/schema evolution as a compatibility break.
+|Retain operation-specific regression gates and freeze diagnostic fields/categories only with the explicit API `1.0` migration.
+|known API debt; not a `v0.6.0` safety blocker
 
 |R-020
-|No accepted numeric performance/resource budgets are recorded.
-|Large workspaces or hostile protocol inputs could cause unbounded latency, memory, pending plans, caches, results, or transaction metadata.
-|Define reference workspaces and limits; add repeatable stress, cancellation, timeout, and deterministic limit-error evidence.
-|planned release blocker
+|Numeric protocol/process/document/result/journal budgets and reference stress tests are implemented, but OS-level RSS isolation is not provided.
+|V8 old-space limits do not bound total process RSS, and future larger workspaces may require budget revision.
+|Retain deterministic limit errors, stress/cancellation/timeout acceptance and document the lack of an OS RSS sandbox; add platform isolation only under a separate qualified provider policy.
+|known resource limitation
 
 |R-021
 |The published `v0.3.0` asset has checksum and downloaded-artifact smoke evidence, but SBOM, provenance/attestation, clean-build reproducibility, and promoted stable-RC evidence are not yet recorded.
@@ -193,7 +193,7 @@ Status: implementation-informed, needs human review for prioritization.
 
 The active stable plan defines the remaining release-hardening workstreams:
 
-* `v0.4.0` publication is complete; `v0.5.0` adds the accepted cross-platform runtime and first multi-language kernel while retaining API `0.2`;
+* `v0.4.0` and `v0.5.0` are published; `v0.6.0` adds the accepted managed TypeScript/JavaScript semantic foundation while retaining API `0.2`;
 * keep API `0.2` active until normative patch/apply/rollback and API `1.0` CLI/daemon contracts are frozen and accepted;
 * prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
 * preserve the closed TX-001 through TX-018 qualified transactionality evidence during API freeze;
