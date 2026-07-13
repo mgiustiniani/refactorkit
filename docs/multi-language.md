@@ -88,10 +88,15 @@ capacity, bounded stdout/stderr, natural-exit cleanup, cancellation, and
 process-tree termination. See
 [`external-semantic-processes.md`](external-semantic-processes.md).
 
-Production adapter support still requires controlled workspace overlays,
-capability/version negotiation, framed request timeout/cancellation, restart,
-response limits, and schema exposure. The lifecycle primitive is explicitly not
-an OS sandbox. External workspace edits are untrusted proposals normalized into
+`ExternalLspAdapter` now uses that lifecycle with byte-safe bounded framing,
+request deadlines/cancellation, initialization/version/capability evidence, and
+bounded source-only workspace overlays. Both LSP WorkspaceEdit forms are strictly
+parsed and normalized through `ExternalWorkspaceEditNormalizer`, including path,
+range, overlap, version, generated-source, symlink, content-limit, and structural
+conflict refusal. The overlay and lifecycle primitives are explicitly not an OS
+sandbox. Backend-specific document synchronization, restart policy, real
+capability matrices, packaged acceptance, and integration-surface schemas remain
+open. External workspace edits are untrusted proposals normalized into
 `PatchPlan`; they never bypass `PatchEngine`.
 
 LSP establishes navigation, native formatting, and common-edit foundations, but

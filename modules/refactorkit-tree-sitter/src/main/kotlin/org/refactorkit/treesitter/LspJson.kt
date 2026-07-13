@@ -1,7 +1,11 @@
 package org.refactorkit.treesitter
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import java.net.URI
 import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
  * Minimal JSON field extractor for LSP protocol responses.
@@ -12,6 +16,7 @@ import java.nio.file.Paths
  * Correctness scope: LSP `Location`, `Location[]`, and `LocationLink[]` responses.
  */
 internal object LspJson {
+    private val parser = Json { isLenient = false; ignoreUnknownKeys = false }
 
     data class Location(
         val uri: String,
@@ -30,21 +35,19 @@ internal object LspJson {
      * Returns the raw value (`"42"`, `"null"`, `"""hello"""`, `"{...}"`, `"[...]"`)
      * or null if the field is absent.
      */
-    fun extractField(json: String, field: String): String? {
-        val keyPat = Regex(""""${Regex.escape(field)}"\s*:\s*""")
-        val match = keyPat.find(json) ?: return null
-        return extractValue(json, match.range.last + 1)
-    }
+    fun extractField(json: String, field: String): String? = runCatching {
+        (parser.parseToJsonElement(json) as? JsonObject)?.get(field)?.toString()
+    }.getOrNull()
 
-    /** Remove surrounding `"` and unescape a JSON string value. */
-    fun unquote(json: String): String = json.trim()
-        .removeSurrounding("\"")
-        .replace("\\\"", "\"")
-        .replace("\\\\", "\\")
-        .replace("\\/", "/")
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
+    /** Quote and escape a JSON string value. */
+    fun quote(value: String): String = JsonPrimitive(value).toString()
+
+    fun isValidValue(json: String): Boolean = runCatching { parser.parseToJsonElement(json) }.isSuccess
+
+    /** Remove surrounding `"` and fully decode a JSON string value. */
+    fun unquote(json: String): String = runCatching {
+        (parser.parseToJsonElement(json) as? JsonPrimitive)?.contentOrNull
+    }.getOrNull() ?: json.trim().removeSurrounding("\"")
 
     /** Parse a single LSP `Location` object from [json]. */
     fun parseLocation(json: String): Location? {
@@ -78,11 +81,9 @@ internal object LspJson {
 
     /** Convert a `file://` URI to a [Path]. */
     fun uriToPath(uri: String): Path {
-        val raw = uri
-            .removePrefix("file://")
-            .removePrefix("file:")
-            .let { if (it.startsWith("//") && !it.startsWith("///")) it.substring(2) else it }
-        return Paths.get(raw)
+        val parsed = URI(uri)
+        require(parsed.scheme.equals("file", ignoreCase = true)) { "LSP location URI must use file scheme" }
+        return Path.of(parsed).toAbsolutePath().normalize()
     }
 
     /** Build a `file://` URI from a [Path]. */

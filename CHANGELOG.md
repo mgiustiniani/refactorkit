@@ -28,6 +28,14 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Integrated `ExternalLspAdapter` with managed external processes, byte-counted
+  bounded LSP frames, request deadlines and cancellation, validated initialize
+  handshake, server/capability provenance, source-only workspace overlays, URI
+  remapping, and overlay mutation detection. Added strict parsing of LSP
+  `changes`/`documentChanges` plus core normalization/refusal for untrusted paths,
+  ranges, overlaps, versions, generated roots, symlinks, resource-operation
+  options, content limits, and structural conflicts; accepted output remains an
+  unapproved `LANGUAGE_SERVER` proposal.
 - Added P4 `ExternalSemanticProcessManager`: bounded process count/arguments/
   explicit environment, secret-shaped environment-key refusal, executable and
   argument provenance hashes, pre/post-launch executable drift detection,

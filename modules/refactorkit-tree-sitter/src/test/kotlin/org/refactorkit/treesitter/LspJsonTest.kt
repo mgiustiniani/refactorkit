@@ -35,7 +35,9 @@ class LspJsonTest {
         val range = LspJson.extractField(json, "range")
         assertNotNull(range)
         assertTrue(range.startsWith('{'))
-        assertEquals("1", LspJson.extractField(range, "line").also { LspJson.extractField(range, "start")?.let { s -> LspJson.extractField(s, "line") } })
+        assertNull(LspJson.extractField(range, "line"), "nested fields must not match top-level extraction")
+        val start = assertNotNull(LspJson.extractField(range, "start"))
+        assertEquals("1", LspJson.extractField(start, "line"))
     }
 
     @Test

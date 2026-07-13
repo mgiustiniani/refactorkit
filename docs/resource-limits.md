@@ -51,7 +51,14 @@ The core manager defaults to at most 8 concurrent external semantic processes
 limits are 64 MiB total stdout and 64 KiB captured stderr; configurable stream
 limits cannot exceed 512 MiB. Graceful shutdown is bounded to 1..30 seconds before
 forced process-tree termination. Raw arguments and environment values are not
-included in provenance.
+included in provenance. LSP transport additionally limits individual frames and
+headers to 8 MiB, pending diagnostic notifications to 500, and request deadlines
+to the configured 100 ms..120 s range (10 s default).
+
+Source-only semantic overlays default to 100,000 files and 512 MiB of UTF-8
+source content. External workspace-edit normalization defaults to 1,000 file
+operations, 10,000 text edits, and 16 MiB replacement content. Exceeding any
+limit is an explicit refusal, never truncation into an applicable proposal.
 
 ## Cancellation
 

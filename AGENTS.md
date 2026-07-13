@@ -263,6 +263,9 @@ LanguageCapability
 ExternalSemanticProcessManager
 SemanticProcessSpec
 SemanticProcessProvenance
+SemanticWorkspaceOverlay
+ExternalWorkspaceEditProposal
+ExternalWorkspaceEditNormalizer
 SourceFile
 TextEdit
 FileEdit

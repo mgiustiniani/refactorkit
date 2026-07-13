@@ -105,6 +105,16 @@ by `language.evidenceInsufficient` refusal. `RefactoringEvidence` additively
 includes `LANGUAGE_SERVER` and `NATIVE_AST`; integrations must tolerate unknown
 future enum values under the pre-1.0 compatibility policy.
 
+External LSP processes are internal proposal providers. They run under the
+bounded semantic process lifecycle with explicit environment and provenance,
+byte-counted framed request deadlines, and a source-only workspace overlay.
+Standard `changes` and `documentChanges` responses pass strict schema and unsafe
+resource-option refusal, overlay-to-workspace URI remapping, and
+`ExternalWorkspaceEditNormalizer`. An accepted result is not apply authorization:
+it must still become a `PatchPlan` and pass snapshot, evidence, diagnostics,
+approval, `PatchEngine`, WAL, and rollback gates. These P4 types remain internal
+until capability/provenance DTO schema acceptance is complete.
+
 ## Daemon JSON-RPC compatibility baseline
 
 `modules/refactorkit-daemon` exposes JSON-RPC 2.0 over newline-delimited stdio.
