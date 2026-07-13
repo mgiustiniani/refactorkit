@@ -392,12 +392,18 @@ the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 
 | Tool | Status | Notes |
 |------|--------|-------|
-| `project_scan`, `project_summary` | `beta-contract` | Workspace lifecycle and project metadata; summary includes high-level Build Model SPI provider/status/source-set information without classpath secrets. |
+| `project_scan`, `project_summary` | `beta-contract` | Mixed Java/TypeScript/JavaScript workspace lifecycle and project metadata; summary includes high-level Build Model SPI provider/status/source-set information without classpath secrets. |
+| `typescript_semantic_start`, `typescript_semantic_stop` | `experimental` | Explicit hash-bound toolchain lifecycle; no package scripts or implicit PATH discovery. |
 | `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries. |
 | `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; rollback refuses post-apply divergence by default and accepts explicit `force=true`. |
 | `available_refactorings` | `experimental` | Descriptor shape may change. |
 | `import_external_java_class` | `experimental` | Import preview with stable provenance/license warning fields in output text. |
 | `generate_context_bundle` | `experimental` | Bundle shape may change with agent needs. |
+
+Language-scoped read tools and experimental `renameSymbol` route to an explicitly
+started TypeScript/JavaScript session. Semantic plans retain their owning language;
+apply uses the exact diagnostics gate, authorization, PatchEngine and WAL, then
+closes the stale session. MCP EOF closes all owned semantic process trees.
 
 `preview_refactoring` beta operations are `renameClass`, `renameMember`,
 `moveClass`, `moveSourceRoot`, `organizeImports`, and `safeDelete`.

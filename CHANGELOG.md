@@ -34,9 +34,10 @@ review safety boundaries before applying refactorings.
   explicit TSX/JSX ownership. Daemon project open and every managed rescan now
   preserve mixed Java/TypeScript/JavaScript source images and attach the
   declarative TypeScript Build Model when script sources are present. Added
-  experimental daemon semantic start/stop with explicit toolchain paths, routed
+  experimental daemon and MCP semantic start/stop with explicit toolchain paths, routed
   TypeScript/JavaScript search, definition, references and exact diagnostics, plus
   rename preview/apply/WAL/rollback through the language-specific diagnostics gate.
+  MCP project scans are mixed-language and EOF closes owned semantic process trees.
   Compiler workspace-symbol search is capability-negotiated, bounded to 200
   results, and emits workspace-relative daemon paths. Exported symbols on
   package-exports/types, declaration/composite, or project-reference library

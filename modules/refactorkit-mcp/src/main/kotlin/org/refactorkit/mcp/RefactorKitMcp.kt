@@ -67,4 +67,5 @@ fun main() {
 
         out.println(json.encodeToString(response))
     }
+    session.close()
 }

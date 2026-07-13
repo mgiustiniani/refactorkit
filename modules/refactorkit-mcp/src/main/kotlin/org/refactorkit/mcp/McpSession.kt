@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
@@ -22,6 +23,10 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RefactoringRequest
+import org.refactorkit.core.SourceLocation
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
@@ -41,7 +46,17 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
+import org.refactorkit.typescript.TypeScriptBuildModelIntegration
+import org.refactorkit.typescript.TypeScriptProjectModelBuilder
+import org.refactorkit.typescript.TypeScriptSemanticAdapter
+import org.refactorkit.typescript.TypeScriptSemanticStart
+import org.refactorkit.typescript.TypeScriptSemanticToolchain
+import org.refactorkit.typescript.TypeScriptToolchainDiscoverer
+import org.refactorkit.typescript.TypeScriptToolchainDiscovery
+import org.refactorkit.typescript.TypeScriptToolchainDiscoveryPolicy
+import org.refactorkit.typescript.TypeScriptToolchainRequest
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.file.Files
@@ -57,14 +72,20 @@ private const val PROTOCOL_VERSION = "2024-11-05"
  * Exposes deterministic refactoring tools to local LLM agents via the MCP protocol
  * (JSON-RPC 2.0 over stdio with NDJSON framing).
  */
-class McpSession {
+class McpSession(
+    private val toolchainDiscovery: (TypeScriptToolchainRequest, TypeScriptToolchainDiscoveryPolicy) -> TypeScriptToolchainDiscovery =
+        { request, policy -> TypeScriptToolchainDiscoverer(policy).discover(request) },
+    private val semanticAdapterFactory: (String, TypeScriptSemanticToolchain, org.refactorkit.typescript.TypeScriptProjectModel) -> TypeScriptSemanticAdapter =
+        { languageId, toolchain, model -> TypeScriptSemanticAdapter(languageId, toolchain, model) },
+) : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
     private val scanner = JavaProjectScanner()
 
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var workspaceRoot: Path? = null
-    private val pendingPlans = object : LinkedHashMap<String, PatchPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
+    private val semanticAdapters = linkedMapOf<String, TypeScriptSemanticAdapter>()
+    private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
     }
 
     var onExit: () -> Unit = {}
@@ -112,9 +133,23 @@ class McpSession {
                 props = mapOf("root" to "string: absolute path to project root")))
             add(tool("project_summary", "Return summary of the currently open project.",
                 required = emptyList(), props = emptyMap()))
+            add(tool("typescript_semantic_start", "Start an explicit bounded TypeScript/JavaScript semantic session.",
+                required = listOf("languageId", "nodeExecutable", "languageServerPackageRoot", "typeScriptPackageRoot"),
+                props = mapOf(
+                    "languageId" to "string: typescript | javascript",
+                    "nodeExecutable" to "string: explicit Node executable path",
+                    "languageServerPackageRoot" to "string: explicit typescript-language-server package root",
+                    "typeScriptPackageRoot" to "string: explicit typescript package root",
+                    "allowWorkspaceLocalToolchain" to "boolean: explicit workspace executable trust (default false)",
+                )))
+            add(tool("typescript_semantic_stop", "Stop a TypeScript/JavaScript semantic session.",
+                required = listOf("languageId"), props = mapOf("languageId" to "string: typescript | javascript")))
             add(tool("symbol_search", "Search for symbols in the project by name.",
                 required = listOf("query"),
-                props = mapOf("query" to "string: name or partial FQN to search")))
+                props = mapOf(
+                    "query" to "string: name or partial FQN to search",
+                    "languageId" to "string: java | typescript | javascript (default java)",
+                )))
             add(tool("symbol_definition", "Return the definition location of a symbol.",
                 required = listOf("symbol"),
                 props = mapOf("symbol" to "string: fully-qualified symbol name")))
@@ -129,9 +164,10 @@ class McpSession {
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation", "symbol"),
                 props = mapOf(
-                    "operation" to "string: renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | organizeImports | formatFile | safeDelete",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
-                    "arguments" to "object: operation-specific arguments (newName, targetPackage, etc.)",
+                    "languageId" to "string: java | typescript | javascript (default java)",
+                    "arguments" to "object: operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)",
                 )))
             add(tool("apply_refactoring", "Apply a previously previewed plan.",
                 required = listOf("planId"),
@@ -179,10 +215,12 @@ class McpSession {
     private fun callTool(name: String, args: JsonObject): String = when (name) {
         "project_scan"          -> toolProjectScan(args)
         "project_summary"       -> toolProjectSummary()
+        "typescript_semantic_start" -> toolTypeScriptSemanticStart(args)
+        "typescript_semantic_stop" -> toolTypeScriptSemanticStop(args)
         "symbol_search"         -> toolSymbolSearch(args)
         "symbol_definition"     -> toolSymbolDefinition(args)
         "symbol_references"     -> toolSymbolReferences(args)
-        "diagnostics"           -> toolDiagnostics()
+        "diagnostics"           -> toolDiagnostics(args)
         "available_refactorings"-> toolAvailableRefactorings(args)
         "preview_refactoring"   -> toolPreviewRefactoring(args)
         "apply_refactoring"     -> toolApplyRefactoring(args)
@@ -190,6 +228,59 @@ class McpSession {
         "import_external_java_class" -> toolImportExternalJavaClass(args)
         "generate_context_bundle" -> toolGenerateContextBundle(args)
         else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown tool: $name")
+    }
+
+    private fun toolTypeScriptSemanticStart(args: JsonObject): String {
+        val snap = requireSnapshot()
+        val root = workspaceRoot ?: error("workspace root missing")
+        val languageId = args.string("languageId") ?: missing("languageId")
+        if (languageId !in setOf("typescript", "javascript")) missing("languageId=typescript|javascript")
+        if (languageId in semanticAdapters) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "Semantic adapter is already started for $languageId",
+        )
+        fun configuredPath(name: String): Path {
+            val raw = args.string(name) ?: missing(name)
+            val candidate = Paths.get(raw)
+            return if (candidate.isAbsolute) candidate.normalize() else root.resolve(candidate).normalize()
+        }
+        val policy = TypeScriptToolchainDiscoveryPolicy(
+            allowPathNodeDiscovery = false,
+            allowWorkspaceLocalToolchain = args.string("allowWorkspaceLocalToolchain")?.toBooleanStrictOrNull() ?: false,
+        )
+        val discovery = toolchainDiscovery(TypeScriptToolchainRequest(
+            root,
+            configuredPath("nodeExecutable"),
+            configuredPath("languageServerPackageRoot"),
+            configuredPath("typeScriptPackageRoot"),
+        ), policy)
+        val toolchain = when (discovery) {
+            is TypeScriptToolchainDiscovery.Available -> discovery.toolchain
+            is TypeScriptToolchainDiscovery.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                discovery.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" },
+            )
+        }
+        val semantic = semanticAdapterFactory(languageId, toolchain, TypeScriptProjectModelBuilder().build(root))
+        return when (val started = semantic.start(snap)) {
+            is TypeScriptSemanticStart.Refused -> {
+                semantic.close()
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS,
+                    started.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" },
+                )
+            }
+            is TypeScriptSemanticStart.Started -> {
+                semanticAdapters[languageId] = semantic
+                "Started $languageId semantic session. Completeness: ${semantic.semanticCompleteness().mode}. " +
+                    "Capabilities SHA-256: ${started.provenance?.capabilitiesSha256 ?: "test-provider"}"
+            }
+        }
+    }
+
+    private fun toolTypeScriptSemanticStop(args: JsonObject): String {
+        val languageId = args.string("languageId") ?: missing("languageId")
+        val stopped = semanticAdapters.remove(languageId)?.let { it.close(); true } ?: false
+        return if (stopped) "Stopped $languageId semantic session." else "No $languageId semantic session was running."
     }
 
     private fun toolProjectScan(args: JsonObject): String {
@@ -202,7 +293,8 @@ class McpSession {
                 "Workspace recovery required: ${recoveryErrors.joinToString("; ") { it.message }}",
             )
         }
-        val snap = scanner.scan(path)
+        closeSemanticAdapters()
+        val snap = scanWorkspace(path)
         snapshot = snap
         workspaceRoot = path
         return "Scanned ${snap.workspace.root}\nFiles: ${snap.files.size}\nModules: ${snap.modules.size}\nSnapshot: ${snap.hash}"
@@ -234,7 +326,9 @@ class McpSession {
     private fun toolSymbolSearch(args: JsonObject): String {
         val query = args.string("query") ?: ""
         val snap = requireSnapshot()
-        val results = adapter.searchSymbols(snap, query)
+        val languageId = args.string("languageId") ?: "java"
+        val results = if (languageId == "java") adapter.searchSymbols(snap, query) else
+            requireSemanticAdapter(languageId).searchWorkspaceSymbols(snap, query)
         if (results.isEmpty()) return "No symbols found for query: $query"
         return results.take(100).joinToString("\n") { "${it.kind} ${it.id.value} at ${it.location.path}:${it.location.range.start.line + 1}" }
     }
@@ -242,21 +336,30 @@ class McpSession {
     private fun toolSymbolDefinition(args: JsonObject): String {
         val symbolId = args.string("symbol") ?: missing("symbol")
         val snap = requireSnapshot()
-        val sym = adapter.findSymbol(snap, org.refactorkit.core.SymbolId(symbolId))
-            ?: return "Symbol not found: $symbolId"
+        val languageId = args.string("languageId") ?: "java"
+        val sym = if (languageId == "java") adapter.findSymbol(snap, org.refactorkit.core.SymbolId(symbolId)) else
+            requireSemanticAdapter(languageId).buildSymbols(snap).symbols.singleOrNull { it.id.value == symbolId }
+        sym ?: return "Symbol not found: $symbolId"
         return "${sym.kind} ${sym.id.value}\nFile: ${sym.location.path}:${sym.location.range.start.line + 1}"
     }
 
     private fun toolSymbolReferences(args: JsonObject): String {
         val symbolId = args.string("symbol") ?: missing("symbol")
-        val refs = adapter.findReferences(requireSnapshot(), org.refactorkit.core.SymbolId(symbolId))
+        val snap = requireSnapshot()
+        val languageId = args.string("languageId") ?: "java"
+        val refs = if (languageId == "java") adapter.findReferences(snap, org.refactorkit.core.SymbolId(symbolId)) else {
+            val semantic = requireSemanticAdapter(languageId)
+            semantic.buildSymbols(snap)
+            semantic.findReferences(org.refactorkit.core.SymbolId(symbolId))
+        }
         if (refs.isEmpty()) return "No references found for: $symbolId"
         return refs.joinToString("\n") { "${it.location.path}:${it.location.range.start.line + 1}" }
     }
 
-    private fun toolDiagnostics(): String {
+    private fun toolDiagnostics(args: JsonObject = JsonObject(emptyMap())): String {
         val snap = requireSnapshot()
-        val diags = adapter.diagnostics(snap)
+        val languageId = args.string("languageId") ?: "java"
+        val diags = if (languageId == "java") adapter.diagnostics(snap) else requireSemanticAdapter(languageId).diagnostics(snap)
         if (diags.isEmpty()) return "No diagnostics."
         return diags.joinToString("\n") { "[${it.severity}] ${it.message}${it.location?.let { loc -> " at ${loc.path}:${loc.range.start.line + 1}" } ?: ""}" }
     }
@@ -279,12 +382,31 @@ class McpSession {
     private fun toolPreviewRefactoring(args: JsonObject): String {
         val operation = args.string("operation") ?: missing("operation")
         val symbol = args.string("symbol")
+        val languageId = args.string("languageId") ?: "java"
         val opArgs = (args["arguments"] as? JsonObject)?.entries?.associate { (k, v) ->
             k to (v as? JsonPrimitive)?.content.orEmpty()
         } ?: emptyMap()
         val snap = requireSnapshot()
 
         val plan = when (operation) {
+            "renameSymbol" -> {
+                if (languageId == "java") missing("languageId=typescript|javascript")
+                val semantic = requireSemanticAdapter(languageId)
+                val index = semantic.buildSymbols(snap)
+                val selected = symbol?.let { id -> index.symbols.singleOrNull { it.id.value == id } }
+                val location = selected?.location ?: SourceLocation(
+                    Paths.get(opArgs["file"] ?: missing("arguments.file")),
+                    SourceRange(
+                        SourcePosition(opArgs["line"]?.toIntOrNull() ?: missing("arguments.line"),
+                            opArgs["character"]?.toIntOrNull() ?: missing("arguments.character")),
+                        SourcePosition(opArgs["line"]?.toIntOrNull() ?: missing("arguments.line"),
+                            opArgs["character"]?.toIntOrNull() ?: missing("arguments.character")),
+                    ),
+                )
+                semantic.applyRefactoring(RefactoringRequest(
+                    "renameSymbol", selected?.id, CodeSelection(location), opArgs, snap,
+                ))
+            }
             "renameClass"  -> JavaRenameClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
             "renameMember" -> JavaRenameMemberPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
             "extractMethod" -> JavaExtractMethodPlanner().preview(
@@ -327,7 +449,7 @@ class McpSession {
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
-        if (plan.status == PatchStatus.PREVIEW) pendingPlans[plan.id.value] = plan
+        if (plan.status == PatchStatus.PREVIEW) pendingPlans[plan.id.value] = PendingPlan(plan, languageId)
         return buildString {
             appendLine("Plan ID  : ${plan.id.value}")
             appendLine("Status   : ${plan.status}")
@@ -356,19 +478,22 @@ class McpSession {
 
     private fun toolApplyRefactoring(args: JsonObject): String {
         val planId = args.string("planId") ?: missing("planId")
-        val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+        val pending = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+        val plan = pending.plan
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
-        val current = scanner.scan(root)
+        val current = scanWorkspace(root)
         return when (val result = PatchEngine(root).apply(
             plan,
             current,
             ApplyAuthorization.explicit("mcp-tool"),
-            DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+            if (pending.languageId == "java") DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
+            else requireSemanticAdapter(pending.languageId).diagnosticsGate(),
         )) {
             is ApplyResult.Applied -> {
                 pendingPlans.remove(planId)
-                // Refresh snapshot
-                snapshot = scanner.scan(root)
+                // Refresh snapshot and close sessions bound to the pre-apply image.
+                snapshot = scanWorkspace(root)
+                closeSemanticAdapters()
                 "Applied successfully.\nTransaction ID: ${result.transaction.id.value}\nTo rollback: use tool rollback_refactoring with transactionId=${result.transaction.id.value}"
             }
             is ApplyResult.Refused -> {
@@ -391,7 +516,7 @@ class McpSession {
             ?: return "Transaction not found: $txId"
         return when (val result = PatchEngine(root).rollback(tx, mode)) {
             is ApplyResult.Applied -> {
-                snapshot = scanner.scan(root)
+                snapshot = scanWorkspace(root)
                 "${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId."
             }
             is ApplyResult.Refused -> {
@@ -419,7 +544,7 @@ class McpSession {
             snapshot = snap,
         ))
 
-        pendingPlans[plan.id.value] = plan
+        pendingPlans[plan.id.value] = PendingPlan(plan)
         return buildString {
             appendLine("Plan ID  : ${plan.id.value}")
             appendLine("Status   : ${plan.status}")
@@ -672,6 +797,29 @@ class McpSession {
         }
     }
 
+    private fun scanWorkspace(root: Path): ProjectSnapshot {
+        val javaSnapshot = scanner.scan(root)
+        val scriptSnapshot = GenericProjectScanner(SCRIPT_EXTENSIONS).scan(root)
+        val merged = javaSnapshot.copy(
+            files = (javaSnapshot.files + scriptSnapshot.files).associateBy { it.path.normalize() }
+                .values.sortedBy { it.path.toString() },
+            sourceExtensions = javaSnapshot.sourceExtensions + SCRIPT_EXTENSIONS.keys,
+            ignoredDirectories = javaSnapshot.ignoredDirectories + scriptSnapshot.ignoredDirectories,
+        )
+        return if (scriptSnapshot.files.isEmpty()) merged else TypeScriptBuildModelIntegration.attach(merged)
+    }
+
+    private fun closeSemanticAdapters() {
+        semanticAdapters.values.forEach { runCatching { it.close() } }
+        semanticAdapters.clear()
+    }
+
+    private fun requireSemanticAdapter(languageId: String): TypeScriptSemanticAdapter =
+        semanticAdapters[languageId] ?: throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "Semantic adapter for $languageId is not started; call typescript_semantic_start",
+        )
+
     private fun requireSnapshot(): ProjectSnapshot =
         snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open. Call project_scan first.")
 
@@ -680,7 +828,20 @@ class McpSession {
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.content
 
+    override fun close() {
+        closeSemanticAdapters()
+        pendingPlans.clear()
+        snapshot = null
+        workspaceRoot = null
+    }
+
+    private data class PendingPlan(val plan: PatchPlan, val languageId: String = "java")
+
     companion object {
+        private val SCRIPT_EXTENSIONS = mapOf(
+            "ts" to "typescript", "tsx" to "typescript",
+            "js" to "javascript", "jsx" to "javascript",
+        )
         private val JSON_SCHEMA_TYPES = setOf("string", "number", "integer", "boolean", "object", "array")
         private val IGNORED_RESOURCE_DIRS = setOf("build", "target", ".gradle", ".git", ".refactorkit")
     }
