@@ -369,7 +369,7 @@ class TypeScriptProjectModelBuilder(
             val targets = parseStringArray(targetsElement, policy.maxAliasTargets, "path alias targets", diagnostics)
                 ?.map { it.replace('\\', '/') } ?: return@mapNotNull null
             if (targets.any {
-                    !validPattern(it) || absoluteLike(it) || !baseDirectory.resolve(it).normalize().startsWith(root)
+                    !validPattern(it) || absoluteLike(it) || !patternStaysWithinRoot(baseDirectory, root, it)
                 }) {
                 diagnostics += diagnostic("typescript.pathsInvalid", "TypeScript path alias target is invalid")
                 return@mapNotNull null
@@ -388,7 +388,7 @@ class TypeScriptProjectModelBuilder(
         val relativeBase = root.relativize(directory)
         return values.mapNotNull { pattern ->
             val normalized = pattern.replace('\\', '/')
-            if (!validPattern(normalized) || absoluteLike(normalized) || !directory.resolve(normalized).normalize().startsWith(root)) {
+            if (!validPattern(normalized) || absoluteLike(normalized) || !patternStaysWithinRoot(directory, root, normalized)) {
                 diagnostics += diagnostic("typescript.patternInvalid", "TypeScript include/exclude pattern is unsafe")
                 null
             } else TypeScriptConfigPattern(relativeBase, normalized)
@@ -605,6 +605,19 @@ class TypeScriptProjectModelBuilder(
 
     private fun validPattern(value: String): Boolean =
         value.isNotBlank() && value.length <= policy.maxStringLength && '\u0000' !in value
+
+    private fun patternStaysWithinRoot(baseDirectory: Path, root: Path, pattern: String): Boolean {
+        if (!baseDirectory.startsWith(root)) return false
+        var depth = root.relativize(baseDirectory).count { it.toString().isNotEmpty() }
+        for (segment in pattern.split('/')) {
+            when (segment) {
+                "", "." -> Unit
+                ".." -> if (depth == 0) return false else depth--
+                else -> depth++
+            }
+        }
+        return true
+    }
 
     private fun absoluteLike(value: String): Boolean = value.startsWith('/') || value.startsWith('\\') ||
         WINDOWS_ABSOLUTE.containsMatchIn(value) || value.contains("://")

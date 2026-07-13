@@ -136,6 +136,14 @@ class TypeScriptProjectModelTest {
         assertCodes(TypeScriptProjectModelBuilder().build(workspace(
             "tsconfig.json" to """{"files":["../outside.ts"]}""",
         )), "typescript.filePathInvalid")
+
+        assertCodes(TypeScriptProjectModelBuilder().build(workspace(
+            "tsconfig.json" to """{"include":["../outside/**/*.ts"]}""",
+        )), "typescript.patternInvalid")
+
+        assertCodes(TypeScriptProjectModelBuilder().build(workspace(
+            "tsconfig.json" to """{"compilerOptions":{"paths":{"@outside/*":["../outside/*"]}}}""",
+        )), "typescript.pathsInvalid")
     }
 
     @Test

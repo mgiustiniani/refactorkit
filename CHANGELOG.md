@@ -11,9 +11,10 @@ No changes yet.
 
 ## 0.6.2 - 2026-07-14
 
-- Publication patch for the completed `v0.6.0` feature scope. Release builders
-  use the same successful fresh-checkout `build` invocation as branch CI and keep
-  package/native smoke separate. No API or product semantics change.
+- Publication patch for the completed `v0.6.0` feature scope. Fixes Windows-safe
+  lexical validation of TypeScript include/exclude and path-alias glob patterns;
+  release builders retain a clean build before separate package/native smoke. No
+  API contract change.
 
 ## 0.6.1 - 2026-07-13 (tagged, not published)
 
