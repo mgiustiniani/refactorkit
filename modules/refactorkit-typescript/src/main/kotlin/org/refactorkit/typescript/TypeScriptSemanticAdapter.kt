@@ -253,9 +253,15 @@ class TypeScriptSemanticAdapter(
             // workspace/symbol observes the exact snapshot rather than an empty
             // unopened project.
             val index = client.buildSymbols(project)
-            (client.searchWorkspaceSymbols(query) +
-                index.symbols.filter { it.name.contains(query, ignoreCase = true) })
-                .distinctBy { it.id }
+            (index.symbols.filter { it.name.contains(query, ignoreCase = true) } +
+                client.searchWorkspaceSymbols(query))
+                .distinctBy { symbol ->
+                    listOf(
+                        symbol.location.path.normalize().toString().replace('\\', '/'),
+                        symbol.kind.name,
+                        symbol.name,
+                    ).joinToString("|")
+                }
                 .take(org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS)
         } else emptyList()
 

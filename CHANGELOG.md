@@ -32,8 +32,10 @@ review safety boundaries before applying refactorings.
   Location-based semantic symbol IDs were replaced by cross-session opaque
   `lsp-symbol-v1` keys derived from normalized declaration path, semantic hierarchy,
   kind/name and bounded signature detail; line/column movement no longer changes
-  identity under the same toolchain provenance. Layered TypeScript/JavaScript
-  capabilities are now exposed through library,
+  identity under the same toolchain provenance. Workspace/document symbol merges
+  now deduplicate the same path/kind/name and prefer hierarchical document identity,
+  avoiding timing-dependent duplicate IDs from lazily loaded real projects. Layered
+  TypeScript/JavaScript capabilities are now exposed through library,
   CLI, daemon, LSP and MCP with per-operation backend/runtime provenance, including
   explicit TSX/JSX ownership. Daemon project open and every managed rescan now
   preserve mixed Java/TypeScript/JavaScript source images and attach the
