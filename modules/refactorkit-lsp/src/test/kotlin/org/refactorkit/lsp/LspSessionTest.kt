@@ -66,9 +66,15 @@ class LspSessionTest {
         assertTrue(capabilities["semanticTokensProvider"]!!.jsonObject["legend"]!!.jsonObject["tokenTypes"]!!.jsonArray.isNotEmpty())
         assertEquals("refactorkit", capabilities["diagnosticProvider"]!!.jsonObject["identifier"]!!.jsonPrimitive.content)
         assertEquals("true", capabilities["documentFormattingProvider"]!!.jsonPrimitive.content)
-        val languageKernel = capabilities["experimental"]!!.jsonObject["refactorkitLanguageKernel"]!!.jsonObject
+        val experimental = capabilities["experimental"]!!.jsonObject
+        val languageKernel = experimental["refactorkitLanguageKernel"]!!.jsonObject
         assertEquals(listOf("java", "javascript", "typescript"), languageKernel["adapters"]!!.jsonArray.map {
             it.jsonObject["languageId"]!!.jsonPrimitive.content
+        })
+        val ownership = experimental["refactorkitSemanticOwnership"]!!.jsonObject
+        assertEquals("client-managed-native-lsp", ownership["typescript"]!!.jsonPrimitive.content)
+        assertEquals(listOf("cli", "daemon", "mcp"), ownership["managedMutationSurfaces"]!!.jsonArray.map {
+            it.jsonPrimitive.content
         })
         val commands = capabilities["executeCommandProvider"]!!.jsonObject["commands"]!!.jsonArray
             .map { it.jsonPrimitive.content }
@@ -78,6 +84,30 @@ class LspSessionTest {
         assertTrue(commands.contains("refactorkit.changeSignature.reorderParameters"))
         assertTrue(commands.contains("refactorkit.changeSignature.removeParameter"))
         assertTrue(commands.contains("refactorkit.formatFile"))
+    }
+
+    @Test
+    fun typescriptLspOwnershipProvidesStructuralOutlineWithoutFalseJavaServices() {
+        val root = createProject("src/service.ts" to "export class Service {}\n")
+        val file = "src/service.ts"
+        val uri = Paths.get(root).resolve(file).toUri().toString()
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+        session.dispatch("textDocument/didOpen", buildJsonObject {
+            put("textDocument", buildJsonObject {
+                put("uri", uri); put("languageId", "typescript"); put("version", 1)
+                put("text", "export class Service {}\n")
+            })
+        })
+
+        val symbols = session.dispatch("textDocument/documentSymbol", textDocumentParams(root, file)).jsonArray
+        assertEquals(listOf("Service"), symbols.map { it.jsonObject["name"]!!.jsonPrimitive.content })
+        assertTrue(session.dispatch("textDocument/codeAction", buildJsonObject {
+            put("textDocument", buildJsonObject { put("uri", uri) })
+        }).jsonArray.isEmpty())
+        assertTrue(session.dispatch("textDocument/semanticTokens/full", textDocumentParams(root, file))
+            .jsonObject["data"]!!.jsonArray.isEmpty())
+        assertTrue(session.dispatch("textDocument/formatting", textDocumentParams(root, file)).jsonArray.isEmpty())
     }
 
     @Test

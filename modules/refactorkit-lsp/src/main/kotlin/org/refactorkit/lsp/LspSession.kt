@@ -38,6 +38,8 @@ import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.treesitter.GenericOutline
+import org.refactorkit.treesitter.TreeSitterAdapter
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaMoveClassPlanner
@@ -63,6 +65,7 @@ import kotlin.math.max
 class LspSession {
     private val adapter = JavaLanguageAdapter()
     private val scanner = JavaProjectScanner()
+    private val structuralAdapter = TreeSitterAdapter()
 
     @Volatile private var rootUri: String? = null
     @Volatile private var snapshot: ProjectSnapshot? = null
@@ -152,6 +155,14 @@ class LspSession {
                     put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
                         listOf(JavaAdapterRegistration.create().descriptor) + TypeScriptAdapterDescriptors.descriptors(),
                     ))
+                    put("refactorkitSemanticOwnership", buildJsonObject {
+                        put("java", "refactorkit-lsp")
+                        put("typescript", "client-managed-native-lsp")
+                        put("javascript", "client-managed-native-lsp")
+                        put("managedMutationSurfaces", buildJsonArray {
+                            add(JsonPrimitive("cli")); add(JsonPrimitive("daemon")); add(JsonPrimitive("mcp"))
+                        })
+                    })
                 })
                 put("executeCommandProvider", buildJsonObject {
                     put("commands", buildJsonArray {
@@ -306,6 +317,7 @@ class LspSession {
         val fileUri = params?.obj("textDocument")?.string("uri") ?: return JsonArray(emptyList())
         val snap = snapshot ?: return JsonArray(emptyList())
         val file = fileForUri(snap, fileUri) ?: return JsonArray(emptyList())
+        if (file.languageId != "java") return JsonArray(emptyList())
         val relPath = file.path.toString()
         val actions = mutableListOf<JsonObject>()
 
@@ -405,6 +417,20 @@ class LspSession {
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
+        if (file.languageId in setOf("typescript", "javascript")) {
+            val extension = file.path.fileName.toString().substringAfterLast('.', "")
+            if (extension !in setOf("ts", "js")) return JsonArray(emptyList())
+            return buildJsonArray {
+                structuralAdapter.outline(file.content, file.languageId).forEach { item ->
+                    add(buildJsonObject {
+                        put("name", item.name)
+                        put("kind", structuralLspSymbolKind(item.kind))
+                        put("range", rangeJson(item.line, item.character, item.line, item.character + item.name.length))
+                        put("selectionRange", rangeJson(item.line, item.character, item.line, item.character + item.name.length))
+                    })
+                }
+            }
+        }
         val index = adapter.buildSymbols(snap)
         val symbols = index.symbols.filter { it.location.path == file.path }
         return buildJsonArray {
@@ -429,6 +455,7 @@ class LspSession {
         val fileUri = params?.obj("textDocument")?.string("uri") ?: return buildJsonObject { put("data", JsonArray(emptyList())) }
         val snap = snapshot ?: return buildJsonObject { put("data", JsonArray(emptyList())) }
         val file = fileForUri(snap, fileUri) ?: return buildJsonObject { put("data", JsonArray(emptyList())) }
+        if (file.languageId != "java") return buildJsonObject { put("data", JsonArray(emptyList())) }
         val symbols = adapter.buildSymbols(snap).symbols
             .filter { it.location.path == file.path }
             .sortedWith(compareBy({ it.location.range.start.line }, { it.location.range.start.character }))
@@ -463,6 +490,7 @@ class LspSession {
         }
         val snap = snapshot ?: return buildJsonObject { put("kind", "full"); put("items", JsonArray(emptyList())) }
         val file = fileForUri(snap, fileUri) ?: return buildJsonObject { put("kind", "full"); put("items", JsonArray(emptyList())) }
+        if (file.languageId != "java") return buildJsonObject { put("kind", "full"); put("items", JsonArray(emptyList())) }
         val items = diagnosticsForFile(snap, file.path)
         return buildJsonObject {
             put("kind", "full")
@@ -475,6 +503,7 @@ class LspSession {
         val snap = snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val file = fileForUri(snap, uri)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Java source not found: $uri")
+        if (file.languageId != "java") return JsonArray(emptyList())
         val plan = JavaFormatFilePlanner(adapter).preview(snap, file.path)
         if (plan.status == PatchStatus.REFUSED) {
             throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
@@ -776,8 +805,13 @@ class LspSession {
         if (openDocuments.isEmpty()) return diskSnapshot
         val files = diskSnapshot.files.associateBy { it.path }.toMutableMap()
         openDocuments.values.forEach { document ->
-            val languageId = files[document.path]?.languageId
-                ?: document.path.fileName.toString().substringAfterLast('.', "java")
+            val languageId = files[document.path]?.languageId ?: when (
+                document.path.fileName.toString().substringAfterLast('.', "java").lowercase()
+            ) {
+                "ts", "tsx" -> "typescript"
+                "js", "jsx" -> "javascript"
+                else -> "java"
+            }
             files[document.path] = SourceFile(document.path, document.content, languageId)
         }
         return diskSnapshot.copy(files = files.values.sortedBy { it.path.toString() })
@@ -798,7 +832,8 @@ class LspSession {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Document is outside workspace: $uri")
         }
         val relative = root.relativize(absolute)
-        if (!relative.fileName.toString().endsWith(".java")) {
+        val extension = relative.fileName.toString().substringAfterLast('.', "").lowercase()
+        if (extension !in setOf("java", "ts", "tsx", "js", "jsx")) {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unsupported LSP document type: $uri")
         }
         return relative
@@ -867,6 +902,23 @@ class LspSession {
     private fun rangeJson(sl: Int, sc: Int, el: Int, ec: Int): JsonObject = buildJsonObject {
         put("start", buildJsonObject { put("line", sl); put("character", sc) })
         put("end", buildJsonObject { put("line", el); put("character", ec) })
+    }
+
+    private fun structuralLspSymbolKind(kind: GenericOutline.OutlineItem.Kind): Int = when (kind) {
+        GenericOutline.OutlineItem.Kind.CLASS, GenericOutline.OutlineItem.Kind.RECORD -> 5
+        GenericOutline.OutlineItem.Kind.INTERFACE -> 11
+        GenericOutline.OutlineItem.Kind.ENUM -> 10
+        GenericOutline.OutlineItem.Kind.FUNCTION -> 12
+        GenericOutline.OutlineItem.Kind.METHOD -> 6
+        GenericOutline.OutlineItem.Kind.PROPERTY -> 7
+        GenericOutline.OutlineItem.Kind.STRUCT -> 23
+        GenericOutline.OutlineItem.Kind.TRAIT -> 11
+        GenericOutline.OutlineItem.Kind.IMPL -> 5
+        GenericOutline.OutlineItem.Kind.MODULE -> 2
+        GenericOutline.OutlineItem.Kind.NAMESPACE -> 3
+        GenericOutline.OutlineItem.Kind.PACKAGE -> 4
+        GenericOutline.OutlineItem.Kind.CONSTANT -> 14
+        GenericOutline.OutlineItem.Kind.VARIABLE, GenericOutline.OutlineItem.Kind.UNKNOWN -> 13
     }
 
     private fun lspSymbolKind(kind: org.refactorkit.core.Symbol.Kind): Int = when (kind) {

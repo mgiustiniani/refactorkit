@@ -40,7 +40,11 @@ review safety boundaries before applying refactorings.
   MCP project scans are mixed-language and EOF closes owned semantic process trees.
   Added one-shot CLI TypeScript/JavaScript search, definition, references,
   diagnostics and rename with explicit toolchain flags, JSON output, preview by
-  default and managed apply only under `--apply`.
+  default and managed apply only under `--apply`. Completed LSP language routing
+  without stealing native TypeScript/JavaScript LSP ownership: mixed script documents
+  are accepted, plain `.ts`/`.js` receive bounded structural outlines, false
+  Java-only services are suppressed, and the initialize response exposes the
+  client-managed/managed-surface split.
   Compiler workspace-symbol search is capability-negotiated, bounded to 200
   results, and emits workspace-relative daemon paths. Exported symbols on
   package-exports/types, declaration/composite, or project-reference library

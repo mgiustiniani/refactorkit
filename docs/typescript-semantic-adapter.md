@@ -6,6 +6,22 @@ daemon, LSP and MCP capability schemas. CLI one-shot search, definition,
 references, diagnostics and rename use the same explicit-toolchain daemon
 orchestration in-process and close the session on every exit path.
 
+## LSP ownership boundary
+
+The RefactorKit LSP server accepts `.ts`, `.tsx`, `.js`, and `.jsx` document
+synchronization, but it does not start or impersonate a native TypeScript language
+server. Native TypeScript/JavaScript definition, references, diagnostics, tokens,
+formatting and rename remain client-managed. RefactorKit provides bounded structural
+`documentSymbol` results for plain `.ts` and `.js`, while returning empty Java-only
+services for script documents so Java analysis cannot be presented as TypeScript
+semantic evidence. TSX/JSX structural outlines remain disabled until their parser
+ownership is qualified.
+
+The initialize response publishes this split in
+`capabilities.experimental.refactorkitSemanticOwnership`. Rollbackable semantic
+writes use the explicit-toolchain CLI, daemon or MCP surfaces; standard native LSP
+edits remain editor-owned and have no RefactorKit WAL or rollback guarantee.
+
 ## Startup gate
 
 `TypeScriptSemanticAdapter` starts only when all three evidence layers agree:

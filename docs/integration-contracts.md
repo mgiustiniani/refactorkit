@@ -313,7 +313,16 @@ when that capability is absent. Structural or open-document edits require
 `documentChanges` support and otherwise refuse.
 
 The LSP initialize response `serverInfo.version` is read-only metadata and uses
-the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
+the centralized implementation version.
+
+TypeScript/JavaScript native semantic LSP operations remain owned by the editor's
+language client. The initialize response reports this explicitly through
+`capabilities.experimental.refactorkitSemanticOwnership`; managed, rollbackable
+compiler-backed script operations are available through CLI, daemon and MCP instead.
+RefactorKit LSP accepts mixed script document synchronization and may provide bounded
+structural `.ts`/`.js` document symbols, but it never promotes those symbols to
+semantic rename authority. Java-only code actions, diagnostics, semantic tokens and
+formatting are suppressed for script documents.
 
 | Capability or command | Status | Notes |
 |-----------------------|--------|-------|
