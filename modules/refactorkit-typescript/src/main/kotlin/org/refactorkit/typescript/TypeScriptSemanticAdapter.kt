@@ -291,6 +291,24 @@ class TypeScriptSemanticAdapter(
         val newName = request.arguments["newName"] ?: return refusedPlan(
             request, "typescript.renameTargetMissing", "TypeScript rename requires arguments.newName",
         )
+        if (!isSafeIdentifier(newName)) return refusedPlan(
+            request, "typescript.renameTargetInvalid", "TypeScript rename target is not a safe non-reserved identifier",
+        )
+        client.buildSymbols(request.snapshot)
+        val resolution = client.resolveSymbol(location)
+        val symbol = resolution.symbol ?: return refusedPlan(
+            request, "typescript.renameSymbolUnresolved", "TypeScript rename target could not be resolved exactly",
+            resolution.diagnostics.ifEmpty {
+                listOf(diagnostic("typescript.renameSymbolUnresolved", "TypeScript rename target could not be resolved exactly"))
+            },
+        )
+        if (symbol.kind in UNSUPPORTED_RENAME_KINDS) return refusedPlan(
+            request, "typescript.renameKindUnsupported",
+            "TypeScript semantic rename does not support ${symbol.kind.name.lowercase()} symbols",
+        )
+        if (newName == symbol.name) return refusedPlan(
+            request, "typescript.renameNoChange", "TypeScript rename target is unchanged",
+        )
         return when (val result = client.requestRename(request.snapshot, location, newName)) {
             is ExternalWorkspaceEditNormalization.Refused -> {
                 val first = result.diagnostics.firstOrNull()
@@ -340,7 +358,7 @@ class TypeScriptSemanticAdapter(
                         TypeScriptSemanticCompletenessMode.DYNAMIC_JAVASCRIPT -> 0.5
                     },
                     requiresUserApproval = true,
-                    summary = "Rename ${languageId} symbol to $newName in ${edit.edits.size} file operation(s).",
+                    summary = "Rename ${symbol.kind.name.lowercase()} '${symbol.name}' to '$newName' in ${edit.edits.size} file operation(s).",
                     affectedFiles = affectedPaths(edit),
                     workspaceEdit = edit,
                     diagnosticsBefore = before,
@@ -445,6 +463,27 @@ class TypeScriptSemanticAdapter(
         category = DiagnosticCategory.SAFETY,
     )
 
+    private fun isSafeIdentifier(value: String): Boolean {
+        if (value.isBlank() || value.length > 1_024 || '\u0000' in value || value in RESERVED_IDENTIFIERS) return false
+        val identifier = value.removePrefix("#")
+        if (identifier.isEmpty() || value.count { it == '#' } > if (value.startsWith('#')) 1 else 0) return false
+        var offset = 0
+        var first = true
+        while (offset < identifier.length) {
+            val codePoint = identifier.codePointAt(offset)
+            val valid = if (first) {
+                codePoint == '_'.code || codePoint == '$'.code || Character.isUnicodeIdentifierStart(codePoint)
+            } else {
+                codePoint == '_'.code || codePoint == '$'.code || codePoint == 0x200C || codePoint == 0x200D ||
+                    Character.isUnicodeIdentifierPart(codePoint)
+            }
+            if (!valid) return false
+            first = false
+            offset += Character.charCount(codePoint)
+        }
+        return true
+    }
+
     private fun provenanceSignature(provenance: ExternalSemanticSessionProvenance) = ServerProvenanceSignature(
         provenance.serverName,
         provenance.serverVersion,
@@ -506,6 +545,19 @@ class TypeScriptSemanticAdapter(
         const val MAX_RESTARTS_PER_WINDOW = 3
         const val RESTART_WINDOW_MILLIS = 60_000L
 
+        private val UNSUPPORTED_RENAME_KINDS = setOf(
+            org.refactorkit.core.Symbol.Kind.UNKNOWN,
+            org.refactorkit.core.Symbol.Kind.CONSTRUCTOR,
+            org.refactorkit.core.Symbol.Kind.PACKAGE,
+            org.refactorkit.core.Symbol.Kind.MODULE,
+        )
+        private val RESERVED_IDENTIFIERS = setOf(
+            "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
+            "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for", "function",
+            "if", "implements", "import", "in", "instanceof", "interface", "let", "new", "null", "package",
+            "private", "protected", "public", "return", "static", "super", "switch", "this", "throw", "true",
+            "try", "typeof", "var", "void", "while", "with", "yield",
+        )
         private val REQUIRED_CAPABILITIES = listOf(
             "definitionProvider", "referencesProvider", "renameProvider",
             "documentSymbolProvider", "textDocumentSync",

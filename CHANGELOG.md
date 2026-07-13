@@ -26,7 +26,9 @@ review safety boundaries before applying refactorings.
   completeness now distinguishes full TypeScript, checked JavaScript, dynamic
   JavaScript and mixed JavaScript; dynamic/mixed managed gates fail closed.
   Versioned edits must match synchronized documents exactly, and rename refuses
-  missing or ambiguous TypeScript Build Model ownership.
+  missing or ambiguous TypeScript Build Model ownership. Semantic rename now
+  requires an exact supported symbol and a safe non-reserved Unicode identifier;
+  unknown/constructor/package/module and no-op targets fail before edit requests.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

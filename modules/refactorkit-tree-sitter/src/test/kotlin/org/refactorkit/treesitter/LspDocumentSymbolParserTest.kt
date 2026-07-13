@@ -32,7 +32,7 @@ class LspDocumentSymbolParserTest {
         ) { Path.of("src/value.ts") }
 
         assertEquals(Path.of("src/value.ts"), symbols.single().location.path)
-        assertEquals(Symbol.Kind.FIELD, symbols.single().kind)
+        assertEquals(Symbol.Kind.VARIABLE, symbols.single().kind)
     }
 
     @Test

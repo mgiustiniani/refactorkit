@@ -57,8 +57,13 @@ remapping, a 256-file request cap and 10,000-symbol result cap. Structural
 Tree-sitter symbols are used only when no semantic document-symbol capability is
 active. Cross-project stable compiler identity/workspace search remains T3 work.
 
-`renameSymbol` converts the server WorkspaceEdit through the strict external edit
-parser and core normalizer. A successful result is a `PatchPlan` preview with
+`renameSymbol` first builds the exact semantic index and resolves the selected
+symbol. Safe non-reserved Unicode identifiers (including private `#` identifiers)
+are accepted for class/interface/enum/function/method/property/field/variable/
+constant/type-parameter/namespace symbols. Unresolved, unknown, constructor,
+package, module, invalid and no-op targets refuse before requesting an edit. The
+server WorkspaceEdit then passes through the strict external edit parser and core
+normalizer. A successful result is a `PatchPlan` preview with
 `LANGUAGE_SERVER` evidence, explicit approval requirement and medium TypeScript
 or high JavaScript risk. The plan reports one of `FULL_TYPESCRIPT`,
 `CHECKED_JAVASCRIPT`, `DYNAMIC_JAVASCRIPT` or `MIXED_JAVASCRIPT`; dynamic and
@@ -87,4 +92,6 @@ native platform.
 - invalid UTF-16 positions;
 - edit path outside overlay/workspace;
 - generated source, symlink, overlap, invalid range or structural conflict;
+- unsupported symbol kind, unresolved symbol, invalid/reserved identifier or
+  unchanged rename target;
 - unsupported operation or missing rename selection/target.

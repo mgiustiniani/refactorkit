@@ -283,6 +283,37 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun renameRequiresSafeIdentifierExactSymbolAndSupportedKind() {
+        val fixture = fixture()
+        val invalidAdapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, FakeClient())
+        assertIs<TypeScriptSemanticStart.Started>(invalidAdapter.start(fixture.snapshot))
+        listOf("has-dash", "class", "9value", "a#b").forEach { target ->
+            val plan = invalidAdapter.applyRefactoring(renameRequest(fixture.snapshot, target))
+            assertEquals("typescript.renameTargetInvalid", plan.refusalCode)
+        }
+        invalidAdapter.close()
+
+        val unresolved = TypeScriptSemanticAdapter(
+            "typescript", fixture.toolchain, fixture.model, FakeClient(unresolvedSymbol = true),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(unresolved.start(fixture.snapshot))
+        assertEquals(
+            "typescript.renameSymbolUnresolved",
+            unresolved.applyRefactoring(renameRequest(fixture.snapshot)).refusalCode,
+        )
+        unresolved.close()
+
+        val constructor = TypeScriptSemanticAdapter(
+            "typescript", fixture.toolchain, fixture.model, FakeClient(symbolKind = Symbol.Kind.CONSTRUCTOR),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(constructor.start(fixture.snapshot))
+        assertEquals(
+            "typescript.renameKindUnsupported",
+            constructor.applyRefactoring(renameRequest(fixture.snapshot)).refusalCode,
+        )
+    }
+
+    @Test
     fun renameRefusalAndStaleSnapshotFailClosed() {
         val fixture = fixture()
         val client = FakeClient(renameRefused = true)
@@ -361,10 +392,10 @@ class TypeScriptSemanticAdapterTest {
         )
     }
 
-    private fun renameRequest(snapshot: ProjectSnapshot) = RefactoringRequest(
+    private fun renameRequest(snapshot: ProjectSnapshot, newName: String = "AccountService") = RefactoringRequest(
         operation = "renameSymbol",
         selection = org.refactorkit.core.CodeSelection(location()),
-        arguments = mapOf("newName" to "AccountService"),
+        arguments = mapOf("newName" to newName),
         snapshot = snapshot,
     )
 
@@ -388,6 +419,8 @@ class TypeScriptSemanticAdapterTest {
         private val renameRefused: Boolean = false,
         private val exactDiagnostics: ExternalSemanticDiagnostics = ExternalSemanticDiagnostics.Available(emptyList()),
         sessionProvenance: ExternalSemanticSessionProvenance? = null,
+        private val unresolvedSymbol: Boolean = false,
+        private val symbolKind: Symbol.Kind = Symbol.Kind.CLASS,
     ) : TypeScriptSemanticClient {
         override var isRunning: Boolean = false
         var sessionProvenance: ExternalSemanticSessionProvenance? = sessionProvenance
@@ -406,7 +439,8 @@ class TypeScriptSemanticAdapterTest {
 
         override fun supports(capability: String): Boolean = capability in capabilities
         override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex = SymbolIndex(listOf(symbol()))
-        override fun resolveSymbol(location: SourceLocation): SymbolResolution = SymbolResolution(symbol())
+        override fun resolveSymbol(location: SourceLocation): SymbolResolution =
+            if (unresolvedSymbol) SymbolResolution(null) else SymbolResolution(symbol())
         override fun findReferences(symbolId: SymbolId): List<Reference> = listOf(Reference(symbolId, symbolLocation()))
         override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = emptyList()
         override fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics {
@@ -434,7 +468,7 @@ class TypeScriptSemanticAdapterTest {
         override fun close() { isRunning = false }
 
         private fun symbol() = Symbol(
-            SymbolId("src/service.ts::Service"), "Service", Symbol.Kind.CLASS,
+            SymbolId("src/service.ts::Service"), "Service", symbolKind,
             symbolLocation(), "typescript",
         )
 

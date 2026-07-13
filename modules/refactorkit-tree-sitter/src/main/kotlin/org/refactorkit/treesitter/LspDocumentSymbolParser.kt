@@ -87,12 +87,20 @@ internal object LspDocumentSymbolParser {
     }
 
     private fun symbolKind(kind: Int): Symbol.Kind = when (kind) {
+        2 -> Symbol.Kind.MODULE
+        3 -> Symbol.Kind.NAMESPACE
+        4 -> Symbol.Kind.PACKAGE
         5 -> Symbol.Kind.CLASS
+        6 -> Symbol.Kind.METHOD
+        7 -> Symbol.Kind.PROPERTY
+        8 -> Symbol.Kind.FIELD
+        9 -> Symbol.Kind.CONSTRUCTOR
         10 -> Symbol.Kind.ENUM
         11 -> Symbol.Kind.INTERFACE
-        6, 12 -> Symbol.Kind.METHOD
-        7, 8, 13, 14 -> Symbol.Kind.FIELD
-        9 -> Symbol.Kind.CONSTRUCTOR
+        12 -> Symbol.Kind.FUNCTION
+        13 -> Symbol.Kind.VARIABLE
+        14 -> Symbol.Kind.CONSTANT
+        26 -> Symbol.Kind.TYPE_PARAMETER
         else -> Symbol.Kind.UNKNOWN
     }
 
