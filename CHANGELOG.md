@@ -14,7 +14,8 @@ review safety boundaries before applying refactorings.
 - Add experimental `TypeScriptSemanticAdapter`: pre-launch toolchain/config
   evidence revalidation, required server-capability negotiation, bounded
   versioned full-document synchronization, UTF-16/surrogate validation, ranged
-  compiler diagnostics, semantic definition/references delegation, and
+  compiler diagnostics, bounded nested LSP document symbols, semantic
+  definition/references delegation, and
   approval-required normalized `LANGUAGE_SERVER` rename previews with no direct
   writes. Exact semantic symbols and TypeScript staged/apply acceptance remain
   open.

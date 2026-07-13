@@ -195,7 +195,8 @@ class TypeScriptSemanticAdapterTest {
 
     private class FakeClient(
         private val capabilities: Set<String> = setOf(
-            "definitionProvider", "referencesProvider", "renameProvider", "textDocumentSync",
+            "definitionProvider", "referencesProvider", "renameProvider",
+            "documentSymbolProvider", "textDocumentSync",
         ),
         private val renameRefused: Boolean = false,
     ) : TypeScriptSemanticClient {

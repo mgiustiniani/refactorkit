@@ -229,8 +229,17 @@ class ExternalLspAdapter(
     override fun parse(file: SourceFile): ParseResult = ParseResult(file)
 
     override fun buildSymbols(project: ProjectSnapshot): SymbolIndex {
-        val items = project.files.filter { it.languageId == languageId }
-            .flatMap { file ->
+        val files = project.files.filter { it.languageId == languageId }.sortedBy { it.path.toString() }
+        val items = if (isRunning && supportsServerCapability("documentSymbolProvider")) {
+            if (files.size > MAX_DOCUMENT_SYMBOL_FILES) {
+                lastFailure = ExternalSemanticFailure(
+                    "semantic.documentSymbolFileLimit",
+                    "Document-symbol request exceeds $MAX_DOCUMENT_SYMBOL_FILES files",
+                )
+                emptyList()
+            } else files.flatMap { file -> requestDocumentSymbols(file) }
+        } else {
+            files.flatMap { file ->
                 structuralAdapter.outline(file.content, languageId).map { item ->
                     Symbol(
                         id = SymbolId("${file.path}::${item.name}"),
@@ -247,9 +256,23 @@ class ExternalLspAdapter(
                     )
                 }
             }
-        val index = SymbolIndex(items)
+        }
+        val index = SymbolIndex(items.distinctBy { it.id }.sortedBy { it.id.value })
         lastIndex.set(index)
         return index
+    }
+
+    private fun requestDocumentSymbols(file: SourceFile): List<Symbol> {
+        val semantic = semanticPath(file.path) ?: return emptyList()
+        val response = sendRequest(
+            "textDocument/documentSymbol",
+            """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}}}""",
+        ) ?: return emptyList()
+        val result = LspJson.extractField(response, "result") ?: return emptyList()
+        if (result.trim() == "null") return emptyList()
+        return LspDocumentSymbolParser.parse(result, file.path.normalize(), languageId) { returned ->
+            workspaceOverlay?.toWorkspacePath(returned) ?: returned
+        }
     }
 
     /**
@@ -781,6 +804,7 @@ class ExternalLspAdapter(
         const val MAX_DIAGNOSTIC_MESSAGE_CHARS = 4_096
         const val MAX_OPEN_DOCUMENTS = 256
         const val MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
+        const val MAX_DOCUMENT_SYMBOL_FILES = 256
         const val DEFAULT_REQUEST_TIMEOUT_MILLIS = 10_000L
         const val MAX_REQUEST_TIMEOUT_MILLIS = 120_000L
         const val SHUTDOWN_TIMEOUT_MILLIS = 2_000L

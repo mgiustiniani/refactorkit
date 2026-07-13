@@ -39,9 +39,12 @@ evidence.
 
 ## Current operations
 
-Experimental read operations delegate definition and references to the bounded
-language server. Structural Tree-sitter symbols remain the temporary workspace
-symbol source; exact compiler-backed symbol identity/search is still T3 work.
+Experimental read operations delegate document symbols, definition and
+references to the bounded language server. Both nested `DocumentSymbol` and
+`SymbolInformation` forms are normalized with exact UTF-16 ranges, portable path
+remapping, a 256-file request cap and 10,000-symbol result cap. Structural
+Tree-sitter symbols are used only when no semantic document-symbol capability is
+active. Cross-project stable compiler identity/workspace search remains T3 work.
 
 `renameSymbol` converts the server WorkspaceEdit through the strict external edit
 parser and core normalizer. A successful result is a `PatchPlan` preview with

@@ -43,6 +43,7 @@ class ExternalLspAdapterLifecycleTest {
         assertEquals(true, provenance.advertisedCapabilities["definitionProvider"])
         assertEquals(true, provenance.advertisedCapabilities["renameProvider"])
         assertEquals(false, provenance.advertisedCapabilities["referencesProvider"])
+        assertEquals(listOf("Service"), adapter.buildSymbols(snapshot).symbols.map { it.name })
 
         val position = SourceLocation(
             workspace.resolve("sample.ts"),
@@ -154,9 +155,10 @@ object ExternalLspFixture {
                         output.flush()
                         Thread.sleep(30_000)
                     }
-                    else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"renameProvider":{"prepareProvider":true},"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
+                    else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"renameProvider":{"prepareProvider":true},"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
                 }
                 "initialized", "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose" -> Unit
+                "textDocument/documentSymbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":21}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}]}""")
                 "textDocument/definition" -> {
                     val params = LspJson.extractField(request, "params").orEmpty()
                     val document = LspJson.extractField(params, "textDocument").orEmpty()

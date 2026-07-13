@@ -292,7 +292,8 @@ class TypeScriptSemanticAdapter(
 
     companion object {
         private val REQUIRED_CAPABILITIES = listOf(
-            "definitionProvider", "referencesProvider", "renameProvider", "textDocumentSync",
+            "definitionProvider", "referencesProvider", "renameProvider",
+            "documentSymbolProvider", "textDocumentSync",
         )
 
         fun descriptor(languageId: String) = LanguageAdapterDescriptor(
