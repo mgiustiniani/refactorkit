@@ -10,6 +10,8 @@ import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolPath
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -192,7 +194,11 @@ class TypeScriptProjectModelBuilder(
         val file = requireWorkspaceFile(config, root, diagnostics, "typescript.configPathInvalid") ?: return null
         val bytes = readBounded(file, policy.maxConfigBytes, diagnostics, "typescript.configFileLimit") ?: return null
         evidence[root.relativize(file)] = evidence(root.relativize(file), bytes)
-        val json = parseJsonc(bytes.toString(Charsets.UTF_8), diagnostics, file) ?: return null
+        val configText = decodeUtf8(bytes) ?: run {
+            diagnostics += diagnostic("typescript.configEncoding", "TypeScript config must be valid UTF-8")
+            return null
+        }
+        val json = parseJsonc(configText, diagnostics, file) ?: return null
         stack.add(file)
         val extendsValue = json.optionalString("extends", diagnostics)
         if (diagnostics.isNotEmpty()) return null
@@ -484,7 +490,8 @@ class TypeScriptProjectModelBuilder(
                 val file = requireWorkspaceFile(manifest, root, diagnostics, "typescript.packageManifestInvalid") ?: return null
                 val bytes = readBounded(file, PACKAGE_MANIFEST_BYTES, diagnostics, "typescript.packageManifestLimit") ?: return null
                 evidence[root.relativize(file)] = evidence(root.relativize(file), bytes)
-                val json = runCatching { STRICT_JSON.parseToJsonElement(bytes.toString(Charsets.UTF_8)) as? JsonObject }.getOrNull()
+                val packageText = decodeUtf8(bytes)
+                val json = packageText?.let { runCatching { STRICT_JSON.parseToJsonElement(it) as? JsonObject }.getOrNull() }
                 if (json == null) {
                     diagnostics += diagnostic("typescript.packageManifestInvalid", "package.json must be strict bounded JSON")
                     return null
@@ -509,6 +516,13 @@ class TypeScriptProjectModelBuilder(
         }
         return null
     }
+
+    private fun decodeUtf8(bytes: ByteArray): String? = runCatching {
+        Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes)).toString()
+    }.getOrNull()
 
     private fun parseJsonc(text: String, diagnostics: MutableList<Diagnostic>, path: Path): JsonObject? {
         val stripped = JsoncSanitizer.sanitize(text).getOrElse {

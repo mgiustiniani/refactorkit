@@ -11,6 +11,13 @@ review safety boundaries before applying refactorings.
 
 - Begin the TypeScript/JavaScript semantic adapter band on top of the published
   `v0.5.0` kernel; no new stable capability is claimed yet.
+- Add experimental `TypeScriptSemanticAdapter`: pre-launch toolchain/config
+  evidence revalidation, required server-capability negotiation, bounded
+  versioned full-document synchronization, UTF-16/surrogate validation, ranged
+  compiler diagnostics, semantic definition/references delegation, and
+  approval-required normalized `LANGUAGE_SERVER` rename previews with no direct
+  writes. Exact semantic symbols and TypeScript staged/apply acceptance remain
+  open.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the

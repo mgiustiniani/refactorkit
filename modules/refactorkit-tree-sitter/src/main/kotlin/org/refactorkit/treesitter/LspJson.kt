@@ -159,7 +159,7 @@ internal object LspJson {
         return if (i > start) json.substring(start, i) else null
     }
 
-    private fun parseArray(json: String): List<String> {
+    internal fun parseArray(json: String): List<String> {
         if (!json.startsWith('[')) return emptyList()
         val elements = mutableListOf<String>()
         var i = 1

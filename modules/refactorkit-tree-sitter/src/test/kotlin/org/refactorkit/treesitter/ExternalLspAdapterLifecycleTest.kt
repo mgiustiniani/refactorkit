@@ -2,6 +2,7 @@ package org.refactorkit.treesitter
 
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
+import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -39,6 +40,9 @@ class ExternalLspAdapterLifecycleTest {
         assertEquals("1.2.3", provenance.serverVersion)
         assertEquals(64, provenance.capabilitiesSha256.length)
         assertEquals(64, provenance.process.executableSha256.length)
+        assertEquals(true, provenance.advertisedCapabilities["definitionProvider"])
+        assertEquals(true, provenance.advertisedCapabilities["renameProvider"])
+        assertEquals(false, provenance.advertisedCapabilities["referencesProvider"])
 
         val position = SourceLocation(
             workspace.resolve("sample.ts"),
@@ -48,16 +52,25 @@ class ExternalLspAdapterLifecycleTest {
         assertEquals(position.path.toAbsolutePath().normalize(), resolved.location.path.toAbsolutePath().normalize())
         val diagnostics = adapter.diagnostics(projectSnapshot())
         assertEquals(listOf("échec contrôlé"), diagnostics.map(Diagnostic::message))
+        assertEquals("TS1001", diagnostics.single().code)
+        assertEquals(source.toAbsolutePath().normalize(), diagnostics.single().location?.path)
+        assertEquals(DiagnosticEvidence.COMPILER, diagnostics.single().evidence)
 
-        val normalized = adapter.requestWorkspaceEdit(
-            "workspace/executeCommand",
-            """{"uri":${LspJson.quote(source.toUri().toString())}}""",
-            snapshot,
-        )
-        val accepted = assertIs<ExternalWorkspaceEditNormalization.Accepted>(normalized).normalized
+        assertTrue(adapter.openDocument(snapshot.files.single(), 3))
+        assertFalse(adapter.changeDocument(snapshot.files.single(), 3), "document versions must increase")
+        assertTrue(adapter.changeDocument(snapshot.files.single().copy(content = "const foo = 2;\n"), 4))
+        val normalized = adapter.requestRename(snapshot, position, "bar")
+        val accepted = assertIs<ExternalWorkspaceEditNormalization.Accepted>(normalized, normalized.toString()).normalized
         val modification = assertIs<FileEdit.Modify>(accepted.workspaceEdit.edits.single())
         assertEquals("bar", modification.textEdits.single().newText)
         assertEquals("lsp-typescript", accepted.providerId)
+        val invalidSurrogate = snapshot.copy(files = listOf(snapshot.files.single().copy(content = "const 😀 = 1;\n")))
+        val invalidPosition = position.copy(range = SourceRange(SourcePosition(0, 7), SourcePosition(0, 7)))
+        assertEquals(
+            listOf("externalEdit.positionInvalid"),
+            assertIs<ExternalWorkspaceEditNormalization.Refused>(adapter.requestRename(invalidSurrogate, invalidPosition, "value"))
+                .diagnostics.map(Diagnostic::code),
+        )
         val outside = adapter.requestWorkspaceEdit("workspace/outside", "{}", snapshot)
         assertEquals(
             listOf("externalEdit.pathOutsideOverlay"),
@@ -141,18 +154,18 @@ object ExternalLspFixture {
                         output.flush()
                         Thread.sleep(30_000)
                     }
-                    else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
+                    else -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"renameProvider":{"prepareProvider":true},"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
                 }
-                "initialized" -> Unit
+                "initialized", "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose" -> Unit
                 "textDocument/definition" -> {
-                    writeFrame(output, """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///sample.ts","diagnostics":[{"severity":1,"message":"échec contrôlé"}]}}""")
                     val params = LspJson.extractField(request, "params").orEmpty()
                     val document = LspJson.extractField(params, "textDocument").orEmpty()
                     val uri = LspJson.extractField(document, "uri") ?: "\"file:///sample.ts\""
+                    writeFrame(output, """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":$uri,"diagnostics":[{"severity":1,"code":"TS1001","message":"échec contrôlé","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}]}}""")
                     lastDocumentUri = uri
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"uri":$uri,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}""")
                 }
-                "workspace/executeCommand" -> {
+                "textDocument/rename" -> {
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"changes":{$lastDocumentUri:[{"range":{"start":{"line":0,"character":6},"end":{"line":0,"character":9}},"newText":"bar"}]}}}""")
                 }
                 "workspace/outside" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"changes":{"file:///outside.ts":[]}}}""")

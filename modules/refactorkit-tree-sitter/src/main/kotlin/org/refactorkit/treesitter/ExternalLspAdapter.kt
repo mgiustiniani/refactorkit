@@ -84,6 +84,7 @@ data class ExternalSemanticSessionProvenance(
     val serverName: String?,
     val serverVersion: String?,
     val capabilitiesSha256: String,
+    val advertisedCapabilities: Map<String, Boolean>,
 )
 
 data class ExternalSemanticFailure(val code: String, val message: String)
@@ -120,6 +121,7 @@ class ExternalLspAdapter(
     /** Pending `textDocument/publishDiagnostics` payloads (params JSON). */
     private val pendingDiagParams = ArrayDeque<String>()
     private val structuralAdapter = TreeSitterAdapter()
+    private val openDocuments = linkedMapOf<Path, OpenDocumentState>()
 
     // ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -184,6 +186,9 @@ class ExternalLspAdapter(
             serverName = serverInfo?.let { LspJson.extractField(it, "name") }?.let(LspJson::unquote),
             serverVersion = serverInfo?.let { LspJson.extractField(it, "version") }?.let(LspJson::unquote),
             capabilitiesSha256 = sha256(capabilities),
+            advertisedCapabilities = KNOWN_SERVER_CAPABILITIES.associateWith { capability ->
+                capabilityAdvertised(capability, LspJson.extractField(capabilities, capability))
+            }.toSortedMap(),
         )
         sendNotification("initialized", "{}")
     }
@@ -206,6 +211,7 @@ class ExternalLspAdapter(
         }
         overlay?.close()
         workspaceOverlay = null
+        openDocuments.clear()
         writer = null
         reader = null
         managedProcess = null
@@ -328,14 +334,97 @@ class ExternalLspAdapter(
         val result = mutableListOf<Diagnostic>()
         while (pendingDiagParams.isNotEmpty()) {
             val paramsJson = pendingDiagParams.removeFirst()
-            val diagsJson  = LspJson.extractField(paramsJson, "diagnostics") ?: continue
-            // Parse the diagnostics array — each element has "message" and "severity" (1=error,2=warn,3=info,4=hint)
-            val elements   = LspJson.extractValue(diagsJson, 0)?.let { _ ->
-                parseDiagnosticsArray(diagsJson)
-            } ?: continue
-            result += elements
+            val diagsJson = LspJson.extractField(paramsJson, "diagnostics") ?: continue
+            val uri = LspJson.extractField(paramsJson, "uri")?.let(LspJson::unquote)
+            result += parseDiagnosticsArray(diagsJson, uri).take(MAX_DIAGNOSTICS - result.size)
+            if (result.size >= MAX_DIAGNOSTICS) break
         }
         return result
+    }
+
+    fun supportsServerCapability(name: String): Boolean =
+        sessionProvenance?.advertisedCapabilities?.get(name) == true
+
+    @Synchronized
+    fun openDocument(file: SourceFile, version: Long = 1): Boolean {
+        if (!isRunning || version < 0 || openDocuments.size >= MAX_OPEN_DOCUMENTS && file.path.normalize() !in openDocuments) return false
+        if (file.content.toByteArray(Charsets.UTF_8).size > MAX_DOCUMENT_BYTES) return false
+        val path = file.path.normalize()
+        if (path in openDocuments) return changeDocument(file, version)
+        val semantic = semanticPath(path) ?: return false
+        sendNotification("textDocument/didOpen", """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))},"languageId":${LspJson.quote(file.languageId)},"version":$version,"text":${LspJson.quote(file.content)}}}""")
+        if (!isRunning) return false
+        openDocuments[path] = OpenDocumentState(version, sha256(file.content))
+        return true
+    }
+
+    @Synchronized
+    fun changeDocument(file: SourceFile, version: Long): Boolean {
+        if (!isRunning || file.content.toByteArray(Charsets.UTF_8).size > MAX_DOCUMENT_BYTES) return false
+        val path = file.path.normalize()
+        val current = openDocuments[path] ?: return false
+        if (version <= current.version) return false
+        val semantic = semanticPath(path) ?: return false
+        sendNotification("textDocument/didChange", """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))},"version":$version},"contentChanges":[{"text":${LspJson.quote(file.content)}}]}""")
+        if (!isRunning) return false
+        openDocuments[path] = OpenDocumentState(version, sha256(file.content))
+        return true
+    }
+
+    @Synchronized
+    fun closeDocument(path: Path): Boolean {
+        val normalized = path.normalize()
+        if (normalized !in openDocuments) return false
+        val semantic = semanticPath(normalized) ?: return false
+        sendNotification("textDocument/didClose", """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}}}""")
+        openDocuments.remove(normalized)
+        return true
+    }
+
+    fun requestRename(
+        snapshot: ProjectSnapshot,
+        location: SourceLocation,
+        newName: String,
+    ): ExternalWorkspaceEditNormalization {
+        if (!supportsServerCapability("renameProvider")) return ExternalWorkspaceEditNormalization.Refused(listOf(externalDiagnostic(
+            "semantic.capabilityUnavailable", "External semantic server does not advertise renameProvider",
+        )))
+        if (newName.isBlank() || newName.length > 1_024 || '\u0000' in newName) return ExternalWorkspaceEditNormalization.Refused(listOf(externalDiagnostic(
+            "externalEdit.renameInvalid", "External semantic rename target is invalid",
+        )))
+        val locationPath = if (location.path.isAbsolute) {
+            val root = snapshot.workspace.root.toAbsolutePath().normalize()
+            val normalized = location.path.toAbsolutePath().normalize()
+            if (!normalized.startsWith(root)) null else root.relativize(normalized)
+        } else location.path.normalize()
+        val file = locationPath?.let { target -> snapshot.files.singleOrNull { it.path.normalize() == target } }
+            ?: return ExternalWorkspaceEditNormalization.Refused(listOf(externalDiagnostic(
+                "externalEdit.documentMissing", "Rename document is not present in the snapshot",
+            )))
+        if (!validPosition(file.content, location.range.start)) return ExternalWorkspaceEditNormalization.Refused(listOf(externalDiagnostic(
+            "externalEdit.positionInvalid", "Rename position is outside the document or splits a UTF-16 surrogate pair",
+        )))
+        val documentState = openDocuments[file.path.normalize()]
+        val contentHash = sha256(file.content)
+        val synchronized = when {
+            documentState == null -> openDocument(file, 1)
+            documentState.contentSha256 != contentHash && documentState.version < Long.MAX_VALUE ->
+                changeDocument(file, documentState.version + 1)
+            documentState.contentSha256 != contentHash -> false
+            else -> true
+        }
+        if (!synchronized) return ExternalWorkspaceEditNormalization.Refused(listOf(externalDiagnostic(
+            "semantic.documentOpenFailed", "Rename document could not be synchronized with the semantic server",
+        )))
+        val semantic = semanticPath(file.path) ?: return ExternalWorkspaceEditNormalization.Refused(listOf(externalDiagnostic(
+            "externalEdit.pathOutsideOverlay", "Rename document is outside the semantic overlay",
+        )))
+        val position = location.range.start
+        return requestWorkspaceEdit(
+            "textDocument/rename",
+            """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}},"newName":${LspJson.quote(newName)}}""",
+            snapshot,
+        )
     }
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = listOf(
@@ -543,6 +632,18 @@ class ExternalLspAdapter(
         throw IllegalStateException("LSP headers exceed $MAX_HEADER_BYTES bytes")
     }
 
+    private data class OpenDocumentState(val version: Long, val contentSha256: String)
+
+    private fun validPosition(content: String, position: SourcePosition): Boolean {
+        if (position.line < 0 || position.character < 0) return false
+        val lines = content.split('\n')
+        if (position.line >= lines.size) return false
+        val line = lines[position.line].removeSuffix("\r")
+        if (position.character > line.length) return false
+        return position.character == 0 || position.character == line.length ||
+            !(line[position.character].isLowSurrogate() && line[position.character - 1].isHighSurrogate())
+    }
+
     private fun semanticPath(path: Path): Path? = workspaceOverlay?.toOverlayPath(path) ?: path
 
     private fun remapOverlayProposal(
@@ -579,6 +680,7 @@ class ExternalLspAdapter(
         requestExecutor?.shutdownNow()
         workspaceOverlay?.close()
         workspaceOverlay = null
+        openDocuments.clear()
         writer = null
         reader = null
         managedProcess = null
@@ -606,33 +708,50 @@ class ExternalLspAdapter(
             ?: throw IllegalArgumentException("external LSP executable was not found: $value")
     }
 
+    private fun capabilityAdvertised(name: String, rawValue: String?): Boolean {
+        val value = rawValue?.trim() ?: return false
+        if (value in setOf("false", "null")) return false
+        if (name == "textDocumentSync" && value == "0") return false
+        return true
+    }
+
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
     // ── diagnostics helper ────────────────────────────────────────────────────
 
-    private fun parseDiagnosticsArray(json: String): List<Diagnostic> {
-        val results = mutableListOf<Diagnostic>()
-        // Extract the raw array content and iterate top-level objects
-        val raw = json.trim()
-        if (!raw.startsWith('[')) return emptyList()
-        var i = 1
-        while (i < raw.length - 1) {
-            while (i < raw.length && (raw[i].isWhitespace() || raw[i] == ',')) i++
-            if (i >= raw.length - 1) break
-            val obj = LspJson.extractValue(raw, i) ?: break
-            i += obj.length
-            val msgField  = LspJson.extractField(obj, "message") ?: continue
-            val msg       = LspJson.unquote(msgField)
-            val sevField  = LspJson.extractField(obj, "severity")
-            val severity  = when (sevField?.trim()?.toIntOrNull()) {
-                1    -> Diagnostic.Severity.ERROR
-                2    -> Diagnostic.Severity.WARNING
+    private fun parseDiagnosticsArray(json: String, uri: String?): List<Diagnostic> {
+        val path = uri?.let { runCatching { LspJson.uriToPath(it) }.getOrNull() }
+            ?.let { workspaceOverlay?.toWorkspacePath(it) ?: it }
+        return LspJson.parseArray(json).take(MAX_DIAGNOSTICS).mapNotNull { obj ->
+            val message = LspJson.extractField(obj, "message")?.let(LspJson::unquote)?.take(MAX_DIAGNOSTIC_MESSAGE_CHARS)
+                ?: return@mapNotNull null
+            val severity = when (LspJson.extractField(obj, "severity")?.trim()?.toIntOrNull()) {
+                1 -> Diagnostic.Severity.ERROR
+                2 -> Diagnostic.Severity.WARNING
                 else -> Diagnostic.Severity.INFO
             }
-            results += Diagnostic(message = msg, severity = severity)
+            val range = LspJson.extractField(obj, "range")?.let { rangeJson ->
+                uri?.let { locationUri -> LspJson.parseLocation("""{"uri":${LspJson.quote(locationUri)},"range":$rangeJson}""") }
+            }
+            val location = if (path != null && range != null) SourceLocation(
+                path,
+                SourceRange(
+                    SourcePosition(range.startLine, range.startChar),
+                    SourcePosition(range.endLine, range.endChar),
+                ),
+            ) else null
+            val codeValue = LspJson.extractField(obj, "code")
+            val code = codeValue?.let { if (it.startsWith('"')) LspJson.unquote(it) else it.take(128) }
+            Diagnostic(
+                message = message,
+                severity = severity,
+                location = location,
+                code = code,
+                evidence = org.refactorkit.core.DiagnosticEvidence.COMPILER,
+                category = org.refactorkit.core.DiagnosticCategory.TYPE_RESOLUTION,
+            )
         }
-        return results
     }
 
     // ── kind mapping ──────────────────────────────────────────────────────────
@@ -658,10 +777,18 @@ class ExternalLspAdapter(
         const val MAX_SESSION_OUTPUT_BYTES = 64L * 1024L * 1024L
         const val MAX_STDERR_BYTES = 64 * 1024
         const val MAX_PENDING_DIAGNOSTIC_NOTIFICATIONS = 500
+        const val MAX_DIAGNOSTICS = 500
+        const val MAX_DIAGNOSTIC_MESSAGE_CHARS = 4_096
+        const val MAX_OPEN_DOCUMENTS = 256
+        const val MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
         const val DEFAULT_REQUEST_TIMEOUT_MILLIS = 10_000L
         const val MAX_REQUEST_TIMEOUT_MILLIS = 120_000L
         const val SHUTDOWN_TIMEOUT_MILLIS = 2_000L
         private val PROCESS_SEQUENCE = AtomicInteger(1)
+        private val KNOWN_SERVER_CAPABILITIES = sortedSetOf(
+            "definitionProvider", "referencesProvider", "renameProvider",
+            "documentSymbolProvider", "textDocumentSync",
+        )
         private val LSP_METHOD = Regex("[A-Za-z0-9_" + '$' + "./-]{1,128}")
 
         fun descriptor(languageId: String, extensions: Set<String>) = LanguageAdapterDescriptor(
