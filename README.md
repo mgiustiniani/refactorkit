@@ -28,7 +28,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Latest release line is `v0.5.0`. API `0.2` remains
+Latest release is `v0.5.0`; main develops `0.6.0-SNAPSHOT`. API `0.2` remains
 the beta compatibility baseline. `v0.5.0` adds natively built self-contained
 Windows x86_64, macOS Intel, and macOS Apple Silicon runtimes; platforms are
 marked supported only after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
@@ -57,6 +57,11 @@ Every package includes its native launcher and embedded Java runtime, so users d
 not need a globally installed Java runtime.
 
 Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.5.0>
+
+Release commit: `175a5a42cce9f2f8d75685d599ff2eabdcd92847`.
+The Linux x86_64 asset SHA-256 is
+`3554a312103e3e5c59ad73e89f4ade03d2e5e762018ceb83927dc88795de13e2`;
+use each platform asset's adjacent checksum as authoritative.
 
 Linux x86_64 example:
 

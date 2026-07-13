@@ -9,7 +9,7 @@ plugins {
 
 allprojects {
     group = "org.refactorkit"
-    version = "0.5.0"
+    version = "0.6.0-SNAPSHOT"
 }
 
 subprojects {
