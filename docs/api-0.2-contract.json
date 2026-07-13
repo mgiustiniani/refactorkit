@@ -6,7 +6,7 @@
   "status": "beta-contract",
   "cli": {
     "commands": [
-      "version", "scan", "index", "symbols", "diagnostics", "references",
+      "version", "capabilities", "scan", "index", "symbols", "diagnostics", "references",
       "definition", "rename", "rename-member", "extract-method",
       "change-signature", "move-class", "organize-imports", "format-file",
       "safe-delete", "patch rollback", "java import-class", "java move-source-root", "recipe run",
@@ -45,9 +45,15 @@
       "moveClass", "moveSourceRoot", "organizeImports", "formatFile", "safeDelete"
     ]
   },
+  "languageKernel": {
+    "schemaVersion": 1,
+    "surfaces": ["cli", "daemon", "lsp-experimental", "mcp-extension"],
+    "packagedAdapters": ["java", "javascript", "typescript"]
+  },
   "limits": {
     "maxRequestBytes": 1048576,
     "maxLspFrameBytes": 1048576,
+    "maxExternalLspFrameBytes": 8388608,
     "maxPendingPlans": 128,
     "maxSymbolResults": 200,
     "maxReferenceResults": 1000,

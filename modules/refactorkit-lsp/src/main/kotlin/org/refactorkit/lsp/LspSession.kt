@@ -18,6 +18,7 @@ import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -35,7 +36,9 @@ import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
+import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.treesitter.TreeSitterAdapterDescriptors
 import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -144,6 +147,11 @@ class LspSession {
                     put("identifier", "refactorkit")
                     put("interFileDependencies", true)
                     put("workspaceDiagnostics", false)
+                })
+                put("experimental", buildJsonObject {
+                    put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
+                        listOf(JavaAdapterRegistration.create().descriptor) + TreeSitterAdapterDescriptors.descriptors(),
+                    ))
                 })
                 put("executeCommandProvider", buildJsonObject {
                     put("commands", buildJsonArray {

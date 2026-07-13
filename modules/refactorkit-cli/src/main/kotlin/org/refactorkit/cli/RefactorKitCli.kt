@@ -3,6 +3,7 @@ package org.refactorkit.cli
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPreviewRenderer
 import org.refactorkit.core.PatchStatus
@@ -12,6 +13,7 @@ import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.TransactionLogException
+import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
@@ -32,6 +34,7 @@ import org.refactorkit.treesitter.GenericLocalRenamePlanner
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.treesitter.GenericStructuralSearch
 import org.refactorkit.treesitter.TreeSitterAdapter
+import org.refactorkit.treesitter.TreeSitterAdapterDescriptors
 import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
@@ -62,6 +65,7 @@ class RefactorKitCli(
             printVersion(); return 0
         }
         return when (args.first()) {
+            "capabilities"    -> cmdCapabilities()
             "scan"            -> cmdScan(args.drop(1))
             "index"           -> cmdScan(args.drop(1))
             "symbols"         -> cmdSymbols(args.drop(1))
@@ -538,6 +542,13 @@ class RefactorKitCli(
         }
     }
 
+    private fun cmdCapabilities(): Int {
+        println(LanguageCapabilityProtocol.render(
+            listOf(JavaAdapterRegistration.create(javaAdapter).descriptor) + TreeSitterAdapterDescriptors.descriptors(),
+        ))
+        return 0
+    }
+
     // ── outline ───────────────────────────────────────────────────────────────
 
     private fun cmdOutline(args: List<String>): Int {
@@ -652,6 +663,7 @@ class RefactorKitCli(
         Usage:
           refactorkit --help
           refactorkit --version
+          refactorkit capabilities
           refactorkit scan              <path>
           refactorkit symbols           <path>
           refactorkit diagnostics       <path>

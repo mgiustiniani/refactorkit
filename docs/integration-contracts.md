@@ -71,6 +71,7 @@ compatible.
 | CLI command | Status | Contract notes |
 |-------------|--------|----------------|
 | `refactorkit --version` / `refactorkit version` | `beta-contract` | Read-only implementation/API metadata; `v0.3.0` reports version `0.3.0` and API version `0.2`. |
+| `refactorkit capabilities` | `experimental` | Emits language-kernel capability schema v1 with deterministic adapter, backend, operation, evidence, authority, execution, timeout/cancellation, overlay, provenance, and resource-limit fields. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
@@ -103,7 +104,11 @@ stability, evidence (`COMPILER`, `LANGUAGE_SERVER`, `NATIVE_AST`,
 authority cannot be lexical, and a returned plan with weaker evidence is replaced
 by `language.evidenceInsufficient` refusal. `RefactoringEvidence` additively
 includes `LANGUAGE_SERVER` and `NATIVE_AST`; integrations must tolerate unknown
-future enum values under the pre-1.0 compatibility policy.
+future enum values under the pre-1.0 compatibility policy. Capability schema v1
+is exposed by CLI `capabilities`, daemon `server.capabilities.languageKernel`, LSP
+initialize `capabilities.experimental.refactorkitLanguageKernel`, and MCP
+initialize `refactorkitLanguageKernel`. Adapter and operation arrays are sorted;
+nullable limit fields remain explicit.
 
 External LSP processes are internal proposal providers. They run under the
 bounded semantic process lifecycle with explicit environment and provenance,
@@ -152,6 +157,7 @@ read-only discovery metadata:
   discovery. `java.importExternalClass.features` advertises `targetDirectory`,
   rendered/structured diff, virtual preview diagnostics, discard, plan-ID apply,
   and transaction-ID rollback independently of the implementation version;
+- `languageKernel`, the versioned deterministic capability/evidence/runtime schema;
 - `safety`, including `previewBeforeApply`, `snapshotValidation`,
   `transactionRollback`, and `workspaceScopedWrites`.
 

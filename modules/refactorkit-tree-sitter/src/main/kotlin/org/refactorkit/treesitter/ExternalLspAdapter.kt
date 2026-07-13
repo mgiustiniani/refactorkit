@@ -1,6 +1,14 @@
 package org.refactorkit.treesitter
 
+import org.refactorkit.core.AdapterExecutionMode
+import org.refactorkit.core.CapabilityStability
 import org.refactorkit.core.CodeSelection
+import org.refactorkit.core.LanguageAdapterDescriptor
+import org.refactorkit.core.LanguageAdapterResourceLimits
+import org.refactorkit.core.LanguageAdapterRuntime
+import org.refactorkit.core.LanguageCapability
+import org.refactorkit.core.MutationAuthority
+import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.ExternalSemanticProcessManager
 import org.refactorkit.core.ManagedSemanticProcess
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
@@ -655,6 +663,35 @@ class ExternalLspAdapter(
         const val SHUTDOWN_TIMEOUT_MILLIS = 2_000L
         private val PROCESS_SEQUENCE = AtomicInteger(1)
         private val LSP_METHOD = Regex("[A-Za-z0-9_" + '$' + "./-]{1,128}")
+
+        fun descriptor(languageId: String, extensions: Set<String>) = LanguageAdapterDescriptor(
+            languageId = languageId,
+            extensions = extensions,
+            backend = "external-lsp",
+            capabilities = listOf(
+                LanguageCapability("definition", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
+                LanguageCapability("references", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
+                LanguageCapability(
+                    "workspaceEditProposal",
+                    CapabilityStability.EXPERIMENTAL,
+                    SemanticEvidenceKind.LANGUAGE_SERVER,
+                    MutationAuthority.PROPOSAL_ONLY,
+                ),
+            ),
+            runtime = LanguageAdapterRuntime(
+                executionMode = AdapterExecutionMode.EXTERNAL_PROCESS,
+                supportsTimeout = true,
+                supportsCancellation = true,
+                usesWorkspaceOverlay = true,
+                recordsProcessProvenance = true,
+                limits = LanguageAdapterResourceLimits(
+                    requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MILLIS,
+                    maxInputBytes = MAX_FRAME_BYTES.toLong(),
+                    maxOutputBytes = MAX_SESSION_OUTPUT_BYTES,
+                    maxProcesses = org.refactorkit.core.ProtocolLimits.MAX_SEMANTIC_PROCESSES,
+                ),
+            ),
+        )
 
         private fun safeEnvironment(): Map<String, String> = listOf(
             "HOME", "USERPROFILE", "TMPDIR", "TMP", "TEMP", "SystemRoot", "LANG", "LC_ALL",

@@ -26,6 +26,46 @@ enum class MutationAuthority {
     NONE,
 }
 
+enum class AdapterExecutionMode {
+    IN_PROCESS,
+    EXTERNAL_PROCESS,
+}
+
+data class LanguageAdapterResourceLimits(
+    val requestTimeoutMillis: Long? = null,
+    val maxInputBytes: Long? = null,
+    val maxOutputBytes: Long? = null,
+    val maxProcesses: Int? = null,
+) {
+    init {
+        require(requestTimeoutMillis == null || requestTimeoutMillis in 1..300_000)
+        require(maxInputBytes == null || maxInputBytes in 1..4L * 1024L * 1024L * 1024L)
+        require(maxOutputBytes == null || maxOutputBytes in 1..4L * 1024L * 1024L * 1024L)
+        require(maxProcesses == null || maxProcesses in 1..64)
+    }
+}
+
+data class LanguageAdapterRuntime(
+    val executionMode: AdapterExecutionMode = AdapterExecutionMode.IN_PROCESS,
+    val supportsTimeout: Boolean = false,
+    val supportsCancellation: Boolean = false,
+    val usesWorkspaceOverlay: Boolean = false,
+    val recordsProcessProvenance: Boolean = false,
+    val limits: LanguageAdapterResourceLimits = LanguageAdapterResourceLimits(),
+) {
+    init {
+        require(executionMode == AdapterExecutionMode.EXTERNAL_PROCESS || !recordsProcessProvenance) {
+            "in-process adapters cannot claim process provenance"
+        }
+        require(!usesWorkspaceOverlay || executionMode == AdapterExecutionMode.EXTERNAL_PROCESS) {
+            "workspace overlays are an external-process boundary"
+        }
+        require(!supportsTimeout || limits.requestTimeoutMillis != null) {
+            "timeout support requires a declared request timeout"
+        }
+    }
+}
+
 data class LanguageCapability(
     val operation: String,
     val stability: CapabilityStability,
@@ -49,6 +89,7 @@ data class LanguageAdapterDescriptor(
     val extensions: Set<String>,
     val backend: String,
     val capabilities: List<LanguageCapability>,
+    val runtime: LanguageAdapterRuntime = LanguageAdapterRuntime(),
 ) {
     init {
         require(LANGUAGE_ID.matches(languageId)) { "language ID must be canonical lowercase kebab-case" }

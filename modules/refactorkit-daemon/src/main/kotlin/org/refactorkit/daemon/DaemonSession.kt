@@ -20,6 +20,7 @@ import org.refactorkit.core.FileChangeKind
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.PatchDiffRenderer
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
@@ -40,7 +41,9 @@ import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaImportTargetResolution
 import org.refactorkit.java.JavaImportTargetResolver
+import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.treesitter.TreeSitterAdapterDescriptors
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -119,6 +122,9 @@ class DaemonSession : AutoCloseable {
                 })
             }
         })
+        put("languageKernel", LanguageCapabilityProtocol.render(
+            listOf(JavaAdapterRegistration.create().descriptor) + TreeSitterAdapterDescriptors.descriptors(),
+        ))
         put("safety", buildJsonObject {
             put("previewBeforeApply", true)
             put("snapshotValidation", true)

@@ -66,6 +66,10 @@ class LspSessionTest {
         assertTrue(capabilities["semanticTokensProvider"]!!.jsonObject["legend"]!!.jsonObject["tokenTypes"]!!.jsonArray.isNotEmpty())
         assertEquals("refactorkit", capabilities["diagnosticProvider"]!!.jsonObject["identifier"]!!.jsonPrimitive.content)
         assertEquals("true", capabilities["documentFormattingProvider"]!!.jsonPrimitive.content)
+        val languageKernel = capabilities["experimental"]!!.jsonObject["refactorkitLanguageKernel"]!!.jsonObject
+        assertEquals(listOf("java", "javascript", "typescript"), languageKernel["adapters"]!!.jsonArray.map {
+            it.jsonObject["languageId"]!!.jsonPrimitive.content
+        })
         val commands = capabilities["executeCommandProvider"]!!.jsonObject["commands"]!!.jsonArray
             .map { it.jsonPrimitive.content }
         assertTrue(commands.contains("refactorkit.extractMethod"))

@@ -1,5 +1,9 @@
 package org.refactorkit.cli
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.refactorkit.core.RefactorKitVersion
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
@@ -21,6 +25,7 @@ class RefactorKitCliTest {
         assertEquals(0, result.code)
         assertTrue(result.stdout.contains("RefactorKit ${RefactorKitVersion.VERSION}"))
         assertTrue(result.stdout.contains("refactorkit --version"))
+        assertTrue(result.stdout.contains("refactorkit capabilities"))
         assertTrue(result.stdout.contains("refactorkit java import-class"))
         assertTrue(result.stdout.contains("refactorkit java move-source-root"))
         assertTrue(result.stdout.contains("refactorkit format-file"))
@@ -34,6 +39,17 @@ class RefactorKitCliTest {
         assertEquals(0, result.code)
         assertTrue(result.stdout.contains(RefactorKitVersion.VERSION))
         assertTrue(result.stdout.contains("API ${RefactorKitVersion.API_VERSION}"))
+    }
+
+    @Test
+    fun capabilitiesPrintsVersionedLanguageKernelSchema() {
+        val result = captureStdout { RefactorKitCli().run(listOf("capabilities")) }
+        assertEquals(0, result.code)
+        val schema = Json.parseToJsonElement(result.stdout.trim()).jsonObject
+        assertEquals("1", schema["schemaVersion"]!!.jsonPrimitive.content)
+        assertEquals(listOf("java", "javascript", "typescript"), schema["adapters"]!!.jsonArray.map {
+            it.jsonObject["languageId"]!!.jsonPrimitive.content
+        })
     }
 
     @Test

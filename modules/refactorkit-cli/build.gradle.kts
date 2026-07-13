@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":modules:refactorkit-daemon"))
     implementation(project(":modules:refactorkit-tree-sitter"))
     implementation(project(":modules:refactorkit-testkit"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }
 

@@ -58,6 +58,7 @@ class DaemonSessionTest {
         val methods = result["methods"]!!.jsonArray.map { it.jsonObject }
         val byName = methods.associateBy { it["name"]!!.jsonPrimitive.content }
         val safety = result["safety"]!!.jsonObject
+        val languageKernel = result["languageKernel"]!!.jsonObject
 
         assertEquals(RefactorKitVersion.API_VERSION, result["apiVersion"]!!.jsonPrimitive.content)
         assertEquals("json-rpc-2.0", result["protocol"]!!.jsonPrimitive.content)
@@ -86,6 +87,10 @@ class DaemonSessionTest {
         assertEquals("false", byName["server.version"]!!["requiresProject"]!!.jsonPrimitive.content)
         assertEquals("true", safety["previewBeforeApply"]!!.jsonPrimitive.content)
         assertEquals("true", safety["transactionRollback"]!!.jsonPrimitive.content)
+        assertEquals("1", languageKernel["schemaVersion"]!!.jsonPrimitive.content)
+        assertEquals(listOf("java", "javascript", "typescript"), languageKernel["adapters"]!!.jsonArray.map {
+            it.jsonObject["languageId"]!!.jsonPrimitive.content
+        })
     }
 
     @Test

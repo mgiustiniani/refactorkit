@@ -260,6 +260,8 @@ BuildModelProvider
 LanguageAdapterRegistry
 LanguageAdapterDescriptor
 LanguageCapability
+LanguageAdapterRuntime
+LanguageCapabilityProtocol
 ExternalSemanticProcessManager
 SemanticProcessSpec
 SemanticProcessProvenance

@@ -28,6 +28,11 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Added language-kernel capability schema v1 and exposed it deterministically via
+  CLI `capabilities`, daemon `server.capabilities`, LSP experimental initialize
+  capabilities, and MCP initialize. It reports backend, operation stability,
+  evidence, mutation authority, execution mode, timeout/cancellation, overlays,
+  process-provenance support, and nullable resource limits.
 - Replaced the Tree-sitter stub for `.ts`/`.js` with packaged real JNI 0.25.3
   TypeScript/JavaScript grammars on every native runtime target. Native bounded
   parse trees now drive outlines and identifier search while excluding
