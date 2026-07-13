@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileChangeKind
@@ -32,7 +33,11 @@ import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RollbackMode
+import org.refactorkit.core.SourceLocation
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
 import org.refactorkit.core.SymbolId
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
@@ -46,6 +51,14 @@ import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
+import org.refactorkit.typescript.TypeScriptProjectModelBuilder
+import org.refactorkit.typescript.TypeScriptSemanticAdapter
+import org.refactorkit.typescript.TypeScriptSemanticStart
+import org.refactorkit.typescript.TypeScriptSemanticToolchain
+import org.refactorkit.typescript.TypeScriptToolchainDiscoverer
+import org.refactorkit.typescript.TypeScriptToolchainDiscovery
+import org.refactorkit.typescript.TypeScriptToolchainDiscoveryPolicy
+import org.refactorkit.typescript.TypeScriptToolchainRequest
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -67,12 +80,18 @@ import java.nio.file.Paths
  * One session per daemon process. Each call is synchronous; the stdio loop
  * serialises concurrent requests naturally.
  */
-class DaemonSession : AutoCloseable {
+class DaemonSession(
+    private val toolchainDiscovery: (TypeScriptToolchainRequest, TypeScriptToolchainDiscoveryPolicy) -> TypeScriptToolchainDiscovery =
+        { request, policy -> TypeScriptToolchainDiscoverer(policy).discover(request) },
+    private val semanticAdapterFactory: (String, TypeScriptSemanticToolchain, org.refactorkit.typescript.TypeScriptProjectModel) -> TypeScriptSemanticAdapter =
+        { languageId, toolchain, model -> TypeScriptSemanticAdapter(languageId, toolchain, model) },
+) : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
     private var scanner = JavaProjectScanner()
 
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var workspaceRoot: Path? = null
+    private val semanticAdapters = linkedMapOf<String, TypeScriptSemanticAdapter>()
 
     private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
@@ -85,6 +104,8 @@ class DaemonSession : AutoCloseable {
         "server.capabilities" -> serverCapabilities()
         "project.open"        -> projectOpen(params)
         "project.summary"   -> projectSummary()
+        "typescript.semantic.start" -> typeScriptSemanticStart(params)
+        "typescript.semantic.stop" -> typeScriptSemanticStop(params)
         "symbol.search"     -> symbolSearch(params)
         "symbol.definition" -> symbolDefinition(params)
         "symbol.references" -> symbolReferences(params)
@@ -136,6 +157,7 @@ class DaemonSession : AutoCloseable {
     }
 
     private fun projectOpen(params: JsonObject?): JsonElement {
+        closeSemanticAdapters()
         pendingPlans.clear()
         snapshot = null
         workspaceRoot = null
@@ -281,7 +303,9 @@ class DaemonSession : AutoCloseable {
     private fun symbolSearch(params: JsonObject?): JsonElement {
         val query = params?.string("query") ?: ""
         val snap = requireSnapshot()
-        val results = adapter.searchSymbols(snap, query)
+        val languageId = params?.string("languageId") ?: "java"
+        val results = if (languageId == "java") adapter.searchSymbols(snap, query) else
+            requireSemanticAdapter(languageId).buildSymbols(snap).search(query)
         return buildJsonArray {
             results.take(200).forEach { sym ->
                 add(buildJsonObject {
@@ -298,8 +322,10 @@ class DaemonSession : AutoCloseable {
     private fun symbolDefinition(params: JsonObject?): JsonElement {
         val symbolId = params?.string("symbol") ?: missing("symbol")
         val snap = requireSnapshot()
-        val symbol = adapter.findSymbol(snap, SymbolId(symbolId))
-            ?: throw JsonRpcException(JsonRpcErrorCodes.SYMBOL_NOT_FOUND, "Symbol not found: $symbolId")
+        val languageId = params?.string("languageId") ?: "java"
+        val symbol = if (languageId == "java") adapter.findSymbol(snap, SymbolId(symbolId)) else
+            requireSemanticAdapter(languageId).buildSymbols(snap).symbols.singleOrNull { it.id == SymbolId(symbolId) }
+        symbol ?: throw JsonRpcException(JsonRpcErrorCodes.SYMBOL_NOT_FOUND, "Symbol not found: $symbolId")
         return buildJsonObject {
             put("id", symbol.id.value)
             put("name", symbol.name)
@@ -312,9 +338,15 @@ class DaemonSession : AutoCloseable {
 
     private fun symbolReferences(params: JsonObject?): JsonElement {
         val symbolId = params?.string("symbol") ?: missing("symbol")
-        val refs = adapter.findReferences(requireSnapshot(), SymbolId(symbolId))
+        val snap = requireSnapshot()
+        val languageId = params?.string("languageId") ?: "java"
+        val refs = if (languageId == "java") adapter.findReferences(snap, SymbolId(symbolId)) else {
+            val semantic = requireSemanticAdapter(languageId)
+            semantic.buildSymbols(snap)
+            semantic.findReferences(SymbolId(symbolId))
+        }
         return buildJsonArray {
-            refs.forEach { ref ->
+            refs.take(ProtocolLimits.MAX_REFERENCE_RESULTS).forEach { ref ->
                 add(buildJsonObject {
                     put("file", ProtocolPath.serialize(ref.location.path))
                     put("line", ref.location.range.start.line + 1)
@@ -327,7 +359,9 @@ class DaemonSession : AutoCloseable {
     private fun diagnostics(params: JsonObject?): JsonElement {
         val snap = requireSnapshot()
         val verbose = params?.string("verbose")?.toBooleanStrictOrNull() ?: false
-        val diags = adapter.diagnostics(snap, verbose)
+        val languageId = params?.string("languageId") ?: "java"
+        val diags = if (languageId == "java") adapter.diagnostics(snap, verbose) else
+            requireSemanticAdapter(languageId).diagnostics(snap)
         return buildJsonArray {
             diags.forEach { d ->
                 add(buildJsonObject {
@@ -349,12 +383,40 @@ class DaemonSession : AutoCloseable {
         val p = params ?: missing("params")
         val operation = p.string("operation") ?: missing("operation")
         val symbol = p.string("symbol")
+        val requestedLanguage = p.string("languageId") ?: "java"
         val args = (p["arguments"] as? JsonObject)?.let { obj ->
             obj.entries.associate { (k, v) -> k to (v as? JsonPrimitive)?.content.orEmpty() }
         } ?: emptyMap()
 
         val snap = requireSnapshot()
         val plan = when (operation) {
+            "renameSymbol" -> {
+                if (requestedLanguage == "java") {
+                    throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "renameSymbol requires typescript or javascript languageId")
+                }
+                val semantic = requireSemanticAdapter(requestedLanguage)
+                val indexed = semantic.buildSymbols(snap)
+                val selectedSymbol = symbol?.let { requested -> indexed.symbols.singleOrNull { it.id.value == requested } }
+                val location = selectedSymbol?.location ?: run {
+                    val file = args["file"] ?: missing("arguments.file")
+                    val line = args["line"]?.toIntOrNull() ?: missing("arguments.line")
+                    val character = args["character"]?.toIntOrNull() ?: missing("arguments.character")
+                    if (line < 0 || character < 0) {
+                        throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Rename coordinates must be non-negative")
+                    }
+                    SourceLocation(
+                        Paths.get(file),
+                        SourceRange(SourcePosition(line, character), SourcePosition(line, character)),
+                    )
+                }
+                semantic.applyRefactoring(RefactoringRequest(
+                    operation = "renameSymbol",
+                    symbolId = selectedSymbol?.id,
+                    selection = CodeSelection(location),
+                    arguments = args,
+                    snapshot = snap,
+                ))
+            }
             "renameClass" -> {
                 val newName = args["newName"] ?: missing("arguments.newName")
                 JavaRenameClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), newName)
@@ -420,7 +482,7 @@ class DaemonSession : AutoCloseable {
                 buildJsonObject { plan.refusalCode?.let { put("refusalCode", it) } },
             )
         }
-        pendingPlans[plan.id.value] = PendingPlan(plan)
+        pendingPlans[plan.id.value] = PendingPlan(plan, languageId = requestedLanguage)
         return planToJson(plan)
     }
 
@@ -441,11 +503,15 @@ class DaemonSession : AutoCloseable {
             plan,
             currentSnap,
             ApplyAuthorization.explicit("daemon-json-rpc"),
-            DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+            if (pending.languageId == "java") DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
+            else requireSemanticAdapter(pending.languageId).diagnosticsGate(),
         )) {
             is ApplyResult.Applied -> {
                 val refreshed = scanWorkspace(root)
-                val diagnostics = boundedDiagnostics(adapter.diagnostics(refreshed))
+                val diagnostics = boundedDiagnostics(
+                    if (pending.languageId == "java") adapter.diagnostics(refreshed) else emptyList(),
+                )
+                closeSemanticAdapters()
                 snapshot = refreshed
                 pendingPlans.clear()
                 val primary = pending.importPreview?.primaryFile
@@ -547,7 +613,94 @@ class DaemonSession : AutoCloseable {
         }
     }
 
+    private fun typeScriptSemanticStart(params: JsonObject?): JsonElement {
+        val p = params ?: missing("params")
+        val snap = requireSnapshot()
+        val root = workspaceRoot ?: error("workspace root missing")
+        val languageId = p.string("languageId") ?: "typescript"
+        if (languageId !in setOf("typescript", "javascript")) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "languageId must be typescript or javascript")
+        }
+        if (semanticAdapters[languageId]?.let { true } == true) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Semantic adapter is already configured for $languageId")
+        }
+        fun configuredPath(name: String): Path? = p.string(name)?.let { raw ->
+            val candidate = Paths.get(raw)
+            if (candidate.isAbsolute) candidate.normalize() else root.resolve(candidate).normalize()
+        }
+        val policy = TypeScriptToolchainDiscoveryPolicy(
+            allowPathNodeDiscovery = p.string("allowPathNodeDiscovery")?.toBooleanStrictOrNull() ?: false,
+            allowWorkspaceLocalToolchain = p.string("allowWorkspaceLocalToolchain")?.toBooleanStrictOrNull() ?: false,
+        )
+        val discovery = toolchainDiscovery(TypeScriptToolchainRequest(
+            workspaceRoot = root,
+            nodeExecutable = configuredPath("nodeExecutable"),
+            languageServerPackageRoot = configuredPath("languageServerPackageRoot"),
+            typeScriptPackageRoot = configuredPath("typeScriptPackageRoot"),
+        ), policy)
+        val toolchain = when (discovery) {
+            is TypeScriptToolchainDiscovery.Available -> discovery.toolchain
+            is TypeScriptToolchainDiscovery.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                discovery.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" },
+            )
+        }
+        val model = TypeScriptProjectModelBuilder().build(root)
+        val semantic = semanticAdapterFactory(languageId, toolchain, model)
+        when (val started = semantic.start(snap)) {
+            is TypeScriptSemanticStart.Refused -> {
+                semantic.close()
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS,
+                    started.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" },
+                )
+            }
+            is TypeScriptSemanticStart.Started -> {
+                semanticAdapters[languageId] = semantic
+                return buildJsonObject {
+                    put("languageId", languageId)
+                    put("status", "started")
+                    put("completeness", semantic.semanticCompleteness().mode.name.lowercase().replace('_', '-'))
+                    started.provenance?.let { provenance ->
+                        put("serverName", provenance.serverName ?: "")
+                        put("serverVersion", provenance.serverVersion ?: "")
+                        put("capabilitiesSha256", provenance.capabilitiesSha256)
+                        put("executableSha256", provenance.process.executableSha256)
+                        put("argumentsSha256", provenance.process.argumentsSha256)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun typeScriptSemanticStop(params: JsonObject?): JsonElement {
+        val languageId = params?.string("languageId") ?: "typescript"
+        val stopped = semanticAdapters.remove(languageId)?.let {
+            it.close()
+            true
+        } ?: false
+        return buildJsonObject {
+            put("languageId", languageId)
+            put("stopped", stopped)
+        }
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private fun closeSemanticAdapters() {
+        semanticAdapters.values.forEach { runCatching { it.close() } }
+        semanticAdapters.clear()
+    }
+
+    private fun requireSemanticAdapter(languageId: String): TypeScriptSemanticAdapter {
+        if (languageId !in setOf("typescript", "javascript")) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unsupported semantic languageId: $languageId")
+        }
+        return semanticAdapters[languageId] ?: throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "Semantic adapter for $languageId is not started; call typescript.semantic.start",
+        )
+    }
 
     private fun requireSnapshot(): ProjectSnapshot =
         snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open. Call project.open first.")
@@ -849,12 +1002,17 @@ class DaemonSession : AutoCloseable {
     }
 
     override fun close() {
+        closeSemanticAdapters()
         pendingPlans.clear()
         snapshot = null
         workspaceRoot = null
     }
 
-    private data class PendingPlan(val plan: PatchPlan, val importPreview: ExternalImportPreview? = null)
+    private data class PendingPlan(
+        val plan: PatchPlan,
+        val importPreview: ExternalImportPreview? = null,
+        val languageId: String = "java",
+    )
 
     private data class DaemonMethodCapability(
         val name: String,
@@ -888,6 +1046,11 @@ class DaemonSession : AutoCloseable {
                     "executionRefusedStatus" to true,
                 ),
             ),
+            DaemonMethodCapability(
+                "typescript.semantic.start", "experimental", true, false,
+                mapOf("explicitToolchain" to true, "hashBoundProvenance" to true, "noPackageScripts" to true),
+            ),
+            DaemonMethodCapability("typescript.semantic.stop", "experimental", true, false),
             DaemonMethodCapability("symbol.search", "beta-contract", true, false),
             DaemonMethodCapability("symbol.definition", "beta-contract", true, false),
             DaemonMethodCapability("symbol.references", "beta-contract", true, false),

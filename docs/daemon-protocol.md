@@ -70,6 +70,32 @@ canonical protocol statuses `available`, `partial`, `offline-missing`,
 `unavailable`, and `execution-refused`. See
 [Build Model SPI](build-model.md).
 
+## Experimental TypeScript/JavaScript semantic session
+
+After `project.open`, callers may start one explicit language session:
+
+```json
+{"jsonrpc":"2.0","id":20,"method":"typescript.semantic.start","params":{"languageId":"typescript","nodeExecutable":"/tools/node","languageServerPackageRoot":"/tools/typescript-language-server","typeScriptPackageRoot":"/tools/typescript"}}
+```
+
+No PATH lookup or workspace-local executable/package root is accepted unless the
+corresponding explicit boolean policy is supplied. The response reports bounded
+server/capability/executable/argument hashes and semantic completeness, never raw
+arguments or environment values. `typescript.semantic.stop` is idempotent.
+
+Once started, `symbol.search`, `symbol.definition`, `symbol.references`, and
+`diagnostics` accept `languageId=typescript|javascript`. Semantic rename uses:
+
+```json
+{"jsonrpc":"2.0","id":21,"method":"refactor.preview","params":{"operation":"renameSymbol","languageId":"typescript","symbol":"src/service.ts::Service@0:13","arguments":{"newName":"AccountService"}}}
+```
+
+A caller may provide zero-based `arguments.file`, `arguments.line`, and
+`arguments.character` instead of `symbol`. Preview remains non-writing. Apply
+uses the retained language-specific exact diagnostics gate, explicit daemon
+authorization, `PatchEngine`, WAL and rollback. A successful apply closes semantic
+sessions because their original snapshot is stale.
+
 ## Maven reactor and source-root relocation
 
 `project.open` builds Maven effective models offline and does not execute plugins.

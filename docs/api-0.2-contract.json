@@ -26,6 +26,9 @@
        "features": {"buildModelSummary": true, "sourceSets": true, "credentialRedaction": true,
                     "boundedBuildModelSummary": true, "typedBuildModelSchema": true,
                     "offlineMissingStatus": true, "executionRefusedStatus": true}},
+      {"name": "typescript.semantic.start", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
+       "features": {"explicitToolchain": true, "hashBoundProvenance": true, "noPackageScripts": true}},
+      {"name": "typescript.semantic.stop", "stability": "experimental", "requiresProject": true, "writesWorkspace": false},
       {"name": "symbol.search", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
       {"name": "symbol.definition", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
       {"name": "symbol.references", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
@@ -42,7 +45,7 @@
       "renameClass", "renameMember", "extractMethod",
       "changeSignature.renameParameter", "changeSignature.addParameter",
       "changeSignature.reorderParameters", "changeSignature.removeParameter",
-      "moveClass", "moveSourceRoot", "organizeImports", "formatFile", "safeDelete"
+      "moveClass", "moveSourceRoot", "organizeImports", "formatFile", "safeDelete", "renameSymbol"
     ]
   },
   "languageKernel": {

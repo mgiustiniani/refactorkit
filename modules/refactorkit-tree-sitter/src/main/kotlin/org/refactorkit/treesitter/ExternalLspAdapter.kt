@@ -339,7 +339,7 @@ class ExternalLspAdapter(
         ) ?: return emptyList()
 
         val resultJson = LspJson.extractField(response, "result") ?: return emptyList()
-        return LspJson.parseLocations(resultJson).map { lspLoc ->
+        return LspJson.parseLocations(resultJson).take(org.refactorkit.core.ProtocolLimits.MAX_REFERENCE_RESULTS).map { lspLoc ->
             Reference(
                 symbolId = symbolId,
                 location = SourceLocation(
