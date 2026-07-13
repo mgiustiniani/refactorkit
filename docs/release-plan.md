@@ -22,18 +22,18 @@ Published tags are immutable. Historical detailed plans remain under
 
 ## Latest release line
 
-### `v0.6.1` — managed TypeScript/JavaScript semantic foundation
+### `v0.6.2` — managed TypeScript/JavaScript semantic foundation
 
 Detailed plan: [`docs/releases/v0.6.0-plan.md`](releases/v0.6.0-plan.md).
 
-`v0.6.1` publishes the completed `v0.6.0` scope: explicit hash-bound TypeScript tooling, declarative project models,
+`v0.6.2` publishes the completed `v0.6.0` scope: explicit hash-bound TypeScript tooling, declarative project models,
 compiler/LSP semantic reads, stable opaque symbol identity, exact no-emit compiler
 diagnostics, managed identifier rename, native apply/WAL/rollback, semantic
 process restart and packaged kill-during-write startup recovery. API `0.2` remains
 the active beta compatibility baseline.
 
 Acceptance and migration evidence are recorded in
-[`docs/releases/v0.6.1-acceptance.md`](releases/v0.6.1-acceptance.md) and
+[`docs/releases/v0.6.2-acceptance.md`](releases/v0.6.2-acceptance.md) and
 [`docs/releases/v0.6.0-migration.md`](releases/v0.6.0-migration.md). Advanced
 TypeScript move/import/signature/extraction/recipe operations are explicitly
 post-`v0.6.0` scope.

@@ -9,11 +9,17 @@ review safety boundaries before applying refactorings.
 
 No changes yet.
 
-## 0.6.1 - 2026-07-13
+## 0.6.2 - 2026-07-14
 
-- Publication patch for the completed `v0.6.0` feature scope. Separates release
-  `clean build` from package/native smoke after the immutable `v0.6.0` tag's
-  Windows job failed before asset publication. No API or product semantics change.
+- Publication patch for the completed `v0.6.0` feature scope. Release builders
+  use the same successful fresh-checkout `build` invocation as branch CI and keep
+  package/native smoke separate. No API or product semantics change.
+
+## 0.6.1 - 2026-07-13 (tagged, not published)
+
+- First publication patch separated package/native smoke, but its Windows tag job
+  still failed in a `clean build` invocation before assets were published. The
+  immutable tag is retained and superseded by `v0.6.2`.
 
 ## 0.6.0 - 2026-07-13 (tagged, not published)
 

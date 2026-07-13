@@ -60,8 +60,8 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Clean build and test
-        run: ${{ matrix.gradle }} clean build --no-daemon
+      - name: Build and test from fresh checkout
+        run: ${{ matrix.gradle }} build --no-daemon
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
