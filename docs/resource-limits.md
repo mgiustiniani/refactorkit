@@ -43,6 +43,16 @@ module dependencies per source set, and 500 typed model diagnostics. Every level
 that can truncate carries an explicit flag and the response includes the active
 limits. Ordering is deterministic before truncation.
 
+## External semantic process limits
+
+The core manager defaults to at most 8 concurrent external semantic processes
+(configurable only within 1..64), 128 arguments of at most 4,096 characters, and
+32 explicit environment entries of at most 8,192 characters. Default output
+limits are 64 MiB total stdout and 64 KiB captured stderr; configurable stream
+limits cannot exceed 512 MiB. Graceful shutdown is bounded to 1..30 seconds before
+forced process-tree termination. Raw arguments and environment values are not
+included in provenance.
+
 ## Cancellation
 
 The `v0.4.0` daemon and MCP request loops are synchronous and do not advertise

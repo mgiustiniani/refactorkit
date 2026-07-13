@@ -81,10 +81,17 @@ Implemented in `modules/refactorkit-tree-sitter`.
 
 ## Level 2: LSP-backed (future)
 
-The `ExternalLspAdapter` is the prototype integration point. Production support
-requires a bounded semantic-process manager for lifecycle, capability negotiation,
-overlays, versions, timeout, cancellation, restart, output limits, provenance,
-and shutdown. External workspace edits are untrusted proposals normalized into
+The `ExternalLspAdapter` is the prototype integration point.
+`ExternalSemanticProcessManager` now provides the core bounded lifecycle:
+executable/argument provenance hashes, cleared explicit environment, process
+capacity, bounded stdout/stderr, natural-exit cleanup, cancellation, and
+process-tree termination. See
+[`external-semantic-processes.md`](external-semantic-processes.md).
+
+Production adapter support still requires controlled workspace overlays,
+capability/version negotiation, framed request timeout/cancellation, restart,
+response limits, and schema exposure. The lifecycle primitive is explicitly not
+an OS sandbox. External workspace edits are untrusted proposals normalized into
 `PatchPlan`; they never bypass `PatchEngine`.
 
 LSP establishes navigation, native formatting, and common-edit foundations, but

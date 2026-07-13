@@ -28,6 +28,13 @@ review safety boundaries before applying refactorings.
   LRU/EOF lifecycle, conservative unknown-license risk, and timeout-bounded
   packaged daemon smoke from paths containing spaces. Golden comparison paths
   and repository line endings are normalized for native Windows acceptance.
+- Added P4 `ExternalSemanticProcessManager`: bounded process count/arguments/
+  explicit environment, secret-shaped environment-key refusal, executable and
+  argument provenance hashes, pre/post-launch executable drift detection,
+  counting stdout, concurrently drained/truncated stderr, natural-exit cleanup,
+  idempotent cancellation, and graceful-then-forced descendant process-tree
+  termination. The lifecycle primitive is explicitly not a sandbox or mutation
+  authority.
 - Started P4 with a bounded core `LanguageAdapterRegistry`, canonical adapter
   descriptors, unique language/extension ownership, deterministic mixed-language
   symbol/diagnostic aggregation, selection/symbol/explicit-language routing,

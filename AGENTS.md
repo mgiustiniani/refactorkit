@@ -260,6 +260,9 @@ BuildModelProvider
 LanguageAdapterRegistry
 LanguageAdapterDescriptor
 LanguageCapability
+ExternalSemanticProcessManager
+SemanticProcessSpec
+SemanticProcessProvenance
 SourceFile
 TextEdit
 FileEdit
