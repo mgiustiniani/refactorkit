@@ -8,7 +8,7 @@ Status: confirmed. The baseline was approved on 2026-07-10; publication progress
 
 RefactorKit is a deterministic refactoring and code-intelligence engine for safe, previewable, rollbackable code transformations.
 
-The first supported language is Java. The Java adapter works with Java 8-era projects while understanding Java language/source constructs and type forms through Java 25. Java is the reference and widest catalogue, while the long-range product target provides equivalent IDE-grade semantic safety and idiomatic depth for TypeScript/JavaScript, the JVM language family, Python, Go, C/C++, C#, Rust, and Clojure without coupling language-specific logic into the core engine.
+The first supported language is Java. The Java adapter works with Java 8-era projects while understanding Java language/source constructs and type forms through Java 25. Java is the reference and widest catalogue, while the long-range product target provides equivalent IDE-grade semantic safety and idiomatic depth for TypeScript/JavaScript, the JVM language family, Python, Go, C/C++, Objective-C, Swift, C#, Rust, and Clojure without coupling language-specific logic into the core engine.
 
 RefactorKit is intended to replace fragile direct text edits, especially in AI-assisted development workflows, with deterministic semantic operations and patch previews.
 
@@ -108,4 +108,4 @@ Status: implementation-informed from `AGENTS.md`.
 
 == Confirmation Record
 
-The user explicitly approved this chapter proposal on 2026-07-10 and confirmed `v0.3.0` publication on 2026-07-11. On 2026-07-12, the user superseded the immediate Java-focused RC sequence: main returns to `0.4.0`, Java remains the reference/widest adapter, other mature ecosystems target equivalent IDE-grade depth, C/C++ receive component/path/build/namespace-aware equivalents, and stable `1.0` follows Clojure integration plus global acceptance.
+The user explicitly approved this chapter proposal on 2026-07-10 and confirmed `v0.3.0` publication on 2026-07-11. On 2026-07-12, the user superseded the immediate Java-focused RC sequence: main returns to `0.4.0`, Java remains the reference/widest adapter, other mature ecosystems target equivalent IDE-grade depth, C/C++/Objective-C receive Clang-backed component/path/build/language-aware equivalents, Swift receives compiler/SourceKit-LSP/SwiftSyntax and SwiftPM/Xcode support, and stable `1.0` follows Clojure integration plus global acceptance.

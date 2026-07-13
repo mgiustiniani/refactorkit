@@ -20,10 +20,11 @@ See individual docs/ files for each subsystem.
 
 ## Active evolution
 
-`v0.4.0` publishes the hardened Java/transaction foundation. The long-range
-`v1.0.0` roadmap evolves the language-neutral core into a deep multi-language
-platform rather than freezing a Java-only stable API. Java remains the reference
-and widest catalogue; TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++,
+`v0.5.0` publishes the cross-platform runtime and first multi-language kernel on
+the hardened Java/transaction foundation. The long-range `v1.0.0` roadmap evolves
+the language-neutral core into a deep multi-language platform rather than
+freezing a Java-only stable API. Java remains the reference and widest catalogue;
+TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Objective-C, Swift,
 Groovy, C#, Rust, and Clojure receive compiler/language-server-backed idiomatic
 catalogues and deterministic project-style-aware formatters with the same preview,
 evidence, diagnostics, managed apply, rollback, and bounded-resource standards.

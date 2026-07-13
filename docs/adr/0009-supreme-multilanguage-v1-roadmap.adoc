@@ -15,8 +15,8 @@ The desired product is not one deep Java adapter plus shallow wrappers. Java is
 the first, reference, and likely widest catalogue, while other mature ecosystems
 must receive equivalent IDE-grade quality through idiomatic operations. JVM
 languages and C# are top-tier deep targets; TypeScript/JavaScript, Python, Go,
-C/C++, Rust, and Clojure likewise require the strongest practical semantic
-backend and explicit uncertainty boundaries.
+C/C++, Objective-C, Swift, Rust, and Clojure likewise require the strongest
+practical semantic backend and explicit uncertainty boundaries.
 
 C and C++ illustrate why semantic equivalence cannot mean identical syntax. C++
 has namespaces; C does not. A package-equivalent operation may instead relocate a
@@ -30,7 +30,8 @@ Directory layout must never be silently equated with a language namespace.
 . `v0.4.0` publishes current transaction, Java semantic, diagnostics, protocol,
   resource, packaging, and documentation hardening without freezing API `1.0`.
 . Subsequent `0.x` releases build the multi-language kernel and deep adapters for
-  TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Groovy, C#, and Rust.
+  TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Objective-C, Swift,
+  Groovy, C#, and Rust.
 . Clojure is the final planned language integration before the `1.0` stabilization
   cycle.
 . Java depth advances continuously and remains the reference/widest catalogue.
@@ -56,7 +57,8 @@ Directory layout must never be silently equated with a language namespace.
   than retrofitted around Java assumptions.
 * Java can pursue an IntelliJ/Eclipse-grade catalogue without making other
   languages second-class.
-* JVM interoperability, Roslyn, Clang translation-unit/component semantics, and
+* JVM interoperability, Roslyn, Clang translation-unit/component and
+  Objective-C runtime semantics, Swift/SourceKit/Xcode project semantics, and
   dynamic-language evidence become first-class architectural inputs.
 * The `0.x` series can evolve capabilities honestly while preserving explicit
   compatibility and migration notes.
@@ -82,3 +84,14 @@ Directory layout must never be silently equated with a language namespace.
   artificial parity.
 * Changes to the target language set or the Clojure-final integration milestone
   require an explicit roadmap decision and ADR update.
+
+== Amendment 2026-07-13: Objective-C and Swift
+
+The product owner added Objective-C and Swift to the mandatory pre-`1.0` target
+set. Objective-C joins the `0.11.x` Clang-family band while retaining an
+independent capability matrix for selectors, protocols, categories, ARC,
+nullability, runtime dispatch, Xcode metadata and Objective-C++ boundaries. Swift
+receives a dedicated `0.12.x` band based on compiler/SourceKit-LSP, SwiftSyntax,
+SwiftPM and bounded declarative Xcode models, including Objective-C bridging.
+Groovy, C# and Rust shift to `0.13.x`, `0.14.x` and `0.15.x`. Clojure remains the
+final planned language integration before global `1.0` stabilization.

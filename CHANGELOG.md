@@ -11,6 +11,10 @@ review safety boundaries before applying refactorings.
 
 - Begin the TypeScript/JavaScript semantic adapter band on top of the published
   `v0.5.0` kernel; no new stable capability is claimed yet.
+- Add Objective-C/Objective-C++ to the shared Clang roadmap band and Swift to a
+  dedicated compiler/SourceKit-LSP/SwiftSyntax plus SwiftPM/Xcode band. Both are
+  mandatory pre-`1.0` targets with independent capability and interoperability
+  acceptance gates.
 
 ## 0.5.0 - 2026-07-13
 

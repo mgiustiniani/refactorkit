@@ -1775,17 +1775,25 @@ RefactorKit Core
 
 Implement native semantic adapters only for languages where deeper refactoring is required.
 
-Recommended order:
+Roadmap order after the shared kernel:
 
 ```text
-1. Java
-2. TypeScript
+1. TypeScript / JavaScript
+2. Kotlin
 3. Python
-4. Kotlin
-5. C#
-6. Go
-7. Rust
+4. Go
+5. Scala
+6. C / C++ / Objective-C through shared Clang infrastructure
+7. Swift with SwiftPM/Xcode and Objective-C interoperability
+8. Groovy
+9. C#
+10. Rust
+11. Clojure, followed by global 1.0 stabilization
 ```
+
+Objective-C and Objective-C++ retain capability matrices distinct from C/C++.
+Swift uses compiler/SourceKit-LSP/SwiftSyntax evidence and must model bridging
+boundaries explicitly. No language is promoted from parsing or LSP rename alone.
 
 ---
 

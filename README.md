@@ -24,7 +24,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
-- Current `v0.5.0` platform plan: [`docs/releases/v0.5.0-plan.md`](docs/releases/v0.5.0-plan.md)
+- Active `v0.6.0` TypeScript/JavaScript plan: [`docs/releases/v0.6.0-plan.md`](docs/releases/v0.6.0-plan.md)
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 

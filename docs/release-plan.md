@@ -50,13 +50,14 @@ credible. Java depth continues in every band.
 | `0.8.x` | Python deep adapter |
 | `0.9.x` | Go deep adapter |
 | `0.10.x` | Scala 2/3 and JVM interoperability |
-| `0.11.x` | C/C++ Clang platform and component relocation |
-| `0.12.x` | Groovy, Gradle Groovy DSL and Spock |
-| `0.13.x` | C# Roslyn solution/refactoring platform |
-| `0.14.x` | Rust and Cargo/rust-analyzer platform |
+| `0.11.x` | C/C++/Objective-C Clang platform, component relocation and Apple runtime boundaries |
+| `0.12.x` | Swift, SwiftPM/Xcode model and Objective-C interoperability |
+| `0.13.x` | Groovy, Gradle Groovy DSL and Spock |
+| `0.14.x` | C# Roslyn solution/refactoring platform |
+| `0.15.x` | Rust and Cargo/rust-analyzer platform |
 | `1.0` development | Clojure and global all-language stabilization |
 
-Active plan: [`docs/releases/v0.5.0-plan.md`](releases/v0.5.0-plan.md).
+Active plan: [`docs/releases/v0.6.0-plan.md`](releases/v0.6.0-plan.md).
 ADR 0010 records offline effective build models, typed cascade suppression,
 source-identity/ownership separation, and the Build Model SPI gate added after the
 Java 21 Maven/Magrathea acceptance slice.
@@ -72,7 +73,7 @@ Normative roadmap: [`docs/releases/v1.0.0-plan.md`](releases/v1.0.0-plan.md).
 The stable release has two simultaneous goals:
 
 1. **depth** — Java is the reference and widest adapter, while JVM languages,
-   C#, TypeScript, C/C++, Go, Rust, Python and Clojure receive serious idiomatic
+   C#, TypeScript, C/C++, Objective-C, Swift, Go, Rust, Python and Clojure receive serious idiomatic
    compiler/language-server-backed refactoring catalogues rather than shallow
    wrappers;
 2. **breadth** — the shared core safely orchestrates mixed-language projects,
