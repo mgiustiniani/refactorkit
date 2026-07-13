@@ -18,6 +18,15 @@ import threading
 import time
 
 
+_current_stage = "startup"
+
+
+def mark_stage(name: str) -> None:
+    global _current_stage
+    _current_stage = name
+    print(f"Packaged TypeScript qualification stage: {name}", flush=True)
+
+
 def command_for(cli: Path, args: list[str]) -> list[str]:
     if os.name == "nt":
         return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", str(cli), *args]
@@ -81,6 +90,7 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         return response
 
     try:
+        mark_stage("daemon project open")
         opened = exchange("project.open", {"root": str(workspace)})
         if opened.get("error"):
             raise AssertionError(f"daemon project open failed: {opened}")
@@ -88,17 +98,20 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
             "languageId": "typescript", "nodeExecutable": str(node),
             "languageServerPackageRoot": str(server), "typeScriptPackageRoot": str(compiler),
         }
+        mark_stage("semantic process start")
         started_response = exchange("typescript.semantic.start", parameters)
         if started_response.get("error"):
             raise AssertionError(f"semantic start failed: {started_response}")
         started = started_response["result"]
         old_pid = int(started["processId"])
+        mark_stage("semantic process kill")
         if os.name == "nt":
             subprocess.run(["taskkill", "/PID", str(old_pid), "/T", "/F"], check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             os.kill(old_pid, signal.SIGKILL)
 
+        mark_stage("semantic process restart")
         deadline = time.monotonic() + 10
         restarted_response = None
         while time.monotonic() < deadline:
@@ -114,6 +127,7 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         for field in ("serverVersion", "capabilitiesSha256", "executableSha256", "argumentsSha256"):
             if restarted.get(field) != started.get(field):
                 raise AssertionError(f"semantic restart changed provenance field {field}")
+        mark_stage("restarted semantic diagnostics")
         diagnosed = exchange("diagnostics", {"languageId": "typescript"})
         if diagnosed.get("error") or diagnosed.get("result") != []:
             raise AssertionError(f"restarted semantic diagnostics failed: {diagnosed}")
@@ -166,6 +180,7 @@ def main() -> int:
             "--language-server-package", str(server), "--typescript-package", str(compiler),
         ]
 
+        mark_stage("stable semantic search")
         first = json.loads(run(cli, common, ["search", "--query", "UserService"]).stdout)
         second = json.loads(run(cli, common, ["search", "--query", "UserService"]).stdout)
         classes = [item for item in first if item["name"] == "UserService" and item["kind"] == "CLASS"]
@@ -175,6 +190,7 @@ def main() -> int:
         if symbol_id not in {item["id"] for item in second}:
             raise AssertionError("semantic symbol identity changed across fresh real-server sessions")
 
+        mark_stage("definition and references")
         definition = json.loads(run(cli, common, ["definition", "--symbol", symbol_id]).stdout)
         if definition["file"] != "src/core/UserService.ts" or definition["character"] != 13:
             raise AssertionError(f"unexpected real-server definition: {definition}")
@@ -182,9 +198,11 @@ def main() -> int:
         if not any(item["file"] == "src/core/UserService.ts" for item in references):
             raise AssertionError(f"real-server references omitted the declaration: {references}")
 
+        mark_stage("exact compiler diagnostics")
         diagnostics = json.loads(run(cli, common, ["diagnostics"]).stdout)
         if diagnostics:
             raise AssertionError(f"exact compiler diagnostics unexpectedly failed: {diagnostics}")
+        mark_stage("managed rename apply")
         applied = json.loads(run(
             cli, common,
             ["rename", "--file", "src/core/UserService.ts", "--line", "1", "--character", "13", "--to", "AccountService", "--apply"],
@@ -204,6 +222,7 @@ def main() -> int:
         journal = workspace / ".refactorkit" / "transactions" / f"{transaction_id}.json"
         if not transaction_id or not journal.is_file():
             raise AssertionError("managed rename did not create its WAL transaction journal")
+        mark_stage("transaction rollback")
         rollback = subprocess.run(
             command_for(cli, ["patch", "rollback", transaction_id, "--root", str(workspace)]),
             text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45,
@@ -219,4 +238,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as error:
+        message = f"stage={_current_stage}; {type(error).__name__}: {error}"[:4000]
+        message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=Packaged TypeScript qualification::{message}", flush=True)
+        raise
