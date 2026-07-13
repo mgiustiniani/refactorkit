@@ -87,7 +87,7 @@ Once started, `symbol.search`, `symbol.definition`, `symbol.references`, and
 `diagnostics` accept `languageId=typescript|javascript`. Semantic rename uses:
 
 ```json
-{"jsonrpc":"2.0","id":21,"method":"refactor.preview","params":{"operation":"renameSymbol","languageId":"typescript","symbol":"src/service.ts::Service@0:13","arguments":{"newName":"AccountService","allowExternalConsumers":"false"}}}
+{"jsonrpc":"2.0","id":21,"method":"refactor.preview","params":{"operation":"renameSymbol","languageId":"typescript","symbol":"src/service.ts::Service@0:13","arguments":{"newName":"AccountService","allowExternalConsumers":"false","allowDynamicReferences":"false"}}}
 ```
 
 A caller may provide zero-based `arguments.file`, `arguments.line`, and

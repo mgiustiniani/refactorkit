@@ -322,6 +322,13 @@ class TypeScriptSemanticAdapter(
             "typescript.externalConsumersUnknown",
             "Exported TypeScript/JavaScript symbol may have consumers outside the bounded workspace; explicit allowExternalConsumers=true is required",
         )
+        val dynamicReferences = dynamicStringReferences(request.snapshot, symbol.name)
+        val dynamicReferenceOverride = request.arguments["allowDynamicReferences"]?.toBooleanStrictOrNull() == true
+        if (dynamicReferences.isNotEmpty() && !dynamicReferenceOverride) return refusedPlan(
+            request,
+            "typescript.dynamicReferencesUnknown",
+            "Found ${dynamicReferences.size} string/decorator/reflection candidate(s) that semantic rename cannot prove; explicit allowDynamicReferences=true is required",
+        )
         return when (val result = client.requestRename(request.snapshot, location, newName)) {
             is ExternalWorkspaceEditNormalization.Refused -> {
                 val first = result.diagnostics.firstOrNull()
@@ -365,6 +372,7 @@ class TypeScriptSemanticAdapter(
                     status = PatchStatus.PREVIEW,
                     snapshotHash = request.snapshot.hash,
                     confidence = when {
+                        dynamicReferences.isNotEmpty() -> 0.55
                         externalConsumerRisk -> 0.65
                         else -> when (completeness.mode) {
                             TypeScriptSemanticCompletenessMode.FULL_TYPESCRIPT -> 0.9
@@ -384,10 +392,16 @@ class TypeScriptSemanticAdapter(
                         completeness.summary,
                         if (externalConsumerRisk) {
                             "Explicit external-consumer override accepted; callers outside the workspace are not proven updated."
-                        } else "No exported declaration marker was detected at the selected symbol.",
+                        } else "No exported library boundary was detected at the selected symbol.",
+                        if (dynamicReferences.isNotEmpty()) {
+                            "Explicit dynamic-reference override accepted for ${dynamicReferences.size} candidate(s): " +
+                                dynamicReferences.take(5).joinToString()
+                        } else "No exact quoted symbol-name candidate was detected.",
                         "Provider=${toolchain.provenance.providerId} TypeScript=${toolchain.provenance.typeScriptVersion}",
                     ),
-                    riskLevel = if (languageId == "typescript" && !externalConsumerRisk) RiskLevel.MEDIUM else RiskLevel.HIGH,
+                    riskLevel = if (
+                        languageId == "typescript" && !externalConsumerRisk && dynamicReferences.isEmpty()
+                    ) RiskLevel.MEDIUM else RiskLevel.HIGH,
                     evidence = RefactoringEvidence.LANGUAGE_SERVER,
                 )
             }
@@ -481,6 +495,19 @@ class TypeScriptSemanticAdapter(
         evidence = DiagnosticEvidence.STRUCTURAL,
         category = DiagnosticCategory.SAFETY,
     )
+
+    private fun dynamicStringReferences(snapshot: ProjectSnapshot, symbolName: String): List<String> {
+        val quotedName = Regex("(['\\\"`])${Regex.escape(symbolName)}\\1")
+        return snapshot.files.asSequence()
+            .filter { it.languageId in setOf("typescript", "javascript") }
+            .flatMap { source ->
+                source.content.lineSequence().mapIndexedNotNull { index, line ->
+                    if (quotedName.containsMatchIn(line)) "${source.path}:${index + 1}" else null
+                }
+            }
+            .take(MAX_DYNAMIC_REFERENCE_CANDIDATES)
+            .toList()
+    }
 
     private fun exportedDeclaration(snapshot: ProjectSnapshot, location: SourceLocation): Boolean {
         val root = snapshot.workspace.root.toAbsolutePath().normalize()
@@ -578,6 +605,7 @@ class TypeScriptSemanticAdapter(
 
     companion object {
         const val MAX_RESTARTS_PER_WINDOW = 3
+        const val MAX_DYNAMIC_REFERENCE_CANDIDATES = 50
         const val RESTART_WINDOW_MILLIS = 60_000L
 
         private val EXPORT_MARKER = Regex("(?:^|\\s)export(?:\\s|$)")

@@ -237,6 +237,30 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun quotedDecoratorAndReflectionCandidatesRequireExplicitOverride() {
+        val fixture = fixture()
+        val snapshot = fixture.snapshot.copy(files = fixture.snapshot.files + SourceFile(
+            Path.of("src/registry.ts"),
+            "@Inject(\"Service\")\nconst reflected = Reflect.get(registry, 'Service');\n",
+            "typescript",
+        ))
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, FakeClient())
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(snapshot))
+
+        val refused = adapter.applyRefactoring(renameRequest(snapshot))
+        assertEquals("typescript.dynamicReferencesUnknown", refused.refusalCode)
+        val accepted = adapter.applyRefactoring(renameRequest(
+            snapshot, arguments = mapOf(
+                "newName" to "AccountService", "allowDynamicReferences" to "true",
+            ),
+        ))
+        assertEquals(PatchStatus.PREVIEW, accepted.status)
+        assertEquals(RiskLevel.HIGH, accepted.riskLevel)
+        assertEquals(0.55, accepted.confidence)
+        assertTrue(accepted.warnings.any { "dynamic-reference override" in it })
+    }
+
+    @Test
     fun managedRenamePassesExactDiagnosticsAuthorizationWalAndRollback() {
         val fixture = fixture()
         val client = FakeClient()

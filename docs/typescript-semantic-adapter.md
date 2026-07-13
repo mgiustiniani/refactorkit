@@ -80,7 +80,12 @@ is treated as having potentially unbounded external consumers. Preview refuses
 with `typescript.externalConsumersUnknown` unless
 `allowExternalConsumers=true`; the override lowers confidence, raises risk to
 high and records an explicit warning. Package `exports` and `types`/`typings`
-publication markers are hash-bound project-model evidence. The server WorkspaceEdit then passes through the strict external edit parser
+publication markers are hash-bound project-model evidence. Separately, up to 50
+exact quoted symbol-name candidates are collected across TypeScript/JavaScript
+sources to cover computed string properties, decorator arguments, reflection and
+framework registries. These refuse with `typescript.dynamicReferencesUnknown`
+unless `allowDynamicReferences=true`; an override lowers confidence to 0.55,
+raises risk and records bounded locations. The server WorkspaceEdit then passes through the strict external edit parser
 and core normalizer. A successful result is a `PatchPlan` preview with
 `LANGUAGE_SERVER` evidence, explicit approval requirement and medium TypeScript
 or high JavaScript risk. The plan reports one of `FULL_TYPESCRIPT`,
@@ -107,6 +112,7 @@ native platform.
 - stale, missing, unversioned or non-monotonic diagnostic/document versions;
 - missing or equally specific TypeScript project ownership;
 - exported library surface without explicit external-consumer override;
+- quoted dynamic/decorator/reflection candidates without explicit override;
 - oversized documents;
 - invalid UTF-16 positions;
 - edit path outside overlay/workspace;

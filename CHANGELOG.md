@@ -41,7 +41,10 @@ review safety boundaries before applying refactorings.
   results, and emits workspace-relative daemon paths. Exported symbols on
   package-exports/types, declaration/composite, or project-reference library
   surfaces now refuse exported rename by default unless an explicit
-  external-consumer override records high risk.
+  external-consumer override records high risk. Exact quoted symbol-name
+  candidates in computed properties, decorators, reflection and framework
+  registries likewise refuse unless an explicit dynamic-reference override lowers
+  confidence and records high risk.
 - Add declarative `typescript-config-declarative-v1` JSONC project modeling for
   local extends, project references, files/globs, compiler paths/options, aliases,
   JS/package modes, typed refusals and SHA-256 evidence, projected into the
