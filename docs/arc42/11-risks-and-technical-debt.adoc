@@ -181,6 +181,12 @@ Status: implementation-informed, needs human review for prioritization.
 |A caller can deliberately pass a disabled gate, but this choice is explicit and identifiable rather than an implicit production default.
 |Document disabled-gate use as unsupported for stable managed Java flows and retain staged-regression tests.
 |planned release blocker
+
+|TD-DIST-001
+|The macOS and Windows runtime archives are checksum-verifiable and attested but remain unsigned: there is no Apple Developer ID/notarization or Windows Authenticode signature.
+|Gatekeeper, SmartScreen, or enterprise endpoint policy may display publisher/security warnings even when archive checksum, SBOM, and provenance verification succeed. This affects warning-free installation and publisher identity, not RefactorKit patch correctness or transaction safety.
+|Track signing as distribution technical debt. Add Developer ID signing plus notarization and Authenticode only when protected CI certificates, credentials, timestamp services, rotation, and revocation procedures are available. Never describe checksums, SBOMs, or attestations as substitutes for platform code signing.
+|accepted technical debt; non-blocking for current unsigned experimental assets, required before claiming warning-free trusted desktop installation
 |===
 
 == Technical Debt from Release Plan
@@ -196,6 +202,7 @@ The active stable plan defines the remaining release-hardening workstreams:
 * classify and test stable LSP/MCP boundaries;
 * establish bounded performance and resource behavior;
 * verify self-contained assets with checksum, SBOM, provenance/attestation, and reproducibility evidence;
+* retain `TD-DIST-001` as explicit platform-signing debt until protected Apple Developer ID/notarization and Windows Authenticode credentials exist; unsigned assets must continue to disclose possible OS publisher warnings;
 * promote only an RC with no unresolved release blocker.
 
 Status: confirmed long-range target from `docs/releases/v1.0.0-plan.md` and ADR 0009; `v0.3.0` publication and downloaded-runtime smoke evidence are implementation-informed, `v0.4.0` acceptance is complete, and multi-language/stable acceptance remains pending.
