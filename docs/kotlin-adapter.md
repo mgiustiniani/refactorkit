@@ -52,8 +52,9 @@ one module per file extension.
 
 ## Next gate
 
-The next slice selects and hash-binds a qualified Kotlin backend and projects a
-bounded Kotlin/JVM build model without executing Gradle, Maven plugins, compiler
-plugins, kapt, KSP or project scripts. Capabilities remain refused until real
-compiler-backed native acceptance satisfies
+Explicit JDK/compiler discovery and hash-bound provenance are now implemented in
+[`kotlin-toolchain.md`](kotlin-toolchain.md), but no compiler is launched. The
+next slice projects that provenance and a bounded Kotlin/JVM source-set model into
+the snapshot before adding read-only compiler analysis. Capabilities remain
+refused until real compiler-backed native acceptance satisfies
 [`v0.7.0-plan.md`](releases/v0.7.0-plan.md).

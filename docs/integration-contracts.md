@@ -119,7 +119,10 @@ The packaged `0.7.0-SNAPSHOT` kernel includes the initial `kotlin` descriptor fo
 is `REFUSED` with `NONE` evidence and no mutation authority. Capability discovery
 therefore reports the planned boundary without implying semantic reads, LSP
 ownership, formatting or managed writes. Kotlin scripts remain a separately
-refused capability.
+refused capability. Library-only `kotlin-compiler-explicit-v1` discovery can now
+validate and hash-bind explicit JDK/compiler inputs without execution; it does not
+change capability stability or expose a semantic process through protocol
+surfaces.
 
 External LSP processes are internal proposal providers. They run under the
 bounded semantic process lifecycle with explicit environment and provenance,

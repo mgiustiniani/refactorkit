@@ -15,7 +15,7 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | `refactorkit-web-importer`| ✅ MVP       | ExternalJavaClassImporter with provenance + conflict detection |
 | `refactorkit-tree-sitter` | ✅ Kernel    | Packaged TypeScript/JavaScript Tree-sitter JNI, bounded external LSP lifecycle, overlays and untrusted edit normalization |
 | `refactorkit-typescript`  | ✅ v0.6     | Explicit bounded toolchain/project models, semantic reads, exact compiler diagnostics and managed identifier rename |
-| `refactorkit-kotlin`      | 🚧 v0.7     | Isolated adapter boundary and explicit refused capabilities; compiler/Analysis API backend not yet configured |
+| `refactorkit-kotlin`      | 🚧 v0.7     | Isolated refused adapter plus non-executing explicit JDK/Kotlin compiler discovery and hash-bound provenance; semantic analysis not yet enabled |
 | `refactorkit-testkit`     | ✅ MVP       | GoldenTestLoader/Runner, AgentSimulation scenarios         |
 
 See individual docs/ files for each subsystem.
@@ -39,5 +39,5 @@ internal Build Model SPI and completed P2B Maven/Gradle productionization gate i
 non-executable `gradle-declarative-v1` model documented in
 [`gradle-build-model.md`](gradle-build-model.md); package/FQCN identity is
 kept separate from source-set/module ownership. See `docs/kotlin-adapter.md`,
-`docs/releases/v0.7.0-plan.md`, `docs/releases/v1.0.0-plan.md`, ADR 0009, ADR 0010,
-and ADR 0011.
+`docs/kotlin-toolchain.md`, `docs/releases/v0.7.0-plan.md`,
+`docs/releases/v1.0.0-plan.md`, ADR 0009, ADR 0010, and ADR 0011.

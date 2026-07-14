@@ -17,6 +17,10 @@ review safety boundaries before applying refactorings.
   routing, typed backend-unavailable diagnostics and capability metadata exposed
   through CLI, daemon, LSP and MCP. Every Kotlin operation remains explicitly
   `REFUSED` with no mutation authority.
+- Add non-executing provider `kotlin-compiler-explicit-v1`: explicit JDK 21 and
+  Kotlin 2.0.21 compiler/classpath identity, bounded JAR inspection, double-read
+  SHA-256 evidence and deterministic projection hashing with workspace-local and
+  drift refusal.
 - No new stable Kotlin capability is claimed until real compiler-backed native
   acceptance passes preview, exact diagnostics, apply, WAL and rollback.
 
