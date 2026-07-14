@@ -190,7 +190,7 @@ class TypeScriptSemanticAdapterTest {
             listOf("export class Service {}\n", "export class AccountService {}\n"),
             client.synchronizedSnapshots.map { it.files.single { file -> file.languageId == "typescript" }.content },
         )
-        assertEquals(3, client.referenceRequestCount)
+        assertEquals(TypeScriptSemanticAdapter.SEMANTIC_RENAME_BARRIER_ATTEMPTS, client.referenceRequestCount)
         assertEquals("export class Service {}\n", Files.readString(fixture.root.resolve("src/service.ts")))
     }
 

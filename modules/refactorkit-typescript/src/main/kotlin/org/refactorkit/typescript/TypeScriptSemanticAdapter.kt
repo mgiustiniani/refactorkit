@@ -374,12 +374,12 @@ class TypeScriptSemanticAdapter(
         // document-symbol, workspace-symbol, and reference requests form a
         // semantic project barrier before rename; without the reference request
         // some Windows servers return a declaration-only syntactic edit.
-        repeat(3) { attempt ->
+        repeat(SEMANTIC_RENAME_BARRIER_ATTEMPTS) { attempt ->
             client.buildSymbols(request.snapshot)
             client.searchWorkspaceSymbols(symbol.name)
             client.findReferences(symbol.id)
-            if (attempt < 2) try {
-                Thread.sleep(50)
+            if (attempt < SEMANTIC_RENAME_BARRIER_ATTEMPTS - 1) try {
+                Thread.sleep(SEMANTIC_RENAME_BARRIER_DELAY_MILLIS)
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
                 return refusedPlan(
@@ -714,6 +714,8 @@ class TypeScriptSemanticAdapter(
     companion object {
         const val MAX_RESTARTS_PER_WINDOW = 3
         const val MAX_DYNAMIC_REFERENCE_CANDIDATES = 50
+        const val SEMANTIC_RENAME_BARRIER_ATTEMPTS = 10
+        const val SEMANTIC_RENAME_BARRIER_DELAY_MILLIS = 100L
         const val MAX_APPROVED_STAGED_SNAPSHOTS = 128
         const val RESTART_WINDOW_MILLIS = 60_000L
 
