@@ -12,9 +12,10 @@ No changes yet.
 ## 0.6.2 - 2026-07-14
 
 - Publication patch for the completed `v0.6.0` feature scope. Fixes Windows-safe
-  lexical validation of TypeScript include/exclude and path-alias glob patterns;
-  release builders retain a clean build before separate package/native smoke. No
-  API contract change.
+  lexical validation of TypeScript include/exclude and path-alias glob patterns,
+  and adds a bounded reference barrier before managed rename to prevent lazy
+  declaration-only edits. Release builders retain a clean build before separate
+  package/native smoke. No API contract change.
 
 ## 0.6.1 - 2026-07-13 (tagged, not published)
 

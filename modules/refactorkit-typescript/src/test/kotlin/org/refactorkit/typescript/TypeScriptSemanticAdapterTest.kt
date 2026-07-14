@@ -190,6 +190,7 @@ class TypeScriptSemanticAdapterTest {
             listOf("export class Service {}\n", "export class AccountService {}\n"),
             client.synchronizedSnapshots.map { it.files.single { file -> file.languageId == "typescript" }.content },
         )
+        assertEquals(3, client.referenceRequestCount)
         assertEquals("export class Service {}\n", Files.readString(fixture.root.resolve("src/service.ts")))
     }
 
@@ -589,6 +590,7 @@ class TypeScriptSemanticAdapterTest {
         var startedSnapshot: ProjectSnapshot? = null
         val synchronizedSnapshots = mutableListOf<ProjectSnapshot>()
         var startCount: Int = 0
+        var referenceRequestCount: Int = 0
 
         override fun start(snapshot: ProjectSnapshot) {
             startedSnapshot = snapshot
@@ -603,7 +605,10 @@ class TypeScriptSemanticAdapterTest {
         override fun searchWorkspaceSymbols(query: String): List<Symbol> = listOf(symbol()).filter { query in it.name }
         override fun resolveSymbol(location: SourceLocation): SymbolResolution =
             if (unresolvedSymbol) SymbolResolution(null) else SymbolResolution(symbol())
-        override fun findReferences(symbolId: SymbolId): List<Reference> = listOf(Reference(symbolId, symbolLocation()))
+        override fun findReferences(symbolId: SymbolId): List<Reference> {
+            referenceRequestCount++
+            return listOf(Reference(symbolId, symbolLocation()))
+        }
         override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = emptyList()
         override fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics {
             synchronizedSnapshots += snapshot

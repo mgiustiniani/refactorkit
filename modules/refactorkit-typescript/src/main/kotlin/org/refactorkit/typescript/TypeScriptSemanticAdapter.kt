@@ -370,12 +370,14 @@ class TypeScriptSemanticAdapter(
             "typescript.externalConsumersUnknown",
             "Exported TypeScript/JavaScript symbol may have consumers outside the bounded workspace; explicit allowExternalConsumers=true is required",
         )
-        // Real TypeScript servers load configured projects lazily. A bounded
-        // workspace-symbol request is a semantic project barrier before rename;
-        // without it some servers return a declaration-only syntactic edit.
+        // Real TypeScript servers load configured projects lazily. Bounded
+        // document-symbol, workspace-symbol, and reference requests form a
+        // semantic project barrier before rename; without the reference request
+        // some Windows servers return a declaration-only syntactic edit.
         repeat(3) { attempt ->
             client.buildSymbols(request.snapshot)
             client.searchWorkspaceSymbols(symbol.name)
+            client.findReferences(symbol.id)
             if (attempt < 2) try {
                 Thread.sleep(50)
             } catch (_: InterruptedException) {
