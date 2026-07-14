@@ -71,8 +71,18 @@ class LspSessionTest {
         assertEquals(listOf("java", "javascript", "kotlin", "typescript"), languageKernel["adapters"]!!.jsonArray.map {
             it.jsonObject["languageId"]!!.jsonPrimitive.content
         })
+        val kotlinAdapter = languageKernel["adapters"]!!.jsonArray.single {
+            it.jsonObject["languageId"]!!.jsonPrimitive.content == "kotlin"
+        }.jsonObject
+        val kotlinDiagnostics = kotlinAdapter["capabilities"]!!.jsonArray.single {
+            it.jsonObject["operation"]!!.jsonPrimitive.content == "diagnostics"
+        }.jsonObject
+        assertEquals("experimental", kotlinDiagnostics["stability"]!!.jsonPrimitive.content)
+        assertEquals("kotlin-compiler-diagnostics-k2-v1", kotlinDiagnostics["backend"]!!.jsonPrimitive.content)
         val ownership = experimental["refactorkitSemanticOwnership"]!!.jsonObject
         assertEquals("client-managed-native-lsp", ownership["typescript"]!!.jsonPrimitive.content)
+        assertEquals("refactorkit-external-compiler-read-only-via-cli-daemon-mcp",
+            ownership["kotlin"]!!.jsonPrimitive.content)
         assertEquals(listOf("cli", "daemon", "mcp"), ownership["managedMutationSurfaces"]!!.jsonArray.map {
             it.jsonPrimitive.content
         })

@@ -96,8 +96,12 @@ class DaemonSessionTest {
         val kotlin = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "kotlin" }
         val kotlinCapabilities = kotlin["capabilities"]!!.jsonArray.map { it.jsonObject }
         assertTrue(kotlinCapabilities.isNotEmpty())
-        assertTrue(kotlinCapabilities.all { it["stability"]!!.jsonPrimitive.content == "refused" })
-        assertTrue(kotlinCapabilities.all { it["evidence"]!!.jsonPrimitive.content == "none" })
+        val kotlinDiagnostics = kotlinCapabilities.single { it["operation"]!!.jsonPrimitive.content == "diagnostics" }
+        assertEquals("experimental", kotlinDiagnostics["stability"]!!.jsonPrimitive.content)
+        assertEquals("compiler", kotlinDiagnostics["evidence"]!!.jsonPrimitive.content)
+        assertEquals("kotlin-compiler-diagnostics-k2-v1", kotlinDiagnostics["backend"]!!.jsonPrimitive.content)
+        assertTrue(kotlinCapabilities.filter { it !== kotlinDiagnostics }
+            .all { it["stability"]!!.jsonPrimitive.content == "refused" && it["evidence"]!!.jsonPrimitive.content == "none" })
         assertTrue(kotlinCapabilities.all { it["mutationAuthority"]!!.jsonPrimitive.content == "none" })
         val typescript = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "typescript" }
         val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }

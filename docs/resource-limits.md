@@ -21,6 +21,7 @@ heap exhaustion.
 | Import preview/apply/rollback diagnostics | 500 entries, 262,144 UTF-8 bytes, 4,096 characters/message | `diagnosticsTruncated=true`; blockers are evaluated before truncation |
 | `diagnostics.v2` response | 2,097,152 UTF-8 bytes, 500 entries, 4,096 characters/message | Deterministic diagnostic-tail truncation with total/returned counts, `truncated=true`, and exact `responseBytes` |
 | `diagnostics.v2` editor overlay | 128 existing source documents, 786,432 UTF-8 bytes per request | Invalid/duplicate/traversing/mixed-language paths are refused before compiler invocation |
+| Kotlin K2 diagnostics | 30 seconds, 512 MiB compiler heap, 8 MiB stdout, 64 KiB stderr, 1 process, 96 `.kt` files, 128 project classpath entries, 500 diagnostics, 4,096 characters/message | Typed refusal/error; process tree terminated, no partial diagnostics promoted |
 | Packaged daemon smoke captured stderr | 65,536 UTF-8 bytes | Additional stderr is discarded; source-marker leakage still fails within the retained bound |
 | MCP symbol/reference context output | Operation-specific caps, no more than 200 symbols or 100 displayed references | Output is truncated deterministically |
 

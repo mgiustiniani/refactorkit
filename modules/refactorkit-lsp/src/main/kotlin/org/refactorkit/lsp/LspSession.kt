@@ -161,6 +161,7 @@ class LspSession {
                     ))
                     put("refactorkitSemanticOwnership", buildJsonObject {
                         put("java", "refactorkit-lsp")
+                        put("kotlin", "refactorkit-external-compiler-read-only-via-cli-daemon-mcp")
                         put("typescript", "client-managed-native-lsp")
                         put("javascript", "client-managed-native-lsp")
                         put("managedMutationSurfaces", buildJsonArray {

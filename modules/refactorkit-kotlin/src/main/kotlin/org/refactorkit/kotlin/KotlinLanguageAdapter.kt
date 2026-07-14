@@ -1,12 +1,16 @@
 package org.refactorkit.kotlin
 
 import org.refactorkit.core.CapabilityStability
+import org.refactorkit.core.AdapterExecutionMode
 import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
+import org.refactorkit.core.DiagnosticSnapshotMode
 import org.refactorkit.core.LanguageAdapter
 import org.refactorkit.core.LanguageAdapterDescriptor
+import org.refactorkit.core.LanguageAdapterResourceLimits
+import org.refactorkit.core.LanguageAdapterRuntime
 import org.refactorkit.core.LanguageCapability
 import org.refactorkit.core.MutationAuthority
 import org.refactorkit.core.ParseResult
@@ -34,7 +38,9 @@ import org.refactorkit.core.WorkspaceEdit
  * This class deliberately exposes no structural or semantic authority until a
  * hash-bound Kotlin compiler/Analysis API backend is qualified.
  */
-class KotlinLanguageAdapter : LanguageAdapter {
+class KotlinLanguageAdapter(
+    private val compilerDiagnostics: KotlinCompilerDiagnostics? = null,
+) : LanguageAdapter {
     override fun languageId(): String = KotlinAdapterRegistration.LANGUAGE_ID
 
     override fun parse(file: SourceFile): ParseResult = ParseResult(
@@ -57,8 +63,25 @@ class KotlinLanguageAdapter : LanguageAdapter {
 
     override fun findReferences(symbolId: SymbolId): List<Reference> = emptyList()
 
-    override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> =
-        if (project.files.any { it.languageId == languageId() }) listOf(backendUnavailable()) else emptyList()
+    override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> = when {
+        project.files.none { it.languageId == languageId() } -> emptyList()
+        compilerDiagnostics == null -> listOf(compilerNotConfigured())
+        else -> compilerDiagnostics.analyze(project).diagnostics
+    }
+
+    fun compilerDiagnostics(project: ProjectSnapshot): KotlinCompilerDiagnosticsResult = compilerDiagnostics?.analyze(project)
+        ?: KotlinCompilerDiagnosticsResult.Refused(
+            compilerNotConfigured(),
+            KotlinCompilerDiagnosticsAttestation(
+                backend = KotlinCompilerDiagnostics.BACKEND,
+                kotlinVersion = "unconfigured",
+                javaVersion = "unconfigured",
+                toolchainProjectionHash = "",
+                buildProjectionHash = "",
+                snapshotHash = project.hash,
+                process = null,
+            ),
+        )
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = emptyList()
 
@@ -82,6 +105,14 @@ class KotlinLanguageAdapter : LanguageAdapter {
     }
 
     override fun formatEdits(edits: List<TextEdit>): List<TextEdit> = edits.toList()
+
+    private fun compilerNotConfigured() = Diagnostic(
+        message = "Kotlin compiler diagnostics require an explicitly configured semantic toolchain",
+        severity = Diagnostic.Severity.ERROR,
+        code = "kotlin.toolchainNotConfigured",
+        evidence = DiagnosticEvidence.COMPILER,
+        category = DiagnosticCategory.SAFETY,
+    )
 
     private fun backendUnavailable(location: SourceLocation? = null) = Diagnostic(
         message = BACKEND_UNAVAILABLE_MESSAGE,
@@ -125,14 +156,38 @@ object KotlinAdapterRegistration {
         extensions = setOf("kt", "kts"),
         backend = BACKEND,
         capabilities = (
-            kotlinSourceOperations.map { refused(it, setOf("kt")) } +
-                refused("scriptSemantics", setOf("kts"))
+            kotlinSourceOperations.map { operation ->
+                if (operation == "diagnostics") diagnosticsCapability() else refused(operation, setOf("kt"))
+            } + refused("scriptSemantics", setOf("kts"))
             ).sortedBy(LanguageCapability::operation),
     )
 
     fun create(adapter: KotlinLanguageAdapter = KotlinLanguageAdapter()) = RegisteredLanguageAdapter(
         descriptor = descriptor(),
         adapter = adapter,
+    )
+
+    private fun diagnosticsCapability() = LanguageCapability(
+        operation = "diagnostics",
+        stability = CapabilityStability.EXPERIMENTAL,
+        evidence = SemanticEvidenceKind.COMPILER,
+        mutationAuthority = MutationAuthority.NONE,
+        backend = KotlinCompilerDiagnostics.BACKEND,
+        runtime = LanguageAdapterRuntime(
+            executionMode = AdapterExecutionMode.EXTERNAL_PROCESS,
+            supportsTimeout = true,
+            supportsCancellation = true,
+            usesWorkspaceOverlay = true,
+            recordsProcessProvenance = true,
+            limits = LanguageAdapterResourceLimits(
+                requestTimeoutMillis = KotlinCompilerDiagnostics.REQUEST_TIMEOUT_MILLIS,
+                maxInputBytes = 128L * 1024L * 1024L,
+                maxOutputBytes = KotlinCompilerDiagnostics.MAX_OUTPUT_BYTES,
+                maxProcesses = 1,
+            ),
+        ),
+        extensions = setOf("kt"),
+        diagnosticSnapshotModes = setOf(DiagnosticSnapshotMode.SAVED_DISK),
     )
 
     private fun refused(operation: String, extensions: Set<String>) = LanguageCapability(

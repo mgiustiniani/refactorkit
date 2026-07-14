@@ -1,61 +1,102 @@
 # Kotlin adapter
 
-Status: `0.7.0-SNAPSHOT` module boundary implemented; semantic backend unavailable
-and every Kotlin capability explicitly refused.
+Status: first compiler-backed Kotlin/JVM capability implemented for
+`0.7.0-SNAPSHOT`. Diagnostics are experimental; every symbol and mutation
+capability remains explicitly refused.
 
-## Current boundary
+## Capability boundary
 
-`modules/refactorkit-kotlin` is an internal Gradle module that depends only on
-`refactorkit-core`. It is not a separate process or product. The boundary keeps
-future Kotlin compiler/Analysis API dependencies out of core and the JDT-backed
-Java adapter while shared JVM build/source-set and identity contracts remain
-language-neutral.
-
-The initial backend identity is:
+`modules/refactorkit-kotlin` remains isolated from core and the JDT-backed Java
+adapter. The descriptor still uses the fail-closed default backend identity:
 
 ```text
 kotlin-analysis-unavailable-v1
 ```
 
-The adapter owns `.kt` and `.kts` routing, but capability metadata distinguishes
-ordinary Kotlin source from Kotlin scripts. All advertised operations currently
-report:
+The diagnostics capability overrides that default with:
 
 ```text
-stability: REFUSED
-evidence: NONE
+operation: diagnostics
+stability: EXPERIMENTAL
+evidence: COMPILER
+backend: kotlin-compiler-diagnostics-k2-v1
 mutationAuthority: NONE
+executionMode: EXTERNAL_PROCESS
+snapshotModes: saved-disk
 ```
 
-Direct library calls return typed diagnostic/refusal code:
+All other `.kt` operations and all `.kts` script semantics remain
+`REFUSED/NONE/NONE`. Calls made without an explicitly configured compiler return
+`kotlin.toolchainNotConfigured`; no lexical or structural diagnostic fallback is
+fabricated. Refactoring requests still return edit-free refused plans and cannot
+reach `PatchEngine`.
+
+## Compiler diagnostics session
+
+The first semantic capability is a one-shot external K2 compiler worker. A caller
+must first configure the exact JDK 21 and `kotlin-compiler-embeddable` 2.0.21
+runtime classpath through `kotlin.semantic.start`, the CLI, or MCP. Startup attaches
+the exact `kotlin-jvm-projection-v1` build model and returns a new semantic lease
+and snapshot hash.
+
+The worker:
+
+- revalidates every toolchain hash/size and project classpath/model fingerprint;
+- requires one proven Kotlin/JVM source module, an `AVAILABLE` projection, one
+  declared JVM target, and one compatible target JDK;
+- refuses scripts, Android, Multiplatform, partial models, workspace classpath
+  outputs, missing evidence, more than 96 source files, or more than 128 project
+  classpath entries;
+- materializes a source-only immutable `SemanticWorkspaceOverlay`;
+- launches the explicit JDK with a cleared environment, overlay-confined temporary
+  and user-home directories, 512 MiB compiler heap, 30-second timeout,
+  one-process limit, 8 MiB stdout and 64 KiB stderr;
+- invokes `K2JVMCompiler.execAndOutputXml` through a Java 8-compatible reflective
+  bridge and never loads compiler classes into the RefactorKit process;
+- accepts only an allowlist of compiler arguments and rejects compiler plugins,
+  scripts, kapt/KSP, javac integration and arbitrary options;
+- parses XML with DTD/entities/external access disabled;
+- verifies snapshot attestation and that overlay sources were not modified;
+- reports process executable/argument hashes and PID without exposing toolchain
+  paths in protocol output.
+
+Kotlin compiler XML provides line/column starts but no trustworthy end offsets.
+Diagnostics therefore report explicit `LINE_ONLY` precision instead of inventing
+Monaco ranges. Project-level diagnostics report `NONE`.
+
+## Integration surfaces
+
+Daemon API:
 
 ```text
-kotlin.semanticBackendUnavailable
+kotlin.semantic.start
+kotlin.semantic.stop
+kotlin.diagnostics
 ```
 
-No symbol, reference, source diagnostic or refactoring result is synthesized
-through lexical fallback. The only diagnostic reports the unavailable backend;
-refused plans contain no workspace edits and cannot reach `PatchEngine` mutation.
+`kotlin.diagnostics` requires the exact lease and snapshot returned by startup and
+returns structured `ready`, `refused`, or `error` status plus toolchain/build
+projection hashes and process attestation. Legacy `diagnostics` accepts
+`languageId=kotlin` after startup.
 
-## Why Kotlin is separate from Java
+CLI:
 
-Java and Kotlin share JVM build/source-set and binary identity concepts but use
-different semantic engines. Java uses Eclipse JDT; Kotlin will use a versioned
-Kotlin compiler/Analysis API backend. Keeping the adapters separate prevents
-compiler dependencies and backend assumptions from entering core or being hidden
-inside Java-specific planners.
+```bash
+refactorkit kotlin diagnostics <root> \
+  --jdk-home <jdk-21> \
+  --compiler-jar <kotlin-compiler-embeddable-2.0.21.jar> \
+  --compiler-classpath <path-separated-runtime-jars>
+```
 
-TypeScript and JavaScript remain together because the TypeScript compiler,
-tsserver, language server and project configuration graph analyze both languages
-as one semantic family. Module boundaries follow semantic backend ownership, not
-one module per file extension.
+MCP exposes `kotlin_semantic_start`, `kotlin_semantic_stop`, and
+`kotlin_diagnostics`. LSP and all capability surfaces expose the same truthful
+experimental compiler capability metadata, but editor-native publication remains
+the editor's responsibility in this slice.
 
-## Next gate
+## Remaining gates
 
-Explicit JDK/compiler discovery and hash-bound provenance are implemented in
-[`kotlin-toolchain.md`](kotlin-toolchain.md). Bounded Maven/Gradle JVM source-set
-and toolchain projection is implemented in
-[`kotlin-build-model.md`](kotlin-build-model.md). Neither gate launches a
-compiler. The next slice defines the bounded compiler lifecycle and read-only K2
-analysis session. Capabilities remain refused until real compiler-backed native
-acceptance satisfies [`v0.7.0-plan.md`](releases/v0.7.0-plan.md).
+Compiler-backed symbols, durable symbol identity, definition, references,
+Java/Kotlin interoperability, immutable editor overlays and every mutation remain
+unimplemented and explicitly refused. Managed Kotlin rename still requires exact
+semantic identity, preview and staged diagnostics, authorization, `PatchEngine`,
+WAL, native recovery and rollback qualification.

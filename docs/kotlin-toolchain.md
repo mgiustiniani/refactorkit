@@ -1,7 +1,8 @@
 # Kotlin/JVM semantic toolchain boundary
 
-Status: explicit declarative discovery implemented for `0.7.0-SNAPSHOT`; no
-compiler process is launched and Kotlin semantic capabilities remain refused.
+Status: explicit declarative discovery and the first bounded external K2
+diagnostics worker are implemented for `0.7.0-SNAPSHOT`. Only diagnostics has
+experimental compiler authority; mutation authority remains absent.
 
 ## Provider selection
 
@@ -16,11 +17,11 @@ The first qualified discovery row is intentionally narrow:
 
 | JDK | Kotlin compiler artifact | Discovery status | Semantic authority |
 |---|---|---|---|
-| 21 | `kotlin-compiler-embeddable` 2.0.21 | qualified declarative identity/evidence | none yet |
+| 21 | `kotlin-compiler-embeddable` 2.0.21 | qualified declarative identity/evidence | experimental read-only diagnostics |
 
-This selects the Kotlin K2 compiler boundary for future semantic analysis without
-claiming that compiler-backed symbols, diagnostics or refactorings are already
-implemented.
+This selects the Kotlin K2 compiler boundary. Compiler-backed diagnostics are now
+implemented through `kotlin-compiler-diagnostics-k2-v1`; symbols, references and
+refactorings are not claimed.
 
 ## Explicit inputs
 
@@ -78,9 +79,10 @@ An available toolchain records:
   and classpath order.
 
 Critical metadata/identity and every evidence digest are read twice. Drift during
-validation returns `kotlin.toolchainChanged`. Future semantic preview/apply must
-also revalidate this evidence under the workspace writer lock; discovery alone
-never grants mutation authority.
+validation returns `kotlin.toolchainChanged`. Diagnostics revalidate every
+recorded file hash and size immediately before launch. Future semantic
+preview/apply must revalidate the same evidence under the workspace writer lock;
+discovery and diagnostics never grant mutation authority.
 
 ## Limits
 
@@ -98,16 +100,25 @@ Default limits are:
 Failures use typed `kotlin.*` diagnostics and return no partially available
 semantic toolchain.
 
+## Packaging and license boundary
+
+RefactorKit does not bundle, download or install the Kotlin compiler distribution.
+The caller supplies the explicitly pinned external JARs, which remain outside the
+RefactorKit runtime archive and its packaged SPDX SBOM. Kotlin compiler artifacts
+are distributed by JetBrains under Apache-2.0; consumers remain responsible for
+the provenance, checksums and license inventory of their supplied toolchain.
+RefactorKit records content hashes but never treats an external path as a packaged
+component.
+
 ## Build-model integration
 
 [`kotlin-build-model.md`](kotlin-build-model.md) now defines
 `kotlin-jvm-projection-v1`, which binds this toolchain hash to bounded Maven,
 Gradle and conventional JVM source-set evidence inside `ProjectSnapshot`.
 
-## Next gate
+## Compiler lifecycle
 
-The next slice defines a bounded compiler lifecycle and starts a compiler-backed
-read-only analysis session from the exact toolchain/build projection.
-`KotlinAdapterRegistration` remains `kotlin-analysis-unavailable-v1` and all
-capabilities stay `REFUSED/NONE` until that session produces exact tested
-evidence.
+The diagnostics worker lifecycle, limits, clean environment, immutable overlay,
+argument allowlist, XML hardening, attestation and refusal cases are documented in
+[`kotlin-adapter.md`](kotlin-adapter.md). The next gate builds compiler-backed
+symbols and durable identity on the same exact toolchain/build projection.

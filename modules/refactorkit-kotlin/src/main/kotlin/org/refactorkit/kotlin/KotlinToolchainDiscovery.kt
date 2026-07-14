@@ -109,6 +109,13 @@ class KotlinToolchainDiscoverer(
             )
             return KotlinToolchainDiscovery.Refused(diagnostics)
         }
+        if (request.compilerClasspath.isEmpty()) {
+            diagnostics += refusal(
+                "kotlin.compilerClasspathInvalid",
+                "Explicit Kotlin compiler runtime classpath is required",
+            )
+            return KotlinToolchainDiscovery.Refused(diagnostics)
+        }
         if (request.compilerClasspath.size > policy.maxClasspathEntries) {
             diagnostics += refusal(
                 "kotlin.compilerClasspathLimit",
@@ -273,7 +280,8 @@ class KotlinToolchainDiscoverer(
         for (line in text.lineSequence().filter(String::isNotBlank)) {
             val name = line.substringBefore('=', missingDelimiterValue = "")
             val raw = line.substringAfter('=', missingDelimiterValue = "")
-            if (!METADATA_KEY.matches(name) || raw.length !in 2..256 || !raw.startsWith('"') || !raw.endsWith('"') || name in entries) {
+            if (!METADATA_KEY.matches(name) || raw.length !in 2..MAX_RELEASE_VALUE_CHARS ||
+                !raw.startsWith('"') || !raw.endsWith('"') || name in entries) {
                 diagnostics += refusal("kotlin.jdkMetadataInvalid", "JDK release metadata has invalid shape")
                 return null
             }
@@ -428,6 +436,7 @@ class KotlinToolchainDiscoverer(
         private const val COMPILER_SENTINEL = "org/jetbrains/kotlin/cli/jvm/K2JVMCompiler.class"
         private const val MAX_MANIFEST_BYTES = 65_536L
         private const val MAX_RELEASE_BYTES = 65_536L
+        private const val MAX_RELEASE_VALUE_CHARS = 32_768
         private const val MAX_EXECUTABLE_BYTES = 512L * 1024L * 1024L
         private const val MAX_SENTINEL_BYTES = 16L * 1024L * 1024L
         private val KOTLIN_DISTRIBUTION_VERSION = Regex("^([0-9]+\\.[0-9]+\\.[0-9]+)(?:[-+][0-9A-Za-z.-]{1,96})?$")

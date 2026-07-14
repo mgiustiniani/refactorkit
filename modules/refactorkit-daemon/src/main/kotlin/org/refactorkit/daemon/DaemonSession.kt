@@ -49,6 +49,15 @@ import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.kotlin.KotlinAdapterRegistration
+import org.refactorkit.kotlin.KotlinCompilerDiagnostics
+import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
+import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
+import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.kotlin.KotlinSemanticToolchain
+import org.refactorkit.kotlin.KotlinToolchainDiscoverer
+import org.refactorkit.kotlin.KotlinToolchainDiscovery
+import org.refactorkit.kotlin.KotlinToolchainDiscoveryPolicy
+import org.refactorkit.kotlin.KotlinToolchainRequest
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
@@ -89,6 +98,8 @@ class DaemonSession(
     private val semanticAdapterFactory: (String, TypeScriptSemanticToolchain, org.refactorkit.typescript.TypeScriptProjectModel) -> TypeScriptSemanticAdapter =
         { languageId, toolchain, model -> TypeScriptSemanticAdapter(languageId, toolchain, model) },
     private val semanticLeaseFactory: () -> String = { "semantic-${UUID.randomUUID()}" },
+    private val kotlinToolchainDiscovery: (KotlinToolchainRequest, KotlinToolchainDiscoveryPolicy) -> KotlinToolchainDiscovery =
+        { request, policy -> KotlinToolchainDiscoverer(policy).discover(request) },
 ) : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
     private var scanner = JavaProjectScanner()
@@ -97,6 +108,9 @@ class DaemonSession(
     @Volatile private var workspaceRoot: Path? = null
     private val semanticAdapters = linkedMapOf<String, TypeScriptSemanticAdapter>()
     private val semanticLeases = linkedMapOf<String, String>()
+    private var kotlinAdapter = KotlinLanguageAdapter()
+    private var kotlinToolchain: KotlinSemanticToolchain? = null
+    private var kotlinSemanticLease: String? = null
 
     private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
@@ -112,6 +126,9 @@ class DaemonSession(
         "typescript.semantic.start" -> typeScriptSemanticStart(params)
         "typescript.semantic.restart" -> typeScriptSemanticRestart(params)
         "typescript.semantic.stop" -> typeScriptSemanticStop(params)
+        "kotlin.semantic.start" -> kotlinSemanticStart(params)
+        "kotlin.semantic.stop" -> kotlinSemanticStop()
+        "kotlin.diagnostics" -> kotlinDiagnostics(params)
         TypeScriptDiagnosticsProtocol.METHOD -> diagnosticsV2(params)
         "symbol.search"     -> symbolSearch(params)
         "symbol.definition" -> symbolDefinition(params)
@@ -370,8 +387,11 @@ class DaemonSession(
         val snap = requireSnapshot()
         val verbose = params?.string("verbose")?.toBooleanStrictOrNull() ?: false
         val languageId = params?.string("languageId") ?: "java"
-        val diags = if (languageId == "java") adapter.diagnostics(snap, verbose) else
-            requireSemanticAdapter(languageId).diagnostics(snap)
+        val diags = when (languageId) {
+            "java" -> adapter.diagnostics(snap, verbose)
+            "kotlin" -> kotlinAdapter.diagnostics(snap)
+            else -> requireSemanticAdapter(languageId).diagnostics(snap)
+        }
         return buildJsonArray {
             diags.forEach { d ->
                 add(buildJsonObject {
@@ -731,6 +751,167 @@ class DaemonSession(
         }
     }
 
+    private fun kotlinSemanticStart(params: JsonObject?): JsonElement {
+        val p = params ?: missing("params")
+        if (kotlinToolchain != null) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin semantic toolchain is already configured",
+        )
+        val current = requireSnapshot()
+        val root = workspaceRoot ?: error("workspace root missing")
+        fun configuredPath(name: String): Path {
+            val raw = p.string(name) ?: missing(name)
+            val candidate = Paths.get(raw)
+            return if (candidate.isAbsolute) candidate.normalize() else root.resolve(candidate).normalize()
+        }
+        val classpath = (p["compilerClasspath"] as? JsonArray)?.map { element ->
+            val raw = (element as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content
+                ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "compilerClasspath must contain strings")
+            val candidate = Paths.get(raw)
+            if (candidate.isAbsolute) candidate.normalize() else root.resolve(candidate).normalize()
+        } ?: emptyList()
+        val policy = KotlinToolchainDiscoveryPolicy(
+            allowWorkspaceLocalToolchain = p.string("allowWorkspaceLocalToolchain")?.toBooleanStrictOrNull() ?: false,
+        )
+        val discovered = kotlinToolchainDiscovery(KotlinToolchainRequest(
+            workspaceRoot = root,
+            jdkHome = configuredPath("jdkHome"),
+            compilerJar = configuredPath("compilerJar"),
+            compilerClasspath = classpath,
+        ), policy)
+        val toolchain = when (discovered) {
+            is KotlinToolchainDiscovery.Available -> discovered.toolchain
+            is KotlinToolchainDiscovery.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                discovered.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" },
+            )
+        }
+        val attached = KotlinJvmBuildModelIntegration.attach(current, toolchain)
+        val model = attached.buildModels.single { it.providerId == org.refactorkit.kotlin.KotlinJvmBuildModelProjector.PROVIDER_ID }
+        if (model.status != org.refactorkit.core.BuildModelStatus.AVAILABLE) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            model.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" }
+                .ifBlank { "kotlin.buildModelUnavailable: Kotlin/JVM build projection is unavailable" },
+        )
+        val lease = semanticLeaseFactory()
+        kotlinToolchain = toolchain
+        kotlinAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        kotlinSemanticLease = lease
+        snapshot = attached
+        return buildJsonObject {
+            put("languageId", "kotlin")
+            put("status", "started")
+            put("semanticLease", lease)
+            put("snapshotHash", attached.hash)
+            put("backend", KotlinCompilerDiagnostics.BACKEND)
+            put("toolchainProvider", toolchain.provenance.providerId)
+            put("toolchainProjectionHash", toolchain.provenance.projectionHash)
+            put("buildProjectionHash", model.attributes.getValue("projectionHash"))
+            put("kotlinVersion", toolchain.provenance.kotlinVersion)
+            put("javaVersion", toolchain.provenance.javaVersion)
+        }
+    }
+
+    private fun kotlinSemanticStop(): JsonElement {
+        val stopped = kotlinToolchain != null
+        snapshot = snapshot?.let { current ->
+            current.copy(buildModels = current.buildModels.filterNot {
+                it.providerId == org.refactorkit.kotlin.KotlinJvmBuildModelProjector.PROVIDER_ID
+            })
+        }
+        kotlinAdapter = KotlinLanguageAdapter()
+        kotlinToolchain = null
+        kotlinSemanticLease = null
+        return buildJsonObject { put("languageId", "kotlin"); put("stopped", stopped) }
+    }
+
+    private fun kotlinDiagnostics(params: JsonObject?): JsonElement {
+        val p = params ?: missing("params")
+        val current = requireSnapshot()
+        val requestId = p.string("requestId") ?: missing("requestId")
+        val expected = p.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+        val requestedLease = p.string("semanticLease") ?: missing("semanticLease")
+        if (expected != current.hash) return kotlinDiagnosticsRefusal(
+            requestId, requestedLease, current.hash, "kotlin.diagnosticsSnapshotStale", "Expected Kotlin snapshot is stale",
+        )
+        if (kotlinToolchain == null || requestedLease != kotlinSemanticLease) return kotlinDiagnosticsRefusal(
+            requestId, requestedLease, current.hash, "kotlin.diagnosticsSessionStale", "Kotlin semantic lease is missing or stale",
+        )
+        val result = kotlinAdapter.compilerDiagnostics(current)
+        val status = when (result) {
+            is KotlinCompilerDiagnosticsResult.Available -> "ready"
+            is KotlinCompilerDiagnosticsResult.Refused -> "refused"
+            is KotlinCompilerDiagnosticsResult.Error -> "error"
+        }
+        return buildJsonObject {
+            put("schemaVersion", 1)
+            put("requestId", requestId)
+            put("languageId", "kotlin")
+            put("status", status)
+            put("semanticLease", requestedLease)
+            put("snapshotHash", current.hash)
+            put("backend", result.attestation.backend)
+            put("toolchainProjectionHash", result.attestation.toolchainProjectionHash)
+            put("buildProjectionHash", result.attestation.buildProjectionHash)
+            put("kotlinVersion", result.attestation.kotlinVersion)
+            put("javaVersion", result.attestation.javaVersion)
+            put("runtime", buildJsonObject {
+                put("requestTimeoutMillis", KotlinCompilerDiagnostics.REQUEST_TIMEOUT_MILLIS)
+                put("maxOutputBytes", KotlinCompilerDiagnostics.MAX_OUTPUT_BYTES)
+                put("maxProcesses", 1)
+                put("compilerHeapMiB", KotlinCompilerDiagnostics.COMPILER_HEAP_MIB)
+            })
+            put("process", result.attestation.process?.let { provenance -> buildJsonObject {
+                put("executableSha256", provenance.executableSha256)
+                put("argumentsSha256", provenance.argumentsSha256)
+                put("processId", provenance.pid)
+            } } ?: kotlinx.serialization.json.JsonNull)
+            val failure = when (result) {
+                is KotlinCompilerDiagnosticsResult.Available -> null
+                is KotlinCompilerDiagnosticsResult.Refused -> result.reason
+                is KotlinCompilerDiagnosticsResult.Error -> result.failure
+            }
+            put("failure", failure?.let { diagnostic -> buildJsonObject {
+                put("code", diagnostic.code ?: "kotlin.diagnosticsUnavailable")
+                put("message", diagnostic.message)
+            } } ?: kotlinx.serialization.json.JsonNull)
+            put("diagnostics", buildJsonArray {
+                if (result is KotlinCompilerDiagnosticsResult.Available) result.diagnostics.forEach { diagnostic ->
+                    add(renderKotlinDiagnostic(current, diagnostic))
+                }
+            })
+        }
+    }
+
+    private fun kotlinDiagnosticsRefusal(
+        requestId: String,
+        lease: String,
+        snapshotHash: String,
+        code: String,
+        message: String,
+    ) = buildJsonObject {
+        put("schemaVersion", 1); put("requestId", requestId); put("languageId", "kotlin")
+        put("status", "refused"); put("semanticLease", lease); put("snapshotHash", snapshotHash)
+        put("backend", KotlinCompilerDiagnostics.BACKEND)
+        put("failure", buildJsonObject { put("code", code); put("message", message) })
+        put("diagnostics", buildJsonArray { })
+    }
+
+    private fun renderKotlinDiagnostic(snapshot: ProjectSnapshot, diagnostic: Diagnostic) = buildJsonObject {
+        put("severity", diagnostic.severity.name.lowercase())
+        put("message", diagnostic.message)
+        diagnostic.code?.let { put("code", it) }
+        put("locationPrecision", diagnostic.locationPrecision.name.lowercase().replace('_', '-'))
+        diagnostic.location?.let { location ->
+            put("file", protocolSourcePath(snapshot, location.path))
+            put("line", location.range.start.line)
+            if (diagnostic.locationPrecision == org.refactorkit.core.DiagnosticLocationPrecision.EXACT_RANGE) {
+                put("character", location.range.start.character)
+                put("endLine", location.range.end.line)
+                put("endCharacter", location.range.end.character)
+            }
+        }
+    }
+
     private fun diagnosticsV2(params: JsonObject?): JsonElement {
         val request = try {
             TypeScriptDiagnosticsProtocol.parse(params ?: missing("params"))
@@ -751,6 +932,9 @@ class DaemonSession(
         semanticAdapters.values.forEach { runCatching { it.close() } }
         semanticAdapters.clear()
         semanticLeases.clear()
+        kotlinAdapter = KotlinLanguageAdapter()
+        kotlinToolchain = null
+        kotlinSemanticLease = null
     }
 
     private fun protocolSourcePath(snapshot: ProjectSnapshot, path: Path): String {
@@ -1136,6 +1320,15 @@ class DaemonSession(
                     "compilerAttestation" to true,
                     "boundedResponse" to true,
                 ),
+            ),
+            DaemonMethodCapability(
+                "kotlin.semantic.start", "experimental", true, false,
+                mapOf("explicitToolchain" to true, "hashBoundProvenance" to true, "noBuildExecution" to true),
+            ),
+            DaemonMethodCapability("kotlin.semantic.stop", "experimental", true, false),
+            DaemonMethodCapability(
+                "kotlin.diagnostics", "experimental", true, false,
+                mapOf("compilerBacked" to true, "semanticLease" to true, "processAttestation" to true),
             ),
             DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
             DaemonMethodCapability("refactor.apply", "beta-contract", true, true),

@@ -35,8 +35,15 @@ review safety boundaries before applying refactorings.
   2 MiB response. Legacy `diagnostics` remains unchanged.
 - Fail source builds immediately with an actionable JDK 21 prerequisite instead
   of exposing Kotlin 2.0.21's internal `JavaVersion.parse` failure on JDK 25.
-- No new stable Kotlin capability is claimed until real compiler-backed native
-  acceptance passes preview, exact diagnostics, apply, WAL and rollback.
+- Add the first real Kotlin/K2 capability: bounded external compiler diagnostics
+  for an explicit JDK 21 plus Kotlin 2.0.21 toolchain and an `AVAILABLE`
+  single-module Kotlin/JVM projection. The worker revalidates evidence, uses an
+  immutable overlay and clean process environment, refuses plugins/scripts/partial
+  models, reports line-only compiler locations and process attestation, and is
+  exposed through library, CLI, daemon capability metadata and MCP. Diagnostics
+  are `EXPERIMENTAL/COMPILER/NONE`; every Kotlin mutation remains refused.
+- No stable Kotlin mutation is claimed until real compiler-backed native
+  acceptance passes preview, staged diagnostics, apply, WAL and rollback.
 
 ## 0.6.2 - 2026-07-14
 

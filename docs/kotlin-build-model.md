@@ -1,7 +1,8 @@
 # Kotlin/JVM build-model projection
 
-Status: bounded non-executable projection implemented for `0.7.0-SNAPSHOT`;
-Kotlin semantic capabilities and mutation authority remain refused.
+Status: bounded non-executable projection implemented for `0.7.0-SNAPSHOT` and
+consumed by experimental compiler diagnostics. Symbol and mutation authority
+remain refused.
 
 ## Provider
 
@@ -78,10 +79,10 @@ diagnostics. It performs no network access, credential access, build execution,
 compiler execution, filesystem writes, kapt, KSP, annotation processing, or
 compiler-plugin loading.
 
-## Next gate
+## Diagnostics consumer and next gate
 
-Define the bounded compiler lifecycle and create a read-only K2 session from this
-exact toolchain/build projection. The session must revalidate both projection
-hashes and toolchain evidence before providing symbols or compiler diagnostics.
-All Kotlin capabilities remain `REFUSED/NONE` until that acceptance evidence is
-complete.
+`kotlin-compiler-diagnostics-k2-v1` now requires an `AVAILABLE` projection,
+revalidates its toolchain and classpath evidence, and reports the exact build and
+toolchain projection hashes. Scripts and partial/unsupported models refuse before
+compiler launch. The next gate adds durable compiler-backed symbols, definition,
+references and conservative mixed Java/Kotlin identity.

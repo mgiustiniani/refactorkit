@@ -23,15 +23,20 @@ import kotlin.test.assertTrue
 
 class KotlinLanguageAdapterTest {
     @Test
-    fun descriptorOwnsKotlinExtensionsButAdvertisesOnlyRefusals() {
+    fun descriptorPromotesOnlyCompilerDiagnosticsAndKeepsMutationsRefused() {
         val descriptor = KotlinAdapterRegistration.descriptor()
 
         assertEquals("kotlin", descriptor.languageId)
         assertEquals(setOf("kt", "kts"), descriptor.extensions)
         assertEquals("kotlin-analysis-unavailable-v1", descriptor.backend)
         assertTrue(descriptor.capabilities.isNotEmpty())
-        assertTrue(descriptor.capabilities.all { it.stability == CapabilityStability.REFUSED })
-        assertTrue(descriptor.capabilities.all { it.evidence == SemanticEvidenceKind.NONE })
+        val diagnostics = descriptor.capabilities.single { it.operation == "diagnostics" }
+        assertEquals(CapabilityStability.EXPERIMENTAL, diagnostics.stability)
+        assertEquals(SemanticEvidenceKind.COMPILER, diagnostics.evidence)
+        assertEquals(KotlinCompilerDiagnostics.BACKEND, diagnostics.backend)
+        assertEquals(1, diagnostics.runtime?.limits?.maxProcesses)
+        assertTrue(descriptor.capabilities.filter { it.operation != "diagnostics" }
+            .all { it.stability == CapabilityStability.REFUSED && it.evidence == SemanticEvidenceKind.NONE })
         assertTrue(descriptor.capabilities.all { it.mutationAuthority == MutationAuthority.NONE })
         assertEquals(setOf("kts"), descriptor.capabilities.single { it.operation == "scriptSemantics" }.extensions)
         assertTrue(descriptor.capabilities.filter { it.operation != "scriptSemantics" }.all {
@@ -54,7 +59,7 @@ class KotlinLanguageAdapterTest {
             adapter.resolveSymbol(location).diagnostics.map { it.code },
         )
         assertEquals(
-            listOf(KotlinLanguageAdapter.BACKEND_UNAVAILABLE_CODE),
+            listOf("kotlin.toolchainNotConfigured"),
             adapter.diagnostics(snapshot).map { it.code },
         )
         assertTrue(adapter.availableRefactorings(CodeSelection(location)).isEmpty())

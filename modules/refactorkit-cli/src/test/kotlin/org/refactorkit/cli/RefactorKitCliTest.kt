@@ -18,10 +18,12 @@ import kotlin.test.assertTrue
 
 class RefactorKitCliTest {
     @Test
-    fun typescriptSemanticCommandRequiresExplicitSubcommandAndToolchain() {
+    fun semanticCommandsRequireExplicitSubcommandAndToolchain() {
         val cli = RefactorKitCli()
         assertEquals(2, cli.run(listOf("typescript")))
         assertEquals(2, cli.run(listOf("typescript", "diagnostics", ".")))
+        assertEquals(2, cli.run(listOf("kotlin")))
+        assertEquals(2, cli.run(listOf("kotlin", "diagnostics", ".")))
     }
 
 
@@ -37,6 +39,7 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("refactorkit java move-source-root"))
         assertTrue(result.stdout.contains("refactorkit format-file"))
         assertTrue(result.stdout.contains("diagnostics-v2"))
+        assertTrue(result.stdout.contains("refactorkit kotlin diagnostics"))
         assertTrue(result.stdout.contains("refactorkit recipe run"))
     }
 
@@ -69,6 +72,16 @@ class RefactorKitCliTest {
             ["requestTimeoutMillis"]!!.jsonPrimitive.content)
         assertEquals(listOf("immutable-editor-overlay", "saved-disk"), diagnostics["diagnosticSnapshotModes"]!!
             .jsonArray.map { it.jsonPrimitive.content })
+        val kotlin = schema["adapters"]!!.jsonArray.single {
+            it.jsonObject["languageId"]!!.jsonPrimitive.content == "kotlin"
+        }.jsonObject
+        val kotlinDiagnostics = kotlin["capabilities"]!!.jsonArray.single {
+            it.jsonObject["operation"]!!.jsonPrimitive.content == "diagnostics"
+        }.jsonObject
+        assertEquals("experimental", kotlinDiagnostics["stability"]!!.jsonPrimitive.content)
+        assertEquals("compiler", kotlinDiagnostics["evidence"]!!.jsonPrimitive.content)
+        assertEquals("kotlin-compiler-diagnostics-k2-v1", kotlinDiagnostics["backend"]!!.jsonPrimitive.content)
+        assertEquals("external-process", kotlinDiagnostics["runtime"]!!.jsonObject["executionMode"]!!.jsonPrimitive.content)
     }
 
     @Test

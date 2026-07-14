@@ -89,6 +89,16 @@ class KotlinToolchainDiscoveryTest {
     }
 
     @Test
+    fun acceptsBoundedRealisticJdkReleaseMetadataValuesLongerThanLegacyLimit() {
+        val fixture = fixture()
+        fixture.jdkHome.resolve("release").writeText(
+            "JAVA_VERSION=\"21.0.11\"\nMODULES=\"${"java.base ".repeat(128).trim()}\"\n",
+        )
+
+        assertIs<KotlinToolchainDiscovery.Available>(KotlinToolchainDiscoverer().discover(fixture.request()))
+    }
+
+    @Test
     fun workspaceLocalToolchainRequiresExplicitPolicy() {
         val fixture = fixture(toolchainInsideWorkspace = true)
         assertCodes(KotlinToolchainDiscoverer().discover(fixture.request()), "kotlin.workspaceToolchainRefused")

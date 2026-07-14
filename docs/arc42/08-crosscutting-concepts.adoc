@@ -39,7 +39,7 @@ Additive API `0.2` `diagnostics.v2` provides the IDE authority envelope for Type
 
 The stable target also compares diagnostics before preview, after preview simulation, after apply, and after rollback where an operation requires those gates. A configured regression beyond the approved plan causes refusal.
 
-Status: implementation-informed. Managed Java surfaces supply JDT diagnostics to a core gate that compares current and exact staged post-image snapshots under lock before WAL, refusing new errors or unavailable diagnostics. TypeScript managed gates and IDE diagnostics use the independent `typescript-compiler-exact-v1` path rather than LSP publications. Direct library apply requires an explicit gate (`TX-015` closed).
+Status: implementation-informed. Managed Java surfaces supply JDT diagnostics to a core gate that compares current and exact staged post-image snapshots under lock before WAL, refusing new errors or unavailable diagnostics. TypeScript managed gates and IDE diagnostics use the independent `typescript-compiler-exact-v1` path rather than LSP publications. Experimental Kotlin reads use `kotlin-compiler-diagnostics-k2-v1`, an external K2 process over an immutable overlay with snapshot/build/toolchain attestation; compiler XML lacks trustworthy end offsets, so locations remain explicitly line-only and have no mutation authority. Direct library apply requires an explicit gate (`TX-015` closed).
 
 == Risk Model
 

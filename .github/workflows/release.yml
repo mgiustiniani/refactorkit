@@ -72,6 +72,12 @@ jobs:
           import subprocess, sys
           subprocess.run([sys.executable, "scripts/smoke-packaged-typescript.py"], check=True)
 
+      - name: Native packaged real Kotlin qualification
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-kotlin.py"], check=True)
+
       - name: Native packaged kill-during-write recovery
         shell: python
         run: |

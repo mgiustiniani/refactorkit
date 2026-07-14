@@ -3,6 +3,7 @@ package org.refactorkit.cli
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -96,6 +97,7 @@ class RefactorKitCli(
             "patch"           -> cmdPatch(args.drop(1))
             "java"            -> cmdJava(args.drop(1))
             "typescript"      -> cmdTypeScript(args.drop(1))
+            "kotlin"          -> cmdKotlin(args.drop(1))
             "recipe"          -> cmdRecipe(args.drop(1))
             "outline"         -> cmdOutline(args.drop(1))
             "search"          -> cmdSearch(args.drop(1))
@@ -547,6 +549,41 @@ class RefactorKitCli(
         }
     }
 
+    private fun cmdKotlin(args: List<String>): Int {
+        if (args.firstOrNull() != "diagnostics") {
+            System.err.println("kotlin requires subcommand: diagnostics")
+            return 2
+        }
+        val parsed = parseOptions(args.drop(1))
+        val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
+        val jdkHome = parsed.options["jdk-home"] ?: run { System.err.println("--jdk-home required"); return 2 }
+        val compilerJar = parsed.options["compiler-jar"] ?: run { System.err.println("--compiler-jar required"); return 2 }
+        val compilerClasspath = parsed.options["compiler-classpath"].orEmpty()
+            .split(java.io.File.pathSeparator).filter(String::isNotBlank)
+        val session = semanticSessionFactory()
+        return try {
+            session.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
+            val started = session.dispatch("kotlin.semantic.start", buildJsonObject {
+                put("jdkHome", jdkHome)
+                put("compilerJar", compilerJar)
+                put("compilerClasspath", buildJsonArray { compilerClasspath.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+                put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
+            }).jsonObject
+            val result = session.dispatch("kotlin.diagnostics", buildJsonObject {
+                put("requestId", parsed.options["request-id"] ?: "cli-${UUID.randomUUID()}")
+                put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
+                put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
+            })
+            println(semanticJson.encodeToString(result))
+            if (result.jsonObject.getValue("status").jsonPrimitive.content == "ready") 0 else 1
+        } catch (failure: Exception) {
+            System.err.println("Kotlin diagnostics command failed: ${failure.message}")
+            1
+        } finally {
+            session.close()
+        }
+    }
+
     private fun cmdJava(args: List<String>): Int {
         if (args.isEmpty()) {
             System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, or move-source-root")
@@ -791,6 +828,7 @@ class RefactorKitCli(
           refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]
           refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
           refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
+          refactorkit kotlin diagnostics <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--request-id <id>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

@@ -73,6 +73,7 @@ compatible.
 | `refactorkit --version` / `refactorkit version` | `beta-contract` | Read-only implementation/API metadata; `v0.3.0` reports version `0.3.0` and API version `0.2`. |
 | `refactorkit capabilities` | `experimental` | Emits language-kernel capability schema v1 with deterministic adapter, backend, operation, evidence, authority, execution, timeout/cancellation, overlay, provenance, and resource-limit fields. |
 | `refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename>` | `experimental` | One-shot explicit-toolchain semantic session; `diagnostics-v2` emits the IDE-grade saved-disk authority envelope, legacy `diagnostics` remains compatible, preview is default, and managed apply requires `--apply`. |
+| `refactorkit kotlin diagnostics <root> --jdk-home ... --compiler-jar ... [--compiler-classpath ...]` | `experimental` | One-shot explicit JDK 21/Kotlin 2.0.21 K2 diagnostics with exact snapshot/lease, build/toolchain hashes, line-only/no-location precision and process attestation; no mutation authority. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
@@ -117,16 +118,16 @@ additively expose `diagnosticSnapshotModes` and `diagnosticRangeCapability`.
 TypeScript/JavaScript diagnostics identify `typescript-compiler-exact-v1`; they
 do not inherit LSP backend or runtime limits.
 
-The packaged `0.7.0-SNAPSHOT` kernel includes the initial `kotlin` descriptor for
-`.kt` and `.kts`. Its backend is `kotlin-analysis-unavailable-v1`; every operation
-is `REFUSED` with `NONE` evidence and no mutation authority. Capability discovery
-therefore reports the planned boundary without implying semantic reads, LSP
-ownership, formatting or managed writes. Kotlin scripts remain a separately
-refused capability. Library-only `kotlin-compiler-explicit-v1` discovery validates
-and hash-binds explicit JDK/compiler inputs without execution.
-`kotlin-jvm-projection-v1` can attach those hashes to bounded mixed-JVM
-Maven/Gradle source sets in a snapshot. Neither boundary changes capability
-stability or exposes a semantic process through protocol surfaces.
+The packaged `0.7.0-SNAPSHOT` kernel includes the `kotlin` descriptor for `.kt`
+and `.kts`. Its default backend remains `kotlin-analysis-unavailable-v1`, while
+only `diagnostics` overrides it with `kotlin-compiler-diagnostics-k2-v1`,
+`EXPERIMENTAL` stability, `COMPILER` evidence, external bounded runtime and no
+mutation authority. Every other operation and Kotlin script semantics remain
+`REFUSED/NONE/NONE`. `kotlin-compiler-explicit-v1` hash-binds explicit JDK/compiler
+inputs without discovery-time execution; `kotlin-jvm-projection-v1` binds those
+hashes to bounded JVM source sets. The diagnostics worker revalidates both,
+launches one isolated K2 process over an immutable overlay, and exposes no symbol
+or write authority.
 
 External LSP processes are internal proposal providers. They run under the
 bounded semantic process lifecycle with explicit environment and provenance,
@@ -157,6 +158,8 @@ of the beta baseline for documented methods.
 | `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |
 | `diagnostics` | `beta-contract` | Legacy read-only bare diagnostic array; retained unchanged for API `0.2` compatibility. It is not sufficient for exact IDE range/snapshot authority. |
 | `diagnostics.v2` | `additive-api-0.2` | IDE-grade TypeScript/JavaScript compiler diagnostics with request ID, semantic lease, saved/overlay authority, snapshot hashes, compiler attestation, exact/partial location variants, structured readiness, and bounded response. See `docs/typescript-diagnostics-protocol.md`. |
+| `kotlin.semantic.start` / `kotlin.semantic.stop` | `experimental` | Configure/clear explicit JDK 21 and Kotlin 2.0.21 compiler evidence, attach/remove the Kotlin/JVM projection, and rotate the semantic lease; no compiler is launched during startup. |
+| `kotlin.diagnostics` | `experimental` | Requires exact startup lease and snapshot; returns structured compiler diagnostics, explicit location precision, toolchain/build hashes, bounded runtime and process attestation. |
 | `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
 | `refactor.apply` | `beta-contract` | Requires `planId`; applies the exact retained plan, rejects stale snapshots/plans, refreshes session state, clears pending plans, and returns structured changes/diagnostics/snapshot evidence. |
 | `refactor.discard` | `beta-contract` | Idempotently removes a pending source-bearing plan without workspace writes; returns `discarded=false` when absent. |
@@ -419,6 +422,7 @@ the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 |------|--------|-------|
 | `project_scan`, `project_summary` | `beta-contract` | Mixed Java/TypeScript/JavaScript workspace lifecycle and project metadata; summary includes high-level Build Model SPI provider/status/source-set information without classpath secrets. |
 | `typescript_semantic_start`, `typescript_semantic_stop` | `experimental` | Explicit hash-bound toolchain lifecycle; no package scripts or implicit PATH discovery. |
+| `kotlin_semantic_start`, `kotlin_semantic_stop`, `kotlin_diagnostics` | `experimental` | Explicit JDK/compiler lifecycle and compiler-backed diagnostics with lease, snapshot, build/toolchain evidence and process attestation; no build/plugin/script execution or mutation authority. |
 | `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries; `diagnostics` remains the legacy human-readable form. |
 | `diagnostics_v2` | `additive-api-0.2` | MCP text content containing the exact `diagnostics.v2` JSON envelope and requiring the lease returned by `typescript_semantic_start`. |
 | `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; rollback refuses post-apply divergence by default and accepts explicit `force=true`. |

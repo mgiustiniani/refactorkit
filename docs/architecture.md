@@ -15,7 +15,7 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | `refactorkit-web-importer`| ✅ MVP       | ExternalJavaClassImporter with provenance + conflict detection |
 | `refactorkit-tree-sitter` | ✅ Kernel    | Packaged TypeScript/JavaScript Tree-sitter JNI, bounded external LSP lifecycle, overlays and untrusted edit normalization |
 | `refactorkit-typescript`  | ✅ v0.6+    | Explicit bounded toolchain/project models, semantic reads, managed rename, and IDE-grade `diagnostics.v2` compiler authority/ranges |
-| `refactorkit-kotlin`      | 🚧 v0.7     | Refused adapter, explicit JDK/compiler discovery and hash-bound Kotlin/JVM source-set projection; semantic analysis not yet enabled |
+| `refactorkit-kotlin`      | 🚧 v0.7     | Explicit JDK/compiler discovery, hash-bound Kotlin/JVM projection and experimental bounded external K2 diagnostics; symbols and mutations remain refused |
 | `refactorkit-testkit`     | ✅ MVP       | GoldenTestLoader/Runner, AgentSimulation scenarios         |
 
 See individual docs/ files for each subsystem.

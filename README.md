@@ -147,6 +147,22 @@ refactorkit typescript search /workspace --query UserService \
   --typescript-package /tools/node_modules/typescript
 ```
 
+### Kotlin compiler diagnostics
+
+The first `0.7.x` Kotlin capability is experimental read-only K2 diagnostics for
+an explicit JDK 21 and `kotlin-compiler-embeddable` 2.0.21 runtime. RefactorKit
+does not discover caches, execute builds/plugins, or install the compiler.
+
+```bash
+refactorkit kotlin diagnostics /workspace \
+  --jdk-home /tools/jdk-21 \
+  --compiler-jar /tools/kotlin/kotlin-compiler-embeddable-2.0.21.jar \
+  --compiler-classpath "/tools/kotlin/kotlin-stdlib-2.0.21.jar:/tools/kotlin/trove4j.jar:..."
+```
+
+Compiler diagnostics have no mutation authority; all Kotlin refactorings remain
+refused. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
+
 ## Build
 
 Source builds require JDK 21. Other build JVMs, including JDK 25, fail fast with
