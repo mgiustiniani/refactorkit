@@ -16,6 +16,7 @@ import org.refactorkit.core.ExternalFileEditProposal
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.ExternalWorkspaceEditNormalizer
 import org.refactorkit.core.ExternalWorkspaceEditProposal
+import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
@@ -163,6 +164,48 @@ class TypeScriptDaemonIntegrationTest {
             .getValue("evidence").jsonPrimitive.content)
         assertTrue(indexed.getValue("items").jsonArray.single().jsonObject
             .getValue("provenanceHash").jsonPrimitive.content.matches(Regex("[0-9a-f]{64}")))
+
+        val overlaySymbols = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "ts-overlay-symbols-1")
+            put("expectedSnapshotHash", snapshotHash)
+            put("expectedIndexGeneration", indexGeneration)
+            put("kind", "documentSymbols")
+            put("languageId", "typescript")
+            put("path", "src/service.ts")
+            put("semanticLease", lease)
+            put("sourceAuthority", buildJsonObject {
+                put("kind", "immutable-editor-overlay")
+                put("documents", buildJsonArray { add(buildJsonObject {
+                    put("path", "src/service.ts")
+                    put("version", 7)
+                    put("content", "export class UnsavedService {}\n")
+                }) })
+            })
+        }).jsonObject
+        assertEquals("ready", overlaySymbols.getValue("status").jsonPrimitive.content)
+        assertEquals("UnsavedService", overlaySymbols.getValue("items").jsonArray.single().jsonObject
+            .getValue("name").jsonPrimitive.content)
+        assertTrue("content" !in overlaySymbols.getValue("sourceAuthority").jsonObject
+            .getValue("documents").jsonArray.single().jsonObject)
+
+        val staleOverlay = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "ts-overlay-symbols-stale")
+            put("expectedSnapshotHash", snapshotHash)
+            put("expectedIndexGeneration", indexGeneration)
+            put("kind", "documentSymbols")
+            put("languageId", "typescript")
+            put("path", "src/service.ts")
+            put("semanticLease", lease)
+            put("sourceAuthority", buildJsonObject {
+                put("kind", "immutable-editor-overlay")
+                put("documents", buildJsonArray { add(buildJsonObject {
+                    put("path", "src/service.ts"); put("version", 6); put("content", "class Older {}\n")
+                }) })
+            })
+        }).jsonObject
+        assertEquals("refused", staleOverlay.getValue("status").jsonPrimitive.content)
+        assertEquals("typescript.overlayVersionStale", staleOverlay.getValue("error").jsonObject
+            .getValue("code").jsonPrimitive.content)
         client.synchronized = ExternalSemanticDiagnostics.Available(listOf(
             Diagnostic(
                 message = "Cannot find name 'missing'.",
@@ -413,6 +456,21 @@ class TypeScriptDaemonIntegrationTest {
             "workspaceSymbolProvider", "textDocumentSync",
         )
         override fun buildSymbols(snapshot: ProjectSnapshot) = SymbolIndex(listOf(symbol()))
+        override fun buildOverlayDocumentSymbols(
+            savedSnapshot: ProjectSnapshot,
+            overlay: ImmutableEditorOverlay,
+            targetPath: Path,
+            limit: Int,
+        ): TypeScriptClientSymbolProjection {
+            val content = overlay.providerSnapshot.files.single { it.path == targetPath }.content
+            val name = Regex("class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(content)?.groupValues?.get(1) ?: "Service"
+            val symbol = Symbol(
+                SymbolId("src/service.ts::$name@0:13"), name, Symbol.Kind.CLASS,
+                SourceLocation(targetPath, SourceRange(SourcePosition(0, 13), SourcePosition(0, 13 + name.length))),
+                "typescript",
+            )
+            return TypeScriptClientSymbolProjection.Available(SymbolIndex(listOf(symbol)), false)
+        }
         override fun buildSymbolProjection(
             snapshot: ProjectSnapshot,
             limit: Int,

@@ -12,6 +12,7 @@ import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.LanguageAdapter
 import org.refactorkit.core.LanguageAdapterDescriptor
 import org.refactorkit.core.LanguageCapability
@@ -92,6 +93,15 @@ interface TypeScriptSemanticClient : AutoCloseable {
             symbols.size > limit,
         )
     }
+    fun buildOverlayDocumentSymbols(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        limit: Int,
+    ): TypeScriptClientSymbolProjection {
+        val symbols = buildSymbols(overlay.providerSnapshot).symbols.filter { it.location.path.normalize() == targetPath.normalize() }
+        return TypeScriptClientSymbolProjection.Available(SymbolIndex(symbols.take(limit)), symbols.size > limit)
+    }
     fun searchWorkspaceSymbols(query: String): List<org.refactorkit.core.Symbol>
     fun resolveSymbol(location: SourceLocation): SymbolResolution
     fun findReferences(symbolId: SymbolId): List<Reference>
@@ -136,6 +146,21 @@ class ExternalTypeScriptSemanticClient(
                 projection.failure.message,
             )
         }
+    override fun buildOverlayDocumentSymbols(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        limit: Int,
+    ): TypeScriptClientSymbolProjection = when (val projection = adapter.buildOverlayDocumentSymbolProjection(
+        savedSnapshot, overlay, targetPath, limit,
+    )) {
+        is ExternalSymbolProjection.Available -> TypeScriptClientSymbolProjection.Available(
+            projection.index, projection.truncated,
+        )
+        is ExternalSymbolProjection.Unavailable -> TypeScriptClientSymbolProjection.Refused(
+            projection.failure.code, projection.failure.message,
+        )
+    }
     override fun searchWorkspaceSymbols(query: String): List<org.refactorkit.core.Symbol> =
         adapter.searchWorkspaceSymbols(query)
     override fun resolveSymbol(location: SourceLocation): SymbolResolution = adapter.resolveSymbol(location)
@@ -167,6 +192,7 @@ class TypeScriptSemanticAdapter(
     private val restartAttempts = ArrayDeque<Long>()
     private var lastRestartMillis: Long? = null
     private val approvedStagedSnapshotHashes = linkedSetOf<String>()
+    private val overlayVersions = linkedMapOf<Path, Pair<Long, String>>()
 
     init {
         require(languageId in setOf("typescript", "javascript")) { "TypeScript semantic adapter language is invalid" }
@@ -267,6 +293,7 @@ class TypeScriptSemanticAdapter(
         restartAttempts.addLast(now)
         client.close()
         activeSnapshot = null
+        overlayVersions.clear()
         val result = start(snapshot)
         if (result is TypeScriptSemanticStart.Refused) activeSnapshot = previous
         return result
@@ -345,6 +372,52 @@ class TypeScriptSemanticAdapter(
                 "typescript.symbolIndexUnavailable",
                 failure.message ?: "TypeScript language server symbol projection failed",
             ))
+        }
+    }
+
+    fun overlayDocumentSymbols(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        limit: Int = org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS,
+    ): TypeScriptSymbolProjection {
+        require(limit in 1..org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS)
+        if (!active(savedSnapshot) || overlay.baseSnapshotHash != savedSnapshot.hash) return TypeScriptSymbolProjection.Refused(
+            diagnostic("typescript.overlaySessionStale", "Editor overlay requires the active saved snapshot"),
+        )
+        if (toolchain.provenance.evidence.any { !verifyEvidence(it) } || !projectEvidenceUnchanged(savedSnapshot.workspace.root)) {
+            return TypeScriptSymbolProjection.Refused(diagnostic(
+                "typescript.overlayEvidenceChanged", "TypeScript toolchain or project evidence changed before overlay query",
+            ))
+        }
+        for (document in overlay.documents) {
+            val hash = sha256(document.content.toByteArray(Charsets.UTF_8))
+            val previous = overlayVersions[document.path.normalize()]
+            if (previous != null && (document.version < previous.first ||
+                    document.version == previous.first && hash != previous.second)) {
+                return TypeScriptSymbolProjection.Refused(diagnostic(
+                    "typescript.overlayVersionStale", "Editor overlay document version is stale",
+                ))
+            }
+        }
+        return when (val result = try {
+            client.buildOverlayDocumentSymbols(savedSnapshot, overlay, targetPath, limit)
+        } catch (failure: RuntimeException) {
+            return TypeScriptSymbolProjection.Refused(diagnostic(
+                "typescript.overlaySymbolsUnavailable",
+                failure.message ?: "TypeScript overlay document symbols failed",
+            ))
+        }) {
+            is TypeScriptClientSymbolProjection.Available -> {
+                overlay.documents.forEach { document ->
+                    overlayVersions[document.path.normalize()] = document.version to
+                        sha256(document.content.toByteArray(Charsets.UTF_8))
+                }
+                TypeScriptSymbolProjection.Available(result.index, result.truncated, symbolProjectionProvenanceHash())
+            }
+            is TypeScriptClientSymbolProjection.Refused -> TypeScriptSymbolProjection.Refused(
+                diagnostic(result.code, result.message),
+            )
         }
     }
 
@@ -598,6 +671,7 @@ class TypeScriptSemanticAdapter(
         restartAttempts.clear()
         lastRestartMillis = null
         approvedStagedSnapshotHashes.clear()
+        overlayVersions.clear()
         client.close()
     }
 

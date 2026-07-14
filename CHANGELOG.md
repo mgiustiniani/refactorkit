@@ -20,6 +20,10 @@ review safety boundaries before applying refactorings.
   hash, in-memory provider snapshot derivation, common semantic-query correlation,
   and bounded path/language/content validation. TypeScript `diagnostics.v2` now
   uses this shared model without changing its API `0.2` JSON contract.
+- Route TypeScript/JavaScript `intelligence.query` document symbols through exact
+  immutable editor overlays. Requests require snapshot/index/lease/path/version
+  authority; stale versions refuse, responses omit content, and the persistent
+  language server restores saved documents before any later semantic operation.
 - Merge qualified TypeScript/JavaScript declaration projections into the central
   index during semantic startup/restart. Contributions carry language-server
   evidence and path-free toolchain/project/server provenance, refuse evidence or

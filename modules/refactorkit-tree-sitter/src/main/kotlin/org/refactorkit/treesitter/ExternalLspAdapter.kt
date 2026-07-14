@@ -20,6 +20,7 @@ import org.refactorkit.core.SemanticProcessLimits
 import org.refactorkit.core.SemanticProcessProvenance
 import org.refactorkit.core.SemanticProcessSpec
 import org.refactorkit.core.Diagnostic
+import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.LanguageAdapter
 import org.refactorkit.core.ParseResult
 import org.refactorkit.core.PatchPlan
@@ -383,6 +384,68 @@ class ExternalLspAdapter(
         val index = SymbolIndex(symbols.values.sortedBy { it.id.value })
         lastIndex.set(index)
         return ExternalSymbolProjection.Available(index, truncated = false)
+    }
+
+    /** Query one temporary immutable editor view and restore saved documents before returning. */
+    fun buildOverlayDocumentSymbolProjection(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        maxSymbols: Int,
+        timeoutMillis: Long = requestTimeoutMillis,
+    ): ExternalSymbolProjection {
+        require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
+        require(maxSymbols in 1..org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS) {
+            "document symbol projection limit is outside the safe range"
+        }
+        require(timeoutMillis in 100..MAX_REQUEST_TIMEOUT_MILLIS) { "document symbol timeout is outside the safe range" }
+        val target = targetPath.normalize()
+        require(overlay.document(target) != null) { "target document is not part of the editor overlay" }
+        val saved = savedSnapshot.files.associateBy { it.path.normalize() }
+        val provider = overlay.providerSnapshot.files.associateBy { it.path.normalize() }
+        lastFailure = null
+        if (!isRunning || !supportsServerCapability("documentSymbolProvider")) return ExternalSymbolProjection.Unavailable(
+            ExternalSemanticFailure("semantic.documentSymbolsUnavailable", "External semantic document symbols are unavailable"),
+        )
+        val changed = overlay.documents.map { it.path.normalize() }.sortedBy(Path::toString)
+        var result: ExternalSymbolProjection? = null
+        try {
+            for (document in overlay.documents) {
+                val path = document.path.normalize()
+                closeDocument(path)
+                val source = provider.getValue(path)
+                if (!openDocument(source, document.version)) {
+                    result = ExternalSymbolProjection.Unavailable(lastFailure ?: ExternalSemanticFailure(
+                        "semantic.overlaySynchronizationFailed", "Editor overlay document synchronization failed",
+                    ))
+                    break
+                }
+            }
+            if (result == null) {
+                val targetFile = provider.getValue(target)
+                val returned = requestDocumentSymbols(targetFile, timeoutMillis)
+                result = lastFailure?.let(ExternalSymbolProjection::Unavailable) ?: run {
+                    val distinct = returned.distinctBy { it.id }.sortedBy { it.id.value }
+                    ExternalSymbolProjection.Available(
+                        SymbolIndex(distinct.take(maxSymbols)),
+                        truncated = distinct.size > maxSymbols,
+                    )
+                }
+            }
+        } finally {
+            var restored = true
+            changed.forEach { path ->
+                closeDocument(path)
+                restored = openDocument(saved.getValue(path), 1) && restored
+            }
+            if (!restored) {
+                failAndStop("semantic.overlayRestoreFailed", "Saved document state could not be restored after overlay query")
+                result = ExternalSymbolProjection.Unavailable(requireNotNull(lastFailure))
+            }
+        }
+        return result ?: ExternalSymbolProjection.Unavailable(ExternalSemanticFailure(
+            "semantic.documentSymbolsUnavailable", "Editor overlay document symbols are unavailable",
+        ))
     }
 
     fun searchWorkspaceSymbols(query: String): List<Symbol> {

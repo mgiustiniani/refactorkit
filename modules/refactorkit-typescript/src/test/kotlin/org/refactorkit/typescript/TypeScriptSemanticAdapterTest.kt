@@ -8,6 +8,8 @@ import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.ExternalWorkspaceEditNormalizer
 import org.refactorkit.core.ExternalWorkspaceEditProposal
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.ImmutableEditorOverlay
+import org.refactorkit.core.ImmutableEditorOverlayDocument
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
@@ -83,6 +85,35 @@ class TypeScriptSemanticAdapterTest {
         assertTrue(adapter.diagnostics(fixture.snapshot).isEmpty())
         adapter.close()
         assertFalse(client.isRunning)
+    }
+
+    @Test
+    fun overlayDocumentVersionsRefuseStaleContentAndResetWithSemanticLeaseRestart() {
+        val fixture = fixture()
+        val client = FakeClient()
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+        fun overlay(version: Long, name: String) = ImmutableEditorOverlay.create(
+            fixture.snapshot,
+            listOf(ImmutableEditorOverlayDocument(
+                Path.of("src/service.ts"), version, "export class $name {}\n",
+            )),
+            "typescript",
+        )
+
+        assertIs<TypeScriptSymbolProjection.Available>(adapter.overlayDocumentSymbols(
+            fixture.snapshot, overlay(7, "NewService"), Path.of("src/service.ts"),
+        ))
+        val stale = assertIs<TypeScriptSymbolProjection.Refused>(adapter.overlayDocumentSymbols(
+            fixture.snapshot, overlay(6, "OldService"), Path.of("src/service.ts"),
+        ))
+        assertEquals("typescript.overlayVersionStale", stale.diagnostic.code)
+
+        client.crash()
+        assertIs<TypeScriptSemanticStart.Started>(adapter.restart(fixture.snapshot))
+        assertIs<TypeScriptSymbolProjection.Available>(adapter.overlayDocumentSymbols(
+            fixture.snapshot, overlay(6, "OldService"), Path.of("src/service.ts"),
+        ))
     }
 
     @Test

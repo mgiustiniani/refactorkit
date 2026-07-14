@@ -11,6 +11,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
@@ -20,6 +21,8 @@ import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileChangeKind
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
+import org.refactorkit.core.ImmutableEditorOverlay
+import org.refactorkit.core.ImmutableEditorOverlayDocument
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.PatchDiffRenderer
@@ -331,6 +334,47 @@ class DaemonSession(
         }
         val path = p.string("path")?.let(::protocolRelativePath)
         if (kind == "documentSymbols" && path == null) missing("path")
+        val sourceAuthority = p["sourceAuthority"] as? JsonObject
+        if (sourceAuthority?.string("kind") == "immutable-editor-overlay") {
+            if (kind != "documentSymbols" || path == null) return intelligenceRefusal(
+                requestId, kind, index, "intelligence.overlayKindUnsupported",
+                "Editor overlay authority currently supports documentSymbols only",
+            )
+            val overlayLanguage = languageId ?: missing("languageId")
+            if (overlayLanguage !in setOf("typescript", "javascript")) return intelligenceRefusal(
+                requestId, kind, index, "intelligence.overlayProviderUnsupported",
+                "Editor overlay document symbols require TypeScript or JavaScript provider authority",
+            )
+            val lease = p.string("semanticLease") ?: missing("semanticLease")
+            if (semanticLeases[overlayLanguage] != lease) return intelligenceRefusal(
+                requestId, kind, index, "intelligence.semanticLeaseStale",
+                "Editor overlay semantic lease is missing or stale",
+            )
+            val overlay = parseIntelligenceOverlay(sourceAuthority, requireSnapshot(), overlayLanguage)
+            if (overlay.document(path) == null) throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS, "documentSymbols path must be present in the editor overlay",
+            )
+            val semantic = semanticAdapters[overlayLanguage] ?: return intelligenceRefusal(
+                requestId, kind, index, "intelligence.semanticSessionNotReady",
+                "TypeScript semantic provider is not started",
+            )
+            return when (val projection = semantic.overlayDocumentSymbols(
+                requireSnapshot(), overlay, path, requestedLimit,
+            )) {
+                is TypeScriptSymbolProjection.Available -> overlayDocumentSymbolsResponse(
+                    requestId, index, overlayLanguage, overlay, projection,
+                )
+                is TypeScriptSymbolProjection.Refused -> intelligenceRefusal(
+                    requestId, kind, index,
+                    projection.diagnostic.code ?: "intelligence.overlayUnavailable",
+                    projection.diagnostic.message,
+                )
+            }
+        } else if (sourceAuthority != null) {
+            if (sourceAuthority.string("kind") != "saved-snapshot" || sourceAuthority.keys != setOf("kind")) {
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "saved-snapshot sourceAuthority accepts only kind")
+            }
+        }
         val relevantLanguages = index.sources.asSequence().map { it.languageId }
             .filter { languageId == null || it == languageId }.toSortedSet()
         val relevantProviders = index.contributions.filter { it.languageId in relevantLanguages }
@@ -378,6 +422,82 @@ class DaemonSession(
                 }
             })
         }
+    }
+
+    private fun parseIntelligenceOverlay(
+        authority: JsonObject,
+        saved: ProjectSnapshot,
+        languageId: String,
+    ): ImmutableEditorOverlay {
+        if (authority.keys != setOf("kind", "documents")) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "immutable-editor-overlay requires only kind and documents",
+        )
+        val values = authority["documents"] as? JsonArray ?: missing("sourceAuthority.documents")
+        val documents = values.map { element ->
+            val value = element as? JsonObject ?: throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS, "editor overlay document must be an object",
+            )
+            if (value.keys != setOf("path", "version", "content")) throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS, "editor overlay document fields are invalid",
+            )
+            val path = protocolRelativePath(value.string("path") ?: missing("sourceAuthority.documents.path"))
+            val version = (value["version"] as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.longOrNull
+                ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "editor overlay version must be an integer")
+            val content = value.string("content") ?: missing("sourceAuthority.documents.content")
+            ImmutableEditorOverlayDocument(path, version, content)
+        }
+        return try {
+            ImmutableEditorOverlay.create(saved, documents, expectedLanguageId = languageId)
+        } catch (failure: RuntimeException) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "editor overlay is invalid")
+        }
+    }
+
+    private fun overlayDocumentSymbolsResponse(
+        requestId: String,
+        index: WorkspaceIndex,
+        languageId: String,
+        overlay: ImmutableEditorOverlay,
+        projection: TypeScriptSymbolProjection.Available,
+    ): JsonElement = buildJsonObject {
+        put("schemaVersion", 1)
+        put("requestId", requestId)
+        put("status", "ready")
+        put("kind", "documentSymbols")
+        put("snapshotHash", index.snapshotHash)
+        put("providerSnapshotHash", overlay.providerSnapshot.hash)
+        put("indexGeneration", index.generation)
+        put("coverage", "declarations")
+        put("missingProviderLanguages", buildJsonArray { })
+        put("total", projection.index.symbols.size)
+        put("returned", projection.index.symbols.size)
+        put("truncated", projection.truncated)
+        put("sourceAuthority", buildJsonObject {
+            put("kind", "immutable-editor-overlay")
+            put("baseSnapshotHash", overlay.baseSnapshotHash)
+            put("overlayHash", overlay.overlayHash)
+            put("documents", buildJsonArray {
+                overlay.documents.forEach { document -> add(buildJsonObject {
+                    put("path", ProtocolPath.serialize(document.path))
+                    put("version", document.version)
+                    put("contentSha256", overlay.authority(document.path)!!.contentSha256)
+                }) }
+            })
+        })
+        put("items", buildJsonArray {
+            projection.index.symbols.forEach { symbol -> add(buildJsonObject {
+                put("id", symbol.id.value)
+                put("name", symbol.name)
+                put("symbolKind", symbol.kind.name.lowercase().replace('_', '-'))
+                put("languageId", languageId)
+                put("providerId", typeScriptIndexProviderId(languageId))
+                put("backend", TypeScriptToolchainProvenance.PROVIDER_ID)
+                put("evidence", "language-server")
+                put("completeness", "declarations")
+                put("provenanceHash", projection.provenanceHash)
+                put("location", intelligenceLocationToJson(symbol.location))
+            }) }
+        })
     }
 
     private fun intelligenceRefusal(
@@ -1772,6 +1892,8 @@ class DaemonSession(
                 mapOf(
                     "workspaceSymbols" to true,
                     "documentSymbols" to true,
+                    "immutableEditorOverlayDocumentSymbols" to true,
+                    "semanticLease" to true,
                     "completion" to false,
                     "hover" to false,
                     "signatureHelp" to false,

@@ -151,6 +151,29 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         if intelligence.get("error") or intelligence_result.get("status") != "ready" or len(indexed_types) != 1:
             raise AssertionError(f"central TypeScript index query failed: {intelligence}")
 
+        mark_stage("immutable overlay document symbols")
+        saved_service = (workspace / "src" / "core" / "UserService.ts").read_text()
+        overlay_service = saved_service.replace("UserService", "UnsavedService")
+        overlay_symbols = exchange("intelligence.query", {
+            "requestId": "native-daemon-overlay-symbols",
+            "expectedSnapshotHash": opened["result"]["snapshotHash"],
+            "expectedIndexGeneration": restarted["index"]["generation"],
+            "kind": "documentSymbols", "languageId": "typescript",
+            "path": "src/core/UserService.ts", "semanticLease": restarted["semanticLease"],
+            "sourceAuthority": {
+                "kind": "immutable-editor-overlay",
+                "documents": [{"path": "src/core/UserService.ts", "version": 11, "content": overlay_service}],
+            },
+        })
+        overlay_items = overlay_symbols.get("result", {}).get("items", [])
+        if overlay_symbols.get("error") or not any(item.get("name") == "UnsavedService" for item in overlay_items):
+            raise AssertionError(f"overlay document symbols failed: {overlay_symbols}")
+        authority = overlay_symbols["result"].get("sourceAuthority", {})
+        if authority.get("kind") != "immutable-editor-overlay" or "content" in authority.get("documents", [{}])[0]:
+            raise AssertionError(f"overlay authority leaked content or is incomplete: {authority}")
+        if (workspace / "src" / "core" / "UserService.ts").read_text() != saved_service:
+            raise AssertionError("overlay document-symbol query modified saved source")
+
         mark_stage("restarted semantic diagnostics")
         diagnosed = exchange("diagnostics", {"languageId": "typescript"})
         if diagnosed.get("error") or diagnosed.get("result") != []:

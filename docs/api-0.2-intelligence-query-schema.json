@@ -71,6 +71,8 @@
           "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "coverage", "missingProviderLanguages", "total", "returned", "truncated", "items"],
           "properties": {
             "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
+            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "sourceAuthority": {"type": "object"},
             "status": {"const": "ready"},
             "kind": {"enum": ["workspaceSymbols", "documentSymbols"]},
             "coverage": {"enum": ["source-inventory", "partial", "declarations", "semantic"]},

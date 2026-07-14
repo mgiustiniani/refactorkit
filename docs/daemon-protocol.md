@@ -95,8 +95,15 @@ bounded to 200 results and correlated to the exact expected snapshot.
 `completion`, `hover`, `signatureHelp`, definition-at-position and
 references-at-position return `status=refused` with
 `intelligence.queryUnsupported` until their JDT, tsserver and K2 implementations
-are qualified. They never fall back to fabricated lexical semantics. The response
-schema is [`api-0.2-intelligence-query-schema.json`](api-0.2-intelligence-query-schema.json).
+are qualified. They never fall back to fabricated lexical semantics.
+
+TypeScript/JavaScript `documentSymbols` additionally accepts
+`sourceAuthority.kind=immutable-editor-overlay`, versioned existing documents and
+the active `semanticLease`. The selected path must be in the overlay. RefactorKit
+queries the derived provider snapshot, rejects stale versions, restores saved LSP
+documents before returning, and reports provider/overlay hashes without echoing
+content. The response schema is
+[`api-0.2-intelligence-query-schema.json`](api-0.2-intelligence-query-schema.json).
 
 ## Experimental TypeScript/JavaScript semantic session
 

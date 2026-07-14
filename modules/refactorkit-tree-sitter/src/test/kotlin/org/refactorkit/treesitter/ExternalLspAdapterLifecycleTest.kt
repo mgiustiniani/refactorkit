@@ -4,6 +4,8 @@ import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.ImmutableEditorOverlay
+import org.refactorkit.core.ImmutableEditorOverlayDocument
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -180,6 +182,30 @@ class ExternalLspAdapterLifecycleTest {
     }
 
     @Test
+    fun overlayDocumentSymbolsRestoreTheSavedProviderDocument() {
+        val workspace = Files.createTempDirectory("refactorkit-lsp-overlay-symbols")
+        val savedFile = org.refactorkit.core.SourceFile(Path.of("sample.ts"), "export class Service {}\n", "typescript")
+        val snapshot = org.refactorkit.core.ProjectSnapshot(
+            workspace = org.refactorkit.core.Workspace(workspace), modules = emptyList(), files = listOf(savedFile),
+        )
+        val overlay = ImmutableEditorOverlay.create(
+            snapshot,
+            listOf(ImmutableEditorOverlayDocument(Path.of("sample.ts"), 7L, "export class OverlayService {}\n")),
+            "typescript",
+        )
+        val adapter = adapter("overlay-symbol")
+        adapter.start(snapshot)
+        assertIs<ExternalSymbolProjection.Available>(adapter.buildSymbolProjection(snapshot, 100))
+
+        val overlaid = assertIs<ExternalSymbolProjection.Available>(
+            adapter.buildOverlayDocumentSymbolProjection(snapshot, overlay, Path.of("sample.ts"), 100),
+        )
+        assertEquals(listOf("OverlayService"), overlaid.index.symbols.map { it.name })
+        assertEquals(listOf("Service"), adapter.buildSymbols(snapshot).symbols.map { it.name })
+        adapter.close()
+    }
+
+    @Test
     fun documentSymbolProjectionHasAnAggregateDeadlineAndPublishesNoPartialIndex() {
         val workspace = Files.createTempDirectory("refactorkit-lsp-symbol-timeout")
         val snapshot = org.refactorkit.core.ProjectSnapshot(
@@ -233,6 +259,7 @@ object ExternalLspFixture {
         val input = System.`in`
         val output = System.out
         var lastDocumentUri = "\"file:///sample.ts\""
+        var overlayDocument = false
         while (true) {
             val request = readFrame(input) ?: return
             val method = LspJson.extractField(request, "method")?.let(LspJson::unquote)
@@ -255,13 +282,15 @@ object ExternalLspFixture {
                     val document = LspJson.extractField(params, "textDocument").orEmpty()
                     val uri = LspJson.extractField(document, "uri") ?: "\"file:///sample.ts\""
                     val version = LspJson.extractField(document, "version") ?: "0"
+                    overlayDocument = mode == "overlay-symbol" && version == "7"
                     val versionField = if (mode == "unversioned") "" else "\"version\":$version,"
                     writeFrame(output, """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":$uri,$versionField"diagnostics":[]}}""")
                 }
                 "initialized", "textDocument/didClose" -> Unit
                 "textDocument/documentSymbol" -> {
                     if (mode == "slow-symbol") Thread.sleep(300)
-                    writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":21}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}]}""")
+                    val name = if (overlayDocument) "OverlayService" else "Service"
+                    writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"$name","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":30}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":${13 + name.length}}}}]}""")
                 }
                 "workspace/symbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"location":{"uri":$lastDocumentUri,"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}}]}""")
                 "textDocument/definition" -> {
