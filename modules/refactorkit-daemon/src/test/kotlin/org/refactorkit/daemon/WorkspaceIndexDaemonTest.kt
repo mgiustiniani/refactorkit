@@ -97,7 +97,7 @@ class WorkspaceIndexDaemonTest {
             }).jsonObject
             assertEquals("refused", hover.getValue("status").jsonPrimitive.content)
             assertEquals(
-                "intelligence.queryUnsupported",
+                "intelligence.hoverOverlayRequired",
                 hover.getValue("error").jsonObject.getValue("code").jsonPrimitive.content,
             )
         }

@@ -174,6 +174,24 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         if (workspace / "src" / "core" / "UserService.ts").read_text() != saved_service:
             raise AssertionError("overlay document-symbol query modified saved source")
 
+        mark_stage("immutable overlay hover")
+        hover = exchange("intelligence.query", {
+            "requestId": "native-daemon-overlay-hover",
+            "expectedSnapshotHash": opened["result"]["snapshotHash"],
+            "expectedIndexGeneration": restarted["index"]["generation"],
+            "kind": "hover", "languageId": "typescript", "path": "src/core/UserService.ts",
+            "semanticLease": restarted["semanticLease"], "position": {"line": 0, "character": 16},
+            "sourceAuthority": {
+                "kind": "immutable-editor-overlay",
+                "documents": [{"path": "src/core/UserService.ts", "version": 11, "content": overlay_service}],
+            },
+        })
+        hover_result = hover.get("result", {})
+        if hover.get("error") or hover_result.get("status") != "ready" or not hover_result.get("contents"):
+            raise AssertionError(f"overlay hover failed: {hover}")
+        if any("content" in document for document in hover_result.get("sourceAuthority", {}).get("documents", [])):
+            raise AssertionError(f"overlay hover leaked source content: {hover_result}")
+
         mark_stage("restarted semantic diagnostics")
         diagnosed = exchange("diagnostics", {"languageId": "typescript"})
         if diagnosed.get("error") or diagnosed.get("result") != []:

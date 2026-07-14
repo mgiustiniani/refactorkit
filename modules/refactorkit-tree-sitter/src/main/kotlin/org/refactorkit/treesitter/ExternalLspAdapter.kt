@@ -95,6 +95,14 @@ sealed interface ExternalSymbolProjection {
     data class Unavailable(val failure: ExternalSemanticFailure) : ExternalSymbolProjection
 }
 
+sealed interface ExternalHoverProjection {
+    data class Available(
+        val range: SourceRange?,
+        val sections: List<org.refactorkit.core.SemanticHoverSection>,
+    ) : ExternalHoverProjection
+    data class Unavailable(val failure: ExternalSemanticFailure) : ExternalHoverProjection
+}
+
 sealed interface ExternalSemanticDiagnostics {
     data class Available(
         val diagnostics: List<Diagnostic>,
@@ -446,6 +454,67 @@ class ExternalLspAdapter(
         return result ?: ExternalSymbolProjection.Unavailable(ExternalSemanticFailure(
             "semantic.documentSymbolsUnavailable", "Editor overlay document symbols are unavailable",
         ))
+    }
+
+    fun buildOverlayHover(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        timeoutMillis: Long = requestTimeoutMillis,
+    ): ExternalHoverProjection {
+        require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
+        val target = targetPath.normalize()
+        require(overlay.document(target) != null) { "hover target is not part of the editor overlay" }
+        val saved = savedSnapshot.files.associateBy { it.path.normalize() }
+        val provider = overlay.providerSnapshot.files.associateBy { it.path.normalize() }
+        lastFailure = null
+        if (!isRunning || !supportsServerCapability("hoverProvider")) return ExternalHoverProjection.Unavailable(
+            ExternalSemanticFailure("semantic.hoverUnavailable", "External semantic hover is unavailable"),
+        )
+        val changed = overlay.documents.map { it.path.normalize() }.sortedBy(Path::toString)
+        var result: ExternalHoverProjection? = null
+        try {
+            for (document in overlay.documents) {
+                val path = document.path.normalize()
+                closeDocument(path)
+                if (!openDocument(provider.getValue(path), document.version)) {
+                    result = ExternalHoverProjection.Unavailable(lastFailure ?: ExternalSemanticFailure(
+                        "semantic.overlaySynchronizationFailed", "Editor overlay document synchronization failed",
+                    ))
+                    break
+                }
+            }
+            if (result == null) {
+                val semantic = semanticPath(target) ?: error("hover target has no semantic path")
+                val response = sendRequest(
+                    "textDocument/hover",
+                    """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}}}""",
+                    timeoutMillis,
+                )
+                val parsed = response?.let { LspJson.extractField(it, "result") }?.let(LspHoverParser::parse)
+                result = when {
+                    lastFailure != null -> ExternalHoverProjection.Unavailable(requireNotNull(lastFailure))
+                    parsed == null -> ExternalHoverProjection.Unavailable(ExternalSemanticFailure(
+                        "semantic.hoverResponseInvalid", "External semantic hover response is invalid",
+                    ))
+                    else -> ExternalHoverProjection.Available(parsed.range, parsed.sections)
+                }
+            }
+        } finally {
+            var restored = true
+            changed.forEach { path ->
+                closeDocument(path)
+                restored = openDocument(saved.getValue(path), 1) && restored
+            }
+            if (!restored) {
+                failAndStop("semantic.overlayRestoreFailed", "Saved document state could not be restored after hover query")
+                result = ExternalHoverProjection.Unavailable(requireNotNull(lastFailure))
+            }
+        }
+        return result ?: ExternalHoverProjection.Unavailable(
+            ExternalSemanticFailure("semantic.hoverUnavailable", "External semantic hover is unavailable"),
+        )
     }
 
     fun searchWorkspaceSymbols(query: String): List<Symbol> {
@@ -1175,7 +1244,7 @@ class ExternalLspAdapter(
         private val PROCESS_SEQUENCE = AtomicInteger(1)
         private val KNOWN_SERVER_CAPABILITIES = sortedSetOf(
             "definitionProvider", "referencesProvider", "renameProvider", "prepareRenameProvider",
-            "documentSymbolProvider", "workspaceSymbolProvider", "textDocumentSync",
+            "documentSymbolProvider", "workspaceSymbolProvider", "hoverProvider", "textDocumentSync",
         )
         private val LSP_METHOD = Regex("[A-Za-z0-9_" + '$' + "./-]{1,128}")
 

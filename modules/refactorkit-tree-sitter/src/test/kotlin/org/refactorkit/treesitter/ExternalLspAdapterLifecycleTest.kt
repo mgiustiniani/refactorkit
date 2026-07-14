@@ -201,6 +201,10 @@ class ExternalLspAdapterLifecycleTest {
             adapter.buildOverlayDocumentSymbolProjection(snapshot, overlay, Path.of("sample.ts"), 100),
         )
         assertEquals(listOf("OverlayService"), overlaid.index.symbols.map { it.name })
+        val hover = assertIs<ExternalHoverProjection.Available>(adapter.buildOverlayHover(
+            snapshot, overlay, Path.of("sample.ts"), SourcePosition(0, 16),
+        ))
+        assertTrue(hover.sections.single().value.contains("OverlayService"))
         assertEquals(listOf("Service"), adapter.buildSymbols(snapshot).symbols.map { it.name })
         adapter.close()
     }
@@ -274,7 +278,7 @@ object ExternalLspFixture {
                     }
                     else -> {
                         val rename = if (mode == "boolean-rename") "true" else "{\"prepareProvider\":true}"
-                        writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"renameProvider":$rename,"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
+                        writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"hoverProvider":true,"renameProvider":$rename,"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
                     }
                 }
                 "textDocument/didOpen", "textDocument/didChange" -> {
@@ -291,6 +295,10 @@ object ExternalLspFixture {
                     if (mode == "slow-symbol") Thread.sleep(300)
                     val name = if (overlayDocument) "OverlayService" else "Service"
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"$name","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":30}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":${13 + name.length}}}}]}""")
+                }
+                "textDocument/hover" -> {
+                    val name = if (overlayDocument) "OverlayService" else "Service"
+                    writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"contents":{"kind":"markdown","value":"```ts\\nclass $name\\n```"},"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":${13 + name.length}}}}}""")
                 }
                 "workspace/symbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"location":{"uri":$lastDocumentUri,"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}}]}""")
                 "textDocument/definition" -> {

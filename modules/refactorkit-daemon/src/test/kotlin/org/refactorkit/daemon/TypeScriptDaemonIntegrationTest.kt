@@ -20,6 +20,7 @@ import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
+import org.refactorkit.core.SemanticHoverSection
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -32,6 +33,7 @@ import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
 import org.refactorkit.typescript.ToolchainFileEvidence
 import org.refactorkit.typescript.TypeScriptClientSymbolProjection
+import org.refactorkit.typescript.TypeScriptHoverProjection
 import org.refactorkit.typescript.TypeScriptProjectModel
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptSemanticClient
@@ -187,6 +189,22 @@ class TypeScriptDaemonIntegrationTest {
             .getValue("name").jsonPrimitive.content)
         assertTrue("content" !in overlaySymbols.getValue("sourceAuthority").jsonObject
             .getValue("documents").jsonArray.single().jsonObject)
+
+        val hover = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "ts-overlay-hover-1"); put("expectedSnapshotHash", snapshotHash)
+            put("expectedIndexGeneration", indexGeneration); put("kind", "hover"); put("languageId", "typescript")
+            put("path", "src/service.ts"); put("semanticLease", lease)
+            put("position", buildJsonObject { put("line", 0); put("character", 16) })
+            put("sourceAuthority", buildJsonObject {
+                put("kind", "immutable-editor-overlay")
+                put("documents", buildJsonArray { add(buildJsonObject {
+                    put("path", "src/service.ts"); put("version", 7); put("content", "export class UnsavedService {}\n")
+                }) })
+            })
+        }).jsonObject
+        assertEquals("ready", hover.getValue("status").jsonPrimitive.content)
+        assertTrue(hover.getValue("contents").jsonArray.single().jsonObject.getValue("value").jsonPrimitive.content
+            .contains("UnsavedService"))
 
         val staleOverlay = session.dispatch("intelligence.query", buildJsonObject {
             put("requestId", "ts-overlay-symbols-stale")
@@ -456,6 +474,21 @@ class TypeScriptDaemonIntegrationTest {
             "workspaceSymbolProvider", "textDocumentSync",
         )
         override fun buildSymbols(snapshot: ProjectSnapshot) = SymbolIndex(listOf(symbol()))
+        override fun buildOverlayHover(
+            savedSnapshot: ProjectSnapshot,
+            overlay: ImmutableEditorOverlay,
+            targetPath: Path,
+            position: SourcePosition,
+        ): TypeScriptHoverProjection {
+            val name = Regex("class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(
+                overlay.providerSnapshot.files.single { it.path == targetPath }.content,
+            )!!.groupValues[1]
+            return TypeScriptHoverProjection.Available(
+                SourceRange(SourcePosition(0, 13), SourcePosition(0, 13 + name.length)),
+                listOf(SemanticHoverSection(SemanticHoverSection.Format.MARKDOWN, "```ts\\nclass $name\\n```")),
+                "",
+            )
+        }
         override fun buildOverlayDocumentSymbols(
             savedSnapshot: ProjectSnapshot,
             overlay: ImmutableEditorOverlay,

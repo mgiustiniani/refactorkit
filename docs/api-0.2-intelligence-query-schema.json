@@ -4,6 +4,7 @@
   "title": "RefactorKit API 0.2 intelligence.query response",
   "oneOf": [
     {"$ref": "#/$defs/ready"},
+    {"$ref": "#/$defs/hover"},
     {"$ref": "#/$defs/refused"}
   ],
   "$defs": {
@@ -81,6 +82,27 @@
             "returned": {"type": "integer", "minimum": 0, "maximum": 200},
             "truncated": {"type": "boolean"},
             "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/symbol"}}
+          }
+        }
+      ]
+    },
+    "hover": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "providerSnapshotHash", "indexGeneration", "providerId", "backend", "evidence", "provenanceHash", "range", "contents", "sourceAuthority"],
+          "properties": {
+            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
+            "status": {"const": "ready"}, "kind": {"const": "hover"},
+            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "providerId": {"type": "string"}, "backend": {"type": "string"},
+            "evidence": {"const": "language-server"},
+            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "range": {"oneOf": [{"$ref": "#/$defs/location/properties/range"}, {"type": "null"}]},
+            "contents": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["format", "value"], "properties": {"format": {"enum": ["plain-text", "markdown"]}, "value": {"type": "string", "maxLength": 16384}}}},
+            "sourceAuthority": {"type": "object"}
           }
         }
       ]

@@ -97,12 +97,13 @@ references-at-position return `status=refused` with
 `intelligence.queryUnsupported` until their JDT, tsserver and K2 implementations
 are qualified. They never fall back to fabricated lexical semantics.
 
-TypeScript/JavaScript `documentSymbols` additionally accepts
+TypeScript/JavaScript `documentSymbols` and `hover` additionally accept
 `sourceAuthority.kind=immutable-editor-overlay`, versioned existing documents and
 the active `semanticLease`. The selected path must be in the overlay. RefactorKit
 queries the derived provider snapshot, rejects stale versions, restores saved LSP
 documents before returning, and reports provider/overlay hashes without echoing
-content. The response schema is
+content. Hover additionally requires a zero-based UTF-16 `position` and returns
+bounded typed plaintext/Markdown sections plus an optional exact range. The response schema is
 [`api-0.2-intelligence-query-schema.json`](api-0.2-intelligence-query-schema.json).
 
 ## Experimental TypeScript/JavaScript semantic session
