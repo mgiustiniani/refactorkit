@@ -40,7 +40,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
             javaAdapter = container "Java Language Adapter" "Java project scanner and lexical Java intelligence for source roots, packages, classes, methods, fields, imports, symbols, references, diagnostics, rename class/member, move class, organize imports, safe delete, extract method, change signature, recipes, and framework-aware risk detection." "Kotlin/JVM library (modules/refactorkit-java)" {
                 tags "Runtime Building Block"
             }
-            kotlinAdapter = container "Kotlin Language Adapter" "Kotlin module boundary with .kt/.kts refused capabilities plus non-executing explicit JDK/compiler discovery and hash-bound provenance; semantic analysis is not yet enabled." "Kotlin/JVM library (modules/refactorkit-kotlin)" {
+            kotlinAdapter = container "Kotlin Language Adapter" "Kotlin module boundary with refused capabilities, explicit JDK/compiler discovery, and non-executing hash-bound Kotlin/JVM source-set projection over Maven/Gradle build evidence; semantic analysis is not yet enabled." "Kotlin/JVM library (modules/refactorkit-kotlin)" {
                 tags "Runtime Building Block"
             }
             webImporter = container "External Java Class Importer" "Preview-only external source assimilation for Java classes: strips Markdown fences, detects license/provenance, validates package names, detects/splits public types, rewrites packages, organizes imports, refuses conflicts, and emits PatchPlans." "Kotlin/JVM library (modules/refactorkit-web-importer)" {

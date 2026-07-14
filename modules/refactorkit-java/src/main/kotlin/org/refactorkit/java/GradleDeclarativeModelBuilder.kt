@@ -83,15 +83,23 @@ internal class GradleDeclarativeModelBuilder {
             BuildSourceSet(
                 id = "main",
                 kind = SourceSetKind.MAIN,
-                sourceRoots = listOf(workspaceRoot.relativize(moduleRoot.resolve("src/main/java"))),
-                outputDirectories = listOf(workspaceRoot.relativize(moduleRoot.resolve("build/classes/java/main"))),
+                sourceRoots = listOf("java", "kotlin").map { language ->
+                    workspaceRoot.relativize(moduleRoot.resolve("src/main/$language"))
+                },
+                outputDirectories = listOf("java", "kotlin").map { language ->
+                    workspaceRoot.relativize(moduleRoot.resolve("build/classes/$language/main"))
+                },
                 attributes = mapOf("java.sourceLevel" to "8", "visibility" to "main"),
             ),
             BuildSourceSet(
                 id = "test",
                 kind = SourceSetKind.TEST,
-                sourceRoots = listOf(workspaceRoot.relativize(moduleRoot.resolve("src/test/java"))),
-                outputDirectories = listOf(workspaceRoot.relativize(moduleRoot.resolve("build/classes/java/test"))),
+                sourceRoots = listOf("java", "kotlin").map { language ->
+                    workspaceRoot.relativize(moduleRoot.resolve("src/test/$language"))
+                },
+                outputDirectories = listOf("java", "kotlin").map { language ->
+                    workspaceRoot.relativize(moduleRoot.resolve("build/classes/$language/test"))
+                },
                 attributes = mapOf("java.sourceLevel" to "8", "visibility" to "test"),
             ),
         ),
@@ -112,8 +120,8 @@ internal class GradleDeclarativeModelBuilder {
     ): ParsedModule {
         val diagnostics = mutableListOf<BuildModelDiagnostic>()
         val rootsBySet = linkedMapOf(
-            "main" to linkedSetOf(moduleRoot.resolve("src/main/java")),
-            "test" to linkedSetOf(moduleRoot.resolve("src/test/java")),
+            "main" to linkedSetOf(moduleRoot.resolve("src/main/java"), moduleRoot.resolve("src/main/kotlin")),
+            "test" to linkedSetOf(moduleRoot.resolve("src/test/java"), moduleRoot.resolve("src/test/kotlin")),
         )
         val customNames = linkedSetOf<String>()
         CREATE_SOURCE_SET.findAll(text).map { it.groupValues[1] }.forEach(customNames::add)
@@ -121,13 +129,24 @@ internal class GradleDeclarativeModelBuilder {
         EXPLICIT_SOURCE_DIRECTORIES.forEach { pattern ->
             pattern.findAll(text).forEach { match ->
                 val sourceSet = match.groupValues[1]
-                val rawPath = match.groupValues[2]
+                val rawPath = match.groupValues[3]
                 rootsBySet.getOrPut(sourceSet) { linkedSetOf() }
                 safeRoot(workspaceRoot, moduleRoot, rawPath)?.let { rootsBySet.getValue(sourceSet).add(it) }
                     ?: diagnostics.add(unsafeRoot(id))
             }
         }
-        val sourceLevel = detectSourceLevel(text)
+        val declaredSourceLevel = detectDeclaredSourceLevel(text)
+        val sourceLevel = declaredSourceLevel ?: 8
+        val kotlinJvm = KOTLIN_JVM_PLUGIN.containsMatchIn(text)
+        val unsupportedKotlinPlatform = KOTLIN_UNSUPPORTED_PLATFORM_PLUGIN.containsMatchIn(text)
+        if (unsupportedKotlinPlatform) diagnostics += BuildModelDiagnostic(
+            "kotlin.platformUnsupported",
+            "Gradle module '$id' declares a Kotlin platform outside the bounded Kotlin/JVM model",
+            id,
+            Diagnostic.Severity.WARNING,
+        )
+        val kotlinJvmTarget = detectKotlinJvmTarget(text)
+        val kotlinTargetJdk = detectKotlinTargetJdk(text)
         val dependencies = linkedMapOf<String, MutableList<BuildDependency>>()
         PROJECT_DEPENDENCY.findAll(text).forEach { match ->
             val configuration = match.groupValues[1]
@@ -157,12 +176,18 @@ internal class GradleDeclarativeModelBuilder {
                 kind = kind,
                 sourceRoots = roots,
                 generatedSourceRoots = generated,
-                outputDirectories = listOf(workspaceRoot.relativize(moduleRoot.resolve("build/classes/java/$name"))),
+                outputDirectories = listOf("java", "kotlin").map { language ->
+                    workspaceRoot.relativize(moduleRoot.resolve("build/classes/$language/$name"))
+                },
                 moduleDependencies = dependencies[name].orEmpty().distinct(),
-                attributes = mapOf(
-                    "java.sourceLevel" to sourceLevel.toString(),
-                    "visibility" to if (kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST)) "test" else "main",
-                ),
+                attributes = buildMap {
+                    put("java.sourceLevel", sourceLevel.toString())
+                    put("java.sourceLevelEvidence", if (declaredSourceLevel == null) "default" else "declared")
+                    put("visibility", if (kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST)) "test" else "main")
+                    if (kotlinJvm) put("kotlin.platform", "jvm")
+                    kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
+                    kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }
+                },
             )
         }
         return ParsedModule(
@@ -180,6 +205,12 @@ internal class GradleDeclarativeModelBuilder {
                         "Gradle source-root declarations escaped the workspace"
                     },
                     "java.sourceLevel" to sourceLevel.toString(),
+                    "java.sourceLevelEvidence" to if (declaredSourceLevel == null) "default" else "declared",
+                    "kotlin.platform" to when {
+                        kotlinJvm -> "jvm"
+                        unsupportedKotlinPlatform -> "unsupported"
+                        else -> "unconfigured"
+                    },
                 ),
             ),
             diagnostics,
@@ -210,9 +241,20 @@ internal class GradleDeclarativeModelBuilder {
         moduleId,
     )
 
-    private fun detectSourceLevel(text: String): Int = SOURCE_LEVEL_PATTERNS.firstNotNullOfOrNull { pattern ->
+    private fun detectDeclaredSourceLevel(text: String): Int? = SOURCE_LEVEL_PATTERNS.firstNotNullOfOrNull { pattern ->
         pattern.find(text)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 8..25 }
-    } ?: 8
+    }
+
+    private fun detectKotlinJvmTarget(text: String): String? = KOTLIN_JVM_TARGET_PATTERNS.firstNotNullOfOrNull { pattern ->
+        pattern.find(text)?.groupValues?.get(1)?.normalizeJvmLevel()
+    }
+
+    private fun detectKotlinTargetJdk(text: String): String? = KOTLIN_TARGET_JDK_PATTERNS.firstNotNullOfOrNull { pattern ->
+        pattern.find(text)?.groupValues?.get(1)?.normalizeJvmLevel()
+    }
+
+    private fun String.normalizeJvmLevel(): String? = trim().removePrefix("1.").toIntOrNull()
+        ?.takeIf { it in 8..25 }?.toString()
 
     private fun configurationSourceSet(configuration: String): String = when {
         configuration.startsWith("test") -> "test"
@@ -240,8 +282,8 @@ internal class GradleDeclarativeModelBuilder {
         private val IGNORED_DIRECTORIES = setOf(".git", ".gradle", ".refactorkit", "build", "target")
         private val CREATE_SOURCE_SET = Regex("sourceSets\\s*\\.\\s*(?:create|maybeCreate)\\s*\\(\\s*[\"']([A-Za-z][A-Za-z0-9_-]{0,63})[\"']\\s*\\)")
         private val EXPLICIT_SOURCE_DIRECTORIES = listOf(
-            Regex("sourceSets\\s*\\[\\s*[\"']([A-Za-z][A-Za-z0-9_-]{0,63})[\"']\\s*]\\s*\\.\\s*java\\s*\\.\\s*srcDir\\s*(?:\\(\\s*)?[\"']([^\"']+)[\"']"),
-            Regex("sourceSets\\s*\\.\\s*([A-Za-z][A-Za-z0-9_-]{0,63})\\s*\\.\\s*java\\s*\\.\\s*srcDir\\s*(?:\\(\\s*)?[\"']([^\"']+)[\"']"),
+            Regex("sourceSets\\s*\\[\\s*[\"']([A-Za-z][A-Za-z0-9_-]{0,63})[\"']\\s*]\\s*\\.\\s*(java|kotlin)\\s*\\.\\s*srcDir\\s*(?:\\(\\s*)?[\"']([^\"']+)[\"']"),
+            Regex("sourceSets\\s*\\.\\s*([A-Za-z][A-Za-z0-9_-]{0,63})\\s*\\.\\s*(java|kotlin)\\s*\\.\\s*srcDir\\s*(?:\\(\\s*)?[\"']([^\"']+)[\"']"),
         )
         private val PROJECT_DEPENDENCY = Regex(
             "([A-Za-z][A-Za-z0-9_]*)\\s*\\(\\s*project\\s*\\(\\s*[\"'](:[A-Za-z0-9_:-]+)[\"']\\s*\\)\\s*\\)",
@@ -250,6 +292,20 @@ internal class GradleDeclarativeModelBuilder {
             Regex("JavaLanguageVersion\\.of\\(\\s*(\\d+)\\s*\\)"),
             Regex("JavaVersion\\.VERSION_(\\d+)"),
             Regex("(?:sourceCompatibility|targetCompatibility|options\\.release(?:\\.set)?)\\D{0,20}(\\d+)"),
+        )
+        private val KOTLIN_JVM_PLUGIN = Regex(
+            "kotlin\\s*\\(\\s*[\"']jvm[\"']\\s*\\)|(?:id\\s*\\(?\\s*[\"']org\\.jetbrains\\.kotlin\\.jvm[\"'])",
+        )
+        private val KOTLIN_UNSUPPORTED_PLATFORM_PLUGIN = Regex(
+            "kotlin\\s*\\(\\s*[\"'](?:multiplatform|android)[\"']\\s*\\)|(?:id\\s*\\(?\\s*[\"']org\\.jetbrains\\.kotlin\\.(?:multiplatform|android)[\"'])",
+        )
+        private val KOTLIN_JVM_TARGET_PATTERNS = listOf(
+            Regex("JvmTarget\\.JVM_(?:1_)?(\\d+)"),
+            Regex("jvmTarget\\s*(?:\\.set\\s*\\()?\\s*[\"'](?:1\\.)?(\\d+)[\"']"),
+        )
+        private val KOTLIN_TARGET_JDK_PATTERNS = listOf(
+            Regex("jvmToolchain\\s*\\(\\s*(\\d+)\\s*\\)"),
+            Regex("JavaLanguageVersion\\.of\\(\\s*(\\d+)\\s*\\)"),
         )
     }
 }

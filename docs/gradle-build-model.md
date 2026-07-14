@@ -9,12 +9,13 @@ Unknown executable semantics remain outside the model.
 
 ## Recognized metadata
 
-- conventional `main` and `test` Java roots and outputs;
-- Java toolchain/source compatibility literals from 8 through 25;
+- conventional `main` and `test` Java and Kotlin roots and outputs;
+- Java toolchain/source compatibility and Kotlin `jvmToolchain`/`jvmTarget`
+  literals from 8 through 25;
 - literal `sourceSets.create("name")` / `maybeCreate` declarations;
 - literal Kotlin/Groovy-style source directory declarations:
-  `sourceSets["name"].java.srcDir("path")` and
-  `sourceSets.name.java.srcDir("path")`;
+  `sourceSets["name"].java.srcDir("path")`,
+  `sourceSets["name"].kotlin.srcDir("path")`, and equivalent dotted forms;
 - literal `configuration(project(":module"))` module dependencies;
 - integration source-set classification when the name contains `integration`;
 - generated classification for materialized roots beneath `build/generated`;
@@ -23,8 +24,10 @@ Unknown executable semantics remain outside the model.
 The provider returns `PARTIAL` even when all recognized metadata is clean because
 Gradle is executable and the declarative subset cannot claim to be an effective
 Gradle model. Main/test/integration/custom roots remain separate BuildSourceSets.
-JDT consumes each set's roots, visibility, module edges, classpath, and source
-level.
+JDT consumes Java roots while `kotlin-jvm-projection-v1` selects Kotlin roots and
+binds source-set evidence to the explicit compiler toolchain. Kotlin JVM plugin
+identity is recognized only from bounded literals. Multiplatform and Android
+remain typed unsupported boundaries.
 
 ## Refusal boundary
 

@@ -52,9 +52,10 @@ one module per file extension.
 
 ## Next gate
 
-Explicit JDK/compiler discovery and hash-bound provenance are now implemented in
-[`kotlin-toolchain.md`](kotlin-toolchain.md), but no compiler is launched. The
-next slice projects that provenance and a bounded Kotlin/JVM source-set model into
-the snapshot before adding read-only compiler analysis. Capabilities remain
-refused until real compiler-backed native acceptance satisfies
-[`v0.7.0-plan.md`](releases/v0.7.0-plan.md).
+Explicit JDK/compiler discovery and hash-bound provenance are implemented in
+[`kotlin-toolchain.md`](kotlin-toolchain.md). Bounded Maven/Gradle JVM source-set
+and toolchain projection is implemented in
+[`kotlin-build-model.md`](kotlin-build-model.md). Neither gate launches a
+compiler. The next slice defines the bounded compiler lifecycle and read-only K2
+analysis session. Capabilities remain refused until real compiler-backed native
+acceptance satisfies [`v0.7.0-plan.md`](releases/v0.7.0-plan.md).

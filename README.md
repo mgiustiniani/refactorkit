@@ -27,6 +27,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
 - Kotlin adapter boundary: [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md)
 - Kotlin toolchain boundary: [`docs/kotlin-toolchain.md`](docs/kotlin-toolchain.md)
+- Kotlin/JVM build-model projection: [`docs/kotlin-build-model.md`](docs/kotlin-build-model.md)
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 

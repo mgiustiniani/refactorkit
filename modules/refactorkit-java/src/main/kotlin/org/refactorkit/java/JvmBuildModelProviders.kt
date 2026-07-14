@@ -216,7 +216,7 @@ private object JavaModuleBuildModelProjector {
                     outputDirectories = module.mainOutputDirectories,
                     classpathEntries = module.mainClasspathEntries,
                     moduleDependencies = mainDependencies,
-                    attributes = mapOf("java.sourceLevel" to sourceLevel),
+                    attributes = jvmSourceSetAttributes(module, sourceLevel),
                 ),
                 BuildSourceSet(
                     id = "test",
@@ -226,10 +226,23 @@ private object JavaModuleBuildModelProjector {
                     outputDirectories = module.testOutputDirectories,
                     classpathEntries = module.testClasspathEntries,
                     moduleDependencies = testDependencies,
-                    attributes = mapOf("java.sourceLevel" to sourceLevel),
+                    attributes = jvmSourceSetAttributes(module, sourceLevel),
                 ),
             ),
             attributes = module.languageSettings,
         )
+    }
+
+    private fun jvmSourceSetAttributes(module: Module, sourceLevel: String): Map<String, String> = buildMap {
+        put("java.sourceLevel", sourceLevel)
+        listOf(
+            "java.sourceLevel.status",
+            "java.sourceLevelEvidence",
+            "kotlin.platform",
+            "kotlin.jvmTarget",
+            "kotlin.targetJdk",
+        ).forEach { key ->
+            module.languageSettings[key]?.let { put(key, it) }
+        }
     }
 }

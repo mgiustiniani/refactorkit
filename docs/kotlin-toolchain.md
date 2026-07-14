@@ -98,10 +98,16 @@ Default limits are:
 Failures use typed `kotlin.*` diagnostics and return no partially available
 semantic toolchain.
 
+## Build-model integration
+
+[`kotlin-build-model.md`](kotlin-build-model.md) now defines
+`kotlin-jvm-projection-v1`, which binds this toolchain hash to bounded Maven,
+Gradle and conventional JVM source-set evidence inside `ProjectSnapshot`.
+
 ## Next gate
 
-The next slice projects Kotlin/JVM source sets and this toolchain provenance into
-the Build Model/Snapshot boundary, then starts a bounded compiler-backed read-only
-analysis session. `KotlinAdapterRegistration` remains
-`kotlin-analysis-unavailable-v1` and all capabilities stay `REFUSED/NONE` until
-that session produces exact tested evidence.
+The next slice defines a bounded compiler lifecycle and starts a compiler-backed
+read-only analysis session from the exact toolchain/build projection.
+`KotlinAdapterRegistration` remains `kotlin-analysis-unavailable-v1` and all
+capabilities stay `REFUSED/NONE` until that session produces exact tested
+evidence.

@@ -8,6 +8,7 @@ kotlin {
 
 dependencies {
     implementation(project(":modules:refactorkit-core"))
+    testImplementation(project(":modules:refactorkit-java"))
     testImplementation(kotlin("test"))
 }
 

@@ -89,10 +89,16 @@ class JavaProjectScanner(
             val generatedTest = (explicitGeneratedTest + pluginTestGenerated).distinct()
             val sourceRoots = (effectiveMainRoots + effectiveTestRoots + gradleCustomRoots + generatedMain + generatedTest)
                 .map(normalizedRoot::relativize).distinct()
-            val conventionalMainOutputs = listOf(moduleRoot.resolve("target/classes"), moduleRoot.resolve("build/classes/java/main"))
-                .filter { it.exists() && it.isDirectory() }
-            val conventionalTestOutputs = listOf(moduleRoot.resolve("target/test-classes"), moduleRoot.resolve("build/classes/java/test"))
-                .filter { it.exists() && it.isDirectory() }
+            val conventionalMainOutputs = listOf(
+                moduleRoot.resolve("target/classes"),
+                moduleRoot.resolve("build/classes/java/main"),
+                moduleRoot.resolve("build/classes/kotlin/main"),
+            ).filter { it.exists() && it.isDirectory() }
+            val conventionalTestOutputs = listOf(
+                moduleRoot.resolve("target/test-classes"),
+                moduleRoot.resolve("build/classes/java/test"),
+                moduleRoot.resolve("build/classes/kotlin/test"),
+            ).filter { it.exists() && it.isDirectory() }
             val localEntries = localJarEntries(moduleRoot) + declaredClasspathEntries(moduleRoot)
             val mainClasspath = if (maven?.modelFailure == null && maven != null) {
                 (conventionalMainOutputs.map(normalizedRoot::relativize) + maven.mainArtifacts).distinct()
@@ -124,6 +130,9 @@ class JavaProjectScanner(
                     maven.modelFailure?.let { put("java.buildModel.message", it) }
                     put("java.sourceLevel.status", if (maven.sourceLevel == null) "unavailable" else "available")
                     if (maven.sourceLevel == null) put("java.sourceLevel.message", "Effective Maven source level could not be resolved")
+                    put("kotlin.platform", if (maven.kotlinPluginConfigured) "jvm" else "unconfigured")
+                    maven.kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
+                    maven.kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }
                     put("java.classpath.status", if (maven.missingArtifacts.isEmpty()) "available" else "unavailable")
                     if (maven.missingArtifacts.isNotEmpty()) {
                         val missing = maven.missingArtifacts.sorted()
@@ -153,10 +162,16 @@ class JavaProjectScanner(
                 testClasspathEntries = testClasspath,
                 mainDependencies = mainDependencies.distinct().sorted(),
                 testDependencies = (mainDependencies + testDependencies).distinct().sorted(),
-                mainOutputDirectories = listOf(moduleRoot.resolve("target/classes"), moduleRoot.resolve("build/classes/java/main"))
-                    .map(normalizedRoot::relativize),
-                testOutputDirectories = listOf(moduleRoot.resolve("target/test-classes"), moduleRoot.resolve("build/classes/java/test"))
-                    .map(normalizedRoot::relativize),
+                mainOutputDirectories = listOf(
+                    moduleRoot.resolve("target/classes"),
+                    moduleRoot.resolve("build/classes/java/main"),
+                    moduleRoot.resolve("build/classes/kotlin/main"),
+                ).map(normalizedRoot::relativize),
+                testOutputDirectories = listOf(
+                    moduleRoot.resolve("target/test-classes"),
+                    moduleRoot.resolve("build/classes/java/test"),
+                    moduleRoot.resolve("build/classes/kotlin/test"),
+                ).map(normalizedRoot::relativize),
             )
         }
         val initialByName = initialModules.associateBy(Module::name)
@@ -183,8 +198,13 @@ class JavaProjectScanner(
         val files = sourceRoots.flatMap { sourceRoot ->
             if (!sourceRoot.exists()) emptyList() else Files.walk(sourceRoot).use { stream ->
                 stream
-                    .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".java") }
-                    .map { SourceFile(normalizedRoot.relativize(it), it.readText(), "java") }
+                    .filter { path ->
+                        Files.isRegularFile(path) && path.fileName.toString().substringAfterLast('.', "") in JVM_SOURCE_EXTENSIONS
+                    }
+                    .map { path ->
+                        val extension = path.fileName.toString().substringAfterLast('.', "")
+                        SourceFile(normalizedRoot.relativize(path), path.readText(), JVM_LANGUAGE_IDS.getValue(extension))
+                    }
                     .collect(Collectors.toList())
             }
         }.distinctBy(SourceFile::path).sortedBy { it.path.toString() }
@@ -229,7 +249,7 @@ class JavaProjectScanner(
             workspace = Workspace(normalizedRoot),
             modules = modules,
             files = files,
-            sourceExtensions = setOf("java"),
+            sourceExtensions = ProjectSnapshot.inferSourceExtensions(files),
             ignoredDirectories = ProjectSnapshot.DEFAULT_IGNORED_DIRECTORIES,
             classpathEvidence = classpathEvidence,
             buildModels = if (includeBuildModels) buildModels(modules, gradleBuildModel) else emptyList(),
@@ -266,7 +286,14 @@ class JavaProjectScanner(
                 sourceSets = buildModule.sourceSets.map { sourceSet ->
                     val testVisibility = sourceSet.kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST) ||
                         sourceSet.attributes["visibility"] == "test"
+                    val materializedGenerated = when (sourceSet.kind) {
+                        SourceSetKind.MAIN -> module.generatedSourceRoots
+                        SourceSetKind.TEST -> module.generatedTestSourceRoots
+                        else -> emptyList()
+                    }
                     sourceSet.copy(
+                        sourceRoots = (sourceSet.sourceRoots + materializedGenerated).distinct(),
+                        generatedSourceRoots = (sourceSet.generatedSourceRoots + materializedGenerated).distinct(),
                         classpathEntries = if (testVisibility) module.testClasspathEntries else module.mainClasspathEntries,
                     )
                 },
@@ -292,32 +319,51 @@ class JavaProjectScanner(
         }
     }
 
-    private fun conventionalMainSourceRoots(root: Path): List<Path> = listOf(root.resolve("src/main/java"))
+    private fun conventionalMainSourceRoots(root: Path): List<Path> = listOf("java", "kotlin")
+        .map { language -> root.resolve("src/main/$language") }
         .filter { it.exists() && it.isDirectory() }
-    private fun conventionalTestSourceRoots(root: Path): List<Path> = listOf(root.resolve("src/test/java"))
+    private fun conventionalTestSourceRoots(root: Path): List<Path> = listOf("java", "kotlin")
+        .map { language -> root.resolve("src/test/$language") }
         .filter { it.exists() && it.isDirectory() }
     private fun conventionalSourceRoots(root: Path): List<Path> = conventionalMainSourceRoots(root) + conventionalTestSourceRoots(root)
 
     private fun generatedSourceRoots(root: Path, test: Boolean): List<Path> {
-        val bases = if (test) listOf(root.resolve("target/generated-test-sources"), root.resolve("build/generated/sources/annotationProcessor/java/test"))
-            else listOf(root.resolve("target/generated-sources"), root.resolve("build/generated/sources/annotationProcessor/java/main"))
+        val bases = if (test) listOf(
+            root.resolve("target/generated-test-sources"),
+            root.resolve("build/generated/sources/annotationProcessor/java/test"),
+            root.resolve("build/generated/ksp/test/kotlin"),
+            root.resolve("build/generated/source/kapt/test"),
+        ) else listOf(
+            root.resolve("target/generated-sources"),
+            root.resolve("build/generated/sources/annotationProcessor/java/main"),
+            root.resolve("build/generated/ksp/main/kotlin"),
+            root.resolve("build/generated/source/kapt/main"),
+        )
         return bases.filter { it.exists() && it.isDirectory() }.flatMap { base ->
-            val children = Files.list(base).use { stream -> stream.filter(Files::isDirectory).collect(Collectors.toList()) }
-                .filter(::containsJava).sortedBy(Path::toString)
-            if (children.isNotEmpty()) children else listOf(base).filter(::containsJava)
+            val normalized = base.toString().replace('\\', '/')
+            if ("/build/generated/ksp/" in normalized || "/build/generated/source/kapt/" in normalized) {
+                listOf(base).filter(::containsJvmSource)
+            } else {
+                val children = Files.list(base).use { stream -> stream.filter(Files::isDirectory).collect(Collectors.toList()) }
+                    .filter(::containsJvmSource).sortedBy(Path::toString)
+                if (children.isNotEmpty()) children else listOf(base).filter(::containsJvmSource)
+            }
         }.fold(mutableListOf()) { roots, candidate ->
             if (roots.none { candidate.startsWith(it) || it.startsWith(candidate) }) roots.add(candidate)
             roots
         }
     }
 
-    private fun containsJava(root: Path): Boolean = Files.walk(root).use { stream ->
-        stream.anyMatch { Files.isRegularFile(it) && it.fileName.toString().endsWith(".java") }
+    private fun containsJvmSource(root: Path): Boolean = Files.walk(root).use { stream ->
+        stream.anyMatch { path ->
+            Files.isRegularFile(path) && path.fileName.toString().substringAfterLast('.', "") in JVM_SOURCE_EXTENSIONS
+        }
     }
 
     private fun conventionalOutputDirectories(root: Path): List<Path> = listOf(
         root.resolve("target/classes"), root.resolve("target/test-classes"),
         root.resolve("build/classes/java/main"), root.resolve("build/classes/java/test"),
+        root.resolve("build/classes/kotlin/main"), root.resolve("build/classes/kotlin/test"),
     )
     private fun localJarDirectories(root: Path): List<Path> = listOf(root.resolve("lib"), root.resolve("libs"))
     private fun buildDescriptorFiles(root: Path): List<Path> = listOf(root.resolve("pom.xml"), root.resolve("build.gradle"), root.resolve("build.gradle.kts"))
@@ -410,5 +456,10 @@ class JavaProjectScanner(
             component in setOf(".gradle", ".git", ".refactorkit") ||
                 (component in setOf("build", "target") && index > 0)
         }
+    }
+
+    companion object {
+        private val JVM_LANGUAGE_IDS = mapOf("java" to "java", "kt" to "kotlin", "kts" to "kotlin")
+        private val JVM_SOURCE_EXTENSIONS = JVM_LANGUAGE_IDS.keys
     }
 }

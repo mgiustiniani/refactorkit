@@ -53,13 +53,17 @@ API `0.2` keeps the existing `Module` fields for compatibility. The Java adapter
 now has explicit `BuildModelProvider` implementations and provider identities:
 
 - `maven-effective-v1`: embedded effective model, plugin/lifecycle execution
-  denied, credentials denied, network denied unless anonymous opt-in;
-- `gradle-declarative-v1`: bounded literal main/test/integration/custom source
-  sets, generated roots, outputs, Java levels, and project edges; Gradle
+  denied, credentials denied, network denied unless anonymous opt-in; bounded
+  Kotlin Maven roots and JVM target/toolchain declarations are metadata only;
+- `gradle-declarative-v1`: bounded literal main/test/integration/custom Java and
+  Kotlin source sets, generated roots, Java/Kotlin outputs, JVM targets, Java
+  levels, and project edges; Gradle
   settings/scripts/tasks/plugins and Tooling API execution remain denied even if
   the generic request allows explicit execution;
-- `java-conventional-v1`: conventional source/output layout without an effective
-  ecosystem model.
+- `java-conventional-v1`: conventional Java/Kotlin JVM source/output layout
+  without an effective ecosystem model;
+- `kotlin-jvm-projection-v1`: non-executable Kotlin-only source ownership view
+  over those JVM models, bound to explicit compiler toolchain provenance.
 
 The scanner projects proven compatibility `Module` facts through these providers.
 Core exact and longest-prefix ownership queries preserve provider, module,
@@ -89,4 +93,5 @@ information without classpath contents.
   `systemPath`, and checksum-verified anonymous Central opt-in are implemented;
 - decide Gradle executable-model policy and implement integration/custom sets;
 - add provider capability/contract snapshots and pagination/limits;
-- validate the abstraction with Kotlin or another JVM adapter before freezing it.
+- continue validating the abstraction through compiler-backed Kotlin analysis
+  and mixed Java/Kotlin identity before freezing it.

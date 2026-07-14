@@ -45,6 +45,9 @@ internal data class MavenModuleModel(
     val importedBoms: Set<Path>,
     val missingArtifacts: List<String>,
     val testGeneratedPathHints: Set<String>,
+    val kotlinPluginConfigured: Boolean = false,
+    val kotlinJvmTarget: String? = null,
+    val kotlinTargetJdk: String? = null,
     val modelFailure: String? = null,
 )
 
@@ -160,6 +163,9 @@ internal class MavenEffectiveReactorBuilder(
                 .filter { plugin -> plugin.executions.any { it.phase?.contains("test", ignoreCase = true) == true } }
                 .map { it.artifactId.removeSuffix("-maven-plugin").removeSuffix("-plugin") }
                 .filter(String::isNotBlank).toSet(),
+            kotlinPluginConfigured = kotlinPlugin(model) != null,
+            kotlinJvmTarget = kotlinJvmTarget(model),
+            kotlinTargetJdk = kotlinTargetJdk(model),
             modelFailure = sourceDirectories.failure,
         )
     }
@@ -169,6 +175,28 @@ internal class MavenEffectiveReactorBuilder(
         val test: List<Path>,
         val failure: String?,
     )
+
+    private fun kotlinPlugin(model: Model) = model.build?.plugins.orEmpty().firstOrNull { plugin ->
+        plugin.artifactId == "kotlin-maven-plugin" && plugin.groupId in setOf(null, "org.jetbrains.kotlin")
+    }
+
+    private fun kotlinJvmTarget(model: Model): String? = kotlinConfigurations(model).firstNotNullOfOrNull { configuration ->
+        configuration.getChild("jvmTarget")?.value?.normalizeJvmLevel()
+            ?: configuration.getChild("compilerOptions")?.getChild("jvmTarget")?.value?.normalizeJvmLevel()
+    }
+
+    private fun kotlinTargetJdk(model: Model): String? = kotlinConfigurations(model).firstNotNullOfOrNull { configuration ->
+        configuration.getChild("jdkToolchain")?.getChild("version")?.value?.normalizeJvmLevel()
+    } ?: model.properties.getProperty("maven.compiler.release")?.normalizeJvmLevel()
+
+    private fun kotlinConfigurations(model: Model): List<org.codehaus.plexus.util.xml.Xpp3Dom> {
+        val plugin = kotlinPlugin(model) ?: return emptyList()
+        return listOfNotNull(plugin.configuration as? org.codehaus.plexus.util.xml.Xpp3Dom) +
+            plugin.executions.mapNotNull { it.configuration as? org.codehaus.plexus.util.xml.Xpp3Dom }
+    }
+
+    private fun String.normalizeJvmLevel(): String? = trim().removePrefix("1.").toIntOrNull()
+        ?.takeIf { it in 8..25 }?.toString()
 
     private fun sourceDirectories(workspaceRoot: Path, model: Model, pom: Path): SourceDirectories {
         val main = mutableListOf<String>()
@@ -191,6 +219,20 @@ internal class MavenEffectiveReactorBuilder(
                     .mapNotNull { it.value?.trim()?.takeIf(String::isNotBlank) }
                     .forEach(target::add)
             }
+        kotlinPlugin(model)?.let { plugin ->
+            fun addConfiguredRoots(configuration: Any?, target: MutableList<String>) {
+                val xml = configuration as? org.codehaus.plexus.util.xml.Xpp3Dom ?: return
+                xml.getChild("sourceDirs")?.children.orEmpty()
+                    .filter { it.name in setOf("source", "sourceDir") }
+                    .mapNotNull { it.value?.trim()?.takeIf(String::isNotBlank) }
+                    .forEach(target::add)
+            }
+            addConfiguredRoots(plugin.configuration, main)
+            plugin.executions.forEach { execution ->
+                val target = if (execution.goals.any { it.contains("test", ignoreCase = true) }) test else main
+                addConfiguredRoots(execution.configuration, target)
+            }
+        }
         val workspace = workspaceRoot.toAbsolutePath().normalize()
         val workspaceReal = runCatching { workspace.toRealPath() }.getOrDefault(workspace)
         var unsafe = 0

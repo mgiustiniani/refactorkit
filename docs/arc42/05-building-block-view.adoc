@@ -77,9 +77,9 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Kotlin Language Adapter
 |Kotlin/JVM library
-|Initial `0.7.x` adapter boundary owning `.kt`/`.kts` routing while advertising only `REFUSED` capabilities with `NONE` evidence and no mutation authority. Non-executing `kotlin-compiler-explicit-v1` discovery validates explicit JDK 21 and Kotlin 2.0.21 compiler/classpath identity with bounded archive inspection, double-read SHA-256 evidence and deterministic projection hashing. No lexical symbols or edits are synthesized; direct calls return `kotlin.semanticBackendUnavailable` until compiler-backed analysis is qualified.
-|`modules/refactorkit-kotlin`, `docs/kotlin-adapter.md`, `docs/kotlin-toolchain.md`, `docs/releases/v0.7.0-plan.md`.
-|toolchain discovery implemented; semantic backend planned
+|Initial `0.7.x` adapter boundary owning `.kt`/`.kts` routing while advertising only `REFUSED` capabilities with `NONE` evidence and no mutation authority. Non-executing `kotlin-compiler-explicit-v1` discovery validates explicit JDK 21 and Kotlin 2.0.21 compiler/classpath identity. `kotlin-jvm-projection-v1` binds that provenance to bounded Maven/Gradle source sets, targets, classpaths, outputs and module edges without executing build or compiler code. No lexical symbols or edits are synthesized; direct calls return `kotlin.semanticBackendUnavailable` until compiler-backed analysis is qualified.
+|`modules/refactorkit-kotlin`, `docs/kotlin-adapter.md`, `docs/kotlin-toolchain.md`, `docs/kotlin-build-model.md`, `docs/releases/v0.7.0-plan.md`.
+|toolchain and build-model projection implemented; semantic backend planned
 
 |External Java Class Importer
 |Kotlin/JVM library

@@ -21,6 +21,10 @@ review safety boundaries before applying refactorings.
   Kotlin 2.0.21 compiler/classpath identity, bounded JAR inspection, double-read
   SHA-256 evidence and deterministic projection hashing with workspace-local and
   drift refusal.
+- Add `kotlin-jvm-projection-v1`: hash-bound Maven/Gradle/conventional JVM
+  main/test/integration/generated Kotlin ownership, classpaths, outputs, module
+  edges and declared JDK/bytecode targets. Build scripts, plugins, kapt, KSP and
+  compilers remain unexecuted; scripts and unsupported platforms fail closed.
 - Bound the explicit TypeScript Node `--version` probe to two attempts so one
   transient native process-start failure does not fail packaged semantic commands;
   executable, constant arguments and per-attempt resource limits remain unchanged.
