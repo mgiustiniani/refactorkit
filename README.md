@@ -24,12 +24,13 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
-- Active `v0.6.0` TypeScript/JavaScript plan: [`docs/releases/v0.6.0-plan.md`](docs/releases/v0.6.0-plan.md)
+- Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Latest release is `v0.6.2`. API `0.2` remains the beta compatibility baseline.
-The `v0.6.2` publication patch delivers the `v0.6.0` managed TypeScript/JavaScript semantic foundation on the
+Latest release is `v0.6.2`; main develops `0.7.0-SNAPSHOT`. API `0.2` remains
+the beta compatibility baseline. The `v0.6.2` publication patch delivers the
+`v0.6.0` managed TypeScript/JavaScript semantic foundation on the
 natively built self-contained runtime matrix; platforms are marked supported only
 after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is

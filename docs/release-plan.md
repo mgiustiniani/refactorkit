@@ -38,6 +38,19 @@ Acceptance and migration evidence are recorded in
 TypeScript move/import/signature/extraction/recipe operations are explicitly
 post-`v0.6.0` scope.
 
+## Active development line
+
+### `0.7.0-SNAPSHOT` — Kotlin and JVM interoperability
+
+Active plan: [`docs/releases/v0.7.0-plan.md`](releases/v0.7.0-plan.md).
+
+The `0.7.x` band adds a compiler/Analysis API-backed Kotlin adapter, validates the
+Build Model SPI against a second JVM language, establishes conservative
+Java/Kotlin semantic boundaries, completes deferred advanced TypeScript work and
+continues Java catalogue depth. No Kotlin mutation becomes supported without
+native compiler-backed preview, exact diagnostics, managed apply, WAL and
+rollback evidence.
+
 ## Long-range 0.x sequence
 
 Planning bands are directional rather than deadlines. A language may span more
@@ -59,7 +72,7 @@ credible. Java depth continues in every band.
 | `0.15.x` | Rust and Cargo/rust-analyzer platform |
 | `1.0` development | Clojure and global all-language stabilization |
 
-Active plan: [`docs/releases/v0.6.0-plan.md`](releases/v0.6.0-plan.md).
+Active plan: [`docs/releases/v0.7.0-plan.md`](releases/v0.7.0-plan.md).
 ADR 0010 records offline effective build models, typed cascade suppression,
 source-identity/ownership separation, and the Build Model SPI gate added after the
 Java 21 Maven/Magrathea acceptance slice.

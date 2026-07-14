@@ -7,7 +7,14 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
-No changes yet.
+### Next development (`0.7.0-SNAPSHOT`)
+
+- Begin the Kotlin and Java/Kotlin interoperability band on the published
+  `v0.6.2` multi-language foundation.
+- Activate the deferred advanced TypeScript/JavaScript move, import, signature,
+  extract/inline and migration workstream while continuing Java depth.
+- No new stable Kotlin capability is claimed until real compiler-backed native
+  acceptance passes preview, exact diagnostics, apply, WAL and rollback.
 
 ## 0.6.2 - 2026-07-14
 
