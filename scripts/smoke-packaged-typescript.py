@@ -188,6 +188,22 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         if source_path.read_text() != disk_source:
             raise AssertionError("immutable editor overlay modified the saved source")
 
+        mark_stage("daemon symbol search and definition")
+        searched = exchange("symbol.search", {"languageId": "typescript", "query": "UserService"})
+        if searched.get("error"):
+            raise AssertionError(f"daemon symbol search failed: {searched}")
+        daemon_symbols = [
+            item for item in searched["result"]
+            if item["name"] == "UserService" and item["kind"] == "CLASS"
+        ]
+        if len(daemon_symbols) != 1:
+            raise AssertionError(f"daemon symbol search was ambiguous: {searched}")
+        defined = exchange("symbol.definition", {
+            "languageId": "typescript", "symbol": daemon_symbols[0]["id"],
+        })
+        if defined.get("error") or defined["result"].get("file") != "src/core/UserService.ts":
+            raise AssertionError(f"daemon symbol definition failed: {defined}")
+
         mark_stage("stale diagnostics lease refusal")
         stale_request = dict(diagnostics_request)
         stale_request["requestId"] = "native-daemon-stale"
@@ -206,9 +222,12 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
                 process.wait(timeout=10)
 
 
-def tree_hash(root: Path) -> str:
+def tree_hash(root: Path, include_metadata: bool = False) -> str:
     digest = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file() and ".refactorkit" not in p.parts):
+    for path in sorted(
+        p for p in root.rglob("*")
+        if p.is_file() and (include_metadata or ".refactorkit" not in p.parts)
+    ):
         digest.update(path.relative_to(root).as_posix().encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
@@ -237,6 +256,7 @@ def main() -> int:
         workspace = Path(temporary) / "workspace"
         shutil.copytree(repository / "samples" / "typescript-semantic", workspace)
         before = tree_hash(workspace)
+        before_read_only = tree_hash(workspace, include_metadata=True)
         node = Path(options.node).resolve()
         qualify_crash_restart(runtime, workspace, node, server, compiler)
         common = [
@@ -271,6 +291,8 @@ def main() -> int:
         diagnostics = json.loads(run(cli, common, ["diagnostics"]).stdout)
         if diagnostics:
             raise AssertionError(f"exact compiler diagnostics unexpectedly failed: {diagnostics}")
+        if tree_hash(workspace, include_metadata=True) != before_read_only:
+            raise AssertionError("read-only semantic lifecycle changed workspace metadata or sources")
         mark_stage("managed rename apply")
         applied = json.loads(run(
             cli, common,

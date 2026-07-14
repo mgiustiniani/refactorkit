@@ -117,11 +117,11 @@ class LspSession {
             ?.firstOrNull()?.jsonObject?.string("uri")
         rootUri?.let { uri ->
             val root = Paths.get(URI(uri)).toAbsolutePath().normalize()
-            val recoveryErrors = PatchEngine(root).recover()
+            val recoveryErrors = PatchEngine(root).inspectRecovery()
             if (recoveryErrors.isNotEmpty()) {
                 throw JsonRpcException(
                     JsonRpcErrorCodes.INTERNAL_ERROR,
-                    "Workspace recovery required: ${recoveryErrors.joinToString("; ") { it.message }}",
+                    "Workspace recovery required; run explicit patch recovery before LSP initialization: ${recoveryErrors.joinToString("; ") { it.message }}",
                 )
             }
             refreshSnapshotFromUri(uri)

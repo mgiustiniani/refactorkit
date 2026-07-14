@@ -327,7 +327,15 @@ refactorkit change-signature \
   samples/java-maven-simple
 ```
 
-### Apply and rollback workflow
+### Apply, recovery, and rollback workflow
+
+Read-only project open, scan, diagnostics, symbol and definition operations do
+not create `.refactorkit` or `workspace.lock`. If an interrupted WAL lifecycle is
+detected, reads refuse until recovery is explicitly authorized:
+
+```bash
+refactorkit patch recover --root samples/java-maven-simple
+```
 
 ```bash
 # 1. Preview first and inspect the rendered patch, diagnostics, warnings, and risk level.

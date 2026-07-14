@@ -43,12 +43,40 @@ class PatchEngine(
     private val faultInjector: PatchFaultInjector = PatchFaultInjector.NONE,
 ) {
     private val normalizedRoot = workspaceRoot.toAbsolutePath().normalize()
+    private val recoveryStates = setOf(
+        JournalState.PREPARED,
+        JournalState.APPLYING,
+        JournalState.ROLLING_BACK,
+        JournalState.RECOVERY_REQUIRED,
+    )
 
     /**
-     * Acquire the workspace lock and recover any interrupted managed lifecycle.
-     * Long-running integrations call this when opening a workspace; apply and
-     * rollback also invoke it automatically before mutation.
+     * Inspect recovery state without creating metadata, a lock file, or changing
+     * journal/workspace bytes. Read-only project/session startup uses this gate.
      */
+    fun inspectRecovery(): List<Diagnostic> = try {
+        val records = transactionLog.listRecordsReadOnly()
+        buildList {
+            if (transactionLog.hasOrphanedTempsReadOnly()) add(Diagnostic(
+                "Interrupted transaction temporary files require explicit recovery",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.recoveryRequired",
+            ))
+            records.filter { it.state in recoveryStates }.forEach { record -> add(Diagnostic(
+                "Transaction ${record.transaction.id.value} in ${record.state} state requires explicit recovery",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.recoveryRequired",
+            )) }
+        }
+    } catch (error: Exception) {
+        listOf(Diagnostic(
+            "Cannot inspect transaction journal without recovery: ${error.message}",
+            Diagnostic.Severity.ERROR,
+            code = "transaction.recoveryRequired",
+        ))
+    }
+
+    /** Acquire the workspace lock and recover any interrupted managed lifecycle. */
     fun recover(): List<Diagnostic> {
         val result = withWorkspaceLock {
             ApplyResult.Applied(Transaction(

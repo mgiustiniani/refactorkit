@@ -77,6 +77,7 @@ class McpSessionTest {
         }) as JsonObject
         val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
         assertTrue(text.contains("Files: 1"))
+        assertFalse(Files.exists(Paths.get(root).resolve(".refactorkit")))
     }
 
     @Test

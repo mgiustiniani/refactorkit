@@ -140,6 +140,7 @@ class DaemonSession(
         "refactor.preview"  -> refactorPreview(params)
         "refactor.apply"    -> refactorApply(params)
         "refactor.discard"  -> refactorDiscard(params)
+        "patch.recover"     -> patchRecover(params)
         "patch.rollback"    -> patchRollback(params)
         "java.importExternalClass" -> javaImportExternalClass(params)
         else -> throw JsonRpcException(JsonRpcErrorCodes.METHOD_NOT_FOUND, "Method not found: $method")
@@ -195,11 +196,11 @@ class DaemonSession(
         val resolveDependencies = params.string("resolveDependencies")?.toBooleanStrictOrNull() ?: false
         scanner = JavaProjectScanner(allowNetworkDependencyResolution = resolveDependencies)
         val path = Paths.get(root).toAbsolutePath().normalize()
-        val recoveryErrors = PatchEngine(path).recover()
+        val recoveryErrors = PatchEngine(path).inspectRecovery()
         if (recoveryErrors.isNotEmpty()) {
             throw JsonRpcException(
-                JsonRpcErrorCodes.INTERNAL_ERROR,
-                "Workspace recovery required: ${recoveryErrors.joinToString("; ") { it.message }}",
+                JsonRpcErrorCodes.RECOVERY_REQUIRED,
+                "Workspace recovery required; call patch.recover explicitly: ${recoveryErrors.joinToString("; ") { it.message }}",
             )
         }
         val snap = scanWorkspace(path)
@@ -604,6 +605,20 @@ class DaemonSession(
         val detail = withPreviewDiagnostics(imported, snap)
         if (detail.applyEligible) pendingPlans[detail.plan.id.value] = PendingPlan(detail.plan, detail)
         return importPreviewToJson(detail, snap)
+    }
+
+    private fun patchRecover(params: JsonObject?): JsonElement {
+        val root = params?.string("root") ?: missing("root")
+        val path = Paths.get(root).toAbsolutePath().normalize()
+        val errors = PatchEngine(path).recover()
+        if (errors.isNotEmpty()) throw JsonRpcException(
+            JsonRpcErrorCodes.RECOVERY_REQUIRED,
+            "Workspace recovery failed: ${errors.joinToString("; ") { it.message }}",
+        )
+        return buildJsonObject {
+            put("root", path.toString())
+            put("recovered", true)
+        }
     }
 
     private fun patchRollback(params: JsonObject?): JsonElement {
@@ -1464,6 +1479,7 @@ class DaemonSession(
             DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
             DaemonMethodCapability("refactor.apply", "beta-contract", true, true),
             DaemonMethodCapability("refactor.discard", "beta-contract", false, false),
+            DaemonMethodCapability("patch.recover", "experimental", false, true),
             DaemonMethodCapability("patch.rollback", "beta-contract", true, true),
             DaemonMethodCapability(
                 "java.importExternalClass",

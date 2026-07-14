@@ -88,6 +88,7 @@ compatible.
 | `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; clean JDT evidence also removes binding-proven unused exact imports, while wildcard/unresolved imports and unclean files remain conservative. |
 | `refactorkit format-file <file> [--apply] [--root <path>]` | `beta-contract` | Formats one non-generated, syntactically valid Java compilation unit through Eclipse JDT using hash-bound project preferences or deterministic defaults; preview/apply/rollback remains mandatory. |
 | `refactorkit safe-delete --symbol <fqcn> [--force] [--apply] [path]` | `beta-contract` | Refuses referenced symbols by default; forced behavior requires explicit risk note. |
+| `refactorkit patch recover [--root <path>]` | `experimental` | Explicitly authorized recovery acquires the writer lock, cleans orphan transaction temps and compensates incomplete journal states. Read-only project/session startup only inspects and refuses pending recovery; it never creates `.refactorkit` or `workspace.lock`. |
 | `refactorkit patch rollback <transaction-id> [--force] --root <path>` | `beta-contract` | Normal rollback validates exact post-images and refuses conflicts; `--force` is an explicit destructive pre-image restore. |
 | `refactorkit test-golden [case] [--golden-dir <path>]` | `beta-contract` | CI/test harness command for documented golden fixtures. |
 | `refactorkit extract-method ...` | `experimental` | Limited MVP; success/refusal coverage expands during beta. |
@@ -155,7 +156,7 @@ of the beta baseline for documented methods.
 |--------|--------|------------------|
 | `server.version` | `beta-contract` | Read-only implementation/API metadata; does not require an opened project. |
 | `server.capabilities` | `beta-contract` | Read-only protocol/method/safety discovery; does not require an opened project. |
-| `project.open` | `beta-contract` | Workspace lifecycle; requires `root`. |
+| `project.open` | `beta-contract` | Read-only workspace lifecycle; requires `root`. It inspects journal state without creating `.refactorkit`/`workspace.lock`; pending or corrupt recovery state refuses and directs the caller to explicit `patch.recover`. |
 | `project.summary` | `beta-contract` | Read-only project metadata plus typed, deterministically ordered, bounded and truncation-signaled Build Model SPI summary (`providerId`, canonical status, policy outcomes, selected profiles, typed diagnostic codes, modules/source sets/outputs/edges); module paths are workspace-relative, while external classpath paths and diagnostic messages are omitted. Shape is guarded by `build-model-summary-schema-keys.json`. |
 | `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
 | `symbol.definition` | `beta-contract` | Read-only lookup; requires `symbol`. |
@@ -169,6 +170,7 @@ of the beta baseline for documented methods.
 | `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
 | `refactor.apply` | `beta-contract` | Requires `planId`; applies the exact retained plan, rejects stale snapshots/plans, refreshes session state, clears pending plans, and returns structured changes/diagnostics/snapshot evidence. |
 | `refactor.discard` | `beta-contract` | Idempotently removes a pending source-bearing plan without workspace writes; returns `discarded=false` when absent. |
+| `patch.recover` | `experimental` | Explicit mutating recovery for a supplied workspace root. It is the only startup-oriented surface allowed to create the writer lock or compensate incomplete journals; ordinary project open/scan/LSP initialize perform read-only inspection and refuse when recovery is pending. |
 | `patch.rollback` | `beta-contract` | Requires `transactionId`; stays inside workspace root, refreshes session state, clears pending plans, and returns inverse WAL changes/diagnostics/snapshot evidence. |
 | `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |

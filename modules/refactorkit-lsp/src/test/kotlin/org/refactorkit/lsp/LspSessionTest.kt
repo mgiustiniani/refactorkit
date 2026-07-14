@@ -54,6 +54,7 @@ class LspSessionTest {
         )
         val session = LspSession()
         val result = session.dispatch("initialize", initializeParams(root)) as JsonObject
+        assertFalse(Files.exists(Paths.get(root).resolve(".refactorkit")))
         val capabilities = result["capabilities"]!!.jsonObject
         val serverInfo = result["serverInfo"]!!.jsonObject
 

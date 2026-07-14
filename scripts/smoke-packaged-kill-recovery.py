@@ -184,9 +184,12 @@ def main() -> int:
         finally:
             daemon.kill_tree()
 
-        mark_stage("startup recovery")
+        mark_stage("explicit restart recovery")
         recovery = Daemon(daemon_launcher)
         try:
+            recovered = recovery.call("patch.recover", {"root": str(workspace)}, timeout=60)
+            if recovered.get("recovered") is not True:
+                raise AssertionError(f"explicit recovery was not acknowledged: {recovered}")
             recovery.call("project.open", {"root": str(workspace)}, timeout=60)
         finally:
             recovery.close()
@@ -197,7 +200,7 @@ def main() -> int:
         if record.get("state") != "ROLLED_BACK" or "interrupted applying" not in (record.get("failure") or ""):
             raise AssertionError(f"unexpected recovered journal state: {record.get('state')} {record.get('failure')}")
 
-    print("Packaged kill-during-write recovery passed: durable APPLYING intent restored exactly on restart.")
+    print("Packaged kill-during-write recovery passed: explicit restart recovery restored durable APPLYING intent exactly.")
     return 0
 
 

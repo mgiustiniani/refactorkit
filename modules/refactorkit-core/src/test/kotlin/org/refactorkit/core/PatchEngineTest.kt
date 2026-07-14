@@ -732,6 +732,45 @@ class PatchEngineTest {
     }
 
     @Test
+    fun readOnlyRecoveryInspectionCreatesNoWorkspaceMetadata() {
+        val root = Files.createTempDirectory("refactorkit-read-only-inspection")
+
+        val diagnostics = PatchEngine(root).inspectRecovery()
+
+        assertTrue(diagnostics.isEmpty())
+        assertFalse(Files.exists(root.resolve(".refactorkit"), LinkOption.NOFOLLOW_LINKS))
+    }
+
+    @Test
+    fun readOnlyRecoveryInspectionReportsInterruptedJournalWithoutLockOrMutation() {
+        val root = Files.createTempDirectory("refactorkit-read-only-inspection")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val log = TransactionLog(root.resolve(".refactorkit/transactions"))
+        val transaction = Transaction(
+            planId = PlanId("plan-inspect-interrupted"),
+            snapshotHashBefore = "before",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        log.prepare(TransactionJournalRecord(
+            transaction = transaction,
+            operation = "inspectInterrupted",
+            forwardEdit = WorkspaceEdit(),
+            preImages = listOf(FileImage(source, "class Example {}\n")),
+            postImages = listOf(FileImage(source, "class Changed {}\n")),
+            state = JournalState.PREPARED,
+        ))
+        val before = Files.readString(log.logDir.resolve("${transaction.id.value}.json"))
+
+        val diagnostics = PatchEngine(root).inspectRecovery()
+
+        assertTrue(diagnostics.any { it.code == "transaction.recoveryRequired" })
+        assertFalse(Files.exists(root.resolve(".refactorkit/workspace.lock"), LinkOption.NOFOLLOW_LINKS))
+        assertEquals(before, Files.readString(log.logDir.resolve("${transaction.id.value}.json")))
+        assertEquals("class Example {}\n", Files.readString(root.resolve(source)))
+    }
+
+    @Test
     fun startupRecoveryRestoresInterruptedApplyingTransaction() {
         val root = Files.createTempDirectory("refactorkit-test")
         val source = Path.of("Example.java")

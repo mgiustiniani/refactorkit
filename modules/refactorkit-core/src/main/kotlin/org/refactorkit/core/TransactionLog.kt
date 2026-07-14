@@ -91,7 +91,9 @@ class TransactionLog(
     fun load(id: TransactionId): Transaction? =
         loadRecord(id)?.takeIf { it.state == JournalState.APPLIED }?.transaction
 
-    fun loadRecord(id: TransactionId): TransactionJournalRecord? {
+    fun loadRecord(id: TransactionId): TransactionJournalRecord? = loadRecord(id, quarantineOnCorruption = true)
+
+    private fun loadRecord(id: TransactionId, quarantineOnCorruption: Boolean): TransactionJournalRecord? {
         ensureSecureLogDirectory()
         ensureNoQuarantinedRecords()
         val file = secureFile(id)
@@ -120,10 +122,15 @@ class TransactionLog(
             }
             record
         } catch (error: TransactionLogException) {
-            if (error.code == "transaction.corrupt") quarantine(file, id, error)
+            if (quarantineOnCorruption && error.code == "transaction.corrupt") quarantine(file, id, error)
             throw error
         } catch (error: Exception) {
-            quarantine(file, id, error)
+            if (quarantineOnCorruption) quarantine(file, id, error)
+            throw TransactionLogException(
+                "transaction.corrupt",
+                "Transaction record cannot be decoded: ${id.value}",
+                error,
+            )
         }
     }
 
@@ -158,6 +165,34 @@ class TransactionLog(
     }
 
     fun listRecords(): List<TransactionJournalRecord> = list().mapNotNull(::loadRecord)
+
+    /** Read-only journal inspection used by non-writing project/session startup. */
+    fun listRecordsReadOnly(): List<TransactionJournalRecord> =
+        list().mapNotNull { loadRecord(it, quarantineOnCorruption = false) }
+
+    /** Read-only orphan detection; cleanup remains restricted to an explicit recovery lock. */
+    fun hasOrphanedTempsReadOnly(): Boolean {
+        ensureSecureLogDirectory()
+        ensureNoQuarantinedRecords()
+        if (!Files.exists(logDir, LinkOption.NOFOLLOW_LINKS)) return false
+        return try {
+            Files.list(logDir).use { stream ->
+                stream.filter { orphanTempPattern.matches(it.fileName.toString()) }.anyMatch { path ->
+                    if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                        throw TransactionLogException(
+                            "transaction.pathUnsafe",
+                            "Unsafe orphan transaction temp path: ${path.fileName}",
+                        )
+                    }
+                    true
+                }
+            }
+        } catch (error: TransactionLogException) {
+            throw error
+        } catch (error: Exception) {
+            throw TransactionLogException("transaction.readFailed", "Cannot inspect orphan transaction temps", error)
+        }
+    }
 
     /** Remove uncommitted lifecycle temps while the caller holds the workspace lock. */
     fun cleanupOrphanedTemps(): Int {

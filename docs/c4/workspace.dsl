@@ -29,7 +29,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
 
         refactorKit = softwareSystem "RefactorKit" "Deterministic refactoring and code-intelligence engine. It produces patch previews, applies safe workspace edits, records transactions, and exposes CLI, JSON-RPC daemon, LSP, MCP, and library integration modes." {
             cli = container "CLI Application" "Command-line executable for users, scripts, CI, Java commands, recipes, patch apply/rollback, outline/search/local-rename, golden tests, and self-contained runtime packaging." "Kotlin/JVM application (modules/refactorkit-cli)"
-            daemon = container "JSON-RPC Daemon" "Long-running local stdio session exposing project/symbol/refactor/transaction APIs plus additive IDE diagnostics.v2 with snapshot, lease, source authority, compiler attestation, and exact range evidence." "Kotlin/JVM application (modules/refactorkit-daemon)"
+            daemon = container "JSON-RPC Daemon" "Long-running local stdio session exposing read-only project/symbol APIs, explicit mutating patch recovery, refactor/transaction APIs, and additive IDE diagnostics.v2 with snapshot, lease, source authority, compiler attestation, and exact range evidence." "Kotlin/JVM application (modules/refactorkit-daemon)"
             lsp = container "LSP Server" "Language Server Protocol process over stdio that exposes definition, references, prepareRename, rename, code actions, document symbols, semantic tokens, diagnostics, and executeCommand hooks." "Kotlin/JVM application (modules/refactorkit-lsp)"
             mcp = container "MCP Server" "Local Model Context Protocol server over newline-delimited JSON-RPC that exposes deterministic project, symbol, diagnostics, preview/apply/rollback, import, and context-bundle tools." "Kotlin/JVM application (modules/refactorkit-mcp)"
             embeddedRuntime = container "Embedded Library Runtime" "In-process runtime for external JVM consumers. This is a library integration mode rather than a standalone process." "Kotlin/JVM library artifacts"
@@ -73,7 +73,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
         cli -> testkit "Runs golden tests" "In-process calls"
         cli -> buildToolchain "Builds self-contained CLI runtime and may run build/test smoke checks" "Gradle / jlink / shell"
 
-        daemon -> core "Manages project session state, previews, applies, and rolls back plans" "In-process calls"
+        daemon -> core "Inspects recovery state without writes; explicitly recovers, previews, applies, and rolls back managed plans" "In-process calls"
         daemon -> javaAdapter "Delegates Java scans, symbol queries, diagnostics, and refactoring previews" "In-process calls"
         daemon -> kotlinAdapter "Manages Kotlin read lease, snapshot and compiler worker" "In-process orchestration + external K2 worker"
 

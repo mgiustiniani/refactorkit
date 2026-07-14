@@ -7,22 +7,25 @@ classpath; clients do not construct a classpath or install Java.
 Transport is JSON-RPC 2.0 as newline-delimited UTF-8 JSON over stdio. Standard
 output is reserved for one response per line. Logs use standard error and must
 never contain imported source. Close stdin for orderly shutdown; the session
-clears pending plans and exits at EOF. Abrupt termination is handled by managed
-WAL recovery during the next `project.open`.
+clears pending plans and exits at EOF. After an abrupt managed-write termination,
+the caller invokes explicit mutating `patch.recover` before read-only
+`project.open`. Project open only inspects journal state and never creates
+`.refactorkit` or `workspace.lock`.
 
 ## Lifecycle
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"server.capabilities"}
-{"jsonrpc":"2.0","id":2,"method":"project.open","params":{"root":"/workspace"}}
-{"jsonrpc":"2.0","id":3,"method":"java.importExternalClass","params":{"sourceKind":"clipboard","code":"public class Foo {}","targetDirectory":"module-a/src/main/java/com/example/util","licensePolicy":"warn"}}
-{"jsonrpc":"2.0","id":4,"method":"refactor.apply","params":{"planId":"plan-..."}}
-{"jsonrpc":"2.0","id":5,"method":"patch.rollback","params":{"transactionId":"transaction-..."}}
+{"jsonrpc":"2.0","id":2,"method":"patch.recover","params":{"root":"/workspace"}}
+{"jsonrpc":"2.0","id":3,"method":"project.open","params":{"root":"/workspace"}}
+{"jsonrpc":"2.0","id":4,"method":"java.importExternalClass","params":{"sourceKind":"clipboard","code":"public class Foo {}","targetDirectory":"module-a/src/main/java/com/example/util","licensePolicy":"warn"}}
+{"jsonrpc":"2.0","id":5,"method":"refactor.apply","params":{"planId":"plan-..."}}
+{"jsonrpc":"2.0","id":6,"method":"patch.rollback","params":{"transactionId":"transaction-..."}}
 ```
 
 A successful preview is retained in an access-ordered LRU with at most 128
-plans. `project.open` clears the previous workspace's plans *before* recovery or
-scan; successful apply, rollback, and process shutdown clear all plans. Refused
+plans. `project.open` clears the previous workspace's plans before read-only
+recovery inspection and scan; successful apply, rollback, and process shutdown clear all plans. Refused
 or diagnostics-blocked plans are never retained. Any apply refusal removes that
 plan. LRU eviction drops the oldest source-bearing plan reference.
 

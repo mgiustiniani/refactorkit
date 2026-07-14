@@ -542,11 +542,11 @@ class McpSession(
     private fun toolProjectScan(args: JsonObject): String {
         val root = args.string("root") ?: missing("root")
         val path = Paths.get(root).toAbsolutePath().normalize()
-        val recoveryErrors = PatchEngine(path).recover()
+        val recoveryErrors = PatchEngine(path).inspectRecovery()
         if (recoveryErrors.isNotEmpty()) {
             throw JsonRpcException(
                 JsonRpcErrorCodes.INTERNAL_ERROR,
-                "Workspace recovery required: ${recoveryErrors.joinToString("; ") { it.message }}",
+                "Workspace recovery required; run explicit CLI/daemon patch recovery first: ${recoveryErrors.joinToString("; ") { it.message }}",
             )
         }
         closeSemanticAdapters()

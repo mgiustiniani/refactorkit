@@ -12,8 +12,15 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.FileImage
+import org.refactorkit.core.JournalState
+import org.refactorkit.core.PlanId
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.Transaction
+import org.refactorkit.core.TransactionJournalRecord
+import org.refactorkit.core.TransactionLog
+import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.typescript.TypeScriptProjectModel
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -49,6 +56,57 @@ class DaemonSessionTest {
         assertEquals(RefactorKitVersion.NAME, result["name"]!!.jsonPrimitive.content)
         assertEquals(RefactorKitVersion.VERSION, result["version"]!!.jsonPrimitive.content)
         assertEquals(RefactorKitVersion.API_VERSION, result["apiVersion"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun projectOpenPreservesFreshWorkspaceWithoutCreatingLockMetadata() {
+        val root = Paths.get(createProject(
+            "pom.xml" to "<project><modelVersion>4.0.0</modelVersion><groupId>x</groupId><artifactId>app</artifactId><version>1</version></project>",
+            "src/main/java/x/App.java" to "package x; public class App {}\n",
+        ))
+        val session = DaemonSession()
+
+        session.dispatch("project.open", params("root" to root.toString()))
+        session.dispatch("project.summary", null)
+        session.close()
+
+        assertFalse(Files.exists(root.resolve(".refactorkit")))
+    }
+
+    @Test
+    fun projectOpenRefusesInterruptedJournalUntilExplicitRecovery() {
+        val root = Paths.get(createProject(
+            "src/main/java/x/App.java" to "package x; public class App {}\n",
+        ))
+        val source = Paths.get("src/main/java/x/App.java")
+        val log = TransactionLog(root.resolve(".refactorkit/transactions"))
+        val transaction = Transaction(
+            planId = PlanId("plan-explicit-recovery"),
+            snapshotHashBefore = "before",
+            rollbackEdit = WorkspaceEdit(),
+        )
+        log.prepare(TransactionJournalRecord(
+            transaction = transaction,
+            operation = "explicitRecovery",
+            forwardEdit = WorkspaceEdit(),
+            preImages = listOf(FileImage(source, "package x; public class App {}\n")),
+            postImages = listOf(FileImage(source, "package x; public class Changed {}\n")),
+            state = JournalState.PREPARED,
+        ))
+        val session = DaemonSession()
+
+        val refusal = assertFailsWith<JsonRpcException> {
+            session.dispatch("project.open", params("root" to root.toString()))
+        }
+        assertEquals(JsonRpcErrorCodes.RECOVERY_REQUIRED, refusal.code)
+        assertTrue(refusal.message.orEmpty().contains("patch.recover"))
+        assertFalse(Files.exists(root.resolve(".refactorkit/workspace.lock")))
+
+        val recovered = session.dispatch("patch.recover", params("root" to root.toString())).jsonObject
+        assertTrue(recovered.getValue("recovered").jsonPrimitive.content.toBoolean())
+        session.dispatch("project.open", params("root" to root.toString()))
+        assertEquals(JournalState.ROLLED_BACK, log.loadRecord(transaction.id)?.state)
+        session.close()
     }
 
     @Test

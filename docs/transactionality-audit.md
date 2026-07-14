@@ -139,7 +139,11 @@ ownership belongs to the process/channel, contention returns `workspace.locked`
 immediately (zero wait timeout), and process termination releases stale OS lock
 ownership; the regular marker file may remain safely. Symbolic-link or
 non-regular lock paths are refused, and owner-only POSIX permissions are applied
-where supported.
+where supported. `inspectRecovery` is a separate read-only path for project open,
+MCP scan and LSP initialization: it creates no metadata/lock file, does not
+quarantine or update journals, and reports incomplete state as
+`transaction.recoveryRequired`. Compensation and orphan cleanup require explicit
+`patch.recover`, which is classified `writesWorkspace=true`.
 
 The snapshot-aware `apply(plan, ProjectSnapshot)` overload revalidates every
 initially affected source or target after acquiring the lock. Changed, appeared,

@@ -137,10 +137,18 @@ temp-file force, and lifecycle atomic move. They prove respectively that complet
 Startup recovery durably removes strictly named non-authoritative lifecycle temps
 under the workspace lock. A workspace subprocess test force-kills a real JVM
 after the first of two committed images, inspects the durable `APPLYING`/mixed-
-image state, and proves exact clean-restart compensation. Raw journal truncation
+image state, and proves exact explicitly authorized restart compensation. Raw journal truncation
 is tested at four byte boundaries, and `/dev/shm` provides a conditional distinct-
 store WAL apply/rollback test. Actual power-loss remains a separate RC acceptance
 gate.
+
+Read-only lifecycle tests separately assert that fresh recovery inspection,
+daemon project open, MCP project scan, and LSP initialize create no `.refactorkit`
+directory or `workspace.lock`. Packaged TypeScript and Kotlin semantic-read smoke
+hashes hidden metadata as well as source files before and after the full read
+sequence. Incomplete journal inspection must report recovery-required without
+changing source/journal bytes; only explicit `patch.recover` may acquire the writer
+lock and compensate.
 
 ## Build Model SPI acceptance
 

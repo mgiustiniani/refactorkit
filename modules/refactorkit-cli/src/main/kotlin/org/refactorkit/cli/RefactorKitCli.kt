@@ -363,11 +363,26 @@ class RefactorKitCli(
     // ── patch ─────────────────────────────────────────────────────────────────
 
     private fun cmdPatch(args: List<String>): Int {
-        if (args.isEmpty()) { System.err.println("patch requires a subcommand: rollback"); return 2 }
+        if (args.isEmpty()) { System.err.println("patch requires a subcommand: recover or rollback"); return 2 }
         return when (args.first()) {
+            "recover" -> cmdRecover(args.drop(1))
             "rollback" -> cmdRollback(args.drop(1))
             else -> { System.err.println("Unknown patch subcommand: ${args.first()}"); 2 }
         }
+    }
+
+    private fun cmdRecover(args: List<String>): Int {
+        val parsed = parseOptions(args)
+        val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
+        val workspaceRoot = Paths.get(root).toAbsolutePath().normalize()
+        val diagnostics = PatchEngine(workspaceRoot).recover()
+        if (diagnostics.isNotEmpty()) {
+            System.err.println("Recovery failed:")
+            diagnostics.forEach { System.err.println("  ${it.severity}: ${it.message}") }
+            return 1
+        }
+        println("Recovered workspace $workspaceRoot.")
+        return 0
     }
 
     private fun cmdRollback(args: List<String>): Int {
@@ -834,6 +849,7 @@ class RefactorKitCli(
           refactorkit organize-imports  <file...>                               [--apply] [--root <path>]
           refactorkit format-file       <file>                                  [--apply] [--root <path>]
           refactorkit safe-delete       --symbol <fqcn>                        [--apply] [--force] [<path>]
+          refactorkit patch recover     [--root <path>]
           refactorkit patch rollback    <transaction-id> [--force]              [--root <path>]
           refactorkit java symbols      <path>                                  (alias for symbols)
           refactorkit java diagnostics  <path>                                  (alias for diagnostics)
