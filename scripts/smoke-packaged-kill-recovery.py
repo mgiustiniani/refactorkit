@@ -161,30 +161,26 @@ def main() -> int:
                 or len(preview.get("affectedFiles", [])) != CONSUMER_COUNT + 1
             ):
                 raise AssertionError(f"unexpected wide rename preview: {preview}")
-            mark_stage("wait for durable APPLYING journal")
+            mark_stage("wait for first committed image after durable APPLYING intent")
             daemon.send("refactor.apply", {"planId": preview["planId"]})
 
             deadline = time.monotonic() + 30
-            applying_journal = None
-            known_journals: list[Path] = []
-            transaction_directory = workspace / ".refactorkit" / "transactions"
+            sentinel = workspace / "src" / "consumer-000.ts"
             while time.monotonic() < deadline and daemon.process.poll() is None:
-                if not known_journals:
-                    known_journals = list(transaction_directory.glob("transaction-*.json"))
-                for journal in known_journals:
-                    try:
-                        if json.loads(journal.read_text()).get("state") == "APPLYING":
-                            applying_journal = journal
-                            break
-                    except (OSError, json.JSONDecodeError):
-                        pass
-                if applying_journal is not None:
-                    break
+                try:
+                    if "AccountService" in sentinel.read_text():
+                        break
+                except OSError:
+                    pass
                 time.sleep(0.001)
-            if applying_journal is None:
-                raise AssertionError("packaged apply never exposed a durable APPLYING journal boundary")
-            mark_stage("kill daemon during APPLYING")
+            else:
+                raise AssertionError("packaged apply never exposed a committed source image")
+            mark_stage("kill daemon after first committed image")
             daemon.kill_tree()
+            journals = list((workspace / ".refactorkit" / "transactions").glob("transaction-*.json"))
+            if len(journals) != 1:
+                raise AssertionError(f"expected one interrupted transaction journal, found {len(journals)}")
+            applying_journal = journals[0]
         finally:
             daemon.kill_tree()
 
