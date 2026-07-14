@@ -108,7 +108,9 @@ def create_workspace(root: Path, consumers: int = 110) -> None:
         "include": ["src/**/*.ts"],
     }))
     (source / "service.ts").write_text("export class Service { value(): number { return 1; } }\n")
-    padding = "// bounded acceptance padding " + ("x" * 16384) + "\n"
+    # Cached writes can otherwise finish within one scheduler quantum, hiding
+    # the intentionally durable APPLYING state from the external killer.
+    padding = "// bounded acceptance padding " + ("x" * 262144) + "\n"
     for index in range(consumers):
         (source / f"consumer-{index:03d}.ts").write_text(
             'import { Service } from "./service";\n' +
