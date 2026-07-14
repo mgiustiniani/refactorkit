@@ -550,11 +550,16 @@ class RefactorKitCli(
     }
 
     private fun cmdKotlin(args: List<String>): Int {
-        if (args.firstOrNull() != "diagnostics") {
-            System.err.println("kotlin requires subcommand: diagnostics")
+        val operation = args.firstOrNull()
+        if (operation !in setOf("diagnostics", "symbols", "definition")) {
+            System.err.println("kotlin requires subcommand: diagnostics, symbols, or definition")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
+        if (operation == "definition" && parsed.options["symbol"] == null) {
+            System.err.println("--symbol required")
+            return 2
+        }
         val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
         val jdkHome = parsed.options["jdk-home"] ?: run { System.err.println("--jdk-home required"); return 2 }
         val compilerJar = parsed.options["compiler-jar"] ?: run { System.err.println("--compiler-jar required"); return 2 }
@@ -569,15 +574,22 @@ class RefactorKitCli(
                 put("compilerClasspath", buildJsonArray { compilerClasspath.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
                 put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
             }).jsonObject
-            val result = session.dispatch("kotlin.diagnostics", buildJsonObject {
+            val result = session.dispatch(when (operation) {
+                "diagnostics" -> "kotlin.diagnostics"
+                "symbols" -> "kotlin.symbols"
+                else -> "kotlin.definition"
+            }, buildJsonObject {
                 put("requestId", parsed.options["request-id"] ?: "cli-${UUID.randomUUID()}")
                 put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
                 put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
+                parsed.options["query"]?.let { put("query", it) }
+                parsed.options["file"]?.let { put("file", it) }
+                parsed.options["symbol"]?.let { put("symbol", it) }
             })
             println(semanticJson.encodeToString(result))
             if (result.jsonObject.getValue("status").jsonPrimitive.content == "ready") 0 else 1
         } catch (failure: Exception) {
-            System.err.println("Kotlin diagnostics command failed: ${failure.message}")
+            System.err.println("Kotlin semantic command failed: ${failure.message}")
             1
         } finally {
             session.close()
@@ -829,6 +841,8 @@ class RefactorKitCli(
           refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
           refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
           refactorkit kotlin diagnostics <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--request-id <id>]
+          refactorkit kotlin symbols <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--query <text>] [--file <workspace-relative.kt>]
+          refactorkit kotlin definition <root> --symbol <opaque-id> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

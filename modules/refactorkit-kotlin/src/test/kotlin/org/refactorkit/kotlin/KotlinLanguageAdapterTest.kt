@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
 
 class KotlinLanguageAdapterTest {
     @Test
-    fun descriptorPromotesOnlyCompilerDiagnosticsAndKeepsMutationsRefused() {
+    fun descriptorPromotesBoundedCompilerReadsAndKeepsMutationsRefused() {
         val descriptor = KotlinAdapterRegistration.descriptor()
 
         assertEquals("kotlin", descriptor.languageId)
@@ -35,8 +35,17 @@ class KotlinLanguageAdapterTest {
         assertEquals(SemanticEvidenceKind.COMPILER, diagnostics.evidence)
         assertEquals(KotlinCompilerDiagnostics.BACKEND, diagnostics.backend)
         assertEquals(1, diagnostics.runtime?.limits?.maxProcesses)
-        assertTrue(descriptor.capabilities.filter { it.operation != "diagnostics" }
-            .all { it.stability == CapabilityStability.REFUSED && it.evidence == SemanticEvidenceKind.NONE })
+        val symbolReads = descriptor.capabilities.filter {
+            it.operation in setOf("workspaceSymbols", "documentSymbols", "definition")
+        }
+        assertTrue(symbolReads.all {
+            it.stability == CapabilityStability.EXPERIMENTAL &&
+                it.evidence == SemanticEvidenceKind.COMPILER &&
+                it.backend == KotlinCompilerDiagnostics.SYMBOL_BACKEND
+        })
+        assertTrue(descriptor.capabilities.filter {
+            it.operation !in setOf("diagnostics", "workspaceSymbols", "documentSymbols", "definition")
+        }.all { it.stability == CapabilityStability.REFUSED && it.evidence == SemanticEvidenceKind.NONE })
         assertTrue(descriptor.capabilities.all { it.mutationAuthority == MutationAuthority.NONE })
         assertEquals(setOf("kts"), descriptor.capabilities.single { it.operation == "scriptSemantics" }.extensions)
         assertTrue(descriptor.capabilities.filter { it.operation != "scriptSemantics" }.all {

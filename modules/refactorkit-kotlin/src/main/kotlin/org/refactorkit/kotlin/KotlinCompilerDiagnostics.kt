@@ -1,6 +1,7 @@
 package org.refactorkit.kotlin
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -22,6 +23,9 @@ import org.refactorkit.core.SemanticWorkspaceOverlay
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
+import org.refactorkit.core.Symbol
+import org.refactorkit.core.SymbolId
+import org.refactorkit.core.SymbolIndex
 import org.refactorkit.kotlin.bridge.KotlinCompilerBridgeMain
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
@@ -57,6 +61,8 @@ sealed interface KotlinCompilerDiagnosticsResult {
     data class Available(
         override val diagnostics: List<Diagnostic>,
         override val attestation: KotlinCompilerDiagnosticsAttestation,
+        val symbols: SymbolIndex? = null,
+        val symbolFailure: Diagnostic? = null,
     ) : KotlinCompilerDiagnosticsResult
 
     data class Refused(
@@ -74,7 +80,26 @@ sealed interface KotlinCompilerDiagnosticsResult {
     }
 }
 
-/** One-shot, external, compiler-backed diagnostics for the bounded Kotlin/JVM projection. */
+sealed interface KotlinCompilerSymbolsResult {
+    val attestation: KotlinCompilerDiagnosticsAttestation
+
+    data class Available(
+        val index: SymbolIndex,
+        override val attestation: KotlinCompilerDiagnosticsAttestation,
+    ) : KotlinCompilerSymbolsResult
+
+    data class Refused(
+        val reason: Diagnostic,
+        override val attestation: KotlinCompilerDiagnosticsAttestation,
+    ) : KotlinCompilerSymbolsResult
+
+    data class Error(
+        val failure: Diagnostic,
+        override val attestation: KotlinCompilerDiagnosticsAttestation,
+    ) : KotlinCompilerSymbolsResult
+}
+
+/** One-shot, external, compiler-backed diagnostics and JVM type symbols for the bounded Kotlin/JVM projection. */
 class KotlinCompilerDiagnostics private constructor(
     private val toolchain: KotlinSemanticToolchain,
     private val execution: ExecutionConfiguration,
@@ -185,6 +210,29 @@ class KotlinCompilerDiagnostics private constructor(
         } finally {
             overlay.close()
         }
+    }
+
+    fun analyzeSymbols(snapshot: ProjectSnapshot): KotlinCompilerSymbolsResult = when (val result = analyze(snapshot)) {
+        is KotlinCompilerDiagnosticsResult.Available -> {
+            val attestation = result.attestation.copy(backend = SYMBOL_BACKEND)
+            when {
+                result.symbols != null -> KotlinCompilerSymbolsResult.Available(result.symbols, attestation)
+                result.symbolFailure?.code == "kotlin.compilerSymbolsInvalid" ->
+                    KotlinCompilerSymbolsResult.Error(result.symbolFailure, attestation)
+                else -> KotlinCompilerSymbolsResult.Refused(
+                    result.symbolFailure ?: diagnostic(
+                        "kotlin.symbolsUnavailable", "Kotlin compiler symbols are unavailable for this snapshot",
+                    ),
+                    attestation,
+                )
+            }
+        }
+        is KotlinCompilerDiagnosticsResult.Refused -> KotlinCompilerSymbolsResult.Refused(
+            result.reason, result.attestation.copy(backend = SYMBOL_BACKEND),
+        )
+        is KotlinCompilerDiagnosticsResult.Error -> KotlinCompilerSymbolsResult.Error(
+            result.failure, result.attestation.copy(backend = SYMBOL_BACKEND),
+        )
     }
 
     internal fun parseWorkerOutputForTest(output: String, snapshot: ProjectSnapshot): KotlinCompilerDiagnosticsResult {
@@ -328,7 +376,90 @@ class KotlinCompilerDiagnostics private constructor(
         if (exitCode == "COMPILATION_ERROR" && diagnostics.none { it.severity == Diagnostic.Severity.ERROR }) return error(
             "kotlin.compilerDiagnosticsIncomplete", "Kotlin compiler reported failure without an error diagnostic", attestation,
         )
-        return KotlinCompilerDiagnosticsResult.Available(diagnostics, attestation)
+        val symbols = parseSymbols(payload, snapshot, overlay)
+        return KotlinCompilerDiagnosticsResult.Available(
+            diagnostics,
+            attestation,
+            symbols = symbols.getOrNull(),
+            symbolFailure = symbols.exceptionOrNull()?.asSymbolDiagnostic(),
+        )
+    }
+
+    private fun parseSymbols(
+        payload: JsonObject,
+        snapshot: ProjectSnapshot,
+        overlay: SemanticWorkspaceOverlay,
+    ): Result<SymbolIndex> = runCatching {
+        if (payload.boolean("symbolsComplete") != true) {
+            val code = payload.string("symbolFailure")?.takeIf { it in SYMBOL_REFUSAL_CODES }
+                ?: "kotlin.compilerSymbolsInvalid"
+            throw SymbolPayloadException(code)
+        }
+        val encoded = payload["symbols"] as? JsonArray
+            ?: throw SymbolPayloadException("kotlin.compilerSymbolsInvalid")
+        check(encoded.size <= MAX_SYMBOLS) { "Kotlin compiler symbol limit exceeded" }
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val sourcePaths = snapshot.files.associateBy { it.path.normalize() }
+        val ids = linkedSetOf<SymbolId>()
+        val symbols = encoded.map { item ->
+            val value = item as? JsonObject ?: error("Kotlin compiler symbol is not an object")
+            check(value.keys == SYMBOL_FIELDS) { "Kotlin compiler symbol fields are invalid" }
+            val identity = value.string("identity")?.takeIf {
+                it.length in 1..MAX_SYMBOL_IDENTITY_CHARS && SYMBOL_IDENTITY.matches(it)
+            } ?: error("Kotlin compiler symbol identity is invalid")
+            val name = value.string("name")?.takeIf { it.length in 1..MAX_SYMBOL_NAME_CHARS }
+                ?: error("Kotlin compiler symbol name is invalid")
+            check(identity.substringAfterLast('.').substringAfterLast('$') == name) {
+                "Kotlin compiler symbol name does not match its identity"
+            }
+            val kind = value.string("kind")?.let { runCatching { Symbol.Kind.valueOf(it) }.getOrNull() }
+                ?.takeIf { it in SYMBOL_KINDS } ?: error("Kotlin compiler symbol kind is invalid")
+            val rawPath = value.string("path") ?: error("Kotlin compiler symbol path is missing")
+            val workspacePath = overlay.toWorkspacePath(Path.of(rawPath).toAbsolutePath().normalize())
+                ?: error("Kotlin compiler symbol path escapes overlay")
+            val relative = root.relativize(workspacePath).normalize()
+            val source = sourcePaths[relative] ?: error("Kotlin compiler symbol source is outside snapshot")
+            val start = value.int("startOffset") ?: error("Kotlin compiler symbol start is invalid")
+            val end = value.int("endOffset") ?: error("Kotlin compiler symbol end is invalid")
+            check(start >= 0 && end > start && end <= source.content.length && source.content.substring(start, end) == name) {
+                "Kotlin compiler symbol range is invalid"
+            }
+            val id = SymbolId("kotlin-jvm-type-v1:${sha256("kotlin-jvm-type-v1\u0000$identity")}")
+            check(ids.add(id)) { "Kotlin compiler symbol identity is duplicated" }
+            Symbol(
+                id = id,
+                name = name,
+                kind = kind,
+                location = SourceLocation(relative, SourceRange(position(source.content, start), position(source.content, end))),
+                languageId = "kotlin",
+            )
+        }.sortedBy { it.id.value }
+        SymbolIndex(symbols)
+    }
+
+    private fun Throwable.asSymbolDiagnostic(): Diagnostic = when (this) {
+        is SymbolPayloadException -> diagnostic(
+            code,
+            when (code) {
+                "kotlin.symbolCompilationFailed" -> "Kotlin symbols require a snapshot that compiles successfully"
+                "kotlin.symbolIdentityCollision" -> "Kotlin declarations produced a duplicate JVM identity"
+                "kotlin.symbolLimitExceeded" -> "Kotlin symbol result exceeded the bounded limit"
+                "kotlin.symbolNameLimitExceeded" -> "Kotlin symbol name or identity exceeded the bounded limit"
+                "kotlin.symbolBinaryEvidenceMissing" -> "Kotlin declaration lacks matching JVM binary evidence"
+                "kotlin.symbolJvmNameUnsupported" -> "Kotlin declaration uses an unsupported JVM name shape"
+                "kotlin.symbolLocationUnavailable" -> "Kotlin declaration lacks an exact compiler PSI location"
+                "kotlin.symbolDeclarationKindUnsupported" ->
+                    "Kotlin symbol indexing currently accepts regular class declarations only"
+                else -> "Kotlin compiler symbol extraction failed"
+            },
+        )
+        else -> diagnostic("kotlin.compilerSymbolsInvalid", "Kotlin compiler symbol payload is invalid")
+    }
+
+    private fun position(content: String, offset: Int): SourcePosition {
+        val previousNewline = content.lastIndexOf('\n', offset - 1)
+        val line = content.take(offset).count { it == '\n' }
+        return SourcePosition(line, offset - previousNewline - 1)
     }
 
     private fun parseXml(
@@ -470,6 +601,9 @@ class KotlinCompilerDiagnostics private constructor(
         category = DiagnosticCategory.SAFETY,
     )
 
+    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
     private fun sha256(path: Path): String {
         val digest = MessageDigest.getInstance("SHA-256")
         Files.newInputStream(path).use { input ->
@@ -505,9 +639,11 @@ class KotlinCompilerDiagnostics private constructor(
         message: String,
         val provenance: SemanticProcessProvenance?,
     ) : RuntimeException(message)
+    private class SymbolPayloadException(val code: String) : RuntimeException(code)
 
     companion object {
         const val BACKEND = "kotlin-compiler-diagnostics-k2-v1"
+        const val SYMBOL_BACKEND = "kotlin-compiler-jvm-types-k2-v1"
         const val REQUEST_TIMEOUT_MILLIS = 30_000L
         const val MAX_OUTPUT_BYTES = 8L * 1024L * 1024L
         const val MAX_STDERR_BYTES = 64 * 1024
@@ -515,11 +651,28 @@ class KotlinCompilerDiagnostics private constructor(
         const val MAX_SOURCE_FILES = 96
         const val MAX_CLASSPATH_ENTRIES = 128
         const val MAX_DIAGNOSTICS = 500
+        const val MAX_SYMBOLS = 500
         const val MAX_MESSAGE_CHARS = 4_096
+        private const val MAX_SYMBOL_NAME_CHARS = 512
+        private const val MAX_SYMBOL_IDENTITY_CHARS = 2_048
         private const val MAX_XML_BYTES = 6 * 1024 * 1024
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = false }
         private val SEQUENCE = AtomicLong(1)
         private val DIAGNOSTIC_CODE = Regex("^\\[([A-Z][A-Z0-9_]{0,63})]")
+        private val SYMBOL_IDENTITY = Regex("[A-Za-z_][A-Za-z0-9_]*(?:[.$][A-Za-z_][A-Za-z0-9_]*)*")
+        private val SYMBOL_FIELDS = setOf("identity", "name", "kind", "path", "startOffset", "endOffset")
+        private val SYMBOL_KINDS = setOf(Symbol.Kind.CLASS)
+        private val SYMBOL_REFUSAL_CODES = setOf(
+            "kotlin.symbolCompilationFailed",
+            "kotlin.symbolIdentityCollision",
+            "kotlin.symbolLimitExceeded",
+            "kotlin.symbolNameLimitExceeded",
+            "kotlin.symbolBinaryEvidenceMissing",
+            "kotlin.symbolJvmNameUnsupported",
+            "kotlin.symbolLocationUnavailable",
+            "kotlin.symbolDeclarationKindUnsupported",
+            "kotlin.symbolExtractionFailed",
+        )
         private val SUPPORTED_JVM_TARGETS = setOf("1.8", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21")
     }
 }

@@ -77,7 +77,7 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Kotlin Language Adapter
 |Kotlin/JVM library
-|`0.7.x` adapter owning `.kt`/`.kts` routing. Non-executing `kotlin-compiler-explicit-v1` discovery validates explicit JDK 21 and Kotlin 2.0.21 compiler/classpath identity, and `kotlin-jvm-projection-v1` binds it to bounded source-set evidence. `kotlin-compiler-diagnostics-k2-v1` is the first experimental compiler capability: an external one-shot worker with clean environment, immutable overlay, evidence revalidation, bounded lifecycle, hardened XML parsing and process attestation. Diagnostics are `EXPERIMENTAL/COMPILER/NONE`; symbols, scripts and every mutation remain refused and no lexical result or edit is synthesized.
+|`0.7.x` adapter owning `.kt`/`.kts` routing. Non-executing `kotlin-compiler-explicit-v1` discovery validates explicit JDK 21 and Kotlin 2.0.21 compiler/classpath identity, and `kotlin-jvm-projection-v1` binds it to bounded source-set evidence. `kotlin-compiler-diagnostics-k2-v1` provides an external one-shot diagnostics worker with clean environment, immutable overlay, evidence revalidation, bounded lifecycle, hardened XML parsing and process attestation. `kotlin-compiler-jvm-types-k2-v1` adds a saved-snapshot regular-class symbol row: successful K2 compilation, compiler `ClassId`, exact PSI name range and matching generated class file produce an opaque JVM-binary-derived ID. These reads are `EXPERIMENTAL/COMPILER/NONE`; scripts, other declarations, references and every mutation remain refused and no lexical result or edit is synthesized.
 |`modules/refactorkit-kotlin`, `docs/kotlin-adapter.md`, `docs/kotlin-toolchain.md`, `docs/kotlin-build-model.md`, `docs/releases/v0.7.0-plan.md`.
 |toolchain and build-model projection implemented; semantic backend planned
 
@@ -108,10 +108,11 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 == Key Dependencies
 
-* CLI depends on core, Java adapter, web importer, tree-sitter foundation, and testkit.
-* Daemon and LSP depend on core and Java adapter.
-* MCP depends on core, Java adapter, and web importer.
-* Java adapter, web importer, tree-sitter foundation, and testkit depend on core.
+* CLI depends on core, Java and Kotlin adapters, web importer, tree-sitter foundation, and testkit.
+* Daemon and LSP depend on core plus Java and Kotlin adapters.
+* MCP depends on core, Java and Kotlin adapters, and web importer.
+* Java adapter, Kotlin adapter, web importer, tree-sitter foundation, and testkit depend on core.
+* Kotlin compiler classes are compile-only for the isolated bridge and are supplied explicitly only to the external worker; they are not loaded into the packaged RefactorKit process.
 * Web importer reuses Java source-root/package/import knowledge.
 
 Status: implementation-informed from Gradle module build files and C4 model.

@@ -42,6 +42,14 @@ review safety boundaries before applying refactorings.
   models, reports line-only compiler locations and process attestation, and is
   exposed through library, CLI, daemon capability metadata and MCP. Diagnostics
   are `EXPERIMENTAL/COMPILER/NONE`; every Kotlin mutation remains refused.
+- Add `kotlin-compiler-jvm-types-k2-v1`, the first compiler-backed Kotlin symbol
+  row. Successful K2 compilation plus compiler PSI and matching generated class
+  files produce opaque JVM-binary-derived regular-class IDs and exact UTF-16
+  declaration-name ranges. CLI, daemon and MCP expose saved-snapshot symbols and
+  ID-based definition with lease/snapshot/toolchain/build/process attestation and
+  a Draft 2020-12 API response schema. Compiler errors, unsupported class-like
+  declarations, malformed ranges, collisions
+  and limits refuse the whole result; references and mutations remain refused.
 - No stable Kotlin mutation is claimed until real compiler-backed native
   acceptance passes preview, staged diagnostics, apply, WAL and rollback.
 

@@ -54,7 +54,21 @@ class KotlinLanguageAdapter(
         )),
     )
 
-    override fun buildSymbols(project: ProjectSnapshot): SymbolIndex = SymbolIndex(emptyList())
+    override fun buildSymbols(project: ProjectSnapshot): SymbolIndex = when (val result = compilerSymbols(project)) {
+        is KotlinCompilerSymbolsResult.Available -> result.index
+        is KotlinCompilerSymbolsResult.Refused, is KotlinCompilerSymbolsResult.Error -> SymbolIndex(emptyList())
+    }
+
+    fun compilerSymbols(project: ProjectSnapshot): KotlinCompilerSymbolsResult = compilerDiagnostics?.analyzeSymbols(project)
+        ?: KotlinCompilerSymbolsResult.Refused(
+            compilerNotConfigured(),
+            unconfiguredAttestation(project, KotlinCompilerDiagnostics.SYMBOL_BACKEND),
+        )
+
+    fun findSymbol(project: ProjectSnapshot, symbolId: SymbolId) = when (val result = compilerSymbols(project)) {
+        is KotlinCompilerSymbolsResult.Available -> result.index.symbols.singleOrNull { it.id == symbolId }
+        is KotlinCompilerSymbolsResult.Refused, is KotlinCompilerSymbolsResult.Error -> null
+    }
 
     override fun resolveSymbol(location: SourceLocation): SymbolResolution = SymbolResolution(
         symbol = null,
@@ -72,16 +86,18 @@ class KotlinLanguageAdapter(
     fun compilerDiagnostics(project: ProjectSnapshot): KotlinCompilerDiagnosticsResult = compilerDiagnostics?.analyze(project)
         ?: KotlinCompilerDiagnosticsResult.Refused(
             compilerNotConfigured(),
-            KotlinCompilerDiagnosticsAttestation(
-                backend = KotlinCompilerDiagnostics.BACKEND,
-                kotlinVersion = "unconfigured",
-                javaVersion = "unconfigured",
-                toolchainProjectionHash = "",
-                buildProjectionHash = "",
-                snapshotHash = project.hash,
-                process = null,
-            ),
+            unconfiguredAttestation(project, KotlinCompilerDiagnostics.BACKEND),
         )
+
+    private fun unconfiguredAttestation(project: ProjectSnapshot, backend: String) = KotlinCompilerDiagnosticsAttestation(
+        backend = backend,
+        kotlinVersion = "unconfigured",
+        javaVersion = "unconfigured",
+        toolchainProjectionHash = "",
+        buildProjectionHash = "",
+        snapshotHash = project.hash,
+        process = null,
+    )
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = emptyList()
 
@@ -157,7 +173,11 @@ object KotlinAdapterRegistration {
         backend = BACKEND,
         capabilities = (
             kotlinSourceOperations.map { operation ->
-                if (operation == "diagnostics") diagnosticsCapability() else refused(operation, setOf("kt"))
+                when (operation) {
+                    "diagnostics" -> diagnosticsCapability()
+                    "workspaceSymbols", "documentSymbols", "definition" -> symbolCapability(operation)
+                    else -> refused(operation, setOf("kt"))
+                }
             } + refused("scriptSemantics", setOf("kts"))
             ).sortedBy(LanguageCapability::operation),
     )
@@ -188,6 +208,28 @@ object KotlinAdapterRegistration {
         ),
         extensions = setOf("kt"),
         diagnosticSnapshotModes = setOf(DiagnosticSnapshotMode.SAVED_DISK),
+    )
+
+    private fun symbolCapability(operation: String) = LanguageCapability(
+        operation = operation,
+        stability = CapabilityStability.EXPERIMENTAL,
+        evidence = SemanticEvidenceKind.COMPILER,
+        mutationAuthority = MutationAuthority.NONE,
+        backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
+        runtime = LanguageAdapterRuntime(
+            executionMode = AdapterExecutionMode.EXTERNAL_PROCESS,
+            supportsTimeout = true,
+            supportsCancellation = true,
+            usesWorkspaceOverlay = true,
+            recordsProcessProvenance = true,
+            limits = LanguageAdapterResourceLimits(
+                requestTimeoutMillis = KotlinCompilerDiagnostics.REQUEST_TIMEOUT_MILLIS,
+                maxInputBytes = 128L * 1024L * 1024L,
+                maxOutputBytes = KotlinCompilerDiagnostics.MAX_OUTPUT_BYTES,
+                maxProcesses = 1,
+            ),
+        ),
+        extensions = setOf("kt"),
     )
 
     private fun refused(operation: String, extensions: Set<String>) = LanguageCapability(

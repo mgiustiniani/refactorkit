@@ -36,7 +36,7 @@ public final class KotlinCompilerBridgeMain {
             Path overlay = canonicalDirectory(Paths.get(args[1]));
             String[] compilerArguments = new String[args.length - 3];
             System.arraycopy(args, 3, compilerArguments, 0, compilerArguments.length);
-            validateCompilerArguments(overlay, compilerArguments);
+            BridgeInputs inputs = validateCompilerArguments(overlay, compilerArguments);
 
             Class<?> compilerClass = Class.forName("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", true,
                 Thread.currentThread().getContextClassLoader());
@@ -54,8 +54,19 @@ public final class KotlinCompilerBridgeMain {
             }
             String xmlBase64 = Base64.getEncoder().encodeToString(bounded.toByteArray());
             String exitName = exitCode instanceof Enum<?> ? ((Enum<?>) exitCode).name() : "UNKNOWN";
+            String symbolPayload = "\"symbolsComplete\":false,\"symbolFailure\":\"kotlin.symbolCompilationFailed\"";
+            if ("OK".equals(exitName)) {
+                try {
+                    symbolPayload = renderSymbols(KotlinCompilerSymbolExtractor.extract(inputs.sources, inputs.outputDirectory));
+                } catch (KotlinCompilerSymbolExtractor.SymbolExtractionException failure) {
+                    symbolPayload = "\"symbolsComplete\":false,\"symbolFailure\":\"" + escape(failure.getMessage()) + "\"";
+                } catch (Throwable failure) {
+                    symbolPayload = "\"symbolsComplete\":false,\"symbolFailure\":\"kotlin.symbolExtractionFailed\"";
+                }
+            }
             System.out.print("{\"schema\":1,\"complete\":true,\"snapshotHash\":\"" + args[0] +
-                "\",\"exitCode\":\"" + escape(exitName) + "\",\"xmlBase64\":\"" + xmlBase64 + "\"}");
+                "\",\"exitCode\":\"" + escape(exitName) + "\",\"xmlBase64\":\"" + xmlBase64 + "\"," +
+                symbolPayload + "}");
         } catch (IllegalArgumentException failure) {
             fail("kotlin.bridgeArgumentsInvalid");
         } catch (OutputLimitException failure) {
@@ -65,10 +76,11 @@ public final class KotlinCompilerBridgeMain {
         }
     }
 
-    private static void validateCompilerArguments(Path overlay, String[] arguments) throws IOException {
+    private static BridgeInputs validateCompilerArguments(Path overlay, String[] arguments) throws IOException {
         if (arguments.length == 0 || arguments.length > 4096) throw new IllegalArgumentException();
         Set<String> seen = new HashSet<>();
-        int sources = 0;
+        java.util.List<Path> sources = new java.util.ArrayList<Path>();
+        Path outputDirectory = null;
         for (int index = 0; index < arguments.length; index++) {
             String value = arguments[index];
             if (value.indexOf('\0') >= 0 || value.length() > 4096) throw new IllegalArgumentException();
@@ -76,7 +88,7 @@ public final class KotlinCompilerBridgeMain {
                 if (!seen.add(value) || ++index >= arguments.length) throw new IllegalArgumentException();
                 String optionValue = arguments[index];
                 if (optionValue.indexOf('\0') >= 0 || optionValue.length() > 32768) throw new IllegalArgumentException();
-                if ("-d".equals(value)) requireInsideOverlay(overlay, Paths.get(optionValue), false);
+                if ("-d".equals(value)) outputDirectory = requireInsideOverlay(overlay, Paths.get(optionValue), false);
                 if ("-jdk-home".equals(value)) canonicalDirectory(Paths.get(optionValue));
                 if ("-classpath".equals(value)) validateClasspath(optionValue);
             } else if (FLAG_OPTIONS.contains(value)) {
@@ -86,14 +98,30 @@ public final class KotlinCompilerBridgeMain {
             } else {
                 Path source = requireInsideOverlay(overlay, Paths.get(value), true);
                 if (!source.getFileName().toString().endsWith(".kt")) throw new IllegalArgumentException();
-                sources++;
+                sources.add(source);
             }
         }
-        if (sources == 0 || !seen.contains("-d") || !seen.contains("-jdk-home") ||
+        if (sources.isEmpty() || outputDirectory == null || !seen.contains("-d") || !seen.contains("-jdk-home") ||
             !seen.contains("-jvm-target") || !seen.contains("-language-version") ||
             !seen.contains("-api-version") || !seen.contains("-no-stdlib") || !seen.contains("-no-reflect")) {
             throw new IllegalArgumentException();
         }
+        return new BridgeInputs(Collections.unmodifiableList(sources), outputDirectory);
+    }
+
+    private static String renderSymbols(java.util.List<KotlinCompilerSymbolExtractor.ExtractedSymbol> symbols) {
+        StringBuilder json = new StringBuilder("\"symbolsComplete\":true,\"symbols\":[");
+        for (int index = 0; index < symbols.size(); index++) {
+            if (index > 0) json.append(',');
+            KotlinCompilerSymbolExtractor.ExtractedSymbol symbol = symbols.get(index);
+            json.append("{\"identity\":\"").append(escape(symbol.identity()))
+                .append("\",\"name\":\"").append(escape(symbol.name()))
+                .append("\",\"kind\":\"").append(escape(symbol.kind()))
+                .append("\",\"path\":\"").append(escape(symbol.path()))
+                .append("\",\"startOffset\":").append(symbol.startOffset())
+                .append(",\"endOffset\":").append(symbol.endOffset()).append('}');
+        }
+        return json.append(']').toString();
     }
 
     private static void validateClasspath(String value) throws IOException {
@@ -136,7 +164,33 @@ public final class KotlinCompilerBridgeMain {
     }
 
     private static String escape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        StringBuilder escaped = new StringBuilder(value.length() + 16);
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            switch (character) {
+                case '\\': escaped.append("\\\\"); break;
+                case '"': escaped.append("\\\""); break;
+                case '\b': escaped.append("\\b"); break;
+                case '\f': escaped.append("\\f"); break;
+                case '\n': escaped.append("\\n"); break;
+                case '\r': escaped.append("\\r"); break;
+                case '\t': escaped.append("\\t"); break;
+                default:
+                    if (character < 0x20) escaped.append(String.format(java.util.Locale.ROOT, "\\u%04x", (int) character));
+                    else escaped.append(character);
+            }
+        }
+        return escaped.toString();
+    }
+
+    private static final class BridgeInputs {
+        private final java.util.List<Path> sources;
+        private final Path outputDirectory;
+
+        private BridgeInputs(java.util.List<Path> sources, Path outputDirectory) {
+            this.sources = sources;
+            this.outputDirectory = outputDirectory;
+        }
     }
 
     private static final class BoundedOutputStream extends OutputStream {

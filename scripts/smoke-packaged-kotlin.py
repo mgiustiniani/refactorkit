@@ -45,14 +45,24 @@ def tree_hash(root: Path) -> str:
     return digest.hexdigest()
 
 
-def run(cli: Path, workspace: Path, jdk: Path, compiler: Path, classpath: list[Path], request: str) -> dict:
+def run(
+    cli: Path,
+    workspace: Path,
+    jdk: Path,
+    compiler: Path,
+    classpath: list[Path],
+    request: str,
+    operation: str = "diagnostics",
+    extra: list[str] | None = None,
+) -> dict:
     result = subprocess.run(
         command_for(cli, [
-            "kotlin", "diagnostics", str(workspace),
+            "kotlin", operation, str(workspace),
             "--jdk-home", str(jdk),
             "--compiler-jar", str(compiler),
             "--compiler-classpath", os.pathsep.join(map(str, classpath)),
             "--request-id", request,
+            *(extra or []),
         ]),
         text=True,
         stdout=subprocess.PIPE,
@@ -101,6 +111,27 @@ def main() -> int:
         if tree_hash(workspace) != before:
             raise AssertionError("clean Kotlin diagnostics modified workspace sources")
 
+        symbols = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-symbols", "symbols",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt"],
+        )
+        symbol_rows = symbols.get("symbols", [])
+        if symbols.get("status") != "ready" or symbols.get("backend") != "kotlin-compiler-jvm-types-k2-v1":
+            raise AssertionError(f"Kotlin compiler symbols failed: {symbols}")
+        greeting = next((item for item in symbol_rows if item.get("name") == "Greeting"), None)
+        if not greeting or not greeting.get("id", "").startswith("kotlin-jvm-type-v1:"):
+            raise AssertionError(f"Kotlin JVM type identity is missing: {symbols}")
+        if greeting.get("startLine") != 2 or greeting.get("startCharacter") != 6 or greeting.get("endCharacter") != 14:
+            raise AssertionError(f"Kotlin compiler PSI range is not exact UTF-16: {greeting}")
+        definition = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-definition", "definition",
+            ["--symbol", greeting["id"]],
+        )
+        if definition.get("status") != "ready" or definition.get("symbols") != [greeting]:
+            raise AssertionError(f"Kotlin opaque definition lookup failed: {definition}")
+        if tree_hash(workspace) != before:
+            raise AssertionError("Kotlin symbol reads modified workspace sources")
+
         source = workspace / "src" / "main" / "kotlin" / "org" / "refactorkit" / "samples" / "Greeting.kt"
         source.write_text("package org.refactorkit.samples\n\nclass Greeting(val missing: MissingType)\n", encoding="utf-8")
         broken_before = tree_hash(workspace)
@@ -113,7 +144,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: real K2 diagnostics, attestation, precision and immutable sources.")
+    print("Packaged Kotlin acceptance passed: K2 diagnostics, durable JVM type symbols, exact definitions and immutable sources.")
     return 0
 
 

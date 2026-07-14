@@ -12,6 +12,7 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class KotlinCompilerDiagnosticsTest {
@@ -48,6 +49,60 @@ class KotlinCompilerDiagnosticsTest {
         val result = assertIs<KotlinCompilerDiagnosticsResult.Available>(analyzed, analyzed.toString())
 
         assertTrue(result.diagnostics.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
+    }
+
+    @Test
+    fun successfulK2CompilationReturnsDurableJvmTypeSymbolsWithExactPsiRanges() {
+        val root = project("/*😀*/ class Holder { class Nested }\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
+
+        assertEquals(KotlinCompilerDiagnostics.SYMBOL_BACKEND, result.attestation.backend)
+        assertEquals(listOf("Holder", "Nested"), result.index.symbols.map { it.name }.sorted())
+        assertEquals(result.index.symbols.size, result.index.symbols.map { it.id }.distinct().size)
+        result.index.symbols.forEach { symbol ->
+            assertTrue(symbol.id.value.matches(Regex("kotlin-jvm-type-v1:[0-9a-f]{64}")))
+            assertEquals(Path.of("src/main/kotlin/fixture/Broken.kt"), symbol.location.path)
+            val source = snapshot.files.single { it.path == symbol.location.path }.content
+            val line = source.lineSequence().elementAt(symbol.location.range.start.line)
+            assertEquals(symbol.name, line.substring(symbol.location.range.start.character, symbol.location.range.end.character))
+        }
+        assertEquals(
+            "/*😀*/ class ".length,
+            result.index.symbols.single { it.name == "Holder" }.location.range.start.character,
+        )
+        assertNotNull(result.attestation.process)
+
+        root.resolve("src/main/kotlin/fixture/Broken.kt").writeText(
+            "package fixture\n\n\nclass Holder { class Nested }\n",
+        )
+        val shiftedSnapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val shifted = assertIs<KotlinCompilerSymbolsResult.Available>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(shiftedSnapshot),
+        )
+        assertEquals(
+            result.index.symbols.associate { it.name to it.id },
+            shifted.index.symbols.associate { it.name to it.id },
+        )
+        assertTrue(shifted.index.symbols.single { it.name == "Holder" }.location.range.start.line >
+            result.index.symbols.single { it.name == "Holder" }.location.range.start.line)
+    }
+
+    @Test
+    fun compilationErrorsRefuseSymbolsWithoutWeakFallback() {
+        val root = project("class Broken(val missing: MissingType)\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Refused>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+
+        assertEquals("kotlin.symbolCompilationFailed", result.reason.code)
+        assertNotNull(result.attestation.process)
     }
 
     @Test
@@ -88,6 +143,15 @@ class KotlinCompilerDiagnosticsTest {
             ),
         )
         assertEquals("kotlin.compilerDiagnosticsSnapshotMismatch", mismatch.failure.code)
+        val xml = java.util.Base64.getEncoder().encodeToString("<MESSAGES/>".toByteArray())
+        val malformedSymbols = assertIs<KotlinCompilerDiagnosticsResult.Available>(
+            diagnostics.parseWorkerOutputForTest(
+                """{"schema":1,"complete":true,"snapshotHash":"${snapshot.hash}","exitCode":"OK","xmlBase64":"$xml","symbolsComplete":true,"symbols":[{}]}""",
+                snapshot,
+            ),
+        )
+        assertEquals("kotlin.compilerSymbolsInvalid", malformedSymbols.symbolFailure?.code)
+        assertEquals(null, malformedSymbols.symbols)
     }
 
     @Test

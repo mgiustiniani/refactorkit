@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.org/schema/api-0.2-kotlin-symbols-response.json",
+  "title": "RefactorKit API 0.2 Kotlin symbols response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "requestId", "languageId", "status", "semanticLease",
+    "snapshotHash", "backend", "toolchainProjectionHash", "buildProjectionHash",
+    "kotlinVersion", "javaVersion", "process", "failure", "symbols", "truncated"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "languageId": {"const": "kotlin"},
+    "status": {"enum": ["ready", "refused", "error"]},
+    "semanticLease": {"type": "string", "minLength": 1, "maxLength": 256},
+    "snapshotHash": {"$ref": "#/$defs/sha256"},
+    "backend": {"const": "kotlin-compiler-jvm-types-k2-v1"},
+    "toolchainProjectionHash": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"const": ""}]},
+    "buildProjectionHash": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"const": ""}]},
+    "kotlinVersion": {"type": "string", "minLength": 1, "maxLength": 64},
+    "javaVersion": {"type": "string", "minLength": 1, "maxLength": 256},
+    "process": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["executableSha256", "argumentsSha256", "processId"],
+          "properties": {
+            "executableSha256": {"$ref": "#/$defs/sha256"},
+            "argumentsSha256": {"$ref": "#/$defs/sha256"},
+            "processId": {"type": "integer", "minimum": 1}
+          }
+        }
+      ]
+    },
+    "failure": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message"],
+          "properties": {
+            "code": {"type": "string", "pattern": "^kotlin\\.[A-Za-z0-9.]+$", "maxLength": 128},
+            "message": {"type": "string", "minLength": 1, "maxLength": 4096}
+          }
+        }
+      ]
+    },
+    "symbols": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {"$ref": "#/$defs/symbol"}
+    },
+    "truncated": {"type": "boolean"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ready"}}},
+      "then": {"properties": {"failure": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["refused", "error"]}}},
+      "then": {"properties": {"failure": {"type": "object"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "position": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "symbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "name", "kind", "file", "startLine", "startCharacter",
+        "endLine", "endCharacter"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^kotlin-jvm-type-v1:[0-9a-f]{64}$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 512},
+        "kind": {"const": "class"},
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "startLine": {"$ref": "#/$defs/position"},
+        "startCharacter": {"$ref": "#/$defs/position"},
+        "endLine": {"$ref": "#/$defs/position"},
+        "endCharacter": {"$ref": "#/$defs/position"}
+      }
+    }
+  }
+}

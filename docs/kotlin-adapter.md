@@ -1,8 +1,9 @@
 # Kotlin adapter
 
-Status: first compiler-backed Kotlin/JVM capability implemented for
-`0.7.0-SNAPSHOT`. Diagnostics are experimental; every symbol and mutation
-capability remains explicitly refused.
+Status: initial compiler-backed Kotlin/JVM read capabilities implemented for
+`0.7.0-SNAPSHOT`. Diagnostics and bounded regular-class symbol navigation are
+experimental; references, callable/member identity and every mutation remain
+explicitly refused.
 
 ## Capability boundary
 
@@ -25,11 +26,23 @@ executionMode: EXTERNAL_PROCESS
 snapshotModes: saved-disk
 ```
 
-All other `.kt` operations and all `.kts` script semantics remain
+The `workspaceSymbols`, `documentSymbols`, and ID-based `definition` capabilities
+use:
+
+```text
+stability: EXPERIMENTAL
+evidence: COMPILER
+backend: kotlin-compiler-jvm-types-k2-v1
+mutationAuthority: NONE
+executionMode: EXTERNAL_PROCESS
+snapshotMode: saved-disk
+```
+
+All remaining `.kt` operations and all `.kts` script semantics remain
 `REFUSED/NONE/NONE`. Calls made without an explicitly configured compiler return
-`kotlin.toolchainNotConfigured`; no lexical or structural diagnostic fallback is
-fabricated. Refactoring requests still return edit-free refused plans and cannot
-reach `PatchEngine`.
+`kotlin.toolchainNotConfigured`; no lexical or structural fallback is fabricated.
+Refactoring requests still return edit-free refused plans and cannot reach
+`PatchEngine`.
 
 ## Compiler diagnostics session
 
@@ -64,6 +77,38 @@ Kotlin compiler XML provides line/column starts but no trustworthy end offsets.
 Diagnostics therefore report explicit `LINE_ONLY` precision instead of inventing
 Monaco ranges. Project-level diagnostics report `NONE`.
 
+## Compiler-proven JVM type symbols
+
+After a successful K2 compilation, the same isolated worker creates a separate
+compiler PSI environment over the exact overlay sources. The initial catalogue is
+intentionally limited to regular class declarations, including nested classes.
+For every returned declaration the worker requires:
+
+- an ASCII JVM-safe package and class-name shape;
+- a non-local compiler `ClassId`;
+- a matching generated `.class` file below the overlay output directory;
+- an exact compiler PSI name-identifier range;
+- a unique JVM binary identity; and
+- no more than 500 symbols.
+
+The public opaque ID is `kotlin-jvm-type-v1:<sha256>` derived from the durable JVM
+binary name, never from a source offset, path, process ID, or compiler object.
+Locations are exact zero-based UTF-16 name ranges and are accepted only when the
+reported source substring equals the symbol name. Worker paths are remapped from
+the immutable overlay and must identify a source in the attested snapshot.
+
+The whole symbol read refuses rather than returning a partial regular-class index
+when the snapshot does not compile, an unsupported class-like declaration such as
+an interface/object/enum/annotation is encountered, a JVM name is unsupported,
+identity collides, binary evidence is missing, or any result/location limit is
+exceeded. Callables, type aliases, local classes and anonymous classes are outside
+the initial catalogue and are not presented as indexed symbols. Definition accepts only an
+opaque ID returned by this backend and resolves it against a newly attested copy
+of the same saved snapshot. Usage-location resolution, functions, properties,
+parameters, type aliases, interfaces, objects, enums, annotation classes and
+references remain refused until their semantic identities are separately
+qualified.
+
 ## Integration surfaces
 
 Daemon API:
@@ -72,6 +117,8 @@ Daemon API:
 kotlin.semantic.start
 kotlin.semantic.stop
 kotlin.diagnostics
+kotlin.symbols
+kotlin.definition
 ```
 
 `kotlin.diagnostics` requires the exact lease and snapshot returned by startup and
@@ -86,17 +133,31 @@ refactorkit kotlin diagnostics <root> \
   --jdk-home <jdk-21> \
   --compiler-jar <kotlin-compiler-embeddable-2.0.21.jar> \
   --compiler-classpath <path-separated-runtime-jars>
+
+refactorkit kotlin symbols <root> \
+  --jdk-home <jdk-21> --compiler-jar <compiler.jar> \
+  --compiler-classpath <runtime-jars> --query Greeting
+
+refactorkit kotlin definition <root> \
+  --symbol kotlin-jvm-type-v1:<sha256> \
+  --jdk-home <jdk-21> --compiler-jar <compiler.jar> \
+  --compiler-classpath <runtime-jars>
 ```
 
-MCP exposes `kotlin_semantic_start`, `kotlin_semantic_stop`, and
-`kotlin_diagnostics`. LSP and all capability surfaces expose the same truthful
-experimental compiler capability metadata, but editor-native publication remains
-the editor's responsibility in this slice.
+MCP exposes `kotlin_semantic_start`, `kotlin_semantic_stop`,
+`kotlin_diagnostics`, `kotlin_symbols`, and `kotlin_definition`. Kotlin navigation
+uses these correlated language-specific envelopes; legacy generic symbol routes
+are not promoted to saved-snapshot authority. The daemon response is constrained
+by `docs/api-0.2-kotlin-symbols-schema.json`. LSP and all capability surfaces
+expose the same truthful experimental compiler capability metadata, but
+editor-native publication remains the editor's responsibility in this slice.
 
 ## Remaining gates
 
-Compiler-backed symbols, durable symbol identity, definition, references,
-Java/Kotlin interoperability, immutable editor overlays and every mutation remain
-unimplemented and explicitly refused. Managed Kotlin rename still requires exact
-semantic identity, preview and staged diagnostics, authorization, `PatchEngine`,
-WAL, native recovery and rollback qualification.
+Callable/member symbols, usage-location definition, references, Java/Kotlin
+interoperability, immutable editor overlays and every mutation remain
+unimplemented and explicitly refused. The regular-class symbol ID is sufficient
+only for saved-snapshot search-to-definition navigation; it is not rename
+authority. Managed Kotlin rename still requires complete semantic references,
+preview and staged diagnostics, authorization, `PatchEngine`, WAL, native
+recovery and rollback qualification.

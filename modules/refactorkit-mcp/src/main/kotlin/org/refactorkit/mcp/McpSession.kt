@@ -51,6 +51,7 @@ import org.refactorkit.java.JavaSafeDeletePlanner
 import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
 import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
+import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import org.refactorkit.kotlin.KotlinSemanticToolchain
@@ -183,6 +184,21 @@ class McpSession(
                     "semanticLease" to "string: lease returned by kotlin_semantic_start",
                     "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
                 )))
+            add(tool("kotlin_symbols", "Return compiler-proven Kotlin/JVM type symbols with exact UTF-16 declaration ranges.",
+                required = listOf("semanticLease", "expectedSnapshotHash"),
+                props = mapOf(
+                    "semanticLease" to "string: lease returned by kotlin_semantic_start",
+                    "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
+                    "query" to "string: optional case-insensitive type-name filter",
+                    "file" to "string: optional normalized workspace-relative Kotlin source",
+                )))
+            add(tool("kotlin_definition", "Resolve an opaque Kotlin symbol ID against the attested saved snapshot.",
+                required = listOf("semanticLease", "expectedSnapshotHash", "symbol"),
+                props = mapOf(
+                    "semanticLease" to "string: lease returned by kotlin_semantic_start",
+                    "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
+                    "symbol" to "string: opaque ID returned by kotlin_symbols",
+                )))
             add(tool("symbol_search", "Search for symbols in the project by name.",
                 required = listOf("query"),
                 props = mapOf(
@@ -191,7 +207,10 @@ class McpSession(
                 )))
             add(tool("symbol_definition", "Return the definition location of a symbol.",
                 required = listOf("symbol"),
-                props = mapOf("symbol" to "string: fully-qualified symbol name")))
+                props = mapOf(
+                    "symbol" to "string: fully-qualified or opaque symbol ID",
+                    "languageId" to "string: java | typescript | javascript (default java)",
+                )))
             add(tool("symbol_references", "Find all references to a symbol.",
                 required = listOf("symbol"),
                 props = mapOf("symbol" to "string: fully-qualified symbol name")))
@@ -268,6 +287,8 @@ class McpSession(
         "kotlin_semantic_start" -> toolKotlinSemanticStart(args)
         "kotlin_semantic_stop" -> toolKotlinSemanticStop()
         "kotlin_diagnostics" -> toolKotlinDiagnostics(args)
+        "kotlin_symbols" -> toolKotlinSymbols(args)
+        "kotlin_definition" -> toolKotlinDefinition(args)
         "symbol_search"         -> toolSymbolSearch(args)
         "symbol_definition"     -> toolSymbolDefinition(args)
         "symbol_references"     -> toolSymbolReferences(args)
@@ -434,6 +455,87 @@ class McpSession(
                     }
                 }) }
             })
+        }.toString()
+    }
+
+    private fun toolKotlinSymbols(args: JsonObject): String = toolKotlinSymbolRead(args, null)
+
+    private fun toolKotlinDefinition(args: JsonObject): String {
+        val symbol = args.string("symbol") ?: missing("symbol")
+        if (!Regex("kotlin-jvm-type-v1:[0-9a-f]{64}").matches(symbol)) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM type ID")
+        }
+        return toolKotlinSymbolRead(args, org.refactorkit.core.SymbolId(symbol))
+    }
+
+    private fun toolKotlinSymbolRead(args: JsonObject, requestedSymbol: org.refactorkit.core.SymbolId?): String {
+        val current = requireSnapshot()
+        val lease = args.string("semanticLease") ?: missing("semanticLease")
+        val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+        if (expected != current.hash) return "Refused [kotlin.symbolsSnapshotStale]: expected Kotlin snapshot is stale."
+        if (kotlinToolchain == null || lease != kotlinSemanticLease) {
+            return "Refused [kotlin.symbolsSessionStale]: Kotlin semantic lease is missing or stale."
+        }
+        val requestedFile = args.string("file")?.let { raw ->
+            if (raw.length > 4_096) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol file is too long")
+            val path = runCatching { Paths.get(raw) }.getOrNull()
+            if (path == null || path.isAbsolute || raw.contains('\\') || Regex("^[A-Za-z]:[/\\\\]").containsMatchIn(raw)) {
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol file must be a normalized workspace-relative '/' path")
+            }
+            val normalized = path.normalize()
+            if (normalized.toString().isBlank() || normalized.startsWith("..") ||
+                current.files.none { it.languageId == "kotlin" && it.path.normalize() == normalized }) {
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol file is not an attested Kotlin source")
+            }
+            normalized
+        }
+        val result = kotlinAdapter.compilerSymbols(current)
+        val query = if (requestedSymbol == null) args.string("query").orEmpty() else ""
+        if (query.length > 512) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol query is too long")
+        val selected = if (result is KotlinCompilerSymbolsResult.Available) {
+            result.index.symbols.filter { symbol ->
+                symbol.name.contains(query, ignoreCase = true) &&
+                    (requestedFile == null || symbol.location.path == requestedFile) &&
+                    (requestedSymbol == null || symbol.id == requestedSymbol)
+            }
+        } else emptyList()
+        return buildJsonObject {
+            put("status", when {
+                result is KotlinCompilerSymbolsResult.Available && requestedSymbol != null && selected.isEmpty() -> "refused"
+                result is KotlinCompilerSymbolsResult.Available -> "ready"
+                result is KotlinCompilerSymbolsResult.Refused -> "refused"
+                else -> "error"
+            })
+            put("snapshotHash", current.hash)
+            put("backend", result.attestation.backend)
+            put("toolchainProjectionHash", result.attestation.toolchainProjectionHash)
+            put("buildProjectionHash", result.attestation.buildProjectionHash)
+            val failure = when (result) {
+                is KotlinCompilerSymbolsResult.Available -> if (requestedSymbol != null && selected.isEmpty()) {
+                    "kotlin.symbolNotFound"
+                } else null
+                is KotlinCompilerSymbolsResult.Refused -> result.reason.code
+                is KotlinCompilerSymbolsResult.Error -> result.failure.code
+            }
+            put("failureCode", failure?.let(::JsonPrimitive) ?: JsonNull)
+            put("process", result.attestation.process?.let { provenance -> buildJsonObject {
+                put("executableSha256", provenance.executableSha256)
+                put("argumentsSha256", provenance.argumentsSha256)
+                put("processId", provenance.pid)
+            } } ?: JsonNull)
+            put("symbols", buildJsonArray {
+                selected.take(ProtocolLimits.MAX_SYMBOL_RESULTS).forEach { symbol -> add(buildJsonObject {
+                    put("id", symbol.id.value)
+                    put("name", symbol.name)
+                    put("kind", symbol.kind.name.lowercase())
+                    put("file", ProtocolPath.serialize(symbol.location.path))
+                    put("startLine", symbol.location.range.start.line)
+                    put("startCharacter", symbol.location.range.start.character)
+                    put("endLine", symbol.location.range.end.line)
+                    put("endCharacter", symbol.location.range.end.character)
+                }) }
+            })
+            put("truncated", selected.size > ProtocolLimits.MAX_SYMBOL_RESULTS)
         }.toString()
     }
 

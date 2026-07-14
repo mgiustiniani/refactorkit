@@ -17,6 +17,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class KotlinDaemonIntegrationTest {
@@ -69,6 +70,25 @@ class KotlinDaemonIntegrationTest {
         assertEquals("refused", stale.getValue("status").jsonPrimitive.content)
         assertEquals("kotlin.diagnosticsSessionStale", stale.getValue("failure").jsonObject
             .getValue("code").jsonPrimitive.content)
+
+        assertFailsWith<org.refactorkit.core.JsonRpcException> {
+            session.dispatch("kotlin.definition", buildJsonObject {
+                put("requestId", "kotlin-invalid-definition")
+                put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
+                put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
+                put("symbol", "not-an-opaque-id")
+            })
+        }
+
+        val staleSymbols = session.dispatch("kotlin.symbols", buildJsonObject {
+            put("requestId", "kotlin-symbols-stale")
+            put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
+            put("semanticLease", "semantic-00000000-0000-4000-8000-000000000099")
+        }).jsonObject
+        assertEquals("refused", staleSymbols.getValue("status").jsonPrimitive.content)
+        assertEquals("kotlin.symbolsSessionStale", staleSymbols.getValue("failure").jsonObject
+            .getValue("code").jsonPrimitive.content)
+        assertTrue(staleSymbols.getValue("symbols").jsonArray.isEmpty())
 
         val failed = session.dispatch("kotlin.diagnostics", buildJsonObject {
             put("requestId", "kotlin-worker")

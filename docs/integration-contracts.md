@@ -74,6 +74,7 @@ compatible.
 | `refactorkit capabilities` | `experimental` | Emits language-kernel capability schema v1 with deterministic adapter, backend, operation, evidence, authority, execution, timeout/cancellation, overlay, provenance, and resource-limit fields. |
 | `refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename>` | `experimental` | One-shot explicit-toolchain semantic session; `diagnostics-v2` emits the IDE-grade saved-disk authority envelope, legacy `diagnostics` remains compatible, preview is default, and managed apply requires `--apply`. |
 | `refactorkit kotlin diagnostics <root> --jdk-home ... --compiler-jar ... [--compiler-classpath ...]` | `experimental` | One-shot explicit JDK 21/Kotlin 2.0.21 K2 diagnostics with exact snapshot/lease, build/toolchain hashes, line-only/no-location precision and process attestation; no mutation authority. |
+| `refactorkit kotlin symbols <root> ... [--query ...]` / `kotlin definition --symbol <opaque-id> <root> ...` | `experimental` | Saved-snapshot compiler-proven regular-class search and ID-based definition. IDs derive from JVM binary identity; ranges are exact UTF-16 compiler PSI name ranges. Unsupported declaration kinds, compiler errors and incomplete results refuse without fallback. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
@@ -120,14 +121,17 @@ do not inherit LSP backend or runtime limits.
 
 The packaged `0.7.0-SNAPSHOT` kernel includes the `kotlin` descriptor for `.kt`
 and `.kts`. Its default backend remains `kotlin-analysis-unavailable-v1`, while
-only `diagnostics` overrides it with `kotlin-compiler-diagnostics-k2-v1`,
-`EXPERIMENTAL` stability, `COMPILER` evidence, external bounded runtime and no
-mutation authority. Every other operation and Kotlin script semantics remain
-`REFUSED/NONE/NONE`. `kotlin-compiler-explicit-v1` hash-binds explicit JDK/compiler
-inputs without discovery-time execution; `kotlin-jvm-projection-v1` binds those
-hashes to bounded JVM source sets. The diagnostics worker revalidates both,
-launches one isolated K2 process over an immutable overlay, and exposes no symbol
-or write authority.
+`diagnostics` overrides it with `kotlin-compiler-diagnostics-k2-v1`; bounded
+`workspaceSymbols`, `documentSymbols`, and ID-based `definition` use
+`kotlin-compiler-jvm-types-k2-v1`. These rows have `EXPERIMENTAL` stability,
+`COMPILER` evidence, external bounded runtime and no mutation authority. Other
+operations and Kotlin script semantics remain `REFUSED/NONE/NONE`.
+`kotlin-compiler-explicit-v1` hash-binds explicit JDK/compiler inputs without
+discovery-time execution; `kotlin-jvm-projection-v1` binds those hashes to bounded
+JVM source sets. The worker revalidates both and launches one isolated K2 process
+over an immutable overlay. Its first symbol catalogue accepts only successfully
+compiled regular classes with matching JVM class-file and exact compiler PSI
+evidence. It exposes no references or write authority.
 
 External LSP processes are internal proposal providers. They run under the
 bounded semantic process lifecycle with explicit environment and provenance,
@@ -160,6 +164,8 @@ of the beta baseline for documented methods.
 | `diagnostics.v2` | `additive-api-0.2` | IDE-grade TypeScript/JavaScript compiler diagnostics with request ID, semantic lease, saved/overlay authority, snapshot hashes, compiler attestation, exact/partial location variants, structured readiness, and bounded response. See `docs/typescript-diagnostics-protocol.md`. |
 | `kotlin.semantic.start` / `kotlin.semantic.stop` | `experimental` | Configure/clear explicit JDK 21 and Kotlin 2.0.21 compiler evidence, attach/remove the Kotlin/JVM projection, and rotate the semantic lease; no compiler is launched during startup. |
 | `kotlin.diagnostics` | `experimental` | Requires exact startup lease and snapshot; returns structured compiler diagnostics, explicit location precision, toolchain/build hashes, bounded runtime and process attestation. |
+| `kotlin.symbols` | `experimental` | Requires exact startup lease and snapshot; returns a structured ready/refused/error envelope, opaque JVM-type IDs, exact zero-based UTF-16 class-name ranges, toolchain/build hashes, process attestation and explicit truncation. |
+| `kotlin.definition` | `experimental` | Requires the same authority plus an opaque ID returned by `kotlin.symbols`; resolves only against a newly attested saved snapshot and returns `kotlin.symbolNotFound` rather than guessing. |
 | `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
 | `refactor.apply` | `beta-contract` | Requires `planId`; applies the exact retained plan, rejects stale snapshots/plans, refreshes session state, clears pending plans, and returns structured changes/diagnostics/snapshot evidence. |
 | `refactor.discard` | `beta-contract` | Idempotently removes a pending source-bearing plan without workspace writes; returns `discarded=false` when absent. |

@@ -79,6 +79,11 @@ class LspSessionTest {
         }.jsonObject
         assertEquals("experimental", kotlinDiagnostics["stability"]!!.jsonPrimitive.content)
         assertEquals("kotlin-compiler-diagnostics-k2-v1", kotlinDiagnostics["backend"]!!.jsonPrimitive.content)
+        val kotlinDefinition = kotlinAdapter["capabilities"]!!.jsonArray.single {
+            it.jsonObject["operation"]!!.jsonPrimitive.content == "definition"
+        }.jsonObject
+        assertEquals("experimental", kotlinDefinition["stability"]!!.jsonPrimitive.content)
+        assertEquals("kotlin-compiler-jvm-types-k2-v1", kotlinDefinition["backend"]!!.jsonPrimitive.content)
         val ownership = experimental["refactorkitSemanticOwnership"]!!.jsonObject
         assertEquals("client-managed-native-lsp", ownership["typescript"]!!.jsonPrimitive.content)
         assertEquals("refactorkit-external-compiler-read-only-via-cli-daemon-mcp",

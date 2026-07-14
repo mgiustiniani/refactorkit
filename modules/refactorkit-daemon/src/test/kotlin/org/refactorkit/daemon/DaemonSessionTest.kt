@@ -100,8 +100,20 @@ class DaemonSessionTest {
         assertEquals("experimental", kotlinDiagnostics["stability"]!!.jsonPrimitive.content)
         assertEquals("compiler", kotlinDiagnostics["evidence"]!!.jsonPrimitive.content)
         assertEquals("kotlin-compiler-diagnostics-k2-v1", kotlinDiagnostics["backend"]!!.jsonPrimitive.content)
-        assertTrue(kotlinCapabilities.filter { it !== kotlinDiagnostics }
-            .all { it["stability"]!!.jsonPrimitive.content == "refused" && it["evidence"]!!.jsonPrimitive.content == "none" })
+        val kotlinSymbolReads = kotlinCapabilities.filter {
+            it["operation"]!!.jsonPrimitive.content in setOf("workspaceSymbols", "documentSymbols", "definition")
+        }
+        assertTrue(kotlinSymbolReads.all {
+            it["stability"]!!.jsonPrimitive.content == "experimental" &&
+                it["evidence"]!!.jsonPrimitive.content == "compiler" &&
+                it["backend"]!!.jsonPrimitive.content == "kotlin-compiler-jvm-types-k2-v1"
+        })
+        assertTrue(kotlinCapabilities.filter {
+            it["operation"]!!.jsonPrimitive.content !in setOf(
+                "diagnostics", "workspaceSymbols", "documentSymbols", "definition",
+            )
+        }.all { it["stability"]!!.jsonPrimitive.content == "refused" && it["evidence"]!!.jsonPrimitive.content == "none" })
+        assertTrue(byName.keys.containsAll(setOf("kotlin.symbols", "kotlin.definition")))
         assertTrue(kotlinCapabilities.all { it["mutationAuthority"]!!.jsonPrimitive.content == "none" })
         val typescript = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "typescript" }
         val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }

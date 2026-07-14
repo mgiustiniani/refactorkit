@@ -79,10 +79,13 @@ diagnostics. It performs no network access, credential access, build execution,
 compiler execution, filesystem writes, kapt, KSP, annotation processing, or
 compiler-plugin loading.
 
-## Diagnostics consumer and next gate
+## Compiler-read consumers and next gate
 
-`kotlin-compiler-diagnostics-k2-v1` now requires an `AVAILABLE` projection,
-revalidates its toolchain and classpath evidence, and reports the exact build and
-toolchain projection hashes. Scripts and partial/unsupported models refuse before
-compiler launch. The next gate adds durable compiler-backed symbols, definition,
-references and conservative mixed Java/Kotlin identity.
+`kotlin-compiler-diagnostics-k2-v1` and
+`kotlin-compiler-jvm-types-k2-v1` require an `AVAILABLE` projection, revalidate
+its toolchain and classpath evidence, and report the exact build and toolchain
+projection hashes. Scripts and partial/unsupported models refuse before compiler
+launch. The symbol row currently covers only successfully compiled regular
+classes with JVM binary and compiler PSI evidence. The next gate adds callable
+and other declaration identity, usage-location definition, references and
+conservative mixed Java/Kotlin identity.

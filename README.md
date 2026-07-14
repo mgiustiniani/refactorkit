@@ -147,21 +147,29 @@ refactorkit typescript search /workspace --query UserService \
   --typescript-package /tools/node_modules/typescript
 ```
 
-### Kotlin compiler diagnostics
+### Kotlin compiler reads
 
-The first `0.7.x` Kotlin capability is experimental read-only K2 diagnostics for
-an explicit JDK 21 and `kotlin-compiler-embeddable` 2.0.21 runtime. RefactorKit
-does not discover caches, execute builds/plugins, or install the compiler.
+The first `0.7.x` Kotlin capabilities are experimental read-only K2 diagnostics
+and compiler-proven regular-class search/definition for an explicit JDK 21 and
+`kotlin-compiler-embeddable` 2.0.21 runtime. RefactorKit does not discover caches,
+execute builds/plugins, or install the compiler.
 
 ```bash
 refactorkit kotlin diagnostics /workspace \
   --jdk-home /tools/jdk-21 \
   --compiler-jar /tools/kotlin/kotlin-compiler-embeddable-2.0.21.jar \
   --compiler-classpath "/tools/kotlin/kotlin-stdlib-2.0.21.jar:/tools/kotlin/trove4j.jar:..."
+
+refactorkit kotlin symbols /workspace --query Greeting \
+  --jdk-home /tools/jdk-21 \
+  --compiler-jar /tools/kotlin/kotlin-compiler-embeddable-2.0.21.jar \
+  --compiler-classpath "/tools/kotlin/kotlin-stdlib-2.0.21.jar:/tools/kotlin/trove4j.jar:..."
 ```
 
-Compiler diagnostics have no mutation authority; all Kotlin refactorings remain
-refused. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
+The initial symbol catalogue accepts successfully compiled regular classes and
+nested regular classes only. Definition takes the opaque ID returned by `symbols`.
+These reads have no mutation authority; references and all Kotlin refactorings
+remain refused. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
 
 ## Build
 

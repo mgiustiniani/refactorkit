@@ -51,6 +51,7 @@ import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
 import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
+import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import org.refactorkit.kotlin.KotlinSemanticToolchain
@@ -129,6 +130,8 @@ class DaemonSession(
         "kotlin.semantic.start" -> kotlinSemanticStart(params)
         "kotlin.semantic.stop" -> kotlinSemanticStop()
         "kotlin.diagnostics" -> kotlinDiagnostics(params)
+        "kotlin.symbols" -> kotlinSymbols(params)
+        "kotlin.definition" -> kotlinDefinition(params)
         TypeScriptDiagnosticsProtocol.METHOD -> diagnosticsV2(params)
         "symbol.search"     -> symbolSearch(params)
         "symbol.definition" -> symbolDefinition(params)
@@ -882,6 +885,123 @@ class DaemonSession(
         }
     }
 
+    private fun kotlinSymbols(params: JsonObject?): JsonElement = kotlinSymbolRead(params, null)
+
+    private fun kotlinDefinition(params: JsonObject?): JsonElement {
+        val symbol = params?.string("symbol") ?: missing("symbol")
+        if (!Regex("kotlin-jvm-type-v1:[0-9a-f]{64}").matches(symbol)) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM type ID")
+        }
+        return kotlinSymbolRead(params, SymbolId(symbol))
+    }
+
+    private fun kotlinSymbolRead(params: JsonObject?, requestedSymbol: SymbolId?): JsonElement {
+        val p = params ?: missing("params")
+        val current = requireSnapshot()
+        val requestId = p.string("requestId") ?: missing("requestId")
+        if (requestId.length !in 1..ProtocolLimits.MAX_DIAGNOSTICS_REQUEST_ID_CHARS) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol requestId is invalid")
+        }
+        val expected = p.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+        val requestedLease = p.string("semanticLease") ?: missing("semanticLease")
+        val query = if (requestedSymbol == null) p.string("query").orEmpty() else ""
+        if (query.length > 512) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol query is too long")
+        val requestedFile = p.string("file")?.let { raw ->
+            if (raw.length > 4_096) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol file is too long")
+            val path = runCatching { Paths.get(raw) }.getOrNull()
+            if (path == null || path.isAbsolute || raw.contains('\\') || Regex("^[A-Za-z]:[/\\\\]").containsMatchIn(raw)) {
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol file must be a normalized workspace-relative '/' path")
+            }
+            val normalized = path.normalize()
+            if (normalized.toString().isBlank() || normalized.startsWith("..") ||
+                current.files.none { it.languageId == "kotlin" && it.path.normalize() == normalized }) {
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin symbol file is not an attested Kotlin source")
+            }
+            normalized
+        }
+        fun refusal(code: String, message: String) = buildJsonObject {
+            val toolchain = kotlinToolchain
+            val model = current.buildModels.singleOrNull {
+                it.providerId == org.refactorkit.kotlin.KotlinJvmBuildModelProjector.PROVIDER_ID
+            }
+            put("schemaVersion", 1); put("requestId", requestId); put("languageId", "kotlin")
+            put("status", "refused"); put("semanticLease", requestedLease); put("snapshotHash", current.hash)
+            put("backend", KotlinCompilerDiagnostics.SYMBOL_BACKEND)
+            put("toolchainProjectionHash", toolchain?.provenance?.projectionHash.orEmpty())
+            put("buildProjectionHash", model?.attributes?.get("projectionHash").orEmpty())
+            put("kotlinVersion", toolchain?.provenance?.kotlinVersion ?: "unconfigured")
+            put("javaVersion", toolchain?.provenance?.javaVersion ?: "unconfigured")
+            put("process", kotlinx.serialization.json.JsonNull)
+            put("failure", buildJsonObject { put("code", code); put("message", message) })
+            put("symbols", buildJsonArray { })
+            put("truncated", false)
+        }
+        if (expected != current.hash) return refusal(
+            "kotlin.symbolsSnapshotStale", "Expected Kotlin snapshot is stale",
+        )
+        if (kotlinToolchain == null || requestedLease != kotlinSemanticLease) return refusal(
+            "kotlin.symbolsSessionStale", "Kotlin semantic lease is missing or stale",
+        )
+        val result = kotlinAdapter.compilerSymbols(current)
+        val status = when (result) {
+            is KotlinCompilerSymbolsResult.Available -> "ready"
+            is KotlinCompilerSymbolsResult.Refused -> "refused"
+            is KotlinCompilerSymbolsResult.Error -> "error"
+        }
+        val selected = if (result is KotlinCompilerSymbolsResult.Available) {
+            val candidates = result.index.symbols.filter {
+                it.name.contains(query, ignoreCase = true) && (requestedFile == null || it.location.path == requestedFile)
+            }
+            if (requestedSymbol == null) candidates else candidates.filter { it.id == requestedSymbol }
+        } else emptyList()
+        return buildJsonObject {
+            put("schemaVersion", 1)
+            put("requestId", requestId)
+            put("languageId", "kotlin")
+            put("status", if (
+                result is KotlinCompilerSymbolsResult.Available && requestedSymbol != null && selected.isEmpty()
+            ) "refused" else status)
+            put("semanticLease", requestedLease)
+            put("snapshotHash", current.hash)
+            put("backend", result.attestation.backend)
+            put("toolchainProjectionHash", result.attestation.toolchainProjectionHash)
+            put("buildProjectionHash", result.attestation.buildProjectionHash)
+            put("kotlinVersion", result.attestation.kotlinVersion)
+            put("javaVersion", result.attestation.javaVersion)
+            put("process", result.attestation.process?.let { provenance -> buildJsonObject {
+                put("executableSha256", provenance.executableSha256)
+                put("argumentsSha256", provenance.argumentsSha256)
+                put("processId", provenance.pid)
+            } } ?: kotlinx.serialization.json.JsonNull)
+            val failure = when (result) {
+                is KotlinCompilerSymbolsResult.Available -> if (requestedSymbol != null && selected.isEmpty()) Diagnostic(
+                    message = "Kotlin symbol was not found in the attested snapshot",
+                    severity = Diagnostic.Severity.ERROR,
+                    code = "kotlin.symbolNotFound",
+                ) else null
+                is KotlinCompilerSymbolsResult.Refused -> result.reason
+                is KotlinCompilerSymbolsResult.Error -> result.failure
+            }
+            put("failure", failure?.let { diagnostic -> buildJsonObject {
+                put("code", diagnostic.code ?: "kotlin.symbolsUnavailable")
+                put("message", diagnostic.message)
+            } } ?: kotlinx.serialization.json.JsonNull)
+            put("symbols", buildJsonArray {
+                selected.take(ProtocolLimits.MAX_SYMBOL_RESULTS).forEach { symbol -> add(buildJsonObject {
+                    put("id", symbol.id.value)
+                    put("name", symbol.name)
+                    put("kind", symbol.kind.name.lowercase())
+                    put("file", protocolSourcePath(current, symbol.location.path))
+                    put("startLine", symbol.location.range.start.line)
+                    put("startCharacter", symbol.location.range.start.character)
+                    put("endLine", symbol.location.range.end.line)
+                    put("endCharacter", symbol.location.range.end.character)
+                }) }
+            })
+            put("truncated", selected.size > ProtocolLimits.MAX_SYMBOL_RESULTS)
+        }
+    }
+
     private fun kotlinDiagnosticsRefusal(
         requestId: String,
         lease: String,
@@ -1329,6 +1449,17 @@ class DaemonSession(
             DaemonMethodCapability(
                 "kotlin.diagnostics", "experimental", true, false,
                 mapOf("compilerBacked" to true, "semanticLease" to true, "processAttestation" to true),
+            ),
+            DaemonMethodCapability(
+                "kotlin.symbols", "experimental", true, false,
+                mapOf(
+                    "compilerBacked" to true, "exactUtf16Range" to true,
+                    "documentFilter" to true, "semanticLease" to true,
+                ),
+            ),
+            DaemonMethodCapability(
+                "kotlin.definition", "experimental", true, false,
+                mapOf("compilerBacked" to true, "opaqueSymbolId" to true, "semanticLease" to true),
             ),
             DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
             DaemonMethodCapability("refactor.apply", "beta-contract", true, true),

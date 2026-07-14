@@ -59,6 +59,8 @@ class McpSessionTest {
         assertTrue(tools.contains("kotlin_semantic_start"))
         assertTrue(tools.contains("kotlin_semantic_stop"))
         assertTrue(tools.contains("kotlin_diagnostics"))
+        assertTrue(tools.contains("kotlin_symbols"))
+        assertTrue(tools.contains("kotlin_definition"))
         val preview = result["tools"]!!.jsonArray.single { it.jsonObject["name"]!!.jsonPrimitive.content == "preview_refactoring" }
         assertTrue(preview.toString().contains("moveSourceRoot"), preview.toString())
     }

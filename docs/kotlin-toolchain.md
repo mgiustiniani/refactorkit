@@ -1,8 +1,8 @@
 # Kotlin/JVM semantic toolchain boundary
 
-Status: explicit declarative discovery and the first bounded external K2
-diagnostics worker are implemented for `0.7.0-SNAPSHOT`. Only diagnostics has
-experimental compiler authority; mutation authority remains absent.
+Status: explicit declarative discovery and bounded external K2 diagnostics plus
+regular-class symbol navigation are implemented for `0.7.0-SNAPSHOT`. These
+reads have experimental compiler authority; mutation authority remains absent.
 
 ## Provider selection
 
@@ -17,10 +17,11 @@ The first qualified discovery row is intentionally narrow:
 
 | JDK | Kotlin compiler artifact | Discovery status | Semantic authority |
 |---|---|---|---|
-| 21 | `kotlin-compiler-embeddable` 2.0.21 | qualified declarative identity/evidence | experimental read-only diagnostics |
+| 21 | `kotlin-compiler-embeddable` 2.0.21 | qualified declarative identity/evidence | experimental read-only diagnostics and regular-class search/definition |
 
-This selects the Kotlin K2 compiler boundary. Compiler-backed diagnostics are now
-implemented through `kotlin-compiler-diagnostics-k2-v1`; symbols, references and
+This selects the Kotlin K2 compiler boundary. Compiler-backed diagnostics use
+`kotlin-compiler-diagnostics-k2-v1`; compiler-proven regular-class symbols use
+`kotlin-compiler-jvm-types-k2-v1`. Other declaration kinds, references and
 refactorings are not claimed.
 
 ## Explicit inputs
@@ -79,10 +80,10 @@ An available toolchain records:
   and classpath order.
 
 Critical metadata/identity and every evidence digest are read twice. Drift during
-validation returns `kotlin.toolchainChanged`. Diagnostics revalidate every
+validation returns `kotlin.toolchainChanged`. Compiler reads revalidate every
 recorded file hash and size immediately before launch. Future semantic
 preview/apply must revalidate the same evidence under the workspace writer lock;
-discovery and diagnostics never grant mutation authority.
+discovery and compiler reads never grant mutation authority.
 
 ## Limits
 

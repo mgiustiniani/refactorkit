@@ -40,6 +40,8 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("refactorkit format-file"))
         assertTrue(result.stdout.contains("diagnostics-v2"))
         assertTrue(result.stdout.contains("refactorkit kotlin diagnostics"))
+        assertTrue(result.stdout.contains("refactorkit kotlin symbols"))
+        assertTrue(result.stdout.contains("refactorkit kotlin definition"))
         assertTrue(result.stdout.contains("refactorkit recipe run"))
     }
 
