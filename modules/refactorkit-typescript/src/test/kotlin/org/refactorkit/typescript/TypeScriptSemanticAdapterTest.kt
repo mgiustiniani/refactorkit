@@ -86,6 +86,62 @@ class TypeScriptSemanticAdapterTest {
     }
 
     @Test
+    fun workspaceSearchDeduplicatesRelativeAndAbsoluteProviderPaths() {
+        val fixture = fixture()
+        val adapter = TypeScriptSemanticAdapter(
+            "typescript",
+            fixture.toolchain,
+            fixture.model,
+            FakeClient(workspaceSymbolAbsoluteRoot = fixture.root),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+
+        val symbols = adapter.searchWorkspaceSymbols(fixture.snapshot, "Service")
+        assertEquals(1, symbols.count { it.name == "Service" && it.kind == Symbol.Kind.CLASS })
+    }
+
+    @Test
+    fun symbolProjectionIsSnapshotBoundProvenanceTaggedAndExplicitlyTruncated() {
+        val fixture = fixture()
+        val adapter = TypeScriptSemanticAdapter(
+            "typescript",
+            fixture.toolchain,
+            fixture.model,
+            FakeClient(projectedSymbolCount = 3),
+        )
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(fixture.snapshot))
+
+        val projection = assertIs<TypeScriptSymbolProjection.Available>(
+            adapter.symbolProjection(fixture.snapshot, limit = 2),
+        )
+        assertEquals(2, projection.index.symbols.size)
+        assertTrue(projection.truncated)
+        assertTrue(projection.provenanceHash.matches(Regex("[0-9a-f]{64}")))
+        assertFailsWith<IllegalArgumentException> { adapter.symbolProjection(fixture.snapshot, limit = 0) }
+
+        val stale = assertIs<TypeScriptSymbolProjection.Refused>(
+            adapter.symbolProjection(fixture.snapshot.copy(files = emptyList()), limit = 2),
+        )
+        assertEquals("typescript.symbolIndexSessionStale", stale.diagnostic.code)
+    }
+
+    @Test
+    fun symbolProjectionRefusesTheDocumentFileLimitWithoutCallingTheProvider() {
+        val fixture = fixture()
+        val files = (0..org.refactorkit.treesitter.ExternalLspAdapter.MAX_DOCUMENT_SYMBOL_FILES).map { index ->
+            SourceFile(Path.of("src/file-$index.ts"), "export const value$index = $index;\n", "typescript")
+        }
+        val oversized = fixture.snapshot.copy(files = files)
+        val client = FakeClient()
+        val adapter = TypeScriptSemanticAdapter("typescript", fixture.toolchain, fixture.model, client)
+        assertIs<TypeScriptSemanticStart.Started>(adapter.start(oversized))
+
+        val refused = assertIs<TypeScriptSymbolProjection.Refused>(adapter.symbolProjection(oversized))
+        assertEquals("typescript.symbolIndexFileLimit", refused.diagnostic.code)
+        assertEquals(0, client.buildSymbolsCount)
+    }
+
+    @Test
     fun crashRestartIsExplicitBoundedAndWindowed() {
         val fixture = fixture()
         val client = FakeClient()
@@ -583,6 +639,8 @@ class TypeScriptSemanticAdapterTest {
         private val symbolKind: Symbol.Kind = Symbol.Kind.CLASS,
         private val renameFile: Boolean = false,
         private val crossFile: Boolean = false,
+        private val projectedSymbolCount: Int = 1,
+        private val workspaceSymbolAbsoluteRoot: Path? = null,
     ) : TypeScriptSemanticClient {
         override var isRunning: Boolean = false
         var sessionProvenance: ExternalSemanticSessionProvenance? = sessionProvenance
@@ -591,6 +649,7 @@ class TypeScriptSemanticAdapterTest {
         val synchronizedSnapshots = mutableListOf<ProjectSnapshot>()
         var startCount: Int = 0
         var referenceRequestCount: Int = 0
+        var buildSymbolsCount: Int = 0
 
         override fun start(snapshot: ProjectSnapshot) {
             startedSnapshot = snapshot
@@ -601,8 +660,18 @@ class TypeScriptSemanticAdapterTest {
         fun crash() { isRunning = false }
 
         override fun supports(capability: String): Boolean = capability in capabilities
-        override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex = SymbolIndex(listOf(symbol()))
-        override fun searchWorkspaceSymbols(query: String): List<Symbol> = listOf(symbol()).filter { query in it.name }
+        override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex {
+            buildSymbolsCount++
+            return if (projectedSymbolCount == 1) SymbolIndex(listOf(symbol())) else SymbolIndex(
+                (0 until projectedSymbolCount).map { index -> symbol(index) },
+            )
+        }
+        override fun searchWorkspaceSymbols(query: String): List<Symbol> {
+            val symbol = workspaceSymbolAbsoluteRoot?.let { root ->
+                symbol().copy(location = symbolLocation().copy(path = root.resolve("src/service.ts")))
+            } ?: symbol()
+            return listOf(symbol).filter { query in it.name }
+        }
         override fun resolveSymbol(location: SourceLocation): SymbolResolution =
             if (unresolvedSymbol) SymbolResolution(null) else SymbolResolution(symbol())
         override fun findReferences(symbolId: SymbolId): List<Reference> {
@@ -644,9 +713,12 @@ class TypeScriptSemanticAdapterTest {
 
         override fun close() { isRunning = false }
 
-        private fun symbol() = Symbol(
-            SymbolId("src/service.ts::Service"), "Service", symbolKind,
-            symbolLocation(), "typescript",
+        private fun symbol(index: Int? = null) = Symbol(
+            SymbolId("src/service.ts::Service${index ?: ""}"),
+            if (index == null) "Service" else "Service$index",
+            symbolKind,
+            symbolLocation(),
+            "typescript",
         )
 
         private fun symbolLocation() = SourceLocation(

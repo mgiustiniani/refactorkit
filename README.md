@@ -26,6 +26,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
 - Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
 - Workspace index and semantic query plan: [`docs/releases/v0.7.0-intelligence-index-plan.md`](docs/releases/v0.7.0-intelligence-index-plan.md)
+- TypeScript workspace-index acceptance: [`docs/releases/v0.7.0-typescript-workspace-index-acceptance.md`](docs/releases/v0.7.0-typescript-workspace-index-acceptance.md)
 - Kotlin adapter boundary: [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md)
 - Kotlin toolchain boundary: [`docs/kotlin-toolchain.md`](docs/kotlin-toolchain.md)
 - Kotlin/JVM build-model projection: [`docs/kotlin-build-model.md`](docs/kotlin-build-model.md)
@@ -137,7 +138,9 @@ for another OS or architecture.
 The Java runtime is self-contained; TypeScript semantics use an explicit external
 Node/toolchain. The `v0.6.0` managed row is Node 22.18.0,
 `typescript-language-server` 5.1.3 and TypeScript 5.9.3. RefactorKit never installs
-or runs npm implicitly. See the
+or runs npm implicitly. Persistent daemon startup also contributes bounded,
+provenance-tagged TypeScript/JavaScript declarations to the central workspace
+index; stopping the semantic provider removes that partition. See the
 [`v0.6.0` support matrix](docs/releases/v0.6.0-support-matrix.md) and
 [migration guide](docs/releases/v0.6.0-migration.md).
 

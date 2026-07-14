@@ -127,6 +127,30 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         for field in ("serverVersion", "capabilitiesSha256", "executableSha256", "argumentsSha256"):
             if restarted.get(field) != started.get(field):
                 raise AssertionError(f"semantic restart changed provenance field {field}")
+
+        mark_stage("central TypeScript workspace index")
+        if restarted.get("index", {}).get("status") != "ready":
+            raise AssertionError(f"TypeScript index refresh failed: {restarted}")
+        index_status = exchange("index.status")
+        providers = index_status.get("result", {}).get("providers", [])
+        provider = next((item for item in providers if item.get("languageId") == "typescript"), None)
+        if provider is None or provider.get("evidence") != "language-server" or provider.get("truncated"):
+            raise AssertionError(f"TypeScript index provider evidence is invalid: {index_status}")
+        if len(provider.get("provenanceHash", "")) != 64:
+            raise AssertionError(f"TypeScript index provenance is missing: {provider}")
+        intelligence = exchange("intelligence.query", {
+            "requestId": "native-daemon-index", "expectedSnapshotHash": opened["result"]["snapshotHash"],
+            "expectedIndexGeneration": restarted["index"]["generation"], "kind": "workspaceSymbols",
+            "query": "UserService", "languageId": "typescript", "limit": 50,
+        })
+        intelligence_result = intelligence.get("result", {})
+        indexed_types = [
+            item for item in intelligence_result.get("items", [])
+            if item.get("name") == "UserService" and item.get("symbolKind") == "class"
+        ]
+        if intelligence.get("error") or intelligence_result.get("status") != "ready" or len(indexed_types) != 1:
+            raise AssertionError(f"central TypeScript index query failed: {intelligence}")
+
         mark_stage("restarted semantic diagnostics")
         diagnosed = exchange("diagnostics", {"languageId": "typescript"})
         if diagnosed.get("error") or diagnosed.get("result") != []:
@@ -212,6 +236,9 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         if stale.get("error") or stale["result"]["status"] != "refused" or stale["result"]["failure"]["code"] != "diagnostics.semanticLeaseStale":
             raise AssertionError(f"stale diagnostics lease was not refused: {stale}")
         exchange("typescript.semantic.stop", {"languageId": "typescript"})
+        stopped_index = exchange("index.status")
+        if any(item.get("languageId") == "typescript" for item in stopped_index["result"]["providers"]):
+            raise AssertionError(f"stopped TypeScript provider remained indexed: {stopped_index}")
     finally:
         if process.poll() is None:
             process.stdin.close()
@@ -324,7 +351,7 @@ def main() -> int:
         if tree_hash(workspace) != before:
             raise AssertionError("real-toolchain rollback did not restore the exact source image")
 
-    print("Packaged TypeScript acceptance passed: real reads, exact compiler diagnostics, apply/WAL and rollback.")
+    print("Packaged TypeScript acceptance passed: central index, real reads, exact compiler diagnostics, apply/WAL and rollback.")
     return 0
 
 

@@ -89,6 +89,11 @@ data class ExternalSemanticSessionProvenance(
 
 data class ExternalSemanticFailure(val code: String, val message: String)
 
+sealed interface ExternalSymbolProjection {
+    data class Available(val index: SymbolIndex, val truncated: Boolean) : ExternalSymbolProjection
+    data class Unavailable(val failure: ExternalSemanticFailure) : ExternalSymbolProjection
+}
+
 sealed interface ExternalSemanticDiagnostics {
     data class Available(
         val diagnostics: List<Diagnostic>,
@@ -288,6 +293,98 @@ class ExternalLspAdapter(
         return index
     }
 
+    /**
+     * Build an all-document declaration projection under one aggregate deadline.
+     * Provider failures never publish a partial index; symbol-cap truncation is
+     * explicit and deterministic.
+     */
+    fun buildSymbolProjection(
+        project: ProjectSnapshot,
+        maxSymbols: Int,
+        timeoutMillis: Long = requestTimeoutMillis,
+    ): ExternalSymbolProjection {
+        require(maxSymbols in 1..org.refactorkit.core.ProtocolLimits.MAX_WORKSPACE_INDEX_PROVIDER_SYMBOLS) {
+            "symbol projection limit is outside the safe range"
+        }
+        require(timeoutMillis in 100..MAX_REQUEST_TIMEOUT_MILLIS) { "symbol projection timeout is outside the safe range" }
+        lastFailure = null
+        if (!isRunning || !supportsServerCapability("documentSymbolProvider")) {
+            return ExternalSymbolProjection.Unavailable(ExternalSemanticFailure(
+                "semantic.documentSymbolsUnavailable",
+                "External semantic document symbols are unavailable",
+            ))
+        }
+        val files = project.files.filter { it.languageId == languageId }.sortedBy { it.path.toString() }
+        if (files.size > MAX_DOCUMENT_SYMBOL_FILES) {
+            val failure = ExternalSemanticFailure(
+                "semantic.documentSymbolFileLimit",
+                "Document-symbol request exceeds $MAX_DOCUMENT_SYMBOL_FILES files",
+            )
+            lastFailure = failure
+            return ExternalSymbolProjection.Unavailable(failure)
+        }
+        val started = System.nanoTime()
+        fun deadlineExceeded(): Boolean = (System.nanoTime() - started) / 1_000_000L >= timeoutMillis
+        val symbols = linkedMapOf<SymbolId, Symbol>()
+        for (file in files) {
+            if (deadlineExceeded()) {
+                val failure = ExternalSemanticFailure(
+                    "semantic.documentSymbolTimeout",
+                    "Document-symbol projection exceeded ${timeoutMillis}ms",
+                )
+                lastFailure = failure
+                return ExternalSymbolProjection.Unavailable(failure)
+            }
+            if (openDocuments[file.path.normalize()] == null && !openDocument(file, 1)) {
+                val failure = lastFailure ?: ExternalSemanticFailure(
+                    "semantic.documentSynchronizationFailed",
+                    "Document-symbol source synchronization failed",
+                )
+                lastFailure = failure
+                return ExternalSymbolProjection.Unavailable(failure)
+            }
+            val elapsedMillis = (System.nanoTime() - started) / 1_000_000L
+            val remainingMillis = timeoutMillis - elapsedMillis
+            if (remainingMillis <= 0) {
+                val failure = ExternalSemanticFailure(
+                    "semantic.documentSymbolTimeout",
+                    "Document-symbol projection exceeded ${timeoutMillis}ms",
+                )
+                lastFailure = failure
+                return ExternalSymbolProjection.Unavailable(failure)
+            }
+            val returned = requestDocumentSymbols(file, minOf(requestTimeoutMillis, remainingMillis))
+            if (lastFailure?.code == "semantic.requestTimeout") {
+                val failure = ExternalSemanticFailure(
+                    "semantic.documentSymbolTimeout",
+                    "Document-symbol projection exceeded ${timeoutMillis}ms",
+                )
+                lastFailure = failure
+                return ExternalSymbolProjection.Unavailable(failure)
+            }
+            if (deadlineExceeded()) {
+                val failure = ExternalSemanticFailure(
+                    "semantic.documentSymbolTimeout",
+                    "Document-symbol projection exceeded ${timeoutMillis}ms",
+                )
+                lastFailure = failure
+                return ExternalSymbolProjection.Unavailable(failure)
+            }
+            lastFailure?.let { return ExternalSymbolProjection.Unavailable(it) }
+            for (symbol in returned) {
+                symbols.putIfAbsent(symbol.id, symbol)
+                if (symbols.size > maxSymbols) {
+                    val bounded = SymbolIndex(symbols.values.take(maxSymbols).sortedBy { it.id.value })
+                    lastIndex.set(bounded)
+                    return ExternalSymbolProjection.Available(bounded, truncated = true)
+                }
+            }
+        }
+        val index = SymbolIndex(symbols.values.sortedBy { it.id.value })
+        lastIndex.set(index)
+        return ExternalSymbolProjection.Available(index, truncated = false)
+    }
+
     fun searchWorkspaceSymbols(query: String): List<Symbol> {
         if (!isRunning || !supportsServerCapability("workspaceSymbolProvider") ||
             query.length > 1_024 || '\u0000' in query) return emptyList()
@@ -299,11 +396,15 @@ class ExternalLspAdapter(
         }.take(org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS)
     }
 
-    private fun requestDocumentSymbols(file: SourceFile): List<Symbol> {
+    private fun requestDocumentSymbols(
+        file: SourceFile,
+        timeoutMillis: Long = requestTimeoutMillis,
+    ): List<Symbol> {
         val semantic = semanticPath(file.path) ?: return emptyList()
         val response = sendRequest(
             "textDocument/documentSymbol",
             """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}}}""",
+            timeoutMillis,
         ) ?: return emptyList()
         val result = LspJson.extractField(response, "result") ?: return emptyList()
         if (result.trim() == "null") return emptyList()
@@ -640,9 +741,14 @@ class ExternalLspAdapter(
      * the generated request `id`. Notifications and foreign responses are buffered
      * and handled via [handleFrame].
      */
-    fun sendRequest(method: String, paramsJson: String?): String? {
+    fun sendRequest(
+        method: String,
+        paramsJson: String?,
+        timeoutMillis: Long = requestTimeoutMillis,
+    ): String? {
         require(LSP_METHOD.matches(method)) { "LSP method name is invalid" }
         require(paramsJson == null || LspJson.isValidValue(paramsJson)) { "LSP request params are invalid JSON" }
+        require(timeoutMillis in 1..requestTimeoutMillis) { "LSP request timeout is outside the session bound" }
         val id   = nextId.getAndIncrement()
         val body = buildString {
             append("""{"jsonrpc":"2.0","id":$id,"method":${LspJson.quote(method)}""")
@@ -653,10 +759,10 @@ class ExternalLspAdapter(
         val executor = requestExecutor ?: return null
         val pending = executor.submit<String?> { readMatchingFrame(id) }
         return try {
-            pending.get(requestTimeoutMillis, TimeUnit.MILLISECONDS)
+            pending.get(timeoutMillis, TimeUnit.MILLISECONDS)
         } catch (_: TimeoutException) {
             pending.cancel(true)
-            failAndStop("semantic.requestTimeout", "LSP request '$method' exceeded ${requestTimeoutMillis}ms")
+            failAndStop("semantic.requestTimeout", "LSP request '$method' exceeded ${timeoutMillis}ms")
             null
         } catch (failure: ExecutionException) {
             failAndStop("semantic.protocolFailure", failure.cause?.message ?: "LSP protocol read failed")

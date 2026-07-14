@@ -28,7 +28,10 @@ base. Main develops `0.7.0-SNAPSHOT`; `refactorkit-kotlin` now exposes qualified
 experimental read-only diagnostics and saved-snapshot regular-class
 search/definition while references, callable identity and mutations remain
 fail-closed. The first centralized workspace-intelligence slice inventories every
-recognized source and merges bounded, attested provider declaration partitions;
+recognized source and merges bounded, attested provider declaration partitions.
+Java lexical declarations load at project open, TypeScript/JavaScript
+language-server declarations load during persistent semantic startup/restart, and
+qualified Kotlin compiler classes load after authorized compiler queries;
 workspace/document symbol queries are implemented while completion, hover,
 signature help and position-based navigation remain refused until their persistent
 JDT, tsserver and K2 providers qualify. The long-range `v1.0.0` roadmap evolves

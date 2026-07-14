@@ -17,6 +17,7 @@ heap exhaustion.
 | Pending plans per daemon/MCP/LSP session | 128 | Least-recently-used plan is evicted; applying an evicted ID returns deterministic invalid-params/not-found |
 | Daemon symbol-search result | 200 | Results are truncated deterministically |
 | Workspace index | 100,000 sources, 100,000 total symbols, 50,000 symbols/provider | Project open/contribution is rejected at the hard boundary; provider output may be explicitly truncated before contribution |
+| TypeScript/JavaScript saved-snapshot symbol projection | 256 source files, 50,000 symbols, 30-second aggregate deadline | File/evidence/provider/timeout failure publishes no partial partition; symbol-cap overflow contributes the deterministic prefix with `truncated=true` |
 | Intelligence query | 512 query characters, 200 returned symbols, 128 request-ID characters | Invalid input is rejected; result tails are deterministically truncated with total/returned counts |
 | Import preview combined rendered/structured diff source lines | 524,288 UTF-8 bytes | `diffTruncated=true` with reasons; never silent |
 | Import preview diff files / hunks per file / lines per hunk | 128 / 64 / 2,000 | Deterministic path ordering and explicit truncation reasons |

@@ -44,6 +44,11 @@ class ExternalLspAdapterLifecycleTest {
         assertEquals(true, provenance.advertisedCapabilities["renameProvider"])
         assertEquals(false, provenance.advertisedCapabilities["referencesProvider"])
         assertEquals(listOf("Service"), adapter.buildSymbols(snapshot).symbols.map { it.name })
+        val projection = assertIs<ExternalSymbolProjection.Available>(
+            adapter.buildSymbolProjection(snapshot, maxSymbols = 100),
+        )
+        assertEquals(listOf("Service"), projection.index.symbols.map { it.name })
+        assertFalse(projection.truncated)
         val exact = assertIs<ExternalSemanticDiagnostics.Available>(adapter.synchronizedDiagnostics(snapshot))
         assertTrue(exact.diagnostics.isEmpty())
 
@@ -174,6 +179,30 @@ class ExternalLspAdapterLifecycleTest {
         assertFailsWith<IllegalArgumentException> { adapter.start(Path.of("missing-workspace").toUri().toString()) }
     }
 
+    @Test
+    fun documentSymbolProjectionHasAnAggregateDeadlineAndPublishesNoPartialIndex() {
+        val workspace = Files.createTempDirectory("refactorkit-lsp-symbol-timeout")
+        val snapshot = org.refactorkit.core.ProjectSnapshot(
+            workspace = org.refactorkit.core.Workspace(workspace),
+            modules = emptyList(),
+            files = listOf(org.refactorkit.core.SourceFile(
+                Path.of("sample.ts"), "export class Service {}\n", "typescript",
+            )),
+        )
+        val adapter = adapter("slow-symbol")
+        adapter.start(snapshot)
+
+        val started = System.nanoTime()
+        val unavailable = assertIs<ExternalSymbolProjection.Unavailable>(
+            adapter.buildSymbolProjection(snapshot, maxSymbols = 100, timeoutMillis = 100),
+        )
+        val elapsedMillis = (System.nanoTime() - started) / 1_000_000L
+        assertEquals("semantic.documentSymbolTimeout", unavailable.failure.code)
+        assertTrue(elapsedMillis < 1_000, "aggregate timeout took ${elapsedMillis}ms")
+        assertFalse(adapter.isRunning)
+        adapter.close()
+    }
+
     private fun adapter(mode: String, timeoutMillis: Long = 5_000): ExternalLspAdapter = ExternalLspAdapter(
         languageId = "typescript",
         command = listOf(
@@ -230,7 +259,10 @@ object ExternalLspFixture {
                     writeFrame(output, """{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":$uri,$versionField"diagnostics":[]}}""")
                 }
                 "initialized", "textDocument/didClose" -> Unit
-                "textDocument/documentSymbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":21}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}]}""")
+                "textDocument/documentSymbol" -> {
+                    if (mode == "slow-symbol") Thread.sleep(300)
+                    writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":21}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}]}""")
+                }
                 "workspace/symbol" -> writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"Service","kind":5,"location":{"uri":$lastDocumentUri,"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":20}}}}]}""")
                 "textDocument/definition" -> {
                     val params = LspJson.extractField(request, "params").orEmpty()

@@ -109,10 +109,20 @@ After `project.open`, callers may start one explicit language session:
 No PATH lookup or workspace-local executable/package root is accepted unless the
 corresponding explicit boolean policy is supplied. The response reports bounded
 server/capability/executable/argument hashes, the owned local process ID, and
-semantic completeness, never raw arguments or environment values. If that process
-crashes, `typescript.semantic.restart` is the only restart path: it requires the
-original snapshot, preserves provenance, and enforces the three-per-60-second
-limit. `typescript.semantic.stop` is idempotent.
+semantic completeness, never raw arguments or environment values. Startup also
+requests a saved-snapshot declaration projection and, when qualified, atomically
+adds it to `WorkspaceIndex` with language-server evidence and a path-free
+provenance hash. The nested `index` result reports ready/refused status, generation,
+symbol count and truncation. Projection is bounded to 256 source files, 50,000
+symbols and one 30-second aggregate deadline; timeout, evidence drift, invalid
+ranges or unsafe paths publish no partial provider partition. A request timeout
+or protocol failure stops the worker and refuses startup/restart rather than
+issuing a dead semantic lease.
+
+If that process crashes, `typescript.semantic.restart` is the only restart path:
+it requires the original snapshot, preserves provenance, rotates the lease and
+refreshes the provider partition under the same bounds. `typescript.semantic.stop`
+is idempotent and removes the TypeScript/JavaScript provider partition.
 
 Once started, `symbol.search`, `symbol.definition`, `symbol.references`, and
 `diagnostics` accept `languageId=typescript|javascript`. Semantic rename uses:

@@ -72,6 +72,8 @@ import org.refactorkit.typescript.TypeScriptProjectModelBuilder
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptSemanticStart
 import org.refactorkit.typescript.TypeScriptSemanticToolchain
+import org.refactorkit.typescript.TypeScriptSymbolProjection
+import org.refactorkit.typescript.TypeScriptToolchainProvenance
 import org.refactorkit.typescript.TypeScriptToolchainDiscoverer
 import org.refactorkit.typescript.TypeScriptToolchainDiscovery
 import org.refactorkit.typescript.TypeScriptToolchainDiscoveryPolicy
@@ -870,6 +872,89 @@ class DaemonSession(
         }
     }
 
+    private fun refreshTypeScriptIndex(
+        languageId: String,
+        semantic: TypeScriptSemanticAdapter,
+        current: ProjectSnapshot,
+    ): TypeScriptIndexRefresh = when (val projection = semantic.symbolProjection(current)) {
+        is TypeScriptSymbolProjection.Available -> try {
+            val updated = workspaceIndex.contribute(WorkspaceSymbolContribution(
+                providerId = typeScriptIndexProviderId(languageId),
+                languageId = languageId,
+                backend = TypeScriptToolchainProvenance.PROVIDER_ID,
+                evidence = SemanticEvidenceKind.LANGUAGE_SERVER,
+                completeness = WorkspaceIndexCompleteness.DECLARATIONS,
+                snapshotHash = current.hash,
+                symbols = projection.index.symbols,
+                truncated = projection.truncated,
+                provenanceHash = projection.provenanceHash,
+            ))
+            TypeScriptIndexRefresh(
+                status = "ready",
+                generation = updated.generation,
+                symbolCount = projection.index.symbols.size,
+                truncated = projection.truncated,
+            )
+        } catch (_: RuntimeException) {
+            removeTypeScriptIndex(languageId)
+            TypeScriptIndexRefresh(
+                status = "refused",
+                generation = workspaceIndex.snapshot()?.generation ?: 0,
+                failure = Diagnostic(
+                    "TypeScript provider returned an invalid workspace symbol projection",
+                    Diagnostic.Severity.ERROR,
+                    code = "typescript.symbolIndexInvalid",
+                ),
+            )
+        }
+        is TypeScriptSymbolProjection.Refused -> {
+            removeTypeScriptIndex(languageId)
+            TypeScriptIndexRefresh(
+                status = "refused",
+                generation = workspaceIndex.snapshot()?.generation ?: 0,
+                failure = projection.diagnostic,
+            )
+        }
+    }
+
+    private fun requireTypeScriptProviderRunning(
+        languageId: String,
+        semantic: TypeScriptSemanticAdapter,
+        refresh: TypeScriptIndexRefresh,
+    ) {
+        if (semantic.isRunning()) return
+        semanticAdapters.remove(languageId)
+        semanticLeases.remove(languageId)
+        removeTypeScriptIndex(languageId)
+        semantic.close()
+        val failure = refresh.failure
+        throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "${failure?.code ?: "typescript.semanticProcessStopped"}: " +
+                (failure?.message ?: "TypeScript semantic process stopped during index projection"),
+        )
+    }
+
+    private fun removeTypeScriptIndex(languageId: String) {
+        val providerId = typeScriptIndexProviderId(languageId)
+        if (workspaceIndex.snapshot()?.contributions?.any { it.providerId == providerId } == true) {
+            workspaceIndex.removeProvider(providerId)
+        }
+    }
+
+    private fun typeScriptIndexProviderId(languageId: String) = "$languageId-lsp-symbols-v1"
+
+    private fun typeScriptIndexRefreshJson(refresh: TypeScriptIndexRefresh): JsonElement = buildJsonObject {
+        put("status", refresh.status)
+        put("generation", refresh.generation)
+        put("symbolCount", refresh.symbolCount)
+        put("truncated", refresh.truncated)
+        put("failure", refresh.failure?.let { diagnostic -> buildJsonObject {
+            put("code", diagnostic.code ?: "typescript.symbolIndexUnavailable")
+            put("message", diagnostic.message)
+        } } ?: kotlinx.serialization.json.JsonNull)
+    }
+
     private fun typeScriptSemanticStart(params: JsonObject?): JsonElement {
         val p = params ?: missing("params")
         val snap = requireSnapshot()
@@ -916,12 +1001,15 @@ class DaemonSession(
                 semanticAdapters[languageId] = semantic
                 val lease = semanticLeaseFactory()
                 semanticLeases[languageId] = lease
+                val indexRefresh = refreshTypeScriptIndex(languageId, semantic, snap)
+                requireTypeScriptProviderRunning(languageId, semantic, indexRefresh)
                 return buildJsonObject {
                     put("languageId", languageId)
                     put("status", "started")
                     put("semanticLease", lease)
                     put("snapshotHash", snap.hash)
                     put("completeness", semantic.semanticCompleteness().mode.name.lowercase().replace('_', '-'))
+                    put("index", typeScriptIndexRefreshJson(indexRefresh))
                     started.provenance?.let { provenance ->
                         put("serverName", provenance.serverName ?: "")
                         put("serverVersion", provenance.serverVersion ?: "")
@@ -949,10 +1037,13 @@ class DaemonSession(
             is TypeScriptSemanticStart.Started -> buildJsonObject {
                 val lease = semanticLeaseFactory()
                 semanticLeases[languageId] = lease
+                val indexRefresh = refreshTypeScriptIndex(languageId, semantic, requireSnapshot())
+                requireTypeScriptProviderRunning(languageId, semantic, indexRefresh)
                 put("languageId", languageId)
                 put("status", "restarted")
                 put("semanticLease", lease)
                 put("snapshotHash", requireSnapshot().hash)
+                put("index", typeScriptIndexRefreshJson(indexRefresh))
                 restarted.provenance?.let { provenance ->
                     put("serverName", provenance.serverName ?: "")
                     put("serverVersion", provenance.serverVersion ?: "")
@@ -970,6 +1061,7 @@ class DaemonSession(
         val stopped = semanticAdapters.remove(languageId)?.let {
             it.close()
             semanticLeases.remove(languageId)
+            removeTypeScriptIndex(languageId)
             true
         } ?: false
         return buildJsonObject {
@@ -1288,6 +1380,7 @@ class DaemonSession(
 
     private fun closeSemanticAdapters() {
         semanticAdapters.values.forEach { runCatching { it.close() } }
+        semanticAdapters.keys.toList().forEach(::removeTypeScriptIndex)
         semanticAdapters.clear()
         semanticLeases.clear()
         kotlinAdapter = KotlinLanguageAdapter()
@@ -1619,6 +1712,14 @@ class DaemonSession(
         workspaceIndex.clear()
     }
 
+    private data class TypeScriptIndexRefresh(
+        val status: String,
+        val generation: Long,
+        val symbolCount: Int = 0,
+        val truncated: Boolean = false,
+        val failure: Diagnostic? = null,
+    )
+
     private data class PendingPlan(
         val plan: PatchPlan,
         val importPreview: ExternalImportPreview? = null,
@@ -1683,9 +1784,19 @@ class DaemonSession(
             ),
             DaemonMethodCapability(
                 "typescript.semantic.start", "experimental", true, false,
-                mapOf("explicitToolchain" to true, "hashBoundProvenance" to true, "noPackageScripts" to true),
+                mapOf(
+                    "explicitToolchain" to true,
+                    "hashBoundProvenance" to true,
+                    "noPackageScripts" to true,
+                    "workspaceIndexContribution" to true,
+                    "aggregateSymbolDeadline" to true,
+                    "explicitSymbolTruncation" to true,
+                ),
             ),
-            DaemonMethodCapability("typescript.semantic.restart", "experimental", true, false),
+            DaemonMethodCapability(
+                "typescript.semantic.restart", "experimental", true, false,
+                mapOf("workspaceIndexRefresh" to true, "semanticLeaseRotation" to true),
+            ),
             DaemonMethodCapability("typescript.semantic.stop", "experimental", true, false),
             DaemonMethodCapability("symbol.search", "beta-contract", true, false),
             DaemonMethodCapability("symbol.definition", "beta-contract", true, false),

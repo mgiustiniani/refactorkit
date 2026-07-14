@@ -15,6 +15,11 @@ review safety boundaries before applying refactorings.
   expose workspace/document symbol search; CLI `index` and `intelligence search`
   provide human output or optional JSON. Completion, hover, signature help and
   position-based navigation remain explicit typed refusals until provider-backed.
+- Merge qualified TypeScript/JavaScript declaration projections into the central
+  index during semantic startup/restart. Contributions carry language-server
+  evidence and path-free toolchain/project/server provenance, refuse evidence or
+  range drift without partial publication, cap at 256 files and 50,000 symbols,
+  enforce one 30-second aggregate deadline, and are removed on provider stop.
 - Begin the Kotlin and Java/Kotlin interoperability band on the published
   `v0.6.2` multi-language foundation.
 - Activate the deferred advanced TypeScript/JavaScript move, import, signature,

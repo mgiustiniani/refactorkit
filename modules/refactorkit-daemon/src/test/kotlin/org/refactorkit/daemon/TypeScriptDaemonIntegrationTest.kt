@@ -16,6 +16,7 @@ import org.refactorkit.core.ExternalFileEditProposal
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.ExternalWorkspaceEditNormalizer
 import org.refactorkit.core.ExternalWorkspaceEditProposal
+import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
 import org.refactorkit.core.SourceLocation
@@ -29,6 +30,7 @@ import org.refactorkit.core.TextEdit
 import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
 import org.refactorkit.typescript.ToolchainFileEvidence
+import org.refactorkit.typescript.TypeScriptClientSymbolProjection
 import org.refactorkit.typescript.TypeScriptProjectModel
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptSemanticClient
@@ -42,10 +44,76 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class TypeScriptDaemonIntegrationTest {
+    @Test
+    fun invalidTypeScriptSymbolProjectionIsRefusedWithoutEndingTheSemanticSession() {
+        val root = Files.createTempDirectory("refactorkit-daemon-ts-invalid-index")
+        Files.createDirectories(root.resolve("src"))
+        root.resolve("src/service.ts").writeText("export class Service {}\n")
+        root.resolve("tsconfig.json").writeText(
+            """{"compilerOptions":{"rootDir":"src"},"include":["src/**/*.ts"]}""",
+        )
+        val client = FakeSemanticClient(invalidSymbolPath = true)
+        val session = DaemonSession(
+            toolchainDiscovery = { _, _ -> TypeScriptToolchainDiscovery.Available(toolchain()) },
+            semanticAdapterFactory = { languageId, discovered, model ->
+                TypeScriptSemanticAdapter(languageId, discovered, model, client)
+            },
+        )
+        session.dispatch("project.open", objectParams("root" to root.toString()))
+
+        val started = session.dispatch(
+            "typescript.semantic.start", objectParams("languageId" to "typescript"),
+        ).jsonObject
+        assertEquals("started", started.getValue("status").jsonPrimitive.content)
+        assertEquals("refused", started.getValue("index").jsonObject.getValue("status").jsonPrimitive.content)
+        assertEquals(
+            "typescript.symbolIndexInvalid",
+            started.getValue("index").jsonObject.getValue("failure").jsonObject
+                .getValue("code").jsonPrimitive.content,
+        )
+        assertTrue(session.dispatch("diagnostics", objectParams("languageId" to "typescript")).jsonArray.isEmpty())
+        assertTrue(session.dispatch("index.status", null).jsonObject.getValue("providers").jsonArray.none {
+            it.jsonObject.getValue("languageId").jsonPrimitive.content == "typescript"
+        })
+        session.close()
+        assertTrue(!Files.exists(root.resolve(".refactorkit")))
+    }
+
+    @Test
+    fun terminalSymbolProjectionFailureDoesNotRetainADeadSemanticLease() {
+        val root = Files.createTempDirectory("refactorkit-daemon-ts-terminal-index")
+        Files.createDirectories(root.resolve("src"))
+        root.resolve("src/service.ts").writeText("export class Service {}\n")
+        root.resolve("tsconfig.json").writeText(
+            """{"compilerOptions":{"rootDir":"src"},"include":["src/**/*.ts"]}""",
+        )
+        val client = FakeSemanticClient(stopDuringProjection = true)
+        val session = DaemonSession(
+            toolchainDiscovery = { _, _ -> TypeScriptToolchainDiscovery.Available(toolchain()) },
+            semanticAdapterFactory = { languageId, discovered, model ->
+                TypeScriptSemanticAdapter(languageId, discovered, model, client)
+            },
+        )
+        session.dispatch("project.open", objectParams("root" to root.toString()))
+
+        val failure = assertFailsWith<JsonRpcException> {
+            session.dispatch("typescript.semantic.start", objectParams("languageId" to "typescript"))
+        }
+        assertTrue(failure.message.orEmpty().contains("semantic.documentSymbolTimeout"))
+        assertFailsWith<JsonRpcException> {
+            session.dispatch("diagnostics", objectParams("languageId" to "typescript"))
+        }
+        assertTrue(session.dispatch("index.status", null).jsonObject.getValue("providers").jsonArray.none {
+            it.jsonObject.getValue("languageId").jsonPrimitive.content == "typescript"
+        })
+        session.close()
+    }
+
     @Test
     fun diagnosticsV2PreservesExactRangesAuthorityCorrelationAndStructuredFailures() {
         val root = Files.createTempDirectory("refactorkit-daemon-ts-diagnostics-v2")
@@ -77,6 +145,24 @@ class TypeScriptDaemonIntegrationTest {
         assertTrue(notReady.getValue("diagnostics").jsonArray.isEmpty())
         val started = session.dispatch("typescript.semantic.start", objectParams("languageId" to "typescript")).jsonObject
         assertEquals(lease, started.getValue("semanticLease").jsonPrimitive.content)
+        val indexRefresh = started.getValue("index").jsonObject
+        assertEquals("ready", indexRefresh.getValue("status").jsonPrimitive.content)
+        assertEquals("1", indexRefresh.getValue("symbolCount").jsonPrimitive.content)
+        val indexGeneration = indexRefresh.getValue("generation").jsonPrimitive.content.toLong()
+        val indexed = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "ts-index-1")
+            put("expectedSnapshotHash", snapshotHash)
+            put("expectedIndexGeneration", indexGeneration)
+            put("kind", "workspaceSymbols")
+            put("query", "Service")
+            put("languageId", "typescript")
+        }).jsonObject
+        assertEquals("ready", indexed.getValue("status").jsonPrimitive.content)
+        assertEquals("declarations", indexed.getValue("coverage").jsonPrimitive.content)
+        assertEquals("language-server", indexed.getValue("items").jsonArray.single().jsonObject
+            .getValue("evidence").jsonPrimitive.content)
+        assertTrue(indexed.getValue("items").jsonArray.single().jsonObject
+            .getValue("provenanceHash").jsonPrimitive.content.matches(Regex("[0-9a-f]{64}")))
         client.synchronized = ExternalSemanticDiagnostics.Available(listOf(
             Diagnostic(
                 message = "Cannot find name 'missing'.",
@@ -195,6 +281,12 @@ class TypeScriptDaemonIntegrationTest {
         assertEquals("error", failed.getValue("status").jsonPrimitive.content)
         assertEquals("typescript.compilerDiagnosticsTimeout", failed.getValue("failure").jsonObject.getValue("code").jsonPrimitive.content)
         assertTrue(failed.getValue("diagnostics").jsonArray.isEmpty())
+
+        session.dispatch("typescript.semantic.stop", objectParams("languageId" to "typescript"))
+        val stoppedIndex = session.dispatch("index.status", null).jsonObject
+        assertTrue(stoppedIndex.getValue("providers").jsonArray.none {
+            it.jsonObject.getValue("languageId").jsonPrimitive.content == "typescript"
+        })
         session.close()
     }
 
@@ -307,7 +399,10 @@ class TypeScriptDaemonIntegrationTest {
         )
     }
 
-    private class FakeSemanticClient : TypeScriptSemanticClient {
+    private class FakeSemanticClient(
+        private val invalidSymbolPath: Boolean = false,
+        private val stopDuringProjection: Boolean = false,
+    ) : TypeScriptSemanticClient {
         override var isRunning = false
         var synchronized: ExternalSemanticDiagnostics = ExternalSemanticDiagnostics.Available(emptyList())
         var lastSynchronizedSnapshot: ProjectSnapshot? = null
@@ -318,6 +413,19 @@ class TypeScriptDaemonIntegrationTest {
             "workspaceSymbolProvider", "textDocumentSync",
         )
         override fun buildSymbols(snapshot: ProjectSnapshot) = SymbolIndex(listOf(symbol()))
+        override fun buildSymbolProjection(
+            snapshot: ProjectSnapshot,
+            limit: Int,
+        ): TypeScriptClientSymbolProjection {
+            if (stopDuringProjection) {
+                isRunning = false
+                return TypeScriptClientSymbolProjection.Refused(
+                    "semantic.documentSymbolTimeout",
+                    "Document-symbol projection exceeded 30000ms",
+                )
+            }
+            return super<TypeScriptSemanticClient>.buildSymbolProjection(snapshot, limit)
+        }
         override fun searchWorkspaceSymbols(query: String) = listOf(symbol()).filter { query in it.name }
         override fun resolveSymbol(location: SourceLocation) = SymbolResolution(symbol())
         override fun findReferences(symbolId: SymbolId) = listOf(Reference(symbolId, location()))
@@ -342,7 +450,8 @@ class TypeScriptDaemonIntegrationTest {
         override fun close() { isRunning = false }
         private fun symbol() = Symbol(SymbolId("src/service.ts::Service@0:13"), "Service", Symbol.Kind.CLASS, location(), "typescript")
         private fun location() = SourceLocation(
-            Path.of("src/service.ts"), SourceRange(SourcePosition(0, 13), SourcePosition(0, 20)),
+            if (invalidSymbolPath) Path.of("src/missing.ts") else Path.of("src/service.ts"),
+            SourceRange(SourcePosition(0, 13), SourcePosition(0, 20)),
         )
     }
 }

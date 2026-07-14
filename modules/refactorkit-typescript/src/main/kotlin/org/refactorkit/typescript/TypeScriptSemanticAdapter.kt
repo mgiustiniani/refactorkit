@@ -38,6 +38,7 @@ import org.refactorkit.treesitter.BonedeTreeSitterBinding
 import org.refactorkit.treesitter.ExternalLspAdapter
 import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
+import org.refactorkit.treesitter.ExternalSymbolProjection
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.ByteBuffer
@@ -63,12 +64,34 @@ sealed interface TypeScriptSemanticStart {
     data class Refused(val diagnostics: List<Diagnostic>) : TypeScriptSemanticStart
 }
 
+sealed interface TypeScriptClientSymbolProjection {
+    data class Available(val index: SymbolIndex, val truncated: Boolean) : TypeScriptClientSymbolProjection
+    data class Refused(val code: String, val message: String) : TypeScriptClientSymbolProjection
+}
+
+sealed interface TypeScriptSymbolProjection {
+    data class Available(
+        val index: SymbolIndex,
+        val truncated: Boolean,
+        val provenanceHash: String,
+    ) : TypeScriptSymbolProjection
+
+    data class Refused(val diagnostic: Diagnostic) : TypeScriptSymbolProjection
+}
+
 interface TypeScriptSemanticClient : AutoCloseable {
     val isRunning: Boolean
     val provenance: ExternalSemanticSessionProvenance?
     fun start(snapshot: ProjectSnapshot)
     fun supports(capability: String): Boolean
     fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex
+    fun buildSymbolProjection(snapshot: ProjectSnapshot, limit: Int): TypeScriptClientSymbolProjection {
+        val symbols = buildSymbols(snapshot).symbols
+        return TypeScriptClientSymbolProjection.Available(
+            SymbolIndex(symbols.take(limit)),
+            symbols.size > limit,
+        )
+    }
     fun searchWorkspaceSymbols(query: String): List<org.refactorkit.core.Symbol>
     fun resolveSymbol(location: SourceLocation): SymbolResolution
     fun findReferences(symbolId: SymbolId): List<Reference>
@@ -102,6 +125,17 @@ class ExternalTypeScriptSemanticClient(
     }
     override fun supports(capability: String): Boolean = adapter.supportsServerCapability(capability)
     override fun buildSymbols(snapshot: ProjectSnapshot): SymbolIndex = adapter.buildSymbols(snapshot)
+    override fun buildSymbolProjection(snapshot: ProjectSnapshot, limit: Int): TypeScriptClientSymbolProjection =
+        when (val projection = adapter.buildSymbolProjection(snapshot, limit)) {
+            is ExternalSymbolProjection.Available -> TypeScriptClientSymbolProjection.Available(
+                projection.index,
+                projection.truncated,
+            )
+            is ExternalSymbolProjection.Unavailable -> TypeScriptClientSymbolProjection.Refused(
+                projection.failure.code,
+                projection.failure.message,
+            )
+        }
     override fun searchWorkspaceSymbols(query: String): List<org.refactorkit.core.Symbol> =
         adapter.searchWorkspaceSymbols(query)
     override fun resolveSymbol(location: SourceLocation): SymbolResolution = adapter.resolveSymbol(location)
@@ -239,6 +273,7 @@ class TypeScriptSemanticAdapter(
     }
 
     fun sessionProvenance(): ExternalSemanticSessionProvenance? = client.provenance
+    fun isRunning(): Boolean = client.isRunning
     fun activeSnapshotHash(): String? = activeSnapshot?.hash
     fun compilerAttestation(): TypeScriptCompilerAttestation = toolchain.compilerAttestation()
 
@@ -265,6 +300,54 @@ class TypeScriptSemanticAdapter(
     override fun buildSymbols(project: ProjectSnapshot): SymbolIndex =
         if (active(project)) client.buildSymbols(project) else SymbolIndex(emptyList())
 
+    fun symbolProjection(
+        project: ProjectSnapshot,
+        limit: Int = org.refactorkit.core.ProtocolLimits.MAX_WORKSPACE_INDEX_PROVIDER_SYMBOLS,
+    ): TypeScriptSymbolProjection {
+        require(limit in 1..org.refactorkit.core.ProtocolLimits.MAX_WORKSPACE_INDEX_PROVIDER_SYMBOLS) {
+            "TypeScript symbol projection limit is outside the safe range"
+        }
+        if (!active(project)) return TypeScriptSymbolProjection.Refused(diagnostic(
+            "typescript.symbolIndexSessionStale",
+            "TypeScript symbol projection requires the active saved snapshot",
+        ))
+        if (toolchain.provenance.evidence.any { !verifyEvidence(it) }) {
+            return TypeScriptSymbolProjection.Refused(diagnostic(
+                "typescript.toolchainEvidenceChanged",
+                "TypeScript semantic toolchain changed before symbol projection",
+            ))
+        }
+        if (!projectEvidenceUnchanged(project.workspace.root)) return TypeScriptSymbolProjection.Refused(diagnostic(
+            "typescript.modelEvidenceChanged",
+            "TypeScript project evidence changed before symbol projection",
+        ))
+        val languageFileCount = project.files.count { it.languageId == languageId }
+        if (languageFileCount > ExternalLspAdapter.MAX_DOCUMENT_SYMBOL_FILES) {
+            return TypeScriptSymbolProjection.Refused(diagnostic(
+                "typescript.symbolIndexFileLimit",
+                "TypeScript symbol projection exceeds ${ExternalLspAdapter.MAX_DOCUMENT_SYMBOL_FILES} source files",
+            ))
+        }
+        return try {
+            when (val projection = client.buildSymbolProjection(project, limit)) {
+                is TypeScriptClientSymbolProjection.Available -> TypeScriptSymbolProjection.Available(
+                    projection.index,
+                    projection.truncated,
+                    symbolProjectionProvenanceHash(),
+                )
+                is TypeScriptClientSymbolProjection.Refused -> TypeScriptSymbolProjection.Refused(diagnostic(
+                    projection.code,
+                    projection.message,
+                ))
+            }
+        } catch (failure: Exception) {
+            TypeScriptSymbolProjection.Refused(diagnostic(
+                "typescript.symbolIndexUnavailable",
+                failure.message ?: "TypeScript language server symbol projection failed",
+            ))
+        }
+    }
+
     fun searchWorkspaceSymbols(project: ProjectSnapshot, query: String): List<org.refactorkit.core.Symbol> =
         if (active(project)) {
             // Real TypeScript servers discover configured projects lazily after a
@@ -275,8 +358,13 @@ class TypeScriptSemanticAdapter(
             (index.symbols.filter { it.name.contains(query, ignoreCase = true) } +
                 client.searchWorkspaceSymbols(query))
                 .distinctBy { symbol ->
+                    val root = project.workspace.root.toAbsolutePath().normalize()
+                    val normalized = symbol.location.path.normalize()
+                    val workspacePath = if (normalized.isAbsolute && normalized.startsWith(root)) {
+                        root.relativize(normalized)
+                    } else normalized
                     listOf(
-                        symbol.location.path.normalize().toString().replace('\\', '/'),
+                        workspacePath.toString().replace('\\', '/'),
                         symbol.kind.name,
                         symbol.name,
                     ).joinToString("|")
@@ -679,6 +767,31 @@ class TypeScriptSemanticAdapter(
             offset += Character.charCount(codePoint)
         }
         return true
+    }
+
+    private fun symbolProjectionProvenanceHash(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        fun add(value: Any?) {
+            digest.update(value?.toString().orEmpty().toByteArray(Charsets.UTF_8))
+            digest.update(0)
+        }
+        add(toolchain.provenance.providerId)
+        add(toolchain.provenance.nodeVersion)
+        add(toolchain.provenance.languageServerVersion)
+        add(toolchain.provenance.typeScriptVersion)
+        toolchain.provenance.evidence.sortedBy { it.role }.forEach { evidence ->
+            add(evidence.role)
+            add(evidence.sha256)
+            add(evidence.size)
+        }
+        add(projectModel.projectionHash)
+        val server = acceptedServerProvenance
+        add(server?.serverName)
+        add(server?.serverVersion)
+        add(server?.capabilitiesSha256)
+        add(server?.executableSha256)
+        add(server?.argumentsSha256)
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun provenanceSignature(provenance: ExternalSemanticSessionProvenance) = ServerProvenanceSignature(
