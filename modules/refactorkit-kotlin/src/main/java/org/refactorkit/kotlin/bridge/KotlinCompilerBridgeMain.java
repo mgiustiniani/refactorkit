@@ -119,11 +119,12 @@ public final class KotlinCompilerBridgeMain {
 
     private static Path requireInsideOverlay(Path overlay, Path path, boolean regularFile) throws IOException {
         Path normalized = path.toAbsolutePath().normalize();
-        if (!normalized.startsWith(overlay) || normalized.equals(overlay) || Files.isSymbolicLink(normalized)) {
-            throw new IllegalArgumentException();
-        }
+        if (Files.isSymbolicLink(normalized)) throw new IllegalArgumentException();
         if (regularFile && !Files.isRegularFile(normalized)) throw new IllegalArgumentException();
-        return normalized;
+        if (!regularFile && !Files.isDirectory(normalized)) throw new IllegalArgumentException();
+        Path canonical = normalized.toRealPath();
+        if (!canonical.startsWith(overlay) || canonical.equals(overlay)) throw new IllegalArgumentException();
+        return canonical;
     }
 
     private static Set<String> immutableSet(String... values) {
