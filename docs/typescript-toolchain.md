@@ -37,8 +37,10 @@ critical entrypoints. It validates:
 
 The only discovery-time execution is the explicitly selected Node binary with the
 constant argument `--version`. It runs through `ExternalSemanticProcessManager`
-with cleared environment, 2-second timeout, 1 KiB stdout, 4 KiB stderr and
-process-tree cancellation. No JavaScript file is passed to this probe.
+with cleared environment, 2-second timeout per attempt, at most two attempts,
+1 KiB stdout, 4 KiB stderr and process-tree cancellation. A bounded retry absorbs
+transient native process-start failures without changing executable or arguments.
+No JavaScript file is passed to this probe.
 
 ## Provenance
 

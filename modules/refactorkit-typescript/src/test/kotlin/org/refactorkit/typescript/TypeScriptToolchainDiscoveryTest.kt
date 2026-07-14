@@ -129,6 +129,25 @@ class TypeScriptToolchainDiscoveryTest {
     }
 
     @Test
+    fun managedVersionProbeRetriesOneTransientFailureWithinFixedBound() {
+        var attempts = 0
+        val recovered = ManagedNodeVersionProbe(NodeVersionProbe {
+            attempts++
+            if (attempts == 1) Result.failure(IllegalStateException("transient")) else Result.success("v22.18.0")
+        }).probe(Path.of("explicit-node"))
+        assertEquals("v22.18.0", recovered.getOrThrow())
+        assertEquals(ManagedNodeVersionProbe.MAX_NODE_PROBE_ATTEMPTS, attempts)
+
+        attempts = 0
+        val failed = ManagedNodeVersionProbe(NodeVersionProbe {
+            attempts++
+            Result.failure(IllegalStateException("still failing"))
+        }).probe(Path.of("explicit-node"))
+        assertTrue(failed.isFailure)
+        assertEquals(ManagedNodeVersionProbe.MAX_NODE_PROBE_ATTEMPTS, attempts)
+    }
+
+    @Test
     fun managedVersionProbeExecutesOnlyConstantVersionArgument() {
         val executable = Path.of(
             System.getProperty("java.home"), "bin",

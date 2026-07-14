@@ -74,39 +74,54 @@ fun interface NodeVersionProbe {
 }
 
 /** Executes only the explicitly selected Node binary with the constant `--version` argument. */
-class ManagedNodeVersionProbe : NodeVersionProbe {
-    override fun probe(executable: Path): Result<String> = runCatching {
-        val working = Files.createTempDirectory("refactorkit-node-probe-")
-        try {
-            ExternalSemanticProcessManager(maxProcesses = 1).use { manager ->
-                val process = manager.launch(SemanticProcessSpec(
-                    id = "node-version",
-                    executable = executable,
-                    arguments = listOf("--version"),
-                    workingDirectory = working,
-                    limits = SemanticProcessLimits(
-                        maxStdoutBytes = 1_024,
-                        maxStderrBytes = 4_096,
-                        gracefulShutdownMillis = 250,
-                    ),
-                ))
-                if (!process.awaitExit(NODE_PROBE_TIMEOUT_MILLIS)) {
-                    process.cancel()
-                    error("Node version probe timed out")
-                }
-                val output = process.output.bufferedReader(Charsets.UTF_8).readText().trim()
-                val error = process.stderrText().trim()
-                check(process.exitCode == 0) { "Node version probe failed${error.takeIf(String::isNotEmpty)?.let { ": $it" } ?: ""}" }
-                check(output.toByteArray(Charsets.UTF_8).size <= 1_024) { "Node version output exceeds limit" }
-                output
-            }
-        } finally {
-            runCatching { Files.deleteIfExists(working) }
+class ManagedNodeVersionProbe(
+    private val singleAttempt: NodeVersionProbe = NodeVersionProbe(::probeOnce),
+) : NodeVersionProbe {
+    override fun probe(executable: Path): Result<String> {
+        var lastFailure: Throwable? = null
+        repeat(MAX_NODE_PROBE_ATTEMPTS) {
+            val result = singleAttempt.probe(executable)
+            if (result.isSuccess) return result
+            lastFailure = result.exceptionOrNull()
         }
+        return Result.failure(lastFailure ?: IllegalStateException("Node version probe failed"))
     }
 
     companion object {
         const val NODE_PROBE_TIMEOUT_MILLIS = 2_000L
+        const val MAX_NODE_PROBE_ATTEMPTS = 2
+
+        private fun probeOnce(executable: Path): Result<String> = runCatching {
+            val working = Files.createTempDirectory("refactorkit-node-probe-")
+            try {
+                ExternalSemanticProcessManager(maxProcesses = 1).use { manager ->
+                    val process = manager.launch(SemanticProcessSpec(
+                        id = "node-version",
+                        executable = executable,
+                        arguments = listOf("--version"),
+                        workingDirectory = working,
+                        limits = SemanticProcessLimits(
+                            maxStdoutBytes = 1_024,
+                            maxStderrBytes = 4_096,
+                            gracefulShutdownMillis = 250,
+                        ),
+                    ))
+                    if (!process.awaitExit(NODE_PROBE_TIMEOUT_MILLIS)) {
+                        process.cancel()
+                        error("Node version probe timed out")
+                    }
+                    val output = process.output.bufferedReader(Charsets.UTF_8).readText().trim()
+                    val error = process.stderrText().trim()
+                    check(process.exitCode == 0) {
+                        "Node version probe failed${error.takeIf(String::isNotEmpty)?.let { ": $it" } ?: ""}"
+                    }
+                    check(output.toByteArray(Charsets.UTF_8).size <= 1_024) { "Node version output exceeds limit" }
+                    output
+                }
+            } finally {
+                runCatching { Files.deleteIfExists(working) }
+            }
+        }
     }
 }
 

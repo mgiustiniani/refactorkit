@@ -21,6 +21,9 @@ review safety boundaries before applying refactorings.
   Kotlin 2.0.21 compiler/classpath identity, bounded JAR inspection, double-read
   SHA-256 evidence and deterministic projection hashing with workspace-local and
   drift refusal.
+- Bound the explicit TypeScript Node `--version` probe to two attempts so one
+  transient native process-start failure does not fail packaged semantic commands;
+  executable, constant arguments and per-attempt resource limits remain unchanged.
 - No new stable Kotlin capability is claimed until real compiler-backed native
   acceptance passes preview, exact diagnostics, apply, WAL and rollback.
 
