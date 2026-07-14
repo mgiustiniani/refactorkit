@@ -88,9 +88,10 @@ Immutable editor overlay:
 
 Overlay paths must already belong to the opened project and match the requested
 language. Paths are workspace-relative, traversal-free, unique, and returned
-with `/` separators. The request is copied into a source-only immutable compiler
-overlay; disk is not modified. New untracked files, config overlays, mixed-language
-overlays, and more than 128/768 KiB of editor documents are currently unsupported.
+with `/` separators. The language-neutral core `ImmutableEditorOverlay` validates
+path/version/content authority and derives an in-memory provider snapshot; disk is
+not modified. New untracked files, config overlays, mixed-language overlays, and
+more than 128/768 KiB of editor documents are currently unsupported.
 
 ## Response authority
 

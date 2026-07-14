@@ -6,7 +6,7 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 
 | Module                    | Status       | Notes                                                     |
 |---------------------------|-------------|------------------------------------------------------------|
-| `refactorkit-core`        | ✅ MVP+      | Patch/transaction engine, Build Model SPI, bounded language-adapter registry, mixed routing, generalized evidence, hash-bound snapshots, and the first provider-neutral `WorkspaceIndex` |
+| `refactorkit-core`        | ✅ MVP+      | Patch/transaction engine, Build Model SPI, bounded language-adapter registry, mixed routing, generalized evidence, hash-bound snapshots, immutable editor-provider views, and the first provider-neutral `WorkspaceIndex` |
 | `refactorkit-java`        | ✅ MVP+      | Offline Maven effective reactor/source-set model, JDT diagnostics, rename/move/move-source-root, organize-imports, safe-delete, formatting, limited extract/change-signature, recipes, framework risk detection |
 | `refactorkit-cli`         | ✅ MVP+      | Java commands, central index/intelligence search with optional JSON, outline/search/local-rename, and jlink runtime packaging |
 | `refactorkit-daemon`      | ✅ MVP       | JSON-RPC over stdio                                        |
@@ -31,8 +31,11 @@ fail-closed. The first centralized workspace-intelligence slice inventories ever
 recognized source and merges bounded, attested provider declaration partitions.
 Java lexical declarations load at project open, TypeScript/JavaScript
 language-server declarations load during persistent semantic startup/restart, and
-qualified Kotlin compiler classes load after authorized compiler queries;
-workspace/document symbol queries are implemented while completion, hover,
+qualified Kotlin compiler classes load after authorized compiler queries.
+The shared `ImmutableEditorOverlay` now derives versioned in-memory provider
+snapshots and binds exact overlay authority into typed semantic-query envelopes;
+TypeScript exact diagnostics consume that shared model. Workspace/document symbol
+queries are implemented while completion, hover,
 signature help and position-based navigation remain refused until their persistent
 JDT, tsserver and K2 providers qualify. The long-range `v1.0.0` roadmap evolves
 the language-neutral core into a deep multi-language platform rather than

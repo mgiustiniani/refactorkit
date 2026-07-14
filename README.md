@@ -27,6 +27,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
 - Workspace index and semantic query plan: [`docs/releases/v0.7.0-intelligence-index-plan.md`](docs/releases/v0.7.0-intelligence-index-plan.md)
 - TypeScript workspace-index acceptance: [`docs/releases/v0.7.0-typescript-workspace-index-acceptance.md`](docs/releases/v0.7.0-typescript-workspace-index-acceptance.md)
+- Immutable editor-overlay foundation: [`docs/releases/v0.7.0-editor-overlay-foundation-acceptance.md`](docs/releases/v0.7.0-editor-overlay-foundation-acceptance.md)
 - Kotlin adapter boundary: [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md)
 - Kotlin toolchain boundary: [`docs/kotlin-toolchain.md`](docs/kotlin-toolchain.md)
 - Kotlin/JVM build-model projection: [`docs/kotlin-build-model.md`](docs/kotlin-build-model.md)

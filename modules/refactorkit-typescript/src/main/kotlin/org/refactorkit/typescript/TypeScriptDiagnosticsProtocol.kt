@@ -14,11 +14,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticLocationPrecision
+import org.refactorkit.core.ImmutableEditorOverlay
+import org.refactorkit.core.ImmutableEditorOverlayDocument
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.RefactorKitVersion
-import org.refactorkit.core.SourceFile
 import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -30,11 +31,7 @@ sealed interface TypeScriptDiagnosticsSourceAuthority {
     data class ImmutableEditorOverlay(val documents: List<EditorOverlayDocument>) : TypeScriptDiagnosticsSourceAuthority
 }
 
-data class EditorOverlayDocument(
-    val path: Path,
-    val version: Int,
-    val content: String,
-)
+typealias EditorOverlayDocument = ImmutableEditorOverlayDocument
 
 data class TypeScriptDiagnosticsRequest(
     val requestId: String,
@@ -117,13 +114,18 @@ object TypeScriptDiagnosticsProtocol {
         }
         val providerSnapshot = when (val source = request.sourceAuthority) {
             TypeScriptDiagnosticsSourceAuthority.SavedDisk -> savedSnapshot
-            is TypeScriptDiagnosticsSourceAuthority.ImmutableEditorOverlay -> overlaySnapshot(savedSnapshot, request.languageId, source)
-                .getOrElse { failure ->
-                    return refusal(
-                        request, savedSnapshot.hash, savedSnapshot.hash, activeLease, authority,
-                        "diagnostics.overlayInvalid", failure.message ?: "Editor overlay is invalid",
-                    )
-                }
+            is TypeScriptDiagnosticsSourceAuthority.ImmutableEditorOverlay -> runCatching {
+                ImmutableEditorOverlay.create(
+                    savedSnapshot,
+                    source.documents,
+                    expectedLanguageId = request.languageId,
+                ).providerSnapshot
+            }.getOrElse { failure ->
+                return refusal(
+                    request, savedSnapshot.hash, savedSnapshot.hash, activeLease, authority,
+                    "diagnostics.overlayInvalid", failure.message ?: "Editor overlay is invalid",
+                )
+            }
         }
         val result = semantic.exactDiagnostics(providerSnapshot)
         return when (result) {
@@ -334,26 +336,6 @@ object TypeScriptDiagnosticsProtocol {
         return null
     }
 
-    private fun overlaySnapshot(
-        snapshot: ProjectSnapshot,
-        languageId: String,
-        overlay: TypeScriptDiagnosticsSourceAuthority.ImmutableEditorOverlay,
-    ): Result<ProjectSnapshot> = runCatching {
-        val files = snapshot.files.associateBy { it.path.normalize() }.toMutableMap()
-        overlay.documents.sortedBy { it.path.toString() }.forEach { document ->
-            val path = document.path.normalize()
-            require(!path.isAbsolute && !path.startsWith("..") && path.toString().isNotBlank()) { "overlay path is unsafe" }
-            require('\u0000' !in document.content) { "overlay content contains NUL" }
-            val existing = files[path] ?: error("overlay path is not present in the opened project snapshot")
-            require(existing.languageId == languageId) { "overlay document language does not match the request" }
-            require(document.content.toByteArray(Charsets.UTF_8).size <= ProtocolLimits.MAX_SOURCE_FILE_BYTES) {
-                "overlay document exceeds the source-file byte limit"
-            }
-            files[path] = SourceFile(path, document.content, existing.languageId)
-        }
-        snapshot.copy(files = files.values.sortedBy { it.path.toString() })
-    }
-
     private fun authorityMetadata(
         authority: TypeScriptDiagnosticsSourceAuthority,
         baseSnapshotHash: String,
@@ -366,7 +348,7 @@ object TypeScriptDiagnosticsProtocol {
         is TypeScriptDiagnosticsSourceAuthority.ImmutableEditorOverlay -> buildJsonObject {
             put("kind", "immutable-editor-overlay")
             put("baseSnapshotHash", baseSnapshotHash)
-            put("overlayHash", overlayHash(authority.documents))
+            put("overlayHash", ImmutableEditorOverlay.computeHash(authority.documents))
             put("providerSnapshotHash", providerSnapshotHash)
             put("documents", buildJsonArray {
                 authority.documents.sortedBy { it.path.toString() }.forEach { document ->
@@ -408,7 +390,7 @@ object TypeScriptDiagnosticsProtocol {
             ?: throw IllegalArgumentException("overlay version must be an integer")
         require(version >= 0) { "overlay version must be non-negative" }
         val content = value.requiredString("content")
-        return EditorOverlayDocument(path, version, content)
+        return EditorOverlayDocument(path, version.toLong(), content)
     }
 
     private fun normalizedPath(snapshot: ProjectSnapshot, path: Path): String {
@@ -416,19 +398,6 @@ object TypeScriptDiagnosticsProtocol {
         val normalized = if (path.isAbsolute) path.toAbsolutePath().normalize() else root.resolve(path).normalize()
         require(normalized.startsWith(root) && normalized != root) { "diagnostic path is outside workspace" }
         return ProtocolPath.serialize(root.relativize(normalized))
-    }
-
-    private fun overlayHash(documents: List<EditorOverlayDocument>): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        documents.sortedBy { it.path.toString() }.forEach { document ->
-            digest.update(ProtocolPath.serialize(document.path.normalize()).toByteArray(Charsets.UTF_8))
-            digest.update(0)
-            digest.update(document.version.toString().toByteArray(Charsets.UTF_8))
-            digest.update(0)
-            digest.update(document.content.toByteArray(Charsets.UTF_8))
-            digest.update(0)
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun failureObject(code: String, message: String) = buildJsonObject {

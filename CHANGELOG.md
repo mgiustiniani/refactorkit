@@ -15,6 +15,11 @@ review safety boundaries before applying refactorings.
   expose workspace/document symbol search; CLI `index` and `intelligence search`
   provide human output or optional JSON. Completion, hover, signature help and
   position-based navigation remain explicit typed refusals until provider-backed.
+- Add the language-neutral immutable editor-overlay foundation: exact saved
+  snapshot, document path/version/content-hash authority, deterministic overlay
+  hash, in-memory provider snapshot derivation, common semantic-query correlation,
+  and bounded path/language/content validation. TypeScript `diagnostics.v2` now
+  uses this shared model without changing its API `0.2` JSON contract.
 - Merge qualified TypeScript/JavaScript declaration projections into the central
   index during semantic startup/restart. Contributions carry language-server
   evidence and path-free toolchain/project/server provenance, refuse evidence or

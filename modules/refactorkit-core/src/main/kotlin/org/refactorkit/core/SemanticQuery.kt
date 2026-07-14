@@ -42,6 +42,7 @@ data class SemanticQueryEnvelope(
     val expectedSnapshotHash: String,
     val expectedIndexGeneration: Long? = null,
     val document: SemanticDocumentAuthority? = null,
+    val overlay: ImmutableEditorOverlay? = null,
     val query: SemanticQueryRequest,
 ) {
     init {
@@ -56,6 +57,18 @@ data class SemanticQueryEnvelope(
         }
         if (query.requiresDocument) require(document != null) {
             "${query.kind} requires document authority"
+        }
+        overlay?.let { value ->
+            require(value.baseSnapshotHash == expectedSnapshotHash) {
+                "semantic query overlay belongs to another saved snapshot"
+            }
+            require(document?.mode == SemanticDocumentMode.IMMUTABLE_EDITOR_OVERLAY) {
+                "semantic query overlay requires immutable editor document authority"
+            }
+            val overlayAuthority = document?.let { value.authority(it.path) }
+            require(overlayAuthority == document) {
+                "semantic query document authority does not match overlay content/version"
+            }
         }
     }
 }
