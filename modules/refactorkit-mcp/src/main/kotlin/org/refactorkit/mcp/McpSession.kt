@@ -50,6 +50,7 @@ import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
+import org.refactorkit.typescript.TypeScriptDiagnosticsProtocol
 import org.refactorkit.typescript.TypeScriptProjectModelBuilder
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptSemanticStart
@@ -63,6 +64,7 @@ import java.net.URLDecoder
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.UUID
 import java.util.stream.Collectors
 
 private const val PROTOCOL_VERSION = "2024-11-05"
@@ -85,6 +87,7 @@ class McpSession(
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var workspaceRoot: Path? = null
     private val semanticAdapters = linkedMapOf<String, TypeScriptSemanticAdapter>()
+    private val semanticLeases = linkedMapOf<String, String>()
     private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
     }
@@ -160,8 +163,17 @@ class McpSession(
             add(tool("symbol_references", "Find all references to a symbol.",
                 required = listOf("symbol"),
                 props = mapOf("symbol" to "string: fully-qualified symbol name")))
-            add(tool("diagnostics", "Return diagnostics for the project.",
+            add(tool("diagnostics", "Return legacy human-readable diagnostics for the project.",
                 required = emptyList(), props = emptyMap()))
+            add(tool("diagnostics_v2", "Return IDE-grade exact compiler diagnostics with snapshot, lease, authority, ranges, and attestation.",
+                required = listOf("requestId", "languageId", "expectedSnapshotHash", "semanticLease", "sourceAuthority"),
+                props = mapOf(
+                    "requestId" to "string: caller correlation ID",
+                    "languageId" to "string: typescript | javascript",
+                    "expectedSnapshotHash" to "string: opened project SHA-256",
+                    "semanticLease" to "string: lease returned by typescript_semantic_start",
+                    "sourceAuthority" to "object: saved-disk or immutable-editor-overlay authority",
+                )))
             add(tool("available_refactorings", "List refactoring operations available for a selection.",
                 required = listOf("symbol"),
                 props = mapOf("symbol" to "string: fully-qualified symbol name")))
@@ -225,6 +237,7 @@ class McpSession(
         "symbol_definition"     -> toolSymbolDefinition(args)
         "symbol_references"     -> toolSymbolReferences(args)
         "diagnostics"           -> toolDiagnostics(args)
+        "diagnostics_v2"        -> toolDiagnosticsV2(args)
         "available_refactorings"-> toolAvailableRefactorings(args)
         "preview_refactoring"   -> toolPreviewRefactoring(args)
         "apply_refactoring"     -> toolApplyRefactoring(args)
@@ -275,7 +288,10 @@ class McpSession(
             }
             is TypeScriptSemanticStart.Started -> {
                 semanticAdapters[languageId] = semantic
+                val lease = "semantic-${UUID.randomUUID()}"
+                semanticLeases[languageId] = lease
                 "Started $languageId semantic session. Completeness: ${semantic.semanticCompleteness().mode}. " +
+                    "Semantic lease: $lease. Snapshot: ${snap.hash}. " +
                     "Capabilities SHA-256: ${started.provenance?.capabilitiesSha256 ?: "test-provider"}"
             }
         }
@@ -283,7 +299,11 @@ class McpSession(
 
     private fun toolTypeScriptSemanticStop(args: JsonObject): String {
         val languageId = args.string("languageId") ?: missing("languageId")
-        val stopped = semanticAdapters.remove(languageId)?.let { it.close(); true } ?: false
+        val stopped = semanticAdapters.remove(languageId)?.let {
+            it.close()
+            semanticLeases.remove(languageId)
+            true
+        } ?: false
         return if (stopped) "Stopped $languageId semantic session." else "No $languageId semantic session was running."
     }
 
@@ -366,6 +386,20 @@ class McpSession(
         val diags = if (languageId == "java") adapter.diagnostics(snap) else requireSemanticAdapter(languageId).diagnostics(snap)
         if (diags.isEmpty()) return "No diagnostics."
         return diags.joinToString("\n") { "[${it.severity}] ${it.message}${it.location?.let { loc -> " at ${loc.path}:${loc.range.start.line + 1}" } ?: ""}" }
+    }
+
+    private fun toolDiagnosticsV2(args: JsonObject): String {
+        val request = try {
+            TypeScriptDiagnosticsProtocol.parse(args)
+        } catch (failure: IllegalArgumentException) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "Invalid diagnostics_v2 request")
+        }
+        val snap = requireSnapshot()
+        val semantic = semanticAdapters[request.languageId]
+            ?: return TypeScriptDiagnosticsProtocol.notReady(request, snap.hash, semanticLeases[request.languageId]).toString()
+        val lease = semanticLeases[request.languageId]
+            ?: return TypeScriptDiagnosticsProtocol.notReady(request, snap.hash).toString()
+        return TypeScriptDiagnosticsProtocol.execute(request, snap, lease, semantic).toString()
     }
 
     private fun toolAvailableRefactorings(args: JsonObject): String {
@@ -816,6 +850,7 @@ class McpSession(
     private fun closeSemanticAdapters() {
         semanticAdapters.values.forEach { runCatching { it.close() } }
         semanticAdapters.clear()
+        semanticLeases.clear()
     }
 
     private fun requireSemanticAdapter(languageId: String): TypeScriptSemanticAdapter =

@@ -239,6 +239,25 @@ class TypeScriptSemanticAdapter(
     }
 
     fun sessionProvenance(): ExternalSemanticSessionProvenance? = client.provenance
+    fun activeSnapshotHash(): String? = activeSnapshot?.hash
+    fun compilerAttestation(): TypeScriptCompilerAttestation = toolchain.compilerAttestation()
+
+    /** Exact compiler diagnostics for the saved snapshot or a validated immutable source overlay. */
+    fun exactDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics {
+        if (!diagnosticScopeCompatible(snapshot)) return unavailableDiagnostics(
+            "typescript.diagnosticsScopeMismatch",
+            "Exact diagnostics snapshot is outside the active semantic lease",
+        )
+        if (toolchain.provenance.evidence.any { !verifyEvidence(it) }) return unavailableDiagnostics(
+            "typescript.toolchainEvidenceChanged",
+            "TypeScript semantic toolchain changed after session startup",
+        )
+        if (!projectEvidenceUnchanged(snapshot.workspace.root)) return unavailableDiagnostics(
+            "typescript.modelEvidenceChanged",
+            "TypeScript project evidence changed after session startup",
+        )
+        return client.synchronizedDiagnostics(snapshot)
+    }
 
     override fun languageId(): String = languageId
     override fun parse(file: SourceFile): ParseResult = ParseResult(file)
@@ -499,12 +518,20 @@ class TypeScriptSemanticAdapter(
 
     private fun semanticScopeCompatible(snapshot: ProjectSnapshot): Boolean {
         val active = activeSnapshot ?: return false
+        return diagnosticScopeCompatible(snapshot) && snapshot.hash in approvedSemanticSnapshotHashes(active.hash)
+    }
+
+    private fun diagnosticScopeCompatible(snapshot: ProjectSnapshot): Boolean {
+        val active = activeSnapshot ?: return false
         return client.isRunning &&
-            snapshot.hash in approvedSemanticSnapshotHashes(active.hash) &&
             active.workspace.root.toAbsolutePath().normalize() == snapshot.workspace.root.toAbsolutePath().normalize() &&
             active.modules == snapshot.modules && active.buildModels == snapshot.buildModels &&
             active.classpathEvidence == snapshot.classpathEvidence
     }
+
+    private fun unavailableDiagnostics(code: String, message: String) = ExternalSemanticDiagnostics.Unavailable(
+        diagnostic(code, message),
+    )
 
     private fun rememberApprovedStagedSnapshot(hash: String) {
         approvedStagedSnapshotHashes += hash
@@ -745,7 +772,16 @@ class TypeScriptSemanticAdapter(
                 LanguageCapability("definition", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("workspaceSymbols", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("references", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
-                LanguageCapability("diagnostics", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.COMPILER),
+                LanguageCapability(
+                    operation = "diagnostics",
+                    stability = CapabilityStability.EXPERIMENTAL,
+                    evidence = SemanticEvidenceKind.COMPILER,
+                    mutationAuthority = MutationAuthority.NONE,
+                    backend = TypeScriptDiagnosticsContract.BACKEND,
+                    runtime = TypeScriptDiagnosticsContract.runtime,
+                    diagnosticSnapshotModes = TypeScriptDiagnosticsContract.snapshotModes,
+                    diagnosticRangeCapability = TypeScriptDiagnosticsContract.rangeCapability,
+                ),
                 LanguageCapability(
                     "renameSymbol", CapabilityStability.EXPERIMENTAL,
                     SemanticEvidenceKind.LANGUAGE_SERVER, MutationAuthority.PROPOSAL_ONLY,

@@ -29,6 +29,8 @@ object LanguageCapabilityProtocol {
                 put("evidence", values<SemanticEvidenceKind>())
                 put("mutationAuthority", values<MutationAuthority>())
                 put("executionMode", values<AdapterExecutionMode>())
+                put("diagnosticSnapshotMode", values<DiagnosticSnapshotMode>())
+                put("diagnosticRangeCapability", values<DiagnosticRangeCapability>())
             })
         }
     }
@@ -48,6 +50,14 @@ object LanguageCapabilityProtocol {
                     put("backend", capability.backend ?: descriptor.backend)
                     put("runtime", renderRuntime(capability.runtime ?: descriptor.runtime))
                     put("extensions", JsonArray((capability.extensions ?: descriptor.extensions).sorted().map(::JsonPrimitive)))
+                    capability.diagnosticSnapshotModes?.let { modes ->
+                        put("diagnosticSnapshotModes", JsonArray(modes.sortedBy { it.name }.map {
+                            JsonPrimitive(it.protocolName())
+                        }))
+                    }
+                    capability.diagnosticRangeCapability?.let { precision ->
+                        put("diagnosticRangeCapability", precision.protocolName())
+                    }
                 })
             }
         })

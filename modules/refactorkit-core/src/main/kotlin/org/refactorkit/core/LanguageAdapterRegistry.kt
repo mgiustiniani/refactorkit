@@ -26,6 +26,15 @@ enum class MutationAuthority {
     NONE,
 }
 
+enum class DiagnosticSnapshotMode {
+    SAVED_DISK,
+    IMMUTABLE_EDITOR_OVERLAY,
+}
+
+enum class DiagnosticRangeCapability {
+    EXACT_UTF16_OR_EXPLICIT_PARTIAL,
+}
+
 enum class AdapterExecutionMode {
     IN_PROCESS,
     EXTERNAL_PROCESS,
@@ -74,6 +83,8 @@ data class LanguageCapability(
     val backend: String? = null,
     val runtime: LanguageAdapterRuntime? = null,
     val extensions: Set<String>? = null,
+    val diagnosticSnapshotModes: Set<DiagnosticSnapshotMode>? = null,
+    val diagnosticRangeCapability: DiagnosticRangeCapability? = null,
 ) {
     init {
         require(operation.isNotBlank()) { "language capability operation must not be blank" }
@@ -88,6 +99,12 @@ data class LanguageCapability(
             SemanticEvidenceKind.LEXICAL,
             SemanticEvidenceKind.NONE,
         )) { "lexical/no evidence cannot receive managed stable authority" }
+        require(diagnosticSnapshotModes == null || operation == "diagnostics" && diagnosticSnapshotModes.isNotEmpty()) {
+            "diagnostic snapshot modes apply only to diagnostics capabilities"
+        }
+        require(diagnosticRangeCapability == null || operation == "diagnostics") {
+            "diagnostic range capability applies only to diagnostics operations"
+        }
     }
 
     companion object {

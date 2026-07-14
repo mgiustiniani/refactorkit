@@ -86,7 +86,12 @@ plugins, restricts compiler reads to the overlay and explicit compiler-library r
 returns the requested snapshot hash and at most 500 structured diagnostics,
 and is bounded to 30 seconds, 512 MiB V8 old space, 8 MiB stdout and 64 KiB stderr.
 Overlay mutation, process failure, malformed/incomplete output or snapshot mismatch
-fails closed.
+fails closed. IDE consumers use the additive API `0.2` `diagnostics.v2` envelope
+documented in [`typescript-diagnostics-protocol.md`](typescript-diagnostics-protocol.md).
+It preserves exact zero-based UTF-16 ranges, distinguishes saved-disk and immutable
+editor-overlay authority, correlates request/snapshot/semantic lease, and separates
+compiler readiness failures from source diagnostics. Legacy `diagnostics` remains
+a bare array for compatibility.
 
 Upstream unversioned `publishDiagnostics` notifications remain unacceptable; they
 are not promoted by inference. Preview stores original and staged compiler images
@@ -103,7 +108,10 @@ external semantic layer without conflating their trust boundaries. Every
 capability reports its own backend and runtime: outline, identifier search and
 local rename remain native/structural, while definition, references, diagnostics
 and semantic rename report external-process execution, source overlay and process
-provenance. Capability-level extension sets make TSX/JSX semantic ownership
+provenance. Diagnostics specifically advertise backend
+`typescript-compiler-exact-v1`, its 30-second/8-MiB/one-process limits, supported
+snapshot modes and exact-UTF-16-or-explicit-partial range capability; LSP runtime
+metadata is not reused for the compiler operation. Capability-level extension sets make TSX/JSX semantic ownership
 explicit without falsely granting them the `.ts`/`.js` structural grammar claim.
 
 ## Current operations

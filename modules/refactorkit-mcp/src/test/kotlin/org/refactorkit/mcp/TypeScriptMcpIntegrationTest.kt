@@ -1,5 +1,6 @@
 package org.refactorkit.mcp
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -55,10 +56,21 @@ class TypeScriptMcpIntegrationTest {
             },
         )
         assertTrue(call(session, "project_scan", args("root" to root.toString())).contains("Files: 1"))
-        assertTrue(call(session, "typescript_semantic_start", args(
+        val started = call(session, "typescript_semantic_start", args(
             "languageId" to "typescript", "nodeExecutable" to ".",
             "languageServerPackageRoot" to ".", "typeScriptPackageRoot" to ".",
-        )).contains("Started typescript"))
+        ))
+        assertTrue(started.contains("Started typescript"))
+        val lease = Regex("Semantic lease: (semantic-[0-9a-f-]+)").find(started)!!.groupValues[1]
+        val snapshotHash = Regex("Snapshot: ([0-9a-f]{64})").find(started)!!.groupValues[1]
+        val diagnostics = call(session, "diagnostics_v2", buildJsonObject {
+            put("requestId", "mcp-request-1")
+            put("languageId", "typescript")
+            put("expectedSnapshotHash", snapshotHash)
+            put("semanticLease", lease)
+            put("sourceAuthority", buildJsonObject { put("kind", "saved-disk") })
+        })
+        assertEquals("ready", Json.parseToJsonElement(diagnostics).jsonObject.getValue("status").jsonPrimitive.content)
         val search = call(session, "symbol_search", args("languageId" to "typescript", "query" to "Service"))
         assertTrue(search.contains("src/service.ts::Service@0:13"))
 
@@ -94,7 +106,7 @@ class TypeScriptMcpIntegrationTest {
 
     private fun toolchain(): TypeScriptSemanticToolchain {
         val root = Files.createTempDirectory("refactorkit-mcp-ts-toolchain")
-        val files = listOf("node", "server-package.json", "cli.mjs", "typescript-package.json", "tsserver.js")
+        val files = listOf("node", "server-package.json", "cli.mjs", "typescript-package.json", "tsserver.js", "typescript.js")
             .associateWith { root.resolve(it).also { path -> path.writeText(it) } }
         return TypeScriptSemanticToolchain(
             files.getValue("node"), files.getValue("cli.mjs"), files.getValue("tsserver.js"),
@@ -107,6 +119,7 @@ class TypeScriptMcpIntegrationTest {
                     evidence("language-server-entrypoint", files.getValue("cli.mjs")),
                     evidence("typescript-package", files.getValue("typescript-package.json")),
                     evidence("typescript-server-entrypoint", files.getValue("tsserver.js")),
+                    evidence("typescript-compiler-entrypoint", files.getValue("typescript.js")),
                 ),
             ),
         )

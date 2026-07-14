@@ -28,6 +28,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Kotlin adapter boundary: [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md)
 - Kotlin toolchain boundary: [`docs/kotlin-toolchain.md`](docs/kotlin-toolchain.md)
 - Kotlin/JVM build-model projection: [`docs/kotlin-build-model.md`](docs/kotlin-build-model.md)
+- TypeScript/JavaScript IDE diagnostics protocol: [`docs/typescript-diagnostics-protocol.md`](docs/typescript-diagnostics-protocol.md)
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
@@ -148,7 +149,12 @@ refactorkit typescript search /workspace --query UserService \
 
 ## Build
 
+Source builds require JDK 21. Other build JVMs, including JDK 25, fail fast with
+an actionable `JAVA_HOME` message until the Kotlin/Gradle toolchain is upgraded
+and qualified. Packaged distributions include their own runtime.
+
 ```bash
+export JAVA_HOME=/path/to/jdk-21
 ./gradlew build
 ```
 

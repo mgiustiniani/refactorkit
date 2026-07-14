@@ -7,6 +7,14 @@ plugins {
     kotlin("plugin.serialization") version "2.0.21" apply false
 }
 
+val buildJdkFeature = Runtime.version().feature()
+if (buildJdkFeature != 21) {
+    throw GradleException(
+        "RefactorKit source builds require JDK 21; detected JDK $buildJdkFeature. " +
+            "Set JAVA_HOME to a JDK 21 installation. Packaged runtimes remain self-contained.",
+    )
+}
+
 allprojects {
     group = "org.refactorkit"
     version = "0.7.0-SNAPSHOT"

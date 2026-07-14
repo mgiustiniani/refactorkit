@@ -276,6 +276,12 @@ enum class DiagnosticCategory {
     SAFETY,
 }
 
+enum class DiagnosticLocationPrecision {
+    EXACT_RANGE,
+    LINE_ONLY,
+    NONE,
+}
+
 data class Diagnostic(
     val message: String,
     val severity: Severity,
@@ -283,7 +289,14 @@ data class Diagnostic(
     val code: String? = null,
     val evidence: DiagnosticEvidence? = null,
     val category: DiagnosticCategory? = null,
+    val locationPrecision: DiagnosticLocationPrecision =
+        if (location == null) DiagnosticLocationPrecision.NONE else DiagnosticLocationPrecision.EXACT_RANGE,
 ) {
+    init {
+        require((location == null) == (locationPrecision == DiagnosticLocationPrecision.NONE)) {
+            "diagnostic location and precision must agree"
+        }
+    }
     enum class Severity {
         INFO,
         WARNING,

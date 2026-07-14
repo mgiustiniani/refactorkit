@@ -16,7 +16,9 @@ object TypeScriptAdapterDescriptors {
             )
         } + semantic.capabilities.map { capability ->
             capability.copy(
-                backend = semantic.backend, runtime = semantic.runtime, extensions = semantic.extensions,
+                backend = capability.backend ?: semantic.backend,
+                runtime = capability.runtime ?: semantic.runtime,
+                extensions = capability.extensions ?: semantic.extensions,
             )
         }
         return LanguageAdapterDescriptor(

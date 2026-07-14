@@ -1,6 +1,8 @@
 package org.refactorkit.typescript
 
 import org.refactorkit.core.AdapterExecutionMode
+import org.refactorkit.core.DiagnosticRangeCapability
+import org.refactorkit.core.DiagnosticSnapshotMode
 import org.refactorkit.core.MutationAuthority
 import org.refactorkit.core.SemanticEvidenceKind
 import kotlin.test.Test
@@ -24,10 +26,16 @@ class TypeScriptAdapterDescriptorsTest {
         assertEquals(SemanticEvidenceKind.NATIVE_AST, outline.evidence)
         assertEquals(AdapterExecutionMode.IN_PROCESS, outline.runtime?.executionMode)
         assertEquals(setOf("ts"), outline.extensions)
+        val diagnostics = descriptor.capabilities.single { it.operation == "diagnostics" }
+        assertEquals(SemanticEvidenceKind.COMPILER, diagnostics.evidence)
+        assertEquals(TypeScriptDiagnosticsContract.BACKEND, diagnostics.backend)
+        assertEquals(TypeScriptDiagnosticsContract.runtime, diagnostics.runtime)
+        assertEquals(MutationAuthority.NONE, diagnostics.mutationAuthority)
         assertEquals(
-            SemanticEvidenceKind.COMPILER,
-            descriptor.capabilities.single { it.operation == "diagnostics" }.evidence,
+            setOf(DiagnosticSnapshotMode.SAVED_DISK, DiagnosticSnapshotMode.IMMUTABLE_EDITOR_OVERLAY),
+            diagnostics.diagnosticSnapshotModes,
         )
+        assertEquals(DiagnosticRangeCapability.EXACT_UTF16_OR_EXPLICIT_PARTIAL, diagnostics.diagnosticRangeCapability)
         val rename = descriptor.capabilities.single { it.operation == "renameSymbol" }
         assertEquals(SemanticEvidenceKind.LANGUAGE_SERVER, rename.evidence)
         assertEquals(MutationAuthority.PROPOSAL_ONLY, rename.mutationAuthority)

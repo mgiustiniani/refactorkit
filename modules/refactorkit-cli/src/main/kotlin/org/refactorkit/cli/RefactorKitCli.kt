@@ -50,6 +50,7 @@ import org.refactorkit.webimporter.LicensePolicy
 import org.refactorkit.webimporter.SourceKind
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.UUID
 import kotlin.io.path.exists
 import kotlin.io.path.readText
 
@@ -460,11 +461,11 @@ class RefactorKitCli(
 
     private fun cmdTypeScript(args: List<String>): Int {
         if (args.isEmpty()) {
-            System.err.println("typescript requires a subcommand: search, definition, references, diagnostics, or rename")
+            System.err.println("typescript requires a subcommand: search, definition, references, diagnostics, diagnostics-v2, or rename")
             return 2
         }
         val operation = args.first()
-        if (operation !in setOf("search", "definition", "references", "diagnostics", "rename")) {
+        if (operation !in setOf("search", "definition", "references", "diagnostics", "diagnostics-v2", "rename")) {
             System.err.println("Unknown typescript subcommand: $operation")
             return 2
         }
@@ -486,14 +487,14 @@ class RefactorKitCli(
         }
         val session = semanticSessionFactory()
         return try {
-            session.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
-            session.dispatch("typescript.semantic.start", buildJsonObject {
+            val opened = session.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+            val started = session.dispatch("typescript.semantic.start", buildJsonObject {
                 put("languageId", languageId)
                 put("nodeExecutable", node)
                 put("languageServerPackageRoot", serverPackage)
                 put("typeScriptPackageRoot", compilerPackage)
                 put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
-            })
+            }).jsonObject
             val result = when (operation) {
                 "search" -> session.dispatch("symbol.search", buildJsonObject {
                     put("languageId", languageId)
@@ -507,6 +508,13 @@ class RefactorKitCli(
                     })
                 }
                 "diagnostics" -> session.dispatch("diagnostics", buildJsonObject { put("languageId", languageId) })
+                "diagnostics-v2" -> session.dispatch("diagnostics.v2", buildJsonObject {
+                    put("requestId", parsed.options["request-id"] ?: "cli-${UUID.randomUUID()}")
+                    put("languageId", languageId)
+                    put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+                    put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
+                    put("sourceAuthority", buildJsonObject { put("kind", "saved-disk") })
+                })
                 else -> {
                     val newName = parsed.options.getValue("to")
                     val preview = session.dispatch("refactor.preview", buildJsonObject {
@@ -782,7 +790,7 @@ class RefactorKitCli(
           refactorkit java diagnostics  <path>                                  (alias for diagnostics)
           refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]
           refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
-          refactorkit typescript <search|definition|references|diagnostics|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--apply]
+          refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

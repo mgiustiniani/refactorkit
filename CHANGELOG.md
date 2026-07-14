@@ -28,6 +28,13 @@ review safety boundaries before applying refactorings.
 - Bound the explicit TypeScript Node `--version` probe to two attempts so one
   transient native process-start failure does not fail packaged semantic commands;
   executable, constant arguments and per-attempt resource limits remain unchanged.
+- Add API `0.2` method `diagnostics.v2` for IDE-grade TypeScript/JavaScript
+  diagnostics: exact zero-based UTF-16 ranges, request/snapshot/semantic-lease
+  correlation, saved-disk or immutable-editor-overlay authority, exact compiler
+  attestation/runtime metadata, structured readiness failures and a bounded
+  2 MiB response. Legacy `diagnostics` remains unchanged.
+- Fail source builds immediately with an actionable JDK 21 prerequisite instead
+  of exposing Kotlin 2.0.21's internal `JavaVersion.parse` failure on JDK 25.
 - No new stable Kotlin capability is claimed until real compiler-backed native
   acceptance passes preview, exact diagnostics, apply, WAL and rollback.
 

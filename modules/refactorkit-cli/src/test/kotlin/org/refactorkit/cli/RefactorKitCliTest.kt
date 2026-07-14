@@ -36,6 +36,7 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("refactorkit java import-class"))
         assertTrue(result.stdout.contains("refactorkit java move-source-root"))
         assertTrue(result.stdout.contains("refactorkit format-file"))
+        assertTrue(result.stdout.contains("diagnostics-v2"))
         assertTrue(result.stdout.contains("refactorkit recipe run"))
     }
 
@@ -57,6 +58,17 @@ class RefactorKitCliTest {
         assertEquals(listOf("java", "javascript", "kotlin", "typescript"), schema["adapters"]!!.jsonArray.map {
             it.jsonObject["languageId"]!!.jsonPrimitive.content
         })
+        val typescript = schema["adapters"]!!.jsonArray.single {
+            it.jsonObject["languageId"]!!.jsonPrimitive.content == "typescript"
+        }.jsonObject
+        val diagnostics = typescript["capabilities"]!!.jsonArray.single {
+            it.jsonObject["operation"]!!.jsonPrimitive.content == "diagnostics"
+        }.jsonObject
+        assertEquals("typescript-compiler-exact-v1", diagnostics["backend"]!!.jsonPrimitive.content)
+        assertEquals("30000", diagnostics["runtime"]!!.jsonObject["limits"]!!.jsonObject
+            ["requestTimeoutMillis"]!!.jsonPrimitive.content)
+        assertEquals(listOf("immutable-editor-overlay", "saved-disk"), diagnostics["diagnosticSnapshotModes"]!!
+            .jsonArray.map { it.jsonPrimitive.content })
     }
 
     @Test

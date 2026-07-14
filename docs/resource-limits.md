@@ -19,6 +19,8 @@ heap exhaustion.
 | Import preview combined rendered/structured diff source lines | 524,288 UTF-8 bytes | `diffTruncated=true` with reasons; never silent |
 | Import preview diff files / hunks per file / lines per hunk | 128 / 64 / 2,000 | Deterministic path ordering and explicit truncation reasons |
 | Import preview/apply/rollback diagnostics | 500 entries, 262,144 UTF-8 bytes, 4,096 characters/message | `diagnosticsTruncated=true`; blockers are evaluated before truncation |
+| `diagnostics.v2` response | 2,097,152 UTF-8 bytes, 500 entries, 4,096 characters/message | Deterministic diagnostic-tail truncation with total/returned counts, `truncated=true`, and exact `responseBytes` |
+| `diagnostics.v2` editor overlay | 128 existing source documents, 786,432 UTF-8 bytes per request | Invalid/duplicate/traversing/mixed-language paths are refused before compiler invocation |
 | Packaged daemon smoke captured stderr | 65,536 UTF-8 bytes | Additional stderr is discarded; source-marker leakage still fails within the retained bound |
 | MCP symbol/reference context output | Operation-specific caps, no more than 200 symbols or 100 displayed references | Output is truncated deterministically |
 
@@ -63,7 +65,9 @@ restart attempts per rolling 60 seconds. LSP publication collection permits at
 most 20 additional 50 ms protocol barriers; missing or unversioned publications
 remain untrusted. Managed `typescript-compiler-exact-v1` analysis separately uses
 a 30-second process timeout, 512 MiB V8 old-space limit, 8 MiB stdout, 64 KiB
-stderr, 64 projects and 500 diagnostics. The V8 limits are not an OS RSS sandbox.
+stderr, one compiler process per invocation, 64 projects and 500 diagnostics.
+Capability metadata reports these compiler limits rather than the LSP limits. The
+V8 limits are not an OS RSS sandbox.
 External workspace-edit normalization defaults to 1,000 file
 operations, 10,000 text edits, and 16 MiB replacement content. Exceeding any
 limit is an explicit refusal, never truncation into an applicable proposal.

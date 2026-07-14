@@ -131,6 +131,70 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         diagnosed = exchange("diagnostics", {"languageId": "typescript"})
         if diagnosed.get("error") or diagnosed.get("result") != []:
             raise AssertionError(f"restarted semantic diagnostics failed: {diagnosed}")
+
+        mark_stage("IDE diagnostics capability truth")
+        capabilities = exchange("server.capabilities")["result"]["languageKernel"]["adapters"]
+        typescript = next(item for item in capabilities if item["languageId"] == "typescript")
+        diagnostics_capability = next(item for item in typescript["capabilities"] if item["operation"] == "diagnostics")
+        if diagnostics_capability["backend"] != "typescript-compiler-exact-v1":
+            raise AssertionError(f"wrong diagnostics backend: {diagnostics_capability}")
+        limits = diagnostics_capability["runtime"]["limits"]
+        if limits["requestTimeoutMillis"] != 30000 or limits["maxOutputBytes"] != 8388608 or limits["maxProcesses"] != 1:
+            raise AssertionError(f"wrong diagnostics runtime limits: {limits}")
+        if diagnostics_capability.get("diagnosticSnapshotModes") != ["immutable-editor-overlay", "saved-disk"]:
+            raise AssertionError(f"wrong diagnostics snapshot modes: {diagnostics_capability}")
+
+        diagnostics_request = {
+            "requestId": "native-daemon-saved", "languageId": "typescript",
+            "expectedSnapshotHash": opened["result"]["snapshotHash"],
+            "semanticLease": restarted["semanticLease"],
+            "sourceAuthority": {"kind": "saved-disk"},
+        }
+        mark_stage("IDE saved-disk diagnostics envelope")
+        exact_saved = exchange("diagnostics.v2", diagnostics_request)
+        if exact_saved.get("error") or exact_saved["result"]["status"] != "ready" or exact_saved["result"]["diagnostics"] != []:
+            raise AssertionError(f"saved-disk diagnostics.v2 failed: {exact_saved}")
+        saved_result = exact_saved["result"]
+        if saved_result["projectSnapshotHash"] != saved_result["providerSnapshotHash"]:
+            raise AssertionError(f"saved authority hashes differ: {saved_result}")
+        if saved_result["compilerAttestation"]["process"] is None:
+            raise AssertionError(f"compiler process attestation missing: {saved_result}")
+        if saved_result["responseBytes"] != len(json.dumps(saved_result, separators=(",", ":"), ensure_ascii=False).encode("utf-8")):
+            raise AssertionError("diagnostics response byte attestation is not exact")
+
+        mark_stage("IDE immutable editor-overlay diagnostics")
+        source_path = workspace / "src" / "core" / "UserService.ts"
+        disk_source = source_path.read_text()
+        unsaved = disk_source + "\nconst broken: MissingType = unknownValue;\n"
+        overlay_request = dict(diagnostics_request)
+        overlay_request.update({
+            "requestId": "native-daemon-overlay",
+            "sourceAuthority": {
+                "kind": "immutable-editor-overlay",
+                "documents": [{"path": "src/core/UserService.ts", "version": 9, "content": unsaved}],
+            },
+        })
+        exact_overlay = exchange("diagnostics.v2", overlay_request)
+        if exact_overlay.get("error") or exact_overlay["result"]["status"] != "ready":
+            raise AssertionError(f"overlay diagnostics.v2 failed: {exact_overlay}")
+        overlay_result = exact_overlay["result"]
+        if overlay_result["providerSnapshotHash"] == overlay_result["projectSnapshotHash"]:
+            raise AssertionError(f"overlay authority was reported as saved disk: {overlay_result}")
+        ranged = [item for item in overlay_result["diagnostics"] if item["location"]["kind"] == "range"]
+        if not ranged or not all(item["location"].get("encoding") == "utf-16" for item in ranged):
+            raise AssertionError(f"exact UTF-16 compiler ranges missing: {overlay_result}")
+        if any("\\" in item["location"].get("path", "") for item in ranged):
+            raise AssertionError(f"diagnostic paths are not normalized: {ranged}")
+        if source_path.read_text() != disk_source:
+            raise AssertionError("immutable editor overlay modified the saved source")
+
+        mark_stage("stale diagnostics lease refusal")
+        stale_request = dict(diagnostics_request)
+        stale_request["requestId"] = "native-daemon-stale"
+        stale_request["semanticLease"] = "semantic-00000000-0000-4000-8000-000000000000"
+        stale = exchange("diagnostics.v2", stale_request)
+        if stale.get("error") or stale["result"]["status"] != "refused" or stale["result"]["failure"]["code"] != "diagnostics.semanticLeaseStale":
+            raise AssertionError(f"stale diagnostics lease was not refused: {stale}")
         exchange("typescript.semantic.stop", {"languageId": "typescript"})
     finally:
         if process.poll() is None:
@@ -179,6 +243,11 @@ def main() -> int:
             str(workspace), "--node", str(node),
             "--language-server-package", str(server), "--typescript-package", str(compiler),
         ]
+
+        mark_stage("CLI exact diagnostics v2")
+        cli_diagnostics = json.loads(run(cli, common, ["diagnostics-v2", "--request-id", "native-cli-saved"]).stdout)
+        if cli_diagnostics["status"] != "ready" or cli_diagnostics["sourceAuthority"]["kind"] != "saved-disk":
+            raise AssertionError(f"CLI diagnostics-v2 failed: {cli_diagnostics}")
 
         mark_stage("stable semantic search")
         first = json.loads(run(cli, common, ["search", "--query", "UserService"]).stdout)

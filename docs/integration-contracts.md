@@ -72,7 +72,7 @@ compatible.
 |-------------|--------|----------------|
 | `refactorkit --version` / `refactorkit version` | `beta-contract` | Read-only implementation/API metadata; `v0.3.0` reports version `0.3.0` and API version `0.2`. |
 | `refactorkit capabilities` | `experimental` | Emits language-kernel capability schema v1 with deterministic adapter, backend, operation, evidence, authority, execution, timeout/cancellation, overlay, provenance, and resource-limit fields. |
-| `refactorkit typescript <search|definition|references|diagnostics|rename>` | `experimental` | One-shot explicit-toolchain semantic session; JSON output, preview by default, managed apply only with `--apply`. |
+| `refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename>` | `experimental` | One-shot explicit-toolchain semantic session; `diagnostics-v2` emits the IDE-grade saved-disk authority envelope, legacy `diagnostics` remains compatible, preview is default, and managed apply requires `--apply`. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
@@ -112,7 +112,10 @@ initialize `refactorkitLanguageKernel`. Adapter and operation arrays are sorted;
 nullable limit fields remain explicit. Each capability also carries its effective
 `backend`, `runtime`, and extension subset, so a layered adapter cannot falsely
 apply an in-process structural claim to an external semantic operation (or grant
-`.tsx`/`.jsx` native-AST evidence from the `.ts`/`.js` grammar layer).
+`.tsx`/`.jsx` native-AST evidence from the `.ts`/`.js` grammar layer). Diagnostics
+additively expose `diagnosticSnapshotModes` and `diagnosticRangeCapability`.
+TypeScript/JavaScript diagnostics identify `typescript-compiler-exact-v1`; they
+do not inherit LSP backend or runtime limits.
 
 The packaged `0.7.0-SNAPSHOT` kernel includes the initial `kotlin` descriptor for
 `.kt` and `.kts`. Its backend is `kotlin-analysis-unavailable-v1`; every operation
@@ -152,7 +155,8 @@ of the beta baseline for documented methods.
 | `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
 | `symbol.definition` | `beta-contract` | Read-only lookup; requires `symbol`. |
 | `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |
-| `diagnostics` | `beta-contract` | Read-only diagnostics query. |
+| `diagnostics` | `beta-contract` | Legacy read-only bare diagnostic array; retained unchanged for API `0.2` compatibility. It is not sufficient for exact IDE range/snapshot authority. |
+| `diagnostics.v2` | `additive-api-0.2` | IDE-grade TypeScript/JavaScript compiler diagnostics with request ID, semantic lease, saved/overlay authority, snapshot hashes, compiler attestation, exact/partial location variants, structured readiness, and bounded response. See `docs/typescript-diagnostics-protocol.md`. |
 | `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
 | `refactor.apply` | `beta-contract` | Requires `planId`; applies the exact retained plan, rejects stale snapshots/plans, refreshes session state, clears pending plans, and returns structured changes/diagnostics/snapshot evidence. |
 | `refactor.discard` | `beta-contract` | Idempotently removes a pending source-bearing plan without workspace writes; returns `discarded=false` when absent. |
@@ -415,7 +419,8 @@ the centralized implementation version. In `v0.3.0`, it reports `0.3.0`.
 |------|--------|-------|
 | `project_scan`, `project_summary` | `beta-contract` | Mixed Java/TypeScript/JavaScript workspace lifecycle and project metadata; summary includes high-level Build Model SPI provider/status/source-set information without classpath secrets. |
 | `typescript_semantic_start`, `typescript_semantic_stop` | `experimental` | Explicit hash-bound toolchain lifecycle; no package scripts or implicit PATH discovery. |
-| `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries. |
+| `symbol_search`, `symbol_definition`, `symbol_references`, `diagnostics` | `beta-contract` | Read-only AI context queries; `diagnostics` remains the legacy human-readable form. |
+| `diagnostics_v2` | `additive-api-0.2` | MCP text content containing the exact `diagnostics.v2` JSON envelope and requiring the lease returned by `typescript_semantic_start`. |
 | `preview_refactoring`, `apply_refactoring`, `rollback_refactoring` | `beta-contract` | Contract applies to beta operations; rollback refuses post-apply divergence by default and accepts explicit `force=true`. |
 | `available_refactorings` | `experimental` | Descriptor shape may change. |
 | `import_external_java_class` | `experimental` | Import preview with stable provenance/license warning fields in output text. |

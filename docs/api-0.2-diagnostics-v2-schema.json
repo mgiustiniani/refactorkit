@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.local/schema/api-0.2-diagnostics-v2.json",
+  "title": "RefactorKit API 0.2 diagnostics.v2",
+  "type": "object",
+  "required": ["request", "response"],
+  "properties": {
+    "request": {"$ref": "#/$defs/request"},
+    "response": {"$ref": "#/$defs/response"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "request": {
+      "type": "object",
+      "required": ["requestId", "languageId", "expectedSnapshotHash", "semanticLease", "sourceAuthority"],
+      "properties": {
+        "requestId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "languageId": {"enum": ["typescript", "javascript"]},
+        "expectedSnapshotHash": {"$ref": "#/$defs/sha256"},
+        "semanticLease": {"type": "string", "pattern": "^semantic-[0-9a-f-]{36}$"},
+        "sourceAuthority": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind"],
+              "properties": {"kind": {"const": "saved-disk"}},
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind", "documents"],
+              "properties": {
+                "kind": {"const": "immutable-editor-overlay"},
+                "documents": {
+                  "type": "array", "minItems": 1, "maxItems": 128,
+                  "items": {
+                    "type": "object",
+                    "required": ["path", "version", "content"],
+                    "properties": {
+                      "path": {"type": "string"},
+                      "version": {"type": "integer", "minimum": 0},
+                      "content": {"type": "string"}
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "position": {
+      "type": "object",
+      "required": ["line", "character"],
+      "properties": {
+        "line": {"type": "integer", "minimum": 0},
+        "character": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "location": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "path", "encoding", "range"],
+          "properties": {
+            "kind": {"const": "range"}, "path": {"type": "string"}, "encoding": {"const": "utf-16"},
+            "range": {
+              "type": "object", "required": ["start", "end"],
+              "properties": {"start": {"$ref": "#/$defs/position"}, "end": {"$ref": "#/$defs/position"}},
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object", "required": ["kind", "path", "line"],
+          "properties": {"kind": {"const": "line"}, "path": {"type": "string"}, "line": {"type": "integer", "minimum": 0}},
+          "additionalProperties": false
+        },
+        {
+          "type": "object", "required": ["kind"],
+          "properties": {"kind": {"const": "none"}},
+          "additionalProperties": false
+        }
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": ["severity", "message", "location"],
+      "properties": {
+        "severity": {"enum": ["info", "warning", "error"]},
+        "message": {"type": "string", "maxLength": 4096},
+        "code": {"type": "string", "maxLength": 64},
+        "evidence": {"type": "string"},
+        "category": {"type": "string"},
+        "location": {"$ref": "#/$defs/location"}
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": ["schemaVersion", "requestId", "languageId", "status", "provider", "backend", "semanticLease", "projectSnapshotHash", "providerSnapshotHash", "sourceAuthority", "rangeEncoding", "rangeCapability", "runtime", "compilerAttestation", "failure", "diagnostics", "diagnosticsTotal", "diagnosticsReturned", "truncated", "responseBytes"],
+      "properties": {
+        "schemaVersion": {"const": 2},
+        "requestId": {"type": "string"},
+        "languageId": {"enum": ["typescript", "javascript"]},
+        "status": {"enum": ["ready", "refused", "error"]},
+        "provider": {"type": "object"},
+        "backend": {"const": "typescript-compiler-exact-v1"},
+        "semanticLease": {"type": ["string", "null"]},
+        "projectSnapshotHash": {"$ref": "#/$defs/sha256"},
+        "providerSnapshotHash": {"$ref": "#/$defs/sha256"},
+        "sourceAuthority": {"type": "object"},
+        "rangeEncoding": {"const": "utf-16"},
+        "rangeCapability": {"const": "exact-utf16-or-explicit-partial"},
+        "runtime": {"type": "object"},
+        "compilerAttestation": {"type": ["object", "null"]},
+        "failure": {"type": ["object", "null"]},
+        "diagnostics": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/diagnostic"}},
+        "diagnosticsTotal": {"type": "integer", "minimum": 0},
+        "diagnosticsReturned": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "responseBytes": {"type": "integer", "minimum": 1, "maximum": 2097152}
+      },
+      "additionalProperties": false
+    }
+  }
+}

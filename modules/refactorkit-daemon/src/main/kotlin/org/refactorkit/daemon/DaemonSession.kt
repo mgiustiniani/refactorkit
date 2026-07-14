@@ -52,6 +52,7 @@ import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
+import org.refactorkit.typescript.TypeScriptDiagnosticsProtocol
 import org.refactorkit.typescript.TypeScriptProjectModelBuilder
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptSemanticStart
@@ -74,6 +75,7 @@ import org.refactorkit.webimporter.LicensePolicy
 import org.refactorkit.webimporter.SourceKind
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.UUID
 
 /**
  * Stateful RefactorKit daemon session.
@@ -86,6 +88,7 @@ class DaemonSession(
         { request, policy -> TypeScriptToolchainDiscoverer(policy).discover(request) },
     private val semanticAdapterFactory: (String, TypeScriptSemanticToolchain, org.refactorkit.typescript.TypeScriptProjectModel) -> TypeScriptSemanticAdapter =
         { languageId, toolchain, model -> TypeScriptSemanticAdapter(languageId, toolchain, model) },
+    private val semanticLeaseFactory: () -> String = { "semantic-${UUID.randomUUID()}" },
 ) : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
     private var scanner = JavaProjectScanner()
@@ -93,6 +96,7 @@ class DaemonSession(
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var workspaceRoot: Path? = null
     private val semanticAdapters = linkedMapOf<String, TypeScriptSemanticAdapter>()
+    private val semanticLeases = linkedMapOf<String, String>()
 
     private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
@@ -108,6 +112,7 @@ class DaemonSession(
         "typescript.semantic.start" -> typeScriptSemanticStart(params)
         "typescript.semantic.restart" -> typeScriptSemanticRestart(params)
         "typescript.semantic.stop" -> typeScriptSemanticStop(params)
+        TypeScriptDiagnosticsProtocol.METHOD -> diagnosticsV2(params)
         "symbol.search"     -> symbolSearch(params)
         "symbol.definition" -> symbolDefinition(params)
         "symbol.references" -> symbolReferences(params)
@@ -662,9 +667,13 @@ class DaemonSession(
             }
             is TypeScriptSemanticStart.Started -> {
                 semanticAdapters[languageId] = semantic
+                val lease = semanticLeaseFactory()
+                semanticLeases[languageId] = lease
                 return buildJsonObject {
                     put("languageId", languageId)
                     put("status", "started")
+                    put("semanticLease", lease)
+                    put("snapshotHash", snap.hash)
                     put("completeness", semantic.semanticCompleteness().mode.name.lowercase().replace('_', '-'))
                     started.provenance?.let { provenance ->
                         put("serverName", provenance.serverName ?: "")
@@ -691,8 +700,12 @@ class DaemonSession(
                 restarted.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" },
             )
             is TypeScriptSemanticStart.Started -> buildJsonObject {
+                val lease = semanticLeaseFactory()
+                semanticLeases[languageId] = lease
                 put("languageId", languageId)
                 put("status", "restarted")
+                put("semanticLease", lease)
+                put("snapshotHash", requireSnapshot().hash)
                 restarted.provenance?.let { provenance ->
                     put("serverName", provenance.serverName ?: "")
                     put("serverVersion", provenance.serverVersion ?: "")
@@ -709,6 +722,7 @@ class DaemonSession(
         val languageId = params?.string("languageId") ?: "typescript"
         val stopped = semanticAdapters.remove(languageId)?.let {
             it.close()
+            semanticLeases.remove(languageId)
             true
         } ?: false
         return buildJsonObject {
@@ -717,11 +731,26 @@ class DaemonSession(
         }
     }
 
+    private fun diagnosticsV2(params: JsonObject?): JsonElement {
+        val request = try {
+            TypeScriptDiagnosticsProtocol.parse(params ?: missing("params"))
+        } catch (failure: IllegalArgumentException) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "Invalid diagnostics.v2 request")
+        }
+        val snap = requireSnapshot()
+        val semantic = semanticAdapters[request.languageId]
+            ?: return TypeScriptDiagnosticsProtocol.notReady(request, snap.hash, semanticLeases[request.languageId])
+        val lease = semanticLeases[request.languageId]
+            ?: return TypeScriptDiagnosticsProtocol.notReady(request, snap.hash)
+        return TypeScriptDiagnosticsProtocol.execute(request, snap, lease, semantic)
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private fun closeSemanticAdapters() {
         semanticAdapters.values.forEach { runCatching { it.close() } }
         semanticAdapters.clear()
+        semanticLeases.clear()
     }
 
     private fun protocolSourcePath(snapshot: ProjectSnapshot, path: Path): String {
@@ -1095,6 +1124,19 @@ class DaemonSession(
             DaemonMethodCapability("symbol.definition", "beta-contract", true, false),
             DaemonMethodCapability("symbol.references", "beta-contract", true, false),
             DaemonMethodCapability("diagnostics", "beta-contract", true, false),
+            DaemonMethodCapability(
+                TypeScriptDiagnosticsProtocol.METHOD, "additive-api-0.2", true, false,
+                mapOf(
+                    "requestCorrelation" to true,
+                    "semanticLease" to true,
+                    "savedDiskAuthority" to true,
+                    "immutableEditorOverlay" to true,
+                    "exactUtf16Ranges" to true,
+                    "structuredReadiness" to true,
+                    "compilerAttestation" to true,
+                    "boundedResponse" to true,
+                ),
+            ),
             DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
             DaemonMethodCapability("refactor.apply", "beta-contract", true, true),
             DaemonMethodCapability("refactor.discard", "beta-contract", false, false),

@@ -2,6 +2,7 @@ package org.refactorkit.typescript
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -16,6 +17,7 @@ import org.refactorkit.core.ExternalSemanticProcessManager
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SemanticProcessLimits
 import org.refactorkit.core.SemanticProcessSpec
+import org.refactorkit.core.SemanticProcessProvenance
 import org.refactorkit.core.SemanticWorkspaceOverlay
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
@@ -63,15 +65,15 @@ internal class TypeScriptCompilerDiagnostics(
                 overlay.root.toString(),
                 snapshot.hash,
             ) + configs
-            val output = ExternalSemanticProcessManager(maxProcesses = 1).use { manager ->
+            val execution = ExternalSemanticProcessManager(maxProcesses = TypeScriptDiagnosticsContract.MAX_PROCESSES).use { manager ->
                 val process = manager.launch(SemanticProcessSpec(
                     id = "typescript-compiler-${SEQUENCE.getAndIncrement()}",
                     executable = toolchain.nodeExecutable,
                     arguments = arguments,
                     workingDirectory = overlay.root,
                     limits = SemanticProcessLimits(
-                        maxStdoutBytes = MAX_OUTPUT_BYTES,
-                        maxStderrBytes = MAX_STDERR_BYTES,
+                        maxStdoutBytes = TypeScriptDiagnosticsContract.MAX_OUTPUT_BYTES,
+                        maxStderrBytes = TypeScriptDiagnosticsContract.MAX_STDERR_BYTES,
                         gracefulShutdownMillis = 1_000,
                     ),
                 ))
@@ -80,7 +82,7 @@ internal class TypeScriptCompilerDiagnostics(
                 }
                 try {
                     val future = reader.submit<String> { process.output.bufferedReader(Charsets.UTF_8).readText() }
-                    if (!process.awaitExit(TIMEOUT_MILLIS)) {
+                    if (!process.awaitExit(TypeScriptDiagnosticsContract.REQUEST_TIMEOUT_MILLIS)) {
                         process.cancel()
                         return unavailable("typescript.compilerDiagnosticsTimeout", "Exact compiler diagnostics timed out")
                     }
@@ -91,7 +93,7 @@ internal class TypeScriptCompilerDiagnostics(
                             "Exact compiler diagnostics process failed: ${process.stderrText().take(MAX_STDERR_MESSAGE)}",
                         )
                     }
-                    text
+                    CompilerExecution(text, process.provenance)
                 } finally {
                     reader.shutdownNow()
                     process.close()
@@ -99,7 +101,7 @@ internal class TypeScriptCompilerDiagnostics(
             }
             val mutations = overlay.verifySourcesUnchanged()
             if (mutations.isNotEmpty()) return ExternalSemanticDiagnostics.Unavailable(mutations.first())
-            parse(output, snapshot)
+            parse(execution.output, snapshot, execution.provenance)
         } catch (failure: Exception) {
             unavailable("typescript.compilerDiagnosticsFailed", failure.message ?: "Exact compiler diagnostics failed")
         } finally {
@@ -109,7 +111,17 @@ internal class TypeScriptCompilerDiagnostics(
         }
     }
 
-    private fun parse(output: String, snapshot: ProjectSnapshot): ExternalSemanticDiagnostics {
+    internal fun parseForProtocolTest(
+        output: String,
+        snapshot: ProjectSnapshot,
+        provenance: SemanticProcessProvenance,
+    ): ExternalSemanticDiagnostics = parse(output, snapshot, provenance)
+
+    private fun parse(
+        output: String,
+        snapshot: ProjectSnapshot,
+        provenance: SemanticProcessProvenance,
+    ): ExternalSemanticDiagnostics {
         val root = runCatching { JSON.parseToJsonElement(output).jsonObject }.getOrNull()
             ?: return unavailable("typescript.compilerDiagnosticsInvalid", "Compiler diagnostics returned invalid JSON")
         if (root.int("schema") != 1 || root.boolean("complete") != true) {
@@ -121,26 +133,65 @@ internal class TypeScriptCompilerDiagnostics(
         )
         val diagnostics = (root["diagnostics"] as? JsonArray)
             ?: return unavailable("typescript.compilerDiagnosticsInvalid", "Compiler diagnostics payload is missing")
-        if (diagnostics.size > MAX_DIAGNOSTICS) return unavailable(
-            "typescript.compilerDiagnosticsLimit", "Compiler diagnostics exceed $MAX_DIAGNOSTICS entries",
+        if (diagnostics.size > TypeScriptDiagnosticsContract.MAX_DIAGNOSTICS) return unavailable(
+            "typescript.compilerDiagnosticsLimit", "Compiler diagnostics exceed ${TypeScriptDiagnosticsContract.MAX_DIAGNOSTICS} entries",
         )
-        val parsed = diagnostics.mapNotNull { element ->
-            val value = element as? JsonObject ?: return@mapNotNull null
-            val message = value.string("message")?.takeIf(String::isNotBlank)?.take(MAX_DIAGNOSTIC_MESSAGE)
-                ?: return@mapNotNull null
+        val sources = snapshot.files.associateBy { it.path.normalize() }
+        val parsed = mutableListOf<Diagnostic>()
+        diagnostics.forEach { element ->
+            val value = element as? JsonObject ?: return unavailable(
+                "typescript.compilerDiagnosticsInvalid", "Compiler diagnostics contain malformed entries",
+            )
+            val message = value.string("message")?.takeIf(String::isNotBlank)
+                ?.take(TypeScriptDiagnosticsContract.MAX_DIAGNOSTIC_MESSAGE_CHARS)
+                ?: return unavailable(
+                    "typescript.compilerDiagnosticsInvalid", "Compiler diagnostics contain malformed entries",
+                )
             val category = value.int("category") ?: 3
-            val location = value.string("file")?.let { raw ->
-                val path = runCatching { Path.of(raw).normalize() }.getOrNull()
-                    ?.takeIf { !it.isAbsolute && !it.startsWith("..") } ?: return@let null
-                val line = value.int("line") ?: return@let null
-                val character = value.int("character") ?: return@let null
-                val endLine = value.int("endLine") ?: line
-                val endCharacter = value.int("endCharacter") ?: character
-                if (minOf(line, character, endLine, endCharacter) < 0 || endLine < line ||
-                    endLine == line && endCharacter < character) return@let null
-                SourceLocation(path, SourceRange(SourcePosition(line, character), SourcePosition(endLine, endCharacter)))
+            val fileValue = value["file"]
+            val location = when {
+                fileValue == null || fileValue is JsonNull -> {
+                    if (listOf("line", "character", "endLine", "endCharacter").any { key ->
+                            value[key] != null && value[key] !is JsonNull
+                        }) {
+                        return unavailable(
+                            "typescript.compilerDiagnosticsInvalid",
+                            "Compiler diagnostics contain a partial source location",
+                        )
+                    }
+                    null
+                }
+                fileValue is JsonPrimitive && fileValue.isString -> {
+                    val path = runCatching { Path.of(fileValue.content).normalize() }.getOrNull()
+                        ?.takeIf { !it.isAbsolute && !it.startsWith("..") }
+                        ?: return unavailable(
+                            "typescript.compilerDiagnosticsInvalid", "Compiler diagnostic path is unsafe",
+                        )
+                    val source = sources[path] ?: return unavailable(
+                        "typescript.compilerDiagnosticsInvalid", "Compiler diagnostic path is outside the analyzed snapshot",
+                    )
+                    val line = value.int("line")
+                    val character = value.int("character")
+                    val endLine = value.int("endLine")
+                    val endCharacter = value.int("endCharacter")
+                    if (line == null || character == null || endLine == null || endCharacter == null ||
+                        minOf(line, character, endLine, endCharacter) < 0 || endLine < line ||
+                        endLine == line && endCharacter < character ||
+                        !validUtf16Position(source.content, line, character) ||
+                        !validUtf16Position(source.content, endLine, endCharacter)
+                    ) {
+                        return unavailable(
+                            "typescript.compilerDiagnosticsInvalid",
+                            "Compiler diagnostics contain an invalid or partial UTF-16 range",
+                        )
+                    }
+                    SourceLocation(path, SourceRange(SourcePosition(line, character), SourcePosition(endLine, endCharacter)))
+                }
+                else -> return unavailable(
+                    "typescript.compilerDiagnosticsInvalid", "Compiler diagnostic location is malformed",
+                )
             }
-            Diagnostic(
+            parsed += Diagnostic(
                 message = message,
                 severity = when (category) {
                     1 -> Diagnostic.Severity.ERROR
@@ -153,10 +204,26 @@ internal class TypeScriptCompilerDiagnostics(
                 category = DiagnosticCategory.TYPE_RESOLUTION,
             )
         }
-        if (parsed.size != diagnostics.size) return unavailable(
-            "typescript.compilerDiagnosticsInvalid", "Compiler diagnostics contain malformed entries",
-        )
-        return ExternalSemanticDiagnostics.Available(parsed)
+        return ExternalSemanticDiagnostics.Available(parsed, provenance)
+    }
+
+    private fun validUtf16Position(content: String, targetLine: Int, character: Int): Boolean {
+        var line = 0
+        var lineStart = 0
+        var index = 0
+        while (index < content.length) {
+            val current = content[index]
+            if (current == '\n' || current == '\r') {
+                if (line == targetLine) return character <= index - lineStart
+                if (current == '\r' && index + 1 < content.length && content[index + 1] == '\n') index++
+                index++
+                line++
+                lineStart = index
+            } else {
+                index++
+            }
+        }
+        return line == targetLine && character <= content.length - lineStart
     }
 
     private fun unavailable(code: String, message: String) = ExternalSemanticDiagnostics.Unavailable(Diagnostic(
@@ -174,18 +241,16 @@ internal class TypeScriptCompilerDiagnostics(
     private fun JsonObject.boolean(key: String): Boolean? = (this[key] as? JsonPrimitive)
         ?.takeUnless(JsonPrimitive::isString)?.booleanOrNull
 
+    private data class CompilerExecution(val output: String, val provenance: SemanticProcessProvenance)
+
     companion object {
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = false }
         private val SEQUENCE = AtomicLong(1)
         private const val BRIDGE_RESOURCE = "/org/refactorkit/typescript/typescript-diagnostics-bridge.cjs"
         private const val MAX_BRIDGE_BYTES = 64 * 1024
         private const val MAX_PROJECTS = 64
-        private const val MAX_DIAGNOSTICS = 500
-        private const val MAX_DIAGNOSTIC_MESSAGE = 4_096
+        private const val MAX_DIAGNOSTIC_MESSAGE = TypeScriptDiagnosticsContract.MAX_DIAGNOSTIC_MESSAGE_CHARS
         private const val MAX_STDERR_MESSAGE = 1_024
-        private const val MAX_OUTPUT_BYTES = 8L * 1024L * 1024L
-        private const val MAX_STDERR_BYTES = 64 * 1024
-        private const val TIMEOUT_MILLIS = 30_000L
-        private const val COMPILER_HEAP_MIB = 512
+        private const val COMPILER_HEAP_MIB = TypeScriptDiagnosticsContract.COMPILER_HEAP_MIB
     }
 }

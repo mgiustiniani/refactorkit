@@ -90,7 +90,10 @@ data class ExternalSemanticSessionProvenance(
 data class ExternalSemanticFailure(val code: String, val message: String)
 
 sealed interface ExternalSemanticDiagnostics {
-    data class Available(val diagnostics: List<Diagnostic>) : ExternalSemanticDiagnostics
+    data class Available(
+        val diagnostics: List<Diagnostic>,
+        val processProvenance: SemanticProcessProvenance? = null,
+    ) : ExternalSemanticDiagnostics
     data class Unavailable(val diagnostic: Diagnostic) : ExternalSemanticDiagnostics
 }
 

@@ -33,11 +33,13 @@ Status: implementation-informed from `docs/transactionality-audit.md`. Write-ahe
 
 == Diagnostics Model
 
-Diagnostics use structured severity (`INFO`, `WARNING`, `ERROR`), optional source location, and optional code. Java diagnostics currently include duplicate symbol detection, package/path mismatch warnings, and public type/file-name mismatch errors.
+Diagnostics use structured severity (`INFO`, `WARNING`, `ERROR`), optional source location, optional code, evidence/category, and explicit location precision (`EXACT_RANGE`, `LINE_ONLY`, `NONE`). Java diagnostics currently include duplicate symbol detection, package/path mismatch warnings, and public type/file-name mismatch errors.
 
-The stable target extends the contract with deterministic source range, evidence, and error-category fields and with comparison before preview, after preview simulation, after apply, and after rollback where an operation requires those gates. A configured regression beyond the approved plan causes refusal.
+Additive API `0.2` `diagnostics.v2` provides the IDE authority envelope for TypeScript/JavaScript: caller request ID, opaque semantic lease, saved and provider snapshot hashes, saved-disk or immutable-editor-overlay authority, exact compiler/toolchain and process attestation, actual compiler limits, structured ready/refused/error state, and bounded diagnostics. Exact ranges are zero-based UTF-16; line-only/no-location variants cannot be promoted to Monaco ranges by inference. Legacy `diagnostics` remains a bare array for compatibility.
 
-Status: implementation-informed. Managed Java surfaces supply JDT diagnostics to a core gate that compares current and exact staged post-image snapshots under lock before WAL, refusing new errors or unavailable diagnostics. Direct library apply requires an explicit gate (`TX-015` closed).
+The stable target also compares diagnostics before preview, after preview simulation, after apply, and after rollback where an operation requires those gates. A configured regression beyond the approved plan causes refusal.
+
+Status: implementation-informed. Managed Java surfaces supply JDT diagnostics to a core gate that compares current and exact staged post-image snapshots under lock before WAL, refusing new errors or unavailable diagnostics. TypeScript managed gates and IDE diagnostics use the independent `typescript-compiler-exact-v1` path rather than LSP publications. Direct library apply requires an explicit gate (`TX-015` closed).
 
 == Risk Model
 

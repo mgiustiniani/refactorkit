@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "product": "RefactorKit",
-  "implementationRelease": "0.6.2",
+  "implementationRelease": "0.7.0-SNAPSHOT",
   "apiVersion": "0.2",
   "status": "beta-contract",
   "cli": {
@@ -35,6 +35,10 @@
       {"name": "symbol.definition", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
       {"name": "symbol.references", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
       {"name": "diagnostics", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
+      {"name": "diagnostics.v2", "stability": "additive-api-0.2", "requiresProject": true, "writesWorkspace": false,
+       "features": {"requestCorrelation": true, "semanticLease": true, "savedDiskAuthority": true,
+                    "immutableEditorOverlay": true, "exactUtf16Ranges": true, "structuredReadiness": true,
+                    "compilerAttestation": true, "boundedResponse": true}},
       {"name": "refactor.preview", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
       {"name": "refactor.apply", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": true},
       {"name": "refactor.discard", "stability": "beta-contract", "requiresProject": false, "writesWorkspace": false},
@@ -54,7 +58,7 @@
     "schemaVersion": 1,
     "surfaces": ["cli", "daemon", "lsp-experimental", "mcp-extension"],
     "packagedAdapters": ["java", "javascript", "kotlin", "typescript"],
-    "capabilityLayerFields": ["backend", "runtime", "extensions"]
+    "capabilityLayerFields": ["backend", "runtime", "extensions", "diagnosticSnapshotModes", "diagnosticRangeCapability"]
   },
   "limits": {
     "maxRequestBytes": 1048576,
@@ -70,6 +74,10 @@
     "maxPreviewDiagnostics": 500,
     "maxPreviewDiagnosticBytes": 262144,
     "maxDiagnosticMessageChars": 4096,
+    "maxDiagnosticsResponseBytes": 2097152,
+    "maxDiagnosticsRequestIdChars": 128,
+    "maxDiagnosticsOverlayDocuments": 128,
+    "maxDiagnosticsOverlayBytes": 786432,
     "maxDaemonStderrBytes": 65536,
     "maxBuildModels": 16,
     "maxBuildModules": 1024,
