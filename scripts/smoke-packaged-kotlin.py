@@ -22,14 +22,24 @@ def command_for(cli: Path, args: list[str]) -> list[str]:
 def artifact(cache: Path, group: str, name: str, version: str) -> Path:
     root = cache / group / name / version
     matches = sorted(root.glob(f"*/{name}-{version}.jar"))
-    if len(matches) != 1:
-        raise AssertionError(f"expected one cached {group}:{name}:{version}, found {matches}")
+    if not matches:
+        raise AssertionError(f"cached artifact is missing: {group}:{name}:{version} below {root}")
+    by_digest: dict[str, list[Path]] = {}
+    for match in matches:
+        by_digest.setdefault(hashlib.sha256(match.read_bytes()).hexdigest(), []).append(match)
+    if len(by_digest) != 1:
+        raise AssertionError(
+            f"cached artifact has conflicting content: {group}:{name}:{version}; "
+            f"digests={sorted(by_digest)}"
+        )
     return matches[0].resolve()
 
 
 def tree_hash(root: Path) -> str:
     digest = hashlib.sha256()
-    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+    for path in sorted(
+        item for item in root.rglob("*") if item.is_file() and ".refactorkit" not in item.parts
+    ):
         digest.update(path.relative_to(root).as_posix().encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
@@ -108,4 +118,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as failure:
+        message = str(failure).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=Packaged Kotlin qualification failed::{message}", flush=True)
+        raise
