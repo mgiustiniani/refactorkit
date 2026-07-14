@@ -97,7 +97,12 @@ def source_hash(root: Path) -> str:
     return digest.hexdigest()
 
 
-def create_workspace(root: Path, consumers: int = 110) -> None:
+# Match the bounded external-LSP document-symbol file ceiling so the commit has
+# enough durable per-file moves to remain externally observable on Windows.
+CONSUMER_COUNT = 255
+
+
+def create_workspace(root: Path, consumers: int = CONSUMER_COUNT) -> None:
     source = root / "src"
     source.mkdir(parents=True)
     (root / "tsconfig.json").write_text(json.dumps({
@@ -108,9 +113,7 @@ def create_workspace(root: Path, consumers: int = 110) -> None:
         "include": ["src/**/*.ts"],
     }))
     (source / "service.ts").write_text("export class Service { value(): number { return 1; } }\n")
-    # Cached writes can otherwise finish within one scheduler quantum, hiding
-    # the intentionally durable APPLYING state from the external killer.
-    padding = "// bounded acceptance padding " + ("x" * 262144) + "\n"
+    padding = "// bounded acceptance padding " + ("x" * 2048) + "\n"
     for index in range(consumers):
         (source / f"consumer-{index:03d}.ts").write_text(
             'import { Service } from "./service";\n' +
@@ -153,15 +156,22 @@ def main() -> int:
                 "operation": "renameSymbol", "languageId": "typescript",
                 "arguments": {"newName": "AccountService", "file": "src/service.ts", "line": 0, "character": 13},
             })
-            if str(preview.get("status", "")).lower() != "preview" or len(preview.get("affectedFiles", [])) != 111:
+            if (
+                str(preview.get("status", "")).lower() != "preview"
+                or len(preview.get("affectedFiles", [])) != CONSUMER_COUNT + 1
+            ):
                 raise AssertionError(f"unexpected wide rename preview: {preview}")
             mark_stage("wait for durable APPLYING journal")
             daemon.send("refactor.apply", {"planId": preview["planId"]})
 
             deadline = time.monotonic() + 30
             applying_journal = None
+            known_journals: list[Path] = []
+            transaction_directory = workspace / ".refactorkit" / "transactions"
             while time.monotonic() < deadline and daemon.process.poll() is None:
-                for journal in (workspace / ".refactorkit" / "transactions").glob("transaction-*.json"):
+                if not known_journals:
+                    known_journals = list(transaction_directory.glob("transaction-*.json"))
+                for journal in known_journals:
                     try:
                         if json.loads(journal.read_text()).get("state") == "APPLYING":
                             applying_journal = journal
