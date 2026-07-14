@@ -30,7 +30,10 @@ class KotlinToolchainDiscoveryTest {
         assertEquals("2.0.21", toolchain.provenance.kotlinVersion)
         assertEquals("2.0.21-release-482", toolchain.provenance.compilerDistributionVersion)
         assertEquals(64, toolchain.provenance.projectionHash.length)
-        assertEquals(listOf(fixture.compilerJar, fixture.dependencyJar), toolchain.compilerClasspath)
+        assertEquals(
+            listOf(fixture.compilerJar.toRealPath(), fixture.dependencyJar.toRealPath()),
+            toolchain.compilerClasspath,
+        )
         assertEquals(
             listOf("compiler-classpath-000", "java-executable", "jdk-release", "kotlin-compiler"),
             toolchain.provenance.evidence.map { it.role },
