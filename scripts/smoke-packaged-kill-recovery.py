@@ -16,6 +16,15 @@ import threading
 import time
 
 
+_current_stage = "startup"
+
+
+def mark_stage(name: str) -> None:
+    global _current_stage
+    _current_stage = name
+    print(f"Packaged kill recovery stage: {name}", flush=True)
+
+
 class Daemon:
     def __init__(self, launcher: Path):
         command = (["cmd.exe", "/d", "/s", "/c", str(launcher)] if os.name == "nt" else [str(launcher)])
@@ -99,7 +108,7 @@ def create_workspace(root: Path, consumers: int = 110) -> None:
         "include": ["src/**/*.ts"],
     }))
     (source / "service.ts").write_text("export class Service { value(): number { return 1; } }\n")
-    padding = "// bounded acceptance padding " + ("x" * 2048) + "\n"
+    padding = "// bounded acceptance padding " + ("x" * 16384) + "\n"
     for index in range(consumers):
         (source / f"consumer-{index:03d}.ts").write_text(
             'import { Service } from "./service";\n' +
@@ -130,17 +139,21 @@ def main() -> int:
         expected = source_hash(workspace)
         daemon = Daemon(daemon_launcher)
         try:
+            mark_stage("project open")
             daemon.call("project.open", {"root": str(workspace)})
+            mark_stage("semantic process start")
             daemon.call("typescript.semantic.start", {
                 "languageId": "typescript", "nodeExecutable": str(node),
                 "languageServerPackageRoot": str(server), "typeScriptPackageRoot": str(compiler),
             })
+            mark_stage("wide rename preview")
             preview = daemon.call("refactor.preview", {
                 "operation": "renameSymbol", "languageId": "typescript",
                 "arguments": {"newName": "AccountService", "file": "src/service.ts", "line": 0, "character": 13},
             })
             if str(preview.get("status", "")).lower() != "preview" or len(preview.get("affectedFiles", [])) != 111:
                 raise AssertionError(f"unexpected wide rename preview: {preview}")
+            mark_stage("wait for durable APPLYING journal")
             daemon.send("refactor.apply", {"planId": preview["planId"]})
 
             deadline = time.monotonic() + 30
@@ -158,15 +171,18 @@ def main() -> int:
                 time.sleep(0.001)
             if applying_journal is None:
                 raise AssertionError("packaged apply never exposed a durable APPLYING journal boundary")
+            mark_stage("kill daemon during APPLYING")
             daemon.kill_tree()
         finally:
             daemon.kill_tree()
 
+        mark_stage("startup recovery")
         recovery = Daemon(daemon_launcher)
         try:
             recovery.call("project.open", {"root": str(workspace)}, timeout=60)
         finally:
             recovery.close()
+        mark_stage("verify exact recovered source and journal")
         if source_hash(workspace) != expected:
             raise AssertionError("startup recovery did not restore the pre-apply TypeScript source image")
         record = json.loads(applying_journal.read_text())
@@ -178,4 +194,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as error:
+        print(f"::error::stage={_current_stage}; {type(error).__name__}: {error}", flush=True)
+        raise
