@@ -40,6 +40,9 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
             javaAdapter = container "Java Language Adapter" "Java project scanner and lexical Java intelligence for source roots, packages, classes, methods, fields, imports, symbols, references, diagnostics, rename class/member, move class, organize imports, safe delete, extract method, change signature, recipes, and framework-aware risk detection." "Kotlin/JVM library (modules/refactorkit-java)" {
                 tags "Runtime Building Block"
             }
+            kotlinAdapter = container "Kotlin Language Adapter" "Initial Kotlin module boundary with .kt/.kts routing and explicit refused capabilities until a compiler/Analysis API backend is qualified." "Kotlin/JVM library (modules/refactorkit-kotlin)" {
+                tags "Runtime Building Block"
+            }
             webImporter = container "External Java Class Importer" "Preview-only external source assimilation for Java classes: strips Markdown fences, detects license/provenance, validates package names, detects/splits public types, rewrites packages, organizes imports, refuses conflicts, and emits PatchPlans." "Kotlin/JVM library (modules/refactorkit-web-importer)" {
                 tags "Runtime Building Block"
             }
@@ -64,6 +67,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
 
         cli -> core "Creates snapshots, renders previews, applies/rolls back PatchPlans, and writes transactions" "In-process calls"
         cli -> javaAdapter "Runs Java scan, symbols, references, diagnostics, and Java refactoring commands" "In-process calls"
+        cli -> kotlinAdapter "Reports Kotlin capability/refusal metadata" "In-process calls"
         cli -> webImporter "Runs external Java class import preview workflows" "In-process calls"
         cli -> treeSitterFoundation "Runs outline, structural search, and local-rename commands" "In-process calls"
         cli -> testkit "Runs golden tests" "In-process calls"
@@ -71,20 +75,25 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
 
         daemon -> core "Manages project session state, previews, applies, and rolls back plans" "In-process calls"
         daemon -> javaAdapter "Delegates Java scans, symbol queries, diagnostics, and refactoring previews" "In-process calls"
+        daemon -> kotlinAdapter "Reports Kotlin capability/refusal metadata" "In-process calls"
 
         lsp -> core "Maps LSP workspace edits, commands, and diagnostics to patch-oriented models" "In-process calls"
         lsp -> javaAdapter "Delegates Java navigation, references, rename, code actions, symbols, semantic tokens, and diagnostics" "In-process calls"
+        lsp -> kotlinAdapter "Reports Kotlin capability/refusal metadata without claiming LSP ownership" "In-process calls"
 
         mcp -> core "Generates project resources, focused context, previews, applies, and rollbacks" "In-process calls"
         mcp -> javaAdapter "Delegates project scan, symbols, definitions, references, diagnostics, and Java refactorings" "In-process calls"
+        mcp -> kotlinAdapter "Reports Kotlin capability/refusal metadata" "In-process calls"
         mcp -> webImporter "Delegates import_external_java_class preview workflows" "In-process calls"
 
         embeddedRuntime -> core "Uses language-independent patch, model, diagnostics, and transaction APIs" "In-process calls"
         embeddedRuntime -> javaAdapter "Uses Java intelligence and refactoring planners when Java support is enabled" "In-process calls"
+        embeddedRuntime -> kotlinAdapter "Can inspect Kotlin capability/refusal metadata" "In-process calls"
         embeddedRuntime -> webImporter "Can preview external Java class imports" "In-process calls"
         embeddedRuntime -> treeSitterFoundation "Can use structural multi-language outline/search/local rename" "In-process calls"
 
         javaAdapter -> core "Builds SymbolIndex, diagnostics, and PatchPlan objects through core contracts" "Kotlin/JVM API"
+        kotlinAdapter -> core "Returns typed diagnostics and refused PatchPlans through core contracts" "Kotlin/JVM API"
         webImporter -> core "Creates preview PatchPlans and file creation edits" "Kotlin/JVM API"
         webImporter -> javaAdapter "Reuses Java package/import parsing and source-root knowledge" "Kotlin/JVM API"
         treeSitterFoundation -> core "Produces ProjectSnapshot, outline symbols, and local-rename PatchPlans" "Kotlin/JVM API"

@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":modules:refactorkit-java"))
     implementation(project(":modules:refactorkit-tree-sitter"))
     implementation(project(":modules:refactorkit-typescript"))
+    implementation(project(":modules:refactorkit-kotlin"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }

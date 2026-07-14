@@ -13,6 +13,10 @@ review safety boundaries before applying refactorings.
   `v0.6.2` multi-language foundation.
 - Activate the deferred advanced TypeScript/JavaScript move, import, signature,
   extract/inline and migration workstream while continuing Java depth.
+- Add the isolated `refactorkit-kotlin` module boundary with `.kt`/`.kts`
+  routing, typed backend-unavailable diagnostics and capability metadata exposed
+  through CLI, daemon, LSP and MCP. Every Kotlin operation remains explicitly
+  `REFUSED` with no mutation authority.
 - No new stable Kotlin capability is claimed until real compiler-backed native
   acceptance passes preview, exact diagnostics, apply, WAL and rollback.
 

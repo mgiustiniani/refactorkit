@@ -54,7 +54,7 @@ class RefactorKitCliTest {
         assertEquals(0, result.code)
         val schema = Json.parseToJsonElement(result.stdout.trim()).jsonObject
         assertEquals("1", schema["schemaVersion"]!!.jsonPrimitive.content)
-        assertEquals(listOf("java", "javascript", "typescript"), schema["adapters"]!!.jsonArray.map {
+        assertEquals(listOf("java", "javascript", "kotlin", "typescript"), schema["adapters"]!!.jsonArray.map {
             it.jsonObject["languageId"]!!.jsonPrimitive.content
         })
     }

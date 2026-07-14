@@ -49,6 +49,7 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.kotlin.KotlinAdapterRegistration
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -153,7 +154,10 @@ class LspSession {
                 })
                 put("experimental", buildJsonObject {
                     put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
-                        listOf(JavaAdapterRegistration.create().descriptor) + TypeScriptAdapterDescriptors.descriptors(),
+                        listOf(
+                            JavaAdapterRegistration.create().descriptor,
+                            KotlinAdapterRegistration.descriptor(),
+                        ) + TypeScriptAdapterDescriptors.descriptors(),
                     ))
                     put("refactorkitSemanticOwnership", buildJsonObject {
                         put("java", "refactorkit-lsp")

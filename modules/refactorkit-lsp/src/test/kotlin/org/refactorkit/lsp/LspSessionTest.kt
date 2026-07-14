@@ -68,7 +68,7 @@ class LspSessionTest {
         assertEquals("true", capabilities["documentFormattingProvider"]!!.jsonPrimitive.content)
         val experimental = capabilities["experimental"]!!.jsonObject
         val languageKernel = experimental["refactorkitLanguageKernel"]!!.jsonObject
-        assertEquals(listOf("java", "javascript", "typescript"), languageKernel["adapters"]!!.jsonArray.map {
+        assertEquals(listOf("java", "javascript", "kotlin", "typescript"), languageKernel["adapters"]!!.jsonArray.map {
             it.jsonObject["languageId"]!!.jsonPrimitive.content
         })
         val ownership = experimental["refactorkitSemanticOwnership"]!!.jsonObject

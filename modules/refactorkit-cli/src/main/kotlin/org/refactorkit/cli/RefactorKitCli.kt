@@ -36,6 +36,7 @@ import org.refactorkit.java.JavaSafeDeletePlanner
 import org.refactorkit.java.recipe.RecipeEngine
 import org.refactorkit.java.recipe.RecipeLoader
 import org.refactorkit.java.recipe.RecipeResult
+import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.testkit.GoldenTestLoader
 import org.refactorkit.testkit.GoldenTestRunner
 import org.refactorkit.treesitter.GenericLocalRenamePlanner
@@ -637,7 +638,10 @@ class RefactorKitCli(
 
     private fun cmdCapabilities(): Int {
         println(LanguageCapabilityProtocol.render(
-            listOf(JavaAdapterRegistration.create(javaAdapter).descriptor) + TypeScriptAdapterDescriptors.descriptors(),
+            listOf(
+                JavaAdapterRegistration.create(javaAdapter).descriptor,
+                KotlinAdapterRegistration.descriptor(),
+            ) + TypeScriptAdapterDescriptors.descriptors(),
         ))
         return 0
     }

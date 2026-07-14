@@ -40,7 +40,7 @@ class McpSessionTest {
         val result = session.dispatch("initialize", null) as JsonObject
         assertEquals("2024-11-05", result["protocolVersion"]!!.jsonPrimitive.content)
         assertEquals(RefactorKitVersion.VERSION, result["serverInfo"]!!.jsonObject["version"]!!.jsonPrimitive.content)
-        assertEquals(listOf("java", "javascript", "typescript"),
+        assertEquals(listOf("java", "javascript", "kotlin", "typescript"),
             result["refactorkitLanguageKernel"]!!.jsonObject["adapters"]!!.jsonArray.map {
                 it.jsonObject["languageId"]!!.jsonPrimitive.content
             })

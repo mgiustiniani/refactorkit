@@ -90,9 +90,15 @@ class DaemonSessionTest {
         assertEquals("true", safety["transactionRollback"]!!.jsonPrimitive.content)
         assertEquals("1", languageKernel["schemaVersion"]!!.jsonPrimitive.content)
         val languageAdapters = languageKernel["adapters"]!!.jsonArray.map { it.jsonObject }
-        assertEquals(listOf("java", "javascript", "typescript"), languageAdapters.map {
+        assertEquals(listOf("java", "javascript", "kotlin", "typescript"), languageAdapters.map {
             it["languageId"]!!.jsonPrimitive.content
         })
+        val kotlin = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "kotlin" }
+        val kotlinCapabilities = kotlin["capabilities"]!!.jsonArray.map { it.jsonObject }
+        assertTrue(kotlinCapabilities.isNotEmpty())
+        assertTrue(kotlinCapabilities.all { it["stability"]!!.jsonPrimitive.content == "refused" })
+        assertTrue(kotlinCapabilities.all { it["evidence"]!!.jsonPrimitive.content == "none" })
+        assertTrue(kotlinCapabilities.all { it["mutationAuthority"]!!.jsonPrimitive.content == "none" })
         val typescript = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "typescript" }
         val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }
         assertEquals(

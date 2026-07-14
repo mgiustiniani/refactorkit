@@ -48,6 +48,7 @@ import org.refactorkit.java.JavaImportTargetResolution
 import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
@@ -147,7 +148,10 @@ class DaemonSession(
             }
         })
         put("languageKernel", LanguageCapabilityProtocol.render(
-            listOf(JavaAdapterRegistration.create().descriptor) + TypeScriptAdapterDescriptors.descriptors(),
+            listOf(
+                JavaAdapterRegistration.create().descriptor,
+                KotlinAdapterRegistration.descriptor(),
+            ) + TypeScriptAdapterDescriptors.descriptors(),
         ))
         put("safety", buildJsonObject {
             put("previewBeforeApply", true)

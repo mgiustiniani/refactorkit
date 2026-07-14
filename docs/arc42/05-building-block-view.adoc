@@ -75,6 +75,12 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 |`modules/refactorkit-java`, Java docs, ADR 0008.
 |implementation-informed
 
+|Kotlin Language Adapter
+|Kotlin/JVM library
+|Initial `0.7.x` adapter boundary owning `.kt`/`.kts` routing while advertising only `REFUSED` capabilities with `NONE` evidence and no mutation authority. No lexical symbols or edits are synthesized; direct calls return `kotlin.semanticBackendUnavailable` until a hash-bound Kotlin compiler/Analysis API backend is qualified.
+|`modules/refactorkit-kotlin`, `docs/kotlin-adapter.md`, `docs/releases/v0.7.0-plan.md`.
+|boundary implemented; semantic backend planned
+
 |External Java Class Importer
 |Kotlin/JVM library
 |Preview-only external Java class import with provenance/license warnings, package rewriting, public type splitting, conflict detection, and PatchPlan output.

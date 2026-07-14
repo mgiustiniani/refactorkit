@@ -46,6 +46,7 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
@@ -120,7 +121,10 @@ class McpSession(
             put("version", RefactorKitVersion.VERSION)
         })
         put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
-            listOf(JavaAdapterRegistration.create().descriptor) + TypeScriptAdapterDescriptors.descriptors(),
+            listOf(
+                JavaAdapterRegistration.create().descriptor,
+                KotlinAdapterRegistration.descriptor(),
+            ) + TypeScriptAdapterDescriptors.descriptors(),
         ))
     }
 

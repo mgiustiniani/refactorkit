@@ -114,6 +114,13 @@ nullable limit fields remain explicit. Each capability also carries its effectiv
 apply an in-process structural claim to an external semantic operation (or grant
 `.tsx`/`.jsx` native-AST evidence from the `.ts`/`.js` grammar layer).
 
+The packaged `0.7.0-SNAPSHOT` kernel includes the initial `kotlin` descriptor for
+`.kt` and `.kts`. Its backend is `kotlin-analysis-unavailable-v1`; every operation
+is `REFUSED` with `NONE` evidence and no mutation authority. Capability discovery
+therefore reports the planned boundary without implying semantic reads, LSP
+ownership, formatting or managed writes. Kotlin scripts remain a separately
+refused capability.
+
 External LSP processes are internal proposal providers. They run under the
 bounded semantic process lifecycle with explicit environment and provenance,
 byte-counted framed request deadlines, and a source-only workspace overlay.
