@@ -398,7 +398,7 @@ class KotlinCompilerDiagnostics private constructor(
         val encoded = payload["symbols"] as? JsonArray
             ?: throw SymbolPayloadException("kotlin.compilerSymbolsInvalid")
         check(encoded.size <= MAX_SYMBOLS) { "Kotlin compiler symbol limit exceeded" }
-        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val overlayRoot = overlay.root.toRealPath()
         val sourcePaths = snapshot.files.associateBy { it.path.normalize() }
         val ids = linkedSetOf<SymbolId>()
         val symbols = encoded.map { item ->
@@ -415,9 +415,15 @@ class KotlinCompilerDiagnostics private constructor(
             val kind = value.string("kind")?.let { runCatching { Symbol.Kind.valueOf(it) }.getOrNull() }
                 ?.takeIf { it in SYMBOL_KINDS } ?: error("Kotlin compiler symbol kind is invalid")
             val rawPath = value.string("path") ?: error("Kotlin compiler symbol path is missing")
-            val workspacePath = overlay.toWorkspacePath(Path.of(rawPath).toAbsolutePath().normalize())
-                ?: error("Kotlin compiler symbol path escapes overlay")
-            val relative = root.relativize(workspacePath).normalize()
+            val reported = Path.of(rawPath).toAbsolutePath().normalize()
+            check(!Files.isSymbolicLink(reported) && Files.isRegularFile(reported, LinkOption.NOFOLLOW_LINKS)) {
+                "Kotlin compiler symbol path is unsafe"
+            }
+            val canonical = reported.toRealPath()
+            check(canonical.startsWith(overlayRoot) && canonical != overlayRoot) {
+                "Kotlin compiler symbol path escapes overlay"
+            }
+            val relative = overlayRoot.relativize(canonical).normalize()
             val source = sourcePaths[relative] ?: error("Kotlin compiler symbol source is outside snapshot")
             val start = value.int("startOffset") ?: error("Kotlin compiler symbol start is invalid")
             val end = value.int("endOffset") ?: error("Kotlin compiler symbol end is invalid")
