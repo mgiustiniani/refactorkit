@@ -25,6 +25,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
 - Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
+- Workspace index and semantic query plan: [`docs/releases/v0.7.0-intelligence-index-plan.md`](docs/releases/v0.7.0-intelligence-index-plan.md)
 - Kotlin adapter boundary: [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md)
 - Kotlin toolchain boundary: [`docs/kotlin-toolchain.md`](docs/kotlin-toolchain.md)
 - Kotlin/JVM build-model projection: [`docs/kotlin-build-model.md`](docs/kotlin-build-model.md)
@@ -212,8 +213,12 @@ refactorkit --help
 # Scan a project and print the workspace summary and snapshot hash.
 refactorkit scan samples/java-maven-simple
 
-# `index` is an alias for scan.
-refactorkit index samples/java-maven-simple
+# Build the bounded central source/declaration index; add --json for automation.
+refactorkit index samples/java-maven-simple --json
+
+# Search the central index with human or typed JSON output.
+refactorkit intelligence search samples/java-maven-simple --kind workspace-symbols --query User --language java
+refactorkit intelligence search samples/java-maven-simple --query User --language java --json
 
 # List Java symbols discovered by the default Java scanner.
 refactorkit symbols samples/java-maven-simple

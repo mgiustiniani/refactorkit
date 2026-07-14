@@ -76,7 +76,8 @@ compatible.
 | `refactorkit kotlin diagnostics <root> --jdk-home ... --compiler-jar ... [--compiler-classpath ...]` | `experimental` | One-shot explicit JDK 21/Kotlin 2.0.21 K2 diagnostics with exact snapshot/lease, build/toolchain hashes, line-only/no-location precision and process attestation; no mutation authority. |
 | `refactorkit kotlin symbols <root> ... [--query ...]` / `kotlin definition --symbol <opaque-id> <root> ...` | `experimental` | Saved-snapshot compiler-proven regular-class search and ID-based definition. IDs derive from JVM binary identity; ranges are exact UTF-16 compiler PSI name ranges. Unsupported declaration kinds, compiler errors and incomplete results refuse without fallback. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
-| `refactorkit index <path>` | `beta-contract` | Alias-compatible indexing workflow. |
+| `refactorkit index [path] [--json]` | `additive-api-0.2` | Builds the session-scoped whole-workspace source/declaration index and prints human or typed JSON status without workspace writes. |
+| `refactorkit intelligence search [path] ... [--json]` | `experimental` | Bounded workspace/document symbol search over the central index. Completion, hover and signature-help kinds return typed refusal until provider-qualified. |
 | `refactorkit symbols <path>` / `refactorkit java symbols <path>` | `beta-contract` | Symbol listing shape should remain scriptable. |
 | `refactorkit diagnostics <path>` / `refactorkit java diagnostics <path>` | `beta-contract` | Diagnostic severity/file/line fields are contract fields. |
 | `refactorkit definition --symbol <fqcn> [path]` / `java definition` | `beta-contract` | Read-only lookup. |
@@ -158,6 +159,8 @@ of the beta baseline for documented methods.
 | `server.capabilities` | `beta-contract` | Read-only protocol/method/safety discovery; does not require an opened project. |
 | `project.open` | `beta-contract` | Read-only workspace lifecycle; requires `root`. It inspects journal state without creating `.refactorkit`/`workspace.lock`; pending or corrupt recovery state refuses and directs the caller to explicit `patch.recover`. |
 | `project.summary` | `beta-contract` | Read-only project metadata plus typed, deterministically ordered, bounded and truncation-signaled Build Model SPI summary (`providerId`, canonical status, policy outcomes, selected profiles, typed diagnostic codes, modules/source sets/outputs/edges); module paths are workspace-relative, while external classpath paths and diagnostic messages are omitted. Shape is guarded by `build-model-summary-schema-keys.json`. |
+| `index.status` | `additive-api-0.2` | Reports snapshot/generation, whole-workspace source/symbol counts, languages, provider evidence/completeness and explicit truncation without source text or toolchain paths. |
+| `intelligence.query` | `experimental` | Request/snapshot-correlated, bounded workspace/document symbol variants are ready. Interactive completion/hover/signature/position-navigation variants are typed but refuse until provider-qualified; schema: `api-0.2-intelligence-query-schema.json`. |
 | `symbol.search` | `beta-contract` | Read-only symbol query; optional `query`. |
 | `symbol.definition` | `beta-contract` | Read-only lookup; requires `symbol`. |
 | `symbol.references` | `beta-contract` | Read-only reference query; requires `symbol`. |

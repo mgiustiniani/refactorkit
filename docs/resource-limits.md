@@ -16,6 +16,8 @@ heap exhaustion.
 | LSP frame | 1,048,576 bytes | JSON-RPC `INVALID_REQUEST`; connection closes because the rejected body is not buffered |
 | Pending plans per daemon/MCP/LSP session | 128 | Least-recently-used plan is evicted; applying an evicted ID returns deterministic invalid-params/not-found |
 | Daemon symbol-search result | 200 | Results are truncated deterministically |
+| Workspace index | 100,000 sources, 100,000 total symbols, 50,000 symbols/provider | Project open/contribution is rejected at the hard boundary; provider output may be explicitly truncated before contribution |
+| Intelligence query | 512 query characters, 200 returned symbols, 128 request-ID characters | Invalid input is rejected; result tails are deterministically truncated with total/returned counts |
 | Import preview combined rendered/structured diff source lines | 524,288 UTF-8 bytes | `diffTruncated=true` with reasons; never silent |
 | Import preview diff files / hunks per file / lines per hunk | 128 / 64 / 2,000 | Deterministic path ordering and explicit truncation reasons |
 | Import preview/apply/rollback diagnostics | 500 entries, 262,144 UTF-8 bytes, 4,096 characters/message | `diagnosticsTruncated=true`; blockers are evaluated before truncation |

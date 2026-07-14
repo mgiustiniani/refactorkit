@@ -9,6 +9,12 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add the first centralized `WorkspaceIndex`: an immutable, snapshot-bound,
+  session-owned inventory of every recognized source plus bounded provider symbol
+  partitions. Daemon `index.status` and experimental typed `intelligence.query`
+  expose workspace/document symbol search; CLI `index` and `intelligence search`
+  provide human output or optional JSON. Completion, hover, signature help and
+  position-based navigation remain explicit typed refusals until provider-backed.
 - Begin the Kotlin and Java/Kotlin interoperability band on the published
   `v0.6.2` multi-language foundation.
 - Activate the deferred advanced TypeScript/JavaScript move, import, signature,

@@ -68,7 +68,7 @@ class RefactorKitCli(
     private val semanticJson = Json { prettyPrint = true }
     private val booleanOptions = setOf(
         "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
-        "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references",
+        "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references", "json",
     )
 
     fun run(args: List<String>): Int {
@@ -81,7 +81,8 @@ class RefactorKitCli(
         return when (args.first()) {
             "capabilities"    -> cmdCapabilities()
             "scan"            -> cmdScan(args.drop(1))
-            "index"           -> cmdScan(args.drop(1))
+            "index"           -> cmdIndex(args.drop(1))
+            "intelligence"    -> cmdIntelligence(args.drop(1))
             "symbols"         -> cmdSymbols(args.drop(1))
             "diagnostics"     -> cmdDiagnostics(args.drop(1))
             "references"      -> cmdReferences(args.drop(1))
@@ -119,6 +120,89 @@ class RefactorKitCli(
         println("Files   : ${snap.files.size}")
         println("Modules : ${snap.modules.size}")
         println("Snapshot: ${snap.hash}")
+        return 0
+    }
+
+    // ── centralized workspace index and intelligence query ───────────────────
+
+    private fun cmdIndex(args: List<String>): Int {
+        val parsed = parseOptions(args)
+        val root = parsed.positionals.firstOrNull() ?: "."
+        val path = Paths.get(root)
+        if (!path.exists()) { System.err.println("Path does not exist: $path"); return 1 }
+        semanticSessionFactory().use { session ->
+            session.dispatch("project.open", buildJsonObject { put("root", root) })
+            val status = session.dispatch("index.status", null)
+            if ("json" in parsed.flags) {
+                println(semanticJson.encodeToString(status))
+            } else {
+                val value = status.jsonObject
+                println("Workspace index")
+                println("Snapshot : ${value.getValue("snapshotHash").jsonPrimitive.content}")
+                println("Generation: ${value.getValue("generation").jsonPrimitive.content}")
+                println("Sources  : ${value.getValue("sourceCount").jsonPrimitive.content}")
+                println("Symbols  : ${value.getValue("symbolCount").jsonPrimitive.content}")
+                println("Languages: ${value.getValue("languages")}")
+            }
+        }
+        return 0
+    }
+
+    private fun cmdIntelligence(args: List<String>): Int {
+        val operation = args.firstOrNull()
+            ?: run { System.err.println("intelligence requires search"); return 2 }
+        if (operation != "search") {
+            System.err.println("Unsupported intelligence operation: $operation")
+            return 2
+        }
+        val parsed = parseOptions(args.drop(1))
+        val root = parsed.positionals.firstOrNull() ?: "."
+        val path = Paths.get(root)
+        if (!path.exists()) { System.err.println("Path does not exist: $path"); return 1 }
+        val kind = when (parsed.options["kind"] ?: "workspace-symbols") {
+            "workspace-symbols", "workspaceSymbols" -> "workspaceSymbols"
+            "document-symbols", "documentSymbols" -> "documentSymbols"
+            "completion" -> "completion"
+            "hover" -> "hover"
+            "signature-help", "signatureHelp" -> "signatureHelp"
+            else -> run { System.err.println("Unknown intelligence query kind"); return 2 }
+        }
+        semanticSessionFactory().use { session ->
+            val opened = session.dispatch("project.open", buildJsonObject { put("root", root) }).jsonObject
+            val response = session.dispatch("intelligence.query", buildJsonObject {
+                put("requestId", parsed.options["request-id"] ?: "cli-${UUID.randomUUID()}")
+                put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+                put("expectedIndexGeneration", opened.getValue("indexGeneration").jsonPrimitive.content.toLong())
+                put("kind", kind)
+                put("query", parsed.options["query"].orEmpty())
+                parsed.options["language"]?.let { put("languageId", it) }
+                parsed.options["file"]?.let { put("path", it) }
+                parsed.options["limit"]?.toIntOrNull()?.let { put("limit", it) }
+            })
+            if ("json" in parsed.flags) {
+                println(semanticJson.encodeToString(response))
+                return if (response.jsonObject["status"]?.jsonPrimitive?.content == "ready") 0 else 1
+            }
+            val value = response.jsonObject
+            if (value["status"]?.jsonPrimitive?.content != "ready") {
+                val error = value["error"]?.jsonObject
+                System.err.println("${error?.get("code")?.jsonPrimitive?.content}: ${error?.get("message")?.jsonPrimitive?.content}")
+                return 1
+            }
+            val items = value.getValue("items") as kotlinx.serialization.json.JsonArray
+            if (items.isEmpty()) println("No symbols found.") else items.forEach { item ->
+                val symbol = item.jsonObject
+                val location = symbol.getValue("location").jsonObject
+                val start = location.getValue("range").jsonObject.getValue("start").jsonObject
+                println(
+                    "${symbol.getValue("symbolKind").jsonPrimitive.content}\t" +
+                        "${symbol.getValue("name").jsonPrimitive.content}\t" +
+                        "${location.getValue("path").jsonPrimitive.content}:" +
+                        "${start.getValue("line").jsonPrimitive.content.toInt() + 1}:" +
+                        "${start.getValue("character").jsonPrimitive.content.toInt() + 1}",
+                )
+            }
+        }
         return 0
     }
 
@@ -834,6 +918,8 @@ class RefactorKitCli(
           refactorkit --version
           refactorkit capabilities
           refactorkit scan              <path>
+          refactorkit index             [<path>] [--json]
+          refactorkit intelligence search [<path>] [--kind workspace-symbols|document-symbols|completion|hover|signature-help] [--query <text>] [--language <id>] [--file <relative-path>] [--limit <n>] [--json]
           refactorkit symbols           <path>
           refactorkit diagnostics       <path>
           refactorkit references        --symbol <fqcn>  [<path>]

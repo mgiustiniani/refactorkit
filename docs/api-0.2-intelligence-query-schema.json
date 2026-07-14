@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.org/schemas/api-0.2-intelligence-query.json",
+  "title": "RefactorKit API 0.2 intelligence.query response",
+  "oneOf": [
+    {"$ref": "#/$defs/ready"},
+    {"$ref": "#/$defs/refused"}
+  ],
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "character"],
+      "properties": {
+        "line": {"type": "integer", "minimum": 0},
+        "character": {"type": "integer", "minimum": 0}
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "range"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "end"],
+          "properties": {
+            "start": {"$ref": "#/$defs/position"},
+            "end": {"$ref": "#/$defs/position"}
+          }
+        }
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "symbolKind", "languageId", "providerId", "backend", "evidence", "completeness", "location"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "symbolKind": {"type": "string"},
+        "languageId": {"type": "string"},
+        "providerId": {"type": "string"},
+        "backend": {"type": "string"},
+        "evidence": {"enum": ["compiler", "language-server", "native-ast", "structural-parse", "lexical"]},
+        "completeness": {"enum": ["declarations", "semantic"]},
+        "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "location": {"$ref": "#/$defs/location"}
+      }
+    },
+    "base": {
+      "type": "object",
+      "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "status": {"enum": ["ready", "refused"]},
+        "kind": {"type": "string"},
+        "snapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "indexGeneration": {"type": "integer", "minimum": 1}
+      }
+    },
+    "ready": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "coverage", "missingProviderLanguages", "total", "returned", "truncated", "items"],
+          "properties": {
+            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
+            "status": {"const": "ready"},
+            "kind": {"enum": ["workspaceSymbols", "documentSymbols"]},
+            "coverage": {"enum": ["source-inventory", "partial", "declarations", "semantic"]},
+            "missingProviderLanguages": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+            "total": {"type": "integer", "minimum": 0},
+            "returned": {"type": "integer", "minimum": 0, "maximum": 200},
+            "truncated": {"type": "boolean"},
+            "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/symbol"}}
+          }
+        }
+      ]
+    },
+    "refused": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "error"],
+          "properties": {
+            "schemaVersion": {}, "requestId": {}, "kind": {}, "snapshotHash": {}, "indexGeneration": {},
+            "status": {"const": "refused"},
+            "error": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message"],
+              "properties": {
+                "code": {"type": "string"},
+                "message": {"type": "string"}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -73,6 +73,31 @@ canonical protocol statuses `available`, `partial`, `offline-missing`,
 `unavailable`, and `execution-refused`. See
 [Build Model SPI](build-model.md).
 
+## Central workspace index and intelligence query
+
+`project.open` now creates a session-owned, immutable `WorkspaceIndex` over every
+recognized source in the exact project snapshot. The index stores normalized
+workspace-relative paths, language IDs, UTF-8 sizes and content hashes, then adds
+bounded provider symbol partitions. The initial Java partition is explicitly
+lexical declaration evidence; it is not presented as JDT/compiler semantics.
+Read-only indexing creates no workspace metadata.
+
+```json
+{"jsonrpc":"2.0","id":15,"method":"index.status"}
+{"jsonrpc":"2.0","id":16,"method":"intelligence.query","params":{"requestId":"ide-42","expectedSnapshotHash":"<sha256>","expectedIndexGeneration":2,"kind":"workspaceSymbols","query":"User","languageId":"java","limit":50}}
+```
+
+`index.status` reports snapshot/generation, source/symbol counts, indexed
+languages and provider evidence/completeness/truncation without source text or
+local toolchain paths. `intelligence.query` currently implements typed,
+zero-based UTF-16 `workspaceSymbols` and `documentSymbols` results. Requests are
+bounded to 200 results and correlated to the exact expected snapshot.
+`completion`, `hover`, `signatureHelp`, definition-at-position and
+references-at-position return `status=refused` with
+`intelligence.queryUnsupported` until their JDT, tsserver and K2 implementations
+are qualified. They never fall back to fabricated lexical semantics. The response
+schema is [`api-0.2-intelligence-query-schema.json`](api-0.2-intelligence-query-schema.json).
+
 ## Experimental TypeScript/JavaScript semantic session
 
 After `project.open`, callers may start one explicit language session:

@@ -35,6 +35,8 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("RefactorKit ${RefactorKitVersion.VERSION}"))
         assertTrue(result.stdout.contains("refactorkit --version"))
         assertTrue(result.stdout.contains("refactorkit capabilities"))
+        assertTrue(result.stdout.contains("refactorkit index"))
+        assertTrue(result.stdout.contains("refactorkit intelligence search"))
         assertTrue(result.stdout.contains("refactorkit java import-class"))
         assertTrue(result.stdout.contains("refactorkit java move-source-root"))
         assertTrue(result.stdout.contains("refactorkit format-file"))
@@ -85,6 +87,33 @@ class RefactorKitCliTest {
         assertEquals("compiler", kotlinDiagnostics["evidence"]!!.jsonPrimitive.content)
         assertEquals("kotlin-compiler-diagnostics-k2-v1", kotlinDiagnostics["backend"]!!.jsonPrimitive.content)
         assertEquals("external-process", kotlinDiagnostics["runtime"]!!.jsonObject["executionMode"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun indexAndIntelligenceSearchSupportJsonOutput() {
+        val project = createProject(
+            "src/main/java/example/UserService.java" to "package example;\npublic class UserService {}\n",
+            "src/app.ts" to "export const answer = 42\n",
+        )
+
+        val index = captureStdout { RefactorKitCli().run(listOf("index", project.toString(), "--json")) }
+        assertEquals(0, index.code)
+        val indexJson = Json.parseToJsonElement(index.stdout.trim()).jsonObject
+        assertEquals("2", indexJson.getValue("sourceCount").jsonPrimitive.content)
+        assertTrue(indexJson.getValue("symbolCount").jsonPrimitive.content.toInt() >= 1)
+
+        val search = captureStdout { RefactorKitCli().run(listOf(
+            "intelligence", "search", project.toString(),
+            "--query", "User", "--language", "java", "--json",
+        )) }
+        assertEquals(0, search.code)
+        val searchJson = Json.parseToJsonElement(search.stdout.trim()).jsonObject
+        assertEquals("ready", searchJson.getValue("status").jsonPrimitive.content)
+        val userType = searchJson.getValue("items").jsonArray.map { it.jsonObject }.single {
+            it.getValue("symbolKind").jsonPrimitive.content == "class"
+        }
+        assertEquals("UserService", userType.getValue("name").jsonPrimitive.content)
+        assertTrue(!Files.exists(project.resolve(".refactorkit")))
     }
 
     @Test

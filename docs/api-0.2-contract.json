@@ -6,7 +6,7 @@
   "status": "beta-contract",
   "cli": {
     "commands": [
-      "version", "capabilities", "scan", "index", "symbols", "diagnostics", "references",
+      "version", "capabilities", "scan", "index", "intelligence search", "symbols", "diagnostics", "references",
       "definition", "rename", "rename-member", "extract-method",
       "change-signature", "move-class", "organize-imports", "format-file",
       "safe-delete", "patch recover", "patch rollback", "java import-class", "java move-source-root", "recipe run",
@@ -14,7 +14,7 @@
     ],
     "booleanOptions": [
       "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
-      "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references"
+      "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references", "json"
     ]
   },
   "daemon": {
@@ -27,6 +27,14 @@
        "features": {"buildModelSummary": true, "sourceSets": true, "credentialRedaction": true,
                     "boundedBuildModelSummary": true, "typedBuildModelSchema": true,
                     "offlineMissingStatus": true, "executionRefusedStatus": true}},
+      {"name": "index.status", "stability": "additive-api-0.2", "requiresProject": true, "writesWorkspace": false,
+       "features": {"wholeWorkspaceSourceInventory": true, "providerContributions": true,
+                    "snapshotBound": true, "bounded": true}},
+      {"name": "intelligence.query", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
+       "features": {"workspaceSymbols": true, "documentSymbols": true, "completion": false,
+                    "hover": false, "signatureHelp": false, "definitionAtPosition": false,
+                    "referencesAtPosition": false, "snapshotBound": true, "typedRefusal": true,
+                    "bounded": true}},
       {"name": "typescript.semantic.start", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
        "features": {"explicitToolchain": true, "hashBoundProvenance": true, "noPackageScripts": true}},
       {"name": "typescript.semantic.restart", "stability": "experimental", "requiresProject": true, "writesWorkspace": false},

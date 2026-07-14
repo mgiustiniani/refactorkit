@@ -32,9 +32,14 @@ import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.WorkspaceIndex
+import org.refactorkit.core.WorkspaceIndexCompleteness
+import org.refactorkit.core.WorkspaceIndexSession
+import org.refactorkit.core.WorkspaceSymbolContribution
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RollbackMode
+import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -112,6 +117,7 @@ class DaemonSession(
     private var kotlinAdapter = KotlinLanguageAdapter()
     private var kotlinToolchain: KotlinSemanticToolchain? = null
     private var kotlinSemanticLease: String? = null
+    private val workspaceIndex = WorkspaceIndexSession()
 
     private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
@@ -124,6 +130,8 @@ class DaemonSession(
         "server.capabilities" -> serverCapabilities()
         "project.open"        -> projectOpen(params)
         "project.summary"   -> projectSummary()
+        "index.status"      -> indexStatus()
+        "intelligence.query" -> intelligenceQuery(params)
         "typescript.semantic.start" -> typeScriptSemanticStart(params)
         "typescript.semantic.restart" -> typeScriptSemanticRestart(params)
         "typescript.semantic.stop" -> typeScriptSemanticStop(params)
@@ -192,6 +200,7 @@ class DaemonSession(
         pendingPlans.clear()
         snapshot = null
         workspaceRoot = null
+        workspaceIndex.clear()
         val root = params?.string("root") ?: missing("root")
         val resolveDependencies = params.string("resolveDependencies")?.toBooleanStrictOrNull() ?: false
         scanner = JavaProjectScanner(allowNetworkDependencyResolution = resolveDependencies)
@@ -206,12 +215,210 @@ class DaemonSession(
         val snap = scanWorkspace(path)
         snapshot = snap
         workspaceRoot = path
+        val index = openWorkspaceIndex(snap)
         return buildJsonObject {
             put("root", workspaceRoot.toString())
             put("fileCount", snap.files.size)
             put("moduleCount", snap.modules.size)
             put("snapshotHash", snap.hash)
+            put("indexGeneration", index.generation)
+            put("indexedSourceCount", index.sources.size)
+            put("indexedSymbolCount", index.symbolCount)
         }
+    }
+
+    private fun openWorkspaceIndex(snap: ProjectSnapshot): WorkspaceIndex {
+        workspaceIndex.open(snap)
+        val discovered = adapter.buildSymbols(snap).symbols
+        val limit = ProtocolLimits.MAX_WORKSPACE_INDEX_PROVIDER_SYMBOLS
+        return workspaceIndex.contribute(WorkspaceSymbolContribution(
+            providerId = "java-source-declarations-v1",
+            languageId = "java",
+            backend = "java-source-declarations-v1",
+            evidence = SemanticEvidenceKind.LEXICAL,
+            completeness = WorkspaceIndexCompleteness.DECLARATIONS,
+            snapshotHash = snap.hash,
+            symbols = discovered.take(limit),
+            truncated = discovered.size > limit,
+        ))
+    }
+
+    private fun indexStatus(): JsonElement = workspaceIndexStatus(
+        workspaceIndex.snapshot() ?: throw JsonRpcException(
+            JsonRpcErrorCodes.PROJECT_NOT_OPEN,
+            "No project open",
+        ),
+    )
+
+    private fun workspaceIndexStatus(index: WorkspaceIndex): JsonElement = buildJsonObject {
+        put("schemaVersion", 1)
+        put("status", "ready")
+        put("snapshotHash", index.snapshotHash)
+        put("generation", index.generation)
+        put("sourceCount", index.sources.size)
+        put("symbolCount", index.symbolCount)
+        put("languages", buildJsonArray {
+            index.sources.map { it.languageId }.distinct().sorted().forEach { add(JsonPrimitive(it)) }
+        })
+        put("providers", buildJsonArray {
+            index.contributions.forEach { contribution ->
+                add(buildJsonObject {
+                    put("providerId", contribution.providerId)
+                    put("languageId", contribution.languageId)
+                    put("backend", contribution.backend)
+                    put("evidence", contribution.evidence.name.lowercase().replace('_', '-'))
+                    put("completeness", contribution.completeness.name.lowercase().replace('_', '-'))
+                    put("symbolCount", contribution.symbols.size)
+                    put("truncated", contribution.truncated)
+                    contribution.provenanceHash?.let { put("provenanceHash", it) }
+                })
+            }
+        })
+    }
+
+    private fun intelligenceQuery(params: JsonObject?): JsonElement {
+        val p = params ?: missing("params")
+        val requestId = p.string("requestId") ?: missing("requestId")
+        if (requestId.isBlank() || requestId.length > ProtocolLimits.MAX_DIAGNOSTICS_REQUEST_ID_CHARS) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "requestId is invalid")
+        }
+        val expected = p.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+        val index = workspaceIndex.snapshot() ?: throw JsonRpcException(
+            JsonRpcErrorCodes.PROJECT_NOT_OPEN,
+            "No project open",
+        )
+        val kind = p.string("kind") ?: missing("kind")
+        if (expected != index.snapshotHash) return intelligenceRefusal(
+            requestId,
+            kind,
+            index,
+            "intelligence.snapshotStale",
+            "Expected workspace index snapshot is stale",
+        )
+        val expectedGeneration = p.string("expectedIndexGeneration")?.let { raw ->
+            raw.toLongOrNull()?.takeIf { it >= 1 } ?: throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                "expectedIndexGeneration must be a positive integer",
+            )
+        }
+        if (expectedGeneration != null && expectedGeneration != index.generation) return intelligenceRefusal(
+            requestId,
+            kind,
+            index,
+            "intelligence.indexStale",
+            "Expected workspace index generation is stale",
+        )
+        if (kind !in setOf("workspaceSymbols", "documentSymbols")) return intelligenceRefusal(
+            requestId,
+            kind,
+            index,
+            "intelligence.queryUnsupported",
+            "Semantic query kind is not implemented: $kind",
+        )
+        val query = p.string("query").orEmpty()
+        if (query.length > ProtocolLimits.MAX_INTELLIGENCE_QUERY_CHARS) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "query is too long")
+        }
+        val languageId = p.string("languageId")
+        val requestedLimit = p.string("limit")?.toIntOrNull() ?: ProtocolLimits.MAX_SYMBOL_RESULTS
+        if (requestedLimit !in 1..ProtocolLimits.MAX_SYMBOL_RESULTS) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                "limit must be between 1 and ${ProtocolLimits.MAX_SYMBOL_RESULTS}",
+            )
+        }
+        val path = p.string("path")?.let(::protocolRelativePath)
+        if (kind == "documentSymbols" && path == null) missing("path")
+        val relevantLanguages = index.sources.asSequence().map { it.languageId }
+            .filter { languageId == null || it == languageId }.toSortedSet()
+        val relevantProviders = index.contributions.filter { it.languageId in relevantLanguages }
+        val missingProviderLanguages = relevantLanguages - relevantProviders.map { it.languageId }.toSet()
+        val coverage = when {
+            missingProviderLanguages.isNotEmpty() || relevantProviders.any { it.truncated } -> "partial"
+            relevantProviders.isNotEmpty() && relevantProviders.all {
+                it.completeness == WorkspaceIndexCompleteness.SEMANTIC
+            } -> "semantic"
+            relevantProviders.isNotEmpty() -> "declarations"
+            else -> "source-inventory"
+        }
+        val all = index.searchSymbols(query, languageId, path)
+        val returned = all.take(requestedLimit)
+        return buildJsonObject {
+            put("schemaVersion", 1)
+            put("requestId", requestId)
+            put("status", "ready")
+            put("kind", kind)
+            put("snapshotHash", index.snapshotHash)
+            put("indexGeneration", index.generation)
+            put("coverage", coverage)
+            put("missingProviderLanguages", buildJsonArray {
+                missingProviderLanguages.forEach { add(JsonPrimitive(it)) }
+            })
+            put("total", all.size)
+            put("returned", returned.size)
+            put("truncated", all.size > returned.size)
+            put("items", buildJsonArray {
+                returned.forEach { indexed ->
+                    val symbol = indexed.symbol
+                    add(buildJsonObject {
+                        put("id", symbol.id.value)
+                        put("name", symbol.name)
+                        put("symbolKind", symbol.kind.name.lowercase().replace('_', '-'))
+                        put("languageId", symbol.languageId)
+                        put("providerId", indexed.providerId)
+                        put("backend", indexed.backend)
+                        put("evidence", indexed.evidence.name.lowercase().replace('_', '-'))
+                        put("completeness", indexed.completeness.name.lowercase().replace('_', '-'))
+                        index.contributions.singleOrNull { it.providerId == indexed.providerId }
+                            ?.provenanceHash?.let { put("provenanceHash", it) }
+                        put("location", intelligenceLocationToJson(symbol.location))
+                    })
+                }
+            })
+        }
+    }
+
+    private fun intelligenceRefusal(
+        requestId: String,
+        kind: String,
+        index: WorkspaceIndex,
+        code: String,
+        message: String,
+    ): JsonElement = buildJsonObject {
+        put("schemaVersion", 1)
+        put("requestId", requestId)
+        put("status", "refused")
+        put("kind", kind)
+        put("snapshotHash", index.snapshotHash)
+        put("indexGeneration", index.generation)
+        put("error", buildJsonObject {
+            put("code", code)
+            put("message", message)
+        })
+    }
+
+    private fun intelligenceLocationToJson(location: SourceLocation): JsonElement = buildJsonObject {
+        put("path", ProtocolPath.serialize(location.path))
+        put("range", buildJsonObject {
+            put("start", buildJsonObject {
+                put("line", location.range.start.line)
+                put("character", location.range.start.character)
+            })
+            put("end", buildJsonObject {
+                put("line", location.range.end.line)
+                put("character", location.range.end.character)
+            })
+        })
+    }
+
+    private fun protocolRelativePath(raw: String): Path {
+        val parsed = try { Paths.get(raw).normalize() } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "path is invalid")
+        }
+        if (parsed.isAbsolute || parsed.toString().isBlank() || parsed.startsWith("..")) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "path must be workspace-relative")
+        }
+        return parsed
     }
 
     private fun projectSummary(): JsonElement {
@@ -547,6 +754,7 @@ class DaemonSession(
                 )
                 closeSemanticAdapters()
                 snapshot = refreshed
+                openWorkspaceIndex(refreshed)
                 pendingPlans.clear()
                 val primary = pending.importPreview?.primaryFile
                 val changes = fileChanges(plan.workspaceEdit, primary)
@@ -637,6 +845,7 @@ class DaemonSession(
                 val refreshed = scanWorkspace(root)
                 val diagnostics = boundedDiagnostics(adapter.diagnostics(refreshed))
                 snapshot = refreshed
+                openWorkspaceIndex(refreshed)
                 pendingPlans.clear()
                 val changes = fileChanges(record.forwardEdit, rollback = true)
                 PROTOCOL_JSON.encodeToJsonElement(RollbackResponseDto(
@@ -815,6 +1024,7 @@ class DaemonSession(
         kotlinAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
         kotlinSemanticLease = lease
         snapshot = attached
+        openWorkspaceIndex(attached)
         return buildJsonObject {
             put("languageId", "kotlin")
             put("status", "started")
@@ -836,6 +1046,7 @@ class DaemonSession(
                 it.providerId == org.refactorkit.kotlin.KotlinJvmBuildModelProjector.PROVIDER_ID
             })
         }
+        snapshot?.let(::openWorkspaceIndex)
         kotlinAdapter = KotlinLanguageAdapter()
         kotlinToolchain = null
         kotlinSemanticLease = null
@@ -958,6 +1169,18 @@ class DaemonSession(
             "kotlin.symbolsSessionStale", "Kotlin semantic lease is missing or stale",
         )
         val result = kotlinAdapter.compilerSymbols(current)
+        if (result is KotlinCompilerSymbolsResult.Available) {
+            workspaceIndex.contribute(WorkspaceSymbolContribution(
+                providerId = "kotlin-k2-jvm-types-v1",
+                languageId = "kotlin",
+                backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
+                evidence = SemanticEvidenceKind.COMPILER,
+                completeness = WorkspaceIndexCompleteness.DECLARATIONS,
+                snapshotHash = current.hash,
+                symbols = result.index.symbols,
+                provenanceHash = result.attestation.toolchainProjectionHash,
+            ))
+        }
         val status = when (result) {
             is KotlinCompilerSymbolsResult.Available -> "ready"
             is KotlinCompilerSymbolsResult.Refused -> "refused"
@@ -1393,6 +1616,7 @@ class DaemonSession(
         pendingPlans.clear()
         snapshot = null
         workspaceRoot = null
+        workspaceIndex.clear()
     }
 
     private data class PendingPlan(
@@ -1431,6 +1655,30 @@ class DaemonSession(
                     "typedBuildModelSchema" to true,
                     "offlineMissingStatus" to true,
                     "executionRefusedStatus" to true,
+                ),
+            ),
+            DaemonMethodCapability(
+                "index.status", "additive-api-0.2", true, false,
+                mapOf(
+                    "wholeWorkspaceSourceInventory" to true,
+                    "providerContributions" to true,
+                    "snapshotBound" to true,
+                    "bounded" to true,
+                ),
+            ),
+            DaemonMethodCapability(
+                "intelligence.query", "experimental", true, false,
+                mapOf(
+                    "workspaceSymbols" to true,
+                    "documentSymbols" to true,
+                    "completion" to false,
+                    "hover" to false,
+                    "signatureHelp" to false,
+                    "definitionAtPosition" to false,
+                    "referencesAtPosition" to false,
+                    "snapshotBound" to true,
+                    "typedRefusal" to true,
+                    "bounded" to true,
                 ),
             ),
             DaemonMethodCapability(

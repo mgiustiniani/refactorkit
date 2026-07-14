@@ -6,9 +6,9 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 
 | Module                    | Status       | Notes                                                     |
 |---------------------------|-------------|------------------------------------------------------------|
-| `refactorkit-core`        | ✅ MVP+      | Patch/transaction engine, Build Model SPI, bounded language-adapter registry, mixed routing, generalized evidence and hash-bound snapshots |
+| `refactorkit-core`        | ✅ MVP+      | Patch/transaction engine, Build Model SPI, bounded language-adapter registry, mixed routing, generalized evidence, hash-bound snapshots, and the first provider-neutral `WorkspaceIndex` |
 | `refactorkit-java`        | ✅ MVP+      | Offline Maven effective reactor/source-set model, JDT diagnostics, rename/move/move-source-root, organize-imports, safe-delete, formatting, limited extract/change-signature, recipes, framework risk detection |
-| `refactorkit-cli`         | ✅ MVP+      | All Java commands + outline/search/local-rename + jlink runtime packaging |
+| `refactorkit-cli`         | ✅ MVP+      | Java commands, central index/intelligence search with optional JSON, outline/search/local-rename, and jlink runtime packaging |
 | `refactorkit-daemon`      | ✅ MVP       | JSON-RPC over stdio                                        |
 | `refactorkit-lsp`         | ✅ MVP       | definition, references, rename, codeAction, documentSymbol, diagnostics, semanticTokens |
 | `refactorkit-mcp`         | ✅ MVP       | Tools, resources (including templates), prompts            |
@@ -27,7 +27,11 @@ on the `v0.5.0` cross-platform multi-language kernel and hardened Java/transacti
 base. Main develops `0.7.0-SNAPSHOT`; `refactorkit-kotlin` now exposes qualified
 experimental read-only diagnostics and saved-snapshot regular-class
 search/definition while references, callable identity and mutations remain
-fail-closed. The long-range `v1.0.0` roadmap evolves
+fail-closed. The first centralized workspace-intelligence slice inventories every
+recognized source and merges bounded, attested provider declaration partitions;
+workspace/document symbol queries are implemented while completion, hover,
+signature help and position-based navigation remain refused until their persistent
+JDT, tsserver and K2 providers qualify. The long-range `v1.0.0` roadmap evolves
 the language-neutral core into a deep multi-language platform rather than
 freezing a Java-only stable API. Java remains the reference and widest catalogue;
 TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Objective-C, Swift,
