@@ -118,7 +118,7 @@ class WorkspaceIndexDaemonTest {
             val opened = session.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
             Files.delete(root.resolve("src/main/java/example/UserService.java"))
             write("src/main/java/example/AccountService.java", "package example;\npublic class AccountService {}\n")
-            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2)
+            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15)
             var observed = false
             while (System.nanoTime() < deadline) {
                 val watch = session.dispatch("workspace.watch.status", null).jsonObject

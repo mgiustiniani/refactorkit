@@ -17,7 +17,7 @@ class SavedWorkspaceWatcherTest {
         try {
             assertEquals("active", watcher.status().state)
             root.resolve("src/App.ts").writeText("export const answer = 42\n")
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
             while (!watcher.status().dirty && System.nanoTime() < deadline) Thread.sleep(10)
             assertTrue(watcher.consumeDirty())
             assertFalse(Files.exists(root.resolve(".refactorkit")))

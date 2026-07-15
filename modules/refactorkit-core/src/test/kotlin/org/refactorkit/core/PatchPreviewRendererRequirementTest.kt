@@ -33,6 +33,8 @@ class PatchPreviewRendererRequirementTest {
         val rendered = PatchPreviewRenderer(root).render(plan)
 
         assertTrue(rendered.contains("package com.newpkg;"))
-        assertTrue(rendered.contains("rename $oldPath -> $newPath"))
+        assertTrue(rendered.contains(
+            "rename ${ProtocolPath.serialize(oldPath)} -> ${ProtocolPath.serialize(newPath)}",
+        ))
     }
 }

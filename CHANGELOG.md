@@ -115,6 +115,11 @@ review safety boundaries before applying refactorings.
   the additive `OBJECT` kind; implicit companions use their compiler name
   `Companion` and exact `object` keyword selection range. Anonymous objects remain
   excluded, and callable identity/references/mutations remain refused.
+- Correct native runtime portability found by the expanded CI matrix: internal
+  overlay `Path` values now accept host-native separators while protocol parsing
+  centrally enforces canonical `/` paths; preview assertions use protocol paths;
+  macOS watcher acceptance allows the bounded JDK polling latency without writing
+  workspace metadata.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions

@@ -101,12 +101,9 @@ class ImmutableEditorOverlay private constructor(
         }
 
         private fun normalizePath(path: Path): Path {
-            val raw = path.toString()
-            require('\\' !in raw && !WINDOWS_DRIVE.containsMatchIn(raw)) {
-                "editor overlay path must use workspace-relative '/' form"
-            }
             val normalized = path.normalize()
-            require(!normalized.isAbsolute && normalized.toString().isNotBlank() && !normalized.startsWith("..")) {
+            require(!normalized.isAbsolute && normalized.toString().isNotBlank() &&
+                !normalized.startsWith("..") && !WINDOWS_DRIVE.containsMatchIn(normalized.toString())) {
                 "editor overlay path is unsafe"
             }
             return normalized

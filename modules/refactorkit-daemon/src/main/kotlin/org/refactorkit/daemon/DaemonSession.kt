@@ -1060,14 +1060,10 @@ class DaemonSession(
         })
     }
 
-    private fun protocolRelativePath(raw: String): Path {
-        val parsed = try { Paths.get(raw).normalize() } catch (_: Exception) {
-            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "path is invalid")
-        }
-        if (parsed.isAbsolute || parsed.toString().isBlank() || parsed.startsWith("..")) {
-            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "path must be workspace-relative")
-        }
-        return parsed
+    private fun protocolRelativePath(raw: String): Path = try {
+        ProtocolPath.parseRelative(raw)
+    } catch (failure: IllegalArgumentException) {
+        throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "path is invalid")
     }
 
     private fun projectSummary(): JsonElement {
