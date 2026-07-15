@@ -99,7 +99,7 @@ sealed interface KotlinCompilerSymbolsResult {
     ) : KotlinCompilerSymbolsResult
 }
 
-/** One-shot, external, compiler-backed diagnostics and JVM type symbols for the bounded Kotlin/JVM projection. */
+/** One-shot external compiler-backed diagnostics and bounded JVM declaration symbols. */
 class KotlinCompilerDiagnostics private constructor(
     private val toolchain: KotlinSemanticToolchain,
     private val execution: ExecutionConfiguration,
@@ -420,16 +420,30 @@ class KotlinCompilerDiagnostics private constructor(
         val symbols = encoded.map { item ->
             val value = item as? JsonObject ?: error("Kotlin compiler symbol is not an object")
             check(value.keys == SYMBOL_FIELDS) { "Kotlin compiler symbol fields are invalid" }
-            val identity = value.string("identity")?.takeIf {
-                it.length in 1..MAX_SYMBOL_IDENTITY_CHARS && SYMBOL_IDENTITY.matches(it)
-            } ?: error("Kotlin compiler symbol identity is invalid")
-            val name = value.string("name")?.takeIf { it.length in 1..MAX_SYMBOL_NAME_CHARS }
-                ?: error("Kotlin compiler symbol name is invalid")
-            check(identity.substringAfterLast('.').substringAfterLast('$') == name) {
-                "Kotlin compiler symbol name does not match its identity"
-            }
+            val identity = value.string("identity")?.takeIf { it.length in 1..MAX_SYMBOL_IDENTITY_CHARS }
+                ?: error("Kotlin compiler symbol identity is invalid")
+            val name = value.string("name")?.takeIf {
+                it.length in 1..MAX_SYMBOL_NAME_CHARS && JVM_NAME.matches(it)
+            } ?: error("Kotlin compiler symbol name is invalid")
             val kind = value.string("kind")?.let { runCatching { Symbol.Kind.valueOf(it) }.getOrNull() }
                 ?.takeIf { it in SYMBOL_KINDS } ?: error("Kotlin compiler symbol kind is invalid")
+            val owner = value.string("owner")?.takeIf {
+                it.length in 1..MAX_SYMBOL_IDENTITY_CHARS && SYMBOL_IDENTITY.matches(it)
+            } ?: error("Kotlin compiler symbol owner is invalid")
+            val descriptor = value.string("descriptor")?.takeIf { it.length <= MAX_JVM_DESCRIPTOR_CHARS }
+                ?: error("Kotlin compiler symbol descriptor is invalid")
+            val id = if (kind == Symbol.Kind.FUNCTION) {
+                check(JVM_METHOD_DESCRIPTOR.matches(descriptor) && identity == "$owner#$name$descriptor") {
+                    "Kotlin compiler callable identity is invalid"
+                }
+                SymbolId("kotlin-jvm-callable-v1:${sha256("kotlin-jvm-callable-v1\u0000$owner\u0000$name\u0000$descriptor")}")
+            } else {
+                check(descriptor.isEmpty() && identity == owner && SYMBOL_IDENTITY.matches(identity) &&
+                    identity.substringAfterLast('.').substringAfterLast('$') == name) {
+                    "Kotlin compiler type identity is invalid"
+                }
+                SymbolId("kotlin-jvm-type-v1:${sha256("kotlin-jvm-type-v1\u0000$identity")}")
+            }
             val selectionText = value.string("selectionText")?.takeIf { it.length in 1..MAX_SYMBOL_NAME_CHARS }
                 ?: error("Kotlin compiler symbol selection text is invalid")
             check(selectionText == name ||
@@ -453,7 +467,6 @@ class KotlinCompilerDiagnostics private constructor(
                 source.content.substring(start, end) == selectionText) {
                 "Kotlin compiler symbol range is invalid"
             }
-            val id = SymbolId("kotlin-jvm-type-v1:${sha256("kotlin-jvm-type-v1\u0000$identity")}")
             check(ids.add(id)) { "Kotlin compiler symbol identity is duplicated" }
             Symbol(
                 id = id,
@@ -478,7 +491,15 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.symbolJvmNameUnsupported" -> "Kotlin declaration uses an unsupported JVM name shape"
                 "kotlin.symbolLocationUnavailable" -> "Kotlin declaration lacks an exact compiler PSI location"
                 "kotlin.symbolDeclarationKindUnsupported" ->
-                    "Kotlin symbol indexing accepts declared JVM classes and named objects only"
+                    "Kotlin symbol indexing accepts bounded JVM declarations only"
+                "kotlin.symbolCallableEvidenceMissing" ->
+                    "Kotlin function lacks an exact generated JVM method"
+                "kotlin.symbolCallableEvidenceAmbiguous" ->
+                    "Kotlin overloaded or bridged function name has ambiguous JVM evidence"
+                "kotlin.symbolCallableEvidenceLimitExceeded" ->
+                    "Kotlin callable-owner method evidence exceeds the bounded limit"
+                "kotlin.symbolDescriptorLimitExceeded" ->
+                    "Kotlin callable JVM descriptor exceeds the bounded limit"
                 else -> "Kotlin compiler symbol extraction failed"
             },
         )
@@ -685,7 +706,7 @@ class KotlinCompilerDiagnostics private constructor(
 
     companion object {
         const val BACKEND = "kotlin-compiler-diagnostics-k2-v1"
-        const val SYMBOL_BACKEND = "kotlin-compiler-jvm-types-k2-v1"
+        const val SYMBOL_BACKEND = "kotlin-compiler-jvm-declarations-k2-v1"
         const val REQUEST_TIMEOUT_MILLIS = 30_000L
         const val MAX_OUTPUT_BYTES = 8L * 1024L * 1024L
         const val MAX_STDERR_BYTES = 64 * 1024
@@ -698,13 +719,18 @@ class KotlinCompilerDiagnostics private constructor(
         const val MAX_MESSAGE_CHARS = 4_096
         private const val MAX_SYMBOL_NAME_CHARS = 512
         private const val MAX_SYMBOL_IDENTITY_CHARS = 2_048
+        private const val MAX_JVM_DESCRIPTOR_CHARS = 1_024
         private const val MAX_XML_BYTES = 6 * 1024 * 1024
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = false }
         private val SEQUENCE = AtomicLong(1)
         private val DIAGNOSTIC_CODE = Regex("^\\[([A-Z][A-Z0-9_]{0,63})]")
+        private val JVM_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
         private val SYMBOL_IDENTITY = Regex("[A-Za-z_][A-Za-z0-9_]*(?:[.$][A-Za-z_][A-Za-z0-9_]*)*")
+        private val JVM_METHOD_DESCRIPTOR = Regex(
+            "\\((?:\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))*\\)(?:V|\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))",
+        )
         private val SYMBOL_FIELDS = setOf(
-            "identity", "name", "kind", "path", "selectionText", "startOffset", "endOffset",
+            "identity", "name", "kind", "path", "owner", "descriptor", "selectionText", "startOffset", "endOffset",
         )
         private val SYMBOL_KINDS = setOf(
             Symbol.Kind.CLASS,
@@ -712,6 +738,7 @@ class KotlinCompilerDiagnostics private constructor(
             Symbol.Kind.INTERFACE,
             Symbol.Kind.ENUM,
             Symbol.Kind.ANNOTATION,
+            Symbol.Kind.FUNCTION,
         )
         private val SYMBOL_REFUSAL_CODES = setOf(
             "kotlin.symbolCompilationFailed",
@@ -722,6 +749,10 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.symbolJvmNameUnsupported",
             "kotlin.symbolLocationUnavailable",
             "kotlin.symbolDeclarationKindUnsupported",
+            "kotlin.symbolCallableEvidenceMissing",
+            "kotlin.symbolCallableEvidenceAmbiguous",
+            "kotlin.symbolCallableEvidenceLimitExceeded",
+            "kotlin.symbolDescriptorLimitExceeded",
             "kotlin.symbolExtractionFailed",
         )
         private val SUPPORTED_JVM_TARGETS = setOf("1.8", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21")

@@ -115,6 +115,13 @@ review safety boundaries before applying refactorings.
   the additive `OBJECT` kind; implicit companions use their compiler name
   `Companion` and exact `object` keyword selection range. Anonymous objects remain
   excluded, and callable identity/references/mutations remain refused.
+- Promote the experimental Kotlin symbol backend to
+  `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
+  identity row. Top-level and direct class/interface/enum/object member functions
+  require one exact non-synthetic/non-bridge generated JVM method; opaque
+  `kotlin-jvm-callable-v1` IDs bind owner, method name and descriptor. Overloads,
+  bridge ambiguity and `@JvmName` refuse instead of guessing; properties,
+  references and mutations remain unsupported.
 - Preserve the read-only workspace contract for daemon `project.open`, MCP
   `project_scan`, LSP initialization and semantic read lifecycles: startup now
   inspects WAL state without creating `.refactorkit/workspace.lock` or changing

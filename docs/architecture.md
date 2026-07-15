@@ -15,7 +15,7 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | `refactorkit-web-importer`| ✅ MVP       | ExternalJavaClassImporter with provenance + conflict detection |
 | `refactorkit-tree-sitter` | ✅ Kernel    | Packaged TypeScript/JavaScript Tree-sitter JNI, bounded external LSP lifecycle, overlays and untrusted edit normalization |
 | `refactorkit-typescript`  | ✅ v0.6+    | Explicit bounded toolchain/project models, semantic reads, managed rename, and IDE-grade `diagnostics.v2` compiler authority/ranges |
-| `refactorkit-kotlin`      | 🚧 v0.7     | Explicit JDK/compiler discovery, hash-bound Kotlin/JVM projection, bounded external K2 diagnostics, and compiler-proven class/object/interface/enum/annotation search/definition; references and mutations remain refused |
+| `refactorkit-kotlin`      | 🚧 v0.7     | Explicit JDK/compiler discovery, hash-bound Kotlin/JVM projection, bounded external K2 diagnostics, and compiler-proven class/object/interface/enum/annotation plus bounded function search/definition; references and mutations remain refused |
 | `refactorkit-testkit`     | ✅ MVP       | GoldenTestLoader/Runner, AgentSimulation scenarios         |
 
 See individual docs/ files for each subsystem.
@@ -25,9 +25,9 @@ See individual docs/ files for each subsystem.
 Published `v0.6.2` delivers the managed TypeScript/JavaScript semantic foundation
 on the `v0.5.0` cross-platform multi-language kernel and hardened Java/transaction
 base. Main develops `0.7.0-SNAPSHOT`; `refactorkit-kotlin` now exposes qualified
-experimental read-only diagnostics and saved-snapshot declared-type
-search/definition while references, callable identity and mutations remain
-fail-closed. The first centralized workspace-intelligence slice inventories every
+experimental read-only diagnostics plus saved-snapshot declared-type and bounded
+function search/definition, while references, broader callable/property identity
+and mutations remain fail-closed. The first centralized workspace-intelligence slice inventories every
 recognized source and merges bounded, attested provider declaration partitions.
 Java lexical declarations load at project open, TypeScript/JavaScript
 language-server declarations load during persistent semantic startup/restart, and

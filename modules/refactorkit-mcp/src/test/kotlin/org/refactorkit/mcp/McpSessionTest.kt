@@ -81,6 +81,28 @@ class McpSessionTest {
     }
 
     @Test
+    fun kotlinDefinitionAcceptsCallableIdShapeBeforeSessionAuthorityRefusal() {
+        val root = createProject("src/main/kotlin/example/App.kt" to "package example\nfun run() = Unit\n")
+        val session = McpSession()
+        val scan = session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        }) as JsonObject
+        val snapshot = firstValueAfter("Snapshot:", contentText(scan))
+
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "kotlin_definition")
+            put("arguments", buildJsonObject {
+                put("expectedSnapshotHash", snapshot)
+                put("semanticLease", "stale")
+                put("symbol", "kotlin-jvm-callable-v1:${"a".repeat(64)}")
+            })
+        }) as JsonObject
+
+        assertTrue(contentText(result).contains("kotlin.symbolsSessionStale"))
+    }
+
+    @Test
     fun symbolSearchIncludesSignedMemberSelectors() {
         val root = createProject(
             "src/main/java/com/example/Lookup.java" to """

@@ -174,9 +174,11 @@ refactorkit kotlin symbols /workspace --query Greeting \
 
 The current symbol catalogue accepts successfully compiled top-level and nested
 classes, named/data/companion objects, interfaces, enum classes and annotation
-classes. Anonymous objects and callable identities remain outside the catalogue. Definition takes the opaque ID returned by `symbols`.
-These reads have no mutation authority; references and all Kotlin refactorings
-remain refused. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
+classes plus the first non-overloaded top-level and direct member function row.
+Anonymous objects, properties and ambiguous/renamed JVM callables remain outside
+the catalogue. Definition takes the opaque type or callable ID returned by
+`symbols`. These reads have no mutation authority; references and all Kotlin
+refactorings remain refused. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
 
 ## Build
 

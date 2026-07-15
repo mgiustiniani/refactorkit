@@ -115,7 +115,7 @@ def main() -> int:
             ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt"],
         )
         symbol_rows = symbols.get("symbols", [])
-        if symbols.get("status") != "ready" or symbols.get("backend") != "kotlin-compiler-jvm-types-k2-v1":
+        if symbols.get("status") != "ready" or symbols.get("backend") != "kotlin-compiler-jvm-declarations-k2-v1":
             raise AssertionError(f"Kotlin compiler symbols failed: {symbols}")
         expected_kinds = {
             "Greeting": "class",
@@ -127,22 +127,30 @@ def main() -> int:
             "GreetingOwner": "class",
             "Companion": "object",
             "NestedRegistry": "object",
+            "topLevelGreeting": "function",
+            "render": "function",
+            "greet": "function",
+            "lookup": "function",
         }
         actual_kinds = {item.get("name"): item.get("kind") for item in symbol_rows}
         if actual_kinds != expected_kinds:
             raise AssertionError(f"Kotlin JVM type kinds are incomplete: {symbols}")
-        if not all(item.get("id", "").startswith("kotlin-jvm-type-v1:") for item in symbol_rows):
-            raise AssertionError(f"Kotlin JVM type identity is missing: {symbols}")
+        for item in symbol_rows:
+            expected_prefix = "kotlin-jvm-callable-v1:" if item.get("kind") == "function" else "kotlin-jvm-type-v1:"
+            if not item.get("id", "").startswith(expected_prefix):
+                raise AssertionError(f"Kotlin JVM declaration identity is invalid: {item}")
         greeting = next(item for item in symbol_rows if item.get("name") == "Greeting")
-        if greeting.get("startLine") != 2 or greeting.get("startCharacter") != 6 or greeting.get("endCharacter") != 14:
+        if greeting.get("startLine") != 4 or greeting.get("startCharacter") != 6 or greeting.get("endCharacter") != 14:
             raise AssertionError(f"Kotlin compiler PSI range is not exact UTF-16: {greeting}")
-        companion = next(item for item in symbol_rows if item.get("name") == "Companion")
+        render = next(item for item in symbol_rows if item.get("name") == "render")
+        if not render.get("id", "").startswith("kotlin-jvm-callable-v1:"):
+            raise AssertionError(f"Kotlin callable identity is missing: {render}")
         definition = run(
             cli, workspace, jdk, compiler, classpath, "native-kotlin-definition", "definition",
-            ["--symbol", companion["id"]],
+            ["--symbol", render["id"]],
         )
-        if definition.get("status") != "ready" or definition.get("symbols") != [companion]:
-            raise AssertionError(f"Kotlin opaque companion-object definition lookup failed: {definition}")
+        if definition.get("status") != "ready" or definition.get("symbols") != [render]:
+            raise AssertionError(f"Kotlin opaque function definition lookup failed: {definition}")
         if tree_hash(workspace) != before:
             raise AssertionError("Kotlin symbol reads modified workspace sources")
 
@@ -158,7 +166,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 declared types and objects, exact definitions and immutable sources.")
+    print("Packaged Kotlin acceptance passed: K2 declared types, objects and functions with exact definitions.")
     return 0
 
 

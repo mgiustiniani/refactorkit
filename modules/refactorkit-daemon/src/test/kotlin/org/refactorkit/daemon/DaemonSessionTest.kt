@@ -164,7 +164,7 @@ class DaemonSessionTest {
         assertTrue(kotlinSymbolReads.all {
             it["stability"]!!.jsonPrimitive.content == "experimental" &&
                 it["evidence"]!!.jsonPrimitive.content == "compiler" &&
-                it["backend"]!!.jsonPrimitive.content == "kotlin-compiler-jvm-types-k2-v1"
+                it["backend"]!!.jsonPrimitive.content == "kotlin-compiler-jvm-declarations-k2-v1"
         })
         assertTrue(kotlinCapabilities.filter {
             it["operation"]!!.jsonPrimitive.content !in setOf(

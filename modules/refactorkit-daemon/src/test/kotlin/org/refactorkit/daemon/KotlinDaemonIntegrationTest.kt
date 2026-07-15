@@ -90,6 +90,16 @@ class KotlinDaemonIntegrationTest {
             .getValue("code").jsonPrimitive.content)
         assertTrue(staleSymbols.getValue("symbols").jsonArray.isEmpty())
 
+        val staleCallableDefinition = session.dispatch("kotlin.definition", buildJsonObject {
+            put("requestId", "kotlin-callable-stale")
+            put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
+            put("semanticLease", "semantic-00000000-0000-4000-8000-000000000099")
+            put("symbol", "kotlin-jvm-callable-v1:${"a".repeat(64)}")
+        }).jsonObject
+        assertEquals("refused", staleCallableDefinition.getValue("status").jsonPrimitive.content)
+        assertEquals("kotlin.symbolsSessionStale", staleCallableDefinition.getValue("failure").jsonObject
+            .getValue("code").jsonPrimitive.content)
+
         val failed = session.dispatch("kotlin.diagnostics", buildJsonObject {
             put("requestId", "kotlin-worker")
             put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)

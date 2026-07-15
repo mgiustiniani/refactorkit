@@ -17,12 +17,13 @@ The first qualified discovery row is intentionally narrow:
 
 | JDK | Kotlin compiler artifact | Discovery status | Semantic authority |
 |---|---|---|---|
-| 21 | `kotlin-compiler-embeddable` 2.0.21, `kotlin-stdlib` 2.0.21, annotations 13.0 | qualified declarative identity/evidence | experimental read-only diagnostics and class/object/interface/enum/annotation search/definition |
+| 21 | `kotlin-compiler-embeddable` 2.0.21, `kotlin-stdlib` 2.0.21, annotations 13.0 | qualified declarative identity/evidence | experimental read-only diagnostics and class/object/interface/enum/annotation/function search/definition |
 
 This selects the Kotlin K2 compiler boundary. Compiler-backed diagnostics use
-`kotlin-compiler-diagnostics-k2-v1`; compiler-proven declared-type symbols use
-`kotlin-compiler-jvm-types-k2-v1`. Anonymous objects, callable/property identities,
-references and refactorings are not claimed.
+`kotlin-compiler-diagnostics-k2-v1`; compiler-proven declaration symbols use
+`kotlin-compiler-jvm-declarations-k2-v1`. It includes the first bounded
+non-overloaded function identity row. Anonymous objects, properties, ambiguous
+callables, references and refactorings are not claimed.
 
 ## Explicit inputs
 
@@ -123,5 +124,5 @@ The diagnostics worker lifecycle, limits, clean environment, immutable overlay,
 argument allowlist, XML hardening, attestation and refusal cases are documented in
 [`kotlin-adapter.md`](kotlin-adapter.md). Semantic execution requires the exact
 attested matching stdlib and qualified annotations runtime before launch. The next
-identity gate covers callable/property declarations on the same exact
-compiler/build projection.
+identity gate covers properties, constructors and broader callable shapes on the
+same exact compiler/build projection.

@@ -1,9 +1,9 @@
 # Kotlin adapter
 
 Status: initial compiler-backed Kotlin/JVM read capabilities implemented for
-`0.7.0-SNAPSHOT`. Diagnostics and bounded JVM declared-type symbol navigation are
-experimental; references, callable/member identity and every mutation remain
-explicitly refused.
+`0.7.0-SNAPSHOT`. Diagnostics plus bounded JVM declared-type and function symbol
+navigation are experimental; references, property/member shapes outside the first
+function row and every mutation remain explicitly refused.
 
 ## Capability boundary
 
@@ -32,7 +32,7 @@ use:
 ```text
 stability: EXPERIMENTAL
 evidence: COMPILER
-backend: kotlin-compiler-jvm-types-k2-v1
+backend: kotlin-compiler-jvm-declarations-k2-v1
 mutationAuthority: NONE
 executionMode: EXTERNAL_PROCESS
 snapshotMode: saved-disk
@@ -79,7 +79,7 @@ Kotlin compiler XML provides line/column starts but no trustworthy end offsets.
 Diagnostics therefore report explicit `LINE_ONLY` precision instead of inventing
 Monaco ranges. Project-level diagnostics report `NONE`.
 
-## Compiler-proven JVM type symbols
+## Compiler-proven JVM declaration symbols
 
 After a successful K2 compilation, the same isolated worker creates a separate
 compiler PSI environment over the exact overlay sources. The qualified catalogue
@@ -103,18 +103,31 @@ Except for implicit `Companion` selecting `object`, the selection equals the
 symbol name. Worker paths are remapped from
 the immutable overlay and must identify a source in the attested snapshot.
 
-The whole symbol read refuses rather than returning a partial declared-type index
-when the snapshot does not compile, a JVM name is unsupported, identity collides,
-binary evidence is missing, or any result/location limit is exceeded. Enum
-entries, callables, type aliases, local classes and anonymous object expressions
-are outside the catalogue and are not presented as indexed symbols. Definition
+The same worker also publishes a first bounded function row. It derives the
+Kotlin file-facade or containing-type JVM owner through compiler APIs, reads the
+generated owner class with bounded ASM, and accepts a source function only when
+exactly one non-synthetic/non-bridge JVM method has the same name. Its public ID
+is `kotlin-jvm-callable-v1:<sha256>` over owner binary name, JVM method name and
+method descriptor. Top-level and direct class/interface/enum/object member
+functions are supported. Extension receivers, suspend lowering, erased generic
+signatures and default arguments are accepted only through that same primary-method
+evidence. Overloads, bridge ambiguity, `@JvmName`, local functions, constructors,
+accessors and synthetic/default helpers refuse or remain excluded rather than
+being guessed.
+
+The whole symbol read refuses rather than returning a partial declaration index
+when the snapshot does not compile, a JVM name/descriptor is unsupported,
+identity collides, binary or callable evidence is missing/ambiguous, or any
+result/location limit is exceeded. Enum entries, properties, type aliases, local
+classes/functions and anonymous object expressions are outside the catalogue and
+are not presented as indexed symbols. Definition
 accepts only an opaque ID returned by this backend and resolves it against a newly
 attested copy of the same saved snapshot. Named/data/nested objects expose exact
 name ranges. An implicit companion has compiler identity/name `Companion` and an
 exact range over its `object` keyword because no source identifier exists.
-Usage-location resolution, functions, properties, parameters, type aliases and
-references remain refused until their semantic identities are separately
-qualified.
+Usage-location resolution, properties, parameters, type aliases, overloaded or
+renamed JVM callables and references remain refused until their semantic
+identities are separately qualified.
 
 ## Integration surfaces
 
@@ -146,7 +159,7 @@ refactorkit kotlin symbols <root> \
   --compiler-classpath <runtime-jars> --query Greeting
 
 refactorkit kotlin definition <root> \
-  --symbol kotlin-jvm-type-v1:<sha256> \
+  --symbol kotlin-jvm-callable-v1:<sha256> \
   --jdk-home <jdk-21> --compiler-jar <compiler.jar> \
   --compiler-classpath <runtime-jars>
 ```
@@ -161,10 +174,11 @@ editor-native publication remains the editor's responsibility in this slice.
 
 ## Remaining gates
 
-Callable/member symbols, usage-location definition, references, Java/Kotlin
-interoperability, immutable editor overlays and every mutation remain
-unimplemented and explicitly refused. The declared-type symbol ID is sufficient
-only for saved-snapshot search-to-definition navigation; it is not rename
+Property/constructor/parameter identity, overloaded callable identity,
+usage-location definition, references, Java/Kotlin interoperability, immutable
+editor overlays and every mutation remain unimplemented and explicitly refused.
+The declaration IDs are sufficient only for saved-snapshot search-to-definition
+navigation; they are not rename
 authority. Managed Kotlin rename still requires complete semantic references,
 preview and staged diagnostics, authorization, `PatchEngine`, WAL, native
 recovery and rollback qualification.

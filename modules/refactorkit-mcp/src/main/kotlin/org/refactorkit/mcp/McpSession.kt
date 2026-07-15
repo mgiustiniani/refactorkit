@@ -184,12 +184,12 @@ class McpSession(
                     "semanticLease" to "string: lease returned by kotlin_semantic_start",
                     "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
                 )))
-            add(tool("kotlin_symbols", "Return compiler-proven Kotlin/JVM type symbols with exact UTF-16 declaration ranges.",
+            add(tool("kotlin_symbols", "Return compiler-proven Kotlin/JVM type and function symbols with exact UTF-16 declaration ranges.",
                 required = listOf("semanticLease", "expectedSnapshotHash"),
                 props = mapOf(
                     "semanticLease" to "string: lease returned by kotlin_semantic_start",
                     "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
-                    "query" to "string: optional case-insensitive type-name filter",
+                    "query" to "string: optional case-insensitive declaration-name filter",
                     "file" to "string: optional normalized workspace-relative Kotlin source",
                 )))
             add(tool("kotlin_definition", "Resolve an opaque Kotlin symbol ID against the attested saved snapshot.",
@@ -462,8 +462,8 @@ class McpSession(
 
     private fun toolKotlinDefinition(args: JsonObject): String {
         val symbol = args.string("symbol") ?: missing("symbol")
-        if (!Regex("kotlin-jvm-type-v1:[0-9a-f]{64}").matches(symbol)) {
-            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM type ID")
+        if (!Regex("kotlin-jvm-(?:type|callable)-v1:[0-9a-f]{64}").matches(symbol)) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM declaration ID")
         }
         return toolKotlinSymbolRead(args, org.refactorkit.core.SymbolId(symbol))
     }

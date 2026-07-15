@@ -1,5 +1,6 @@
 package org.refactorkit.kotlin
 
+import org.junit.jupiter.api.AfterEach
 import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.kotlin.bridge.KotlinCompilerBridgeMain
@@ -16,6 +17,14 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class KotlinCompilerDiagnosticsTest {
+    private val temporaryRoots = mutableListOf<Path>()
+
+    @AfterEach
+    fun removeTemporaryRoots() {
+        temporaryRoots.asReversed().forEach { it.toFile().deleteRecursively() }
+        temporaryRoots.clear()
+    }
+
     @Test
     fun realK2WorkerReturnsCompilerDiagnosticsWithoutMutatingSources() {
         val root = project("class Broken(val missing: MissingType)\n")
@@ -55,18 +64,24 @@ class KotlinCompilerDiagnosticsTest {
     fun successfulK2CompilationReturnsDurableJvmTypeSymbolsWithExactPsiRanges() {
         val declarations = """
             /*😀*/ class Holder {
-                companion object
-                object NestedRegistry
+                fun member(input: String): Int = input.length
+                companion object { fun companionCall(): String = "companion" }
+                object NestedRegistry { fun nestedObjectCall(): String = "nested" }
                 class Nested
-                interface NestedPort
+                interface NestedPort { fun nestedCall(): Unit }
                 enum class NestedMode { ACTIVE }
                 annotation class NestedMarker
             }
-            object Registry
-            data object DataRegistry
-            interface Port
-            enum class Mode { ACTIVE }
+            object Registry { fun find(): String = "found" }
+            data object DataRegistry { fun dataCall(): String = "data" }
+            interface Port { fun execute(value: Int): String }
+            enum class Mode { ACTIVE; fun modeLabel(): String = name }
             annotation class Marker
+            fun topLevel(value: Int): String = value.toString()
+            fun String.extensionCall(prefix: String): String = prefix + this
+            suspend fun suspendCall(value: Int): String = value.toString()
+            fun <T> genericCall(value: T): T = value
+            fun defaultCall(value: String = "default"): String = value
         """.trimIndent() + "\n"
         val root = project(declarations)
         val toolchain = toolchain(root)
@@ -80,6 +95,13 @@ class KotlinCompilerDiagnosticsTest {
             mapOf(
                 "Companion" to org.refactorkit.core.Symbol.Kind.OBJECT,
                 "DataRegistry" to org.refactorkit.core.Symbol.Kind.OBJECT,
+                "companionCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "dataCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "defaultCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "execute" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "extensionCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "find" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "genericCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "Holder" to org.refactorkit.core.Symbol.Kind.CLASS,
                 "Marker" to org.refactorkit.core.Symbol.Kind.ANNOTATION,
                 "Mode" to org.refactorkit.core.Symbol.Kind.ENUM,
@@ -89,13 +111,22 @@ class KotlinCompilerDiagnosticsTest {
                 "NestedPort" to org.refactorkit.core.Symbol.Kind.INTERFACE,
                 "NestedRegistry" to org.refactorkit.core.Symbol.Kind.OBJECT,
                 "Port" to org.refactorkit.core.Symbol.Kind.INTERFACE,
+                "member" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "modeLabel" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "nestedCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "nestedObjectCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "Registry" to org.refactorkit.core.Symbol.Kind.OBJECT,
+                "suspendCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "topLevel" to org.refactorkit.core.Symbol.Kind.FUNCTION,
             ),
             result.index.symbols.sortedBy { it.name }.associate { it.name to it.kind },
         )
         assertEquals(result.index.symbols.size, result.index.symbols.map { it.id }.distinct().size)
         result.index.symbols.forEach { symbol ->
-            assertTrue(symbol.id.value.matches(Regex("kotlin-jvm-type-v1:[0-9a-f]{64}")))
+            val idPattern = if (symbol.kind == org.refactorkit.core.Symbol.Kind.FUNCTION) {
+                Regex("kotlin-jvm-callable-v1:[0-9a-f]{64}")
+            } else Regex("kotlin-jvm-type-v1:[0-9a-f]{64}")
+            assertTrue(symbol.id.value.matches(idPattern), symbol.toString())
             assertEquals(Path.of("src/main/kotlin/fixture/Broken.kt"), symbol.location.path)
             val source = snapshot.files.single { it.path == symbol.location.path }.content
             val line = source.lineSequence().elementAt(symbol.location.range.start.line)
@@ -124,17 +155,83 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
-    fun anonymousObjectIsExcludedWithoutWeakOrSyntheticSymbols() {
-        val root = project("class Container { val anonymous = object {} }\n")
+    fun anonymousObjectLocalsPropertiesAndLambdasAreExcludedWithoutWeakOrSyntheticSymbols() {
+        val root = project("""
+            class Container {
+                val anonymous = object {}
+                private val callback: () -> Unit = {}
+                fun outer() {
+                    fun local() {}
+                    local()
+                }
+            }
+        """.trimIndent() + "\n")
         val toolchain = toolchain(root)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
 
-        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
+        val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
+
+        assertEquals(listOf("Container", "outer"), result.index.symbols.map { it.name }.sorted())
+        assertEquals(
+            setOf(org.refactorkit.core.Symbol.Kind.CLASS, org.refactorkit.core.Symbol.Kind.FUNCTION),
+            result.index.symbols.map { it.kind }.toSet(),
+        )
+    }
+
+    @Test
+    fun callableIdentityChangesWhenJvmDescriptorChanges() {
+        val root = project("fun convert(value: Int): String = value.toString()\n")
+        val toolchain = toolchain(root)
+        fun functionId(): org.refactorkit.core.SymbolId {
+            val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+            return assertIs<KotlinCompilerSymbolsResult.Available>(
+                KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+            ).index.symbols.single { it.name == "convert" }.id
+        }
+        val integerId = functionId()
+        root.resolve("src/main/kotlin/fixture/Broken.kt").writeText(
+            "package fixture\n\n// offset-only change\nfun convert(value: Int): String = value.toString()\n",
+        )
+        assertEquals(integerId, functionId())
+        root.resolve("src/main/kotlin/fixture/Broken.kt").writeText(
+            "package fixture\nfun convert(value: String): String = value\n",
+        )
+
+        val stringId = functionId()
+
+        assertTrue(integerId != stringId)
+        assertTrue(integerId.value.startsWith("kotlin-jvm-callable-v1:"))
+        assertTrue(stringId.value.startsWith("kotlin-jvm-callable-v1:"))
+    }
+
+    @Test
+    fun jvmRenamedFunctionRefusesWithoutSourceToBinaryGuessing() {
+        val root = project("@kotlin.jvm.JvmName(\"binaryName\")\nfun sourceName(): String = \"value\"\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Refused>(
             KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
         )
 
-        assertEquals(listOf("Container"), result.index.symbols.map { it.name })
-        assertTrue(result.index.symbols.all { it.kind == org.refactorkit.core.Symbol.Kind.CLASS })
+        assertEquals("kotlin.symbolCallableEvidenceMissing", result.reason.code)
+    }
+
+    @Test
+    fun overloadedFunctionNameRefusesWithoutGuessingJvmDescriptor() {
+        val root = project("""
+            fun calculate(value: Int): String = value.toString()
+            fun calculate(value: String): String = value
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Refused>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+
+        assertEquals("kotlin.symbolCallableEvidenceAmbiguous", result.reason.code)
     }
 
     @Test
@@ -221,7 +318,7 @@ class KotlinCompilerDiagnosticsTest {
 
     @Test
     fun bridgeRejectsCompilerPluginsAndScriptsBeforeLoadingCompiler() {
-        val root = Files.createTempDirectory("refactorkit-kotlin-bridge-rejection")
+        val root = temporaryDirectory("refactorkit-kotlin-bridge-rejection")
         val source = root.resolve("Source.kt").also { it.writeText("class Source\n") }
         val java = Path.of(System.getProperty("java.home"), "bin", if (isWindows()) "java.exe" else "java")
         val bridgeLocation = Path.of(KotlinCompilerBridgeMain::class.java.protectionDomain.codeSource.location.toURI())
@@ -253,10 +350,13 @@ class KotlinCompilerDiagnosticsTest {
         assertEquals(null, drift.attestation.process)
     }
 
+    private fun temporaryDirectory(prefix: String): Path =
+        Files.createTempDirectory(prefix).also(temporaryRoots::add)
+
     private fun isWindows(): Boolean = System.getProperty("os.name").startsWith("Windows")
 
     private fun project(source: String): Path {
-        val root = Files.createTempDirectory("refactorkit-kotlin-compiler-project")
+        val root = temporaryDirectory("refactorkit-kotlin-compiler-project")
         root.resolve("pom.xml").writeText("""
             <project>
               <modelVersion>4.0.0</modelVersion>
@@ -287,7 +387,7 @@ class KotlinCompilerDiagnosticsTest {
             } }
         val compilerSource = runtime.single { it.fileName.toString().startsWith("kotlin-compiler-embeddable-2.0.21") }
         assertEquals(requiredRuntimePrefixes.size, runtime.distinctBy { it.fileName.toString() }.size)
-        val toolchainRoot = Files.createTempDirectory("refactorkit-kotlin-real-toolchain")
+        val toolchainRoot = temporaryDirectory("refactorkit-kotlin-real-toolchain")
         val compiler = toolchainRoot.resolve(compilerSource.fileName.toString())
         Files.copy(compilerSource, compiler)
         val classpath = runtime.filterNot { it == compilerSource }.distinctBy { it.fileName.toString() }.map { source ->

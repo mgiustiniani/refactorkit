@@ -82,11 +82,12 @@ compiler-plugin loading.
 ## Compiler-read consumers and next gate
 
 `kotlin-compiler-diagnostics-k2-v1` and
-`kotlin-compiler-jvm-types-k2-v1` require an `AVAILABLE` projection, revalidate
+`kotlin-compiler-jvm-declarations-k2-v1` require an `AVAILABLE` projection, revalidate
 its toolchain and classpath evidence, and report the exact build and toolchain
 projection hashes. Scripts and partial/unsupported models refuse before compiler
 launch. The symbol row currently covers successfully compiled classes,
 interfaces, enum classes, annotation classes and named/companion objects with JVM
-binary and compiler PSI evidence. The next gate adds callable and other declaration identity,
-usage-location definition, references and
+binary and compiler PSI evidence plus a bounded non-overloaded function row with
+generated owner/method descriptor evidence. The next gate adds property,
+constructor and broader callable identity, usage-location definition, references and
 conservative mixed Java/Kotlin identity.
