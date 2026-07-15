@@ -130,6 +130,10 @@ def main() -> int:
             "InternalGreeting": "class",
             "Companion": "object",
             "NestedRegistry": "object",
+            "anonymous": "property",
+            "name": "parameter",
+            "normalizer": "property",
+            "value": "parameter",
             "topLevelGreeting": "function",
             "render": "function",
             "greet": "function",
@@ -140,7 +144,10 @@ def main() -> int:
         if actual_kinds != expected_kinds:
             raise AssertionError(f"Kotlin JVM type kinds are incomplete: {symbols}")
         for item in symbol_rows:
-            expected_prefix = "kotlin-jvm-callable-v1:" if item.get("kind") == "function" else "kotlin-jvm-type-v1:"
+            expected_prefix = {
+                "function": "kotlin-jvm-callable-v1:", "property": "kotlin-jvm-property-v1:",
+                "parameter": "kotlin-jvm-parameter-v1:", "type-parameter": "kotlin-jvm-type-parameter-v1:",
+            }.get(item.get("kind"), "kotlin-jvm-type-v1:")
             if not item.get("id", "").startswith(expected_prefix):
                 raise AssertionError(f"Kotlin JVM declaration identity is invalid: {item}")
         greeting = next(item for item in symbol_rows if item.get("name") == "Greeting")
