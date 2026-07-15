@@ -177,7 +177,7 @@ class DaemonSessionTest {
         val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }
         assertEquals(
             listOf(
-                "definition", "diagnostics", "hover", "identifierSearch", "localRename", "outline", "references",
+                "completion", "definition", "diagnostics", "hover", "identifierSearch", "localRename", "outline", "references",
                 "renameSymbol", "workspaceSymbols",
             ),
             capabilities.map { it["operation"]!!.jsonPrimitive.content },

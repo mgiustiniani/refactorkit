@@ -16,6 +16,7 @@ import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.CodeSelection
+import org.refactorkit.core.CompletionTrigger
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileChangeKind
@@ -73,6 +74,7 @@ import org.refactorkit.typescript.TypeScriptBuildModelIntegration
 import org.refactorkit.typescript.TypeScriptDiagnosticsProtocol
 import org.refactorkit.typescript.TypeScriptProjectModelBuilder
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
+import org.refactorkit.typescript.TypeScriptCompletionProjection
 import org.refactorkit.typescript.TypeScriptHoverProjection
 import org.refactorkit.typescript.TypeScriptSemanticStart
 import org.refactorkit.typescript.TypeScriptSemanticToolchain
@@ -314,7 +316,7 @@ class DaemonSession(
             "intelligence.indexStale",
             "Expected workspace index generation is stale",
         )
-        if (kind !in setOf("workspaceSymbols", "documentSymbols", "hover")) return intelligenceRefusal(
+        if (kind !in setOf("workspaceSymbols", "documentSymbols", "completion", "hover")) return intelligenceRefusal(
             requestId,
             kind,
             index,
@@ -337,14 +339,14 @@ class DaemonSession(
         if (kind == "documentSymbols" && path == null) missing("path")
         val sourceAuthority = p["sourceAuthority"] as? JsonObject
         if (sourceAuthority?.string("kind") == "immutable-editor-overlay") {
-            if (kind !in setOf("documentSymbols", "hover") || path == null) return intelligenceRefusal(
+            if (kind !in setOf("documentSymbols", "completion", "hover") || path == null) return intelligenceRefusal(
                 requestId, kind, index, "intelligence.overlayKindUnsupported",
-                "Editor overlay authority currently supports documentSymbols and hover",
+                "Editor overlay authority currently supports documentSymbols, completion and hover",
             )
             val overlayLanguage = languageId ?: missing("languageId")
             if (overlayLanguage !in setOf("typescript", "javascript")) return intelligenceRefusal(
                 requestId, kind, index, "intelligence.overlayProviderUnsupported",
-                "Editor overlay document symbols require TypeScript or JavaScript provider authority",
+                "Editor overlay semantic queries require TypeScript or JavaScript provider authority",
             )
             val lease = p.string("semanticLease") ?: missing("semanticLease")
             if (semanticLeases[overlayLanguage] != lease) return intelligenceRefusal(
@@ -353,21 +355,47 @@ class DaemonSession(
             )
             val overlay = parseIntelligenceOverlay(sourceAuthority, requireSnapshot(), overlayLanguage)
             if (overlay.document(path) == null) throw JsonRpcException(
-                JsonRpcErrorCodes.INVALID_PARAMS, "documentSymbols path must be present in the editor overlay",
+                JsonRpcErrorCodes.INVALID_PARAMS, "$kind path must be present in the editor overlay",
             )
             val semantic = semanticAdapters[overlayLanguage] ?: return intelligenceRefusal(
                 requestId, kind, index, "intelligence.semanticSessionNotReady",
                 "TypeScript semantic provider is not started",
             )
-            if (kind == "hover") {
+            if (kind in setOf("completion", "hover")) {
                 val positionObject = p["position"] as? JsonObject ?: missing("position")
                 val line = positionObject.string("line")?.toIntOrNull() ?: missing("position.line")
                 val character = positionObject.string("character")?.toIntOrNull() ?: missing("position.character")
                 if (line < 0 || character < 0) throw JsonRpcException(
-                    JsonRpcErrorCodes.INVALID_PARAMS, "hover position must be non-negative",
+                    JsonRpcErrorCodes.INVALID_PARAMS, "$kind position must be non-negative",
                 )
+                val position = SourcePosition(line, character)
+                if (kind == "completion") {
+                    val trigger = when (p.string("trigger") ?: "invoked") {
+                        "invoked" -> CompletionTrigger.INVOKED
+                        "trigger-character" -> CompletionTrigger.TRIGGER_CHARACTER
+                        "incomplete-retrigger" -> CompletionTrigger.INCOMPLETE_RETRIGGER
+                        else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "completion trigger is invalid")
+                    }
+                    val triggerCharacter = p.string("triggerCharacter")
+                    if ((trigger == CompletionTrigger.TRIGGER_CHARACTER) != (triggerCharacter != null) ||
+                        triggerCharacter != null && (triggerCharacter.isEmpty() || triggerCharacter.length > 8)) {
+                        throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "completion triggerCharacter is invalid")
+                    }
+                    return when (val completion = semantic.overlayCompletion(
+                        requireSnapshot(), overlay, path, position, trigger, triggerCharacter, requestedLimit,
+                    )) {
+                        is TypeScriptCompletionProjection.Available -> overlayCompletionResponse(
+                            requestId, index, overlayLanguage, overlay, completion,
+                        )
+                        is TypeScriptCompletionProjection.Refused -> intelligenceRefusal(
+                            requestId, kind, index,
+                            completion.diagnostic.code ?: "intelligence.completionUnavailable",
+                            completion.diagnostic.message,
+                        )
+                    }
+                }
                 return when (val hover = semantic.overlayHover(
-                    requireSnapshot(), overlay, path, SourcePosition(line, character),
+                    requireSnapshot(), overlay, path, position,
                 )) {
                     is TypeScriptHoverProjection.Available -> overlayHoverResponse(
                         requestId, index, overlayLanguage, overlay, hover,
@@ -388,9 +416,9 @@ class DaemonSession(
                 throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "saved-snapshot sourceAuthority accepts only kind")
             }
         }
-        if (kind == "hover") return intelligenceRefusal(
-            requestId, kind, index, "intelligence.hoverOverlayRequired",
-            "TypeScript hover currently requires immutable-editor-overlay authority",
+        if (kind in setOf("completion", "hover")) return intelligenceRefusal(
+            requestId, kind, index, "intelligence.${kind}OverlayRequired",
+            "TypeScript $kind currently requires immutable-editor-overlay authority",
         )
         val relevantLanguages = index.sources.asSequence().map { it.languageId }
             .filter { languageId == null || it == languageId }.toSortedSet()
@@ -517,6 +545,42 @@ class DaemonSession(
         })
     }
 
+    private fun overlayCompletionResponse(
+        requestId: String,
+        index: WorkspaceIndex,
+        languageId: String,
+        overlay: ImmutableEditorOverlay,
+        completion: TypeScriptCompletionProjection.Available,
+    ): JsonElement = buildJsonObject {
+        put("schemaVersion", 1); put("requestId", requestId); put("status", "ready"); put("kind", "completion")
+        put("snapshotHash", index.snapshotHash); put("providerSnapshotHash", overlay.providerSnapshot.hash)
+        put("indexGeneration", index.generation); put("incomplete", completion.incomplete)
+        put("providerId", typeScriptIndexProviderId(languageId)); put("backend", TypeScriptToolchainProvenance.PROVIDER_ID)
+        put("evidence", "language-server"); put("provenanceHash", completion.provenanceHash)
+        put("items", buildJsonArray { completion.items.forEach { item -> add(buildJsonObject {
+            put("label", item.label); put("symbolKind", item.kind.name.lowercase().replace('_', '-'))
+            item.detail?.let { put("detail", it) }; item.documentation?.let { put("documentation", it) }
+            item.sortText?.let { put("sortText", it) }; item.filterText?.let { put("filterText", it) }
+            item.insertText?.let { put("insertText", it) }
+            put("insertTextFormat", item.insertTextFormat.name.lowercase().replace('_', '-'))
+            put("commitCharacters", buildJsonArray { item.commitCharacters.forEach { add(JsonPrimitive(it)) } })
+            item.replacementRange?.let { put("replacementRange", rangeToJson(it)) }
+            put("additionalTextEdits", buildJsonArray { item.additionalTextEdits.forEach { edit -> add(buildJsonObject {
+                put("range", rangeToJson(edit.range)); put("newText", edit.newText)
+            }) } })
+        }) } })
+        put("sourceAuthority", overlaySourceAuthority(overlay))
+    }
+
+    private fun overlaySourceAuthority(overlay: ImmutableEditorOverlay): JsonElement = buildJsonObject {
+        put("kind", "immutable-editor-overlay"); put("baseSnapshotHash", overlay.baseSnapshotHash)
+        put("overlayHash", overlay.overlayHash)
+        put("documents", buildJsonArray { overlay.documents.forEach { document -> add(buildJsonObject {
+            put("path", ProtocolPath.serialize(document.path)); put("version", document.version)
+            put("contentSha256", overlay.authority(document.path)!!.contentSha256)
+        }) } })
+    }
+
     private fun overlayHoverResponse(
         requestId: String,
         index: WorkspaceIndex,
@@ -533,14 +597,7 @@ class DaemonSession(
         put("contents", buildJsonArray { hover.sections.forEach { section -> add(buildJsonObject {
             put("format", section.format.name.lowercase().replace('_', '-')); put("value", section.value)
         }) } })
-        put("sourceAuthority", buildJsonObject {
-            put("kind", "immutable-editor-overlay"); put("baseSnapshotHash", overlay.baseSnapshotHash)
-            put("overlayHash", overlay.overlayHash)
-            put("documents", buildJsonArray { overlay.documents.forEach { document -> add(buildJsonObject {
-                put("path", ProtocolPath.serialize(document.path)); put("version", document.version)
-                put("contentSha256", overlay.authority(document.path)!!.contentSha256)
-            }) } })
-        })
+        put("sourceAuthority", overlaySourceAuthority(overlay))
     }
 
     private fun rangeToJson(range: SourceRange): JsonElement = buildJsonObject {
@@ -1942,7 +1999,8 @@ class DaemonSession(
                     "documentSymbols" to true,
                     "immutableEditorOverlayDocumentSymbols" to true,
                     "semanticLease" to true,
-                    "completion" to false,
+                    "completion" to true,
+                    "immutableEditorOverlayCompletion" to true,
                     "hover" to true,
                     "immutableEditorOverlayHover" to true,
                     "signatureHelp" to false,

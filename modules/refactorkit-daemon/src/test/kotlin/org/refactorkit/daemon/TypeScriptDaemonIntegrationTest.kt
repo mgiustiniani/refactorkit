@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.refactorkit.core.CompletionTrigger
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
@@ -20,6 +21,7 @@ import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
+import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticHoverSection
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -33,6 +35,7 @@ import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
 import org.refactorkit.typescript.ToolchainFileEvidence
 import org.refactorkit.typescript.TypeScriptClientSymbolProjection
+import org.refactorkit.typescript.TypeScriptCompletionProjection
 import org.refactorkit.typescript.TypeScriptHoverProjection
 import org.refactorkit.typescript.TypeScriptProjectModel
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
@@ -189,6 +192,22 @@ class TypeScriptDaemonIntegrationTest {
             .getValue("name").jsonPrimitive.content)
         assertTrue("content" !in overlaySymbols.getValue("sourceAuthority").jsonObject
             .getValue("documents").jsonArray.single().jsonObject)
+
+        val completion = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "ts-overlay-completion-1"); put("expectedSnapshotHash", snapshotHash)
+            put("expectedIndexGeneration", indexGeneration); put("kind", "completion"); put("languageId", "typescript")
+            put("path", "src/service.ts"); put("semanticLease", lease); put("limit", 10)
+            put("position", buildJsonObject { put("line", 0); put("character", 16) })
+            put("sourceAuthority", buildJsonObject {
+                put("kind", "immutable-editor-overlay")
+                put("documents", buildJsonArray { add(buildJsonObject {
+                    put("path", "src/service.ts"); put("version", 7); put("content", "export class UnsavedService {}\n")
+                }) })
+            })
+        }).jsonObject
+        assertEquals("ready", completion.getValue("status").jsonPrimitive.content)
+        assertEquals("UnsavedService", completion.getValue("items").jsonArray.single().jsonObject
+            .getValue("label").jsonPrimitive.content)
 
         val hover = session.dispatch("intelligence.query", buildJsonObject {
             put("requestId", "ts-overlay-hover-1"); put("expectedSnapshotHash", snapshotHash)
@@ -474,6 +493,22 @@ class TypeScriptDaemonIntegrationTest {
             "workspaceSymbolProvider", "textDocumentSync",
         )
         override fun buildSymbols(snapshot: ProjectSnapshot) = SymbolIndex(listOf(symbol()))
+        override fun buildOverlayCompletion(
+            savedSnapshot: ProjectSnapshot,
+            overlay: ImmutableEditorOverlay,
+            targetPath: Path,
+            position: SourcePosition,
+            trigger: CompletionTrigger,
+            triggerCharacter: String?,
+            limit: Int,
+        ): TypeScriptCompletionProjection {
+            val name = Regex("class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(
+                overlay.providerSnapshot.files.single { it.path == targetPath }.content,
+            )!!.groupValues[1]
+            return TypeScriptCompletionProjection.Available(
+                listOf(SemanticCompletionItem(name, Symbol.Kind.CLASS, insertText = name)), false, "",
+            )
+        }
         override fun buildOverlayHover(
             savedSnapshot: ProjectSnapshot,
             overlay: ImmutableEditorOverlay,

@@ -6,6 +6,7 @@ import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.buildSourceRootOwnerships
 import org.refactorkit.core.CapabilityStability
 import org.refactorkit.core.CodeSelection
+import org.refactorkit.core.CompletionTrigger
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
@@ -26,6 +27,7 @@ import org.refactorkit.core.RefactoringDescriptor
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
@@ -38,6 +40,7 @@ import org.refactorkit.core.TextEdit
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.treesitter.BonedeTreeSitterBinding
+import org.refactorkit.treesitter.ExternalCompletionProjection
 import org.refactorkit.treesitter.ExternalLspAdapter
 import org.refactorkit.treesitter.ExternalHoverProjection
 import org.refactorkit.treesitter.ExternalSemanticDiagnostics
@@ -71,6 +74,15 @@ sealed interface TypeScriptSemanticStart {
 sealed interface TypeScriptClientSymbolProjection {
     data class Available(val index: SymbolIndex, val truncated: Boolean) : TypeScriptClientSymbolProjection
     data class Refused(val code: String, val message: String) : TypeScriptClientSymbolProjection
+}
+
+sealed interface TypeScriptCompletionProjection {
+    data class Available(
+        val items: List<SemanticCompletionItem>,
+        val incomplete: Boolean,
+        val provenanceHash: String,
+    ) : TypeScriptCompletionProjection
+    data class Refused(val diagnostic: Diagnostic) : TypeScriptCompletionProjection
 }
 
 sealed interface TypeScriptHoverProjection {
@@ -114,6 +126,17 @@ interface TypeScriptSemanticClient : AutoCloseable {
         val symbols = buildSymbols(overlay.providerSnapshot).symbols.filter { it.location.path.normalize() == targetPath.normalize() }
         return TypeScriptClientSymbolProjection.Available(SymbolIndex(symbols.take(limit)), symbols.size > limit)
     }
+    fun buildOverlayCompletion(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        trigger: CompletionTrigger,
+        triggerCharacter: String?,
+        limit: Int,
+    ): TypeScriptCompletionProjection = TypeScriptCompletionProjection.Refused(Diagnostic(
+        "TypeScript completion is unavailable", Diagnostic.Severity.ERROR, code = "semantic.completionUnavailable",
+    ))
     fun buildOverlayHover(
         savedSnapshot: ProjectSnapshot,
         overlay: ImmutableEditorOverlay,
@@ -180,6 +203,24 @@ class ExternalTypeScriptSemanticClient(
         is ExternalSymbolProjection.Unavailable -> TypeScriptClientSymbolProjection.Refused(
             projection.failure.code, projection.failure.message,
         )
+    }
+    override fun buildOverlayCompletion(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        trigger: CompletionTrigger,
+        triggerCharacter: String?,
+        limit: Int,
+    ): TypeScriptCompletionProjection = when (val projection = adapter.buildOverlayCompletion(
+        savedSnapshot, overlay, targetPath, position, trigger, triggerCharacter, limit,
+    )) {
+        is ExternalCompletionProjection.Available -> TypeScriptCompletionProjection.Available(
+            projection.items, projection.incomplete, "",
+        )
+        is ExternalCompletionProjection.Unavailable -> TypeScriptCompletionProjection.Refused(Diagnostic(
+            projection.failure.message, Diagnostic.Severity.ERROR, code = projection.failure.code,
+        ))
     }
     override fun buildOverlayHover(
         savedSnapshot: ProjectSnapshot,
@@ -410,6 +451,37 @@ class TypeScriptSemanticAdapter(
         }
     }
 
+    fun overlayCompletion(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        trigger: CompletionTrigger,
+        triggerCharacter: String?,
+        limit: Int,
+    ): TypeScriptCompletionProjection {
+        validateOverlayRequest(savedSnapshot, overlay)?.let { return TypeScriptCompletionProjection.Refused(it) }
+        val source = overlay.providerSnapshot.files.singleOrNull { it.path.normalize() == targetPath.normalize() }
+            ?: return TypeScriptCompletionProjection.Refused(diagnostic(
+                "typescript.completionTargetMissing", "Completion target is not part of the editor overlay",
+            ))
+        if (!validPosition(source.content, position)) return TypeScriptCompletionProjection.Refused(diagnostic(
+            "typescript.completionPositionInvalid", "Completion position is outside the overlay document",
+        ))
+        return when (val result = client.buildOverlayCompletion(
+            savedSnapshot, overlay, targetPath, position, trigger, triggerCharacter, limit,
+        )) {
+            is TypeScriptCompletionProjection.Available -> {
+                if (!validCompletionEdits(source.content, result.items)) return TypeScriptCompletionProjection.Refused(diagnostic(
+                    "typescript.completionEditInvalid", "Completion provider returned an out-of-document or overlapping edit",
+                ))
+                rememberOverlayVersions(overlay)
+                result.copy(provenanceHash = symbolProjectionProvenanceHash())
+            }
+            is TypeScriptCompletionProjection.Refused -> result
+        }
+    }
+
     fun overlayHover(
         savedSnapshot: ProjectSnapshot,
         overlay: ImmutableEditorOverlay,
@@ -484,6 +556,12 @@ class TypeScriptSemanticAdapter(
     private fun validPosition(content: String, position: SourcePosition): Boolean {
         val lines = content.split('\n')
         return position.line in lines.indices && position.character <= lines[position.line].length
+    }
+
+    private fun validCompletionEdits(content: String, items: List<SemanticCompletionItem>): Boolean = items.all { item ->
+        val edits = listOfNotNull(item.replacementRange?.let { TextEdit(it, item.insertText ?: item.label) }) + item.additionalTextEdits
+        edits.all { validPosition(content, it.range.start) && validPosition(content, it.range.end) } &&
+            edits.indices.none { left -> edits.indices.any { right -> left < right && edits[left].range.overlaps(edits[right].range) } }
     }
 
     fun searchWorkspaceSymbols(project: ProjectSnapshot, query: String): List<org.refactorkit.core.Symbol> =
@@ -1021,6 +1099,7 @@ class TypeScriptSemanticAdapter(
             extensions = if (languageId == "typescript") setOf("ts", "tsx") else setOf("js", "jsx"),
             backend = TypeScriptToolchainProvenance.PROVIDER_ID,
             capabilities = listOf(
+                LanguageCapability("completion", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("definition", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("workspaceSymbols", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("hover", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),

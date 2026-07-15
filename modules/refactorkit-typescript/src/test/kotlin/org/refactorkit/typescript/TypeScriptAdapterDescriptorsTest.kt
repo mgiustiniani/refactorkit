@@ -17,7 +17,7 @@ class TypeScriptAdapterDescriptorsTest {
         assertEquals(setOf("ts", "tsx"), descriptor.extensions)
         assertEquals(
             listOf(
-                "definition", "diagnostics", "hover", "identifierSearch", "localRename", "outline", "references",
+                "completion", "definition", "diagnostics", "hover", "identifierSearch", "localRename", "outline", "references",
                 "renameSymbol", "workspaceSymbols",
             ),
             descriptor.capabilities.map { it.operation },

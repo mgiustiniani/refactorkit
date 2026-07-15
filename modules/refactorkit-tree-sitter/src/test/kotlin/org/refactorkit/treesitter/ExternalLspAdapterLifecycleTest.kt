@@ -1,5 +1,6 @@
 package org.refactorkit.treesitter
 
+import org.refactorkit.core.CompletionTrigger
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
 import org.refactorkit.core.DiagnosticEvidence
@@ -201,6 +202,11 @@ class ExternalLspAdapterLifecycleTest {
             adapter.buildOverlayDocumentSymbolProjection(snapshot, overlay, Path.of("sample.ts"), 100),
         )
         assertEquals(listOf("OverlayService"), overlaid.index.symbols.map { it.name })
+        val completion = assertIs<ExternalCompletionProjection.Available>(adapter.buildOverlayCompletion(
+            snapshot, overlay, Path.of("sample.ts"), SourcePosition(0, 16), CompletionTrigger.INVOKED, null, 10,
+        ))
+        assertEquals("OverlayService", completion.items.single().label)
+        assertEquals("OverlayService", completion.items.single().insertText)
         val hover = assertIs<ExternalHoverProjection.Available>(adapter.buildOverlayHover(
             snapshot, overlay, Path.of("sample.ts"), SourcePosition(0, 16),
         ))
@@ -278,7 +284,7 @@ object ExternalLspFixture {
                     }
                     else -> {
                         val rename = if (mode == "boolean-rename") "true" else "{\"prepareProvider\":true}"
-                        writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"hoverProvider":true,"renameProvider":$rename,"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
+                        writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"capabilities":{"definitionProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"hoverProvider":true,"completionProvider":{"triggerCharacters":["."]},"renameProvider":$rename,"textDocumentSync":{"change":1,"openClose":true}},"serverInfo":{"name":"Sémantique","version":"1.2.3"}}}""")
                     }
                 }
                 "textDocument/didOpen", "textDocument/didChange" -> {
@@ -295,6 +301,10 @@ object ExternalLspFixture {
                     if (mode == "slow-symbol") Thread.sleep(300)
                     val name = if (overlayDocument) "OverlayService" else "Service"
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"$name","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":30}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":${13 + name.length}}}}]}""")
+                }
+                "textDocument/completion" -> {
+                    val name = if (overlayDocument) "OverlayService" else "Service"
+                    writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"isIncomplete":false,"items":[{"label":"$name","kind":7,"detail":"class $name","textEdit":{"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":${13 + name.length}}},"newText":"$name"},"additionalTextEdits":[]}]}}""")
                 }
                 "textDocument/hover" -> {
                     val name = if (overlayDocument) "OverlayService" else "Service"

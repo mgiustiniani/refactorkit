@@ -4,6 +4,7 @@
   "title": "RefactorKit API 0.2 intelligence.query response",
   "oneOf": [
     {"$ref": "#/$defs/ready"},
+    {"$ref": "#/$defs/completion"},
     {"$ref": "#/$defs/hover"},
     {"$ref": "#/$defs/refused"}
   ],
@@ -82,6 +83,36 @@
             "returned": {"type": "integer", "minimum": 0, "maximum": 200},
             "truncated": {"type": "boolean"},
             "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/symbol"}}
+          }
+        }
+      ]
+    },
+    "completion": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "providerSnapshotHash", "indexGeneration", "providerId", "backend", "evidence", "provenanceHash", "incomplete", "items", "sourceAuthority"],
+          "properties": {
+            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
+            "status": {"const": "ready"}, "kind": {"const": "completion"},
+            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "providerId": {"type": "string"}, "backend": {"type": "string"},
+            "evidence": {"const": "language-server"},
+            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "incomplete": {"type": "boolean"},
+            "items": {"type": "array", "maxItems": 200, "items": {"type": "object", "additionalProperties": false, "required": ["label", "symbolKind", "insertTextFormat", "commitCharacters", "additionalTextEdits"], "properties": {
+              "label": {"type": "string", "minLength": 1, "maxLength": 512}, "symbolKind": {"type": "string"},
+              "detail": {"type": "string", "maxLength": 4096}, "documentation": {"type": "string", "maxLength": 16384},
+              "sortText": {"type": "string", "maxLength": 65536}, "filterText": {"type": "string", "maxLength": 65536},
+              "insertText": {"type": "string", "maxLength": 65536},
+              "insertTextFormat": {"enum": ["plain-text", "snippet"]},
+              "commitCharacters": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 8}},
+              "replacementRange": {"$ref": "#/$defs/location/properties/range"},
+              "additionalTextEdits": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": false, "required": ["range", "newText"], "properties": {"range": {"$ref": "#/$defs/location/properties/range"}, "newText": {"type": "string", "maxLength": 65536}}}}
+            }}},
+            "sourceAuthority": {"type": "object"}
           }
         }
       ]

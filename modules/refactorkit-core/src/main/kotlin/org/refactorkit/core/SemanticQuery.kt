@@ -235,6 +235,8 @@ sealed interface SemanticQueryResponse {
     ) : SemanticQueryResponse
 }
 
+enum class SemanticInsertTextFormat { PLAIN_TEXT, SNIPPET }
+
 data class SemanticCompletionItem(
     val label: String,
     val kind: Symbol.Kind,
@@ -243,6 +245,8 @@ data class SemanticCompletionItem(
     val sortText: String? = null,
     val filterText: String? = null,
     val insertText: String? = null,
+    val insertTextFormat: SemanticInsertTextFormat = SemanticInsertTextFormat.PLAIN_TEXT,
+    val commitCharacters: List<String> = emptyList(),
     val replacementRange: SourceRange? = null,
     val additionalTextEdits: List<TextEdit> = emptyList(),
 )

@@ -153,7 +153,7 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
 
         mark_stage("immutable overlay document symbols")
         saved_service = (workspace / "src" / "core" / "UserService.ts").read_text()
-        overlay_service = saved_service.replace("UserService", "UnsavedService")
+        overlay_service = saved_service.replace("UserService", "UnsavedService") + "\nconst unsaved = new UnsavedService();\nunsaved.\n"
         overlay_symbols = exchange("intelligence.query", {
             "requestId": "native-daemon-overlay-symbols",
             "expectedSnapshotHash": opened["result"]["snapshotHash"],
@@ -173,6 +173,27 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
             raise AssertionError(f"overlay authority leaked content or is incomplete: {authority}")
         if (workspace / "src" / "core" / "UserService.ts").read_text() != saved_service:
             raise AssertionError("overlay document-symbol query modified saved source")
+
+        mark_stage("immutable overlay completion")
+        completion = exchange("intelligence.query", {
+            "requestId": "native-daemon-overlay-completion",
+            "expectedSnapshotHash": opened["result"]["snapshotHash"],
+            "expectedIndexGeneration": restarted["index"]["generation"],
+            "kind": "completion", "languageId": "typescript", "path": "src/core/UserService.ts",
+            "semanticLease": restarted["semanticLease"], "position": {"line": 7, "character": 8},
+            "limit": 50,
+            "sourceAuthority": {
+                "kind": "immutable-editor-overlay",
+                "documents": [{"path": "src/core/UserService.ts", "version": 11, "content": overlay_service}],
+            },
+        })
+        completion_result = completion.get("result", {})
+        if completion.get("error") or completion_result.get("status") != "ready":
+            raise AssertionError(f"overlay completion failed: {completion}")
+        if "greet" not in [item.get("label") for item in completion_result.get("items", [])]:
+            raise AssertionError(f"overlay completion did not include greet: {completion_result}")
+        if any("content" in document for document in completion_result.get("sourceAuthority", {}).get("documents", [])):
+            raise AssertionError(f"overlay completion leaked source content: {completion_result}")
 
         mark_stage("immutable overlay hover")
         hover = exchange("intelligence.query", {

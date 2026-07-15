@@ -90,19 +90,22 @@ Read-only indexing creates no workspace metadata.
 `index.status` reports snapshot/generation, source/symbol counts, indexed
 languages and provider evidence/completeness/truncation without source text or
 local toolchain paths. `intelligence.query` currently implements typed,
-zero-based UTF-16 `workspaceSymbols` and `documentSymbols` results. Requests are
-bounded to 200 results and correlated to the exact expected snapshot.
-`completion`, `hover`, `signatureHelp`, definition-at-position and
-references-at-position return `status=refused` with
-`intelligence.queryUnsupported` until their JDT, tsserver and K2 implementations
-are qualified. They never fall back to fabricated lexical semantics.
+zero-based UTF-16 `workspaceSymbols`, `documentSymbols`, TypeScript/JavaScript
+`completion`, and TypeScript/JavaScript `hover` results. Requests are bounded to
+200 results and correlated to the exact expected snapshot. Signature help,
+definition-at-position, references-at-position, and unsupported language/provider
+rows remain refused until their implementations qualify. They never fall back to
+fabricated lexical semantics.
 
-TypeScript/JavaScript `documentSymbols` and `hover` additionally accept
+TypeScript/JavaScript `documentSymbols`, `completion` and `hover` additionally accept
 `sourceAuthority.kind=immutable-editor-overlay`, versioned existing documents and
 the active `semanticLease`. The selected path must be in the overlay. RefactorKit
 queries the derived provider snapshot, rejects stale versions, restores saved LSP
 documents before returning, and reports provider/overlay hashes without echoing
-content. Hover additionally requires a zero-based UTF-16 `position` and returns
+content. Completion and hover additionally require a zero-based UTF-16
+`position`. Completion returns bounded typed candidates, replacement ranges,
+additional text edits, snippet/plain-text format, commit characters and explicit
+incompleteness. Provider completion commands are not executed. Hover returns
 bounded typed plaintext/Markdown sections plus an optional exact range. The response schema is
 [`api-0.2-intelligence-query-schema.json`](api-0.2-intelligence-query-schema.json).
 

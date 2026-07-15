@@ -24,6 +24,10 @@ review safety boundaries before applying refactorings.
   immutable editor overlays. Requests require snapshot/index/lease/path/version
   authority; stale versions refuse, responses omit content, and the persistent
   language server restores saved documents before any later semantic operation.
+- Add typed TypeScript/JavaScript completion through immutable editor overlays,
+  including invocation/trigger/retrigger context, bounded operation-specific items,
+  symbol kinds, insertion/replacement data, additional text edits, incompleteness,
+  exact provider provenance and saved-document restoration.
 - Add the first typed hover query through the same TypeScript/JavaScript overlay
   authority pipeline. Hover returns bounded plaintext/Markdown sections, optional
   exact UTF-16 range and provider provenance; malformed/out-of-range/provider-

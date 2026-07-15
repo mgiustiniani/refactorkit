@@ -35,9 +35,9 @@ qualified Kotlin compiler classes load after authorized compiler queries.
 The shared `ImmutableEditorOverlay` now derives versioned in-memory provider
 snapshots and binds exact overlay authority into typed semantic-query envelopes;
 TypeScript exact diagnostics consume that shared model. Workspace/document symbol
-queries are implemented while completion, hover,
-signature help and position-based navigation remain refused until their persistent
-JDT, tsserver and K2 providers qualify. The long-range `v1.0.0` roadmap evolves
+queries and the first TypeScript/JavaScript completion and hover rows are
+implemented. Signature help, position-based navigation, and other provider rows
+remain refused until their persistent JDT, tsserver and K2 implementations qualify. The long-range `v1.0.0` roadmap evolves
 the language-neutral core into a deep multi-language platform rather than
 freezing a Java-only stable API. Java remains the reference and widest catalogue;
 TypeScript/JavaScript, Kotlin, Python, Go, Scala, C/C++, Objective-C, Swift,

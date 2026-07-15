@@ -3,11 +3,13 @@ package org.refactorkit.treesitter
 import org.refactorkit.core.AdapterExecutionMode
 import org.refactorkit.core.CapabilityStability
 import org.refactorkit.core.CodeSelection
+import org.refactorkit.core.CompletionTrigger
 import org.refactorkit.core.LanguageAdapterDescriptor
 import org.refactorkit.core.LanguageAdapterResourceLimits
 import org.refactorkit.core.LanguageAdapterRuntime
 import org.refactorkit.core.LanguageCapability
 import org.refactorkit.core.MutationAuthority
+import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.ExternalSemanticProcessManager
 import org.refactorkit.core.ManagedSemanticProcess
@@ -93,6 +95,14 @@ data class ExternalSemanticFailure(val code: String, val message: String)
 sealed interface ExternalSymbolProjection {
     data class Available(val index: SymbolIndex, val truncated: Boolean) : ExternalSymbolProjection
     data class Unavailable(val failure: ExternalSemanticFailure) : ExternalSymbolProjection
+}
+
+sealed interface ExternalCompletionProjection {
+    data class Available(
+        val items: List<SemanticCompletionItem>,
+        val incomplete: Boolean,
+    ) : ExternalCompletionProjection
+    data class Unavailable(val failure: ExternalSemanticFailure) : ExternalCompletionProjection
 }
 
 sealed interface ExternalHoverProjection {
@@ -454,6 +464,82 @@ class ExternalLspAdapter(
         return result ?: ExternalSymbolProjection.Unavailable(ExternalSemanticFailure(
             "semantic.documentSymbolsUnavailable", "Editor overlay document symbols are unavailable",
         ))
+    }
+
+    fun buildOverlayCompletion(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        trigger: CompletionTrigger,
+        triggerCharacter: String?,
+        limit: Int,
+        timeoutMillis: Long = requestTimeoutMillis,
+    ): ExternalCompletionProjection {
+        require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
+        require(limit in 1..org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS) { "completion limit is invalid" }
+        val target = targetPath.normalize()
+        require(overlay.document(target) != null) { "completion target is not part of the editor overlay" }
+        val saved = savedSnapshot.files.associateBy { it.path.normalize() }
+        val provider = overlay.providerSnapshot.files.associateBy { it.path.normalize() }
+        lastFailure = null
+        if (!isRunning || !supportsServerCapability("completionProvider")) return ExternalCompletionProjection.Unavailable(
+            ExternalSemanticFailure("semantic.completionUnavailable", "External semantic completion is unavailable"),
+        )
+        val changed = overlay.documents.map { it.path.normalize() }.sortedBy(Path::toString)
+        var result: ExternalCompletionProjection? = null
+        try {
+            for (document in overlay.documents) {
+                val path = document.path.normalize()
+                closeDocument(path)
+                if (!openDocument(provider.getValue(path), document.version)) {
+                    result = ExternalCompletionProjection.Unavailable(lastFailure ?: ExternalSemanticFailure(
+                        "semantic.overlaySynchronizationFailed", "Editor overlay document synchronization failed",
+                    ))
+                    break
+                }
+            }
+            if (result == null) {
+                val semantic = semanticPath(target) ?: error("completion target has no semantic path")
+                val triggerKind = when (trigger) {
+                    CompletionTrigger.INVOKED -> 1
+                    CompletionTrigger.TRIGGER_CHARACTER -> 2
+                    CompletionTrigger.INCOMPLETE_RETRIGGER -> 3
+                }
+                val context = buildString {
+                    append("{\"triggerKind\":").append(triggerKind)
+                    triggerCharacter?.let { append(",\"triggerCharacter\":").append(LspJson.quote(it)) }
+                    append('}')
+                }
+                val response = sendRequest(
+                    "textDocument/completion",
+                    """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}},"context":$context}""",
+                    timeoutMillis,
+                )
+                val parsed = response?.let { LspJson.extractField(it, "result") }
+                    ?.let { LspCompletionParser.parse(it, limit) }
+                result = when {
+                    lastFailure != null -> ExternalCompletionProjection.Unavailable(requireNotNull(lastFailure))
+                    parsed == null -> ExternalCompletionProjection.Unavailable(ExternalSemanticFailure(
+                        "semantic.completionResponseInvalid", "External semantic completion response is invalid",
+                    ))
+                    else -> ExternalCompletionProjection.Available(parsed.items, parsed.incomplete)
+                }
+            }
+        } finally {
+            var restored = true
+            changed.forEach { path ->
+                closeDocument(path)
+                restored = openDocument(saved.getValue(path), 1) && restored
+            }
+            if (!restored) {
+                failAndStop("semantic.overlayRestoreFailed", "Saved document state could not be restored after completion query")
+                result = ExternalCompletionProjection.Unavailable(requireNotNull(lastFailure))
+            }
+        }
+        return result ?: ExternalCompletionProjection.Unavailable(
+            ExternalSemanticFailure("semantic.completionUnavailable", "External semantic completion is unavailable"),
+        )
     }
 
     fun buildOverlayHover(
@@ -1244,7 +1330,7 @@ class ExternalLspAdapter(
         private val PROCESS_SEQUENCE = AtomicInteger(1)
         private val KNOWN_SERVER_CAPABILITIES = sortedSetOf(
             "definitionProvider", "referencesProvider", "renameProvider", "prepareRenameProvider",
-            "documentSymbolProvider", "workspaceSymbolProvider", "hoverProvider", "textDocumentSync",
+            "documentSymbolProvider", "workspaceSymbolProvider", "hoverProvider", "completionProvider", "textDocumentSync",
         )
         private val LSP_METHOD = Regex("[A-Za-z0-9_" + '$' + "./-]{1,128}")
 
