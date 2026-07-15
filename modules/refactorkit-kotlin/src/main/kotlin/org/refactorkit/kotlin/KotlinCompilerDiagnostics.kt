@@ -64,7 +64,12 @@ enum class KotlinDeclarationVisibility { PUBLIC, INTERNAL, PROTECTED, PRIVATE }
 data class KotlinCompilerDeclarationEvidence(
     val id: SymbolId,
     val visibility: KotlinDeclarationVisibility,
+    val jvmIdentity: String = "",
+    val jvmOwner: String = "",
+    val jvmDescriptor: String = "",
 )
+
+private class CompiledOutputConsumerException(cause: Throwable) : RuntimeException(cause)
 
 private data class ParsedKotlinSymbols(
     val index: SymbolIndex,
@@ -136,7 +141,21 @@ class KotlinCompilerDiagnostics private constructor(
         requestTimeoutMillis: Long,
         bridgeClass: Class<*>,
     ) : this(toolchain, ExecutionConfiguration(requestTimeoutMillis, bridgeClass))
-    fun analyze(snapshot: ProjectSnapshot): KotlinCompilerDiagnosticsResult {
+    fun analyze(snapshot: ProjectSnapshot): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, null)
+
+    /**
+     * Supplies compiler-produced classes only while their immutable disposable overlay is alive.
+     * The consumer must not retain the path or mutate the output directory.
+     */
+    fun analyzeWithCompiledOutput(
+        snapshot: ProjectSnapshot,
+        consumer: (Path) -> Unit,
+    ): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, consumer)
+
+    private fun analyzeInternal(
+        snapshot: ProjectSnapshot,
+        compiledOutputConsumer: ((Path) -> Unit)?,
+    ): KotlinCompilerDiagnosticsResult {
         val model = snapshot.buildModels.singleOrNull { it.providerId == KotlinJvmBuildModelProjector.PROVIDER_ID }
         val buildHash = model?.attributes?.get("projectionHash").orEmpty()
         fun attestation(process: SemanticProcessProvenance? = null) = KotlinCompilerDiagnosticsAttestation(
@@ -240,9 +259,24 @@ class KotlinCompilerDiagnostics private constructor(
             val execution = execute(snapshot.hash, overlay, compilerArguments)
             val mutations = overlay.verifySourcesUnchanged()
             if (mutations.isNotEmpty()) return KotlinCompilerDiagnosticsResult.Error(mutations.first(), attestation(execution.provenance))
-            parse(execution.output, snapshot, overlay, attestation(execution.provenance))
+            val parsed = parse(execution.output, snapshot, overlay, attestation(execution.provenance))
+            if (compiledOutputConsumer != null && parsed is KotlinCompilerDiagnosticsResult.Available &&
+                parsed.diagnostics.none { it.severity == Diagnostic.Severity.ERROR }) {
+                try {
+                    compiledOutputConsumer(outputDirectory)
+                } catch (failure: Exception) {
+                    throw CompiledOutputConsumerException(failure)
+                }
+                val outputMutation = overlay.verifySourcesUnchanged()
+                if (outputMutation.isNotEmpty()) return KotlinCompilerDiagnosticsResult.Error(
+                    outputMutation.first(), attestation(execution.provenance),
+                )
+            }
+            parsed
         } catch (failure: KotlinCompilerExecutionException) {
             error(failure.code, failure.message ?: "Kotlin compiler diagnostics failed", attestation(failure.provenance))
+        } catch (_: CompiledOutputConsumerException) {
+            error("kotlin.compiledOutputConsumerFailed", "Kotlin compiled-output evidence consumer failed", attestation())
         } catch (_: Exception) {
             error("kotlin.compilerDiagnosticsFailed", "Kotlin compiler diagnostics failed", attestation())
         } finally {
@@ -514,7 +548,13 @@ class KotlinCompilerDiagnostics private constructor(
                 "Kotlin compiler symbol range is invalid"
             }
             check(ids.add(id) && identityIds.put(identity, id) == null &&
-                declarations.put(id, KotlinCompilerDeclarationEvidence(id, visibility)) == null) {
+                declarations.put(id, KotlinCompilerDeclarationEvidence(
+                    id = id,
+                    visibility = visibility,
+                    jvmIdentity = identity,
+                    jvmOwner = owner,
+                    jvmDescriptor = descriptor,
+                )) == null) {
                 "Kotlin compiler symbol identity is duplicated"
             }
             Symbol(

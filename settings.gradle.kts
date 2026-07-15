@@ -25,5 +25,6 @@ include(
     ":modules:refactorkit-tree-sitter",
     ":modules:refactorkit-typescript",
     ":modules:refactorkit-kotlin",
+    ":modules:refactorkit-jvm",
     ":modules:refactorkit-testkit",
 )

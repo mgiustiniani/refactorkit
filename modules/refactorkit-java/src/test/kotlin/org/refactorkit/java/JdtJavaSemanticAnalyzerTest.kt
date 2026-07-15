@@ -461,6 +461,33 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun jdtBindingUsesRetainQualifiedBinaryIdentityFromEphemeralClasspath() {
+        val root = Files.createTempDirectory("rk-jdt-ephemeral-binary-test")
+        val binarySource = root.resolve("binary-src/fixture/PublicGreeting.java").apply {
+            Files.createDirectories(parent)
+            writeText("package fixture; public class PublicGreeting {}\n")
+        }
+        val output = root.resolve("ephemeral-output").also { Files.createDirectories(it) }
+        val compiler = ToolProvider.getSystemJavaCompiler() ?: error("JDK compiler is required for this test")
+        assertEquals(0, compiler.run(null, null, null, "-d", output.toString(), binarySource.toString()))
+        root.resolve("src/main/java/fixture/Caller.java").apply {
+            Files.createDirectories(parent)
+            writeText("package fixture; class Caller { PublicGreeting value = new PublicGreeting(); }\n")
+        }
+
+        val snapshot = JavaProjectScanner().scan(root)
+        val result = JdtJavaSemanticAnalyzer().analyze(
+            snapshot,
+            additionalClasspathEntries = listOf(output),
+        )
+        val uses = result.bindingUses.filter { it.symbolQualifiedName == "fixture.PublicGreeting" }
+
+        assertTrue(result.warnings.isEmpty(), "expected ephemeral binary resolution, got ${result.warnings}")
+        assertTrue(uses.size >= 2, "expected exact binary-backed Java uses, got $uses")
+        assertTrue(uses.all { it.simpleName == "PublicGreeting" && it.evidence == JdtJavaSemanticEvidence.JDT_BINDING })
+    }
+
+    @Test
     fun jdtAnalyzerUsesGeneratedMavenDependencyClasspathFile() {
         val root = Files.createTempDirectory("rk-jdt-generated-classpath-test")
         val dependencySource = root.resolve("dependency-src/external/Dependency.java").apply {

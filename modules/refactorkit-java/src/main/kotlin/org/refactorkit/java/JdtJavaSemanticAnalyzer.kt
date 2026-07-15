@@ -45,9 +45,21 @@ import java.nio.file.Path
  * into planners and covered by semantic tests.
  */
 class JdtJavaSemanticAnalyzer {
+    /** API 0.2 entry point retained while ephemeral binary evidence remains additive. */
     fun analyze(
         snapshot: ProjectSnapshot,
         cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): JdtJavaSemanticAnalysisResult = analyze(snapshot, cancellation, emptyList())
+
+    fun analyze(
+        snapshot: ProjectSnapshot,
+        additionalClasspathEntries: List<Path>,
+    ): JdtJavaSemanticAnalysisResult = analyze(snapshot, SemanticCancellationToken.NONE, additionalClasspathEntries)
+
+    fun analyze(
+        snapshot: ProjectSnapshot,
+        cancellation: SemanticCancellationToken,
+        additionalClasspathEntries: List<Path>,
     ): JdtJavaSemanticAnalysisResult {
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
@@ -79,10 +91,10 @@ class JdtJavaSemanticAnalyzer {
                         addAll(dependency.generatedSourceRoots)
                     }
                 }.ifEmpty { visibleModules.flatMap(Module::sourceRoots) }
-                val classpathPaths = buildEnvironment?.classpathEntries ?: buildList {
+                val classpathPaths = ((buildEnvironment?.classpathEntries ?: buildList {
                     if (owner != null) addAll(if (isTestSource) owner.testClasspathEntries else owner.mainClasspathEntries)
                     visibleModules.filter { it != owner }.forEach { addAll(it.mainClasspathEntries) }
-                }.ifEmpty { visibleModules.flatMap(Module::classpathEntries) }
+                }.ifEmpty { visibleModules.flatMap(Module::classpathEntries) }) + additionalClasspathEntries).distinct()
                 val sourceRoots = sourceRootPaths
                     .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
                     .filter { Files.isDirectory(Path.of(it)) }
@@ -131,6 +143,7 @@ class JdtJavaSemanticAnalyzer {
                     line = raw.line,
                     sourceRange = raw.sourceRange,
                     bindingKey = bindingKey,
+                    symbolQualifiedName = raw.symbolQualifiedName,
                     isImport = raw.isImport,
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                 )
@@ -841,9 +854,21 @@ data class JdtJavaSemanticBindingUse(
     val line: Int,
     val sourceRange: SourceRange,
     val bindingKey: String,
+    val symbolQualifiedName: String?,
     val isImport: Boolean,
     val evidence: JdtJavaSemanticEvidence,
-)
+) {
+    /** API 0.2 compatibility constructor retained while qualified binary identity is additive. */
+    constructor(
+        simpleName: String,
+        path: Path,
+        line: Int,
+        sourceRange: SourceRange,
+        bindingKey: String,
+        isImport: Boolean,
+        evidence: JdtJavaSemanticEvidence,
+    ) : this(simpleName, path, line, sourceRange, bindingKey, null, isImport, evidence)
+}
 
 enum class JdtJavaDiagnosticCategory {
     SYNTAX,

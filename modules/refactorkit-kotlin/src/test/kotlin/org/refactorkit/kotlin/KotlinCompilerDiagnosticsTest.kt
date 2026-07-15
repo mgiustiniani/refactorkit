@@ -338,6 +338,34 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun compilerOutputLetsJdtProveJavaUsesOfPublicKotlinType() {
+        val root = project("public class PublicGreeting\n")
+        root.resolve("src/main/java/fixture/Caller.java").apply {
+            java.nio.file.Files.createDirectories(parent)
+            writeText(
+                "package fixture; class Caller { PublicGreeting value = new PublicGreeting(); }\n",
+            )
+        }
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        var javaUses = emptyList<org.refactorkit.java.JdtJavaSemanticBindingUse>()
+
+        val result = adapter.compilerDiagnosticsWithOutput(snapshot) { output ->
+            javaUses = org.refactorkit.java.JdtJavaSemanticAnalyzer().analyze(
+                snapshot,
+                additionalClasspathEntries = listOf(output),
+            ).bindingUses.filter { it.symbolQualifiedName == "fixture.PublicGreeting" }
+        }
+
+        val available = assertIs<KotlinCompilerDiagnosticsResult.Available>(result)
+        val target = available.symbols!!.symbols.single { it.name == "PublicGreeting" }
+        assertEquals("fixture.PublicGreeting", available.declarations.getValue(target.id).jvmIdentity)
+        assertTrue(javaUses.size >= 2, "expected binary-backed JDT uses, got $javaUses")
+        assertTrue(javaUses.all { it.simpleName == "PublicGreeting" })
+    }
+
+    @Test
     fun privateTypeRenameRefusesPublicCrossLanguageAndIncompleteImportBoundaries() {
         val root = project("class PublicType\nprivate class PrivateType\n")
         val toolchain = toolchain(root)
