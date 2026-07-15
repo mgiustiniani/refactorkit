@@ -128,10 +128,12 @@ exact range over its `object` keyword because no source identifier exists.
 The worker now also builds an internal, bounded K2 FIR projection for direct
 function call-name usages. A real-PSI resolved reference must map by exact target
 path/name offset to an existing callable symbol; fake sources, locals, operators,
-properties and callable references are excluded. This evidence is not yet exposed
-as a capability. Usage-location definition, properties, parameters, type aliases,
-overloaded or renamed JVM callables and references remain refused until transport
-integration and native qualification are complete.
+properties and callable references are excluded. API `0.2` daemon
+`intelligence.query` exposes saved-snapshot definition from those call-name ranges
+and explicitly partial references under exact lease/snapshot/generation authority.
+CLI/MCP integration, broader usage-location definition, properties, parameters,
+type aliases, overloaded or renamed JVM callables and complete references remain
+refused until transport integration and native qualification are complete.
 
 ## Integration surfaces
 

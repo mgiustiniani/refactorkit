@@ -90,6 +90,18 @@ class KotlinDaemonIntegrationTest {
             .getValue("code").jsonPrimitive.content)
         assertTrue(staleSymbols.getValue("symbols").jsonArray.isEmpty())
 
+        val staleUsageDefinition = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "kotlin-usage-stale")
+            put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
+            put("kind", "definition"); put("languageId", "kotlin")
+            put("path", "src/main/kotlin/fixture/App.kt")
+            put("semanticLease", "semantic-00000000-0000-4000-8000-000000000099")
+            put("position", buildJsonObject { put("line", 1); put("character", 7) })
+            put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+        }).jsonObject
+        assertEquals("intelligence.semanticLeaseStale", staleUsageDefinition.getValue("error").jsonObject
+            .getValue("code").jsonPrimitive.content)
+
         val staleCallableDefinition = session.dispatch("kotlin.definition", buildJsonObject {
             put("requestId", "kotlin-callable-stale")
             put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)

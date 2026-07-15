@@ -129,9 +129,10 @@ review safety boundaries before applying refactorings.
   not inherit the generic 10-second LSP default.
 - Add the internal K2 FIR function-usage evidence foundation: real-PSI resolved
   call names map atomically to existing `kotlin-jvm-callable-v1` declarations,
-  with exact UTF-16 ranges and a 2,000-usage bound. Position definition,
-  references and every Kotlin mutation remain refused until transport integration
-  and native qualification are complete.
+  with exact UTF-16 ranges and a 2,000-usage bound. API `0.2` daemon
+  `intelligence.query` now exposes definition from direct call names and explicitly
+  partial references with lease/snapshot/generation authority. CLI/MCP integration,
+  broader references and every Kotlin mutation remain refused.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions

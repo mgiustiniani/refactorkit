@@ -151,6 +151,56 @@ def main() -> int:
         )
         if definition.get("status") != "ready" or definition.get("symbols") != [render]:
             raise AssertionError(f"Kotlin opaque function definition lookup failed: {definition}")
+
+        daemon = runtime / "bin" / ("refactorkit-daemon.bat" if os.name == "nt" else "refactorkit-daemon")
+        process = subprocess.Popen(
+            command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"daemon {method} failed: {response}")
+                return response["result"]
+
+            opened = exchange(1, "project.open", {"root": str(workspace)})
+            started = exchange(2, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            authority = {"kind": "saved-snapshot"}
+            common = {
+                "expectedSnapshotHash": started["snapshotHash"], "languageId": "kotlin",
+                "path": "src/main/kotlin/org/refactorkit/samples/Greeting.kt",
+                "semanticLease": started["semanticLease"], "sourceAuthority": authority,
+                "position": {"line": 5, "character": 45},
+            }
+            usage_definition = exchange(3, "intelligence.query", {
+                **common, "requestId": "native-kotlin-usage-definition", "kind": "definition",
+            })
+            if usage_definition.get("status") != "ready" or usage_definition.get("locations", [{}])[0].get("range", {}).get("start", {}).get("line") != 2:
+                raise AssertionError(f"Kotlin usage definition failed: {usage_definition}")
+            usage_references = exchange(4, "intelligence.query", {
+                **common, "requestId": "native-kotlin-usage-references", "kind": "references",
+                "includeDeclaration": True, "limit": 10,
+            })
+            if (usage_references.get("status") != "ready" or usage_references.get("total") != 2 or
+                    usage_references.get("complete") is not False or usage_references.get("completeness") != "partial"):
+                raise AssertionError(f"Kotlin partial function references failed: {usage_references}")
+            exchange(5, "kotlin.semantic.stop")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
         if tree_hash(workspace) != before:
             raise AssertionError("Kotlin symbol reads modified workspace sources")
 
@@ -166,7 +216,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 declared types, objects and functions with exact definitions.")
+    print("Packaged Kotlin acceptance passed: K2 declarations plus function usage definition and partial references.")
     return 0
 
 

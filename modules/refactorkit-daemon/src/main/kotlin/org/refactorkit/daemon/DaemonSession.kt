@@ -48,6 +48,7 @@ import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
+import org.refactorkit.core.Symbol
 import org.refactorkit.core.SymbolId
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
@@ -603,6 +604,9 @@ class DaemonSession(
                 throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "saved-snapshot sourceAuthority accepts only kind")
             }
         }
+        if (kind == "definition" && languageId == "kotlin") {
+            return kotlinUsageNavigation(p, requestId, kind, index, requireNotNull(path), requestedLimit)
+        }
         if (kind == "definition") {
             if (languageId != "java") return intelligenceRefusal(
                 requestId, kind, index, "intelligence.definitionProviderUnsupported",
@@ -671,6 +675,9 @@ class DaemonSession(
                     hover.diagnostic.code ?: "intelligence.hoverUnavailable", hover.diagnostic.message,
                 )
             }
+        }
+        if (kind == "references" && languageId == "kotlin") {
+            return kotlinUsageNavigation(p, requestId, kind, index, requireNotNull(path), requestedLimit)
         }
         if (kind == "references") {
             if (languageId != "java") return intelligenceRefusal(
@@ -817,6 +824,118 @@ class DaemonSession(
         put("cache", buildJsonObject {
             put("entries", cache.entries); put("hits", cache.hits); put("misses", cache.misses)
         })
+    }
+
+    private fun kotlinUsageNavigation(
+        params: JsonObject,
+        requestId: String,
+        kind: String,
+        index: WorkspaceIndex,
+        path: Path,
+        limit: Int,
+    ): JsonElement {
+        if ((params["sourceAuthority"] as? JsonObject)?.let { it.string("kind") == "saved-snapshot" && it.keys == setOf("kind") } != true) {
+            return intelligenceRefusal(
+                requestId, kind, index, "intelligence.${kind}SavedSnapshotRequired",
+                "Kotlin $kind requires saved-snapshot source authority",
+            )
+        }
+        val requestedSource = index.sources.singleOrNull {
+            it.languageId == "kotlin" && it.path.normalize() == path.normalize()
+        } ?: return intelligenceRefusal(
+            requestId, kind, index, "kotlin.usageSourceMissing",
+            "Kotlin usage navigation path is not an attested Kotlin source",
+        )
+        val lease = params.string("semanticLease") ?: missing("semanticLease")
+        if (kotlinToolchain == null || lease != kotlinSemanticLease) return intelligenceRefusal(
+            requestId, kind, index, "intelligence.semanticLeaseStale", "Kotlin semantic lease is missing or stale",
+        )
+        val positionObject = params["position"] as? JsonObject ?: missing("position")
+        val line = positionObject.string("line")?.toIntOrNull() ?: missing("position.line")
+        val character = positionObject.string("character")?.toIntOrNull() ?: missing("position.character")
+        if (line < 0 || character < 0) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "$kind position must be non-negative",
+        )
+        val point = SourcePosition(line, character)
+        val result = kotlinAdapter.compilerSymbols(requireSnapshot())
+        if (result !is KotlinCompilerSymbolsResult.Available) {
+            val failure = when (result) {
+                is KotlinCompilerSymbolsResult.Refused -> result.reason
+                is KotlinCompilerSymbolsResult.Error -> result.failure
+                else -> error("unreachable")
+            }
+            return intelligenceRefusal(
+                requestId, kind, index, failure.code ?: "kotlin.usagesUnavailable", failure.message,
+            )
+        }
+        workspaceIndex.contribute(WorkspaceSymbolContribution(
+            providerId = "kotlin-k2-jvm-declarations-v1",
+            languageId = "kotlin",
+            backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
+            evidence = SemanticEvidenceKind.COMPILER,
+            completeness = WorkspaceIndexCompleteness.DECLARATIONS,
+            snapshotHash = requireSnapshot().hash,
+            symbols = result.index.symbols,
+            provenanceHash = result.attestation.toolchainProjectionHash,
+        ))
+        fun contains(location: SourceLocation): Boolean {
+            if (location.path.normalize() != path.normalize()) return false
+            val start = location.range.start
+            val end = location.range.end
+            val atOrAfterStart = point.line > start.line || point.line == start.line && point.character >= start.character
+            val beforeEnd = point.line < end.line || point.line == end.line && point.character < end.character
+            return atOrAfterStart && beforeEnd
+        }
+        val targetIds = buildList {
+            result.index.symbols.filter { it.kind == Symbol.Kind.FUNCTION && contains(it.location) }.forEach { add(it.id) }
+            result.usages.filter { contains(it.location) }.forEach { add(it.targetId) }
+        }.distinct()
+        if (targetIds.size != 1) return intelligenceRefusal(
+            requestId, kind, workspaceIndex.snapshot() ?: index,
+            if (targetIds.isEmpty()) "kotlin.usageNotFound" else "kotlin.usageAmbiguous",
+            if (targetIds.isEmpty()) "No compiler-proven Kotlin function usage exists at the requested position"
+            else "Kotlin function usage position resolved ambiguously",
+        )
+        val target = result.index.symbols.singleOrNull { it.id == targetIds.single() }
+            ?: return intelligenceRefusal(
+                requestId, kind, workspaceIndex.snapshot() ?: index,
+                "kotlin.usageTargetMissing", "Resolved Kotlin function target is absent from the declaration index",
+            )
+        val updated = workspaceIndex.snapshot() ?: index
+        val source = updated.sources.singleOrNull { it.path == requestedSource.path }
+            ?: return intelligenceRefusal(
+                requestId, kind, updated, "kotlin.usageSourceMissing",
+                "Kotlin usage navigation source disappeared during analysis",
+            )
+        return buildJsonObject {
+            put("schemaVersion", 1); put("requestId", requestId); put("status", "ready"); put("kind", kind)
+            put("snapshotHash", updated.snapshotHash); put("indexGeneration", updated.generation)
+            put("providerId", "kotlin-k2-fir-usages-v1"); put("backend", KotlinCompilerDiagnostics.SYMBOL_BACKEND)
+            put("evidence", "compiler"); put("provenanceHash", result.attestation.toolchainProjectionHash)
+            if (kind == "definition") {
+                put("completeness", "semantic")
+                put("locations", buildJsonArray { add(intelligenceLocationToJson(target.location)) })
+            } else {
+                val includeDeclaration = params.string("includeDeclaration")?.toBooleanStrictOrNull()
+                    ?: if ("includeDeclaration" in params) throw JsonRpcException(
+                        JsonRpcErrorCodes.INVALID_PARAMS, "includeDeclaration must be boolean",
+                    ) else true
+                val all = buildList {
+                    if (includeDeclaration) add(target.location)
+                    result.usages.filter { it.targetId == target.id }.forEach { add(it.location) }
+                }.distinct().sortedWith(compareBy({ ProtocolPath.serialize(it.path) },
+                    { it.range.start.line }, { it.range.start.character }))
+                val returned = all.take(limit)
+                put("completeness", "partial"); put("total", all.size); put("returned", returned.size)
+                put("truncated", all.size > returned.size); put("complete", false); put("warningCount", 1)
+                put("references", buildJsonArray { returned.forEach { add(intelligenceLocationToJson(it)) } })
+            }
+            put("sourceAuthority", buildJsonObject {
+                put("kind", "saved-snapshot"); put("path", ProtocolPath.serialize(source.path))
+                put("contentSha256", source.contentSha256)
+            })
+            put("cache", buildJsonObject { put("entries", 1); put("hits", 0); put("misses", 1) })
+        }
     }
 
     private fun javaReferencesResponse(

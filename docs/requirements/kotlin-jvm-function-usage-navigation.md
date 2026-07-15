@@ -1,7 +1,8 @@
 # Kotlin JVM function-usage navigation requirements
 
-Status: K2 FIR worker evidence implemented; API/daemon/CLI/MCP position queries
-and native qualification remain pending.
+Status: K2 FIR worker evidence and API `0.2` daemon `intelligence.query`
+position definition/partial references implemented; CLI/MCP integration and
+native qualification remain pending.
 
 ## Scope
 

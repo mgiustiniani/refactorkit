@@ -101,8 +101,8 @@
           "properties": {
             "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
             "status": {"const": "ready"}, "kind": {"const": "definition"},
-            "providerId": {"const": "java-jdt-bindings-v1"},
-            "backend": {"const": "eclipse-jdt-3.44-bindings-v1"},
+            "providerId": {"enum": ["java-jdt-bindings-v1", "kotlin-k2-fir-usages-v1"]},
+            "backend": {"enum": ["eclipse-jdt-3.44-bindings-v1", "kotlin-compiler-jvm-declarations-k2-v1"]},
             "evidence": {"const": "compiler"}, "completeness": {"const": "semantic"},
             "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "locations": {"type": "array", "maxItems": 1, "items": {"$ref": "#/$defs/location"}},
@@ -128,9 +128,9 @@
           "properties": {
             "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
             "status": {"const": "ready"}, "kind": {"const": "references"},
-            "providerId": {"const": "java-jdt-bindings-v1"},
-            "backend": {"const": "eclipse-jdt-3.44-bindings-v1"},
-            "evidence": {"const": "compiler"}, "completeness": {"const": "semantic"},
+            "providerId": {"enum": ["java-jdt-bindings-v1", "kotlin-k2-fir-usages-v1"]},
+            "backend": {"enum": ["eclipse-jdt-3.44-bindings-v1", "kotlin-compiler-jvm-declarations-k2-v1"]},
+            "evidence": {"const": "compiler"}, "completeness": {"enum": ["semantic", "partial"]},
             "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "total": {"type": "integer", "minimum": 0}, "returned": {"type": "integer", "minimum": 0, "maximum": 1000},
             "truncated": {"type": "boolean"}, "complete": {"type": "boolean"},
