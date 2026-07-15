@@ -82,6 +82,11 @@ class KotlinCompilerDiagnosticsTest {
             suspend fun suspendCall(value: Int): String = value.toString()
             fun <T> genericCall(value: T): T = value
             fun defaultCall(value: String = "default"): String = value
+            fun callTopLevel(): String = topLevel(1)
+            fun callMember(holder: Holder): Int = holder.member("value")
+            fun callCompanion(): String = Holder.companionCall()
+            fun callObject(): String = Registry.find()
+            fun callExtension(): String = "value".extensionCall("prefix")
         """.trimIndent() + "\n"
         val root = project(declarations)
         val toolchain = toolchain(root)
@@ -95,6 +100,11 @@ class KotlinCompilerDiagnosticsTest {
             mapOf(
                 "Companion" to org.refactorkit.core.Symbol.Kind.OBJECT,
                 "DataRegistry" to org.refactorkit.core.Symbol.Kind.OBJECT,
+                "callCompanion" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "callExtension" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "callMember" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "callObject" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "callTopLevel" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "companionCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "dataCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "defaultCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
@@ -122,6 +132,17 @@ class KotlinCompilerDiagnosticsTest {
             result.index.symbols.sortedBy { it.name }.associate { it.name to it.kind },
         )
         assertEquals(result.index.symbols.size, result.index.symbols.map { it.id }.distinct().size)
+        val namesById = result.index.symbols.associate { it.id to it.name }
+        assertEquals(
+            listOf("companionCall", "extensionCall", "find", "member", "topLevel"),
+            result.usages.map { namesById.getValue(it.targetId) }.sorted(),
+        )
+        result.usages.forEach { usage ->
+            val source = snapshot.files.single { it.path == usage.location.path }.content
+            val range = usage.location.range
+            val line = source.lineSequence().elementAt(range.start.line)
+            assertEquals(namesById.getValue(usage.targetId), line.substring(range.start.character, range.end.character))
+        }
         result.index.symbols.forEach { symbol ->
             val idPattern = if (symbol.kind == org.refactorkit.core.Symbol.Kind.FUNCTION) {
                 Regex("kotlin-jvm-callable-v1:[0-9a-f]{64}")
@@ -150,6 +171,8 @@ class KotlinCompilerDiagnosticsTest {
             result.index.symbols.associate { it.name to it.id },
             shifted.index.symbols.associate { it.name to it.id },
         )
+        assertEquals(result.usages.map { it.targetId }, shifted.usages.map { it.targetId })
+        assertTrue(shifted.usages.first().location.range.start.line > result.usages.first().location.range.start.line)
         assertTrue(shifted.index.symbols.single { it.name == "Holder" }.location.range.start.line >
             result.index.symbols.single { it.name == "Holder" }.location.range.start.line)
     }
@@ -177,6 +200,26 @@ class KotlinCompilerDiagnosticsTest {
             setOf(org.refactorkit.core.Symbol.Kind.CLASS, org.refactorkit.core.Symbol.Kind.FUNCTION),
             result.index.symbols.map { it.kind }.toSet(),
         )
+        assertTrue(result.usages.isEmpty())
+    }
+
+    @Test
+    fun callableReferencesAndPropertyInvokeRemainOutsideFunctionUsageNavigation() {
+        val root = project("""
+            fun target(): String = "value"
+            val reference = ::target
+            fun callReference(): String = reference()
+            fun sameName(sameName: String): String = sameName
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+
+        assertEquals(listOf("callReference", "sameName", "target"), result.index.symbols.map { it.name }.sorted())
+        assertTrue(result.usages.isEmpty())
     }
 
     @Test

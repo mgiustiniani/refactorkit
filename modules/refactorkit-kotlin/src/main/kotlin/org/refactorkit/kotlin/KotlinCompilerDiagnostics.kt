@@ -54,6 +54,16 @@ data class KotlinCompilerDiagnosticsAttestation(
     val process: SemanticProcessProvenance?,
 )
 
+data class KotlinCompilerResolvedUsage(
+    val targetId: SymbolId,
+    val location: SourceLocation,
+)
+
+private data class ParsedKotlinSymbols(
+    val index: SymbolIndex,
+    val usages: List<KotlinCompilerResolvedUsage>,
+)
+
 sealed interface KotlinCompilerDiagnosticsResult {
     val diagnostics: List<Diagnostic>
     val attestation: KotlinCompilerDiagnosticsAttestation
@@ -62,6 +72,7 @@ sealed interface KotlinCompilerDiagnosticsResult {
         override val diagnostics: List<Diagnostic>,
         override val attestation: KotlinCompilerDiagnosticsAttestation,
         val symbols: SymbolIndex? = null,
+        val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
         val symbolFailure: Diagnostic? = null,
     ) : KotlinCompilerDiagnosticsResult
 
@@ -86,6 +97,7 @@ sealed interface KotlinCompilerSymbolsResult {
     data class Available(
         val index: SymbolIndex,
         override val attestation: KotlinCompilerDiagnosticsAttestation,
+        val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
     ) : KotlinCompilerSymbolsResult
 
     data class Refused(
@@ -232,7 +244,7 @@ class KotlinCompilerDiagnostics private constructor(
         is KotlinCompilerDiagnosticsResult.Available -> {
             val attestation = result.attestation.copy(backend = SYMBOL_BACKEND)
             when {
-                result.symbols != null -> KotlinCompilerSymbolsResult.Available(result.symbols, attestation)
+                result.symbols != null -> KotlinCompilerSymbolsResult.Available(result.symbols, attestation, result.usages)
                 result.symbolFailure?.code == "kotlin.compilerSymbolsInvalid" ->
                     KotlinCompilerSymbolsResult.Error(result.symbolFailure, attestation)
                 else -> KotlinCompilerSymbolsResult.Refused(
@@ -396,7 +408,8 @@ class KotlinCompilerDiagnostics private constructor(
         return KotlinCompilerDiagnosticsResult.Available(
             diagnostics,
             attestation,
-            symbols = symbols.getOrNull(),
+            symbols = symbols.getOrNull()?.index,
+            usages = symbols.getOrNull()?.usages.orEmpty(),
             symbolFailure = symbols.exceptionOrNull()?.asSymbolDiagnostic(),
         )
     }
@@ -405,7 +418,7 @@ class KotlinCompilerDiagnostics private constructor(
         payload: JsonObject,
         snapshot: ProjectSnapshot,
         overlay: SemanticWorkspaceOverlay,
-    ): Result<SymbolIndex> = runCatching {
+    ): Result<ParsedKotlinSymbols> = runCatching {
         if (payload.boolean("symbolsComplete") != true) {
             val code = payload.string("symbolFailure")?.takeIf { it in SYMBOL_REFUSAL_CODES }
                 ?: "kotlin.compilerSymbolsInvalid"
@@ -417,6 +430,7 @@ class KotlinCompilerDiagnostics private constructor(
         val overlayRoot = overlay.root.toRealPath()
         val sourcePaths = snapshot.files.associateBy { it.path.normalize() }
         val ids = linkedSetOf<SymbolId>()
+        val identityIds = linkedMapOf<String, SymbolId>()
         val symbols = encoded.map { item ->
             val value = item as? JsonObject ?: error("Kotlin compiler symbol is not an object")
             check(value.keys == SYMBOL_FIELDS) { "Kotlin compiler symbol fields are invalid" }
@@ -467,7 +481,9 @@ class KotlinCompilerDiagnostics private constructor(
                 source.content.substring(start, end) == selectionText) {
                 "Kotlin compiler symbol range is invalid"
             }
-            check(ids.add(id)) { "Kotlin compiler symbol identity is duplicated" }
+            check(ids.add(id) && identityIds.put(identity, id) == null) {
+                "Kotlin compiler symbol identity is duplicated"
+            }
             Symbol(
                 id = id,
                 name = name,
@@ -476,7 +492,56 @@ class KotlinCompilerDiagnostics private constructor(
                 languageId = "kotlin",
             )
         }.sortedBy { it.id.value }
-        SymbolIndex(symbols)
+        val index = SymbolIndex(symbols)
+        val usages = parseUsages(payload, sourcePaths, overlayRoot, identityIds)
+        ParsedKotlinSymbols(index, usages)
+    }
+
+    private fun parseUsages(
+        payload: JsonObject,
+        sourcePaths: Map<Path, org.refactorkit.core.SourceFile>,
+        overlayRoot: Path,
+        identityIds: Map<String, SymbolId>,
+    ): List<KotlinCompilerResolvedUsage> {
+        check(payload.boolean("usagesComplete") == true) { "Kotlin compiler usages are incomplete" }
+        val encoded = payload["usages"] as? JsonArray ?: error("Kotlin compiler usages are missing")
+        check(encoded.size <= MAX_USAGES) { "Kotlin compiler usage limit exceeded" }
+        val unique = linkedSetOf<String>()
+        return encoded.map { item ->
+            val value = item as? JsonObject ?: error("Kotlin compiler usage is not an object")
+            check(value.keys == USAGE_FIELDS) { "Kotlin compiler usage fields are invalid" }
+            val targetIdentity = value.string("targetIdentity")?.takeIf { it.length in 1..MAX_SYMBOL_IDENTITY_CHARS }
+                ?: error("Kotlin compiler usage target is invalid")
+            val targetId = identityIds[targetIdentity] ?: error("Kotlin compiler usage target is unknown")
+            val selectionText = value.string("selectionText")?.takeIf {
+                it.length in 1..MAX_SYMBOL_NAME_CHARS && JVM_NAME.matches(it)
+            } ?: error("Kotlin compiler usage selection is invalid")
+            val rawPath = value.string("path") ?: error("Kotlin compiler usage path is missing")
+            val reported = Path.of(rawPath).toAbsolutePath().normalize()
+            check(!Files.isSymbolicLink(reported) && Files.isRegularFile(reported, LinkOption.NOFOLLOW_LINKS)) {
+                "Kotlin compiler usage path is unsafe"
+            }
+            val canonical = reported.toRealPath()
+            check(canonical.startsWith(overlayRoot) && canonical != overlayRoot) {
+                "Kotlin compiler usage path escapes overlay"
+            }
+            val relative = overlayRoot.relativize(canonical).normalize()
+            val source = sourcePaths[relative] ?: error("Kotlin compiler usage source is outside snapshot")
+            val start = value.int("startOffset") ?: error("Kotlin compiler usage start is invalid")
+            val end = value.int("endOffset") ?: error("Kotlin compiler usage end is invalid")
+            check(start >= 0 && end > start && end <= source.content.length &&
+                source.content.substring(start, end) == selectionText) {
+                "Kotlin compiler usage range is invalid"
+            }
+            check(unique.add("$relative\u0000$start\u0000$end\u0000${targetId.value}")) {
+                "Kotlin compiler usage is duplicated"
+            }
+            KotlinCompilerResolvedUsage(
+                targetId,
+                SourceLocation(relative, SourceRange(position(source.content, start), position(source.content, end))),
+            )
+        }.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
+            { it.location.range.start.character }, { it.targetId.value }))
     }
 
     private fun Throwable.asSymbolDiagnostic(): Diagnostic = when (this) {
@@ -500,6 +565,15 @@ class KotlinCompilerDiagnostics private constructor(
                     "Kotlin callable-owner method evidence exceeds the bounded limit"
                 "kotlin.symbolDescriptorLimitExceeded" ->
                     "Kotlin callable JVM descriptor exceeds the bounded limit"
+                "kotlin.usageTargetCollision" -> "Kotlin function usage target identity is duplicated"
+                "kotlin.usageJvmTargetInvalid" -> "Kotlin function usage JVM target is invalid"
+                "kotlin.usageFirResolutionFailed" -> "Kotlin FIR usage resolution failed"
+                "kotlin.usageTargetLocationUnavailable" -> "Kotlin usage target lacks an exact source location"
+                "kotlin.usageTargetMissing" -> "Kotlin usage target is absent from the proven callable catalogue"
+                "kotlin.usageLocationUnavailable" -> "Kotlin function usage lacks an exact source range"
+                "kotlin.usagePathInvalid" -> "Kotlin function usage path is invalid"
+                "kotlin.usageLimitExceeded" -> "Kotlin function usage result exceeded the bounded limit"
+                "kotlin.usageExtractionFailed" -> "Kotlin compiler function-usage extraction failed"
                 else -> "Kotlin compiler symbol extraction failed"
             },
         )
@@ -720,6 +794,7 @@ class KotlinCompilerDiagnostics private constructor(
         private const val MAX_SYMBOL_NAME_CHARS = 512
         private const val MAX_SYMBOL_IDENTITY_CHARS = 2_048
         private const val MAX_JVM_DESCRIPTOR_CHARS = 1_024
+        private const val MAX_USAGES = 2_000
         private const val MAX_XML_BYTES = 6 * 1024 * 1024
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = false }
         private val SEQUENCE = AtomicLong(1)
@@ -731,6 +806,9 @@ class KotlinCompilerDiagnostics private constructor(
         )
         private val SYMBOL_FIELDS = setOf(
             "identity", "name", "kind", "path", "owner", "descriptor", "selectionText", "startOffset", "endOffset",
+        )
+        private val USAGE_FIELDS = setOf(
+            "path", "targetIdentity", "selectionText", "startOffset", "endOffset",
         )
         private val SYMBOL_KINDS = setOf(
             Symbol.Kind.CLASS,
@@ -754,6 +832,15 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.symbolCallableEvidenceLimitExceeded",
             "kotlin.symbolDescriptorLimitExceeded",
             "kotlin.symbolExtractionFailed",
+            "kotlin.usageTargetCollision",
+            "kotlin.usageJvmTargetInvalid",
+            "kotlin.usageFirResolutionFailed",
+            "kotlin.usageTargetLocationUnavailable",
+            "kotlin.usageTargetMissing",
+            "kotlin.usageLocationUnavailable",
+            "kotlin.usagePathInvalid",
+            "kotlin.usageLimitExceeded",
+            "kotlin.usageExtractionFailed",
         )
         private val SUPPORTED_JVM_TARGETS = setOf("1.8", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21")
     }

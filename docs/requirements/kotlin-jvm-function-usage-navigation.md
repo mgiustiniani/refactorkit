@@ -1,7 +1,7 @@
 # Kotlin JVM function-usage navigation requirements
 
-Status: requirement-first contract for the next `0.7.0-SNAPSHOT` K2 semantic-read
-slice.
+Status: K2 FIR worker evidence implemented; API/daemon/CLI/MCP position queries
+and native qualification remain pending.
 
 ## Scope
 
@@ -67,7 +67,8 @@ row must report partial completeness and must not be consumed as rename authorit
 
 Symbol and usage payloads belong to one compiler invocation and one attested
 snapshot. The worker shall cap resolved usages at 2,000 and bind path, selection
-text, offsets and target declaration key. Missing/extra fields, fake usage source,
+text, offsets and the target callable identity obtained through the exact
+declaration key. Missing/extra fields, fake usage source,
 unsafe paths, malformed ranges, duplicate usage entries, unresolved supported
 source targets or overflow invalidate the complete usage result. No partial usage
 index is published.

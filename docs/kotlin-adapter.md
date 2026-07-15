@@ -125,9 +125,13 @@ accepts only an opaque ID returned by this backend and resolves it against a new
 attested copy of the same saved snapshot. Named/data/nested objects expose exact
 name ranges. An implicit companion has compiler identity/name `Companion` and an
 exact range over its `object` keyword because no source identifier exists.
-Usage-location resolution, properties, parameters, type aliases, overloaded or
-renamed JVM callables and references remain refused until their semantic
-identities are separately qualified.
+The worker now also builds an internal, bounded K2 FIR projection for direct
+function call-name usages. A real-PSI resolved reference must map by exact target
+path/name offset to an existing callable symbol; fake sources, locals, operators,
+properties and callable references are excluded. This evidence is not yet exposed
+as a capability. Usage-location definition, properties, parameters, type aliases,
+overloaded or renamed JVM callables and references remain refused until transport
+integration and native qualification are complete.
 
 ## Integration surfaces
 

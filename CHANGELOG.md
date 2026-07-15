@@ -124,6 +124,11 @@ review safety boundaries before applying refactorings.
   Cancellation acceptance also waits for the bounded process-tree shutdown before
   inspecting results. GitHub Actions run `29423034607` passes the complete
   correction on Linux, Windows x86-64, macOS x86-64 and macOS arm64.
+- Add the internal K2 FIR function-usage evidence foundation: real-PSI resolved
+  call names map atomically to existing `kotlin-jvm-callable-v1` declarations,
+  with exact UTF-16 ranges and a 2,000-usage bound. Position definition,
+  references and every Kotlin mutation remain refused until transport integration
+  and native qualification are complete.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions

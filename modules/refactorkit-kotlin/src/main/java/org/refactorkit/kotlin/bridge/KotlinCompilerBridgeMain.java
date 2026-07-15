@@ -57,7 +57,14 @@ public final class KotlinCompilerBridgeMain {
             String symbolPayload = "\"symbolsComplete\":false,\"symbolFailure\":\"kotlin.symbolCompilationFailed\"";
             if ("OK".equals(exitName)) {
                 try {
-                    symbolPayload = renderSymbols(KotlinCompilerSymbolExtractor.extract(inputs.sources, inputs.outputDirectory));
+                    java.util.List<KotlinCompilerSymbolExtractor.ExtractedSymbol> symbols =
+                        KotlinCompilerSymbolExtractor.extract(inputs.sources, inputs.outputDirectory);
+                    symbolPayload = renderSymbols(
+                        symbols,
+                        KotlinCompilerUsageExtractor.extract(
+                            inputs.sources, inputs.jdkHome, inputs.classpath, inputs.jvmTarget, symbols
+                        )
+                    );
                 } catch (KotlinCompilerSymbolExtractor.SymbolExtractionException failure) {
                     symbolPayload = "\"symbolsComplete\":false,\"symbolFailure\":\"" + escape(failure.getMessage()) + "\"";
                 } catch (Throwable failure) {
@@ -81,6 +88,11 @@ public final class KotlinCompilerBridgeMain {
         Set<String> seen = new HashSet<>();
         java.util.List<Path> sources = new java.util.ArrayList<Path>();
         Path outputDirectory = null;
+        Path jdkHome = null;
+        java.util.List<Path> classpath = Collections.emptyList();
+        String jvmTarget = null;
+        String languageVersion = null;
+        String apiVersion = null;
         for (int index = 0; index < arguments.length; index++) {
             String value = arguments[index];
             if (value.indexOf('\0') >= 0 || value.length() > 4096) throw new IllegalArgumentException();
@@ -89,8 +101,11 @@ public final class KotlinCompilerBridgeMain {
                 String optionValue = arguments[index];
                 if (optionValue.indexOf('\0') >= 0 || optionValue.length() > 32768) throw new IllegalArgumentException();
                 if ("-d".equals(value)) outputDirectory = requireInsideOverlay(overlay, Paths.get(optionValue), false);
-                if ("-jdk-home".equals(value)) canonicalDirectory(Paths.get(optionValue));
-                if ("-classpath".equals(value)) validateClasspath(optionValue);
+                if ("-jdk-home".equals(value)) jdkHome = canonicalDirectory(Paths.get(optionValue));
+                if ("-classpath".equals(value)) classpath = validateClasspath(optionValue);
+                if ("-jvm-target".equals(value)) jvmTarget = optionValue;
+                if ("-language-version".equals(value)) languageVersion = optionValue;
+                if ("-api-version".equals(value)) apiVersion = optionValue;
             } else if (FLAG_OPTIONS.contains(value)) {
                 if (!seen.add(value)) throw new IllegalArgumentException();
             } else if (value.startsWith("-")) {
@@ -106,10 +121,19 @@ public final class KotlinCompilerBridgeMain {
             !seen.contains("-api-version") || !seen.contains("-no-stdlib") || !seen.contains("-no-reflect")) {
             throw new IllegalArgumentException();
         }
-        return new BridgeInputs(Collections.unmodifiableList(sources), outputDirectory);
+        if (jdkHome == null || jvmTarget == null || !"2.0".equals(languageVersion) || !"2.0".equals(apiVersion)) {
+            throw new IllegalArgumentException();
+        }
+        return new BridgeInputs(
+            Collections.unmodifiableList(sources), outputDirectory, jdkHome,
+            Collections.unmodifiableList(classpath), jvmTarget
+        );
     }
 
-    private static String renderSymbols(java.util.List<KotlinCompilerSymbolExtractor.ExtractedSymbol> symbols) {
+    private static String renderSymbols(
+        java.util.List<KotlinCompilerSymbolExtractor.ExtractedSymbol> symbols,
+        java.util.List<KotlinCompilerUsageExtractor.ExtractedUsage> usages
+    ) {
         StringBuilder json = new StringBuilder("\"symbolsComplete\":true,\"symbols\":[");
         for (int index = 0; index < symbols.size(); index++) {
             if (index > 0) json.append(',');
@@ -124,13 +148,24 @@ public final class KotlinCompilerBridgeMain {
                 .append("\",\"startOffset\":").append(symbol.startOffset())
                 .append(",\"endOffset\":").append(symbol.endOffset()).append('}');
         }
+        json.append("],\"usagesComplete\":true,\"usages\":[");
+        for (int index = 0; index < usages.size(); index++) {
+            if (index > 0) json.append(',');
+            KotlinCompilerUsageExtractor.ExtractedUsage usage = usages.get(index);
+            json.append("{\"path\":\"").append(escape(usage.path()))
+                .append("\",\"targetIdentity\":\"").append(escape(usage.targetIdentity()))
+                .append("\",\"selectionText\":\"").append(escape(usage.selectionText()))
+                .append("\",\"startOffset\":").append(usage.startOffset())
+                .append(",\"endOffset\":").append(usage.endOffset()).append('}');
+        }
         return json.append(']').toString();
     }
 
-    private static void validateClasspath(String value) throws IOException {
-        if (value.trim().isEmpty()) return;
+    private static java.util.List<Path> validateClasspath(String value) throws IOException {
+        if (value.trim().isEmpty()) return Collections.emptyList();
         String[] entries = value.split(Pattern.quote(System.getProperty("path.separator")), -1);
         if (entries.length > 4096) throw new IllegalArgumentException();
+        java.util.List<Path> validated = new java.util.ArrayList<Path>();
         for (String entry : entries) {
             if (entry.trim().isEmpty()) throw new IllegalArgumentException();
             Path path = Paths.get(entry).toAbsolutePath().normalize();
@@ -138,8 +173,9 @@ public final class KotlinCompilerBridgeMain {
                 !path.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".jar")) {
                 throw new IllegalArgumentException();
             }
-            path.toRealPath();
+            validated.add(path.toRealPath());
         }
+        return validated;
     }
 
     private static Path canonicalDirectory(Path path) throws IOException {
@@ -189,10 +225,22 @@ public final class KotlinCompilerBridgeMain {
     private static final class BridgeInputs {
         private final java.util.List<Path> sources;
         private final Path outputDirectory;
+        private final Path jdkHome;
+        private final java.util.List<Path> classpath;
+        private final String jvmTarget;
 
-        private BridgeInputs(java.util.List<Path> sources, Path outputDirectory) {
+        private BridgeInputs(
+            java.util.List<Path> sources,
+            Path outputDirectory,
+            Path jdkHome,
+            java.util.List<Path> classpath,
+            String jvmTarget
+        ) {
             this.sources = sources;
             this.outputDirectory = outputDirectory;
+            this.jdkHome = jdkHome;
+            this.classpath = classpath;
+            this.jvmTarget = jvmTarget;
         }
     }
 
