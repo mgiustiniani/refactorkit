@@ -83,33 +83,38 @@ Monaco ranges. Project-level diagnostics report `NONE`.
 
 After a successful K2 compilation, the same isolated worker creates a separate
 compiler PSI environment over the exact overlay sources. The qualified catalogue
-contains top-level and nested regular classes, interfaces, enum classes and
-annotation classes.
+contains top-level and nested regular classes, interfaces, enum classes,
+annotation classes, named/data objects and companion objects.
 For every returned declaration the worker requires:
 
 - an ASCII JVM-safe package and class-name shape;
 - a non-local compiler `ClassId`;
 - a matching generated `.class` file below the overlay output directory;
-- an exact compiler PSI name-identifier range;
+- an exact compiler PSI declaration selection (name identifier, or the `object`
+  keyword for an implicit companion);
 - a unique JVM binary identity; and
 - no more than 500 symbols.
 
 The public opaque ID is `kotlin-jvm-type-v1:<sha256>` derived from the durable JVM
 binary name, never from a source offset, path, process ID, or compiler object.
-Locations are exact zero-based UTF-16 name ranges and are accepted only when the
-reported source substring equals the symbol name. Worker paths are remapped from
+Locations are exact zero-based UTF-16 declaration selections and are accepted
+only when the reported compiler PSI selection text equals the source substring.
+Except for implicit `Companion` selecting `object`, the selection equals the
+symbol name. Worker paths are remapped from
 the immutable overlay and must identify a source in the attested snapshot.
 
 The whole symbol read refuses rather than returning a partial declared-type index
-when the snapshot does not compile, an unsupported class-like declaration such as
-an object is encountered, a JVM name is unsupported, identity collides, binary
-evidence is missing, or any result/location limit is exceeded. Enum entries,
-callables, type aliases, local classes and anonymous classes are outside the
-catalogue and are not presented as indexed symbols. Definition accepts only an
-opaque ID returned by this backend and resolves it against a newly attested copy
-of the same saved snapshot. Usage-location resolution, objects, functions,
-properties, parameters, type aliases and references remain refused until their
-semantic identities are separately qualified.
+when the snapshot does not compile, a JVM name is unsupported, identity collides,
+binary evidence is missing, or any result/location limit is exceeded. Enum
+entries, callables, type aliases, local classes and anonymous object expressions
+are outside the catalogue and are not presented as indexed symbols. Definition
+accepts only an opaque ID returned by this backend and resolves it against a newly
+attested copy of the same saved snapshot. Named/data/nested objects expose exact
+name ranges. An implicit companion has compiler identity/name `Companion` and an
+exact range over its `object` keyword because no source identifier exists.
+Usage-location resolution, functions, properties, parameters, type aliases and
+references remain refused until their semantic identities are separately
+qualified.
 
 ## Integration surfaces
 

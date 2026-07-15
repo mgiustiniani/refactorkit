@@ -27,11 +27,12 @@ The catalogue shall accept non-local top-level and nested:
 - enum classes as `ENUM`;
 - annotation classes as `ANNOTATION`.
 
-Enum entries are not independent type symbols. Objects, companion objects, type
-aliases, local/anonymous declarations, functions, properties, constructors,
-parameters and type parameters remain unsupported in this slice. Encountering an
-unsupported class-like declaration shall refuse the complete result rather than
-publish a partial index.
+Enum entries are not independent type symbols. Object and companion-object
+support is governed by the additive requirements in
+`kotlin-jvm-object-symbols.md`. Type aliases, local/anonymous declarations,
+functions, properties, constructors, parameters and type parameters remain
+unsupported. Encountering an unknown class-like declaration shall refuse the
+complete result rather than publish a partial index.
 
 ### RPK-KOT-TYPE-003 — Stable opaque identity
 

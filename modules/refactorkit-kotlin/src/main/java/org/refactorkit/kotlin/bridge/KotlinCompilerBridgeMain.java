@@ -118,6 +118,7 @@ public final class KotlinCompilerBridgeMain {
                 .append("\",\"name\":\"").append(escape(symbol.name()))
                 .append("\",\"kind\":\"").append(escape(symbol.kind()))
                 .append("\",\"path\":\"").append(escape(symbol.path()))
+                .append("\",\"selectionText\":\"").append(escape(symbol.selectionText()))
                 .append("\",\"startOffset\":").append(symbol.startOffset())
                 .append(",\"endOffset\":").append(symbol.endOffset()).append('}');
         }

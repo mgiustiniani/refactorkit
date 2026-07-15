@@ -17,11 +17,11 @@ The first qualified discovery row is intentionally narrow:
 
 | JDK | Kotlin compiler artifact | Discovery status | Semantic authority |
 |---|---|---|---|
-| 21 | `kotlin-compiler-embeddable` 2.0.21, `kotlin-stdlib` 2.0.21, annotations 13.0 | qualified declarative identity/evidence | experimental read-only diagnostics and class/interface/enum/annotation search/definition |
+| 21 | `kotlin-compiler-embeddable` 2.0.21, `kotlin-stdlib` 2.0.21, annotations 13.0 | qualified declarative identity/evidence | experimental read-only diagnostics and class/object/interface/enum/annotation search/definition |
 
 This selects the Kotlin K2 compiler boundary. Compiler-backed diagnostics use
 `kotlin-compiler-diagnostics-k2-v1`; compiler-proven declared-type symbols use
-`kotlin-compiler-jvm-types-k2-v1`. Objects, callable/property identities,
+`kotlin-compiler-jvm-types-k2-v1`. Anonymous objects, callable/property identities,
 references and refactorings are not claimed.
 
 ## Explicit inputs

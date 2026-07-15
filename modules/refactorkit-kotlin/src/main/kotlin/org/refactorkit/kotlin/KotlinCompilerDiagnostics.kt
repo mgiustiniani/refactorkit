@@ -430,6 +430,12 @@ class KotlinCompilerDiagnostics private constructor(
             }
             val kind = value.string("kind")?.let { runCatching { Symbol.Kind.valueOf(it) }.getOrNull() }
                 ?.takeIf { it in SYMBOL_KINDS } ?: error("Kotlin compiler symbol kind is invalid")
+            val selectionText = value.string("selectionText")?.takeIf { it.length in 1..MAX_SYMBOL_NAME_CHARS }
+                ?: error("Kotlin compiler symbol selection text is invalid")
+            check(selectionText == name ||
+                (kind == Symbol.Kind.OBJECT && name == "Companion" && selectionText == "object")) {
+                "Kotlin compiler symbol selection does not match its identity"
+            }
             val rawPath = value.string("path") ?: error("Kotlin compiler symbol path is missing")
             val reported = Path.of(rawPath).toAbsolutePath().normalize()
             check(!Files.isSymbolicLink(reported) && Files.isRegularFile(reported, LinkOption.NOFOLLOW_LINKS)) {
@@ -443,7 +449,8 @@ class KotlinCompilerDiagnostics private constructor(
             val source = sourcePaths[relative] ?: error("Kotlin compiler symbol source is outside snapshot")
             val start = value.int("startOffset") ?: error("Kotlin compiler symbol start is invalid")
             val end = value.int("endOffset") ?: error("Kotlin compiler symbol end is invalid")
-            check(start >= 0 && end > start && end <= source.content.length && source.content.substring(start, end) == name) {
+            check(start >= 0 && end > start && end <= source.content.length &&
+                source.content.substring(start, end) == selectionText) {
                 "Kotlin compiler symbol range is invalid"
             }
             val id = SymbolId("kotlin-jvm-type-v1:${sha256("kotlin-jvm-type-v1\u0000$identity")}")
@@ -471,7 +478,7 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.symbolJvmNameUnsupported" -> "Kotlin declaration uses an unsupported JVM name shape"
                 "kotlin.symbolLocationUnavailable" -> "Kotlin declaration lacks an exact compiler PSI location"
                 "kotlin.symbolDeclarationKindUnsupported" ->
-                    "Kotlin symbol indexing accepts classes, interfaces, enum classes and annotation classes only"
+                    "Kotlin symbol indexing accepts declared JVM classes and named objects only"
                 else -> "Kotlin compiler symbol extraction failed"
             },
         )
@@ -696,9 +703,12 @@ class KotlinCompilerDiagnostics private constructor(
         private val SEQUENCE = AtomicLong(1)
         private val DIAGNOSTIC_CODE = Regex("^\\[([A-Z][A-Z0-9_]{0,63})]")
         private val SYMBOL_IDENTITY = Regex("[A-Za-z_][A-Za-z0-9_]*(?:[.$][A-Za-z_][A-Za-z0-9_]*)*")
-        private val SYMBOL_FIELDS = setOf("identity", "name", "kind", "path", "startOffset", "endOffset")
+        private val SYMBOL_FIELDS = setOf(
+            "identity", "name", "kind", "path", "selectionText", "startOffset", "endOffset",
+        )
         private val SYMBOL_KINDS = setOf(
             Symbol.Kind.CLASS,
+            Symbol.Kind.OBJECT,
             Symbol.Kind.INTERFACE,
             Symbol.Kind.ENUM,
             Symbol.Kind.ANNOTATION,

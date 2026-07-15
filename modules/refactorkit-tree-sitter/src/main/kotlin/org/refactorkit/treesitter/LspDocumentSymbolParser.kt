@@ -108,6 +108,7 @@ internal object LspDocumentSymbolParser {
         12 -> Symbol.Kind.FUNCTION
         13 -> Symbol.Kind.VARIABLE
         14 -> Symbol.Kind.CONSTANT
+        19 -> Symbol.Kind.OBJECT
         26 -> Symbol.Kind.TYPE_PARAMETER
         else -> Symbol.Kind.UNKNOWN
     }

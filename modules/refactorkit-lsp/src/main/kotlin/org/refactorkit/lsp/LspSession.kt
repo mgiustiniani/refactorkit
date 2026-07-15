@@ -928,6 +928,7 @@ class LspSession {
 
     private fun lspSymbolKind(kind: org.refactorkit.core.Symbol.Kind): Int = when (kind) {
         org.refactorkit.core.Symbol.Kind.CLASS       -> 5
+        org.refactorkit.core.Symbol.Kind.OBJECT      -> 19
         org.refactorkit.core.Symbol.Kind.INTERFACE   -> 11
         org.refactorkit.core.Symbol.Kind.ENUM        -> 10
         org.refactorkit.core.Symbol.Kind.RECORD      -> 5
@@ -940,6 +941,7 @@ class LspSession {
 
     private fun semanticTokenType(kind: org.refactorkit.core.Symbol.Kind): Int = when (kind) {
         org.refactorkit.core.Symbol.Kind.CLASS,
+        org.refactorkit.core.Symbol.Kind.OBJECT,
         org.refactorkit.core.Symbol.Kind.RECORD      -> TOKEN_TYPES.indexOf("class")
         org.refactorkit.core.Symbol.Kind.INTERFACE   -> TOKEN_TYPES.indexOf("interface")
         org.refactorkit.core.Symbol.Kind.ENUM        -> TOKEN_TYPES.indexOf("enum")

@@ -86,7 +86,7 @@ compiler-plugin loading.
 its toolchain and classpath evidence, and report the exact build and toolchain
 projection hashes. Scripts and partial/unsupported models refuse before compiler
 launch. The symbol row currently covers successfully compiled classes,
-interfaces, enum classes and annotation classes with JVM binary and compiler PSI
-evidence. The next gate adds object, callable and other declaration identity,
+interfaces, enum classes, annotation classes and named/companion objects with JVM
+binary and compiler PSI evidence. The next gate adds callable and other declaration identity,
 usage-location definition, references and
 conservative mixed Java/Kotlin identity.

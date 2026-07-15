@@ -110,6 +110,11 @@ review safety boundaries before applying refactorings.
   objects and callable identities still refuse the complete result. Semantic
   execution now also requires attested matching stdlib and qualified annotations
   runtime inputs before compiler launch.
+- Add compiler-proven Kotlin named, data, nested and companion object symbols
+  under the same JVM-binary-derived type-ID family. Core/API/LSP projections gain
+  the additive `OBJECT` kind; implicit companions use their compiler name
+  `Companion` and exact `object` keyword selection range. Anonymous objects remain
+  excluded, and callable identity/references/mutations remain refused.
 - Preserve the read-only workspace contract for daemon `project.open`, MCP
   `project_scan`, LSP initialization and semantic read lifecycles: startup now
   inspects WAL state without creating `.refactorkit/workspace.lock` or changing

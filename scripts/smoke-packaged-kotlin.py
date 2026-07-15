@@ -122,6 +122,11 @@ def main() -> int:
             "GreetingPort": "interface",
             "GreetingMode": "enum",
             "GreetingMarker": "annotation",
+            "GreetingRegistry": "object",
+            "GreetingDataRegistry": "object",
+            "GreetingOwner": "class",
+            "Companion": "object",
+            "NestedRegistry": "object",
         }
         actual_kinds = {item.get("name"): item.get("kind") for item in symbol_rows}
         if actual_kinds != expected_kinds:
@@ -131,13 +136,13 @@ def main() -> int:
         greeting = next(item for item in symbol_rows if item.get("name") == "Greeting")
         if greeting.get("startLine") != 2 or greeting.get("startCharacter") != 6 or greeting.get("endCharacter") != 14:
             raise AssertionError(f"Kotlin compiler PSI range is not exact UTF-16: {greeting}")
-        interface = next(item for item in symbol_rows if item.get("name") == "GreetingPort")
+        companion = next(item for item in symbol_rows if item.get("name") == "Companion")
         definition = run(
             cli, workspace, jdk, compiler, classpath, "native-kotlin-definition", "definition",
-            ["--symbol", interface["id"]],
+            ["--symbol", companion["id"]],
         )
-        if definition.get("status") != "ready" or definition.get("symbols") != [interface]:
-            raise AssertionError(f"Kotlin opaque non-class definition lookup failed: {definition}")
+        if definition.get("status") != "ready" or definition.get("symbols") != [companion]:
+            raise AssertionError(f"Kotlin opaque companion-object definition lookup failed: {definition}")
         if tree_hash(workspace) != before:
             raise AssertionError("Kotlin symbol reads modified workspace sources")
 
@@ -153,7 +158,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 diagnostics, four JVM type kinds, exact definitions and immutable sources.")
+    print("Packaged Kotlin acceptance passed: K2 declared types and objects, exact definitions and immutable sources.")
     return 0
 
 

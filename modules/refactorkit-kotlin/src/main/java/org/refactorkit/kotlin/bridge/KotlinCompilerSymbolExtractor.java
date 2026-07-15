@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.psi.KtDeclaration;
 import org.jetbrains.kotlin.psi.KtDeclarationContainer;
 import org.jetbrains.kotlin.psi.KtEnumEntry;
 import org.jetbrains.kotlin.psi.KtFile;
+import org.jetbrains.kotlin.psi.KtObjectDeclaration;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,6 +95,9 @@ final class KotlinCompilerSymbolExtractor {
                 throw new SymbolExtractionException("kotlin.symbolBinaryEvidenceMissing");
             }
             org.jetbrains.kotlin.com.intellij.psi.PsiElement identifier = type.getNameIdentifier();
+            if (identifier == null && type instanceof KtObjectDeclaration && ((KtObjectDeclaration) type).isCompanion()) {
+                identifier = ((KtObjectDeclaration) type).getObjectKeyword();
+            }
             if (identifier == null) throw new SymbolExtractionException("kotlin.symbolLocationUnavailable");
             String kind = kind(type);
             result.add(new ExtractedSymbol(
@@ -101,6 +105,7 @@ final class KotlinCompilerSymbolExtractor {
                 name,
                 kind,
                 source.toString(),
+                identifier.getText(),
                 identifier.getTextRange().getStartOffset(),
                 identifier.getTextRange().getEndOffset()
             ));
@@ -129,9 +134,7 @@ final class KotlinCompilerSymbolExtractor {
     }
 
     private static String kind(KtClassOrObject type) {
-        if (!(type instanceof KtClass)) {
-            throw new SymbolExtractionException("kotlin.symbolDeclarationKindUnsupported");
-        }
+        if (!(type instanceof KtClass)) return "OBJECT";
         KtClass klass = (KtClass) type;
         if (klass.isAnnotation()) return "ANNOTATION";
         if (klass.isInterface()) return "INTERFACE";
@@ -144,14 +147,24 @@ final class KotlinCompilerSymbolExtractor {
         private final String name;
         private final String kind;
         private final String path;
+        private final String selectionText;
         private final int startOffset;
         private final int endOffset;
 
-        ExtractedSymbol(String identity, String name, String kind, String path, int startOffset, int endOffset) {
+        ExtractedSymbol(
+            String identity,
+            String name,
+            String kind,
+            String path,
+            String selectionText,
+            int startOffset,
+            int endOffset
+        ) {
             this.identity = identity;
             this.name = name;
             this.kind = kind;
             this.path = path;
+            this.selectionText = selectionText;
             this.startOffset = startOffset;
             this.endOffset = endOffset;
         }
@@ -160,6 +173,7 @@ final class KotlinCompilerSymbolExtractor {
         String name() { return name; }
         String kind() { return kind; }
         String path() { return path; }
+        String selectionText() { return selectionText; }
         int startOffset() { return startOffset; }
         int endOffset() { return endOffset; }
     }

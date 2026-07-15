@@ -373,6 +373,7 @@ data class Symbol(
 ) {
     enum class Kind {
         CLASS,
+        OBJECT,
         INTERFACE,
         ENUM,
         RECORD,

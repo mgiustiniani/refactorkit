@@ -55,11 +55,15 @@ class KotlinCompilerDiagnosticsTest {
     fun successfulK2CompilationReturnsDurableJvmTypeSymbolsWithExactPsiRanges() {
         val declarations = """
             /*😀*/ class Holder {
+                companion object
+                object NestedRegistry
                 class Nested
                 interface NestedPort
                 enum class NestedMode { ACTIVE }
                 annotation class NestedMarker
             }
+            object Registry
+            data object DataRegistry
             interface Port
             enum class Mode { ACTIVE }
             annotation class Marker
@@ -74,6 +78,8 @@ class KotlinCompilerDiagnosticsTest {
         assertEquals(KotlinCompilerDiagnostics.SYMBOL_BACKEND, result.attestation.backend)
         assertEquals(
             mapOf(
+                "Companion" to org.refactorkit.core.Symbol.Kind.OBJECT,
+                "DataRegistry" to org.refactorkit.core.Symbol.Kind.OBJECT,
                 "Holder" to org.refactorkit.core.Symbol.Kind.CLASS,
                 "Marker" to org.refactorkit.core.Symbol.Kind.ANNOTATION,
                 "Mode" to org.refactorkit.core.Symbol.Kind.ENUM,
@@ -81,7 +87,9 @@ class KotlinCompilerDiagnosticsTest {
                 "NestedMarker" to org.refactorkit.core.Symbol.Kind.ANNOTATION,
                 "NestedMode" to org.refactorkit.core.Symbol.Kind.ENUM,
                 "NestedPort" to org.refactorkit.core.Symbol.Kind.INTERFACE,
+                "NestedRegistry" to org.refactorkit.core.Symbol.Kind.OBJECT,
                 "Port" to org.refactorkit.core.Symbol.Kind.INTERFACE,
+                "Registry" to org.refactorkit.core.Symbol.Kind.OBJECT,
             ),
             result.index.symbols.sortedBy { it.name }.associate { it.name to it.kind },
         )
@@ -91,7 +99,8 @@ class KotlinCompilerDiagnosticsTest {
             assertEquals(Path.of("src/main/kotlin/fixture/Broken.kt"), symbol.location.path)
             val source = snapshot.files.single { it.path == symbol.location.path }.content
             val line = source.lineSequence().elementAt(symbol.location.range.start.line)
-            assertEquals(symbol.name, line.substring(symbol.location.range.start.character, symbol.location.range.end.character))
+            val selected = line.substring(symbol.location.range.start.character, symbol.location.range.end.character)
+            assertEquals(if (symbol.name == "Companion") "object" else symbol.name, selected)
         }
         assertEquals(
             "/*😀*/ class ".length,
@@ -115,16 +124,17 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
-    fun unsupportedObjectRefusesTheCompleteTypeIndex() {
-        val root = project("class Supported\nobject Unsupported\n")
+    fun anonymousObjectIsExcludedWithoutWeakOrSyntheticSymbols() {
+        val root = project("class Container { val anonymous = object {} }\n")
         val toolchain = toolchain(root)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
 
-        val result = assertIs<KotlinCompilerSymbolsResult.Refused>(
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
             KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
         )
 
-        assertEquals("kotlin.symbolDeclarationKindUnsupported", result.reason.code)
+        assertEquals(listOf("Container"), result.index.symbols.map { it.name })
+        assertTrue(result.index.symbols.all { it.kind == org.refactorkit.core.Symbol.Kind.CLASS })
     }
 
     @Test
