@@ -2038,7 +2038,7 @@ class DaemonSession(
 
     private fun kotlinDefinition(params: JsonObject?): JsonElement {
         val symbol = params?.string("symbol") ?: missing("symbol")
-        if (!Regex("kotlin-jvm-(?:type|callable|property)-v1:[0-9a-f]{64}").matches(symbol)) {
+        if (!Regex("kotlin-jvm-(?:type|callable|property|parameter|type-parameter)-v1:[0-9a-f]{64}").matches(symbol)) {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM declaration ID")
         }
         return kotlinSymbolRead(params, SymbolId(symbol))

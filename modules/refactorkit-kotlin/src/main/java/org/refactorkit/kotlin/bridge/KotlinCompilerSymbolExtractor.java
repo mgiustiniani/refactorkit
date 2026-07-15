@@ -22,6 +22,8 @@ import org.jetbrains.kotlin.psi.KtFile;
 import org.jetbrains.kotlin.psi.KtObjectDeclaration;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.KtProperty;
+import org.jetbrains.kotlin.psi.KtParameter;
+import org.jetbrains.kotlin.psi.KtTypeParameter;
 import org.jetbrains.org.objectweb.asm.ClassReader;
 import org.jetbrains.org.objectweb.asm.ClassVisitor;
 import org.jetbrains.org.objectweb.asm.MethodVisitor;
@@ -193,10 +195,43 @@ final class KotlinCompilerSymbolExtractor {
         String identity = owner + "#" + name + descriptor;
         if (!identities.add(identity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
         if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
+        String declaredVisibility = visibility(function);
         result.add(new ExtractedSymbol(
             identity, name, "FUNCTION", source.toString(), owner, descriptor, identifier.getText(),
-            visibility(function), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
+            declaredVisibility, identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
         ));
+        List<KtTypeParameter> typeParameters = function.getTypeParameters();
+        for (int index = 0; index < typeParameters.size(); index++) {
+            KtTypeParameter parameter = typeParameters.get(index);
+            String parameterName = parameter.getName();
+            org.jetbrains.kotlin.com.intellij.psi.PsiElement parameterIdentifier = parameter.getNameIdentifier();
+            if (parameterName == null || parameterIdentifier == null || !JVM_SEGMENT.matcher(parameterName).matches()) continue;
+            String parameterDescriptor = descriptor + "@" + index;
+            String parameterIdentity = owner + "#type-parameter:" + name + parameterDescriptor;
+            if (!identities.add(parameterIdentity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
+            if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
+            result.add(new ExtractedSymbol(
+                parameterIdentity, parameterName, "TYPE_PARAMETER", source.toString(), owner, parameterDescriptor,
+                parameterIdentifier.getText(), declaredVisibility,
+                parameterIdentifier.getTextRange().getStartOffset(), parameterIdentifier.getTextRange().getEndOffset()
+            ));
+        }
+        List<KtParameter> parameters = function.getValueParameters();
+        for (int index = 0; index < parameters.size(); index++) {
+            KtParameter parameter = parameters.get(index);
+            String parameterName = parameter.getName();
+            org.jetbrains.kotlin.com.intellij.psi.PsiElement parameterIdentifier = parameter.getNameIdentifier();
+            if (parameterName == null || parameterIdentifier == null || !JVM_SEGMENT.matcher(parameterName).matches()) continue;
+            String parameterDescriptor = descriptor + "@" + index;
+            String parameterIdentity = owner + "#parameter:" + name + parameterDescriptor;
+            if (!identities.add(parameterIdentity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
+            if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
+            result.add(new ExtractedSymbol(
+                parameterIdentity, parameterName, "PARAMETER", source.toString(), owner, parameterDescriptor,
+                parameterIdentifier.getText(), declaredVisibility,
+                parameterIdentifier.getTextRange().getStartOffset(), parameterIdentifier.getTextRange().getEndOffset()
+            ));
+        }
     }
 
     private static void collectProperty(

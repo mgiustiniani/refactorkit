@@ -31,7 +31,13 @@ review safety boundaries before applying refactorings.
   field-backed properties now receive `kotlin-jvm-property-v1` IDs from JVM
   owner/name/field-descriptor evidence; K2-resolved reads/writes feed the same
   private-declaration rename planner. Delegated/constructor properties and
-  callable references remain refused.
+  callable references remain refused. Value parameters of supported functions now
+  receive `kotlin-jvm-parameter-v1` IDs from callable owner/name/descriptor plus
+  ordinal (not source offset or parameter name); resolved parameter reads feed
+  managed private-function parameter rename. Function type parameters receive a
+  separate owner/callable-descriptor/ordinal `kotlin-jvm-type-parameter-v1` ID,
+  but rename still refuses because K2 has not yet supplied complete exact usage
+  ranges for that row.
 - Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
   queries backed only by Eclipse JDT bindings. Hover returns the exact selected
   range, binding-derived Java signature, qualified identity, bounded Javadoc,

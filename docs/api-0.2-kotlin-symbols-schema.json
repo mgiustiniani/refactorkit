@@ -81,9 +81,9 @@
         "endLine", "endCharacter"
       ],
       "properties": {
-        "id": {"type": "string", "pattern": "^kotlin-jvm-(?:type|callable|property)-v1:[0-9a-f]{64}$"},
+        "id": {"type": "string", "pattern": "^kotlin-jvm-(?:type|callable|property|parameter|type-parameter)-v1:[0-9a-f]{64}$"},
         "name": {"type": "string", "minLength": 1, "maxLength": 512},
-        "kind": {"enum": ["class", "object", "interface", "enum", "annotation", "function", "property"]},
+        "kind": {"enum": ["class", "object", "interface", "enum", "annotation", "function", "property", "parameter", "type-parameter"]},
         "file": {
           "type": "string",
           "minLength": 1,

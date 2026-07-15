@@ -1,8 +1,10 @@
 # Managed Kotlin/JVM rename requirements
 
-Status: K2 visibility/completeness evidence, library preview, daemon/CLI/MCP
-transport authorization and managed `PatchEngine` apply/WAL/rollback are
-implemented with local packaged apply/rollback acceptance. Kill recovery and the
+Status: K2 visibility/completeness evidence covers private types, direct
+functions, field-backed properties and function value parameters; function type
+parameters have durable identity but still refuse incomplete usage evidence.
+Library preview, daemon/CLI/MCP authorization and managed `PatchEngine`
+apply/WAL/rollback are implemented with local packaged apply/rollback acceptance. Kill recovery and the
 four-platform native matrix remain pending; capability metadata is therefore still
 `PROPOSAL_ONLY`.
 
@@ -10,10 +12,11 @@ four-platform native matrix remain pending; capability metadata is therefore sti
 
 The first mutation slice targets a non-local `private` Kotlin class, interface,
 object, enum class, annotation class, non-overloaded direct-call function or
-direct field-backed property in a single-module Kotlin/JVM project with no Java sources. It reuses the qualified `kotlin-jvm-type-v1` identity and K2 FIR
+direct field-backed property or value parameter owned by a supported private
+function in a single-module Kotlin/JVM project with no Java sources. It reuses the qualified `kotlin-jvm-type-v1` identity and K2 FIR
 type-usage evidence. Narrow private-type acceptance is a bootstrap row, not
-completion of K4; broader callable/property forms, parameters, type parameters
-and cross-language public symbols remain subsequent mandatory rows.
+completion of K4; broader callable/property/constructor-parameter forms, type
+parameters and cross-language public symbols remain subsequent mandatory rows.
 
 ## Requirements
 

@@ -470,6 +470,16 @@ class KotlinCompilerDiagnostics private constructor(
                     "Kotlin compiler property identity is invalid"
                 }
                 SymbolId("kotlin-jvm-property-v1:${sha256("kotlin-jvm-property-v1\u0000$owner\u0000$name\u0000$descriptor")}")
+            } else if (kind in setOf(Symbol.Kind.PARAMETER, Symbol.Kind.TYPE_PARAMETER)) {
+                val methodDescriptor = descriptor.substringBeforeLast('@', "")
+                val ordinal = descriptor.substringAfterLast('@', "").toIntOrNull()
+                val family = if (kind == Symbol.Kind.PARAMETER) "parameter" else "type-parameter"
+                val callableName = identity.substringAfter("#$family:", "").substringBefore('(')
+                check(JVM_METHOD_DESCRIPTOR.matches(methodDescriptor) && ordinal != null && ordinal >= 0 &&
+                    JVM_NAME.matches(callableName) && identity == "$owner#$family:$callableName$descriptor") {
+                    "Kotlin compiler $family identity is invalid"
+                }
+                SymbolId("kotlin-jvm-$family-v1:${sha256("kotlin-jvm-$family-v1\u0000$owner\u0000$callableName\u0000$descriptor")}")
             } else {
                 check(descriptor.isEmpty() && identity == owner && SYMBOL_IDENTITY.matches(identity) &&
                     identity.substringAfterLast('.').substringAfterLast('$') == name) {
@@ -842,6 +852,8 @@ class KotlinCompilerDiagnostics private constructor(
             Symbol.Kind.ANNOTATION,
             Symbol.Kind.FUNCTION,
             Symbol.Kind.PROPERTY,
+            Symbol.Kind.PARAMETER,
+            Symbol.Kind.TYPE_PARAMETER,
         )
         private val SYMBOL_REFUSAL_CODES = setOf(
             "kotlin.symbolCompilationFailed",

@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
 import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
+import org.jetbrains.kotlin.fir.types.ConeTypeParameterType;
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
 import org.jetbrains.kotlin.name.ClassId;
@@ -45,8 +46,10 @@ import org.jetbrains.kotlin.psi.KtNullableType;
 import org.jetbrains.kotlin.psi.KtObjectDeclaration;
 import org.jetbrains.kotlin.psi.KtOperationReferenceExpression;
 import org.jetbrains.kotlin.psi.KtProperty;
+import org.jetbrains.kotlin.psi.KtParameter;
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression;
 import org.jetbrains.kotlin.psi.KtTypeReference;
+import org.jetbrains.kotlin.psi.KtTypeParameter;
 import org.jetbrains.kotlin.psi.KtUserType;
 
 import java.nio.file.Path;
@@ -194,6 +197,13 @@ final class KotlinCompilerUsageExtractor {
             if (property.isLocal()) return;
             targetIdentifier = property.getNameIdentifier();
             targetFile = property.getContainingKtFile();
+        } else if (targetPsi instanceof KtParameter) {
+            KtParameter parameter = (KtParameter) targetPsi;
+            targetIdentifier = parameter.getNameIdentifier();
+            targetFile = parameter.getContainingKtFile();
+            if (targetIdentifier == null || !targets.containsKey(declarationKey(
+                canonicalPath(targetFile), targetIdentifier.getTextRange().getStartOffset()
+            ))) return;
         } else {
             KtClassOrObject type = targetType(targetPsi);
             if (type == null || type.getClassId() == null || type.getClassId().isLocal()) return;
@@ -218,10 +228,24 @@ final class KotlinCompilerUsageExtractor {
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
-        if (!(typeRef.getType() instanceof ConeClassLikeType) ||
-            !(typeRef.getSource() instanceof KtPsiSourceElement)) return;
-        ClassId classId = ((ConeClassLikeType) typeRef.getType()).getLookupTag().getClassId();
-        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryName(classId));
+        if (!(typeRef.getSource() instanceof KtPsiSourceElement)) return;
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target;
+        if (typeRef.getType() instanceof ConeClassLikeType) {
+            ClassId classId = ((ConeClassLikeType) typeRef.getType()).getLookupTag().getClassId();
+            target = targets.get(binaryName(classId));
+        } else if (typeRef.getType() instanceof ConeTypeParameterType) {
+            KtSourceElement targetSource = ((ConeTypeParameterType) typeRef.getType()).getLookupTag()
+                .getTypeParameterSymbol().getFir().getSource();
+            if (!(targetSource instanceof KtPsiSourceElement)) return;
+            PsiElement targetPsi = ((KtPsiSourceElement) targetSource).getPsi();
+            KtTypeParameter parameter = targetPsi instanceof KtTypeParameter ?
+                (KtTypeParameter) targetPsi : parent(targetPsi, KtTypeParameter.class);
+            if (parameter == null) return;
+            PsiElement declaration = parameter.getNameIdentifier();
+            if (declaration == null) return;
+            target = targets.get(declarationKey(canonicalPath(parameter.getContainingKtFile()),
+                declaration.getTextRange().getStartOffset()));
+        } else return;
         if (target == null) return;
         PsiElement identifier = typeIdentifier(((KtPsiSourceElement) typeRef.getSource()).getPsi());
         if (identifier == null || !identifier.getText().equals(target.name())) return;

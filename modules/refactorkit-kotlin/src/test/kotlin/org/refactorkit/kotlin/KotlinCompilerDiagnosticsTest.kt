@@ -112,7 +112,9 @@ class KotlinCompilerDiagnosticsTest {
                 "extensionCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "find" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "genericCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "holder" to org.refactorkit.core.Symbol.Kind.PARAMETER,
                 "Holder" to org.refactorkit.core.Symbol.Kind.CLASS,
+                "input" to org.refactorkit.core.Symbol.Kind.PARAMETER,
                 "Marker" to org.refactorkit.core.Symbol.Kind.ANNOTATION,
                 "Mode" to org.refactorkit.core.Symbol.Kind.ENUM,
                 "Nested" to org.refactorkit.core.Symbol.Kind.CLASS,
@@ -121,13 +123,16 @@ class KotlinCompilerDiagnosticsTest {
                 "NestedPort" to org.refactorkit.core.Symbol.Kind.INTERFACE,
                 "NestedRegistry" to org.refactorkit.core.Symbol.Kind.OBJECT,
                 "Port" to org.refactorkit.core.Symbol.Kind.INTERFACE,
+                "prefix" to org.refactorkit.core.Symbol.Kind.PARAMETER,
                 "member" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "modeLabel" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "nestedCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "nestedObjectCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
                 "Registry" to org.refactorkit.core.Symbol.Kind.OBJECT,
                 "suspendCall" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "T" to org.refactorkit.core.Symbol.Kind.TYPE_PARAMETER,
                 "topLevel" to org.refactorkit.core.Symbol.Kind.FUNCTION,
+                "value" to org.refactorkit.core.Symbol.Kind.PARAMETER,
             ),
             result.index.symbols.sortedBy { it.name }.associate { it.name to it.kind },
         )
@@ -146,9 +151,12 @@ class KotlinCompilerDiagnosticsTest {
             assertEquals(namesById.getValue(usage.targetId), line.substring(range.start.character, range.end.character))
         }
         result.index.symbols.forEach { symbol ->
-            val idPattern = if (symbol.kind == org.refactorkit.core.Symbol.Kind.FUNCTION) {
-                Regex("kotlin-jvm-callable-v1:[0-9a-f]{64}")
-            } else Regex("kotlin-jvm-type-v1:[0-9a-f]{64}")
+            val idPattern = when (symbol.kind) {
+                org.refactorkit.core.Symbol.Kind.FUNCTION -> Regex("kotlin-jvm-callable-v1:[0-9a-f]{64}")
+                org.refactorkit.core.Symbol.Kind.PARAMETER -> Regex("kotlin-jvm-parameter-v1:[0-9a-f]{64}")
+                org.refactorkit.core.Symbol.Kind.TYPE_PARAMETER -> Regex("kotlin-jvm-type-parameter-v1:[0-9a-f]{64}")
+                else -> Regex("kotlin-jvm-type-v1:[0-9a-f]{64}")
+            }
             assertTrue(symbol.id.value.matches(idPattern), symbol.toString())
             assertEquals(Path.of("src/main/kotlin/fixture/Broken.kt"), symbol.location.path)
             val source = snapshot.files.single { it.path == symbol.location.path }.content
@@ -292,6 +300,43 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun privateFunctionParameterRenameUsesOwnerDescriptorOrdinalIdentity() {
+        val root = project("private fun format(value: Int): String = value.toString()\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val symbols = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = symbols.index.symbols.single { it.name == "value" }
+
+        val plan = KotlinPrivateDeclarationRenamePlanner(adapter).preview(snapshot, target.id, "number")
+
+        assertEquals(org.refactorkit.core.Symbol.Kind.PARAMETER, target.kind)
+        assertTrue(target.id.value.matches(Regex("kotlin-jvm-parameter-v1:[0-9a-f]{64}")))
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(2, plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
+            .flatMap { it.textEdits }.size)
+        assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
+    }
+
+    @Test
+    fun typeParameterIdentityRefusesRenameUntilExactUsageEvidenceIsComplete() {
+        val root = project("private fun <T> identity(value: T): T = value\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val symbols = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = symbols.index.symbols.single { it.name == "T" }
+
+        val plan = KotlinPrivateDeclarationRenamePlanner(adapter).preview(snapshot, target.id, "R")
+
+        assertEquals(org.refactorkit.core.Symbol.Kind.TYPE_PARAMETER, target.kind)
+        assertTrue(target.id.value.matches(Regex("kotlin-jvm-type-parameter-v1:[0-9a-f]{64}")))
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.renameReferenceCompletenessUnavailable", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun privateTypeRenameRefusesPublicCrossLanguageAndIncompleteImportBoundaries() {
         val root = project("class PublicType\nprivate class PrivateType\n")
         val toolchain = toolchain(root)
@@ -375,9 +420,9 @@ class KotlinCompilerDiagnosticsTest {
             KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
         )
 
-        assertEquals(listOf("callReference", "reference", "sameName", "target"), result.index.symbols.map { it.name }.sorted())
+        assertEquals(listOf("callReference", "reference", "sameName", "sameName", "target"), result.index.symbols.map { it.name }.sorted())
         val names = result.index.symbols.associate { it.id to it.name }
-        assertEquals(listOf("reference"), result.usages.map { names.getValue(it.targetId) })
+        assertEquals(listOf("reference", "sameName"), result.usages.map { names.getValue(it.targetId) })
     }
 
     @Test
