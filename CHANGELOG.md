@@ -27,7 +27,11 @@ review safety boundaries before applying refactorings.
   `PROPOSAL_ONLY` until kill recovery and native qualification pass. The same
   planner now accepts private non-overloaded functions when all uses are proven
   direct K2 call names; callable references/imports and operator/infix/override
-  shapes refuse rather than inheriting partial-reference authority.
+  shapes refuse rather than inheriting partial-reference authority. Direct
+  field-backed properties now receive `kotlin-jvm-property-v1` IDs from JVM
+  owner/name/field-descriptor evidence; K2-resolved reads/writes feed the same
+  private-declaration rename planner. Delegated/constructor properties and
+  callable references remain refused.
 - Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
   queries backed only by Eclipse JDT bindings. Hover returns the exact selected
   range, binding-derived Java signature, qualified identity, bounded Javadoc,

@@ -489,7 +489,7 @@ class McpSession(
 
     private fun toolKotlinDefinition(args: JsonObject): String {
         val symbol = args.string("symbol") ?: missing("symbol")
-        if (!Regex("kotlin-jvm-(?:type|callable)-v1:[0-9a-f]{64}").matches(symbol)) {
+        if (!Regex("kotlin-jvm-(?:type|callable|property)-v1:[0-9a-f]{64}").matches(symbol)) {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM declaration ID")
         }
         return toolKotlinSymbolRead(args, org.refactorkit.core.SymbolId(symbol))

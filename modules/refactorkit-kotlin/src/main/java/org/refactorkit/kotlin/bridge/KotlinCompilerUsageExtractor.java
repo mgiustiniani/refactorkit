@@ -44,6 +44,7 @@ import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.KtNullableType;
 import org.jetbrains.kotlin.psi.KtObjectDeclaration;
 import org.jetbrains.kotlin.psi.KtOperationReferenceExpression;
+import org.jetbrains.kotlin.psi.KtProperty;
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression;
 import org.jetbrains.kotlin.psi.KtTypeReference;
 import org.jetbrains.kotlin.psi.KtUserType;
@@ -188,6 +189,11 @@ final class KotlinCompilerUsageExtractor {
             if (parent(function, KtBlockExpression.class) != null) return;
             targetIdentifier = function.getNameIdentifier();
             targetFile = function.getContainingKtFile();
+        } else if (targetPsi instanceof KtProperty) {
+            KtProperty property = (KtProperty) targetPsi;
+            if (property.isLocal()) return;
+            targetIdentifier = property.getNameIdentifier();
+            targetFile = property.getContainingKtFile();
         } else {
             KtClassOrObject type = targetType(targetPsi);
             if (type == null || type.getClassId() == null || type.getClassId().isLocal()) return;

@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.psi.KtEnumEntry;
 import org.jetbrains.kotlin.psi.KtFile;
 import org.jetbrains.kotlin.psi.KtObjectDeclaration;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
+import org.jetbrains.kotlin.psi.KtProperty;
 import org.jetbrains.org.objectweb.asm.ClassReader;
 import org.jetbrains.org.objectweb.asm.ClassVisitor;
 import org.jetbrains.org.objectweb.asm.MethodVisitor;
@@ -71,16 +72,17 @@ final class KotlinCompilerSymbolExtractor {
             List<ExtractedSymbol> result = new ArrayList<ExtractedSymbol>();
             Set<String> identities = new HashSet<String>();
             Map<String, List<JvmMethod>> methods = new HashMap<String, List<JvmMethod>>();
+            Map<String, List<JvmField>> fields = new HashMap<String, List<JvmField>>();
             for (KtFile file : environment.getSourceFiles()) {
                 Path path = Paths.get(file.getVirtualFilePath()).toAbsolutePath().normalize().toRealPath();
                 String fileOwner = null;
                 for (KtDeclaration declaration : file.getDeclarations()) {
-                    if (declaration instanceof KtNamedFunction) {
+                    if (declaration instanceof KtNamedFunction || declaration instanceof KtProperty) {
                         fileOwner = binaryOwner(JvmFileClassUtil.getFileClassInternalName(file));
                         break;
                     }
                 }
-                collect(file.getDeclarations(), path, outputDirectory, fileOwner, identities, methods, result);
+                collect(file.getDeclarations(), path, outputDirectory, fileOwner, identities, methods, fields, result);
             }
             result.sort(Comparator.comparing(ExtractedSymbol::identity));
             return result;
@@ -100,12 +102,19 @@ final class KotlinCompilerSymbolExtractor {
         String callableOwner,
         Set<String> identities,
         Map<String, List<JvmMethod>> methods,
+        Map<String, List<JvmField>> fields,
         List<ExtractedSymbol> result
     ) {
         for (KtDeclaration declaration : declarations) {
             if (declaration instanceof KtNamedFunction) {
                 collectFunction(
                     (KtNamedFunction) declaration, source, outputDirectory, callableOwner, identities, methods, result
+                );
+                continue;
+            }
+            if (declaration instanceof KtProperty) {
+                collectProperty(
+                    (KtProperty) declaration, source, outputDirectory, callableOwner, identities, fields, result
                 );
                 continue;
             }
@@ -146,7 +155,7 @@ final class KotlinCompilerSymbolExtractor {
             if (type instanceof KtDeclarationContainer) {
                 collect(
                     ((KtDeclarationContainer) type).getDeclarations(), source, outputDirectory, identity,
-                    identities, methods, result
+                    identities, methods, fields, result
                 );
             }
         }
@@ -188,6 +197,66 @@ final class KotlinCompilerSymbolExtractor {
             identity, name, "FUNCTION", source.toString(), owner, descriptor, identifier.getText(),
             visibility(function), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
         ));
+    }
+
+    private static void collectProperty(
+        KtProperty property,
+        Path source,
+        Path outputDirectory,
+        String owner,
+        Set<String> identities,
+        Map<String, List<JvmField>> fields,
+        List<ExtractedSymbol> result
+    ) {
+        if (owner == null || property.isLocal()) return;
+        String name = property.getName();
+        org.jetbrains.kotlin.com.intellij.psi.PsiElement identifier = property.getNameIdentifier();
+        if (name == null || identifier == null || !JVM_SEGMENT.matcher(name).matches()) return;
+        List<JvmField> ownerFields = fields.get(owner);
+        if (ownerFields == null) {
+            ownerFields = readFields(outputDirectory, owner);
+            fields.put(owner, ownerFields);
+        }
+        List<JvmField> matches = new ArrayList<JvmField>();
+        for (JvmField field : ownerFields) if (field.name.equals(name)) matches.add(field);
+        if (matches.size() != 1) return;
+        String descriptor = matches.get(0).descriptor;
+        String identity = owner + "#property:" + name + ":" + descriptor;
+        if (!identities.add(identity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
+        if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
+        result.add(new ExtractedSymbol(
+            identity, name, "PROPERTY", source.toString(), owner, descriptor, identifier.getText(),
+            visibility(property), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
+        ));
+    }
+
+    private static List<JvmField> readFields(Path outputDirectory, String owner) {
+        Path classFile = outputDirectory.resolve(owner.replace('.', '/') + ".class").normalize();
+        try {
+            if (!classFile.startsWith(outputDirectory) || Files.isSymbolicLink(classFile) ||
+                !Files.isRegularFile(classFile, java.nio.file.LinkOption.NOFOLLOW_LINKS) ||
+                Files.size(classFile) > MAX_CLASS_FILE_BYTES) {
+                throw new SymbolExtractionException("kotlin.symbolBinaryEvidenceMissing");
+            }
+            final List<JvmField> fields = new ArrayList<JvmField>();
+            ClassReader reader = new ClassReader(Files.readAllBytes(classFile));
+            if (!reader.getClassName().equals(owner.replace('.', '/'))) {
+                throw new SymbolExtractionException("kotlin.symbolBinaryEvidenceMissing");
+            }
+            reader.accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override public org.jetbrains.org.objectweb.asm.FieldVisitor visitField(
+                    int access, String name, String descriptor, String signature, Object value
+                ) {
+                    if ((access & Opcodes.ACC_SYNTHETIC) == 0) fields.add(new JvmField(name, descriptor));
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            return fields;
+        } catch (SymbolExtractionException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new SymbolExtractionException("kotlin.symbolBinaryEvidenceMissing");
+        }
     }
 
     private static List<JvmMethod> readMethods(Path outputDirectory, String owner) {
@@ -314,6 +383,12 @@ final class KotlinCompilerSymbolExtractor {
         String visibility() { return visibility; }
         int startOffset() { return startOffset; }
         int endOffset() { return endOffset; }
+    }
+
+    private static final class JvmField {
+        private final String name;
+        private final String descriptor;
+        private JvmField(String name, String descriptor) { this.name = name; this.descriptor = descriptor; }
     }
 
     private static final class JvmMethod {

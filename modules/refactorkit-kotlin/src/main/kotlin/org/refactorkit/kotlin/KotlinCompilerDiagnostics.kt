@@ -465,6 +465,11 @@ class KotlinCompilerDiagnostics private constructor(
                     "Kotlin compiler callable identity is invalid"
                 }
                 SymbolId("kotlin-jvm-callable-v1:${sha256("kotlin-jvm-callable-v1\u0000$owner\u0000$name\u0000$descriptor")}")
+            } else if (kind == Symbol.Kind.PROPERTY) {
+                check(JVM_FIELD_DESCRIPTOR.matches(descriptor) && identity == "$owner#property:$name:$descriptor") {
+                    "Kotlin compiler property identity is invalid"
+                }
+                SymbolId("kotlin-jvm-property-v1:${sha256("kotlin-jvm-property-v1\u0000$owner\u0000$name\u0000$descriptor")}")
             } else {
                 check(descriptor.isEmpty() && identity == owner && SYMBOL_IDENTITY.matches(identity) &&
                     identity.substringAfterLast('.').substringAfterLast('$') == name) {
@@ -822,6 +827,7 @@ class KotlinCompilerDiagnostics private constructor(
         private val JVM_METHOD_DESCRIPTOR = Regex(
             "\\((?:\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))*\\)(?:V|\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))",
         )
+        private val JVM_FIELD_DESCRIPTOR = Regex("\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;)")
         private val SYMBOL_FIELDS = setOf(
             "identity", "name", "kind", "path", "owner", "descriptor", "selectionText", "visibility", "startOffset", "endOffset",
         )
@@ -835,6 +841,7 @@ class KotlinCompilerDiagnostics private constructor(
             Symbol.Kind.ENUM,
             Symbol.Kind.ANNOTATION,
             Symbol.Kind.FUNCTION,
+            Symbol.Kind.PROPERTY,
         )
         private val SYMBOL_REFUSAL_CODES = setOf(
             "kotlin.symbolCompilationFailed",

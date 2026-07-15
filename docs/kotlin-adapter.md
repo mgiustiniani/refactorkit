@@ -118,8 +118,8 @@ being guessed.
 The whole symbol read refuses rather than returning a partial declaration index
 when the snapshot does not compile, a JVM name/descriptor is unsupported,
 identity collides, binary or callable evidence is missing/ambiguous, or any
-result/location limit is exceeded. Enum entries, properties, type aliases, local
-classes/functions and anonymous object expressions are outside the catalogue and
+result/location limit is exceeded. Enum entries, delegated/constructor properties,
+type aliases, local classes/functions and anonymous object expressions are outside the catalogue and
 are not presented as indexed symbols. Definition
 accepts only an opaque ID returned by this backend and resolves it against a newly
 attested copy of the same saved snapshot. Named/data/nested objects expose exact
@@ -128,7 +128,7 @@ exact range over its `object` keyword because no source identifier exists.
 The worker also builds one atomic, bounded K2 FIR projection for direct function
 call names and source type usages. Real-PSI resolved references/types/qualifiers/
 imports must map exactly to an existing callable or type symbol; fake sources,
-locals, operators, properties, aliases and callable references are excluded. API
+locals, operators, unsupported/delegated properties, aliases and callable references are excluded. API
 `0.2` daemon `intelligence.query`, CLI and MCP expose saved-snapshot definition
 from those ranges and explicitly partial references under exact lease/snapshot/
 generation authority. Type aliases, overloaded or renamed JVM callables,

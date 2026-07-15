@@ -45,12 +45,14 @@ class KotlinPrivateDeclarationRenamePlanner(
         if (kotlinSources.any { STAR_IMPORT.containsMatchIn(it.content) || ALIAS_IMPORT.containsMatchIn(it.content) || TYPE_ALIAS.containsMatchIn(it.content) }) {
             return refused(snapshot, "kotlin.renameReferenceCompletenessUnavailable", "Kotlin aliases, star imports or type aliases prevent complete initial rename evidence")
         }
-        if (target.kind == Symbol.Kind.FUNCTION) {
+        if (target.kind in setOf(Symbol.Kind.FUNCTION, Symbol.Kind.PROPERTY)) {
             val callableReference = Regex("::\\s*${Regex.escape(target.name)}\\b")
-            val unsupportedModifier = Regex("\\b(?:operator|infix|override)\\s+fun\\s+${Regex.escape(target.name)}\\b")
             val importedCallable = Regex("(?m)^\\s*import\\s+[^\\n.]+(?:\\.[^\\n.]+)*\\.${Regex.escape(target.name)}\\s*$")
+            val unsupportedModifier = if (target.kind == Symbol.Kind.FUNCTION) {
+                Regex("\\b(?:operator|infix|override)\\s+fun\\s+${Regex.escape(target.name)}\\b")
+            } else Regex("a^")
             if (kotlinSources.any { source -> listOf(callableReference, unsupportedModifier, importedCallable).any { it.containsMatchIn(source.content) } }) {
-                return refused(snapshot, "kotlin.renameReferenceCompletenessUnavailable", "Callable references, imports or operator/override shapes prevent complete function rename evidence")
+                return refused(snapshot, "kotlin.renameReferenceCompletenessUnavailable", "Callable references, imports or unsupported callable shapes prevent complete rename evidence")
             }
         }
         val dynamic = Regex("[\\\"'][^\\\"'\\n]*\\b${Regex.escape(target.name)}\\b[^\\\"'\\n]*[\\\"']")
@@ -123,7 +125,7 @@ class KotlinPrivateDeclarationRenamePlanner(
         private val TYPE_ALIAS = Regex("(?m)^\\s*(?:public|private|internal)?\\s*typealias\\s+")
         private val SUPPORTED_KINDS = setOf(
             Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.OBJECT, Symbol.Kind.ENUM,
-            Symbol.Kind.ANNOTATION, Symbol.Kind.FUNCTION,
+            Symbol.Kind.ANNOTATION, Symbol.Kind.FUNCTION, Symbol.Kind.PROPERTY,
         )
         private val KEYWORDS = setOf("class", "object", "interface", "fun", "val", "var", "when", "is", "in", "as", "private", "public", "internal", "protected", "return", "package", "import", "typealias")
     }

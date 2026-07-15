@@ -270,6 +270,28 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun privatePropertyRenameUsesFieldIdentityAndResolvedAccesses() {
+        val root = project("""
+            private var counter: Int = 0
+            private fun increment(): Int { counter += 1; return counter }
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val symbols = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = symbols.index.symbols.single { it.name == "counter" }
+
+        val plan = KotlinPrivateDeclarationRenamePlanner(adapter).preview(snapshot, target.id, "total")
+
+        assertEquals(org.refactorkit.core.Symbol.Kind.PROPERTY, target.kind)
+        assertTrue(target.id.value.matches(Regex("kotlin-jvm-property-v1:[0-9a-f]{64}")))
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(3, plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
+            .flatMap { it.textEdits }.size)
+        assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
+    }
+
+    @Test
     fun privateTypeRenameRefusesPublicCrossLanguageAndIncompleteImportBoundaries() {
         val root = project("class PublicType\nprivate class PrivateType\n")
         val toolchain = toolchain(root)
@@ -310,7 +332,7 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
-    fun anonymousObjectLocalsPropertiesAndLambdasAreExcludedWithoutWeakOrSyntheticSymbols() {
+    fun anonymousObjectsAndLocalsAreExcludedWhileDirectPropertiesUseFieldEvidence() {
         val root = project("""
             class Container {
                 val anonymous = object {}
@@ -329,16 +351,17 @@ class KotlinCompilerDiagnosticsTest {
         val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
         val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
 
-        assertEquals(listOf("Container", "outer"), result.index.symbols.map { it.name }.sorted())
+        assertEquals(listOf("Container", "anonymous", "callback", "outer"), result.index.symbols.map { it.name }.sorted())
         assertEquals(
-            setOf(org.refactorkit.core.Symbol.Kind.CLASS, org.refactorkit.core.Symbol.Kind.FUNCTION),
+            setOf(org.refactorkit.core.Symbol.Kind.CLASS, org.refactorkit.core.Symbol.Kind.FUNCTION,
+                org.refactorkit.core.Symbol.Kind.PROPERTY),
             result.index.symbols.map { it.kind }.toSet(),
         )
         assertTrue(result.usages.isEmpty())
     }
 
     @Test
-    fun callableReferencesAndPropertyInvokeRemainOutsideFunctionUsageNavigation() {
+    fun callableReferenceTargetStaysExcludedWhilePropertyInvokeReferenceIsResolved() {
         val root = project("""
             fun target(): String = "value"
             val reference = ::target
@@ -352,8 +375,9 @@ class KotlinCompilerDiagnosticsTest {
             KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
         )
 
-        assertEquals(listOf("callReference", "sameName", "target"), result.index.symbols.map { it.name }.sorted())
-        assertTrue(result.usages.isEmpty())
+        assertEquals(listOf("callReference", "reference", "sameName", "target"), result.index.symbols.map { it.name }.sorted())
+        val names = result.index.symbols.associate { it.id to it.name }
+        assertEquals(listOf("reference"), result.usages.map { names.getValue(it.targetId) })
     }
 
     @Test
