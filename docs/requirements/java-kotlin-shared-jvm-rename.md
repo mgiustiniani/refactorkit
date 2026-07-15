@@ -1,7 +1,10 @@
 # Java/Kotlin shared JVM rename requirements
 
-Status: active requirement-first K5/J1 prerequisite; no cross-language mutation
-authority is granted by this document.
+Status: active requirement-first K5/J1 prerequisite. The Kotlin-to-Java public
+top-level type library preview is implemented with exact K2 class-file and JDT
+binding evidence. Daemon/CLI/MCP routing and combined K2/JDT apply diagnostics are
+implemented; local packaged preview/apply/rollback restores both languages byte
+exactly. Native qualification and the symmetric Java-to-Kotlin row remain pending.
 
 ## First qualified row
 

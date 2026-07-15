@@ -697,7 +697,10 @@ class RefactorKitCli(
                     put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
                     put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
                     put("expectedIndexGeneration", generation)
-                    put("arguments", buildJsonObject { put("newName", parsed.options.getValue("to")) })
+                    put("arguments", buildJsonObject {
+                        put("newName", parsed.options.getValue("to"))
+                        put("acceptExternalConsumerRisk", "accept-external-consumer-risk" in parsed.flags)
+                    })
                 })
                 if ("apply" in parsed.flags) session.dispatch("refactor.apply", buildJsonObject {
                     put("planId", preview.jsonObject.getValue("planId").jsonPrimitive.content)
@@ -988,7 +991,7 @@ class RefactorKitCli(
           refactorkit kotlin definition <root> --symbol <opaque-id> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin definition <root> --file <relative.kt> --line <zero-based> --character <zero-based> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin references <root> --file <relative.kt> --line <zero-based> --character <zero-based> [--exclude-declaration] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
-          refactorkit kotlin rename <root> --symbol <private-type-id> --to <new-name> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin rename <root> --symbol <kotlin-id> --to <new-name> [--accept-external-consumer-risk] [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

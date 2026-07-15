@@ -176,6 +176,11 @@ refactorkit kotlin definition <root> --file src/main/kotlin/example/App.kt \
 refactorkit kotlin references <root> --file src/main/kotlin/example/App.kt \
   --line 12 --character 8 --jdk-home <jdk-21> \
   --compiler-jar <compiler.jar> --compiler-classpath <runtime-jars>
+
+refactorkit kotlin rename <root> --symbol <kotlin-jvm-type-v1:id> \
+  --to RenamedGreeting --accept-external-consumer-risk \
+  --jdk-home <jdk-21> --compiler-jar <compiler.jar> \
+  --compiler-classpath <runtime-jars>
 ```
 
 MCP exposes `kotlin_semantic_start`, `kotlin_semantic_stop`,
@@ -188,13 +193,18 @@ promoted to saved-snapshot authority. Declaration responses are constrained by
 expose the same truthful experimental compiler capability metadata, but
 editor-native publication remains the editor's responsibility in this slice.
 
-## Remaining gates
+## Current mutation boundary and remaining gates
 
-Property/constructor/parameter identity, overloaded callable identity,
-usage-location definition, references, Java/Kotlin interoperability, immutable
-editor overlays and every mutation remain unimplemented and explicitly refused.
-The declaration IDs are sufficient only for saved-snapshot search-to-definition
-navigation; they are not rename
-authority. Managed Kotlin rename still requires complete semantic references,
-preview and staged diagnostics, authorization, `PatchEngine`, WAL, native
-recovery and rollback qualification.
+K4 qualifies bounded private types, direct functions, field-backed properties,
+function parameters and function type parameters through managed preview/apply,
+WAL and rollback. The shared `refactorkit-jvm` composition module adds a first
+library preview for a public top-level Kotlin type used by Java: class files from
+the exact disposable K2 overlay let JDT bind exact Java tokens to the same JVM
+binary name. Public preview requires explicit external-consumer-risk acceptance
+and clean before/staged K2 plus JDT evidence.
+
+Transport apply/rollback and native qualification of that public row, symmetric
+Java-to-Kotlin mutation, members, overloads, delegated/constructor properties,
+callable references, aliases, moves, signature/extract/inline operations,
+multiplatform, Android and broader framework boundaries remain pending or
+explicitly refused. No partial read result inherits mutation authority.

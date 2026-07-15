@@ -276,6 +276,75 @@ def main() -> int:
         if tree_hash(workspace / "src") != source_before:
             raise AssertionError("Kotlin rollback did not restore source bytes")
 
+        java_caller = workspace / "src/main/java/org/refactorkit/samples/Caller.java"
+        java_caller.parent.mkdir(parents=True, exist_ok=True)
+        java_caller.write_text(
+            "package org.refactorkit.samples; class Caller { Greeting value = new Greeting(); }\n",
+            encoding="utf-8",
+        )
+        mixed_before = tree_hash(workspace / "src")
+        mixed_symbols = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-mixed-symbols", "symbols",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt"],
+        )
+        public_greeting = next(item for item in mixed_symbols.get("symbols", []) if item.get("name") == "Greeting")
+        process = subprocess.Popen(
+            command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def mixed_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"mixed daemon {method} failed: {response}")
+                return response["result"]
+
+            mixed_exchange(20, "project.open", {"root": str(workspace)})
+            mixed_started = mixed_exchange(21, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            mixed_index = mixed_exchange(22, "index.status")
+            mixed_preview = mixed_exchange(23, "refactor.preview", {
+                "operation": "renameSymbol", "languageId": "kotlin", "symbol": public_greeting["id"],
+                "semanticLease": mixed_started["semanticLease"],
+                "expectedSnapshotHash": mixed_started["snapshotHash"],
+                "expectedIndexGeneration": mixed_index["generation"],
+                "arguments": {"newName": "PublicGreeting", "acceptExternalConsumerRisk": True},
+            })
+            if mixed_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != mixed_before:
+                raise AssertionError(f"mixed public-type preview is invalid or wrote files: {mixed_preview}")
+            mixed_applied = mixed_exchange(24, "refactor.apply", {
+                "planId": mixed_preview["planId"], "semanticLease": mixed_started["semanticLease"],
+                "expectedIndexGeneration": mixed_index["generation"],
+            })
+            kotlin_text = (workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt").read_text(encoding="utf-8")
+            java_text = java_caller.read_text(encoding="utf-8")
+            if mixed_applied.get("status") != "applied" or "PublicGreeting" not in kotlin_text or "PublicGreeting" not in java_text:
+                raise AssertionError(f"mixed public-type apply failed: {mixed_applied}")
+            mixed_rollback = mixed_exchange(25, "patch.rollback", {"transactionId": mixed_applied["transactionId"]})
+            if mixed_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != mixed_before:
+                raise AssertionError(f"mixed public-type rollback failed: {mixed_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+        java_caller.unlink()
+        java_caller.parent.rmdir()
+        (workspace / "src/main/java/org/refactorkit").rmdir()
+        (workspace / "src/main/java/org").rmdir()
+        (workspace / "src/main/java").rmdir()
+        if tree_hash(workspace / "src") != source_before:
+            raise AssertionError("mixed Java/Kotlin rollback did not restore source bytes")
+
         source = workspace / "src" / "main" / "kotlin" / "org" / "refactorkit" / "samples" / "Greeting.kt"
         source.write_text("package org.refactorkit.samples\n\nclass Greeting(val missing: MissingType)\n", encoding="utf-8")
         broken_before = tree_hash(workspace)
@@ -288,7 +357,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 declarations plus function/type usage definition and partial references.")
+    print("Packaged Kotlin acceptance passed: K2 reads, private rename, and mixed public Kotlin/Java apply/rollback.")
     return 0
 
 

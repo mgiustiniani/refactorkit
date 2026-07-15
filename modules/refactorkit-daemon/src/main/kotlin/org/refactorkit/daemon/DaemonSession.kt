@@ -69,7 +69,8 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
-import org.refactorkit.kotlin.KotlinPrivateDeclarationRenamePlanner
+import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
+import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
 import org.refactorkit.kotlin.KotlinToolchainDiscovery
@@ -1427,10 +1428,11 @@ class DaemonSession(
                     if (expected != snap.hash || generation != currentGeneration) throw JsonRpcException(
                         JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.renameAuthorityStale",
                     )
-                    KotlinPrivateDeclarationRenamePlanner(kotlinAdapter).preview(
+                    KotlinManagedDeclarationRenamePlanner(kotlinAdapter).preview(
                         snap,
                         SymbolId(symbol ?: missing("symbol")),
                         args["newName"] ?: missing("arguments.newName"),
+                        args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
                     )
                 } else {
                     val semantic = requireSemanticAdapter(requestedLanguage)
@@ -1560,7 +1562,11 @@ class DaemonSession(
             ApplyAuthorization.explicit("daemon-json-rpc"),
             when (pending.languageId) {
                 "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
-                "kotlin" -> DiagnosticsGate.enabled("kotlin-k2") { candidate ->
+                "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
+                    DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
+                        KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                    }
+                } else DiagnosticsGate.enabled("kotlin-k2") { candidate ->
                     kotlinAdapter.compilerDiagnostics(candidate).diagnostics
                 }
                 else -> requireSemanticAdapter(pending.languageId).diagnosticsGate()
@@ -1571,7 +1577,9 @@ class DaemonSession(
                 val diagnostics = boundedDiagnostics(
                     when (pending.languageId) {
                         "java" -> adapter.diagnostics(refreshed)
-                        "kotlin" -> kotlinAdapter.compilerDiagnostics(refreshed).diagnostics
+                        "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
+                            KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
+                        } else kotlinAdapter.compilerDiagnostics(refreshed).diagnostics
                         else -> emptyList()
                     },
                 )

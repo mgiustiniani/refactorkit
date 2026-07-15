@@ -55,7 +55,8 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
-import org.refactorkit.kotlin.KotlinPrivateDeclarationRenamePlanner
+import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
+import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
 import org.refactorkit.kotlin.KotlinToolchainDiscovery
@@ -762,9 +763,10 @@ class McpSession(
                     val lease = args.string("semanticLease") ?: missing("semanticLease")
                     val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
                     if (lease != kotlinSemanticLease || expected != snap.hash) return "Refused [kotlin.renameAuthorityStale]: Kotlin rename authority is stale."
-                    KotlinPrivateDeclarationRenamePlanner(kotlinAdapter).preview(
+                    KotlinManagedDeclarationRenamePlanner(kotlinAdapter).preview(
                         snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
                         opArgs["newName"] ?: missing("arguments.newName"),
+                        opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
                     )
                 } else {
                 val semantic = requireSemanticAdapter(languageId)
@@ -874,7 +876,11 @@ class McpSession(
             ApplyAuthorization.explicit("mcp-tool"),
             when (pending.languageId) {
                 "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
-                "kotlin" -> DiagnosticsGate.enabled("kotlin-k2") { candidate ->
+                "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
+                    DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
+                        KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                    }
+                } else DiagnosticsGate.enabled("kotlin-k2") { candidate ->
                     kotlinAdapter.compilerDiagnostics(candidate).diagnostics
                 }
                 else -> requireSemanticAdapter(pending.languageId).diagnosticsGate()

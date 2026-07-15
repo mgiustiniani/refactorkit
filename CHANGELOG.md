@@ -9,6 +9,16 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add the first shared-JVM public-type preview foundation in the new
+  `refactorkit-jvm` module. Exact classes emitted in the disposable K2 overlay
+  are supplied to JDT as an ephemeral classpath; JDT binding uses retain the
+  qualified binary identity and compose with exact Kotlin tokens. Public preview
+  requires `acceptExternalConsumerRisk=true`, re-runs both compilers on the staged
+  snapshot and refuses dirty, dynamic, generated or incomplete evidence. The
+  Kotlin CLI exposes `--accept-external-consumer-risk`. API `0.2` JDT entry points
+  and the legacy binding-use constructor remain available.
+- Route every Gradle test JVM to bounded repository-local `build/test-tmp` storage
+  so a saturated host `/tmp` cannot turn semantic acceptance into false failures.
 - Make every open K5, T5, J1 and I1 row release-blocking for closure of the
   `0.7.x` band. The completion contract preserves API `0.2`, requirement-first
   slices, compiler/provider authority, managed transactions and stable refusal;

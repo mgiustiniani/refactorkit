@@ -77,9 +77,15 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Kotlin Language Adapter
 |Kotlin/JVM library
-|`0.7.x` adapter owning `.kt`/`.kts` routing. Non-executing `kotlin-compiler-explicit-v1` discovery validates explicit JDK 21 and Kotlin 2.0.21 compiler/classpath identity, and `kotlin-jvm-projection-v1` binds it to bounded source-set evidence. `kotlin-compiler-diagnostics-k2-v1` provides an external one-shot diagnostics worker with clean environment, immutable overlay, evidence revalidation, bounded lifecycle, hardened XML parsing and process attestation. `kotlin-compiler-jvm-declarations-k2-v1` adds a saved-snapshot declared-type symbol row: successful K2 compilation, compiler `ClassId`, exact PSI declaration selection and matching generated class file produce an opaque JVM-binary-derived ID for classes, named/companion objects, interfaces, enum classes and annotation classes. A bounded function row reads the compiler-derived file-facade/containing owner class and requires one exact non-synthetic JVM method, deriving `kotlin-jvm-callable-v1` from owner/name/descriptor. These reads are `EXPERIMENTAL/COMPILER/NONE`; scripts, anonymous objects, properties, ambiguous callables, references and every mutation remain refused and no lexical result or edit is synthesized.
+|`0.7.x` adapter owning `.kt`/`.kts` routing. Explicit JDK/compiler discovery and `kotlin-jvm-projection-v1` bind K2 diagnostics, declaration identities and exact FIR/PSI usages to immutable snapshots. JVM type, callable, field-backed property, function-parameter and function-type-parameter identities are durable and bounded. K4 adds managed private-declaration proposals with staged diagnostics; scripts, incomplete callable/property shapes and unsupported dynamic boundaries refuse.
 |`modules/refactorkit-kotlin`, `docs/kotlin-adapter.md`, `docs/kotlin-toolchain.md`, `docs/kotlin-build-model.md`, `docs/releases/v0.7.0-plan.md`.
-|toolchain and build-model projection implemented; semantic backend planned
+|K4 bounded row qualified; K5 active
+
+|Shared JVM Semantic Composition
+|Kotlin/JVM library
+|`refactorkit-jvm` composes independently attested Kotlin K2 and Java JDT evidence without coupling core to either adapter. The first row exposes compiler-generated classes only inside the disposable immutable Kotlin overlay, adds that ephemeral output to JDT's bounded classpath, and joins a public top-level Kotlin declaration to exact Java binding uses by JVM binary name. Public preview requires explicit external-consumer-risk acceptance and re-runs K2 plus JDT on the staged snapshot; missing, dirty, generated, dynamic or ambiguous evidence refuses.
+|`modules/refactorkit-jvm`, `docs/requirements/java-kotlin-shared-jvm-rename.md`.
+|first Kotlin-to-Java public-type preview row implemented; transport/native acceptance pending
 
 |External Java Class Importer
 |Kotlin/JVM library
@@ -108,9 +114,9 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 == Key Dependencies
 
-* CLI depends on core, Java and Kotlin adapters, web importer, tree-sitter foundation, and testkit.
-* Daemon and LSP depend on core plus Java and Kotlin adapters.
-* MCP depends on core, Java and Kotlin adapters, and web importer.
+* CLI depends on core, Java and Kotlin adapters, daemon, web importer, tree-sitter foundation, and testkit.
+* Daemon and MCP depend on core, Java, Kotlin, and shared JVM composition; LSP depends on core plus Java and Kotlin adapters.
+* Shared JVM composition depends on core and both Java/Kotlin adapters.
 * Java adapter, Kotlin adapter, web importer, tree-sitter foundation, and testkit depend on core.
 * Kotlin compiler classes are compile-only for the isolated bridge and are supplied explicitly only to the external worker; they are not loaded into the packaged RefactorKit process.
 * Web importer reuses Java source-root/package/import knowledge.
