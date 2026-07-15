@@ -228,6 +228,28 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun compilerPayloadAttestsSourceVisibilityForRenameEligibility() {
+        val root = project("class Placeholder\n")
+        root.resolve("src/main/kotlin/fixture/Broken.kt").writeText("""
+            package fixture
+            private class PrivateType
+            internal class InternalType
+            class PublicType
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+        val symbols = result.index.symbols.associateBy { it.name }
+
+        assertEquals(KotlinDeclarationVisibility.PRIVATE, result.declarations.getValue(symbols.getValue("PrivateType").id).visibility)
+        assertEquals(KotlinDeclarationVisibility.INTERNAL, result.declarations.getValue(symbols.getValue("InternalType").id).visibility)
+        assertEquals(KotlinDeclarationVisibility.PUBLIC, result.declarations.getValue(symbols.getValue("PublicType").id).visibility)
+    }
+
+    @Test
     fun anonymousObjectLocalsPropertiesAndLambdasAreExcludedWithoutWeakOrSyntheticSymbols() {
         val root = project("""
             class Container {

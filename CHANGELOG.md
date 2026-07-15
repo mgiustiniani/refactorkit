@@ -15,7 +15,9 @@ review safety boundaries before applying refactorings.
   diagnostics, normalized preview, explicit authorization, `PatchEngine`, WAL,
   recovery and rollback. Existing partial K3 references grant no mutation
   authority; broader declaration families and Java interoperability remain
-  mandatory before K4 completion.
+  mandatory before K4 completion. The first internal implementation step extends
+  the strict atomic worker payload with compiler-PSI declaration visibility and
+  validates it host-side for every published type/function symbol.
 - Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
   queries backed only by Eclipse JDT bindings. Hover returns the exact selected
   range, binding-derived Java signature, qualified identity, bounded Javadoc,

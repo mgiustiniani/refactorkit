@@ -59,9 +59,17 @@ data class KotlinCompilerResolvedUsage(
     val location: SourceLocation,
 )
 
+enum class KotlinDeclarationVisibility { PUBLIC, INTERNAL, PROTECTED, PRIVATE }
+
+data class KotlinCompilerDeclarationEvidence(
+    val id: SymbolId,
+    val visibility: KotlinDeclarationVisibility,
+)
+
 private data class ParsedKotlinSymbols(
     val index: SymbolIndex,
     val usages: List<KotlinCompilerResolvedUsage>,
+    val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence>,
 )
 
 sealed interface KotlinCompilerDiagnosticsResult {
@@ -73,6 +81,7 @@ sealed interface KotlinCompilerDiagnosticsResult {
         override val attestation: KotlinCompilerDiagnosticsAttestation,
         val symbols: SymbolIndex? = null,
         val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
+        val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence> = emptyMap(),
         val symbolFailure: Diagnostic? = null,
     ) : KotlinCompilerDiagnosticsResult
 
@@ -98,6 +107,7 @@ sealed interface KotlinCompilerSymbolsResult {
         val index: SymbolIndex,
         override val attestation: KotlinCompilerDiagnosticsAttestation,
         val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
+        val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence> = emptyMap(),
     ) : KotlinCompilerSymbolsResult
 
     data class Refused(
@@ -244,7 +254,9 @@ class KotlinCompilerDiagnostics private constructor(
         is KotlinCompilerDiagnosticsResult.Available -> {
             val attestation = result.attestation.copy(backend = SYMBOL_BACKEND)
             when {
-                result.symbols != null -> KotlinCompilerSymbolsResult.Available(result.symbols, attestation, result.usages)
+                result.symbols != null -> KotlinCompilerSymbolsResult.Available(
+                    result.symbols, attestation, result.usages, result.declarations,
+                )
                 result.symbolFailure?.code == "kotlin.compilerSymbolsInvalid" ->
                     KotlinCompilerSymbolsResult.Error(result.symbolFailure, attestation)
                 else -> KotlinCompilerSymbolsResult.Refused(
@@ -410,6 +422,7 @@ class KotlinCompilerDiagnostics private constructor(
             attestation,
             symbols = symbols.getOrNull()?.index,
             usages = symbols.getOrNull()?.usages.orEmpty(),
+            declarations = symbols.getOrNull()?.declarations.orEmpty(),
             symbolFailure = symbols.exceptionOrNull()?.asSymbolDiagnostic(),
         )
     }
@@ -431,6 +444,7 @@ class KotlinCompilerDiagnostics private constructor(
         val sourcePaths = snapshot.files.associateBy { it.path.normalize() }
         val ids = linkedSetOf<SymbolId>()
         val identityIds = linkedMapOf<String, SymbolId>()
+        val declarations = linkedMapOf<SymbolId, KotlinCompilerDeclarationEvidence>()
         val symbols = encoded.map { item ->
             val value = item as? JsonObject ?: error("Kotlin compiler symbol is not an object")
             check(value.keys == SYMBOL_FIELDS) { "Kotlin compiler symbol fields are invalid" }
@@ -458,6 +472,9 @@ class KotlinCompilerDiagnostics private constructor(
                 }
                 SymbolId("kotlin-jvm-type-v1:${sha256("kotlin-jvm-type-v1\u0000$identity")}")
             }
+            val visibility = value.string("visibility")?.let {
+                runCatching { KotlinDeclarationVisibility.valueOf(it) }.getOrNull()
+            } ?: error("Kotlin compiler symbol visibility is invalid")
             val selectionText = value.string("selectionText")?.takeIf { it.length in 1..MAX_SYMBOL_NAME_CHARS }
                 ?: error("Kotlin compiler symbol selection text is invalid")
             check(selectionText == name ||
@@ -481,7 +498,8 @@ class KotlinCompilerDiagnostics private constructor(
                 source.content.substring(start, end) == selectionText) {
                 "Kotlin compiler symbol range is invalid"
             }
-            check(ids.add(id) && identityIds.put(identity, id) == null) {
+            check(ids.add(id) && identityIds.put(identity, id) == null &&
+                declarations.put(id, KotlinCompilerDeclarationEvidence(id, visibility)) == null) {
                 "Kotlin compiler symbol identity is duplicated"
             }
             Symbol(
@@ -494,7 +512,7 @@ class KotlinCompilerDiagnostics private constructor(
         }.sortedBy { it.id.value }
         val index = SymbolIndex(symbols)
         val usages = parseUsages(payload, sourcePaths, overlayRoot, identityIds)
-        ParsedKotlinSymbols(index, usages)
+        ParsedKotlinSymbols(index, usages, declarations.toMap())
     }
 
     private fun parseUsages(
@@ -805,7 +823,7 @@ class KotlinCompilerDiagnostics private constructor(
             "\\((?:\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))*\\)(?:V|\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))",
         )
         private val SYMBOL_FIELDS = setOf(
-            "identity", "name", "kind", "path", "owner", "descriptor", "selectionText", "startOffset", "endOffset",
+            "identity", "name", "kind", "path", "owner", "descriptor", "selectionText", "visibility", "startOffset", "endOffset",
         )
         private val USAGE_FIELDS = setOf(
             "path", "targetIdentity", "selectionText", "startOffset", "endOffset",

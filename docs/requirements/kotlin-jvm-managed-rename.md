@@ -1,7 +1,8 @@
 # Managed Kotlin/JVM rename requirements
 
-Status: requirement-first K4 contract for `0.7.0-SNAPSHOT`; implementation has not
-received mutation authority.
+Status: K2 worker/host declaration-visibility evidence implemented; complete
+reference barrier, planner, staged diagnostics and managed transaction remain
+pending. No Kotlin mutation authority has been granted.
 
 ## Initial qualified row
 

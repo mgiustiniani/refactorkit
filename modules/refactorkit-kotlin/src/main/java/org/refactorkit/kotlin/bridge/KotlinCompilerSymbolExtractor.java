@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer;
 import org.jetbrains.kotlin.config.CommonConfigurationKeys;
 import org.jetbrains.kotlin.config.CompilerConfiguration;
 import org.jetbrains.kotlin.fileClasses.JvmFileClassUtil;
+import org.jetbrains.kotlin.lexer.KtTokens;
 import org.jetbrains.kotlin.name.ClassId;
 import org.jetbrains.kotlin.name.Name;
 import org.jetbrains.kotlin.psi.KtClass;
@@ -138,6 +139,7 @@ final class KotlinCompilerSymbolExtractor {
                 identity,
                 "",
                 identifier.getText(),
+                visibility(type),
                 identifier.getTextRange().getStartOffset(),
                 identifier.getTextRange().getEndOffset()
             ));
@@ -184,7 +186,7 @@ final class KotlinCompilerSymbolExtractor {
         if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
         result.add(new ExtractedSymbol(
             identity, name, "FUNCTION", source.toString(), owner, descriptor, identifier.getText(),
-            identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
+            visibility(function), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
         ));
     }
 
@@ -250,6 +252,13 @@ final class KotlinCompilerSymbolExtractor {
         return (segments.isEmpty() ? "" : String.join(".", segments) + ".") + relative;
     }
 
+    private static String visibility(org.jetbrains.kotlin.psi.KtModifierListOwner declaration) {
+        if (declaration.hasModifier(KtTokens.PRIVATE_KEYWORD)) return "PRIVATE";
+        if (declaration.hasModifier(KtTokens.PROTECTED_KEYWORD)) return "PROTECTED";
+        if (declaration.hasModifier(KtTokens.INTERNAL_KEYWORD)) return "INTERNAL";
+        return "PUBLIC";
+    }
+
     private static String kind(KtClassOrObject type) {
         if (!(type instanceof KtClass)) return "OBJECT";
         KtClass klass = (KtClass) type;
@@ -267,6 +276,7 @@ final class KotlinCompilerSymbolExtractor {
         private final String owner;
         private final String descriptor;
         private final String selectionText;
+        private final String visibility;
         private final int startOffset;
         private final int endOffset;
 
@@ -278,6 +288,7 @@ final class KotlinCompilerSymbolExtractor {
             String owner,
             String descriptor,
             String selectionText,
+            String visibility,
             int startOffset,
             int endOffset
         ) {
@@ -288,6 +299,7 @@ final class KotlinCompilerSymbolExtractor {
             this.owner = owner;
             this.descriptor = descriptor;
             this.selectionText = selectionText;
+            this.visibility = visibility;
             this.startOffset = startOffset;
             this.endOffset = endOffset;
         }
@@ -299,6 +311,7 @@ final class KotlinCompilerSymbolExtractor {
         String owner() { return owner; }
         String descriptor() { return descriptor; }
         String selectionText() { return selectionText; }
+        String visibility() { return visibility; }
         int startOffset() { return startOffset; }
         int endOffset() { return endOffset; }
     }

@@ -145,6 +145,7 @@ public final class KotlinCompilerBridgeMain {
                 .append("\",\"owner\":\"").append(escape(symbol.owner()))
                 .append("\",\"descriptor\":\"").append(escape(symbol.descriptor()))
                 .append("\",\"selectionText\":\"").append(escape(symbol.selectionText()))
+                .append("\",\"visibility\":\"").append(escape(symbol.visibility()))
                 .append("\",\"startOffset\":").append(symbol.startOffset())
                 .append(",\"endOffset\":").append(symbol.endOffset()).append('}');
         }
