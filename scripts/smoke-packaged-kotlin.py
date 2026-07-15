@@ -92,6 +92,7 @@ def main() -> int:
         artifact(cache, "org.jetbrains.kotlin", "kotlin-daemon-embeddable", "2.0.21"),
         artifact(cache, "org.jetbrains.intellij.deps", "trove4j", "1.0.20200330"),
         artifact(cache, "org.jetbrains.kotlinx", "kotlinx-coroutines-core-jvm", "1.6.4"),
+        artifact(cache, "org.jetbrains", "annotations", "13.0"),
     ]
     for required in [cli, jdk / "release", compiler, *classpath]:
         if not required.exists():
@@ -116,17 +117,27 @@ def main() -> int:
         symbol_rows = symbols.get("symbols", [])
         if symbols.get("status") != "ready" or symbols.get("backend") != "kotlin-compiler-jvm-types-k2-v1":
             raise AssertionError(f"Kotlin compiler symbols failed: {symbols}")
-        greeting = next((item for item in symbol_rows if item.get("name") == "Greeting"), None)
-        if not greeting or not greeting.get("id", "").startswith("kotlin-jvm-type-v1:"):
+        expected_kinds = {
+            "Greeting": "class",
+            "GreetingPort": "interface",
+            "GreetingMode": "enum",
+            "GreetingMarker": "annotation",
+        }
+        actual_kinds = {item.get("name"): item.get("kind") for item in symbol_rows}
+        if actual_kinds != expected_kinds:
+            raise AssertionError(f"Kotlin JVM type kinds are incomplete: {symbols}")
+        if not all(item.get("id", "").startswith("kotlin-jvm-type-v1:") for item in symbol_rows):
             raise AssertionError(f"Kotlin JVM type identity is missing: {symbols}")
+        greeting = next(item for item in symbol_rows if item.get("name") == "Greeting")
         if greeting.get("startLine") != 2 or greeting.get("startCharacter") != 6 or greeting.get("endCharacter") != 14:
             raise AssertionError(f"Kotlin compiler PSI range is not exact UTF-16: {greeting}")
+        interface = next(item for item in symbol_rows if item.get("name") == "GreetingPort")
         definition = run(
             cli, workspace, jdk, compiler, classpath, "native-kotlin-definition", "definition",
-            ["--symbol", greeting["id"]],
+            ["--symbol", interface["id"]],
         )
-        if definition.get("status") != "ready" or definition.get("symbols") != [greeting]:
-            raise AssertionError(f"Kotlin opaque definition lookup failed: {definition}")
+        if definition.get("status") != "ready" or definition.get("symbols") != [interface]:
+            raise AssertionError(f"Kotlin opaque non-class definition lookup failed: {definition}")
         if tree_hash(workspace) != before:
             raise AssertionError("Kotlin symbol reads modified workspace sources")
 
@@ -142,7 +153,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 diagnostics, durable JVM type symbols, exact definitions and immutable sources.")
+    print("Packaged Kotlin acceptance passed: K2 diagnostics, four JVM type kinds, exact definitions and immutable sources.")
     return 0
 
 

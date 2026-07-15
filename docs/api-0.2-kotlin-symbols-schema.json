@@ -83,7 +83,7 @@
       "properties": {
         "id": {"type": "string", "pattern": "^kotlin-jvm-type-v1:[0-9a-f]{64}$"},
         "name": {"type": "string", "minLength": 1, "maxLength": 512},
-        "kind": {"const": "class"},
+        "kind": {"enum": ["class", "interface", "enum", "annotation"]},
         "file": {
           "type": "string",
           "minLength": 1,

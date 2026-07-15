@@ -95,8 +95,8 @@ class KotlinDaemonIntegrationTest {
             put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
             put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
         }).jsonObject
-        assertEquals("error", failed.getValue("status").jsonPrimitive.content)
-        assertEquals("kotlin.compilerDiagnosticsFailed", failed.getValue("failure").jsonObject
+        assertEquals("refused", failed.getValue("status").jsonPrimitive.content)
+        assertEquals("kotlin.compilerStdlibUnavailable", failed.getValue("failure").jsonObject
             .getValue("code").jsonPrimitive.content)
         assertTrue(failed.getValue("diagnostics").jsonArray.isEmpty())
 

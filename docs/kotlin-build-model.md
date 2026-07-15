@@ -85,7 +85,8 @@ compiler-plugin loading.
 `kotlin-compiler-jvm-types-k2-v1` require an `AVAILABLE` projection, revalidate
 its toolchain and classpath evidence, and report the exact build and toolchain
 projection hashes. Scripts and partial/unsupported models refuse before compiler
-launch. The symbol row currently covers only successfully compiled regular
-classes with JVM binary and compiler PSI evidence. The next gate adds callable
-and other declaration identity, usage-location definition, references and
+launch. The symbol row currently covers successfully compiled classes,
+interfaces, enum classes and annotation classes with JVM binary and compiler PSI
+evidence. The next gate adds object, callable and other declaration identity,
+usage-location definition, references and
 conservative mixed Java/Kotlin identity.

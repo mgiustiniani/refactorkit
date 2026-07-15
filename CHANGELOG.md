@@ -104,6 +104,12 @@ review safety boundaries before applying refactorings.
   a Draft 2020-12 API response schema. Compiler errors, unsupported class-like
   declarations, malformed ranges, collisions
   and limits refuse the whole result; references and mutations remain refused.
+- Extend the compiler-proven Kotlin JVM type row to top-level and nested
+  interfaces, enum classes and annotation classes while retaining the same
+  binary-derived opaque IDs and exact PSI ranges. Enum entries are excluded;
+  objects and callable identities still refuse the complete result. Semantic
+  execution now also requires attested matching stdlib and qualified annotations
+  runtime inputs before compiler launch.
 - Preserve the read-only workspace contract for daemon `project.open`, MCP
   `project_scan`, LSP initialization and semantic read lifecycles: startup now
   inspects WAL state without creating `.refactorkit/workspace.lock` or changing

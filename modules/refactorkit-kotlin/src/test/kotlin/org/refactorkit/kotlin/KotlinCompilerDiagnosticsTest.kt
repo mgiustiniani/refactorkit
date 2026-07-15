@@ -53,7 +53,18 @@ class KotlinCompilerDiagnosticsTest {
 
     @Test
     fun successfulK2CompilationReturnsDurableJvmTypeSymbolsWithExactPsiRanges() {
-        val root = project("/*😀*/ class Holder { class Nested }\n")
+        val declarations = """
+            /*😀*/ class Holder {
+                class Nested
+                interface NestedPort
+                enum class NestedMode { ACTIVE }
+                annotation class NestedMarker
+            }
+            interface Port
+            enum class Mode { ACTIVE }
+            annotation class Marker
+        """.trimIndent() + "\n"
+        val root = project(declarations)
         val toolchain = toolchain(root)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
 
@@ -61,7 +72,19 @@ class KotlinCompilerDiagnosticsTest {
         val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
 
         assertEquals(KotlinCompilerDiagnostics.SYMBOL_BACKEND, result.attestation.backend)
-        assertEquals(listOf("Holder", "Nested"), result.index.symbols.map { it.name }.sorted())
+        assertEquals(
+            mapOf(
+                "Holder" to org.refactorkit.core.Symbol.Kind.CLASS,
+                "Marker" to org.refactorkit.core.Symbol.Kind.ANNOTATION,
+                "Mode" to org.refactorkit.core.Symbol.Kind.ENUM,
+                "Nested" to org.refactorkit.core.Symbol.Kind.CLASS,
+                "NestedMarker" to org.refactorkit.core.Symbol.Kind.ANNOTATION,
+                "NestedMode" to org.refactorkit.core.Symbol.Kind.ENUM,
+                "NestedPort" to org.refactorkit.core.Symbol.Kind.INTERFACE,
+                "Port" to org.refactorkit.core.Symbol.Kind.INTERFACE,
+            ),
+            result.index.symbols.sortedBy { it.name }.associate { it.name to it.kind },
+        )
         assertEquals(result.index.symbols.size, result.index.symbols.map { it.id }.distinct().size)
         result.index.symbols.forEach { symbol ->
             assertTrue(symbol.id.value.matches(Regex("kotlin-jvm-type-v1:[0-9a-f]{64}")))
@@ -77,7 +100,7 @@ class KotlinCompilerDiagnosticsTest {
         assertNotNull(result.attestation.process)
 
         root.resolve("src/main/kotlin/fixture/Broken.kt").writeText(
-            "package fixture\n\n\nclass Holder { class Nested }\n",
+            "package fixture\n\n\n$declarations",
         )
         val shiftedSnapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
         val shifted = assertIs<KotlinCompilerSymbolsResult.Available>(
@@ -89,6 +112,19 @@ class KotlinCompilerDiagnosticsTest {
         )
         assertTrue(shifted.index.symbols.single { it.name == "Holder" }.location.range.start.line >
             result.index.symbols.single { it.name == "Holder" }.location.range.start.line)
+    }
+
+    @Test
+    fun unsupportedObjectRefusesTheCompleteTypeIndex() {
+        val root = project("class Supported\nobject Unsupported\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Refused>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+
+        assertEquals("kotlin.symbolDeclarationKindUnsupported", result.reason.code)
     }
 
     @Test
@@ -155,6 +191,25 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun missingQualifiedCompilerRuntimeRefusesBeforeProcessExecution() {
+        val root = project("enum class Mode { ACTIVE }\n")
+        val complete = toolchain(root)
+        val incomplete = complete.copy(
+            compilerClasspath = complete.compilerClasspath.filterNot {
+                it.fileName.toString() == "annotations-13.0.jar"
+            },
+        )
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), incomplete)
+
+        val result = assertIs<KotlinCompilerDiagnosticsResult.Refused>(
+            KotlinCompilerDiagnostics(incomplete).analyze(snapshot),
+        )
+
+        assertEquals("kotlin.compilerRuntimeUnavailable", result.reason.code)
+        assertEquals(null, result.attestation.process)
+    }
+
+    @Test
     fun bridgeRejectsCompilerPluginsAndScriptsBeforeLoadingCompiler() {
         val root = Files.createTempDirectory("refactorkit-kotlin-bridge-rejection")
         val source = root.resolve("Source.kt").also { it.writeText("class Source\n") }
@@ -213,7 +268,7 @@ class KotlinCompilerDiagnosticsTest {
             "kotlin-compiler-embeddable-2.0.21", "kotlin-stdlib-2.0.21",
             "kotlin-script-runtime-2.0.21", "kotlin-reflect-1.6.10",
             "kotlin-daemon-embeddable-2.0.21", "trove4j-1.0.20200330",
-            "kotlinx-coroutines-core-jvm-1.6.4",
+            "kotlinx-coroutines-core-jvm-1.6.4", "annotations-13.0",
         )
         val runtime = System.getProperty("kotlin.compiler.test.classpath")
             .split(File.pathSeparator).map(Path::of)

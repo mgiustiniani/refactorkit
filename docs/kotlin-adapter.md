@@ -1,7 +1,7 @@
 # Kotlin adapter
 
 Status: initial compiler-backed Kotlin/JVM read capabilities implemented for
-`0.7.0-SNAPSHOT`. Diagnostics and bounded regular-class symbol navigation are
+`0.7.0-SNAPSHOT`. Diagnostics and bounded JVM declared-type symbol navigation are
 experimental; references, callable/member identity and every mutation remain
 explicitly refused.
 
@@ -48,7 +48,9 @@ Refactoring requests still return edit-free refused plans and cannot reach
 
 The first semantic capability is a one-shot external K2 compiler worker. A caller
 must first configure the exact JDK 21 and `kotlin-compiler-embeddable` 2.0.21
-runtime classpath through `kotlin.semantic.start`, the CLI, or MCP. Startup attaches
+runtime classpath through `kotlin.semantic.start`, the CLI, or MCP. The qualified
+runtime includes matching `kotlin-stdlib` 2.0.21 and JetBrains annotations 13.0;
+missing components refuse before compiler execution. Startup attaches
 the exact `kotlin-jvm-projection-v1` build model and returns a new semantic lease
 and snapshot hash.
 
@@ -80,8 +82,9 @@ Monaco ranges. Project-level diagnostics report `NONE`.
 ## Compiler-proven JVM type symbols
 
 After a successful K2 compilation, the same isolated worker creates a separate
-compiler PSI environment over the exact overlay sources. The initial catalogue is
-intentionally limited to regular class declarations, including nested classes.
+compiler PSI environment over the exact overlay sources. The qualified catalogue
+contains top-level and nested regular classes, interfaces, enum classes and
+annotation classes.
 For every returned declaration the worker requires:
 
 - an ASCII JVM-safe package and class-name shape;
@@ -97,17 +100,16 @@ Locations are exact zero-based UTF-16 name ranges and are accepted only when the
 reported source substring equals the symbol name. Worker paths are remapped from
 the immutable overlay and must identify a source in the attested snapshot.
 
-The whole symbol read refuses rather than returning a partial regular-class index
+The whole symbol read refuses rather than returning a partial declared-type index
 when the snapshot does not compile, an unsupported class-like declaration such as
-an interface/object/enum/annotation is encountered, a JVM name is unsupported,
-identity collides, binary evidence is missing, or any result/location limit is
-exceeded. Callables, type aliases, local classes and anonymous classes are outside
-the initial catalogue and are not presented as indexed symbols. Definition accepts only an
+an object is encountered, a JVM name is unsupported, identity collides, binary
+evidence is missing, or any result/location limit is exceeded. Enum entries,
+callables, type aliases, local classes and anonymous classes are outside the
+catalogue and are not presented as indexed symbols. Definition accepts only an
 opaque ID returned by this backend and resolves it against a newly attested copy
-of the same saved snapshot. Usage-location resolution, functions, properties,
-parameters, type aliases, interfaces, objects, enums, annotation classes and
-references remain refused until their semantic identities are separately
-qualified.
+of the same saved snapshot. Usage-location resolution, objects, functions,
+properties, parameters, type aliases and references remain refused until their
+semantic identities are separately qualified.
 
 ## Integration surfaces
 
@@ -156,7 +158,7 @@ editor-native publication remains the editor's responsibility in this slice.
 
 Callable/member symbols, usage-location definition, references, Java/Kotlin
 interoperability, immutable editor overlays and every mutation remain
-unimplemented and explicitly refused. The regular-class symbol ID is sufficient
+unimplemented and explicitly refused. The declared-type symbol ID is sufficient
 only for saved-snapshot search-to-definition navigation; it is not rename
 authority. Managed Kotlin rename still requires complete semantic references,
 preview and staged diagnostics, authorization, `PatchEngine`, WAL, native

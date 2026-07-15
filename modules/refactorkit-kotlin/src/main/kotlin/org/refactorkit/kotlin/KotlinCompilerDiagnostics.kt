@@ -175,8 +175,24 @@ class KotlinCompilerDiagnostics private constructor(
             "Compiler diagnostics require 1..$MAX_SOURCE_FILES owned Kotlin source files",
             attestation(),
         )
-        val classpath = resolveClasspath(snapshot, sourceSets.flatMap { it.classpathEntries }.distinct())
+        val projectClasspath = resolveClasspath(snapshot, sourceSets.flatMap { it.classpathEntries }.distinct())
             .getOrElse { return KotlinCompilerDiagnosticsResult.Refused(it.asDiagnostic(), attestation()) }
+        val stdlib = compilerStdlib() ?: return refused(
+            "kotlin.compilerStdlibUnavailable",
+            "Kotlin compiler semantics require an explicitly attested matching stdlib runtime",
+            attestation(),
+        )
+        if (compilerAnnotations() == null) return refused(
+            "kotlin.compilerRuntimeUnavailable",
+            "Kotlin compiler semantics require the qualified annotations runtime",
+            attestation(),
+        )
+        val classpath = (projectClasspath + listOf(stdlib)).distinct()
+        if (classpath.size > MAX_CLASSPATH_ENTRIES + 1) return refused(
+            "kotlin.compilerClasspathLimit",
+            "Kotlin project classpath exceeds $MAX_CLASSPATH_ENTRIES entries",
+            attestation(),
+        )
 
         val overlay = runCatching { SemanticWorkspaceOverlay.create(snapshot) }.getOrElse { failure ->
             return error("kotlin.compilerOverlayFailed", failure.message ?: "Kotlin compiler overlay failed", attestation())
@@ -455,7 +471,7 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.symbolJvmNameUnsupported" -> "Kotlin declaration uses an unsupported JVM name shape"
                 "kotlin.symbolLocationUnavailable" -> "Kotlin declaration lacks an exact compiler PSI location"
                 "kotlin.symbolDeclarationKindUnsupported" ->
-                    "Kotlin symbol indexing currently accepts regular class declarations only"
+                    "Kotlin symbol indexing accepts classes, interfaces, enum classes and annotation classes only"
                 else -> "Kotlin compiler symbol extraction failed"
             },
         )
@@ -530,6 +546,19 @@ class KotlinCompilerDiagnostics private constructor(
             )
         }
         diagnostics.sortedWith(compareBy({ it.location?.path?.toString().orEmpty() }, { it.location?.range?.start?.line ?: -1 }, { it.code.orEmpty() }))
+    }
+
+    private fun compilerStdlib(): Path? {
+        val expected = "kotlin-stdlib-${toolchain.provenance.kotlinVersion}.jar"
+        return toolchain.compilerClasspath.singleOrNull { path ->
+            path.fileName.toString() == expected && Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) &&
+                !Files.isSymbolicLink(path)
+        }
+    }
+
+    private fun compilerAnnotations(): Path? = toolchain.compilerClasspath.singleOrNull { path ->
+        path.fileName.toString() == QUALIFIED_ANNOTATIONS_JAR && Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) &&
+            !Files.isSymbolicLink(path)
     }
 
     private fun validateToolchain(): Diagnostic? {
@@ -658,6 +687,7 @@ class KotlinCompilerDiagnostics private constructor(
         const val MAX_CLASSPATH_ENTRIES = 128
         const val MAX_DIAGNOSTICS = 500
         const val MAX_SYMBOLS = 500
+        private const val QUALIFIED_ANNOTATIONS_JAR = "annotations-13.0.jar"
         const val MAX_MESSAGE_CHARS = 4_096
         private const val MAX_SYMBOL_NAME_CHARS = 512
         private const val MAX_SYMBOL_IDENTITY_CHARS = 2_048
@@ -667,7 +697,12 @@ class KotlinCompilerDiagnostics private constructor(
         private val DIAGNOSTIC_CODE = Regex("^\\[([A-Z][A-Z0-9_]{0,63})]")
         private val SYMBOL_IDENTITY = Regex("[A-Za-z_][A-Za-z0-9_]*(?:[.$][A-Za-z_][A-Za-z0-9_]*)*")
         private val SYMBOL_FIELDS = setOf("identity", "name", "kind", "path", "startOffset", "endOffset")
-        private val SYMBOL_KINDS = setOf(Symbol.Kind.CLASS)
+        private val SYMBOL_KINDS = setOf(
+            Symbol.Kind.CLASS,
+            Symbol.Kind.INTERFACE,
+            Symbol.Kind.ENUM,
+            Symbol.Kind.ANNOTATION,
+        )
         private val SYMBOL_REFUSAL_CODES = setOf(
             "kotlin.symbolCompilationFailed",
             "kotlin.symbolIdentityCollision",

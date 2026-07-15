@@ -155,8 +155,9 @@ refactorkit typescript search /workspace --query UserService \
 ### Kotlin compiler reads
 
 The first `0.7.x` Kotlin capabilities are experimental read-only K2 diagnostics
-and compiler-proven regular-class search/definition for an explicit JDK 21 and
-`kotlin-compiler-embeddable` 2.0.21 runtime. RefactorKit does not discover caches,
+and compiler-proven class, interface, enum-class and annotation-class
+search/definition for an explicit JDK 21 and `kotlin-compiler-embeddable` 2.0.21
+runtime with matching stdlib and the qualified annotations runtime. RefactorKit does not discover caches,
 execute builds/plugins, or install the compiler.
 
 ```bash
@@ -171,8 +172,9 @@ refactorkit kotlin symbols /workspace --query Greeting \
   --compiler-classpath "/tools/kotlin/kotlin-stdlib-2.0.21.jar:/tools/kotlin/trove4j.jar:..."
 ```
 
-The initial symbol catalogue accepts successfully compiled regular classes and
-nested regular classes only. Definition takes the opaque ID returned by `symbols`.
+The current symbol catalogue accepts successfully compiled top-level and nested
+classes, interfaces, enum classes and annotation classes. Objects and callable
+identities remain refused. Definition takes the opaque ID returned by `symbols`.
 These reads have no mutation authority; references and all Kotlin refactorings
 remain refused. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
 

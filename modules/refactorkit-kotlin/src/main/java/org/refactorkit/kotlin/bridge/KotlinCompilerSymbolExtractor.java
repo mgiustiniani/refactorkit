@@ -133,9 +133,9 @@ final class KotlinCompilerSymbolExtractor {
             throw new SymbolExtractionException("kotlin.symbolDeclarationKindUnsupported");
         }
         KtClass klass = (KtClass) type;
-        if (klass.isAnnotation() || klass.isInterface() || klass.isEnum()) {
-            throw new SymbolExtractionException("kotlin.symbolDeclarationKindUnsupported");
-        }
+        if (klass.isAnnotation()) return "ANNOTATION";
+        if (klass.isInterface()) return "INTERFACE";
+        if (klass.isEnum()) return "ENUM";
         return "CLASS";
     }
 
