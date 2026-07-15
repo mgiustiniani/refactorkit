@@ -1,6 +1,7 @@
 # Cross-platform runtime portability requirements
 
-Status: corrective requirement contract for the `0.7.0-SNAPSHOT` native CI matrix.
+Status: accepted by GitHub Actions native CI run `29418213082` for commit
+`6a708f6`.
 
 ## Scope
 

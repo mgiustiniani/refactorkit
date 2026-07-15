@@ -119,7 +119,8 @@ review safety boundaries before applying refactorings.
   overlay `Path` values now accept host-native separators while protocol parsing
   centrally enforces canonical `/` paths; preview assertions use protocol paths;
   macOS watcher acceptance allows the bounded JDK polling latency without writing
-  workspace metadata.
+  workspace metadata. GitHub Actions run `29418213082` passes Linux, Windows
+  x86-64, macOS x86-64 and macOS arm64.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions
