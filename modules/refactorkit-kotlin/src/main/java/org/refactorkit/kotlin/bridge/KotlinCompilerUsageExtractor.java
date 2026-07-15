@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.config.LanguageVersion;
 import org.jetbrains.kotlin.config.LanguageVersionSettingsImpl;
 import org.jetbrains.kotlin.fir.FirElement;
 import org.jetbrains.kotlin.fir.declarations.FirResolvedImport;
+import org.jetbrains.kotlin.fir.declarations.FirTypeParameter;
 import org.jetbrains.kotlin.fir.expressions.FirResolvedQualifier;
 import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
@@ -30,6 +31,7 @@ import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
 import org.jetbrains.kotlin.fir.types.ConeTypeParameterType;
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
+import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol;
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
 import org.jetbrains.kotlin.name.ClassId;
 import org.jetbrains.kotlin.name.Name;
@@ -132,6 +134,22 @@ final class KotlinCompilerUsageExtractor {
 
             final List<ExtractedUsage> usages = new ArrayList<ExtractedUsage>();
             final Set<String> identities = new HashSet<String>();
+            final Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters =
+                new HashMap<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol>();
+            FirVisitorVoid typeParameterVisitor = new FirVisitorVoid() {
+                @Override public void visitElement(FirElement element) { element.acceptChildren(this); }
+                @Override public Object visitElement(FirElement element, Object ignored) {
+                    visitElement(element);
+                    return null;
+                }
+                @Override public void visitTypeParameter(FirTypeParameter parameter) {
+                    collectTypeParameter(parameter, declarationTargets, typeParameters);
+                    parameter.acceptChildren(this);
+                }
+            };
+            for (ModuleCompilerAnalyzedOutput output : result.getOutputs()) {
+                for (org.jetbrains.kotlin.fir.declarations.FirFile file : output.getFir()) file.accept(typeParameterVisitor);
+            }
             FirVisitorVoid visitor = new FirVisitorVoid() {
                 @Override public void visitElement(FirElement element) { element.acceptChildren(this); }
                 @Override public Object visitElement(FirElement element, Object ignored) {
@@ -142,8 +160,12 @@ final class KotlinCompilerUsageExtractor {
                     collectNamedReference(reference, declarationTargets, identities, usages);
                     reference.acceptChildren(this);
                 }
+                @Override public void visitTypeParameter(FirTypeParameter parameter) {
+                    collectTypeParameter(parameter, declarationTargets, typeParameters);
+                    parameter.acceptChildren(this);
+                }
                 @Override public void visitResolvedTypeRef(FirResolvedTypeRef typeRef) {
-                    collectTypeReference(typeRef, typeTargets, identities, usages);
+                    collectTypeReference(typeRef, typeTargets, typeParameters, identities, usages);
                     typeRef.acceptChildren(this);
                 }
                 @Override public void visitResolvedQualifier(FirResolvedQualifier qualifier) {
@@ -222,9 +244,27 @@ final class KotlinCompilerUsageExtractor {
         addUsage(usageIdentifier, target, identities, usages);
     }
 
+    private static void collectTypeParameter(
+        FirTypeParameter parameter,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters
+    ) {
+        if (!(parameter.getSource() instanceof KtPsiSourceElement)) return;
+        PsiElement psi = ((KtPsiSourceElement) parameter.getSource()).getPsi();
+        KtTypeParameter declaration = psi instanceof KtTypeParameter ?
+            (KtTypeParameter) psi : parent(psi, KtTypeParameter.class);
+        if (declaration == null || declaration.getNameIdentifier() == null) return;
+        PsiElement identifier = declaration.getNameIdentifier();
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(declarationKey(
+            canonicalPath(declaration.getContainingKtFile()), identifier.getTextRange().getStartOffset()
+        ));
+        if (target != null && "TYPE_PARAMETER".equals(target.kind())) typeParameters.put(parameter.getSymbol(), target);
+    }
+
     private static void collectTypeReference(
         FirResolvedTypeRef typeRef,
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters,
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
@@ -234,17 +274,8 @@ final class KotlinCompilerUsageExtractor {
             ClassId classId = ((ConeClassLikeType) typeRef.getType()).getLookupTag().getClassId();
             target = targets.get(binaryName(classId));
         } else if (typeRef.getType() instanceof ConeTypeParameterType) {
-            KtSourceElement targetSource = ((ConeTypeParameterType) typeRef.getType()).getLookupTag()
-                .getTypeParameterSymbol().getFir().getSource();
-            if (!(targetSource instanceof KtPsiSourceElement)) return;
-            PsiElement targetPsi = ((KtPsiSourceElement) targetSource).getPsi();
-            KtTypeParameter parameter = targetPsi instanceof KtTypeParameter ?
-                (KtTypeParameter) targetPsi : parent(targetPsi, KtTypeParameter.class);
-            if (parameter == null) return;
-            PsiElement declaration = parameter.getNameIdentifier();
-            if (declaration == null) return;
-            target = targets.get(declarationKey(canonicalPath(parameter.getContainingKtFile()),
-                declaration.getTextRange().getStartOffset()));
+            target = typeParameters.get(((ConeTypeParameterType) typeRef.getType()).getLookupTag()
+                .getTypeParameterSymbol());
         } else return;
         if (target == null) return;
         PsiElement identifier = typeIdentifier(((KtPsiSourceElement) typeRef.getSource()).getPsi());

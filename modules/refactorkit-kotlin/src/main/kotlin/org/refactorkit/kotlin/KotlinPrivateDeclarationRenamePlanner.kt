@@ -28,10 +28,6 @@ class KotlinPrivateDeclarationRenamePlanner(
         }
         val target = symbols.index.symbols.singleOrNull { it.id == symbolId }
             ?: return refused(snapshot, "kotlin.renameTargetMissing", "Kotlin rename target is absent from the attested declaration catalogue")
-        if (target.kind == Symbol.Kind.TYPE_PARAMETER) return refused(
-            snapshot, "kotlin.renameReferenceCompletenessUnavailable",
-            "K2 type-parameter usage ranges are not yet complete enough for managed rename",
-        )
         if (target.kind !in SUPPORTED_KINDS) return refused(
             snapshot, "kotlin.renameKindUnsupported", "Initial Kotlin rename supports compiler-proven types and direct-call functions only",
         )
@@ -129,7 +125,7 @@ class KotlinPrivateDeclarationRenamePlanner(
         private val TYPE_ALIAS = Regex("(?m)^\\s*(?:public|private|internal)?\\s*typealias\\s+")
         private val SUPPORTED_KINDS = setOf(
             Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.OBJECT, Symbol.Kind.ENUM,
-            Symbol.Kind.ANNOTATION, Symbol.Kind.FUNCTION, Symbol.Kind.PROPERTY, Symbol.Kind.PARAMETER,
+            Symbol.Kind.ANNOTATION, Symbol.Kind.FUNCTION, Symbol.Kind.PROPERTY, Symbol.Kind.PARAMETER, Symbol.Kind.TYPE_PARAMETER,
         )
         private val KEYWORDS = setOf("class", "object", "interface", "fun", "val", "var", "when", "is", "in", "as", "private", "public", "internal", "protected", "return", "package", "import", "typealias")
     }

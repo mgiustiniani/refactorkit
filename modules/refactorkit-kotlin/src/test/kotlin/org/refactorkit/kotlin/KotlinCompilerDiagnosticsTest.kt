@@ -319,7 +319,7 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
-    fun typeParameterIdentityRefusesRenameUntilExactUsageEvidenceIsComplete() {
+    fun privateFunctionTypeParameterRenameUsesExactFirSymbolEvidence() {
         val root = project("private fun <T> identity(value: T): T = value\n")
         val toolchain = toolchain(root)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
@@ -331,9 +331,10 @@ class KotlinCompilerDiagnosticsTest {
 
         assertEquals(org.refactorkit.core.Symbol.Kind.TYPE_PARAMETER, target.kind)
         assertTrue(target.id.value.matches(Regex("kotlin-jvm-type-parameter-v1:[0-9a-f]{64}")))
-        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status, plan.toString())
-        assertEquals("kotlin.renameReferenceCompletenessUnavailable", plan.refusalCode)
-        assertTrue(plan.workspaceEdit.edits.isEmpty())
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(3, plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
+            .flatMap { it.textEdits }.size)
+        assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
     }
 
     @Test

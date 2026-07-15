@@ -1,8 +1,8 @@
 # Managed Kotlin/JVM rename requirements
 
 Status: K2 visibility/completeness evidence covers private types, direct
-functions, field-backed properties and function value parameters; function type
-parameters have durable identity but still refuse incomplete usage evidence.
+functions, field-backed properties, function value parameters and function type parameters;
+the latter use a dedicated FIR symbol-binding pass before collecting type usages.
 Library preview, daemon/CLI/MCP authorization and managed `PatchEngine`
 apply/WAL/rollback are implemented with local packaged apply/rollback acceptance. Kill recovery and the
 four-platform native matrix remain pending; capability metadata is therefore still
@@ -15,8 +15,8 @@ object, enum class, annotation class, non-overloaded direct-call function or
 direct field-backed property or value parameter owned by a supported private
 function in a single-module Kotlin/JVM project with no Java sources. It reuses the qualified `kotlin-jvm-type-v1` identity and K2 FIR
 type-usage evidence. Narrow private-type acceptance is a bootstrap row, not
-completion of K4; broader callable/property/constructor-parameter forms, type
-parameters and cross-language public symbols remain subsequent mandatory rows.
+completion of K4; broader callable/property/constructor-parameter/class-type-
+parameter forms and cross-language public symbols remain subsequent mandatory rows.
 
 ## Requirements
 
