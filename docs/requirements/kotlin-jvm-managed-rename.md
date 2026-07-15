@@ -1,12 +1,13 @@
 # Managed Kotlin/JVM rename requirements
 
-Status: K2 visibility/completeness evidence covers private types, direct
-functions, field-backed properties, function value parameters and function type parameters;
-the latter use a dedicated FIR symbol-binding pass before collecting type usages.
-Library preview, daemon/CLI/MCP authorization and managed `PatchEngine`
-apply/WAL/rollback are implemented with local packaged apply/rollback acceptance. Kill recovery and the
-four-platform native matrix remain pending; capability metadata is therefore still
-`PROPOSAL_ONLY`.
+Status: accepted for the bounded private-declaration foundation by packaged/native
+GitHub Actions run `29451134010` on Linux x86-64, Windows x86-64, macOS x86-64
+and macOS arm64. K2 evidence covers private types, direct functions, field-backed
+properties, function value parameters and function type parameters. Daemon/CLI/MCP
+preview, staged diagnostics, explicit apply, `PatchEngine`, WAL and rollback are
+qualified; shared native kill recovery passes in the same matrix. Capability
+metadata remains `PROPOSAL_ONLY` because public/cross-language and unsupported
+Kotlin shapes refuse.
 
 ## Initial qualified row
 

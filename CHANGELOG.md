@@ -24,7 +24,10 @@ review safety boundaries before applying refactorings.
   CLI and MCP now preserve exact lease/snapshot/generation authority through
   preview and explicit apply; `PatchEngine` diagnostics gating, WAL and rollback
   are exercised by local packaged acceptance. Capability metadata remains
-  `PROPOSAL_ONLY` until kill recovery and native qualification pass. The same
+  `PROPOSAL_ONLY`; the bounded private-declaration K4 foundation passed packaged
+  apply/rollback plus shared kill recovery on Linux, Windows x86-64, macOS x86-64
+  and macOS arm64 in GitHub Actions run `29451134010`. Public/incomplete shapes
+  remain typed refusals rather than inheriting this authority. The same
   planner now accepts private non-overloaded functions when all uses are proven
   direct K2 call names; callable references/imports and operator/infix/override
   shapes refuse rather than inheriting partial-reference authority. Targets or
