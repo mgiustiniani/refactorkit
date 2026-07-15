@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -199,6 +200,24 @@ class McpSession(
                     "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
                     "symbol" to "string: opaque ID returned by kotlin_symbols",
                 )))
+            add(tool("kotlin_usage_definition", "Resolve a compiler-proven Kotlin function call name to its declaration.",
+                required = listOf("semanticLease", "expectedSnapshotHash", "file", "line", "character"),
+                props = mapOf(
+                    "semanticLease" to "string: lease returned by kotlin_semantic_start",
+                    "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
+                    "file" to "string: normalized workspace-relative Kotlin source",
+                    "line" to "integer: zero-based line", "character" to "integer: zero-based UTF-16 character",
+                )))
+            add(tool("kotlin_references", "Return bounded partial references for a compiler-proven Kotlin function call.",
+                required = listOf("semanticLease", "expectedSnapshotHash", "file", "line", "character"),
+                props = mapOf(
+                    "semanticLease" to "string: lease returned by kotlin_semantic_start",
+                    "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
+                    "file" to "string: normalized workspace-relative Kotlin source",
+                    "line" to "integer: zero-based line", "character" to "integer: zero-based UTF-16 character",
+                    "includeDeclaration" to "boolean: include the declaration (default true)",
+                    "limit" to "integer: maximum returned locations",
+                )))
             add(tool("symbol_search", "Search for symbols in the project by name.",
                 required = listOf("query"),
                 props = mapOf(
@@ -289,6 +308,8 @@ class McpSession(
         "kotlin_diagnostics" -> toolKotlinDiagnostics(args)
         "kotlin_symbols" -> toolKotlinSymbols(args)
         "kotlin_definition" -> toolKotlinDefinition(args)
+        "kotlin_usage_definition" -> toolKotlinUsageNavigation(args, references = false)
+        "kotlin_references" -> toolKotlinUsageNavigation(args, references = true)
         "symbol_search"         -> toolSymbolSearch(args)
         "symbol_definition"     -> toolSymbolDefinition(args)
         "symbol_references"     -> toolSymbolReferences(args)
@@ -466,6 +487,77 @@ class McpSession(
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM declaration ID")
         }
         return toolKotlinSymbolRead(args, org.refactorkit.core.SymbolId(symbol))
+    }
+
+    private fun toolKotlinUsageNavigation(args: JsonObject, references: Boolean): String {
+        val current = requireSnapshot()
+        val lease = args.string("semanticLease") ?: missing("semanticLease")
+        val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+        if (expected != current.hash) return "Refused [kotlin.symbolsSnapshotStale]: expected Kotlin snapshot is stale."
+        if (kotlinToolchain == null || lease != kotlinSemanticLease) {
+            return "Refused [kotlin.symbolsSessionStale]: Kotlin semantic lease is missing or stale."
+        }
+        val path = runCatching { ProtocolPath.parseRelative(args.string("file") ?: missing("file")) }.getOrElse {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, it.message ?: "Kotlin usage file is invalid")
+        }
+        if (current.files.none { it.languageId == "kotlin" && it.path.normalize() == path }) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin usage file is not an attested source")
+        }
+        val line = (args["line"] as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.intOrNull
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin usage line must be an integer")
+        val character = (args["character"] as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.intOrNull
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin usage character must be an integer")
+        if (line < 0 || character < 0) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin usage position must be non-negative",
+        )
+        val point = SourcePosition(line, character)
+        val result = kotlinAdapter.compilerSymbols(current)
+        if (result !is KotlinCompilerSymbolsResult.Available) return when (result) {
+            is KotlinCompilerSymbolsResult.Refused -> "Refused [${result.reason.code}]: ${result.reason.message}"
+            is KotlinCompilerSymbolsResult.Error -> "Error [${result.failure.code}]: ${result.failure.message}"
+            else -> error("unreachable")
+        }
+        fun contains(location: SourceLocation): Boolean {
+            if (location.path.normalize() != path) return false
+            val start = location.range.start; val end = location.range.end
+            return (point.line > start.line || point.line == start.line && point.character >= start.character) &&
+                (point.line < end.line || point.line == end.line && point.character < end.character)
+        }
+        val ids = buildList {
+            result.index.symbols.filter { it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION && contains(it.location) }
+                .forEach { add(it.id) }
+            result.usages.filter { contains(it.location) }.forEach { add(it.targetId) }
+        }.distinct()
+        if (ids.size != 1) return "Refused [kotlin.usageNotFound]: no unique compiler-proven function usage at position."
+        val target = result.index.symbols.single { it.id == ids.single() }
+        val includeDeclaration = if ("includeDeclaration" in args) {
+            (args["includeDeclaration"] as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.booleanOrNull
+                ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "includeDeclaration must be boolean")
+        } else true
+        val limit = if ("limit" in args) {
+            (args["limit"] as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.intOrNull
+                ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin reference limit must be an integer")
+        } else ProtocolLimits.MAX_REFERENCE_RESULTS
+        if (limit !in 1..ProtocolLimits.MAX_REFERENCE_RESULTS) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin reference limit is invalid",
+        )
+        val locations = if (!references) listOf(target.location) else buildList {
+            if (includeDeclaration) add(target.location)
+            result.usages.filter { it.targetId == target.id }.forEach { add(it.location) }
+        }.distinct().sortedWith(compareBy({ ProtocolPath.serialize(it.path) },
+            { it.range.start.line }, { it.range.start.character }))
+        val returned = locations.take(limit)
+        return buildJsonObject {
+            put("status", "ready"); put("backend", result.attestation.backend)
+            put("targetId", target.id.value); put("targetName", target.name)
+            put("complete", !references); put("completeness", if (references) "partial" else "semantic")
+            put("total", locations.size); put("returned", returned.size); put("truncated", locations.size > returned.size)
+            put("locations", buildJsonArray { returned.forEach { location -> add(buildJsonObject {
+                put("path", ProtocolPath.serialize(location.path)); put("startLine", location.range.start.line)
+                put("startCharacter", location.range.start.character); put("endLine", location.range.end.line)
+                put("endCharacter", location.range.end.character)
+            }) } })
+        }.toString()
     }
 
     private fun toolKotlinSymbolRead(args: JsonObject, requestedSymbol: org.refactorkit.core.SymbolId?): String {

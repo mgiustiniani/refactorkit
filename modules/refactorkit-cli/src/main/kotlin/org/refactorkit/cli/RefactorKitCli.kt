@@ -650,13 +650,24 @@ class RefactorKitCli(
 
     private fun cmdKotlin(args: List<String>): Int {
         val operation = args.firstOrNull()
-        if (operation !in setOf("diagnostics", "symbols", "definition")) {
-            System.err.println("kotlin requires subcommand: diagnostics, symbols, or definition")
+        if (operation !in setOf("diagnostics", "symbols", "definition", "references")) {
+            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, or references")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
-        if (operation == "definition" && parsed.options["symbol"] == null) {
-            System.err.println("--symbol required")
+        val positionNavigation = operation in setOf("definition", "references") && parsed.options["symbol"] == null
+        if (positionNavigation && listOf("file", "line", "character").any { parsed.options[it] == null }) {
+            System.err.println("position navigation requires --file, --line, and --character")
+            return 2
+        }
+        val line = parsed.options["line"]?.toIntOrNull()
+        val character = parsed.options["character"]?.toIntOrNull()
+        if (positionNavigation && (line == null || line < 0 || character == null || character < 0)) {
+            System.err.println("--line and --character must be non-negative zero-based integers")
+            return 2
+        }
+        if (operation == "references" && parsed.options["symbol"] != null) {
+            System.err.println("Kotlin references currently require --file, --line, and --character, not --symbol")
             return 2
         }
         val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
@@ -673,9 +684,10 @@ class RefactorKitCli(
                 put("compilerClasspath", buildJsonArray { compilerClasspath.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
                 put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
             }).jsonObject
-            val result = session.dispatch(when (operation) {
-                "diagnostics" -> "kotlin.diagnostics"
-                "symbols" -> "kotlin.symbols"
+            val result = session.dispatch(when {
+                positionNavigation -> "intelligence.query"
+                operation == "diagnostics" -> "kotlin.diagnostics"
+                operation == "symbols" -> "kotlin.symbols"
                 else -> "kotlin.definition"
             }, buildJsonObject {
                 put("requestId", parsed.options["request-id"] ?: "cli-${UUID.randomUUID()}")
@@ -684,6 +696,16 @@ class RefactorKitCli(
                 parsed.options["query"]?.let { put("query", it) }
                 parsed.options["file"]?.let { put("file", it) }
                 parsed.options["symbol"]?.let { put("symbol", it) }
+                if (positionNavigation) {
+                    put("kind", operation)
+                    put("languageId", "kotlin")
+                    put("path", parsed.options.getValue("file"))
+                    put("position", buildJsonObject {
+                        put("line", requireNotNull(line)); put("character", requireNotNull(character))
+                    })
+                    put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+                    if (operation == "references") put("includeDeclaration", "exclude-declaration" !in parsed.flags)
+                }
             })
             println(semanticJson.encodeToString(result))
             if (result.jsonObject.getValue("status").jsonPrimitive.content == "ready") 0 else 1
@@ -945,6 +967,8 @@ class RefactorKitCli(
           refactorkit kotlin diagnostics <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--request-id <id>]
           refactorkit kotlin symbols <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--query <text>] [--file <workspace-relative.kt>]
           refactorkit kotlin definition <root> --symbol <opaque-id> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin definition <root> --file <relative.kt> --line <zero-based> --character <zero-based> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin references <root> --file <relative.kt> --line <zero-based> --character <zero-based> [--exclude-declaration] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

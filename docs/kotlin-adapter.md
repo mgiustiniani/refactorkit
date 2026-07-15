@@ -168,13 +168,23 @@ refactorkit kotlin definition <root> \
   --symbol kotlin-jvm-callable-v1:<sha256> \
   --jdk-home <jdk-21> --compiler-jar <compiler.jar> \
   --compiler-classpath <runtime-jars>
+
+refactorkit kotlin definition <root> --file src/main/kotlin/example/App.kt \
+  --line 12 --character 8 --jdk-home <jdk-21> \
+  --compiler-jar <compiler.jar> --compiler-classpath <runtime-jars>
+
+refactorkit kotlin references <root> --file src/main/kotlin/example/App.kt \
+  --line 12 --character 8 --jdk-home <jdk-21> \
+  --compiler-jar <compiler.jar> --compiler-classpath <runtime-jars>
 ```
 
 MCP exposes `kotlin_semantic_start`, `kotlin_semantic_stop`,
-`kotlin_diagnostics`, `kotlin_symbols`, and `kotlin_definition`. Kotlin navigation
-uses these correlated language-specific envelopes; legacy generic symbol routes
-are not promoted to saved-snapshot authority. The daemon response is constrained
-by `docs/api-0.2-kotlin-symbols-schema.json`. LSP and all capability surfaces
+`kotlin_diagnostics`, `kotlin_symbols`, `kotlin_definition`,
+`kotlin_usage_definition`, and `kotlin_references`. Kotlin navigation uses these
+correlated language-specific envelopes; legacy generic symbol routes are not
+promoted to saved-snapshot authority. Declaration responses are constrained by
+`docs/api-0.2-kotlin-symbols-schema.json`, while position navigation uses
+`docs/api-0.2-intelligence-query-schema.json`. LSP and all capability surfaces
 expose the same truthful experimental compiler capability metadata, but
 editor-native publication remains the editor's responsibility in this slice.
 

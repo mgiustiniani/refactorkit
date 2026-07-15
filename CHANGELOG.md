@@ -131,8 +131,9 @@ review safety boundaries before applying refactorings.
   call names map atomically to existing `kotlin-jvm-callable-v1` declarations,
   with exact UTF-16 ranges and a 2,000-usage bound. API `0.2` daemon
   `intelligence.query` now exposes definition from direct call names and explicitly
-  partial references with lease/snapshot/generation authority. CLI/MCP integration,
-  broader references and every Kotlin mutation remain refused.
+  partial references with lease/snapshot/generation authority. CLI position
+  commands and MCP `kotlin_usage_definition`/`kotlin_references` expose the same
+  boundary; broader references and every Kotlin mutation remain refused.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions

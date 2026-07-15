@@ -24,6 +24,11 @@ class RefactorKitCliTest {
         assertEquals(2, cli.run(listOf("typescript", "diagnostics", ".")))
         assertEquals(2, cli.run(listOf("kotlin")))
         assertEquals(2, cli.run(listOf("kotlin", "diagnostics", ".")))
+        assertEquals(2, cli.run(listOf("kotlin", "definition", ".")))
+        assertEquals(2, cli.run(listOf("kotlin", "references", ".", "--file", "App.kt", "--line", "0")))
+        assertEquals(2, cli.run(listOf(
+            "kotlin", "references", ".", "--file", "App.kt", "--line", "-1", "--character", "0",
+        )))
     }
 
 
@@ -44,6 +49,7 @@ class RefactorKitCliTest {
         assertTrue(result.stdout.contains("refactorkit kotlin diagnostics"))
         assertTrue(result.stdout.contains("refactorkit kotlin symbols"))
         assertTrue(result.stdout.contains("refactorkit kotlin definition"))
+        assertTrue(result.stdout.contains("refactorkit kotlin references"))
         assertTrue(result.stdout.contains("refactorkit patch recover"))
         assertTrue(result.stdout.contains("refactorkit recipe run"))
     }

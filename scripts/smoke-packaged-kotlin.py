@@ -151,6 +151,18 @@ def main() -> int:
         )
         if definition.get("status") != "ready" or definition.get("symbols") != [render]:
             raise AssertionError(f"Kotlin opaque function definition lookup failed: {definition}")
+        cli_usage_definition = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-cli-usage-definition", "definition",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt", "--line", "5", "--character", "45"],
+        )
+        if cli_usage_definition.get("status") != "ready":
+            raise AssertionError(f"Kotlin CLI usage definition failed: {cli_usage_definition}")
+        cli_usage_references = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-cli-usage-references", "references",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt", "--line", "5", "--character", "45"],
+        )
+        if cli_usage_references.get("status") != "ready" or cli_usage_references.get("total") != 2:
+            raise AssertionError(f"Kotlin CLI partial references failed: {cli_usage_references}")
 
         daemon = runtime / "bin" / ("refactorkit-daemon.bat" if os.name == "nt" else "refactorkit-daemon")
         process = subprocess.Popen(

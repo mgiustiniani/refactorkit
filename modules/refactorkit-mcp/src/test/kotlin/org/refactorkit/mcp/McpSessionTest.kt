@@ -61,6 +61,8 @@ class McpSessionTest {
         assertTrue(tools.contains("kotlin_diagnostics"))
         assertTrue(tools.contains("kotlin_symbols"))
         assertTrue(tools.contains("kotlin_definition"))
+        assertTrue(tools.contains("kotlin_usage_definition"))
+        assertTrue(tools.contains("kotlin_references"))
         val preview = result["tools"]!!.jsonArray.single { it.jsonObject["name"]!!.jsonPrimitive.content == "preview_refactoring" }
         assertTrue(preview.toString().contains("moveSourceRoot"), preview.toString())
     }
@@ -100,6 +102,15 @@ class McpSessionTest {
         }) as JsonObject
 
         assertTrue(contentText(result).contains("kotlin.symbolsSessionStale"))
+
+        val usage = session.dispatch("tools/call", buildJsonObject {
+            put("name", "kotlin_usage_definition")
+            put("arguments", buildJsonObject {
+                put("expectedSnapshotHash", snapshot); put("semanticLease", "stale")
+                put("file", "src/main/kotlin/example/App.kt"); put("line", 1); put("character", 4)
+            })
+        }) as JsonObject
+        assertTrue(contentText(usage).contains("kotlin.symbolsSessionStale"))
     }
 
     @Test
