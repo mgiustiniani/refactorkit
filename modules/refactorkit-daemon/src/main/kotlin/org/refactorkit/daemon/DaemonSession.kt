@@ -2022,6 +2022,11 @@ class DaemonSession(
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "Invalid diagnostics.v2 request")
         }
         val snap = requireSnapshot()
+        TypeScriptDiagnosticsProtocol.snapshotRefusal(
+            request,
+            snap.hash,
+            semanticLeases[request.languageId],
+        )?.let { return it }
         val semantic = semanticAdapters[request.languageId]
             ?: return TypeScriptDiagnosticsProtocol.notReady(request, snap.hash, semanticLeases[request.languageId])
         val lease = semanticLeases[request.languageId]

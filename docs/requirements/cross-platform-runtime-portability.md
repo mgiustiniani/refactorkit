@@ -1,7 +1,7 @@
 # Cross-platform runtime portability requirements
 
-Status: accepted by GitHub Actions native CI run `29418213082` for commit
-`6a708f6`.
+Status: path/watcher correction accepted by GitHub Actions run `29418213082`;
+diagnostics reconciliation-race precedence awaits native qualification.
 
 ## Scope
 
@@ -40,7 +40,15 @@ macOS. Tests shall wait up to 15 seconds using a monotonic deadline and must sti
 prove that a real saved-file change marks the watcher dirty, refreshes the next
 read, and creates no `.refactorkit` metadata.
 
-### RPK-PORT-005 — Qualification
+### RPK-PORT-005 — Reconciliation race precedence
+
+When an external saved-file change races watcher reconciliation, diagnostics may
+return `diagnostics.savedSnapshotStale` before reconciliation or
+`diagnostics.snapshotStale` after the session adopts the new snapshot. A missing
+semantic adapter after reconciliation must not mask the stale request as
+`diagnostics.semanticSessionNotReady`; snapshot correlation is checked first.
+
+### RPK-PORT-006 — Qualification
 
 The correction is complete only when the full JVM suite and golden tests pass
 locally, packaged Kotlin acceptance remains green, and the Linux, Windows x86-64,

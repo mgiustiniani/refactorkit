@@ -211,6 +211,14 @@ class TypeScriptDaemonIntegrationTest {
         )
         val opened = session.dispatch("project.open", objectParams("root" to root.toString())).jsonObject
         val snapshotHash = opened.getValue("snapshotHash").jsonPrimitive.content
+        val staleBeforeStart = session.dispatch("diagnostics.v2", diagnosticsV2Params(
+            requestId = "ide-request-stale-before-start",
+            snapshotHash = "0".repeat(64),
+            lease = lease,
+            sourceAuthority = buildJsonObject { put("kind", "saved-disk") },
+        )).jsonObject
+        assertEquals("diagnostics.snapshotStale", staleBeforeStart.getValue("failure").jsonObject
+            .getValue("code").jsonPrimitive.content)
         val notReady = session.dispatch("diagnostics.v2", diagnosticsV2Params(
             requestId = "ide-request-before-start",
             snapshotHash = snapshotHash,
@@ -410,8 +418,10 @@ class TypeScriptDaemonIntegrationTest {
             sourceAuthority = buildJsonObject { put("kind", "saved-disk") },
         )).jsonObject
         assertEquals("refused", staleDisk.getValue("status").jsonPrimitive.content)
-        assertEquals("diagnostics.savedSnapshotStale", staleDisk.getValue("failure").jsonObject
-            .getValue("code").jsonPrimitive.content)
+        assertTrue(staleDisk.getValue("failure").jsonObject.getValue("code").jsonPrimitive.content in setOf(
+            "diagnostics.savedSnapshotStale",
+            "diagnostics.snapshotStale",
+        ))
         root.resolve("src/service.ts").writeText("const value = missing;\n")
 
         val stale = session.dispatch("diagnostics.v2", diagnosticsV2Params(

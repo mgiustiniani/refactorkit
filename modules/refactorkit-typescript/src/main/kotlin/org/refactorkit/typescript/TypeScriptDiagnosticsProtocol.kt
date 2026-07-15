@@ -98,10 +98,7 @@ object TypeScriptDiagnosticsProtocol {
         semantic: TypeScriptSemanticAdapter,
     ): JsonObject {
         val authority = authorityMetadata(request.sourceAuthority, savedSnapshot.hash)
-        if (request.expectedSnapshotHash != savedSnapshot.hash) return refusal(
-            request, savedSnapshot.hash, savedSnapshot.hash, activeLease, authority,
-            "diagnostics.snapshotStale", "Expected project snapshot is stale",
-        )
+        snapshotRefusal(request, savedSnapshot.hash, activeLease)?.let { return it }
         if (request.semanticLease != activeLease || semantic.activeSnapshotHash() != savedSnapshot.hash) return refusal(
             request, savedSnapshot.hash, savedSnapshot.hash, activeLease, authority,
             "diagnostics.semanticLeaseStale", "Semantic session lease is stale or belongs to another snapshot",
@@ -151,6 +148,20 @@ object TypeScriptDiagnosticsProtocol {
             )
         }
     }
+
+    fun snapshotRefusal(
+        request: TypeScriptDiagnosticsRequest,
+        currentSnapshotHash: String,
+        activeLease: String? = null,
+    ): JsonObject? = if (request.expectedSnapshotHash == currentSnapshotHash) null else refusal(
+        request,
+        currentSnapshotHash,
+        currentSnapshotHash,
+        activeLease,
+        authorityMetadata(request.sourceAuthority, currentSnapshotHash),
+        "diagnostics.snapshotStale",
+        "Expected project snapshot is stale",
+    )
 
     fun notReady(
         request: TypeScriptDiagnosticsRequest,
