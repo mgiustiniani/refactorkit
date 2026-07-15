@@ -17,7 +17,11 @@ review safety boundaries before applying refactorings.
   authority; broader declaration families and Java interoperability remain
   mandatory before K4 completion. The first internal implementation step extends
   the strict atomic worker payload with compiler-PSI declaration visibility and
-  validates it host-side for every published type/function symbol.
+  validates it host-side for every published type/function symbol. A library-level
+  bootstrap planner now previews private-type declaration/constructor/type/import/
+  qualifier token edits, refuses incomplete Java/alias/star/type-alias/dynamic
+  boundaries, simulates the post-image and rejects introduced K2 errors. Transport
+  and managed apply authority remain refused.
 - Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
   queries backed only by Eclipse JDT bindings. Hover returns the exact selected
   range, binding-derived Java signature, qualified identity, bounded Javadoc,

@@ -1,8 +1,10 @@
 # Managed Kotlin/JVM rename requirements
 
-Status: K2 worker/host declaration-visibility evidence implemented; complete
-reference barrier, planner, staged diagnostics and managed transaction remain
-pending. No Kotlin mutation authority has been granted.
+Status: K2 visibility evidence and the library-level private-type preview planner
+are implemented with a conservative Kotlin-only completeness barrier and exact
+before/staged compiler diagnostics. Transport authorization, apply/WAL/recovery/
+rollback and native qualification remain pending; no Kotlin mutation authority has
+been granted.
 
 ## Initial qualified row
 

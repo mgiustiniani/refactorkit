@@ -228,6 +228,46 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun privateTypeRenamePreviewUsesCompleteK2TokensAndStagedCompilerDiagnostics() {
+        val root = project("""
+            private class Secret
+            private fun create(value: Secret): Secret = Secret()
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val symbols = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = symbols.index.symbols.single { it.name == "Secret" }
+
+        val plan = KotlinPrivateTypeRenamePlanner(adapter).preview(snapshot, target.id, "Credential")
+
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(4, plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
+            .flatMap { it.textEdits }.size)
+        assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
+        assertTrue(plan.requiresUserApproval)
+        assertEquals(org.refactorkit.core.RefactoringEvidence.NATIVE_AST, plan.evidence)
+    }
+
+    @Test
+    fun privateTypeRenameRefusesPublicCrossLanguageAndIncompleteImportBoundaries() {
+        val root = project("class PublicType\nprivate class PrivateType\n")
+        val toolchain = toolchain(root)
+        fun preview(name: String, target: String): org.refactorkit.core.PatchPlan {
+            val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+            val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+            val symbol = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+                .index.symbols.single { it.name == target }
+            return KotlinPrivateTypeRenamePlanner(adapter).preview(snapshot, symbol.id, name)
+        }
+
+        assertEquals("kotlin.renameVisibilityUnsupported", preview("Renamed", "PublicType").refusalCode)
+        root.resolve("src/main/java/fixture").createDirectories()
+        root.resolve("src/main/java/fixture/Caller.java").writeText("package fixture; class Caller {}\n")
+        assertEquals("kotlin.renameCrossLanguageIncomplete", preview("RenamedPrivate", "PrivateType").refusalCode)
+    }
+
+    @Test
     fun compilerPayloadAttestsSourceVisibilityForRenameEligibility() {
         val root = project("class Placeholder\n")
         root.resolve("src/main/kotlin/fixture/Broken.kt").writeText("""
