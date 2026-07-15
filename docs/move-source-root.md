@@ -53,4 +53,6 @@ already has an effective POM in the worktree.
 
 Refusal is final for that plan; do not replace it with raw filesystem moves.
 POM changes needed to define module ownership/dependencies must exist before the
-preview so they are included in snapshot and classpath evidence.
+preview so they are included in snapshot and classpath evidence. A future explicit
+`java.moveAcrossMavenModules` capability is tracked in
+`docs/releases/v0.7.0-plan.md`; `moveSourceRoot` must not infer or edit POMs.
