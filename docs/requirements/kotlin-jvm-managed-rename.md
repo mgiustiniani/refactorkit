@@ -1,10 +1,10 @@
 # Managed Kotlin/JVM rename requirements
 
-Status: K2 visibility evidence and the library-level private-type preview planner
-are implemented with a conservative Kotlin-only completeness barrier and exact
-before/staged compiler diagnostics. Transport authorization, apply/WAL/recovery/
-rollback and native qualification remain pending; no Kotlin mutation authority has
-been granted.
+Status: K2 visibility/completeness evidence, library preview, daemon/CLI/MCP
+transport authorization and managed `PatchEngine` apply/WAL/rollback are
+implemented with local packaged apply/rollback acceptance. Kill recovery and the
+four-platform native matrix remain pending; capability metadata is therefore still
+`PROPOSAL_ONLY`.
 
 ## Initial qualified row
 

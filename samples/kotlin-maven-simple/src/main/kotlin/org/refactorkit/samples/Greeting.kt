@@ -21,3 +21,5 @@ class GreetingOwner {
     val anonymous = object {}
 }
 class GreetingConsumer(val greeting: Greeting)
+private class InternalGreeting
+private fun internalGreeting(value: InternalGreeting): InternalGreeting = InternalGreeting()

@@ -69,6 +69,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.kotlin.KotlinPrivateTypeRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
 import org.refactorkit.kotlin.KotlinToolchainDiscovery
@@ -1288,7 +1289,8 @@ class DaemonSession(
             sourceExtensions = javaSnapshot.sourceExtensions + SCRIPT_EXTENSIONS.keys,
             ignoredDirectories = javaSnapshot.ignoredDirectories + scriptSnapshot.ignoredDirectories,
         )
-        return if (scriptSnapshot.files.isEmpty()) merged else TypeScriptBuildModelIntegration.attach(merged)
+        val languageAttached = if (scriptSnapshot.files.isEmpty()) merged else TypeScriptBuildModelIntegration.attach(merged)
+        return kotlinToolchain?.let { KotlinJvmBuildModelIntegration.attach(languageAttached, it) } ?: languageAttached
     }
 
     private fun csvAttribute(value: String?): List<String> = value.orEmpty().split(',')
@@ -1410,30 +1412,50 @@ class DaemonSession(
         val plan = when (operation) {
             "renameSymbol" -> {
                 if (requestedLanguage == "java") {
-                    throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "renameSymbol requires typescript or javascript languageId")
+                    throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "renameSymbol requires kotlin, typescript or javascript languageId")
                 }
-                val semantic = requireSemanticAdapter(requestedLanguage)
-                val indexed = semantic.buildSymbols(snap)
-                val selectedSymbol = symbol?.let { requested -> indexed.symbols.singleOrNull { it.id.value == requested } }
-                val location = selectedSymbol?.location ?: run {
-                    val file = args["file"] ?: missing("arguments.file")
-                    val line = args["line"]?.toIntOrNull() ?: missing("arguments.line")
-                    val character = args["character"]?.toIntOrNull() ?: missing("arguments.character")
-                    if (line < 0 || character < 0) {
-                        throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Rename coordinates must be non-negative")
-                    }
-                    SourceLocation(
-                        Paths.get(file),
-                        SourceRange(SourcePosition(line, character), SourcePosition(line, character)),
+                if (requestedLanguage == "kotlin") {
+                    val lease = p.string("semanticLease") ?: missing("semanticLease")
+                    val expected = p.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                    val generation = p.string("expectedIndexGeneration")?.toLongOrNull()
+                        ?: missing("expectedIndexGeneration")
+                    val currentGeneration = workspaceIndex.snapshot()?.generation
+                        ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin workspace index is unavailable")
+                    if (lease != kotlinSemanticLease) throw JsonRpcException(
+                        JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.renameSessionStale",
                     )
+                    if (expected != snap.hash || generation != currentGeneration) throw JsonRpcException(
+                        JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.renameAuthorityStale",
+                    )
+                    KotlinPrivateTypeRenamePlanner(kotlinAdapter).preview(
+                        snap,
+                        SymbolId(symbol ?: missing("symbol")),
+                        args["newName"] ?: missing("arguments.newName"),
+                    )
+                } else {
+                    val semantic = requireSemanticAdapter(requestedLanguage)
+                    val indexed = semantic.buildSymbols(snap)
+                    val selectedSymbol = symbol?.let { requested -> indexed.symbols.singleOrNull { it.id.value == requested } }
+                    val location = selectedSymbol?.location ?: run {
+                        val file = args["file"] ?: missing("arguments.file")
+                        val line = args["line"]?.toIntOrNull() ?: missing("arguments.line")
+                        val character = args["character"]?.toIntOrNull() ?: missing("arguments.character")
+                        if (line < 0 || character < 0) {
+                            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Rename coordinates must be non-negative")
+                        }
+                        SourceLocation(
+                            Paths.get(file),
+                            SourceRange(SourcePosition(line, character), SourcePosition(line, character)),
+                        )
+                    }
+                    semantic.applyRefactoring(RefactoringRequest(
+                        operation = "renameSymbol",
+                        symbolId = selectedSymbol?.id,
+                        selection = CodeSelection(location),
+                        arguments = args,
+                        snapshot = snap,
+                    ))
                 }
-                semantic.applyRefactoring(RefactoringRequest(
-                    operation = "renameSymbol",
-                    symbolId = selectedSymbol?.id,
-                    selection = CodeSelection(location),
-                    arguments = args,
-                    snapshot = snap,
-                ))
             }
             "renameClass" -> {
                 val newName = args["newName"] ?: missing("arguments.newName")
@@ -1500,7 +1522,12 @@ class DaemonSession(
                 buildJsonObject { plan.refusalCode?.let { put("refusalCode", it) } },
             )
         }
-        pendingPlans[plan.id.value] = PendingPlan(plan, languageId = requestedLanguage)
+        pendingPlans[plan.id.value] = PendingPlan(
+            plan,
+            languageId = requestedLanguage,
+            semanticLease = if (requestedLanguage == "kotlin") p.string("semanticLease") else null,
+            indexGeneration = if (requestedLanguage == "kotlin") workspaceIndex.snapshot()?.generation else null,
+        )
         return planToJson(plan)
     }
 
@@ -1515,19 +1542,38 @@ class DaemonSession(
         val pending = pendingPlans[planId]
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val plan = pending.plan
+        if (pending.languageId == "kotlin") {
+            val lease = params?.string("semanticLease") ?: missing("semanticLease")
+            val generation = params?.string("expectedIndexGeneration")?.toLongOrNull()
+                ?: missing("expectedIndexGeneration")
+            if (lease != pending.semanticLease || lease != kotlinSemanticLease ||
+                generation != pending.indexGeneration || generation != workspaceIndex.snapshot()?.generation) {
+                pendingPlans.remove(planId)
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.renameAuthorityStale")
+            }
+        }
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val currentSnap = scanWorkspace(root)
         return when (val result = PatchEngine(root).apply(
             plan,
             currentSnap,
             ApplyAuthorization.explicit("daemon-json-rpc"),
-            if (pending.languageId == "java") DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
-            else requireSemanticAdapter(pending.languageId).diagnosticsGate(),
+            when (pending.languageId) {
+                "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
+                "kotlin" -> DiagnosticsGate.enabled("kotlin-k2") { candidate ->
+                    kotlinAdapter.compilerDiagnostics(candidate).diagnostics
+                }
+                else -> requireSemanticAdapter(pending.languageId).diagnosticsGate()
+            },
         )) {
             is ApplyResult.Applied -> {
                 val refreshed = scanWorkspace(root)
                 val diagnostics = boundedDiagnostics(
-                    if (pending.languageId == "java") adapter.diagnostics(refreshed) else emptyList(),
+                    when (pending.languageId) {
+                        "java" -> adapter.diagnostics(refreshed)
+                        "kotlin" -> kotlinAdapter.compilerDiagnostics(refreshed).diagnostics
+                        else -> emptyList()
+                    },
                 )
                 closeSemanticAdapters()
                 snapshot = refreshed
@@ -2524,6 +2570,8 @@ class DaemonSession(
         val plan: PatchPlan,
         val importPreview: ExternalImportPreview? = null,
         val languageId: String = "java",
+        val semanticLease: String? = null,
+        val indexGeneration: Long? = null,
     )
 
     private data class DaemonMethodCapability(

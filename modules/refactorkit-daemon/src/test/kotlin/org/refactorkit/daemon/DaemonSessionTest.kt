@@ -168,11 +168,14 @@ class DaemonSessionTest {
         })
         assertTrue(kotlinCapabilities.filter {
             it["operation"]!!.jsonPrimitive.content !in setOf(
-                "diagnostics", "workspaceSymbols", "documentSymbols", "definition",
+                "diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol",
             )
         }.all { it["stability"]!!.jsonPrimitive.content == "refused" && it["evidence"]!!.jsonPrimitive.content == "none" })
+        val kotlinRename = kotlinCapabilities.single { it["operation"]!!.jsonPrimitive.content == "renameSymbol" }
+        assertEquals("experimental", kotlinRename["stability"]!!.jsonPrimitive.content)
+        assertEquals("compiler", kotlinRename["evidence"]!!.jsonPrimitive.content)
+        assertEquals("proposal-only", kotlinRename["mutationAuthority"]!!.jsonPrimitive.content)
         assertTrue(byName.keys.containsAll(setOf("kotlin.symbols", "kotlin.definition")))
-        assertTrue(kotlinCapabilities.all { it["mutationAuthority"]!!.jsonPrimitive.content == "none" })
         val typescript = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "typescript" }
         val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }
         assertEquals(

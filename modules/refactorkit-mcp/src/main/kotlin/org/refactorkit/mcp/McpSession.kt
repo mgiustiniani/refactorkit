@@ -55,6 +55,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.kotlin.KotlinPrivateTypeRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
 import org.refactorkit.kotlin.KotlinToolchainDiscovery
@@ -252,12 +253,17 @@ class McpSession(
                 props = mapOf(
                     "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
-                    "languageId" to "string: java | typescript | javascript (default java)",
+                    "languageId" to "string: java | kotlin | typescript | javascript (default java)",
+                    "expectedSnapshotHash" to "string: required for Kotlin rename",
+                    "semanticLease" to "string: required for Kotlin rename",
                     "arguments" to "object: operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)",
                 )))
             add(tool("apply_refactoring", "Apply a previously previewed plan.",
                 required = listOf("planId"),
-                props = mapOf("planId" to "string: plan ID returned by preview_refactoring")))
+                props = mapOf(
+                    "planId" to "string: plan ID returned by preview_refactoring",
+                    "semanticLease" to "string: required for Kotlin rename apply",
+                )))
             add(tool("rollback_refactoring", "Roll back a previously applied transaction; normal mode refuses post-apply changes.",
                 required = listOf("transactionId"),
                 props = mapOf(
@@ -751,7 +757,16 @@ class McpSession(
 
         val plan = when (operation) {
             "renameSymbol" -> {
-                if (languageId == "java") missing("languageId=typescript|javascript")
+                if (languageId == "java") missing("languageId=kotlin|typescript|javascript")
+                if (languageId == "kotlin") {
+                    val lease = args.string("semanticLease") ?: missing("semanticLease")
+                    val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                    if (lease != kotlinSemanticLease || expected != snap.hash) return "Refused [kotlin.renameAuthorityStale]: Kotlin rename authority is stale."
+                    KotlinPrivateTypeRenamePlanner(kotlinAdapter).preview(
+                        snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
+                        opArgs["newName"] ?: missing("arguments.newName"),
+                    )
+                } else {
                 val semantic = requireSemanticAdapter(languageId)
                 val index = semantic.buildSymbols(snap)
                 val selected = symbol?.let { id -> index.symbols.singleOrNull { it.id.value == id } }
@@ -767,6 +782,7 @@ class McpSession(
                 semantic.applyRefactoring(RefactoringRequest(
                     "renameSymbol", selected?.id, CodeSelection(location), opArgs, snap,
                 ))
+                }
             }
             "renameClass"  -> JavaRenameClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
             "renameMember" -> JavaRenameMemberPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
@@ -810,7 +826,9 @@ class McpSession(
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
-        if (plan.status == PatchStatus.PREVIEW) pendingPlans[plan.id.value] = PendingPlan(plan, languageId)
+        if (plan.status == PatchStatus.PREVIEW) pendingPlans[plan.id.value] = PendingPlan(
+            plan, languageId, if (languageId == "kotlin") args.string("semanticLease") else null,
+        )
         return buildString {
             appendLine("Plan ID  : ${plan.id.value}")
             appendLine("Status   : ${plan.status}")
@@ -841,14 +859,26 @@ class McpSession(
         val planId = args.string("planId") ?: missing("planId")
         val pending = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val plan = pending.plan
+        if (pending.languageId == "kotlin") {
+            val lease = args.string("semanticLease") ?: missing("semanticLease")
+            if (lease != pending.semanticLease || lease != kotlinSemanticLease) {
+                pendingPlans.remove(planId)
+                return "Apply refused [kotlin.renameAuthorityStale]: Kotlin semantic lease is stale."
+            }
+        }
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val current = scanWorkspace(root)
         return when (val result = PatchEngine(root).apply(
             plan,
             current,
             ApplyAuthorization.explicit("mcp-tool"),
-            if (pending.languageId == "java") DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
-            else requireSemanticAdapter(pending.languageId).diagnosticsGate(),
+            when (pending.languageId) {
+                "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
+                "kotlin" -> DiagnosticsGate.enabled("kotlin-k2") { candidate ->
+                    kotlinAdapter.compilerDiagnostics(candidate).diagnostics
+                }
+                else -> requireSemanticAdapter(pending.languageId).diagnosticsGate()
+            },
         )) {
             is ApplyResult.Applied -> {
                 pendingPlans.remove(planId)
@@ -1167,7 +1197,8 @@ class McpSession(
             sourceExtensions = javaSnapshot.sourceExtensions + SCRIPT_EXTENSIONS.keys,
             ignoredDirectories = javaSnapshot.ignoredDirectories + scriptSnapshot.ignoredDirectories,
         )
-        return if (scriptSnapshot.files.isEmpty()) merged else TypeScriptBuildModelIntegration.attach(merged)
+        val languageAttached = if (scriptSnapshot.files.isEmpty()) merged else TypeScriptBuildModelIntegration.attach(merged)
+        return kotlinToolchain?.let { KotlinJvmBuildModelIntegration.attach(languageAttached, it) } ?: languageAttached
     }
 
     private fun closeSemanticAdapters() {
@@ -1201,7 +1232,11 @@ class McpSession(
         workspaceRoot = null
     }
 
-    private data class PendingPlan(val plan: PatchPlan, val languageId: String = "java")
+    private data class PendingPlan(
+        val plan: PatchPlan,
+        val languageId: String = "java",
+        val semanticLease: String? = null,
+    )
 
     companion object {
         private val SCRIPT_EXTENSIONS = mapOf(

@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
 
 class KotlinLanguageAdapterTest {
     @Test
-    fun descriptorPromotesBoundedCompilerReadsAndKeepsMutationsRefused() {
+    fun descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly() {
         val descriptor = KotlinAdapterRegistration.descriptor()
 
         assertEquals("kotlin", descriptor.languageId)
@@ -44,9 +44,14 @@ class KotlinLanguageAdapterTest {
                 it.backend == KotlinCompilerDiagnostics.SYMBOL_BACKEND
         })
         assertTrue(descriptor.capabilities.filter {
-            it.operation !in setOf("diagnostics", "workspaceSymbols", "documentSymbols", "definition")
+            it.operation !in setOf("diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol")
         }.all { it.stability == CapabilityStability.REFUSED && it.evidence == SemanticEvidenceKind.NONE })
-        assertTrue(descriptor.capabilities.all { it.mutationAuthority == MutationAuthority.NONE })
+        val rename = descriptor.capabilities.single { it.operation == "renameSymbol" }
+        assertEquals(CapabilityStability.EXPERIMENTAL, rename.stability)
+        assertEquals(SemanticEvidenceKind.COMPILER, rename.evidence)
+        assertEquals(MutationAuthority.PROPOSAL_ONLY, rename.mutationAuthority)
+        assertTrue(descriptor.capabilities.filter { it.operation != "renameSymbol" }
+            .all { it.mutationAuthority == MutationAuthority.NONE })
         assertEquals(setOf("kts"), descriptor.capabilities.single { it.operation == "scriptSemantics" }.extensions)
         assertTrue(descriptor.capabilities.filter { it.operation != "scriptSemantics" }.all {
             it.extensions == setOf("kt")
@@ -86,7 +91,7 @@ class KotlinLanguageAdapterTest {
     }
 
     @Test
-    fun registryRoutesKotlinFilesAndRefusesUnavailableOperationsBeforeMutation() {
+    fun registryRoutesKotlinScriptsButUnconfiguredAdapterStillRefusesBeforeMutation() {
         val snapshot = snapshot("Example.kts", "val example = 1\n")
         val registry = LanguageAdapterRegistry(listOf(KotlinAdapterRegistration.create()))
 
@@ -103,7 +108,7 @@ class KotlinLanguageAdapterTest {
             snapshot = snapshot,
         ))
         assertEquals(PatchStatus.REFUSED, plan.status)
-        assertEquals("language.operationUnsupported", plan.refusalCode)
+        assertEquals(KotlinLanguageAdapter.BACKEND_UNAVAILABLE_CODE, plan.refusalCode)
         assertTrue(plan.workspaceEdit.edits.isEmpty())
     }
 

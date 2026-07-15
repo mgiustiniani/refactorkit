@@ -650,12 +650,16 @@ class RefactorKitCli(
 
     private fun cmdKotlin(args: List<String>): Int {
         val operation = args.firstOrNull()
-        if (operation !in setOf("diagnostics", "symbols", "definition", "references")) {
-            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, or references")
+        if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename")) {
+            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, or rename")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
         val positionNavigation = operation in setOf("definition", "references") && parsed.options["symbol"] == null
+        if (operation == "rename" && (parsed.options["symbol"] == null || parsed.options["to"] == null)) {
+            System.err.println("Kotlin rename requires --symbol and --to")
+            return 2
+        }
         if (positionNavigation && listOf("file", "line", "character").any { parsed.options[it] == null }) {
             System.err.println("position navigation requires --file, --line, and --character")
             return 2
@@ -684,7 +688,23 @@ class RefactorKitCli(
                 put("compilerClasspath", buildJsonArray { compilerClasspath.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
                 put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
             }).jsonObject
-            val result = session.dispatch(when {
+            val result = if (operation == "rename") {
+                val index = session.dispatch("index.status", null).jsonObject
+                val generation = index.getValue("generation").jsonPrimitive.content.toLong()
+                val preview = session.dispatch("refactor.preview", buildJsonObject {
+                    put("operation", "renameSymbol"); put("languageId", "kotlin")
+                    put("symbol", parsed.options.getValue("symbol"))
+                    put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
+                    put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
+                    put("expectedIndexGeneration", generation)
+                    put("arguments", buildJsonObject { put("newName", parsed.options.getValue("to")) })
+                })
+                if ("apply" in parsed.flags) session.dispatch("refactor.apply", buildJsonObject {
+                    put("planId", preview.jsonObject.getValue("planId").jsonPrimitive.content)
+                    put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
+                    put("expectedIndexGeneration", generation)
+                }) else preview
+            } else session.dispatch(when {
                 positionNavigation -> "intelligence.query"
                 operation == "diagnostics" -> "kotlin.diagnostics"
                 operation == "symbols" -> "kotlin.symbols"
@@ -697,8 +717,7 @@ class RefactorKitCli(
                 parsed.options["file"]?.let { put("file", it) }
                 parsed.options["symbol"]?.let { put("symbol", it) }
                 if (positionNavigation) {
-                    put("kind", operation)
-                    put("languageId", "kotlin")
+                    put("kind", operation); put("languageId", "kotlin")
                     put("path", parsed.options.getValue("file"))
                     put("position", buildJsonObject {
                         put("line", requireNotNull(line)); put("character", requireNotNull(character))
@@ -708,7 +727,7 @@ class RefactorKitCli(
                 }
             })
             println(semanticJson.encodeToString(result))
-            if (result.jsonObject.getValue("status").jsonPrimitive.content == "ready") 0 else 1
+            if (result.jsonObject.getValue("status").jsonPrimitive.content in setOf("ready", "PREVIEW", "applied")) 0 else 1
         } catch (failure: Exception) {
             System.err.println("Kotlin semantic command failed: ${failure.message}")
             1
@@ -969,6 +988,7 @@ class RefactorKitCli(
           refactorkit kotlin definition <root> --symbol <opaque-id> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin definition <root> --file <relative.kt> --line <zero-based> --character <zero-based> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin references <root> --file <relative.kt> --line <zero-based> --character <zero-based> [--exclude-declaration] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin rename <root> --symbol <private-type-id> --to <new-name> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

@@ -176,6 +176,7 @@ object KotlinAdapterRegistration {
                 when (operation) {
                     "diagnostics" -> diagnosticsCapability()
                     "workspaceSymbols", "documentSymbols", "definition" -> symbolCapability(operation)
+                    "renameSymbol" -> renameCapability()
                     else -> refused(operation, setOf("kt"))
                 }
             } + refused("scriptSemantics", setOf("kts"))
@@ -215,6 +216,28 @@ object KotlinAdapterRegistration {
         stability = CapabilityStability.EXPERIMENTAL,
         evidence = SemanticEvidenceKind.COMPILER,
         mutationAuthority = MutationAuthority.NONE,
+        backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
+        runtime = LanguageAdapterRuntime(
+            executionMode = AdapterExecutionMode.EXTERNAL_PROCESS,
+            supportsTimeout = true,
+            supportsCancellation = true,
+            usesWorkspaceOverlay = true,
+            recordsProcessProvenance = true,
+            limits = LanguageAdapterResourceLimits(
+                requestTimeoutMillis = KotlinCompilerDiagnostics.REQUEST_TIMEOUT_MILLIS,
+                maxInputBytes = 128L * 1024L * 1024L,
+                maxOutputBytes = KotlinCompilerDiagnostics.MAX_OUTPUT_BYTES,
+                maxProcesses = 1,
+            ),
+        ),
+        extensions = setOf("kt"),
+    )
+
+    private fun renameCapability() = LanguageCapability(
+        operation = "renameSymbol",
+        stability = CapabilityStability.EXPERIMENTAL,
+        evidence = SemanticEvidenceKind.COMPILER,
+        mutationAuthority = MutationAuthority.PROPOSAL_ONLY,
         backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
         runtime = LanguageAdapterRuntime(
             executionMode = AdapterExecutionMode.EXTERNAL_PROCESS,

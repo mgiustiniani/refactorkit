@@ -20,8 +20,11 @@ review safety boundaries before applying refactorings.
   validates it host-side for every published type/function symbol. A library-level
   bootstrap planner now previews private-type declaration/constructor/type/import/
   qualifier token edits, refuses incomplete Java/alias/star/type-alias/dynamic
-  boundaries, simulates the post-image and rejects introduced K2 errors. Transport
-  and managed apply authority remain refused.
+  boundaries, simulates the post-image and rejects introduced K2 errors. Daemon,
+  CLI and MCP now preserve exact lease/snapshot/generation authority through
+  preview and explicit apply; `PatchEngine` diagnostics gating, WAL and rollback
+  are exercised by local packaged acceptance. Capability metadata remains
+  `PROPOSAL_ONLY` until kill recovery and native qualification pass.
 - Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
   queries backed only by Eclipse JDT bindings. Hover returns the exact selected
   range, binding-derived Java signature, qualified identity, bounded Javadoc,

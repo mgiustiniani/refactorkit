@@ -102,6 +102,7 @@ def main() -> int:
         workspace = Path(temporary) / "workspace"
         shutil.copytree(repository / "samples" / "kotlin-maven-simple", workspace)
         before = tree_hash(workspace)
+        source_before = tree_hash(workspace / "src")
         clean = run(cli, workspace, jdk, compiler, classpath, "native-kotlin-clean")
         if clean.get("status") != "ready" or clean.get("diagnostics") != []:
             raise AssertionError(f"clean Kotlin diagnostics failed: {clean}")
@@ -126,12 +127,14 @@ def main() -> int:
             "GreetingRegistry": "object",
             "GreetingDataRegistry": "object",
             "GreetingOwner": "class",
+            "InternalGreeting": "class",
             "Companion": "object",
             "NestedRegistry": "object",
             "topLevelGreeting": "function",
             "render": "function",
             "greet": "function",
             "lookup": "function",
+            "internalGreeting": "function",
         }
         actual_kinds = {item.get("name"): item.get("kind") for item in symbol_rows}
         if actual_kinds != expected_kinds:
@@ -237,7 +240,25 @@ def main() -> int:
             if (type_references.get("status") != "ready" or type_references.get("total") != 2 or
                     type_references.get("completeness") != "partial"):
                 raise AssertionError(f"Kotlin partial type references failed: {type_references}")
-            exchange(8, "kotlin.semantic.stop")
+            index = exchange(8, "index.status")
+            internal = next(item for item in symbol_rows if item.get("name") == "InternalGreeting")
+            rename_preview = exchange(9, "refactor.preview", {
+                "operation": "renameSymbol", "languageId": "kotlin", "symbol": internal["id"],
+                "semanticLease": started["semanticLease"], "expectedSnapshotHash": started["snapshotHash"],
+                "expectedIndexGeneration": index["generation"], "arguments": {"newName": "RenamedGreeting"},
+            })
+            if rename_preview.get("status") != "PREVIEW" or tree_hash(workspace) != before:
+                raise AssertionError(f"Kotlin private-type rename preview is invalid or wrote files: {rename_preview}")
+            applied = exchange(10, "refactor.apply", {
+                "planId": rename_preview["planId"], "semanticLease": started["semanticLease"],
+                "expectedIndexGeneration": index["generation"],
+            })
+            if applied.get("status") != "applied" or "RenamedGreeting" not in (
+                    workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt").read_text(encoding="utf-8"):
+                raise AssertionError(f"Kotlin private-type rename apply failed: {applied}")
+            rolled_back = exchange(11, "patch.rollback", {"transactionId": applied["transactionId"]})
+            if rolled_back.get("status") != "rolledBack" or tree_hash(workspace / "src") != source_before:
+                raise AssertionError(f"Kotlin private-type rename rollback failed: {rolled_back}")
         finally:
             process.terminate()
             try:
@@ -245,8 +266,8 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=20)
-        if tree_hash(workspace) != before:
-            raise AssertionError("Kotlin symbol reads modified workspace sources")
+        if tree_hash(workspace / "src") != source_before:
+            raise AssertionError("Kotlin rollback did not restore source bytes")
 
         source = workspace / "src" / "main" / "kotlin" / "org" / "refactorkit" / "samples" / "Greeting.kt"
         source.write_text("package org.refactorkit.samples\n\nclass Greeting(val missing: MissingType)\n", encoding="utf-8")
