@@ -565,15 +565,15 @@ class KotlinCompilerDiagnostics private constructor(
                     "Kotlin callable-owner method evidence exceeds the bounded limit"
                 "kotlin.symbolDescriptorLimitExceeded" ->
                     "Kotlin callable JVM descriptor exceeds the bounded limit"
-                "kotlin.usageTargetCollision" -> "Kotlin function usage target identity is duplicated"
-                "kotlin.usageJvmTargetInvalid" -> "Kotlin function usage JVM target is invalid"
+                "kotlin.usageTargetCollision" -> "Kotlin usage target identity is duplicated"
+                "kotlin.usageJvmTargetInvalid" -> "Kotlin usage JVM target is invalid"
                 "kotlin.usageFirResolutionFailed" -> "Kotlin FIR usage resolution failed"
                 "kotlin.usageTargetLocationUnavailable" -> "Kotlin usage target lacks an exact source location"
-                "kotlin.usageTargetMissing" -> "Kotlin usage target is absent from the proven callable catalogue"
-                "kotlin.usageLocationUnavailable" -> "Kotlin function usage lacks an exact source range"
-                "kotlin.usagePathInvalid" -> "Kotlin function usage path is invalid"
-                "kotlin.usageLimitExceeded" -> "Kotlin function usage result exceeded the bounded limit"
-                "kotlin.usageExtractionFailed" -> "Kotlin compiler function-usage extraction failed"
+                "kotlin.usageTargetMissing" -> "Kotlin usage target is absent from the proven declaration catalogue"
+                "kotlin.usageLocationUnavailable" -> "Kotlin usage lacks an exact source range"
+                "kotlin.usagePathInvalid" -> "Kotlin usage path is invalid"
+                "kotlin.usageLimitExceeded" -> "Kotlin usage result exceeded the bounded limit"
+                "kotlin.usageExtractionFailed" -> "Kotlin compiler usage extraction failed"
                 else -> "Kotlin compiler symbol extraction failed"
             },
         )

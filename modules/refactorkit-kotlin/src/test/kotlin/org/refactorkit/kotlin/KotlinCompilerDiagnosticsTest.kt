@@ -133,9 +133,11 @@ class KotlinCompilerDiagnosticsTest {
         )
         assertEquals(result.index.symbols.size, result.index.symbols.map { it.id }.distinct().size)
         val namesById = result.index.symbols.associate { it.id to it.name }
+        val functionIds = result.index.symbols.filter { it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION }
+            .mapTo(mutableSetOf()) { it.id }
         assertEquals(
             listOf("companionCall", "extensionCall", "find", "member", "topLevel"),
-            result.usages.map { namesById.getValue(it.targetId) }.sorted(),
+            result.usages.filter { it.targetId in functionIds }.map { namesById.getValue(it.targetId) }.sorted(),
         )
         result.usages.forEach { usage ->
             val source = snapshot.files.single { it.path == usage.location.path }.content
@@ -178,13 +180,63 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun successfulK2CompilationReturnsCompilerProvenTypeUsagesWithExactPsiRanges() {
+        val root = project("""
+            annotation class Marker
+            interface Port
+            class Box<T>
+            class Outer { class Nested }
+            object Registry
+            @Marker
+            class Consumer(
+                val port: Port,
+                val boxes: Box<Outer.Nested>,
+            ) {
+                fun construct(): Outer.Nested = Outer.Nested()
+                fun check(value: Any): Boolean = value is Outer.Nested
+                fun cast(value: Any): Outer.Nested = value as Outer.Nested
+                fun registry(): Registry = Registry
+            }
+        """.trimIndent() + "\n")
+        root.resolve("src/main/kotlin/consumer").createDirectories()
+        root.resolve("src/main/kotlin/consumer/Imported.kt").writeText("""
+            package consumer
+            import fixture.Box
+            class Imported(val box: Box<String>)
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
+        val typesById = result.index.symbols.filter { it.kind != org.refactorkit.core.Symbol.Kind.FUNCTION }
+            .associateBy { it.id }
+        val usages = result.usages.mapNotNull { usage -> typesById[usage.targetId]?.let { it to usage.location } }
+
+        assertTrue(usages.isNotEmpty())
+        assertTrue(usages.map { it.first.name }.toSet().containsAll(
+            setOf("Marker", "Port", "Box", "Outer", "Nested", "Registry"),
+        ))
+        assertTrue(usages.count { it.first.name == "Box" } >= 3, usages.toString())
+        assertTrue(usages.count { it.first.name == "Nested" } >= 5, usages.toString())
+        usages.forEach { (symbol, location) ->
+            val source = snapshot.files.single { it.path == location.path }.content
+            val range = location.range
+            val line = source.lineSequence().elementAt(range.start.line)
+            assertEquals(symbol.name, line.substring(range.start.character, range.end.character))
+        }
+    }
+
+    @Test
     fun anonymousObjectLocalsPropertiesAndLambdasAreExcludedWithoutWeakOrSyntheticSymbols() {
         val root = project("""
             class Container {
                 val anonymous = object {}
                 private val callback: () -> Unit = {}
                 fun outer() {
+                    class Local
                     fun local() {}
+                    Local()
                     local()
                 }
             }

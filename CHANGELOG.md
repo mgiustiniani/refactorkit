@@ -136,6 +136,13 @@ review safety boundaries before applying refactorings.
   boundary; broader references and every Kotlin mutation remain refused. Native
   packaged qualification passed in GitHub Actions run `29432766317` on Linux,
   Windows x86-64, macOS x86-64 and macOS arm64.
+- Extend the atomic K2 FIR usage payload with compiler-proven source type usages
+  mapped to existing `kotlin-jvm-type-v1` declarations. The internal row covers
+  type annotations and arguments, supertypes, casts/checks, constructor names,
+  object qualifiers and explicit imports with exact PSI ranges; aliases, import
+  wildcards themselves, local/anonymous/type-alias targets, external declarations
+  and mutation authority remain excluded. Transport/native qualification remains
+  pending.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions

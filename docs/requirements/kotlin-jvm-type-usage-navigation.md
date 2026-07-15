@@ -1,7 +1,7 @@
 # Kotlin JVM type-usage navigation requirements
 
-Status: requirement-first contract for the next `0.7.0-SNAPSHOT` K2 semantic-read
-slice.
+Status: internal K2 FIR worker evidence implemented; daemon/CLI/MCP acceptance and
+native qualification remain pending.
 
 ## Scope
 
@@ -34,10 +34,13 @@ types, generic arguments, supertypes, casts and type checks; constructor/class
 name calls; object and companion qualifiers where K2 provides exact source and
 target evidence; and explicit imports that resolve to a published source type.
 
-Star imports, import aliases, callable/property targets, enum entries, anonymous or
-local classes, type aliases, reflection/configuration strings, Java callers and
-external-library declarations remain outside the first row unless separately
-qualified. Unsupported categories must not acquire type authority by name.
+Star-import and alias import directives, callable/property targets, enum entries,
+anonymous or local classes, type aliases, reflection/configuration strings, Java
+callers and external-library declarations remain outside the first row unless
+separately qualified. A non-aliased use-site type token resolved by K2 remains
+eligible even when its visibility originated from a star import; the `*` itself is
+never published as a reference. Unsupported categories must not acquire type
+authority by name.
 
 ### RPK-KOT-TYPE-USE-004 — Exact usage range
 

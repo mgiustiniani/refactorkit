@@ -22,16 +22,31 @@ import org.jetbrains.kotlin.config.JvmTarget;
 import org.jetbrains.kotlin.config.LanguageVersion;
 import org.jetbrains.kotlin.config.LanguageVersionSettingsImpl;
 import org.jetbrains.kotlin.fir.FirElement;
+import org.jetbrains.kotlin.fir.declarations.FirResolvedImport;
+import org.jetbrains.kotlin.fir.expressions.FirResolvedQualifier;
 import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
 import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
+import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
+import org.jetbrains.kotlin.name.ClassId;
+import org.jetbrains.kotlin.name.Name;
 import org.jetbrains.kotlin.psi.KtBlockExpression;
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression;
+import org.jetbrains.kotlin.psi.KtClassOrObject;
+import org.jetbrains.kotlin.psi.KtConstructor;
+import org.jetbrains.kotlin.psi.KtDotQualifiedExpression;
 import org.jetbrains.kotlin.psi.KtFile;
+import org.jetbrains.kotlin.psi.KtImportDirective;
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
+import org.jetbrains.kotlin.psi.KtNullableType;
+import org.jetbrains.kotlin.psi.KtObjectDeclaration;
 import org.jetbrains.kotlin.psi.KtOperationReferenceExpression;
+import org.jetbrains.kotlin.psi.KtSimpleNameExpression;
+import org.jetbrains.kotlin.psi.KtTypeReference;
+import org.jetbrains.kotlin.psi.KtUserType;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -44,7 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** K2 FIR extraction for source function-call usages after successful compilation. */
+/** K2 FIR extraction for compiler-resolved source function and type usages after successful compilation. */
 final class KotlinCompilerUsageExtractor {
     private static final int MAX_USAGES = 2_000;
 
@@ -57,11 +72,16 @@ final class KotlinCompilerUsageExtractor {
         String jvmTarget,
         List<KotlinCompilerSymbolExtractor.ExtractedSymbol> symbols
     ) {
-        final Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets = new HashMap<String, KotlinCompilerSymbolExtractor.ExtractedSymbol>();
+        final Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> declarationTargets =
+            new HashMap<String, KotlinCompilerSymbolExtractor.ExtractedSymbol>();
+        final Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeTargets =
+            new HashMap<String, KotlinCompilerSymbolExtractor.ExtractedSymbol>();
         for (KotlinCompilerSymbolExtractor.ExtractedSymbol symbol : symbols) {
-            if (!"FUNCTION".equals(symbol.kind())) continue;
             String key = declarationKey(Paths.get(symbol.path()), symbol.startOffset());
-            if (targets.put(key, symbol) != null) throw failure("kotlin.usageTargetCollision");
+            if (declarationTargets.put(key, symbol) != null) throw failure("kotlin.usageTargetCollision");
+            if (!"FUNCTION".equals(symbol.kind()) && typeTargets.put(symbol.identity(), symbol) != null) {
+                throw failure("kotlin.usageTargetCollision");
+            }
         }
         Disposable disposable = Disposer.newDisposable("refactorkit-kotlin-usages");
         try {
@@ -115,8 +135,20 @@ final class KotlinCompilerUsageExtractor {
                     return null;
                 }
                 @Override public void visitResolvedNamedReference(FirResolvedNamedReference reference) {
-                    collect(reference, targets, identities, usages);
+                    collectNamedReference(reference, declarationTargets, identities, usages);
                     reference.acceptChildren(this);
+                }
+                @Override public void visitResolvedTypeRef(FirResolvedTypeRef typeRef) {
+                    collectTypeReference(typeRef, typeTargets, identities, usages);
+                    typeRef.acceptChildren(this);
+                }
+                @Override public void visitResolvedQualifier(FirResolvedQualifier qualifier) {
+                    collectQualifier(qualifier, declarationTargets, identities, usages);
+                    qualifier.acceptChildren(this);
+                }
+                @Override public void visitResolvedImport(FirResolvedImport resolvedImport) {
+                    collectImport(resolvedImport, typeTargets, identities, usages);
+                    resolvedImport.acceptChildren(this);
                 }
             };
             for (ModuleCompilerAnalyzedOutput output : result.getOutputs()) {
@@ -135,7 +167,7 @@ final class KotlinCompilerUsageExtractor {
         }
     }
 
-    private static void collect(
+    private static void collectNamedReference(
         FirResolvedNamedReference reference,
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
         Set<String> identities,
@@ -147,29 +179,153 @@ final class KotlinCompilerUsageExtractor {
         PsiElement usagePsi = ((KtPsiSourceElement) usageSource).getPsi();
         PsiElement targetPsi = ((KtPsiSourceElement) targetSource).getPsi();
         if (!(usagePsi instanceof KtNameReferenceExpression) || usagePsi instanceof KtOperationReferenceExpression) return;
-        if (parent(usagePsi, KtCallableReferenceExpression.class) != null) return;
-        if (!(targetPsi instanceof KtNamedFunction)) return;
-        KtNamedFunction function = (KtNamedFunction) targetPsi;
-        if (parent(function, KtBlockExpression.class) != null) return;
-        PsiElement targetIdentifier = function.getNameIdentifier();
+        if (parent(usagePsi, KtCallableReferenceExpression.class) != null ||
+            parent(usagePsi, KtImportDirective.class) != null) return;
+        PsiElement targetIdentifier;
+        KtFile targetFile;
+        if (targetPsi instanceof KtNamedFunction) {
+            KtNamedFunction function = (KtNamedFunction) targetPsi;
+            if (parent(function, KtBlockExpression.class) != null) return;
+            targetIdentifier = function.getNameIdentifier();
+            targetFile = function.getContainingKtFile();
+        } else {
+            KtClassOrObject type = targetType(targetPsi);
+            if (type == null || type.getClassId() == null || type.getClassId().isLocal()) return;
+            targetIdentifier = typeIdentifier(type);
+            targetFile = type.getContainingKtFile();
+        }
         if (targetIdentifier == null) throw failure("kotlin.usageTargetLocationUnavailable");
-        Path targetPath = canonicalPath(function.getContainingKtFile());
         KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(
-            declarationKey(targetPath, targetIdentifier.getTextRange().getStartOffset())
+            declarationKey(canonicalPath(targetFile), targetIdentifier.getTextRange().getStartOffset())
         );
         if (target == null) throw failure("kotlin.usageTargetMissing");
-
         PsiElement usageIdentifier = ((KtNameReferenceExpression) usagePsi).getReferencedNameElement();
         if (usageIdentifier == null) throw failure("kotlin.usageLocationUnavailable");
         if (!usageIdentifier.getText().equals(reference.getName().asString()) ||
             !usageIdentifier.getText().equals(target.name())) return;
-        Path path = canonicalPath((KtFile) usagePsi.getContainingFile());
-        int start = usageIdentifier.getTextRange().getStartOffset();
-        int end = usageIdentifier.getTextRange().getEndOffset();
+        addUsage(usageIdentifier, target, identities, usages);
+    }
+
+    private static void collectTypeReference(
+        FirResolvedTypeRef typeRef,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (!(typeRef.getType() instanceof ConeClassLikeType) ||
+            !(typeRef.getSource() instanceof KtPsiSourceElement)) return;
+        ClassId classId = ((ConeClassLikeType) typeRef.getType()).getLookupTag().getClassId();
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryName(classId));
+        if (target == null) return;
+        PsiElement identifier = typeIdentifier(((KtPsiSourceElement) typeRef.getSource()).getPsi());
+        if (identifier == null || !identifier.getText().equals(target.name())) return;
+        addUsage(identifier, target, identities, usages);
+    }
+
+    private static void collectQualifier(
+        FirResolvedQualifier qualifier,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (!(qualifier.getSource() instanceof KtPsiSourceElement) ||
+            !(qualifier.getSymbol().getSource() instanceof KtPsiSourceElement)) return;
+        KtClassOrObject type = targetType(((KtPsiSourceElement) qualifier.getSymbol().getSource()).getPsi());
+        if (type == null || type.getClassId() == null || type.getClassId().isLocal()) return;
+        PsiElement targetIdentifier = typeIdentifier(type);
+        if (targetIdentifier == null) throw failure("kotlin.usageTargetLocationUnavailable");
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(
+            declarationKey(canonicalPath(type.getContainingKtFile()), targetIdentifier.getTextRange().getStartOffset())
+        );
+        if (target == null) throw failure("kotlin.usageTargetMissing");
+        PsiElement identifier = typeIdentifier(((KtPsiSourceElement) qualifier.getSource()).getPsi());
+        if (identifier == null || !identifier.getText().equals(target.name())) return;
+        addUsage(identifier, target, identities, usages);
+    }
+
+    private static void collectImport(
+        FirResolvedImport resolvedImport,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (resolvedImport.isAllUnder() || resolvedImport.getAliasName() != null ||
+            !(resolvedImport.getSource() instanceof KtPsiSourceElement)) return;
+        Name importedName = resolvedImport.getImportedName();
+        if (importedName == null || resolvedImport.getImportedFqName() == null) return;
+        ClassId parent = resolvedImport.getResolvedParentClassId();
+        ClassId classId = parent == null ? ClassId.topLevel(resolvedImport.getImportedFqName()) :
+            parent.createNestedClassId(importedName);
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryName(classId));
+        if (target == null) return;
+        PsiElement identifier = typeIdentifier(((KtPsiSourceElement) resolvedImport.getSource()).getPsi());
+        if (identifier == null || !identifier.getText().equals(target.name())) return;
+        addUsage(identifier, target, identities, usages);
+    }
+
+    private static void addUsage(
+        PsiElement identifier,
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (!(identifier.getContainingFile() instanceof KtFile)) throw failure("kotlin.usageLocationUnavailable");
+        Path path = canonicalPath((KtFile) identifier.getContainingFile());
+        int start = identifier.getTextRange().getStartOffset();
+        int end = identifier.getTextRange().getEndOffset();
         String identity = path + "\u0000" + start + "\u0000" + end + "\u0000" + target.identity();
         if (!identities.add(identity)) return;
         if (usages.size() >= MAX_USAGES) throw failure("kotlin.usageLimitExceeded");
-        usages.add(new ExtractedUsage(path.toString(), target.identity(), usageIdentifier.getText(), start, end));
+        usages.add(new ExtractedUsage(path.toString(), target.identity(), identifier.getText(), start, end));
+    }
+
+    private static KtClassOrObject targetType(PsiElement target) {
+        if (target instanceof KtClassOrObject) return (KtClassOrObject) target;
+        if (target instanceof KtConstructor) return ((KtConstructor<?>) target).getContainingClassOrObject();
+        return null;
+    }
+
+    private static PsiElement typeIdentifier(KtClassOrObject type) {
+        PsiElement identifier = type.getNameIdentifier();
+        if (identifier == null && type instanceof KtObjectDeclaration && ((KtObjectDeclaration) type).isCompanion()) {
+            identifier = ((KtObjectDeclaration) type).getObjectKeyword();
+        }
+        return identifier;
+    }
+
+    private static PsiElement typeIdentifier(PsiElement source) {
+        if (source instanceof KtNameReferenceExpression) {
+            return ((KtNameReferenceExpression) source).getReferencedNameElement();
+        }
+        if (source instanceof KtTypeReference) {
+            return typeIdentifier(((KtTypeReference) source).getTypeElement());
+        }
+        if (source instanceof KtNullableType) {
+            return typeIdentifier(((KtNullableType) source).getInnerType());
+        }
+        if (source instanceof KtUserType) {
+            KtSimpleNameExpression reference = ((KtUserType) source).getReferenceExpression();
+            return reference == null ? null : reference.getReferencedNameElement();
+        }
+        if (source instanceof KtDotQualifiedExpression) {
+            return typeIdentifier(((KtDotQualifiedExpression) source).getSelectorExpression());
+        }
+        if (source instanceof KtImportDirective) {
+            return typeIdentifier(((KtImportDirective) source).getImportedReference());
+        }
+        return null;
+    }
+
+    private static String binaryName(ClassId classId) {
+        StringBuilder result = new StringBuilder();
+        if (!classId.getPackageFqName().isRoot()) result.append(classId.getPackageFqName().asString()).append('.');
+        boolean first = true;
+        for (Name segment : classId.getRelativeClassName().pathSegments()) {
+            if (!first) result.append('$');
+            result.append(segment.asString());
+            first = false;
+        }
+        return result.toString();
     }
 
     private static Path canonicalPath(KtFile file) {
