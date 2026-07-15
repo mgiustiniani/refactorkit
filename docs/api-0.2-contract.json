@@ -38,7 +38,7 @@
        "features": {"workspaceSymbols": true, "documentSymbols": true,
                     "immutableEditorOverlayDocumentSymbols": true, "semanticLease": true,
                     "completion": true, "immutableEditorOverlayCompletion": true,
-                    "hover": true, "immutableEditorOverlayHover": true,
+                    "hover": true, "immutableEditorOverlayHover": true, "javaSavedSnapshotHover": true,
                     "signatureHelp": true, "immutableEditorOverlaySignatureHelp": true, "definitionAtPosition": true,
                     "javaSavedSnapshotDefinition": true, "snapshotKeyedJdtCache": true,
                     "referencesAtPosition": true, "javaSavedSnapshotReferences": true, "snapshotBound": true, "typedRefusal": true,

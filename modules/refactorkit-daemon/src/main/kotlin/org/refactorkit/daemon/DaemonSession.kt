@@ -59,6 +59,7 @@ import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaJdtDefinitionProjection
+import org.refactorkit.java.JavaJdtHoverProjection
 import org.refactorkit.java.JavaJdtReferencesProjection
 import org.refactorkit.java.JdtJavaAnalysisCache
 import org.refactorkit.kotlin.KotlinAdapterRegistration
@@ -639,6 +640,38 @@ class DaemonSession(
                 )
             }
         }
+        if (kind == "hover" && languageId == "java") {
+            if (sourceAuthority?.string("kind") != "saved-snapshot") return intelligenceRefusal(
+                requestId, kind, index, "intelligence.hoverSavedSnapshotRequired",
+                "Java hover requires saved-snapshot source authority",
+            )
+            val targetPath = path ?: missing("path")
+            val positionObject = p["position"] as? JsonObject ?: missing("position")
+            val line = positionObject.string("line")?.toIntOrNull() ?: missing("position.line")
+            val character = positionObject.string("character")?.toIntOrNull() ?: missing("position.character")
+            if (line < 0 || character < 0) throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS, "hover position must be non-negative",
+            )
+            val location = SourceLocation(
+                targetPath, SourceRange(SourcePosition(line, character), SourcePosition(line, character)),
+            )
+            return when (val hover = adapter.semanticHover(requireSnapshot(), location, cancellation)) {
+                is JavaJdtHoverProjection.Available -> {
+                    if (cancellation.isCancellationRequested()) return intelligenceRefusal(
+                        requestId, kind, workspaceIndex.snapshot() ?: index,
+                        "intelligence.cancelled", "Interactive semantic query was cancelled",
+                    )
+                    val updated = ensureJavaJdtContribution(
+                        requireSnapshot(), hover.symbols, hover.provenanceHash,
+                    )
+                    javaHoverResponse(requestId, updated, targetPath, hover)
+                }
+                is JavaJdtHoverProjection.Refused -> intelligenceRefusal(
+                    requestId, kind, workspaceIndex.snapshot() ?: index,
+                    hover.diagnostic.code ?: "intelligence.hoverUnavailable", hover.diagnostic.message,
+                )
+            }
+        }
         if (kind == "references") {
             if (languageId != "java") return intelligenceRefusal(
                 requestId, kind, index, "intelligence.referencesProviderUnsupported",
@@ -758,6 +791,32 @@ class DaemonSession(
             truncated = symbols.size > limit,
             provenanceHash = provenanceHash,
         ))
+    }
+
+    private fun javaHoverResponse(
+        requestId: String,
+        index: WorkspaceIndex,
+        path: Path,
+        hover: JavaJdtHoverProjection.Available,
+    ): JsonElement = buildJsonObject {
+        put("schemaVersion", 1); put("requestId", requestId); put("status", "ready"); put("kind", "hover")
+        put("snapshotHash", index.snapshotHash); put("indexGeneration", index.generation)
+        put("providerId", JdtJavaAnalysisCache.PROVIDER_ID); put("backend", JdtJavaAnalysisCache.BACKEND)
+        put("evidence", "compiler"); put("completeness", "semantic"); put("provenanceHash", hover.provenanceHash)
+        put("range", hover.range?.let(::rangeToJson) ?: kotlinx.serialization.json.JsonNull)
+        put("contents", buildJsonArray { hover.sections.forEach { section -> add(buildJsonObject {
+            put("format", section.format.name.lowercase().replace('_', '-')); put("value", section.value)
+        }) } })
+        put("complete", hover.complete); put("warningCount", hover.warningCount)
+        val source = index.sources.single { it.path == path.normalize() }
+        put("sourceAuthority", buildJsonObject {
+            put("kind", "saved-snapshot"); put("path", ProtocolPath.serialize(source.path))
+            put("contentSha256", source.contentSha256)
+        })
+        val cache = adapter.semanticCacheStatus()
+        put("cache", buildJsonObject {
+            put("entries", cache.entries); put("hits", cache.hits); put("misses", cache.misses)
+        })
     }
 
     private fun javaReferencesResponse(
@@ -2397,6 +2456,7 @@ class DaemonSession(
                     "immutableEditorOverlayCompletion" to true,
                     "hover" to true,
                     "immutableEditorOverlayHover" to true,
+                    "javaSavedSnapshotHover" to true,
                     "signatureHelp" to true,
                     "immutableEditorOverlaySignatureHelp" to true,
                     "definitionAtPosition" to true,

@@ -91,8 +91,8 @@ Read-only indexing creates no workspace metadata.
 languages and provider evidence/completeness/truncation without source text or
 local toolchain paths. `intelligence.query` currently implements typed,
 zero-based UTF-16 `workspaceSymbols`, `documentSymbols`, TypeScript/JavaScript
-`completion`, `hover`, `signatureHelp`, and saved-snapshot Java `definition` and
-`references` results. Requests are bounded and correlated to the exact expected snapshot. Queries accept
+`completion`, `hover`, `signatureHelp`, and saved-snapshot Java `definition`,
+`references`, and `hover` results. Requests are bounded and correlated to the exact expected snapshot. Queries accept
 `priority=interactive|normal|background` (default `interactive`). Priority can
 reorder reads only inside the same FIFO stateful/control barrier, so project,
 provider-lifecycle and mutation operations are never crossed.
@@ -105,7 +105,9 @@ workspace-relative path and exact zero-based UTF-16 position. Eclipse JDT bindin
 return zero or one exact source location and lazily publish the bounded
 `java-jdt-bindings-v1` partition. Analysis is cached for two exact snapshots,
 limited to 10,000 Java files and 256 MiB aggregate UTF-8 source, and cooperatively cancellable between compilation
-units. Java `references` uses the same authority, accepts `includeDeclaration`
+units. Java `hover` returns the exact selected range, binding-derived Java
+signature, qualified identity, bounded Javadoc and warning-derived completeness.
+Java `references` uses the same authority, accepts `includeDeclaration`
 (default `true`) and a limit up to 1,000, and returns deterministic locations with
 total/returned/truncation metadata plus `complete` and JDT warning count. Responses report compiler provenance, source
 content hash, resulting index generation and cache counters without exposing

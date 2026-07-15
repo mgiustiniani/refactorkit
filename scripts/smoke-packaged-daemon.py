@@ -157,6 +157,16 @@ try:
             "module/src/main/java/com/example/Use.java",
         }
         assert references["cache"]["hits"] == 2
+        hover_request = dict(definition_request)
+        hover_request.update({
+            "requestId": "packaged-java-hover",
+            "expectedIndexGeneration": references["indexGeneration"],
+            "kind": "hover",
+        })
+        hover = call(12, "intelligence.query", hover_request)
+        assert hover["status"] == "ready" and hover["complete"] is True
+        assert "java.lang.String greet()" in hover["contents"][0]["value"]
+        assert hover["range"]["start"]["line"] == 2
 
         preview = call(3, "java.importExternalClass", {
             "sourceKind": "clipboard",

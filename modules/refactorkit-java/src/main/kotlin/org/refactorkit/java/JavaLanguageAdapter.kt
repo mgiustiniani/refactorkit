@@ -14,6 +14,7 @@ import org.refactorkit.core.RefactoringDescriptor
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SemanticCancellationToken
+import org.refactorkit.core.SemanticHoverSection
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -30,6 +31,18 @@ import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Comparator
+
+sealed interface JavaJdtHoverProjection {
+    data class Available(
+        val range: SourceRange?,
+        val sections: List<SemanticHoverSection>,
+        val complete: Boolean,
+        val warningCount: Int,
+        val symbols: List<Symbol>,
+        val provenanceHash: String,
+    ) : JavaJdtHoverProjection
+    data class Refused(val diagnostic: Diagnostic) : JavaJdtHoverProjection
+}
 
 sealed interface JavaJdtReferencesProjection {
     data class Available(
@@ -264,6 +277,69 @@ class JavaLanguageAdapter(
             JavaJdtDefinitionProjection.Refused(Diagnostic(
                 "Eclipse JDT definition analysis failed", Diagnostic.Severity.ERROR, location,
                 code = "java.definitionUnavailable",
+            ))
+        }
+    }
+
+    fun semanticHover(
+        project: ProjectSnapshot,
+        location: SourceLocation,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): JavaJdtHoverProjection {
+        lastSnapshot = project
+        val file = project.files.singleOrNull { it.path.normalize() == location.path.normalize() && it.languageId == "java" }
+            ?: return JavaJdtHoverProjection.Refused(Diagnostic(
+                "Java hover path is not part of the saved snapshot", Diagnostic.Severity.ERROR, location,
+                code = "java.hoverPathMissing",
+            ))
+        if (!validPosition(file.content, location.range.start)) return JavaJdtHoverProjection.Refused(Diagnostic(
+            "Java hover position is outside the saved document", Diagnostic.Severity.ERROR, location,
+            code = "java.hoverPositionInvalid",
+        ))
+        return try {
+            val cached = jdtCache.get(project, cancellation)
+            val boundSymbols = cached.analysis.symbols.filter { !it.bindingKey.isNullOrBlank() }
+            val target = boundTarget(cached.analysis, boundSymbols, location)
+            val selectedRange = boundSymbols.firstOrNull {
+                it.path.normalize() == location.path.normalize() && it.sourceRange.contains(location.range.start)
+            }?.sourceRange ?: cached.analysis.references.firstOrNull {
+                it.path.normalize() == location.path.normalize() && it.sourceRange.contains(location.range.start)
+            }?.sourceRange
+            val sections = if (target == null) emptyList() else buildList {
+                add(SemanticHoverSection(
+                    SemanticHoverSection.Format.MARKDOWN,
+                    "```java\n${target.hoverSignature}\n```",
+                ))
+                add(SemanticHoverSection(
+                    SemanticHoverSection.Format.PLAIN_TEXT,
+                    "${target.kind.name.lowercase()} ${target.qualifiedName}".take(8_192),
+                ))
+                target.documentation?.takeIf(String::isNotBlank)?.let { documentation ->
+                    add(SemanticHoverSection(SemanticHoverSection.Format.PLAIN_TEXT, documentation))
+                }
+            }
+            val symbols = boundSymbols.map { it.toCoreSymbol() }
+                .distinctBy { it.id to it.location }
+                .sortedWith(compareBy({ it.id.value }, { it.location.path.toString() },
+                    { it.location.range.start.line }, { it.location.range.start.character }))
+            JavaJdtHoverProjection.Available(
+                selectedRange, sections, cached.analysis.warnings.isEmpty(), cached.analysis.warnings.size,
+                symbols, cached.provenanceHash,
+            )
+        } catch (_: JdtJavaAnalysisCancelledException) {
+            JavaJdtHoverProjection.Refused(Diagnostic(
+                "Java hover query was cancelled", Diagnostic.Severity.WARNING, location,
+                code = "java.hoverCancelled",
+            ))
+        } catch (_: JdtJavaAnalysisLimitException) {
+            JavaJdtHoverProjection.Refused(Diagnostic(
+                "Java hover analysis exceeds the bounded source limit", Diagnostic.Severity.ERROR, location,
+                code = "java.hoverSourceLimit",
+            ))
+        } catch (_: RuntimeException) {
+            JavaJdtHoverProjection.Refused(Diagnostic(
+                "Eclipse JDT hover analysis failed", Diagnostic.Severity.ERROR, location,
+                code = "java.hoverUnavailable",
             ))
         }
     }

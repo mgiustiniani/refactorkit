@@ -257,6 +257,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
                     memberSignature = null,
+                    documentation = node.javadoc?.toString(),
                 )
                 symbols += typeSymbol
                 inheritances += typeInheritanceRecords(node, packageName, typeSymbol.qualifiedName)
@@ -281,6 +282,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
                     memberSignature = null,
+                    documentation = node.javadoc?.toString(),
                 )
                 symbols += annotationSymbol
                 ownerStack += annotationSymbol.qualifiedName
@@ -304,6 +306,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
                     memberSignature = null,
+                    documentation = node.javadoc?.toString(),
                 )
                 symbols += enumSymbol
                 ownerStack += enumSymbol.qualifiedName
@@ -327,6 +330,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
                     memberSignature = null,
+                    documentation = node.javadoc?.toString(),
                 )
                 symbols += recordSymbol
                 inheritances += recordInheritanceRecords(node, packageName, recordSymbol.qualifiedName)
@@ -354,6 +358,8 @@ class JdtJavaSemanticAnalyzer {
                     bindingQualifiedName = null,
                     bindingKey = binding?.key,
                     memberSignature = signature,
+                    hoverSignature = "${node.type} ${node.name.identifier}()",
+                    documentation = node.javadoc?.toString(),
                 )
                 symbols += memberSymbol
                 if (binding != null) methodBindings += MethodBindingRecord(memberSymbol, binding)
@@ -375,6 +381,8 @@ class JdtJavaSemanticAnalyzer {
                     bindingQualifiedName = null,
                     bindingKey = binding?.key,
                     memberSignature = signature,
+                    hoverSignature = methodHoverSignature(node, binding),
+                    documentation = node.javadoc?.toString(),
                 )
                 symbols += methodSymbol
                 if (binding != null && !node.isConstructor) {
@@ -398,6 +406,8 @@ class JdtJavaSemanticAnalyzer {
                         bindingQualifiedName = null,
                         bindingKey = binding?.key,
                         memberSignature = null,
+                        hoverSignature = "${node.type} ${fragment.name.identifier}",
+                        documentation = node.javadoc?.toString(),
                     )
                 }
                 return true
@@ -678,6 +688,8 @@ class JdtJavaSemanticAnalyzer {
         bindingQualifiedName: String?,
         bindingKey: String?,
         memberSignature: String?,
+        hoverSignature: String? = null,
+        documentation: String? = null,
     ): JdtJavaSemanticSymbol {
         val qualifiedName = bindingQualifiedName
             ?.takeIf { it.isNotBlank() }
@@ -695,6 +707,9 @@ class JdtJavaSemanticAnalyzer {
             line = (compilationUnit.getLineNumber(startPosition) - 1).coerceAtLeast(0),
             ownerQualifiedName = ownerQualifiedName,
             memberSignature = memberSignature,
+            hoverSignature = (hoverSignature ?: "${kind.name.lowercase()} $qualifiedName")
+                .take(MAX_HOVER_SIGNATURE_CHARS),
+            documentation = documentation?.take(MAX_HOVER_DOCUMENTATION_CHARS),
             sourceRange = rangeFor(compilationUnit, startPosition, simpleName.length),
             bindingKey = bindingKey,
             evidence = if (bindingKey.isNullOrBlank()) {
@@ -715,6 +730,17 @@ class JdtJavaSemanticAnalyzer {
             SourcePosition(startLine, startColumn),
             SourcePosition(endLine, endColumn),
         )
+    }
+
+    private fun methodHoverSignature(node: MethodDeclaration, binding: IMethodBinding?): String {
+        val parameterTypes = binding?.parameterTypes
+            ?.map { type -> type.qualifiedName.takeIf { it.isNotBlank() } ?: type.name }
+            ?: node.parameters().filterIsInstance<SingleVariableDeclaration>().map { it.type.toString() }
+        val parameters = parameterTypes.joinToString(", ")
+        if (node.isConstructor) return "${node.name.identifier}($parameters)"
+        val returnType = binding?.returnType?.let { it.qualifiedName.takeIf(String::isNotBlank) ?: it.name }
+            ?: node.returnType2?.toString() ?: "void"
+        return "$returnType ${node.name.identifier}($parameters)"
     }
 
     private fun methodSignature(node: MethodDeclaration, binding: IMethodBinding?): String {
@@ -738,6 +764,11 @@ class JdtJavaSemanticAnalyzer {
             is SingleVariableDeclaration -> parent.name === this
             else -> false
         }
+    }
+
+    private companion object {
+        const val MAX_HOVER_SIGNATURE_CHARS = 8_192
+        const val MAX_HOVER_DOCUMENTATION_CHARS = 16_384
     }
 
     private data class FileAnalysis(
@@ -785,6 +816,8 @@ data class JdtJavaSemanticSymbol(
     val line: Int,
     val ownerQualifiedName: String?,
     val memberSignature: String?,
+    val hoverSignature: String,
+    val documentation: String?,
     val sourceRange: SourceRange,
     val bindingKey: String?,
     val evidence: JdtJavaSemanticEvidence,

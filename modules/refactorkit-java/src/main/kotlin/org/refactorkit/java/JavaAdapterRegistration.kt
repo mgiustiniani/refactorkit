@@ -20,6 +20,10 @@ object JavaAdapterRegistration {
                     SemanticEvidenceKind.COMPILER, MutationAuthority.NONE,
                 ),
                 LanguageCapability(
+                    "hover", CapabilityStability.EXPERIMENTAL,
+                    SemanticEvidenceKind.COMPILER, MutationAuthority.NONE,
+                ),
+                LanguageCapability(
                     "references", CapabilityStability.EXPERIMENTAL,
                     SemanticEvidenceKind.COMPILER, MutationAuthority.NONE,
                 ),

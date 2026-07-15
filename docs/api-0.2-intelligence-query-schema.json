@@ -7,6 +7,7 @@
     {"$ref": "#/$defs/completion"},
     {"$ref": "#/$defs/definition"},
     {"$ref": "#/$defs/references"},
+    {"$ref": "#/$defs/javaHover"},
     {"$ref": "#/$defs/hover"},
     {"$ref": "#/$defs/signatureHelp"},
     {"$ref": "#/$defs/refused"}
@@ -173,6 +174,36 @@
               "additionalTextEdits": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": false, "required": ["range", "newText"], "properties": {"range": {"$ref": "#/$defs/location/properties/range"}, "newText": {"type": "string", "maxLength": 65536}}}}
             }}},
             "sourceAuthority": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "javaHover": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "providerId", "backend", "evidence", "completeness", "provenanceHash", "range", "contents", "complete", "warningCount", "sourceAuthority", "cache"],
+          "properties": {
+            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
+            "status": {"const": "ready"}, "kind": {"const": "hover"},
+            "providerId": {"const": "java-jdt-bindings-v1"}, "backend": {"const": "eclipse-jdt-3.44-bindings-v1"},
+            "evidence": {"const": "compiler"}, "completeness": {"const": "semantic"},
+            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "range": {"oneOf": [{"$ref": "#/$defs/location/properties/range"}, {"type": "null"}]},
+            "contents": {"type": "array", "maxItems": 3, "items": {"type": "object", "additionalProperties": false, "required": ["format", "value"], "properties": {
+              "format": {"enum": ["plain-text", "markdown"]}, "value": {"type": "string", "maxLength": 16384}
+            }}},
+            "complete": {"type": "boolean"}, "warningCount": {"type": "integer", "minimum": 0},
+            "sourceAuthority": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "contentSha256"], "properties": {
+              "kind": {"const": "saved-snapshot"}, "path": {"type": "string"},
+              "contentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }},
+            "cache": {"type": "object", "additionalProperties": false, "required": ["entries", "hits", "misses"], "properties": {
+              "entries": {"type": "integer", "minimum": 1, "maximum": 2},
+              "hits": {"type": "integer", "minimum": 0}, "misses": {"type": "integer", "minimum": 0}
+            }}
           }
         }
       ]

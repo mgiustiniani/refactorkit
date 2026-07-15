@@ -22,6 +22,7 @@ class WorkspaceIndexDaemonTest {
         write("src/main/java/example/UserService.java", """
             package example;
             public class UserService {
+                /** Greets the caller. */
                 public String greet() { return "hello"; }
             }
         """.trimIndent())
@@ -80,6 +81,21 @@ class WorkspaceIndexDaemonTest {
             assertEquals(2, truncated.getValue("total").jsonPrimitive.content.toInt())
             assertEquals(1, truncated.getValue("returned").jsonPrimitive.content.toInt())
             assertTrue(truncated.getValue("truncated").jsonPrimitive.content.toBoolean())
+            val hover = session.dispatch("intelligence.query", buildJsonObject {
+                put("requestId", "java-hover"); put("expectedSnapshotHash", opened.getValue("snapshotHash"))
+                put("expectedIndexGeneration", second.getValue("indexGeneration")); put("kind", "hover")
+                put("languageId", "java"); put("path", "src/main/java/example/Use.java")
+                put("position", buildJsonObject { put("line", 3); put("character", useLine.indexOf("greet") + 1) })
+                put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+            }).jsonObject
+            assertTrue(hover.getValue("contents").jsonArray.first().jsonObject.getValue("value")
+                .jsonPrimitive.content.contains("java.lang.String greet()"))
+            assertTrue(hover.getValue("contents").jsonArray.any {
+                it.jsonObject.getValue("value").jsonPrimitive.content.contains("Greets the caller")
+            })
+            assertEquals(3, hover.getValue("range").jsonObject.getValue("start").jsonObject
+                .getValue("line").jsonPrimitive.content.toInt())
+            assertTrue(hover.getValue("complete").jsonPrimitive.content.toBoolean())
             assertTrue(session.dispatch("index.status", null).jsonObject.getValue("providers").jsonArray.any {
                 it.jsonObject.getValue("providerId").jsonPrimitive.content == "java-jdt-bindings-v1"
             })

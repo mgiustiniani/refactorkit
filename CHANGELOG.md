@@ -9,8 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
-- Add saved-snapshot Java `definition` and bounded `references` queries backed
-  only by Eclipse JDT bindings. References support explicit declaration inclusion,
+- Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
+  queries backed only by Eclipse JDT bindings. Hover returns the exact selected
+  range, binding-derived Java signature, qualified identity, bounded Javadoc,
+  and warning-derived completeness. References support explicit declaration inclusion,
   total/returned counts, deterministic ordering, warning-derived completeness and
   truncation at 1,000 locations. A two-entry session-owned cache is keyed by the exact project snapshot,
   capped at 10,000 Java sources, cooperatively cancellable between compilation
