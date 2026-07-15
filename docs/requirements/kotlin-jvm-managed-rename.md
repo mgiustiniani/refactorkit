@@ -9,8 +9,8 @@ four-platform native matrix remain pending; capability metadata is therefore sti
 ## Initial qualified row
 
 The first mutation slice targets a non-local `private` Kotlin class, interface,
-object, enum class or annotation class in a single-module Kotlin/JVM project with
-no Java sources. It reuses the qualified `kotlin-jvm-type-v1` identity and K2 FIR
+object, enum class, annotation class or non-overloaded direct-call function in a
+single-module Kotlin/JVM project with no Java sources. It reuses the qualified `kotlin-jvm-type-v1` identity and K2 FIR
 type-usage evidence. Narrow private-type acceptance is a bootstrap row, not
 completion of K4; functions, properties, parameters, type parameters and
 cross-language public symbols remain subsequent mandatory rows.
@@ -29,7 +29,9 @@ symbol discovery cannot authorize mutation.
 The worker shall attest declaration kind, source visibility, JVM identity and exact
 PSI declaration range in the same atomic payload as usages. The initial row accepts
 only an explicitly `private`, non-local source type already present in the complete
-catalogue. Missing/ambiguous visibility, generated sources, scripts, compiler
+catalogue. Functions additionally refuse callable references, callable imports,
+operator/infix/override shapes and every unsupported call form. Missing/ambiguous
+visibility, generated sources, scripts, compiler
 plugins, multiplatform/Android models or external declarations refuse.
 
 ### RPK-KOT-REN-003 — Complete bounded reference barrier

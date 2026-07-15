@@ -69,7 +69,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
-import org.refactorkit.kotlin.KotlinPrivateTypeRenamePlanner
+import org.refactorkit.kotlin.KotlinPrivateDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
 import org.refactorkit.kotlin.KotlinToolchainDiscovery
@@ -1427,7 +1427,7 @@ class DaemonSession(
                     if (expected != snap.hash || generation != currentGeneration) throw JsonRpcException(
                         JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.renameAuthorityStale",
                     )
-                    KotlinPrivateTypeRenamePlanner(kotlinAdapter).preview(
+                    KotlinPrivateDeclarationRenamePlanner(kotlinAdapter).preview(
                         snap,
                         SymbolId(symbol ?: missing("symbol")),
                         args["newName"] ?: missing("arguments.newName"),

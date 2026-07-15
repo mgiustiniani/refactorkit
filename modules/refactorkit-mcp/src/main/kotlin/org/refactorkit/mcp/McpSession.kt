@@ -55,7 +55,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
-import org.refactorkit.kotlin.KotlinPrivateTypeRenamePlanner
+import org.refactorkit.kotlin.KotlinPrivateDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
 import org.refactorkit.kotlin.KotlinToolchainDiscovery
@@ -762,7 +762,7 @@ class McpSession(
                     val lease = args.string("semanticLease") ?: missing("semanticLease")
                     val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
                     if (lease != kotlinSemanticLease || expected != snap.hash) return "Refused [kotlin.renameAuthorityStale]: Kotlin rename authority is stale."
-                    KotlinPrivateTypeRenamePlanner(kotlinAdapter).preview(
+                    KotlinPrivateDeclarationRenamePlanner(kotlinAdapter).preview(
                         snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
                         opArgs["newName"] ?: missing("arguments.newName"),
                     )

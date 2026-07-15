@@ -239,7 +239,7 @@ class KotlinCompilerDiagnosticsTest {
         val symbols = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
         val target = symbols.index.symbols.single { it.name == "Secret" }
 
-        val plan = KotlinPrivateTypeRenamePlanner(adapter).preview(snapshot, target.id, "Credential")
+        val plan = KotlinPrivateDeclarationRenamePlanner(adapter).preview(snapshot, target.id, "Credential")
 
         assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
         assertEquals(4, plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
@@ -247,6 +247,26 @@ class KotlinCompilerDiagnosticsTest {
         assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
         assertTrue(plan.requiresUserApproval)
         assertEquals(org.refactorkit.core.RefactoringEvidence.NATIVE_AST, plan.evidence)
+    }
+
+    @Test
+    fun privateFunctionRenamePreviewUsesDirectK2CallEvidence() {
+        val root = project("""
+            private fun calculate(value: Int): Int = value + 1
+            private fun invokeCalculation(): Int = calculate(1)
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val symbols = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = symbols.index.symbols.single { it.name == "calculate" }
+
+        val plan = KotlinPrivateDeclarationRenamePlanner(adapter).preview(snapshot, target.id, "compute")
+
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(2, plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
+            .flatMap { it.textEdits }.size)
+        assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
     }
 
     @Test
@@ -258,7 +278,7 @@ class KotlinCompilerDiagnosticsTest {
             val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
             val symbol = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
                 .index.symbols.single { it.name == target }
-            return KotlinPrivateTypeRenamePlanner(adapter).preview(snapshot, symbol.id, name)
+            return KotlinPrivateDeclarationRenamePlanner(adapter).preview(snapshot, symbol.id, name)
         }
 
         assertEquals("kotlin.renameVisibilityUnsupported", preview("Renamed", "PublicType").refusalCode)

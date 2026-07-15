@@ -24,7 +24,10 @@ review safety boundaries before applying refactorings.
   CLI and MCP now preserve exact lease/snapshot/generation authority through
   preview and explicit apply; `PatchEngine` diagnostics gating, WAL and rollback
   are exercised by local packaged acceptance. Capability metadata remains
-  `PROPOSAL_ONLY` until kill recovery and native qualification pass.
+  `PROPOSAL_ONLY` until kill recovery and native qualification pass. The same
+  planner now accepts private non-overloaded functions when all uses are proven
+  direct K2 call names; callable references/imports and operator/infix/override
+  shapes refuse rather than inheriting partial-reference authority.
 - Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
   queries backed only by Eclipse JDT bindings. Hover returns the exact selected
   range, binding-derived Java signature, qualified identity, bounded Javadoc,
