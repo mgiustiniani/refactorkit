@@ -1,7 +1,7 @@
 # Kotlin JVM function-usage navigation requirements
 
-Status: K2 FIR worker evidence plus API `0.2` daemon, CLI and MCP position
-definition/partial references implemented; native qualification remains pending.
+Status: accepted by packaged/native GitHub Actions run `29432766317` on Linux
+x86-64, Windows x86-64, macOS x86-64 and macOS arm64.
 
 ## Scope
 

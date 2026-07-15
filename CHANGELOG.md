@@ -133,7 +133,9 @@ review safety boundaries before applying refactorings.
   `intelligence.query` now exposes definition from direct call names and explicitly
   partial references with lease/snapshot/generation authority. CLI position
   commands and MCP `kotlin_usage_definition`/`kotlin_references` expose the same
-  boundary; broader references and every Kotlin mutation remain refused.
+  boundary; broader references and every Kotlin mutation remain refused. Native
+  packaged qualification passed in GitHub Actions run `29432766317` on Linux,
+  Windows x86-64, macOS x86-64 and macOS arm64.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions
