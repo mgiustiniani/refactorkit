@@ -124,6 +124,9 @@ review safety boundaries before applying refactorings.
   Cancellation acceptance also waits for the bounded process-tree shutdown before
   inspecting results. GitHub Actions run `29423034607` passes the complete
   correction on Linux, Windows x86-64, macOS x86-64 and macOS arm64.
+- Align the real TypeScript semantic client with its documented 30-second
+  aggregate projection deadline so cold native macOS language-server startup does
+  not inherit the generic 10-second LSP default.
 - Add the internal K2 FIR function-usage evidence foundation: real-PSI resolved
   call names map atomically to existing `kotlin-jvm-callable-v1` declarations,
   with exact UTF-16 ranges and a 2,000-usage bound. Position definition,

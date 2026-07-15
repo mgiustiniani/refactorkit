@@ -193,6 +193,7 @@ class ExternalTypeScriptSemanticClient(
                 put("path", toolchain.typeScriptServerEntrypoint.toAbsolutePath().normalize().toString())
             })
         }.toString(),
+        requestTimeoutMillis = TypeScriptSemanticAdapter.SYMBOL_AGGREGATE_TIMEOUT_MILLIS,
     )
     private val compilerDiagnostics = TypeScriptCompilerDiagnostics(toolchain, projectModel)
     private val evidencePaths = projectModel.evidence.map { it.path.normalize() }.toSet()
@@ -1161,6 +1162,7 @@ class TypeScriptSemanticAdapter(
         const val SEMANTIC_RENAME_BARRIER_ATTEMPTS = 10
         const val SEMANTIC_RENAME_BARRIER_DELAY_MILLIS = 100L
         const val MAX_APPROVED_STAGED_SNAPSHOTS = 128
+        const val SYMBOL_AGGREGATE_TIMEOUT_MILLIS = 30_000L
         const val RESTART_WINDOW_MILLIS = 60_000L
 
         private val EXPORT_MARKER = Regex("(?:^|\\s)export(?:\\s|$)")
