@@ -1,7 +1,7 @@
 # Cross-platform runtime portability requirements
 
-Status: path/watcher correction accepted by GitHub Actions run `29418213082`;
-diagnostics reconciliation-race precedence awaits native qualification.
+Status: accepted by GitHub Actions native CI run `29423034607` for commit
+`08046f6`.
 
 ## Scope
 

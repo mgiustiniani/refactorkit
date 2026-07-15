@@ -121,8 +121,9 @@ review safety boundaries before applying refactorings.
   macOS watcher acceptance allows the bounded JDK polling latency without writing
   workspace metadata. Saved-snapshot mismatch now also takes precedence over a
   watcher-invalidated semantic session, removing a diagnostics refusal race.
-  GitHub Actions run `29418213082` passes the original path/watcher correction on
-  Linux, Windows x86-64, macOS x86-64 and macOS arm64.
+  Cancellation acceptance also waits for the bounded process-tree shutdown before
+  inspecting results. GitHub Actions run `29423034607` passes the complete
+  correction on Linux, Windows x86-64, macOS x86-64 and macOS arm64.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions
