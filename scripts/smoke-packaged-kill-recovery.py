@@ -164,7 +164,10 @@ def main() -> int:
             mark_stage("wait for first committed image after durable APPLYING intent")
             daemon.send("refactor.apply", {"planId": preview["planId"]})
 
-            deadline = time.monotonic() + 30
+            # Windows antivirus/filesystem latency can consume the original 30-second
+            # observation window before a 256-file atomic commit exposes its first
+            # post-image. Keep the acceptance bounded by the daemon request budget.
+            deadline = time.monotonic() + 120
             sentinel = workspace / "src" / "consumer-000.ts"
             while time.monotonic() < deadline and daemon.process.poll() is None:
                 try:

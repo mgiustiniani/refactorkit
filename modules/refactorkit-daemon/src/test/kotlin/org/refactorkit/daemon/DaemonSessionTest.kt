@@ -1090,6 +1090,25 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun mixedJvmDiagnosticsAggregateLanguagesAndCollapseDuplicateRootsDeterministically() {
+        val root = createProject(
+            "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
+            "src/main/kotlin/com/example/App.kt" to "package com.example\nclass App\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val diagnostics = session.dispatch("diagnostics", buildJsonObject {
+            put("languageId", "jvm")
+        }).jsonArray
+
+        assertEquals(1, diagnostics.size)
+        assertEquals("kotlin", diagnostics.single().jsonObject["languageId"]!!.jsonPrimitive.content)
+        assertEquals("kotlin.toolchainNotConfigured", diagnostics.single().jsonObject["code"]!!.jsonPrimitive.content)
+        assertTrue(!Files.exists(Paths.get(root).resolve(".refactorkit")))
+    }
+
+    @Test
     fun diagnosticsReturnsEmptyListForCleanProject() {
         val root = createProject(
             "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",

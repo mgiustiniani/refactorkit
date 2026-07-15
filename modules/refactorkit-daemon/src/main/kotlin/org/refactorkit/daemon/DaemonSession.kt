@@ -1362,14 +1362,27 @@ class DaemonSession(
         val snap = requireSnapshot()
         val verbose = params?.string("verbose")?.toBooleanStrictOrNull() ?: false
         val languageId = params?.string("languageId") ?: "java"
-        val diags = when (languageId) {
-            "java" -> adapter.diagnostics(snap, verbose)
-            "kotlin" -> kotlinAdapter.diagnostics(snap)
-            else -> requireSemanticAdapter(languageId).diagnostics(snap)
+        val diagnosticsByLanguage = when (languageId) {
+            "java" -> adapter.diagnostics(snap, verbose).map { "java" to it }
+            "kotlin" -> kotlinAdapter.diagnostics(snap).map { "kotlin" to it }
+            "jvm" -> (adapter.diagnostics(snap, verbose).map { "java" to it } +
+                kotlinAdapter.diagnostics(snap).map { "kotlin" to it })
+                .distinctBy { (owner, diagnostic) -> listOf(
+                    owner,
+                    diagnostic.code.orEmpty(),
+                    diagnostic.severity.name,
+                    diagnostic.location?.path?.normalize()?.toString().orEmpty(),
+                    diagnostic.location?.range?.toString().orEmpty(),
+                    diagnostic.message,
+                ) }
+                .sortedWith(compareBy({ it.first }, { it.second.location?.path?.toString().orEmpty() },
+                    { it.second.code.orEmpty() }, { it.second.message }))
+            else -> requireSemanticAdapter(languageId).diagnostics(snap).map { languageId to it }
         }
         return buildJsonArray {
-            diags.forEach { d ->
+            diagnosticsByLanguage.forEach { (owner, d) ->
                 add(buildJsonObject {
+                    if (languageId == "jvm") put("languageId", owner)
                     put("severity", d.severity.name)
                     put("message", d.message)
                     d.code?.let { put("code", it) }

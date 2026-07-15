@@ -196,7 +196,11 @@ def main() -> int:
                 return response["result"]
 
             opened = exchange(1, "project.open", {"root": str(workspace)})
-            started = exchange(2, "kotlin.semantic.start", {
+            unconfigured_jvm = exchange(2, "diagnostics", {"languageId": "jvm"})
+            if (len(unconfigured_jvm) != 1 or unconfigured_jvm[0].get("languageId") != "kotlin" or
+                    unconfigured_jvm[0].get("code") != "kotlin.toolchainNotConfigured"):
+                raise AssertionError(f"Mixed JVM diagnostics did not preserve the concise Kotlin root: {unconfigured_jvm}")
+            started = exchange(3, "kotlin.semantic.start", {
                 "jdkHome": str(jdk), "compilerJar": str(compiler),
                 "compilerClasspath": [str(item) for item in classpath],
             })
@@ -207,12 +211,12 @@ def main() -> int:
                 "semanticLease": started["semanticLease"], "sourceAuthority": authority,
                 "position": {"line": 5, "character": 45},
             }
-            usage_definition = exchange(3, "intelligence.query", {
+            usage_definition = exchange(4, "intelligence.query", {
                 **common, "requestId": "native-kotlin-usage-definition", "kind": "definition",
             })
             if usage_definition.get("status") != "ready" or usage_definition.get("locations", [{}])[0].get("range", {}).get("start", {}).get("line") != 2:
                 raise AssertionError(f"Kotlin usage definition failed: {usage_definition}")
-            usage_references = exchange(4, "intelligence.query", {
+            usage_references = exchange(5, "intelligence.query", {
                 **common, "requestId": "native-kotlin-usage-references", "kind": "references",
                 "includeDeclaration": True, "limit": 10,
             })
@@ -220,20 +224,20 @@ def main() -> int:
                     usage_references.get("complete") is not False or usage_references.get("completeness") != "partial"):
                 raise AssertionError(f"Kotlin partial function references failed: {usage_references}")
             type_common = {**common, "position": {"line": 22, "character": 38}}
-            type_definition = exchange(5, "intelligence.query", {
+            type_definition = exchange(6, "intelligence.query", {
                 **type_common, "requestId": "native-kotlin-type-definition", "kind": "definition",
             })
             if (type_definition.get("status") != "ready" or
                     type_definition.get("locations", [{}])[0].get("range", {}).get("start", {}).get("line") != 4):
                 raise AssertionError(f"Kotlin type-usage definition failed: {type_definition}")
-            type_references = exchange(6, "intelligence.query", {
+            type_references = exchange(7, "intelligence.query", {
                 **type_common, "requestId": "native-kotlin-type-references", "kind": "references",
                 "includeDeclaration": True, "limit": 10,
             })
             if (type_references.get("status") != "ready" or type_references.get("total") != 2 or
                     type_references.get("completeness") != "partial"):
                 raise AssertionError(f"Kotlin partial type references failed: {type_references}")
-            exchange(7, "kotlin.semantic.stop")
+            exchange(8, "kotlin.semantic.stop")
         finally:
             process.terminate()
             try:

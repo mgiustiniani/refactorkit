@@ -199,6 +199,10 @@ uses `PLAN_REFUSED (-32001)` and `error.data.refusalCode` with a typed
 `sourceRoot.*`, `buildModel.unavailable`, or `classpath.unavailable` value.
 Protocol paths always use `/`. `diagnostics` accepts optional `verbose=true` to
 show derivative JDT errors otherwise suppressed behind a typed module root cause.
+The additive `languageId=jvm` route deterministically combines Java JDT and Kotlin
+K2 rows for the saved snapshot, tags each row with its owning language and retains
+a concise `kotlin.toolchainNotConfigured` root when Kotlin inputs are unavailable;
+see `docs/requirements/mixed-jvm-diagnostics.md`.
 
 ## External Java import preview
 
