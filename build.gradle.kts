@@ -1,5 +1,6 @@
 import org.gradle.api.attributes.java.TargetJvmVersion
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.Test
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -45,6 +46,13 @@ subprojects {
             jvmTarget.set(JvmTarget.JVM_1_8)
             freeCompilerArgs.addAll("-Xjsr305=strict")
         }
+    }
+
+    tasks.withType<Test>().configureEach {
+        val boundedTemp = rootProject.layout.buildDirectory.dir("test-tmp/${project.name}")
+        doFirst { boundedTemp.get().asFile.mkdirs() }
+        systemProperty("java.io.tmpdir", boundedTemp.get().asFile.absolutePath)
+        environment("TMPDIR", boundedTemp.get().asFile.absolutePath)
     }
 }
 

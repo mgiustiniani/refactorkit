@@ -5,8 +5,13 @@ See AGENTS.md §18 for the authoritative testing rules.
 Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests,
 initial P3 safety tests, initial P4 daemon/MCP contract tests, hardened P4 LSP
 command-contract coverage, focused P6 external-importer hardening, and P7
-packaging/release-verification progress. The current golden suite contains 22
+packaging/release-verification progress. The current golden suite contains 23
 cases covering shipped patch-producing operations.
+
+Every Gradle `Test` worker uses bounded repository-local temporary storage below
+`build/test-tmp/<module>` for both `java.io.tmpdir` and `TMPDIR`. A saturated host
+`/tmp` therefore cannot corrupt compiler/toolchain acceptance, and disposable
+evidence remains outside user workspaces.
 
 ## Unit tests
 
