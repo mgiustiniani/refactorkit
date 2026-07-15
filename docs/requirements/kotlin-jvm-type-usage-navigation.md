@@ -1,7 +1,7 @@
 # Kotlin JVM type-usage navigation requirements
 
-Status: internal K2 FIR evidence plus daemon, CLI and MCP routes implemented;
-packaged acceptance passes locally and native qualification remains pending.
+Status: accepted by packaged/native GitHub Actions run `29439584115` on Linux
+x86-64, Windows x86-64, macOS x86-64 and macOS arm64.
 
 ## Scope
 

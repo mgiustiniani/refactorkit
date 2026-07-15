@@ -1,7 +1,7 @@
 # Mixed Java/Kotlin JVM diagnostics requirements
 
-Status: implemented with JVM tests and local packaged Kotlin acceptance; native
-matrix qualification remains pending.
+Status: accepted by packaged/native GitHub Actions run `29439584115` on Linux
+x86-64, Windows x86-64, macOS x86-64 and macOS arm64.
 
 ## Scope
 

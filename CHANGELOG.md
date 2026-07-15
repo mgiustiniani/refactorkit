@@ -140,16 +140,17 @@ review safety boundaries before applying refactorings.
   Kotlin K2 rows retain provider evidence, receive explicit language ownership,
   deterministic exact de-duplication and concise missing-toolchain roots without
   writing workspace metadata. The correlated per-language envelopes remain the
-  authority for IDE precision and managed operations.
+  authority for IDE precision and managed operations. Native packaged acceptance
+  passed in GitHub Actions run `29439584115`.
 - Extend the atomic K2 FIR usage payload with compiler-proven source type usages
   mapped to existing `kotlin-jvm-type-v1` declarations. The internal row covers
   type annotations and arguments, supertypes, casts/checks, constructor names,
   object qualifiers and explicit imports with exact PSI ranges; aliases, import
   wildcards themselves, local/anonymous/type-alias targets, external declarations
-  and mutation authority remain excluded. Transport/native qualification remains
-  pending. The Windows kill-during-write acceptance observation window now uses
-  the existing 120-second daemon request bound for the 256-file commit instead of
-  a flaky 30-second sub-bound.
+  and mutation authority remain excluded. Daemon, CLI and MCP transport plus
+  packaged native qualification passed in run `29439584115`. The Windows
+  kill-during-write acceptance observation window now uses the existing 120-second
+  daemon request bound for the 256-file commit instead of a flaky 30-second sub-bound.
 - Promote the experimental Kotlin symbol backend to
   `kotlin-compiler-jvm-declarations-k2-v1` and add the first bounded function
   identity row. Top-level and direct class/interface/enum/object member functions
