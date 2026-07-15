@@ -402,6 +402,13 @@ refactorkit recipe run recipes/java/rename-package.yml \
   --apply
 ```
 
+Java package recipes move exact-package non-generated compilation units, tests,
+and `package-info.java` as one transaction. Subpackage declarations remain in
+place. Normal diagnostics reject introduced errors while tolerating unchanged
+baseline errors; set `strict: true` in a recipe diagnostics step to require zero
+staged errors. Maven modules, artifact IDs, scripts, documentation, and arbitrary
+configuration strings are outside this capability.
+
 ### Structural tools
 
 Structural tools are lightweight, language-agnostic helpers. They are useful for inspection and local edits, but they are not a substitute for semantic Java refactorings.

@@ -16,6 +16,7 @@ import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.java.JavaGeneratedSourcePolicy
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -49,11 +50,20 @@ sealed interface RecipeResult {
     ) : RecipeResult
 }
 
+data class DiagnosticDelta(
+    val baselineErrors: Int,
+    val stagedErrors: Int,
+    val introducedErrors: Int,
+    val resolvedErrors: Int,
+    val unchangedErrors: Int,
+)
+
 data class StepResult(
     val stepType: String,
     val plan: PatchPlan?,
     val diagnostics: List<Diagnostic> = emptyList(),
     val message: String = "",
+    val diagnosticDelta: DiagnosticDelta? = null,
 )
 
 /**
@@ -66,6 +76,7 @@ data class StepResult(
 class RecipeEngine(
     private val adapter: JavaLanguageAdapter = JavaLanguageAdapter(),
     private val scanner: JavaProjectScanner = JavaProjectScanner(),
+    private val diagnosticsProvider: ((ProjectSnapshot) -> List<Diagnostic>)? = null,
 ) {
     fun run(
         recipe: RecipeDefinition,
@@ -80,11 +91,12 @@ class RecipeEngine(
         val initialSnapshot = scanner.scan(workspaceRoot)
         var stagedSnapshot = initialSnapshot
         val stepResults = mutableListOf<StepResult>()
+        val touchedPaths = linkedSetOf<Path>()
 
         for ((index, stepDef) in recipe.steps.withIndex()) {
             val step = stepDef.substitute(resolvedParams)
             val result = try {
-                executeStep(step, stagedSnapshot)
+                executeStep(step, initialSnapshot, stagedSnapshot, touchedPaths)
             } catch (e: Exception) {
                 return RecipeResult.Failed(stepResults, "Step ${index + 1} '${step.type}' failed: ${e.message}")
             }
@@ -105,6 +117,7 @@ class RecipeEngine(
                         "Step ${index + 1} '${step.type}' could not be staged: ${e.message}",
                     )
                 }
+                touchedPaths += result.plan.affectedFiles.map(Path::normalize)
             }
         }
 
@@ -120,7 +133,7 @@ class RecipeEngine(
             recipePlan,
             initialSnapshot,
             ApplyAuthorization.explicit("recipe-engine"),
-            DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+            DiagnosticsGate.enabled("java-jdt", ::diagnostics),
         )) {
             is ApplyResult.Applied -> RecipeResult.Applied(
                 stepResults,
@@ -138,7 +151,12 @@ class RecipeEngine(
 
     // ── step execution ────────────────────────────────────────────────────────
 
-    private fun executeStep(step: StepDef, snap: ProjectSnapshot): StepResult {
+    private fun executeStep(
+        step: StepDef,
+        initial: ProjectSnapshot,
+        snap: ProjectSnapshot,
+        touchedPaths: Set<Path>,
+    ): StepResult {
         return when (step.type) {
             "renameClass" -> {
                 val symbol = step.params["symbol"] ?: error("renameClass step requires 'symbol'")
@@ -166,7 +184,14 @@ class RecipeEngine(
                 val paths = if (fileArg != null) {
                     listOf(Paths.get(fileArg))
                 } else {
-                    snap.files.filter { it.languageId == "java" }.map { it.path }
+                    val initialByPath = initial.files.associateBy { it.path.normalize() }
+                    snap.files.filter { file ->
+                        val original = initialByPath[file.path.normalize()]
+                        file.languageId == "java" &&
+                            file.path.normalize() in touchedPaths &&
+                            JavaGeneratedSourcePolicy.reason(file) == null &&
+                            (original == null || importSurface(original.content) != importSurface(file.content))
+                    }.map { it.path }
                 }
                 val plan = JavaOrganizeImportsPlanner().preview(snap, paths)
                 StepResult("organizeImports", plan)
@@ -180,13 +205,22 @@ class RecipeEngine(
             }
 
             "runDiagnostics" -> {
-                val diags = adapter.diagnostics(snap)
-                val errors = diags.filter { it.severity == Diagnostic.Severity.ERROR }
-                if (errors.isNotEmpty()) {
-                    val plan = refusedPlan("runDiagnostics", "Diagnostics found ${errors.size} error(s).", snap)
-                    StepResult("runDiagnostics", plan, diagnostics = diags)
+                val baseline = diagnostics(initial)
+                val staged = diagnostics(snap)
+                val delta = diagnosticDelta(baseline, staged)
+                val strict = step.params["strict"]?.let { value ->
+                    value.toBooleanStrictOrNull() ?: error("runDiagnostics 'strict' must be true or false")
+                } ?: false
+                val refuses = delta.introducedErrors > 0 || (strict && delta.stagedErrors > 0)
+                val policy = if (strict) "strict" else "introduced-error"
+                val message = "Diagnostics ($policy): baseline=${delta.baselineErrors}, " +
+                    "staged=${delta.stagedErrors}, introduced=${delta.introducedErrors}, " +
+                    "resolved=${delta.resolvedErrors}, unchanged=${delta.unchangedErrors}."
+                if (refuses) {
+                    val plan = refusedPlan("runDiagnostics", message, snap)
+                    StepResult("runDiagnostics", plan, diagnostics = staged, message = message, diagnosticDelta = delta)
                 } else {
-                    StepResult("runDiagnostics", null, diagnostics = diags, message = "No errors found.")
+                    StepResult("runDiagnostics", null, diagnostics = staged, message = message, diagnosticDelta = delta)
                 }
             }
 
@@ -199,44 +233,183 @@ class RecipeEngine(
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private fun movePackagePlan(snap: ProjectSnapshot, fromPkg: String, toPkg: String): PatchPlan {
-        val symbols = adapter.buildSymbols(snap).symbols.filter { symbol ->
-            symbol.id.value.substringBeforeLast('.') == fromPkg && symbol.kind in setOf(
-                org.refactorkit.core.Symbol.Kind.CLASS,
-                org.refactorkit.core.Symbol.Kind.INTERFACE,
-                org.refactorkit.core.Symbol.Kind.ENUM,
-                org.refactorkit.core.Symbol.Kind.RECORD,
-                org.refactorkit.core.Symbol.Kind.ANNOTATION,
-            )
-        }.sortedBy { it.id.value }
-        var staged = snap
-        val plans = mutableListOf<PatchPlan>()
-        for (symbol in symbols) {
-            val plan = JavaMoveClassPlanner(adapter).preview(staged, symbol.id.value, toPkg)
-            plans += plan
-            if (plan.status == PatchStatus.REFUSED) return plan
-            staged = WorkspaceEditSimulator.apply(staged, plan.workspaceEdit)
+        if (!isValidPackageName(fromPkg) || !isValidPackageName(toPkg)) {
+            return refusedPlan("movePackage", "Invalid Java package name: '$fromPkg' -> '$toPkg'.", snap)
         }
-        val workspaceEdit = workspaceDelta(snap, staged, plans.flatMap { it.workspaceEdit.edits })
+        if (fromPkg == toPkg) {
+            return refusedPlan("movePackage", "Source and target package are identical.", snap)
+        }
+        val packageRegex = Regex("(?m)^\\s*package\\s+${Regex.escape(fromPkg)}\\s*;")
+        val movedFiles = snap.files.filter { file ->
+            file.languageId == "java" && packageRegex.containsMatchIn(file.content) &&
+                JavaGeneratedSourcePolicy.reason(file) == null
+        }.sortedBy { it.path.toString() }
+        if (movedFiles.isEmpty()) {
+            return PatchPlan(
+                operation = "movePackage", snapshotHash = snap.hash, confidence = 1.0,
+                summary = "No exact-package Java compilation units to process.",
+                affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(),
+                evidence = RefactoringEvidence.STRUCTURAL,
+            )
+        }
+
+        val targetBySource = linkedMapOf<Path, Path>()
+        for (file in movedFiles) {
+            val target = packageTargetPath(file.path, fromPkg, toPkg)
+                ?: return refusedPlan(
+                    "movePackage",
+                    "Cannot safely derive a package path for ${file.path}; its path does not match $fromPkg.",
+                    snap,
+                )
+            targetBySource[file.path.normalize()] = target
+        }
+        val existing = snap.files.map { it.path.normalize() }.toSet()
+        val movingSources = targetBySource.keys
+        val conflict = targetBySource.values.firstOrNull { target ->
+            target in existing && target !in movingSources
+        }
+        if (conflict != null || targetBySource.values.toSet().size != targetBySource.size) {
+            return refusedPlan(
+                "movePackage",
+                "Target package conflict: ${conflict ?: "multiple units map to one target path"} already exists.",
+                snap,
+            )
+        }
+
+        val typeKinds = setOf(
+            org.refactorkit.core.Symbol.Kind.CLASS,
+            org.refactorkit.core.Symbol.Kind.INTERFACE,
+            org.refactorkit.core.Symbol.Kind.ENUM,
+            org.refactorkit.core.Symbol.Kind.RECORD,
+            org.refactorkit.core.Symbol.Kind.ANNOTATION,
+        )
+        val symbolKinds = adapter.buildSymbols(snap).symbols
+            .filter {
+                it.kind in typeKinds && it.location.path.normalize() in movingSources &&
+                    it.id.value.substringBeforeLast('.') == fromPkg
+            }
+            .groupingBy { it.kind.name.lowercase() }
+            .eachCount()
+        val declaredTypes = movedFiles.flatMap(::topLevelTypeNames).toSortedSet()
+        val qualifiedNames = declaredTypes.map { "$fromPkg.$it" to "$toPkg.$it" }
+        val sourcePathReferences = targetBySource.mapNotNull { (source, target) ->
+            val oldPath = source.toString().replace('\\', '/')
+            val newPath = target.toString().replace('\\', '/')
+            val marker = Regex("(?:^|/)src/(?:main|test)/java/").find(oldPath) ?: return@mapNotNull null
+            oldPath.substring(marker.range.first + if (oldPath[marker.range.first] == '/') 1 else 0) to
+                newPath.substring(marker.range.first + if (newPath[marker.range.first] == '/') 1 else 0)
+        }
+        val wildcardImport = Regex(
+            "(?m)^(\\s*import\\s+(?:static\\s+)?)${Regex.escape(fromPkg)}\\.(\\*\\s*;)",
+        )
+        val modifications = mutableListOf<FileEdit>()
+        for (file in snap.files.sortedBy { it.path.toString() }) {
+            if (file.languageId != "java" || JavaGeneratedSourcePolicy.reason(file) != null) continue
+            var after = file.content
+            if (file.path.normalize() in movingSources) {
+                after = packageRegex.replaceFirst(after, "package $toPkg;")
+            }
+            qualifiedNames.forEach { (oldName, newName) ->
+                after = after.replace(
+                    Regex("(?<![A-Za-z0-9_$])${Regex.escape(oldName)}(?![A-Za-z0-9_$])"),
+                    newName,
+                )
+            }
+            sourcePathReferences.forEach { (oldPath, newPath) -> after = after.replace(oldPath, newPath) }
+            after = after.replace("\"$fromPkg\"", "\"$toPkg\"")
+            after = wildcardImport.replace(after, "$1$toPkg.$2")
+            fullFileReplacement(file.path.normalize(), file.content, after)?.let(modifications::add)
+        }
+        val renames = targetBySource.entries.sortedBy { it.key.toString() }
+            .map { (source, target) -> FileEdit.Rename(source, target) }
+        val workspaceEdit = WorkspaceEdit(modifications + renames)
+        val packageInfoCount = movedFiles.count { it.path.fileName.toString() == "package-info.java" }
+        val kindSummary = symbolKinds.toSortedMap().entries.joinToString(", ") { "${it.key}=${it.value}" }
+            .ifBlank { "types=${declaredTypes.size}" }
         return PatchPlan(
             operation = "movePackage",
             snapshotHash = snap.hash,
-            confidence = plans.minOfOrNull(PatchPlan::confidence) ?: 1.0,
-            requiresUserApproval = plans.any(PatchPlan::requiresUserApproval),
-            summary = if (plans.isEmpty()) "No classes to process." else
-                "Move ${plans.size} class(es) from $fromPkg to $toPkg.",
+            confidence = 0.92,
+            summary = "Move package $fromPkg -> $toPkg: units=${movedFiles.size}, " +
+                "$kindSummary, package-info=$packageInfoCount.",
             affectedFiles = workspaceEdit.affectedFiles(),
             workspaceEdit = workspaceEdit,
-            diagnosticsBefore = plans.flatMap(PatchPlan::diagnosticsBefore),
-            diagnosticsAfterPreview = plans.flatMap(PatchPlan::diagnosticsAfterPreview),
-            warnings = plans.flatMap(PatchPlan::warnings).distinct(),
-            riskLevel = plans.map(PatchPlan::riskLevel).maxByOrNull { it.ordinal }
-                ?: org.refactorkit.core.RiskLevel.LOW,
-            // The package operation owns the complete old-package source set and
-            // stages every class against the prior move, so its authority is
-            // structural rather than the evidence of any intermediate class move.
+            warnings = listOf(
+                "Java compilation units, imports, fully qualified references, exact package-name literals, and exact moved-unit source-path literals are in scope; other strings and build metadata are not migrated.",
+                "Generated sources and build outputs are excluded from mutation planning.",
+            ),
+            riskLevel = org.refactorkit.core.RiskLevel.MEDIUM,
             evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
+
+    private fun importSurface(content: String): List<String> =
+        content.lineSequence()
+            .map(String::trim)
+            .filter { it.startsWith("package ") || it.startsWith("import ") }
+            .toList()
+
+    private fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> =
+        diagnosticsProvider?.invoke(snapshot) ?: adapter.diagnostics(snapshot)
+
+    private fun diagnosticDelta(
+        baselineDiagnostics: List<Diagnostic>,
+        stagedDiagnostics: List<Diagnostic>,
+    ): DiagnosticDelta {
+        fun counts(diagnostics: List<Diagnostic>) = diagnostics
+            .filter { it.severity == Diagnostic.Severity.ERROR }
+            .groupingBy(::diagnosticIdentity)
+            .eachCount()
+        val baseline = counts(baselineDiagnostics)
+        val staged = counts(stagedDiagnostics)
+        val identities = baseline.keys + staged.keys
+        val unchanged = identities.sumOf { minOf(baseline[it] ?: 0, staged[it] ?: 0) }
+        return DiagnosticDelta(
+            baselineErrors = baseline.values.sum(),
+            stagedErrors = staged.values.sum(),
+            introducedErrors = identities.sumOf { maxOf(0, (staged[it] ?: 0) - (baseline[it] ?: 0)) },
+            resolvedErrors = identities.sumOf { maxOf(0, (baseline[it] ?: 0) - (staged[it] ?: 0)) },
+            unchangedErrors = unchanged,
+        )
+    }
+
+    private fun diagnosticIdentity(diagnostic: Diagnostic): String {
+        val location = diagnostic.location
+        return listOf(
+            diagnostic.code.orEmpty(), diagnostic.category?.name.orEmpty(),
+            location?.path?.normalize()?.toString()?.replace('\\', '/').orEmpty(),
+            location?.range?.start?.line?.toString().orEmpty(),
+            location?.range?.start?.character?.toString().orEmpty(),
+            location?.range?.end?.line?.toString().orEmpty(),
+            location?.range?.end?.character?.toString().orEmpty(),
+            diagnostic.message,
+        ).joinToString("\u0000")
+    }
+
+    private fun isValidPackageName(packageName: String): Boolean =
+        packageName.isNotBlank() && packageName.split('.').all { segment ->
+            segment.isNotEmpty() &&
+                (segment.first().isLetter() || segment.first() == '_' || segment.first() == '$') &&
+                segment.all { it.isLetterOrDigit() || it == '_' || it == '$' }
+        }
+
+    private fun packageTargetPath(path: Path, fromPkg: String, toPkg: String): Path? {
+        val parent = path.parent ?: return null
+        val parentSegments = (0 until parent.nameCount).map { parent.getName(it).toString() }
+        val oldSegments = fromPkg.split('.')
+        if (parentSegments.size < oldSegments.size || parentSegments.takeLast(oldSegments.size) != oldSegments) return null
+        var target = path.root ?: Path.of("")
+        parentSegments.dropLast(oldSegments.size).forEach { target = target.resolve(it) }
+        toPkg.split('.').forEach { target = target.resolve(it) }
+        return target.resolve(path.fileName).normalize()
+    }
+
+    private fun topLevelTypeNames(file: org.refactorkit.core.SourceFile): List<String> =
+        Regex("(?m)^(?:\\s*(?:public|protected|private|abstract|final|sealed|non-sealed|static|strictfp)\\s+)*" +
+            "(?:class|interface|enum|record|@interface)\\s+([A-Za-z_$][A-Za-z0-9_$]*)")
+            .findAll(file.content)
+            .map { it.groupValues[1] }
+            .toList()
 
     private fun composeRecipePlan(
         recipe: RecipeDefinition,

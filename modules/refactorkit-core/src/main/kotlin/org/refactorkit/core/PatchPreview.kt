@@ -31,24 +31,38 @@ class PatchPreviewRenderer(
         plan.affectedFiles.sortedBy(ProtocolPath::serialize).forEach { appendLine("- ${ProtocolPath.serialize(it)}") }
         appendLine()
         appendLine("Patch:")
+        val staged = mutableMapOf<Path, String?>()
+        fun content(path: Path): String? {
+            val normalized = path.normalize()
+            if (normalized in staged) return staged[normalized]
+            val absolute = workspaceRoot.toAbsolutePath().normalize().resolve(path).normalize()
+            return (if (absolute.exists()) absolute.readText() else null).also { staged[normalized] = it }
+        }
         plan.workspaceEdit.edits.forEach { edit ->
-            append(renderEdit(edit))
+            val rendered = when (edit) {
+                is FileEdit.Create -> {
+                    staged[edit.path.normalize()] = edit.content
+                    "create ${ProtocolPath.serialize(edit.path)}\n"
+                }
+                is FileEdit.Delete -> {
+                    staged[edit.path.normalize()] = null
+                    "delete ${ProtocolPath.serialize(edit.path)}\n"
+                }
+                is FileEdit.Rename -> {
+                    staged[edit.newPath.normalize()] = content(edit.path)
+                    staged[edit.path.normalize()] = null
+                    "rename ${ProtocolPath.serialize(edit.path)} -> ${ProtocolPath.serialize(edit.newPath)}\n"
+                }
+                is FileEdit.Modify -> {
+                    val before = content(edit.path).orEmpty()
+                    val after = TextEdits.apply(before, edit.textEdits)
+                    staged[edit.path.normalize()] = after
+                    simpleUnifiedDiff(ProtocolPath.serialize(edit.path), before, after)
+                }
+            }
+            append(rendered)
             if (!endsWith("\n")) appendLine()
         }
-    }
-
-    private fun renderEdit(edit: FileEdit): String = when (edit) {
-        is FileEdit.Create -> "create ${ProtocolPath.serialize(edit.path)}\n"
-        is FileEdit.Delete -> "delete ${ProtocolPath.serialize(edit.path)}\n"
-        is FileEdit.Rename -> "rename ${ProtocolPath.serialize(edit.path)} -> ${ProtocolPath.serialize(edit.newPath)}\n"
-        is FileEdit.Modify -> renderModify(edit)
-    }
-
-    private fun renderModify(edit: FileEdit.Modify): String {
-        val absolute = workspaceRoot.toAbsolutePath().normalize().resolve(edit.path).normalize()
-        val before = if (absolute.exists()) absolute.readText() else ""
-        val after = TextEdits.apply(before, edit.textEdits)
-        return simpleUnifiedDiff(ProtocolPath.serialize(edit.path), before, after)
     }
 
     private fun simpleUnifiedDiff(path: String, before: String, after: String): String {

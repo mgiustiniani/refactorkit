@@ -1,6 +1,7 @@
 package org.refactorkit.java.recipe
 
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JournalState
 import org.refactorkit.core.PatchEngine
@@ -214,7 +215,12 @@ class RecipeEngineTest {
               - type: runDiagnostics
         """.trimIndent()
         val recipe = RecipeLoader.load(yaml.byteInputStream())
-        val result = engine.run(
+        val introducedErrorEngine = RecipeEngine(diagnosticsProvider = { snapshot ->
+            if (snapshot.files.any { it.path.fileName.toString() == "AccountManager.java" }) {
+                listOf(Diagnostic("introduced fixture error", Diagnostic.Severity.ERROR, code = "fixture.introduced"))
+            } else emptyList()
+        })
+        val result = introducedErrorEngine.run(
             recipe,
             mapOf("symbol" to "com.example.UserManager", "newName" to "AccountManager"),
             root,

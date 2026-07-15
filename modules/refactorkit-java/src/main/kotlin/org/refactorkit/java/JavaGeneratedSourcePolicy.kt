@@ -6,8 +6,8 @@ import org.refactorkit.core.SourceFile
 object JavaGeneratedSourcePolicy {
     fun reason(file: SourceFile): String? {
         val normalizedPath = file.path.toString().replace('\\', '/').lowercase()
-        if (GENERATED_PATH_SEGMENTS.any(normalizedPath::contains)) {
-            return "path is inside a generated-source location"
+        if (GENERATED_PATH_SEGMENTS.any(normalizedPath::contains) || isBuildOutputPath(normalizedPath)) {
+            return "path is inside a generated-source or build-output location"
         }
         val prefix = file.content.take(4096)
         if (GENERATED_ANNOTATION.containsMatchIn(prefix)) {
@@ -26,6 +26,12 @@ object JavaGeneratedSourcePolicy {
         "build/generated/",
         "target/generated-sources/",
     )
+
+    private fun isBuildOutputPath(path: String): Boolean {
+        val sourceRoot = Regex("(?:^|/)src/(?:main|test)/java/").find(path)?.range?.first ?: Int.MAX_VALUE
+        val output = Regex("(?:^|/)(?:target|build)/").find(path)?.range?.first ?: return false
+        return output < sourceRoot
+    }
     private val GENERATED_ANNOTATION = Regex(
         """@(?:javax\.annotation\.|javax\.annotation\.processing\.|jakarta\.annotation\.)?Generated\b""",
     )

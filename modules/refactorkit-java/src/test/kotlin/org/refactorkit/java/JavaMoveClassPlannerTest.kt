@@ -3,6 +3,7 @@ package org.refactorkit.java
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.WorkspaceEditSimulator
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
@@ -81,6 +82,35 @@ class JavaMoveClassPlannerTest {
         val conflict = planner.preview(snapshot, "com.old.Service", "com.target")
         assertEquals(PatchStatus.REFUSED, conflict.status)
         assertTrue(conflict.summary.contains("already exists"), conflict.summary)
+    }
+
+    @Test
+    fun lexicalFallbackLeavesUnrelatedSamePackageFilesByteIdenticalAndJavaWellFormed() {
+        val unrelated = "package com.old;\nclass Unrelated { String value; }\n"
+        val root = createProject(
+            "src/main/java/com/old/Service.java" to "package com.old;\npublic class Service { MissingDependency dependency; }",
+            "src/main/java/com/old/Unrelated.java" to unrelated.trimEnd(),
+            "src/main/java/com/client/Client.java" to
+                "package com.client;\nimport com.old.Service;\nclass Client { Service value; }",
+        )
+        val snapshot = JavaProjectScanner().scan(root)
+        val plan = planner.preview(snapshot, "com.old.Service", "com.target")
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val staged = WorkspaceEditSimulator.apply(snapshot, plan.workspaceEdit)
+        assertEquals(unrelated, staged.files.single { it.path == Path.of("src/main/java/com/old/Unrelated.java") }.content)
+        assertTrue(staged.files.filter { it.languageId == "java" }.none { it.content.contains(";import ") })
+    }
+
+    @Test
+    fun lexicalFallbackRefusesUnprovenSamePackageSimpleNameReferences() {
+        val root = createProject(
+            "src/main/java/com/old/Service.java" to "package com.old;\npublic class Service { MissingDependency dependency; }",
+            "src/main/java/com/old/Used.java" to "package com.old;\nclass Used { Service value; }",
+        )
+        val plan = planner.preview(JavaProjectScanner().scan(root), "com.old.Service", "com.target")
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("java.moveClass.lexicalScopeUnsafe", plan.refusalCode)
     }
 
     @Test

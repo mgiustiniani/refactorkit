@@ -55,6 +55,24 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             return refused(snapshot, "moveClass", "Move target already exists: $newFqn ($newRelativePath)")
         }
         val jdtReferencePaths = findJdtReferencePaths(snapshot, symbolFqn, declarationFile.path)
+        if (jdtReferencePaths == null) {
+            val unsafeSamePackage = snapshot.files.firstOrNull { file ->
+                file.path != declarationFile.path && file.languageId == "java" &&
+                    JavaGeneratedSourcePolicy.reason(file) == null &&
+                    JavaPackageUtil.extractPackage(file.content) == oldPkg &&
+                    !file.content.contains("import $symbolFqn;") &&
+                    !file.content.contains(symbolFqn) &&
+                    JavaLexer.findOccurrences(file.content, simpleName).isNotEmpty()
+            }
+            if (unsafeSamePackage != null) {
+                return refused(
+                    snapshot,
+                    "moveClass",
+                    "Lexical fallback cannot prove simple-name ownership in ${unsafeSamePackage.path}; JDT binding evidence is required.",
+                    "java.moveClass.lexicalScopeUnsafe",
+                )
+            }
+        }
 
         val edits = mutableListOf<FileEdit>()
         val affectedPaths = mutableSetOf<Path>()
@@ -72,7 +90,8 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
 
         // 3. Update all other files
         for (file in snapshot.files) {
-            if (file.path == declarationFile.path || file.languageId != "java") continue
+            if (file.path == declarationFile.path || file.languageId != "java" ||
+                JavaGeneratedSourcePolicy.reason(file) != null) continue
 
             val filePkg = JavaPackageUtil.extractPackage(file.content)
             val hasOldImport = file.content.contains("import $symbolFqn;")
@@ -82,7 +101,7 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
 
             if (jdtReferencePaths != null) {
                 if (file.path !in jdtReferencePaths) continue
-            } else if (!hasOldImport && !hasFqn && !wasInSamePkg) {
+            } else if (!hasOldImport && !hasFqn) {
                 continue
             }
 
@@ -202,9 +221,11 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
     }
 
     private fun insertImportOffset(content: String): Int {
-        // Insert after existing package declaration, or at the top of the file
-        val pkgMatch = Regex("""(?m)^package\s+[\w.]+\s*;""").find(content)
-        return if (pkgMatch != null) pkgMatch.range.last + 1 else 0
+        val pkgMatch = Regex("""(?m)^package\s+[\w.]+\s*;""").find(content) ?: return 0
+        var offset = pkgMatch.range.last + 1
+        if (content.startsWith("\r\n", offset)) offset += 2
+        else if (content.startsWith("\n", offset)) offset += 1
+        return offset
     }
 
     private fun isValidPackageName(packageName: String): Boolean =
@@ -214,7 +235,12 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
                 segment.all(JavaLexer::isIdentChar)
         }
 
-    private fun refused(snapshot: ProjectSnapshot, operation: String, reason: String) = PatchPlan(
+    private fun refused(
+        snapshot: ProjectSnapshot,
+        operation: String,
+        reason: String,
+        code: String? = null,
+    ) = PatchPlan(
         operation = operation,
         status = PatchStatus.REFUSED,
         snapshotHash = snapshot.hash,
@@ -225,6 +251,7 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         workspaceEdit = WorkspaceEdit(),
         warnings = listOf(reason),
         riskLevel = RiskLevel.HIGH,
+        refusalCode = code,
     )
 
     companion object {

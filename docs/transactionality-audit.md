@@ -223,11 +223,13 @@ After every step succeeds, the engine derives one recipe-wide delta from the
 initial snapshot to the final staged snapshot and applies exactly one `PatchPlan`
 against the initial engine-owned snapshot. The resulting write has one WAL
 record, one transaction ID, and normal atomic apply/recovery/rollback semantics;
-a no-op recipe writes no transaction. `movePackage` likewise previews each class
-move against the result of the previous staged move instead of merging plans
-calculated from one stale coordinate space. Tests cover later-step refusal with
-zero writes/records, dependent rename-then-move steps, multi-class package moves,
-and a single durable transaction.
+a no-op recipe writes no transaction. `movePackage` now creates one exact-package
+compilation-unit plan rather than composing per-class plans. Recipe reduction
+renders rename-followed-by-modify edits against the staged file image, so target
+ranges are never interpreted against absent or stale original bytes. Tests cover
+later-step refusal with zero writes/records, dependent rename-then-move steps,
+exact-package production/test/package-info movement, conflict refusal, staged
+preview rendering, byte-exact rollback, and a single durable transaction.
 
 ### TX-009 — Multiple modifications of one file have ambiguous coordinates
 

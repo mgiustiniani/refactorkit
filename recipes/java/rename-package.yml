@@ -10,4 +10,5 @@ steps:
     to: "{{ newPackage }}"
   - type: organizeImports
   - type: runDiagnostics
+    strict: false
   - type: summarizePatch
