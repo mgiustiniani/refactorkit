@@ -887,19 +887,19 @@ class DaemonSession(
             return atOrAfterStart && beforeEnd
         }
         val targetIds = buildList {
-            result.index.symbols.filter { it.kind == Symbol.Kind.FUNCTION && contains(it.location) }.forEach { add(it.id) }
+            result.index.symbols.filter { contains(it.location) }.forEach { add(it.id) }
             result.usages.filter { contains(it.location) }.forEach { add(it.targetId) }
         }.distinct()
         if (targetIds.size != 1) return intelligenceRefusal(
             requestId, kind, workspaceIndex.snapshot() ?: index,
             if (targetIds.isEmpty()) "kotlin.usageNotFound" else "kotlin.usageAmbiguous",
-            if (targetIds.isEmpty()) "No compiler-proven Kotlin function usage exists at the requested position"
-            else "Kotlin function usage position resolved ambiguously",
+            if (targetIds.isEmpty()) "No compiler-proven Kotlin declaration or usage exists at the requested position"
+            else "Kotlin declaration or usage position resolved ambiguously",
         )
         val target = result.index.symbols.singleOrNull { it.id == targetIds.single() }
             ?: return intelligenceRefusal(
                 requestId, kind, workspaceIndex.snapshot() ?: index,
-                "kotlin.usageTargetMissing", "Resolved Kotlin function target is absent from the declaration index",
+                "kotlin.usageTargetMissing", "Resolved Kotlin target is absent from the declaration index",
             )
         val updated = workspaceIndex.snapshot() ?: index
         val source = updated.sources.singleOrNull { it.path == requestedSource.path }

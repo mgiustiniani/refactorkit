@@ -200,7 +200,7 @@ class McpSession(
                     "expectedSnapshotHash" to "string: configured Kotlin snapshot hash",
                     "symbol" to "string: opaque ID returned by kotlin_symbols",
                 )))
-            add(tool("kotlin_usage_definition", "Resolve a compiler-proven Kotlin function call name to its declaration.",
+            add(tool("kotlin_usage_definition", "Resolve a compiler-proven Kotlin function or type usage to its declaration.",
                 required = listOf("semanticLease", "expectedSnapshotHash", "file", "line", "character"),
                 props = mapOf(
                     "semanticLease" to "string: lease returned by kotlin_semantic_start",
@@ -208,7 +208,7 @@ class McpSession(
                     "file" to "string: normalized workspace-relative Kotlin source",
                     "line" to "integer: zero-based line", "character" to "integer: zero-based UTF-16 character",
                 )))
-            add(tool("kotlin_references", "Return bounded partial references for a compiler-proven Kotlin function call.",
+            add(tool("kotlin_references", "Return bounded partial references for a compiler-proven Kotlin function or type usage.",
                 required = listOf("semanticLease", "expectedSnapshotHash", "file", "line", "character"),
                 props = mapOf(
                     "semanticLease" to "string: lease returned by kotlin_semantic_start",
@@ -524,11 +524,10 @@ class McpSession(
                 (point.line < end.line || point.line == end.line && point.character < end.character)
         }
         val ids = buildList {
-            result.index.symbols.filter { it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION && contains(it.location) }
-                .forEach { add(it.id) }
+            result.index.symbols.filter { contains(it.location) }.forEach { add(it.id) }
             result.usages.filter { contains(it.location) }.forEach { add(it.targetId) }
         }.distinct()
-        if (ids.size != 1) return "Refused [kotlin.usageNotFound]: no unique compiler-proven function usage at position."
+        if (ids.size != 1) return "Refused [kotlin.usageNotFound]: no unique compiler-proven Kotlin declaration or usage at position."
         val target = result.index.symbols.single { it.id == ids.single() }
         val includeDeclaration = if ("includeDeclaration" in args) {
             (args["includeDeclaration"] as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.booleanOrNull

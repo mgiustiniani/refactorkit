@@ -125,15 +125,15 @@ accepts only an opaque ID returned by this backend and resolves it against a new
 attested copy of the same saved snapshot. Named/data/nested objects expose exact
 name ranges. An implicit companion has compiler identity/name `Companion` and an
 exact range over its `object` keyword because no source identifier exists.
-The worker now also builds an internal, bounded K2 FIR projection for direct
-function call-name usages. A real-PSI resolved reference must map by exact target
-path/name offset to an existing callable symbol; fake sources, locals, operators,
-properties and callable references are excluded. API `0.2` daemon
-`intelligence.query` exposes saved-snapshot definition from those call-name ranges
-and explicitly partial references under exact lease/snapshot/generation authority.
-CLI/MCP integration, broader usage-location definition, properties, parameters,
-type aliases, overloaded or renamed JVM callables and complete references remain
-refused until transport integration and native qualification are complete.
+The worker also builds one atomic, bounded K2 FIR projection for direct function
+call names and source type usages. Real-PSI resolved references/types/qualifiers/
+imports must map exactly to an existing callable or type symbol; fake sources,
+locals, operators, properties, aliases and callable references are excluded. API
+`0.2` daemon `intelligence.query`, CLI and MCP expose saved-snapshot definition
+from those ranges and explicitly partial references under exact lease/snapshot/
+generation authority. Type aliases, overloaded or renamed JVM callables,
+cross-language callers and complete references remain refused; the type-usage row
+is not qualified until packaged/native acceptance passes.
 
 ## Integration surfaces
 

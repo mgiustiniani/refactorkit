@@ -119,6 +119,7 @@ def main() -> int:
             raise AssertionError(f"Kotlin compiler symbols failed: {symbols}")
         expected_kinds = {
             "Greeting": "class",
+            "GreetingConsumer": "class",
             "GreetingPort": "interface",
             "GreetingMode": "enum",
             "GreetingMarker": "annotation",
@@ -163,6 +164,19 @@ def main() -> int:
         )
         if cli_usage_references.get("status") != "ready" or cli_usage_references.get("total") != 2:
             raise AssertionError(f"Kotlin CLI partial references failed: {cli_usage_references}")
+        cli_type_definition = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-cli-type-definition", "definition",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt", "--line", "22", "--character", "38"],
+        )
+        if (cli_type_definition.get("status") != "ready" or
+                cli_type_definition.get("locations", [{}])[0].get("range", {}).get("start", {}).get("line") != 4):
+            raise AssertionError(f"Kotlin CLI type-usage definition failed: {cli_type_definition}")
+        cli_type_references = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-cli-type-references", "references",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt", "--line", "22", "--character", "38"],
+        )
+        if cli_type_references.get("status") != "ready" or cli_type_references.get("total") != 2:
+            raise AssertionError(f"Kotlin CLI partial type references failed: {cli_type_references}")
 
         daemon = runtime / "bin" / ("refactorkit-daemon.bat" if os.name == "nt" else "refactorkit-daemon")
         process = subprocess.Popen(
@@ -205,7 +219,21 @@ def main() -> int:
             if (usage_references.get("status") != "ready" or usage_references.get("total") != 2 or
                     usage_references.get("complete") is not False or usage_references.get("completeness") != "partial"):
                 raise AssertionError(f"Kotlin partial function references failed: {usage_references}")
-            exchange(5, "kotlin.semantic.stop")
+            type_common = {**common, "position": {"line": 22, "character": 38}}
+            type_definition = exchange(5, "intelligence.query", {
+                **type_common, "requestId": "native-kotlin-type-definition", "kind": "definition",
+            })
+            if (type_definition.get("status") != "ready" or
+                    type_definition.get("locations", [{}])[0].get("range", {}).get("start", {}).get("line") != 4):
+                raise AssertionError(f"Kotlin type-usage definition failed: {type_definition}")
+            type_references = exchange(6, "intelligence.query", {
+                **type_common, "requestId": "native-kotlin-type-references", "kind": "references",
+                "includeDeclaration": True, "limit": 10,
+            })
+            if (type_references.get("status") != "ready" or type_references.get("total") != 2 or
+                    type_references.get("completeness") != "partial"):
+                raise AssertionError(f"Kotlin partial type references failed: {type_references}")
+            exchange(7, "kotlin.semantic.stop")
         finally:
             process.terminate()
             try:
@@ -228,7 +256,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 declarations plus function usage definition and partial references.")
+    print("Packaged Kotlin acceptance passed: K2 declarations plus function/type usage definition and partial references.")
     return 0
 
 

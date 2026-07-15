@@ -20,3 +20,4 @@ class GreetingOwner {
     object NestedRegistry
     val anonymous = object {}
 }
+class GreetingConsumer(val greeting: Greeting)

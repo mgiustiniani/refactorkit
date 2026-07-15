@@ -1,7 +1,7 @@
 # Kotlin JVM type-usage navigation requirements
 
-Status: internal K2 FIR worker evidence implemented; daemon/CLI/MCP acceptance and
-native qualification remain pending.
+Status: internal K2 FIR evidence plus daemon, CLI and MCP routes implemented;
+packaged acceptance passes locally and native qualification remains pending.
 
 ## Scope
 
