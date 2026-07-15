@@ -27,6 +27,91 @@ import kotlin.test.assertTrue
 
 class KotlinJavaPublicTypeRenamePlannerTest {
     @Test
+    fun ephemeralJavaCompilationFailurePublishesNoConsumerEvidence() {
+        val fixture = javaDeclarationFixture()
+        fixture.root.resolve("src/main/java/fixture/PublicAccount.java").writeText(
+            "package fixture; public class PublicAccount { syntax }\n",
+        )
+        val broken = JavaProjectScanner().scan(fixture.root)
+        var consumed = false
+
+        val result = JavaEphemeralCompiler().compile(broken) { consumed = true }
+
+        val refusal = assertIs<JavaEphemeralCompilationResult.Refused>(result)
+        assertEquals("jvm.javaCompilationFailed", refusal.code)
+        assertTrue(!consumed)
+    }
+
+    @Test
+    fun ephemeralJavaClassesLetK2ProveKotlinUsesOfPublicJavaType() {
+        val fixture = javaDeclarationFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        var kotlinResult: org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult? = null
+
+        val compilation = JavaEphemeralCompiler().compile(fixture.snapshot) { output ->
+            kotlinResult = adapter.compilerDiagnosticsWithAdditionalClasspath(fixture.snapshot, listOf(output))
+        }
+
+        val compiled = assertIs<JavaEphemeralCompilationResult.Available>(compilation, compilation.toString())
+        assertTrue(compiled.outputHash.matches(Regex("[0-9a-f]{64}")))
+        val available = assertIs<org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult.Available>(kotlinResult, kotlinResult.toString())
+        val usages = available.externalTypeUsages.filter { it.jvmBinaryName == "fixture.PublicAccount" }
+        assertTrue(usages.size >= 2, "expected exact K2 uses of Java binary identity, got $usages")
+        assertTrue(available.attestation.ephemeralClasspathHash.matches(Regex("[0-9a-f]{64}")))
+    }
+
+    @Test
+    fun publicJavaTypeRenameUsesJdtAndK2ExactTokens() {
+        val fixture = javaDeclarationFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val plan = JavaKotlinPublicTypeRenamePlanner(adapter).preview(
+            fixture.snapshot,
+            org.refactorkit.core.SymbolId("fixture.PublicAccount"),
+            "CustomerAccount",
+            acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertTrue(plan.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>().single().let {
+            it.path == Path.of("src/main/java/fixture/PublicAccount.java") &&
+                it.newPath == Path.of("src/main/java/fixture/CustomerAccount.java")
+        })
+        assertEquals(
+            setOf(
+                Path.of("src/main/java/fixture/PublicAccount.java"),
+                Path.of("src/main/java/fixture/CustomerAccount.java"),
+                Path.of("src/main/kotlin/fixture/UseAccount.kt"),
+            ),
+            plan.affectedFiles,
+        )
+        assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
+    }
+
+    @Test
+    fun publicJavaTypeRenameAppliesAndRollsBackOneMixedTransaction() {
+        val fixture = javaDeclarationFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val planner = JavaKotlinPublicTypeRenamePlanner(adapter)
+        val plan = planner.preview(
+            fixture.snapshot, org.refactorkit.core.SymbolId("fixture.PublicAccount"), "CustomerAccount", true,
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("jvm-symmetric-integration-test"),
+            DiagnosticsGate.enabled("java-ecj-kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertTrue(!Files.exists(fixture.root.resolve("src/main/java/fixture/PublicAccount.java")))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/java/fixture/CustomerAccount.java")).contains("CustomerAccount"))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/kotlin/fixture/UseAccount.kt")).contains("CustomerAccount"))
+
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(Files.exists(fixture.root.resolve("src/main/java/fixture/PublicAccount.java")))
+        assertTrue(!Files.exists(fixture.root.resolve("src/main/java/fixture/CustomerAccount.java")))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/kotlin/fixture/UseAccount.kt")).contains("PublicAccount"))
+    }
+
+    @Test
     fun publicKotlinTypeRenameRequiresExplicitExternalConsumerAcceptance() {
         val fixture = fixture()
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
@@ -102,6 +187,31 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         val snapshot: org.refactorkit.core.ProjectSnapshot,
         val toolchain: KotlinSemanticToolchain,
     )
+
+    private fun javaDeclarationFixture(): Fixture {
+        val root = temporaryDirectory("rk-jvm-java-declaration")
+        root.resolve("pom.xml").writeText("""
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>fixture</groupId><artifactId>mixed</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <build><plugins><plugin>
+                <groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-maven-plugin</artifactId><version>2.0.21</version>
+                <configuration><jvmTarget>21</jvmTarget><jdkToolchain><version>21</version></jdkToolchain></configuration>
+              </plugin></plugins></build>
+            </project>
+        """.trimIndent())
+        root.resolve("src/main/java/fixture/PublicAccount.java").apply {
+            parent.createDirectories()
+            writeText("package fixture; public class PublicAccount {}\n")
+        }
+        root.resolve("src/main/kotlin/fixture/UseAccount.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture\nfun account(): PublicAccount = PublicAccount()\n")
+        }
+        val toolchain = toolchain(root)
+        return Fixture(root, KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain), toolchain)
+    }
 
     private fun fixture(): Fixture {
         val root = temporaryDirectory("rk-jvm-public-rename")

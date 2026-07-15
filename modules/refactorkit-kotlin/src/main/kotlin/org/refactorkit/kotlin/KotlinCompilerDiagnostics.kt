@@ -52,10 +52,16 @@ data class KotlinCompilerDiagnosticsAttestation(
     val buildProjectionHash: String,
     val snapshotHash: String,
     val process: SemanticProcessProvenance?,
+    val ephemeralClasspathHash: String = "",
 )
 
 data class KotlinCompilerResolvedUsage(
     val targetId: SymbolId,
+    val location: SourceLocation,
+)
+
+data class KotlinCompilerExternalTypeUsage(
+    val jvmBinaryName: String,
     val location: SourceLocation,
 )
 
@@ -74,6 +80,7 @@ private class CompiledOutputConsumerException(cause: Throwable) : RuntimeExcepti
 private data class ParsedKotlinSymbols(
     val index: SymbolIndex,
     val usages: List<KotlinCompilerResolvedUsage>,
+    val externalTypeUsages: List<KotlinCompilerExternalTypeUsage>,
     val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence>,
 )
 
@@ -86,6 +93,7 @@ sealed interface KotlinCompilerDiagnosticsResult {
         override val attestation: KotlinCompilerDiagnosticsAttestation,
         val symbols: SymbolIndex? = null,
         val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
+        val externalTypeUsages: List<KotlinCompilerExternalTypeUsage> = emptyList(),
         val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence> = emptyMap(),
         val symbolFailure: Diagnostic? = null,
     ) : KotlinCompilerDiagnosticsResult
@@ -112,6 +120,7 @@ sealed interface KotlinCompilerSymbolsResult {
         val index: SymbolIndex,
         override val attestation: KotlinCompilerDiagnosticsAttestation,
         val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
+        val externalTypeUsages: List<KotlinCompilerExternalTypeUsage> = emptyList(),
         val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence> = emptyMap(),
     ) : KotlinCompilerSymbolsResult
 
@@ -141,7 +150,7 @@ class KotlinCompilerDiagnostics private constructor(
         requestTimeoutMillis: Long,
         bridgeClass: Class<*>,
     ) : this(toolchain, ExecutionConfiguration(requestTimeoutMillis, bridgeClass))
-    fun analyze(snapshot: ProjectSnapshot): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, null)
+    fun analyze(snapshot: ProjectSnapshot): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, emptyList(), null)
 
     /**
      * Supplies compiler-produced classes only while their immutable disposable overlay is alive.
@@ -150,12 +159,20 @@ class KotlinCompilerDiagnostics private constructor(
     fun analyzeWithCompiledOutput(
         snapshot: ProjectSnapshot,
         consumer: (Path) -> Unit,
-    ): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, consumer)
+    ): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, emptyList(), consumer)
+
+    /** Adds hash-bound ephemeral JVM classes without changing the declared project classpath. */
+    fun analyzeWithAdditionalClasspath(
+        snapshot: ProjectSnapshot,
+        additionalClasspath: List<Path>,
+    ): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, additionalClasspath, null)
 
     private fun analyzeInternal(
         snapshot: ProjectSnapshot,
+        additionalClasspath: List<Path>,
         compiledOutputConsumer: ((Path) -> Unit)?,
     ): KotlinCompilerDiagnosticsResult {
+        var ephemeralClasspathHash = ""
         val model = snapshot.buildModels.singleOrNull { it.providerId == KotlinJvmBuildModelProjector.PROVIDER_ID }
         val buildHash = model?.attributes?.get("projectionHash").orEmpty()
         fun attestation(process: SemanticProcessProvenance? = null) = KotlinCompilerDiagnosticsAttestation(
@@ -166,7 +183,12 @@ class KotlinCompilerDiagnostics private constructor(
             buildProjectionHash = buildHash,
             snapshotHash = snapshot.hash,
             process = process,
+            ephemeralClasspathHash = ephemeralClasspathHash,
         )
+        val ephemeralClasspath = runCatching { validateEphemeralClasspath(additionalClasspath) }.getOrElse {
+            return refused("kotlin.ephemeralClasspathInvalid", "Ephemeral JVM classpath evidence is invalid", attestation())
+        }
+        ephemeralClasspathHash = hashEphemeralClasspath(ephemeralClasspath)
         validateToolchain()?.let { return KotlinCompilerDiagnosticsResult.Refused(it, attestation()) }
         if (snapshot.files.any { it.languageId == "kotlin" && it.path.fileName.toString().endsWith(".kts") }) return refused(
             "kotlin.scriptSemanticsUnsupported", "Kotlin script semantics remain refused", attestation(),
@@ -228,7 +250,7 @@ class KotlinCompilerDiagnostics private constructor(
             "Kotlin compiler semantics require the qualified annotations runtime",
             attestation(),
         )
-        val classpath = (projectClasspath + listOf(stdlib)).distinct()
+        val classpath = (projectClasspath + ephemeralClasspath + listOf(stdlib)).distinct()
         if (classpath.size > MAX_CLASSPATH_ENTRIES + 1) return refused(
             "kotlin.compilerClasspathLimit",
             "Kotlin project classpath exceeds $MAX_CLASSPATH_ENTRIES entries",
@@ -289,7 +311,7 @@ class KotlinCompilerDiagnostics private constructor(
             val attestation = result.attestation.copy(backend = SYMBOL_BACKEND)
             when {
                 result.symbols != null -> KotlinCompilerSymbolsResult.Available(
-                    result.symbols, attestation, result.usages, result.declarations,
+                    result.symbols, attestation, result.usages, result.externalTypeUsages, result.declarations,
                 )
                 result.symbolFailure?.code == "kotlin.compilerSymbolsInvalid" ->
                     KotlinCompilerSymbolsResult.Error(result.symbolFailure, attestation)
@@ -456,6 +478,7 @@ class KotlinCompilerDiagnostics private constructor(
             attestation,
             symbols = symbols.getOrNull()?.index,
             usages = symbols.getOrNull()?.usages.orEmpty(),
+            externalTypeUsages = symbols.getOrNull()?.externalTypeUsages.orEmpty(),
             declarations = symbols.getOrNull()?.declarations.orEmpty(),
             symbolFailure = symbols.exceptionOrNull()?.asSymbolDiagnostic(),
         )
@@ -567,25 +590,38 @@ class KotlinCompilerDiagnostics private constructor(
         }.sortedBy { it.id.value }
         val index = SymbolIndex(symbols)
         val usages = parseUsages(payload, sourcePaths, overlayRoot, identityIds)
-        ParsedKotlinSymbols(index, usages, declarations.toMap())
+        ParsedKotlinSymbols(index, usages.internal, usages.external, declarations.toMap())
     }
+
+    private data class ParsedUsageEvidence(
+        val internal: List<KotlinCompilerResolvedUsage>,
+        val external: List<KotlinCompilerExternalTypeUsage>,
+    )
 
     private fun parseUsages(
         payload: JsonObject,
         sourcePaths: Map<Path, org.refactorkit.core.SourceFile>,
         overlayRoot: Path,
         identityIds: Map<String, SymbolId>,
-    ): List<KotlinCompilerResolvedUsage> {
+    ): ParsedUsageEvidence {
         check(payload.boolean("usagesComplete") == true) { "Kotlin compiler usages are incomplete" }
         val encoded = payload["usages"] as? JsonArray ?: error("Kotlin compiler usages are missing")
         check(encoded.size <= MAX_USAGES) { "Kotlin compiler usage limit exceeded" }
         val unique = linkedSetOf<String>()
-        return encoded.map { item ->
+        val internal = mutableListOf<KotlinCompilerResolvedUsage>()
+        val external = mutableListOf<KotlinCompilerExternalTypeUsage>()
+        encoded.forEach { item ->
             val value = item as? JsonObject ?: error("Kotlin compiler usage is not an object")
             check(value.keys == USAGE_FIELDS) { "Kotlin compiler usage fields are invalid" }
-            val targetIdentity = value.string("targetIdentity")?.takeIf { it.length in 1..MAX_SYMBOL_IDENTITY_CHARS }
-                ?: error("Kotlin compiler usage target is invalid")
-            val targetId = identityIds[targetIdentity] ?: error("Kotlin compiler usage target is unknown")
+            val targetIdentity = value.string("targetIdentity")?.takeIf {
+                it.length in 1..(MAX_SYMBOL_IDENTITY_CHARS + EXTERNAL_JVM_TYPE_PREFIX.length)
+            } ?: error("Kotlin compiler usage target is invalid")
+            val targetId = identityIds[targetIdentity]
+            val externalIdentity = targetIdentity.removePrefix(EXTERNAL_JVM_TYPE_PREFIX).takeIf {
+                targetId == null && targetIdentity.startsWith(EXTERNAL_JVM_TYPE_PREFIX) &&
+                    it.length in 1..MAX_SYMBOL_IDENTITY_CHARS && SYMBOL_IDENTITY.matches(it)
+            }
+            check(targetId != null || externalIdentity != null) { "Kotlin compiler usage target is unknown" }
             val selectionText = value.string("selectionText")?.takeIf {
                 it.length in 1..MAX_SYMBOL_NAME_CHARS && JVM_NAME.matches(it)
             } ?: error("Kotlin compiler usage selection is invalid")
@@ -606,15 +642,20 @@ class KotlinCompilerDiagnostics private constructor(
                 source.content.substring(start, end) == selectionText) {
                 "Kotlin compiler usage range is invalid"
             }
-            check(unique.add("$relative\u0000$start\u0000$end\u0000${targetId.value}")) {
+            val targetKey = targetId?.value ?: externalIdentity!!
+            check(unique.add("$relative\u0000$start\u0000$end\u0000$targetKey")) {
                 "Kotlin compiler usage is duplicated"
             }
-            KotlinCompilerResolvedUsage(
-                targetId,
-                SourceLocation(relative, SourceRange(position(source.content, start), position(source.content, end))),
-            )
-        }.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
-            { it.location.range.start.character }, { it.targetId.value }))
+            val location = SourceLocation(relative, SourceRange(position(source.content, start), position(source.content, end)))
+            if (targetId != null) internal += KotlinCompilerResolvedUsage(targetId, location)
+            else external += KotlinCompilerExternalTypeUsage(externalIdentity!!, location)
+        }
+        return ParsedUsageEvidence(
+            internal.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
+                { it.location.range.start.character }, { it.targetId.value })),
+            external.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
+                { it.location.range.start.character }, { it.jvmBinaryName })),
+        )
     }
 
     private fun Throwable.asSymbolDiagnostic(): Diagnostic = when (this) {
@@ -827,6 +868,65 @@ class KotlinCompilerDiagnostics private constructor(
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
+    private fun validateEphemeralClasspath(entries: List<Path>): List<Path> {
+        require(entries.size <= MAX_EPHEMERAL_CLASSPATH_ENTRIES)
+        return entries.map { entry ->
+            val normalized = entry.toAbsolutePath().normalize()
+            require(!Files.isSymbolicLink(normalized) && (
+                Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS) ||
+                    (Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS) && normalized.fileName.toString().endsWith(".jar"))
+                ))
+            normalized.toRealPath()
+        }.distinct()
+    }
+
+    private fun hashEphemeralClasspath(entries: List<Path>): String {
+        if (entries.isEmpty()) return ""
+        val digest = MessageDigest.getInstance("SHA-256")
+        var files = 0
+        var bytes = 0L
+        entries.sortedBy(Path::toString).forEachIndexed { index, root ->
+            if (Files.isRegularFile(root, LinkOption.NOFOLLOW_LINKS)) {
+                files++
+                bytes += Files.size(root)
+                require(files <= MAX_EPHEMERAL_CLASS_FILES && bytes <= MAX_EPHEMERAL_CLASS_BYTES)
+                digest.update(index.toString().toByteArray(Charsets.UTF_8))
+                digest.update(root.fileName.toString().toByteArray(Charsets.UTF_8))
+                Files.newInputStream(root).use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
+                }
+                return@forEachIndexed
+            }
+            Files.walk(root).use { stream ->
+                stream.filter { it != root }.sorted().forEach { path ->
+                    require(!Files.isSymbolicLink(path))
+                    if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) return@forEach
+                    require(Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && path.fileName.toString().endsWith(".class"))
+                    files++
+                    bytes += Files.size(path)
+                    require(files <= MAX_EPHEMERAL_CLASS_FILES && bytes <= MAX_EPHEMERAL_CLASS_BYTES)
+                    digest.update(index.toString().toByteArray(Charsets.UTF_8))
+                    digest.update(root.relativize(path).toString().replace('\\', '/').toByteArray(Charsets.UTF_8))
+                    Files.newInputStream(path).use { input ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            digest.update(buffer, 0, count)
+                        }
+                    }
+                }
+            }
+        }
+        require(files > 0)
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
     private fun jdkMajor(value: String): Int? = value.substringBefore('.').toIntOrNull()
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)
         ?.takeIf(JsonPrimitive::isString)?.content
@@ -868,6 +968,10 @@ class KotlinCompilerDiagnostics private constructor(
         private const val MAX_SYMBOL_IDENTITY_CHARS = 2_048
         private const val MAX_JVM_DESCRIPTOR_CHARS = 1_024
         private const val MAX_USAGES = 2_000
+        private const val MAX_EPHEMERAL_CLASSPATH_ENTRIES = 4
+        private const val MAX_EPHEMERAL_CLASS_FILES = 10_000
+        private const val MAX_EPHEMERAL_CLASS_BYTES = 128L * 1024L * 1024L
+        private const val EXTERNAL_JVM_TYPE_PREFIX = "external-jvm-type-v1:"
         private const val MAX_XML_BYTES = 6 * 1024 * 1024
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = false }
         private val SEQUENCE = AtomicLong(1)

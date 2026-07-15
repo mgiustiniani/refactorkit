@@ -16,12 +16,15 @@ class KotlinManagedDeclarationRenamePlanner(
         newName: String,
         acceptExternalConsumerRisk: Boolean = false,
     ): PatchPlan = if (snapshot.files.any { it.languageId == "java" }) {
-        KotlinJavaPublicTypeRenamePlanner(kotlin).preview(
-            snapshot,
-            symbolId,
-            newName,
-            acceptExternalConsumerRisk,
-        )
+        if (symbolId.value.startsWith("kotlin-jvm-")) {
+            KotlinJavaPublicTypeRenamePlanner(kotlin).preview(
+                snapshot, symbolId, newName, acceptExternalConsumerRisk,
+            )
+        } else {
+            JavaKotlinPublicTypeRenamePlanner(kotlin).preview(
+                snapshot, symbolId, newName, acceptExternalConsumerRisk,
+            )
+        }
     } else {
         KotlinPrivateDeclarationRenamePlanner(kotlin).preview(snapshot, symbolId, newName)
     }

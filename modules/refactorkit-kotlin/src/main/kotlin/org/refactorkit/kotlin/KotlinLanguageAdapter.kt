@@ -83,6 +83,15 @@ class KotlinLanguageAdapter(
         else -> compilerDiagnostics.analyze(project).diagnostics
     }
 
+    fun compilerDiagnosticsWithAdditionalClasspath(
+        project: ProjectSnapshot,
+        additionalClasspath: List<java.nio.file.Path>,
+    ): KotlinCompilerDiagnosticsResult = compilerDiagnostics?.analyzeWithAdditionalClasspath(project, additionalClasspath)
+        ?: KotlinCompilerDiagnosticsResult.Refused(
+            compilerNotConfigured(),
+            unconfiguredAttestation(project, KotlinCompilerDiagnostics.BACKEND),
+        )
+
     fun compilerDiagnosticsWithOutput(
         project: ProjectSnapshot,
         consumer: (java.nio.file.Path) -> Unit,

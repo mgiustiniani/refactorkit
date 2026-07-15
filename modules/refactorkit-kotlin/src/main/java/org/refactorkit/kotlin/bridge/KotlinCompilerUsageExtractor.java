@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
 import org.jetbrains.kotlin.fir.types.ConeTypeParameterType;
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
+import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol;
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
 import org.jetbrains.kotlin.name.ClassId;
@@ -201,10 +202,25 @@ final class KotlinCompilerUsageExtractor {
     ) {
         KtSourceElement usageSource = reference.getSource();
         KtSourceElement targetSource = reference.getResolvedSymbol().getSource();
-        if (!(usageSource instanceof KtPsiSourceElement) || !(targetSource instanceof KtPsiSourceElement)) return;
+        if (!(usageSource instanceof KtPsiSourceElement)) return;
         PsiElement usagePsi = ((KtPsiSourceElement) usageSource).getPsi();
-        PsiElement targetPsi = ((KtPsiSourceElement) targetSource).getPsi();
         if (!(usagePsi instanceof KtNameReferenceExpression) || usagePsi instanceof KtOperationReferenceExpression) return;
+        if (!(targetSource instanceof KtPsiSourceElement)) {
+            if (reference.getResolvedSymbol() instanceof FirConstructorSymbol) {
+                ClassId classId = ((FirConstructorSymbol) reference.getResolvedSymbol()).getCallableId().getClassId();
+                if (classId != null && !classId.isLocal()) {
+                    String binaryIdentity = binaryName(classId);
+                    String simpleName = binaryIdentity.substring(
+                        Math.max(binaryIdentity.lastIndexOf('.'), binaryIdentity.lastIndexOf('$')) + 1
+                    );
+                    if (usagePsi.getText().equals(simpleName)) {
+                        addExternalUsage(usagePsi, binaryIdentity, identities, usages);
+                    }
+                }
+            }
+            return;
+        }
+        PsiElement targetPsi = ((KtPsiSourceElement) targetSource).getPsi();
         if (parent(usagePsi, KtCallableReferenceExpression.class) != null ||
             parent(usagePsi, KtImportDirective.class) != null) return;
         PsiElement targetIdentifier;
@@ -270,17 +286,27 @@ final class KotlinCompilerUsageExtractor {
     ) {
         if (!(typeRef.getSource() instanceof KtPsiSourceElement)) return;
         KotlinCompilerSymbolExtractor.ExtractedSymbol target;
+        String externalIdentity = null;
         if (typeRef.getType() instanceof ConeClassLikeType) {
             ClassId classId = ((ConeClassLikeType) typeRef.getType()).getLookupTag().getClassId();
-            target = targets.get(binaryName(classId));
+            String binaryIdentity = binaryName(classId);
+            target = targets.get(binaryIdentity);
+            if (target == null) externalIdentity = binaryIdentity;
         } else if (typeRef.getType() instanceof ConeTypeParameterType) {
             target = typeParameters.get(((ConeTypeParameterType) typeRef.getType()).getLookupTag()
                 .getTypeParameterSymbol());
         } else return;
-        if (target == null) return;
         PsiElement identifier = typeIdentifier(((KtPsiSourceElement) typeRef.getSource()).getPsi());
-        if (identifier == null || !identifier.getText().equals(target.name())) return;
-        addUsage(identifier, target, identities, usages);
+        if (identifier == null) return;
+        if (target != null) {
+            if (!identifier.getText().equals(target.name())) return;
+            addUsage(identifier, target, identities, usages);
+        } else if (externalIdentity != null &&
+            identifier.getText().equals(externalIdentity.substring(
+                Math.max(externalIdentity.lastIndexOf('.'), externalIdentity.lastIndexOf('$')) + 1
+            ))) {
+            addExternalUsage(identifier, externalIdentity, identities, usages);
+        }
     }
 
     private static void collectQualifier(
@@ -289,19 +315,27 @@ final class KotlinCompilerUsageExtractor {
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
-        if (!(qualifier.getSource() instanceof KtPsiSourceElement) ||
-            !(qualifier.getSymbol().getSource() instanceof KtPsiSourceElement)) return;
-        KtClassOrObject type = targetType(((KtPsiSourceElement) qualifier.getSymbol().getSource()).getPsi());
-        if (type == null || type.getClassId() == null || type.getClassId().isLocal()) return;
-        PsiElement targetIdentifier = typeIdentifier(type);
-        if (targetIdentifier == null) throw failure("kotlin.usageTargetLocationUnavailable");
-        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(
-            declarationKey(canonicalPath(type.getContainingKtFile()), targetIdentifier.getTextRange().getStartOffset())
-        );
-        if (target == null) throw failure("kotlin.usageTargetMissing");
+        if (!(qualifier.getSource() instanceof KtPsiSourceElement) || qualifier.getClassId() == null ||
+            qualifier.getClassId().isLocal()) return;
         PsiElement identifier = typeIdentifier(((KtPsiSourceElement) qualifier.getSource()).getPsi());
-        if (identifier == null || !identifier.getText().equals(target.name())) return;
-        addUsage(identifier, target, identities, usages);
+        if (identifier == null) return;
+        if (qualifier.getSymbol().getSource() instanceof KtPsiSourceElement) {
+            KtClassOrObject type = targetType(((KtPsiSourceElement) qualifier.getSymbol().getSource()).getPsi());
+            if (type == null) return;
+            PsiElement targetIdentifier = typeIdentifier(type);
+            if (targetIdentifier == null) throw failure("kotlin.usageTargetLocationUnavailable");
+            KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(
+                declarationKey(canonicalPath(type.getContainingKtFile()), targetIdentifier.getTextRange().getStartOffset())
+            );
+            if (target == null) throw failure("kotlin.usageTargetMissing");
+            if (identifier.getText().equals(target.name())) addUsage(identifier, target, identities, usages);
+        } else {
+            String binaryIdentity = binaryName(qualifier.getClassId());
+            String simpleName = binaryIdentity.substring(
+                Math.max(binaryIdentity.lastIndexOf('.'), binaryIdentity.lastIndexOf('$')) + 1
+            );
+            if (identifier.getText().equals(simpleName)) addExternalUsage(identifier, binaryIdentity, identities, usages);
+        }
     }
 
     private static void collectImport(
@@ -317,11 +351,16 @@ final class KotlinCompilerUsageExtractor {
         ClassId parent = resolvedImport.getResolvedParentClassId();
         ClassId classId = parent == null ? ClassId.topLevel(resolvedImport.getImportedFqName()) :
             parent.createNestedClassId(importedName);
-        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryName(classId));
-        if (target == null) return;
+        String binaryIdentity = binaryName(classId);
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryIdentity);
         PsiElement identifier = typeIdentifier(((KtPsiSourceElement) resolvedImport.getSource()).getPsi());
-        if (identifier == null || !identifier.getText().equals(target.name())) return;
-        addUsage(identifier, target, identities, usages);
+        if (identifier == null) return;
+        if (target != null) {
+            if (!identifier.getText().equals(target.name())) return;
+            addUsage(identifier, target, identities, usages);
+        } else if (identifier.getText().equals(importedName.asString())) {
+            addExternalUsage(identifier, binaryIdentity, identities, usages);
+        }
     }
 
     private static void addUsage(
@@ -338,6 +377,23 @@ final class KotlinCompilerUsageExtractor {
         if (!identities.add(identity)) return;
         if (usages.size() >= MAX_USAGES) throw failure("kotlin.usageLimitExceeded");
         usages.add(new ExtractedUsage(path.toString(), target.identity(), identifier.getText(), start, end));
+    }
+
+    private static void addExternalUsage(
+        PsiElement identifier,
+        String jvmBinaryName,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (!(identifier.getContainingFile() instanceof KtFile)) throw failure("kotlin.usageLocationUnavailable");
+        Path path = canonicalPath((KtFile) identifier.getContainingFile());
+        int start = identifier.getTextRange().getStartOffset();
+        int end = identifier.getTextRange().getEndOffset();
+        String targetIdentity = "external-jvm-type-v1:" + jvmBinaryName;
+        String identity = path + "\u0000" + start + "\u0000" + end + "\u0000" + targetIdentity;
+        if (!identities.add(identity)) return;
+        if (usages.size() >= MAX_USAGES) throw failure("kotlin.usageLimitExceeded");
+        usages.add(new ExtractedUsage(path.toString(), targetIdentity, identifier.getText(), start, end));
     }
 
     private static KtClassOrObject targetType(PsiElement target) {
