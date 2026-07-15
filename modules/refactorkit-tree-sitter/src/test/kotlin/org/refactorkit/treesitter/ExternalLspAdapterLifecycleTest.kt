@@ -206,7 +206,8 @@ class ExternalLspAdapterLifecycleTest {
         }
         Thread.sleep(100)
         cancelled.set(true)
-        request.join(2_000)
+        request.join(7_000)
+        assertFalse(request.isAlive, "acknowledged cancellation did not finish within the bounded shutdown window")
         val unavailable = assertIs<ExternalCompletionProjection.Unavailable>(projection)
         assertEquals("semantic.requestCancelled", unavailable.failure.code)
         assertTrue(adapter.isRunning)
@@ -234,7 +235,8 @@ class ExternalLspAdapterLifecycleTest {
         }
         Thread.sleep(100)
         cancelled.set(true)
-        request.join(2_000)
+        request.join(7_000)
+        assertFalse(request.isAlive, "unacknowledged cancellation did not finish within the bounded shutdown window")
         assertIs<ExternalCompletionProjection.Unavailable>(projection)
         assertFalse(adapter.isRunning)
         adapter.close()

@@ -48,7 +48,15 @@ return `diagnostics.savedSnapshotStale` before reconciliation or
 semantic adapter after reconciliation must not mask the stale request as
 `diagnostics.semanticSessionNotReady`; snapshot correlation is checked first.
 
-### RPK-PORT-006 — Qualification
+### RPK-PORT-006 — Cancellation acceptance bound
+
+External-provider cancellation tests shall allow the configured request-cancel
+acknowledgement window plus bounded graceful/forced process-tree termination and
+stderr-drain time. They must use a finite seven-second join bound, prove the
+request thread terminates, and then verify the typed cancellation result and
+provider liveness state; they must not inspect a result before termination.
+
+### RPK-PORT-007 — Qualification
 
 The correction is complete only when the full JVM suite and golden tests pass
 locally, packaged Kotlin acceptance remains green, and the Linux, Windows x86-64,
