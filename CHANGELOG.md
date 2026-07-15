@@ -9,6 +9,13 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Define the K4 managed Kotlin/JVM rename contract. The first implementation row
+  is deliberately limited to compiler-attested private source types in a
+  Kotlin-only module and requires a complete reference barrier, exact staged K2
+  diagnostics, normalized preview, explicit authorization, `PatchEngine`, WAL,
+  recovery and rollback. Existing partial K3 references grant no mutation
+  authority; broader declaration families and Java interoperability remain
+  mandatory before K4 completion.
 - Add saved-snapshot Java `definition`, bounded `references`, and typed `hover`
   queries backed only by Eclipse JDT bindings. Hover returns the exact selected
   range, binding-derived Java signature, qualified identity, bounded Javadoc,
