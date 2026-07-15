@@ -322,6 +322,29 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         stale = exchange("diagnostics.v2", stale_request)
         if stale.get("error") or stale["result"]["status"] != "refused" or stale["result"]["failure"]["code"] != "diagnostics.semanticLeaseStale":
             raise AssertionError(f"stale diagnostics lease was not refused: {stale}")
+
+        mark_stage("saved-file reconciliation")
+        probe = workspace / "src" / "main" / "java" / "WatchProbe.java"
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_text("public class WatchProbe {}\n")
+        refreshed = exchange("workspace.refresh")
+        refresh_result = refreshed.get("result", {})
+        if refreshed.get("error") or refresh_result.get("status") != "ready":
+            raise AssertionError(f"workspace refresh failed: {refreshed}")
+        if "java-source-declarations-v1" not in refresh_result.get("invalidatedProviders", []):
+            raise AssertionError(f"Java provider was not invalidated: {refresh_result}")
+        if "typescript" not in refresh_result.get("stoppedSemanticLanguages", []):
+            raise AssertionError(f"snapshot-bound TypeScript lease was not invalidated: {refresh_result}")
+        retained = exchange("index.status")
+        if not any(item.get("languageId") == "typescript" for item in retained["result"]["providers"]):
+            raise AssertionError(f"unrelated TypeScript partition was not retained: {retained}")
+        probe.unlink()
+        probe.parent.rmdir()
+        probe.parent.parent.rmdir()
+        removed = exchange("workspace.refresh")
+        if removed.get("error") or removed.get("result", {}).get("changes", {}).get("deleted") != 1:
+            raise AssertionError(f"saved-file deletion was not reconciled: {removed}")
+
         exchange("typescript.semantic.stop", {"languageId": "typescript"})
         stopped_index = exchange("index.status")
         if any(item.get("languageId") == "typescript" for item in stopped_index["result"]["providers"]):

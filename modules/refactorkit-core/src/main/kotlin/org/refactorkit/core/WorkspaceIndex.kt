@@ -327,6 +327,14 @@ class WorkspaceIndexSession {
     }
 
     @Synchronized
+    fun reconcile(snapshot: ProjectSnapshot): WorkspaceIndexReconciliation {
+        val index = requireNotNull(current) { "workspace index session is not open" }
+        val reconciliation = index.reconcile(snapshot)
+        current = reconciliation.index
+        return reconciliation
+    }
+
+    @Synchronized
     fun contribute(contribution: WorkspaceSymbolContribution): WorkspaceIndex {
         val index = requireNotNull(current) { "workspace index session is not open" }
         val updated = index.withContribution(contribution)

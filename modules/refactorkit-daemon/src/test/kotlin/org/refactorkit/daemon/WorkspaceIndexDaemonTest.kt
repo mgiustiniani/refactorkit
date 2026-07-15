@@ -11,10 +11,45 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class WorkspaceIndexDaemonTest {
     @TempDir lateinit var root: Path
+
+    @Test
+    fun `saved file watcher refreshes index before the next read`() {
+        write("src/main/java/example/UserService.java", "package example;\npublic class UserService {}\n")
+        DaemonSession().use { session ->
+            val opened = session.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+            Files.delete(root.resolve("src/main/java/example/UserService.java"))
+            write("src/main/java/example/AccountService.java", "package example;\npublic class AccountService {}\n")
+            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2)
+            var observed = false
+            while (System.nanoTime() < deadline) {
+                val watch = session.dispatch("workspace.watch.status", null).jsonObject
+                if (watch.getValue("dirty").jsonPrimitive.content.toBoolean()) {
+                    observed = true
+                    break
+                }
+                Thread.sleep(10)
+            }
+            assertTrue(observed)
+
+            val refreshed = session.dispatch("index.status", null).jsonObject
+
+            assertNotEquals(opened.getValue("snapshotHash").jsonPrimitive.content,
+                refreshed.getValue("snapshotHash").jsonPrimitive.content)
+            val query = session.dispatch("intelligence.query", buildJsonObject {
+                put("requestId", "watch-query"); put("expectedSnapshotHash", refreshed.getValue("snapshotHash"))
+                put("expectedIndexGeneration", refreshed.getValue("generation")); put("kind", "workspaceSymbols")
+                put("query", "AccountService"); put("languageId", "java")
+            }).jsonObject
+            assertEquals("AccountService", query.getValue("items").jsonArray.single().jsonObject
+                .getValue("name").jsonPrimitive.content)
+            assertFalse(Files.exists(root.resolve(".refactorkit")))
+        }
+    }
 
     @Test
     fun `project open builds a read-only whole-workspace index and searches symbols`() {

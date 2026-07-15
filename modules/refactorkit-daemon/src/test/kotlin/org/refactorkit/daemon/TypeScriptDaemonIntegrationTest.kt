@@ -54,11 +54,79 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class TypeScriptDaemonIntegrationTest {
+    @Test
+    fun savedFileRefreshRetainsUnrelatedPartitionsAndInvalidatesSemanticLeases() {
+        val root = Files.createTempDirectory("refactorkit-daemon-watch-refresh")
+        Files.createDirectories(root.resolve("src/main/java"))
+        root.resolve("src/service.ts").writeText("export class Service {}\n")
+        root.resolve("src/main/java/JavaService.java").writeText("public class JavaService {}\n")
+        root.resolve("tsconfig.json").writeText(
+            """{"compilerOptions":{"rootDir":"src"},"include":["src/**/*.ts"]}""",
+        )
+        val session = DaemonSession(
+            toolchainDiscovery = { _, _ -> TypeScriptToolchainDiscovery.Available(toolchain()) },
+            semanticAdapterFactory = { languageId, discovered, model ->
+                TypeScriptSemanticAdapter(languageId, discovered, model, FakeSemanticClient())
+            },
+        )
+        val opened = session.dispatch("project.open", objectParams("root" to root.toString())).jsonObject
+        val started = session.dispatch(
+            "typescript.semantic.start", objectParams("languageId" to "typescript"),
+        ).jsonObject
+        val oldLease = started.getValue("semanticLease").jsonPrimitive.content
+        root.resolve("src/main/java/JavaService.java").writeText("public class AccountService {}\n")
+
+        val javaRefresh = session.dispatch("workspace.refresh", null).jsonObject
+        assertEquals("ready", javaRefresh.getValue("status").jsonPrimitive.content)
+        assertEquals(listOf("java-source-declarations-v1"), javaRefresh.getValue("invalidatedProviders").jsonArray.map {
+            it.jsonPrimitive.content
+        })
+        assertEquals(listOf("typescript"), javaRefresh.getValue("stoppedSemanticLanguages").jsonArray.map {
+            it.jsonPrimitive.content
+        })
+        val afterJava = session.dispatch("index.status", null).jsonObject
+        assertTrue(afterJava.getValue("providers").jsonArray.any {
+            it.jsonObject.getValue("languageId").jsonPrimitive.content == "typescript"
+        })
+        assertTrue(session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "after-java-refresh"); put("expectedSnapshotHash", javaRefresh.getValue("snapshotHash"))
+            put("expectedIndexGeneration", javaRefresh.getValue("generation")); put("kind", "workspaceSymbols")
+            put("query", "AccountService"); put("languageId", "java")
+        }).jsonObject.getValue("items").jsonArray.any {
+            it.jsonObject.getValue("name").jsonPrimitive.content == "AccountService"
+        })
+
+        root.resolve("src/service.ts").writeText("export class ChangedService {}\n")
+        val typeScriptRefresh = session.dispatch("workspace.refresh", null).jsonObject
+        assertTrue(typeScriptRefresh.getValue("invalidatedProviders").jsonArray.any {
+            it.jsonPrimitive.content == "typescript-lsp-symbols-v1"
+        })
+        assertTrue(session.dispatch("index.status", null).jsonObject.getValue("providers").jsonArray.none {
+            it.jsonObject.getValue("languageId").jsonPrimitive.content == "typescript"
+        })
+        val staleLease = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "old-lease"); put("expectedSnapshotHash", typeScriptRefresh.getValue("snapshotHash"))
+            put("expectedIndexGeneration", typeScriptRefresh.getValue("generation")); put("kind", "hover")
+            put("languageId", "typescript"); put("path", "src/service.ts"); put("semanticLease", oldLease)
+            put("position", buildJsonObject { put("line", 0); put("character", 13) })
+            put("sourceAuthority", buildJsonObject {
+                put("kind", "immutable-editor-overlay"); put("documents", buildJsonArray { add(buildJsonObject {
+                    put("path", "src/service.ts"); put("version", 1); put("content", "export class ChangedService {}\n")
+                }) })
+            })
+        }).jsonObject
+        assertEquals("intelligence.semanticLeaseStale", staleLease.getValue("error").jsonObject
+            .getValue("code").jsonPrimitive.content)
+        assertFalse(Files.exists(root.resolve(".refactorkit")))
+        session.close()
+    }
+
     @Test
     fun invalidTypeScriptSymbolProjectionIsRefusedWithoutEndingTheSemanticSession() {
         val root = Files.createTempDirectory("refactorkit-daemon-ts-invalid-index")

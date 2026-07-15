@@ -36,7 +36,11 @@ The shared `ImmutableEditorOverlay` now derives versioned in-memory provider
 snapshots and binds exact overlay authority into typed semantic-query envelopes;
 TypeScript exact diagnostics consume that shared model. Workspace/document symbol
 queries and the first TypeScript/JavaScript completion, hover, and signature-help
-rows are implemented. Interactive daemon reads use cooperative cancellation and
+rows are implemented. A bounded recursive saved-file watcher marks the session
+for reconciliation; the single daemon worker publishes a new immutable snapshot
+and index generation, preserves unrelated partitions, removes changed-language
+partitions, and invalidates exact-snapshot semantic leases. Watcher failure or
+overflow uses refresh-before-request. Interactive daemon reads use cooperative cancellation and
 barrier-aware priority scheduling: reads may reorder only between FIFO stateful
 control/mutation barriers. Position-based navigation and other provider rows remain
 refused until their persistent JDT, tsserver and K2 implementations qualify. The long-range `v1.0.0` roadmap evolves

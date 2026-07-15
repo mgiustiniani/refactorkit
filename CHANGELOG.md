@@ -9,6 +9,12 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add bounded recursive saved-file watching and explicit `workspace.refresh` /
+  `workspace.watch.status`. Snapshot reconciliation reports added, modified and
+  deleted sources, retains unrelated language partitions, rebuilds invalidated
+  Java declarations, removes invalid provider partitions and invalidates all
+  snapshot-bound semantic leases without writing workspace metadata. Watcher
+  failure or directory overflow falls back to fail-closed refresh-before-request.
 - Add barrier-aware daemon scheduling for semantic reads. Interactive, normal and
   background queries reorder only between FIFO stateful/control barriers.
   `intelligence.cancel` cancels queued or active requests by semantic request ID;

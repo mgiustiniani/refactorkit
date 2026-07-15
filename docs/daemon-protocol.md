@@ -113,6 +113,16 @@ bounded overloads, exact parameter-label spans, and active signature/parameter
 state. The response schema is
 [`api-0.2-intelligence-query-schema.json`](api-0.2-intelligence-query-schema.json).
 
+The daemon recursively watches saved workspace files after `project.open` without
+creating metadata. `workspace.watch.status` reports active/failed state, bounded
+directory/event counters, overflow and refresh count. `workspace.refresh` forces
+a rescan and returns the new snapshot/generation, change counts, a bounded path
+sample, invalidated providers and stopped semantic languages; result schema:
+[`api-0.2-workspace-refresh-schema.json`](api-0.2-workspace-refresh-schema.json).
+Automatic refresh
+runs before later requests after coalesced events. Watcher failure or the 4,096-
+directory bound falls back to refresh-before-request.
+
 `intelligence.cancel` accepts a semantic `requestId`. A queued or running query
 finishes with JSON-RPC error `-32800`. Running LSP operations receive
 `$/cancelRequest`; acknowledged cancellation preserves the provider lease, while

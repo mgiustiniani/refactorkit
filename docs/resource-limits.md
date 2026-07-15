@@ -13,6 +13,7 @@ heap exhaustion.
 |---|---:|---|
 | Daemon NDJSON request | 1,048,576 UTF-8 bytes | JSON-RPC `INVALID_REQUEST`; session continues |
 | Daemon queued requests | 256 | Further requests receive `INVALID_REQUEST`; queued/running intelligence requests remain cancellable |
+| Saved-workspace watcher | 4,096 recursively registered directories; 200 returned changed paths/refresh | Events are coalesced; overflow/failure falls back to full refresh before each request; refresh reports path truncation |
 | MCP NDJSON request | 1,048,576 UTF-8 bytes | JSON-RPC `INVALID_REQUEST`; session continues |
 | LSP frame | 1,048,576 bytes | JSON-RPC `INVALID_REQUEST`; connection closes because the rejected body is not buffered |
 | Pending plans per daemon/MCP/LSP session | 128 | Least-recently-used plan is evicted; applying an evicted ID returns deterministic invalid-params/not-found |

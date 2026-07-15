@@ -108,6 +108,15 @@ import java.util.UUID
  * One session per daemon process. Each call is synchronous; the stdio loop
  * serialises concurrent requests naturally.
  */
+private data class WorkspaceRefreshOutcome(
+    val status: String,
+    val generation: Long,
+    val changes: org.refactorkit.core.WorkspaceIndexChanges? = null,
+    val invalidatedProviders: Set<String> = emptySet(),
+    val stoppedSemanticLanguages: Set<String> = emptySet(),
+    val message: String? = null,
+)
+
 class DaemonSession(
     private val toolchainDiscovery: (TypeScriptToolchainRequest, TypeScriptToolchainDiscoveryPolicy) -> TypeScriptToolchainDiscovery =
         { request, policy -> TypeScriptToolchainDiscoverer(policy).discover(request) },
@@ -128,6 +137,10 @@ class DaemonSession(
     private var kotlinToolchain: KotlinSemanticToolchain? = null
     private var kotlinSemanticLease: String? = null
     private val workspaceIndex = WorkspaceIndexSession()
+    private var savedWorkspaceWatcher: SavedWorkspaceWatcher? = null
+    private var savedWorkspaceWatcherFailure: String? = null
+    private var workspaceRefreshCount: Long = 0
+    private var lastWorkspaceRefresh: WorkspaceRefreshOutcome? = null
 
     private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
@@ -139,12 +152,19 @@ class DaemonSession(
         method: String,
         params: JsonObject?,
         cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
-    ): JsonElement = when (method) {
+    ): JsonElement {
+        if (method !in setOf(
+                "server.version", "server.capabilities", "project.open", "workspace.watch.status",
+                "workspace.refresh", "patch.recover",
+            )) refreshSavedWorkspaceIfDirty()
+        return when (method) {
         "server.version"      -> serverVersion()
         "server.capabilities" -> serverCapabilities()
         "project.open"        -> projectOpen(params)
         "project.summary"   -> projectSummary()
         "index.status"      -> indexStatus()
+        "workspace.watch.status" -> workspaceWatchStatus()
+        "workspace.refresh" -> workspaceRefresh()
         "intelligence.query" -> intelligenceQuery(params, cancellation)
         "typescript.semantic.start" -> typeScriptSemanticStart(params)
         "typescript.semantic.restart" -> typeScriptSemanticRestart(params)
@@ -166,6 +186,7 @@ class DaemonSession(
         "patch.rollback"    -> patchRollback(params)
         "java.importExternalClass" -> javaImportExternalClass(params)
         else -> throw JsonRpcException(JsonRpcErrorCodes.METHOD_NOT_FOUND, "Method not found: $method")
+        }
     }
 
     // ── methods ───────────────────────────────────────────────────────────────
@@ -210,6 +231,7 @@ class DaemonSession(
     }
 
     private fun projectOpen(params: JsonObject?): JsonElement {
+        closeSavedWorkspaceWatcher()
         closeSemanticAdapters()
         pendingPlans.clear()
         snapshot = null
@@ -230,6 +252,9 @@ class DaemonSession(
         snapshot = snap
         workspaceRoot = path
         val index = openWorkspaceIndex(snap)
+        val watcher = SavedWorkspaceWatcher.start(path)
+        savedWorkspaceWatcher = watcher.getOrNull()
+        savedWorkspaceWatcherFailure = watcher.exceptionOrNull()?.javaClass?.simpleName
         return buildJsonObject {
             put("root", workspaceRoot.toString())
             put("fileCount", snap.files.size)
@@ -238,6 +263,7 @@ class DaemonSession(
             put("indexGeneration", index.generation)
             put("indexedSourceCount", index.sources.size)
             put("indexedSymbolCount", index.symbolCount)
+            put("watcherState", if (savedWorkspaceWatcher != null) "active" else "unavailable")
         }
     }
 
@@ -263,6 +289,114 @@ class DaemonSession(
             "No project open",
         ),
     )
+
+    private fun workspaceRefresh(): JsonElement = workspaceRefreshToJson(refreshSavedWorkspace(force = true))
+
+    private fun workspaceWatchStatus(): JsonElement {
+        requireSnapshot()
+        val status = savedWorkspaceWatcher?.status()
+        return buildJsonObject {
+            put("schemaVersion", 1)
+            put("state", status?.state ?: "unavailable")
+            put("dirty", status?.dirty ?: false)
+            put("watchedDirectories", status?.watchedDirectories ?: 0)
+            put("observedEvents", status?.observedEvents ?: 0)
+            put("overflowed", status?.overflowed ?: false)
+            put("refreshCount", workspaceRefreshCount)
+            (status?.failure ?: savedWorkspaceWatcherFailure)?.let { put("failure", it) }
+            lastWorkspaceRefresh?.let { put("lastRefresh", workspaceRefreshToJson(it)) }
+        }
+    }
+
+    private fun refreshSavedWorkspaceIfDirty() {
+        if (snapshot == null) return
+        val watcher = savedWorkspaceWatcher
+        val status = watcher?.status()
+        if (watcher == null || watcher.consumeDirty() || status?.overflowed == true || status?.state != "active") {
+            refreshSavedWorkspace(force = true)
+        }
+    }
+
+    private fun refreshSavedWorkspace(force: Boolean): WorkspaceRefreshOutcome {
+        if (force) savedWorkspaceWatcher?.consumeDirty()
+        val current = snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        if (!force) return WorkspaceRefreshOutcome(
+            "unchanged", workspaceIndex.snapshot()?.generation ?: 0,
+        )
+        val next = try {
+            scanWorkspace(root)
+        } catch (problem: Exception) {
+            savedWorkspaceWatcher?.markDirty()
+            return WorkspaceRefreshOutcome(
+                "refused", workspaceIndex.snapshot()?.generation ?: 0,
+                message = problem.javaClass.simpleName,
+            ).also { lastWorkspaceRefresh = it }
+        }
+        workspaceRefreshCount++
+        if (next.hash == current.hash) return WorkspaceRefreshOutcome(
+            "unchanged", workspaceIndex.snapshot()?.generation ?: 0,
+        ).also { lastWorkspaceRefresh = it }
+
+        val reconciliation = workspaceIndex.reconcile(next)
+        snapshot = next
+        val stoppedLanguages = semanticAdapters.keys.toSortedSet()
+        semanticAdapters.values.forEach(TypeScriptSemanticAdapter::close)
+        semanticAdapters.clear()
+        semanticLeases.clear()
+        if (kotlinSemanticLease != null || kotlinToolchain != null) {
+            stoppedLanguages += "kotlin"
+            kotlinSemanticLease = null
+            kotlinToolchain = null
+            kotlinAdapter = KotlinLanguageAdapter()
+        }
+        var refreshed = reconciliation.index
+        if ("java-source-declarations-v1" in reconciliation.invalidatedProviders) {
+            val symbols = adapter.buildSymbols(next).symbols
+            val limit = ProtocolLimits.MAX_WORKSPACE_INDEX_PROVIDER_SYMBOLS
+            refreshed = workspaceIndex.contribute(WorkspaceSymbolContribution(
+                providerId = "java-source-declarations-v1",
+                languageId = "java",
+                backend = "java-source-declarations-v1",
+                evidence = SemanticEvidenceKind.LEXICAL,
+                completeness = WorkspaceIndexCompleteness.DECLARATIONS,
+                snapshotHash = next.hash,
+                symbols = symbols.take(limit),
+                truncated = symbols.size > limit,
+            ))
+        }
+        return WorkspaceRefreshOutcome(
+            status = "ready",
+            generation = refreshed.generation,
+            changes = reconciliation.changes,
+            invalidatedProviders = reconciliation.invalidatedProviders,
+            stoppedSemanticLanguages = stoppedLanguages,
+        ).also { lastWorkspaceRefresh = it }
+    }
+
+    private fun workspaceRefreshToJson(outcome: WorkspaceRefreshOutcome): JsonElement = buildJsonObject {
+        put("status", outcome.status)
+        put("snapshotHash", workspaceIndex.snapshot()?.snapshotHash ?: "")
+        put("generation", outcome.generation)
+        outcome.message?.let { put("message", it) }
+        put("invalidatedProviders", buildJsonArray {
+            outcome.invalidatedProviders.sorted().forEach { add(JsonPrimitive(it)) }
+        })
+        put("stoppedSemanticLanguages", buildJsonArray {
+            outcome.stoppedSemanticLanguages.sorted().forEach { add(JsonPrimitive(it)) }
+        })
+        outcome.changes?.let { changes ->
+            put("changes", buildJsonObject {
+                put("added", changes.added.size); put("modified", changes.modified.size)
+                put("deleted", changes.deleted.size); put("unchanged", changes.unchanged.size)
+                val paths = changes.changed.sortedBy(Path::toString)
+                put("paths", buildJsonArray {
+                    paths.take(ProtocolLimits.MAX_SYMBOL_RESULTS).forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
+                })
+                put("pathsTruncated", paths.size > ProtocolLimits.MAX_SYMBOL_RESULTS)
+            })
+        }
+    }
 
     private fun workspaceIndexStatus(index: WorkspaceIndex): JsonElement = buildJsonObject {
         put("schemaVersion", 1)
@@ -1365,12 +1499,14 @@ class DaemonSession(
 
     private fun typeScriptSemanticStop(params: JsonObject?): JsonElement {
         val languageId = params?.string("languageId") ?: "typescript"
-        val stopped = semanticAdapters.remove(languageId)?.let {
-            it.close()
-            semanticLeases.remove(languageId)
-            removeTypeScriptIndex(languageId)
-            true
-        } ?: false
+        val hadPartition = workspaceIndex.snapshot()?.contributions?.any {
+            it.providerId == typeScriptIndexProviderId(languageId)
+        } == true
+        val adapter = semanticAdapters.remove(languageId)
+        adapter?.close()
+        val hadLease = semanticLeases.remove(languageId) != null
+        removeTypeScriptIndex(languageId)
+        val stopped = adapter != null || hadLease || hadPartition
         return buildJsonObject {
             put("languageId", languageId)
             put("stopped", stopped)
@@ -1684,6 +1820,14 @@ class DaemonSession(
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private fun closeSavedWorkspaceWatcher() {
+        savedWorkspaceWatcher?.close()
+        savedWorkspaceWatcher = null
+        savedWorkspaceWatcherFailure = null
+        lastWorkspaceRefresh = null
+        workspaceRefreshCount = 0
+    }
 
     private fun closeSemanticAdapters() {
         semanticAdapters.values.forEach { runCatching { it.close() } }
@@ -2012,6 +2156,7 @@ class DaemonSession(
     }
 
     override fun close() {
+        closeSavedWorkspaceWatcher()
         closeSemanticAdapters()
         pendingPlans.clear()
         snapshot = null
@@ -2072,6 +2217,17 @@ class DaemonSession(
                     "providerContributions" to true,
                     "snapshotBound" to true,
                     "bounded" to true,
+                ),
+            ),
+            DaemonMethodCapability(
+                "workspace.watch.status", "experimental", true, false,
+                mapOf("recursiveSavedFiles" to true, "boundedDirectories" to true, "readOnly" to true),
+            ),
+            DaemonMethodCapability(
+                "workspace.refresh", "experimental", true, false,
+                mapOf(
+                    "reconcile" to true, "providerInvalidation" to true,
+                    "semanticLeaseInvalidation" to true, "typedSchema" to true,
                 ),
             ),
             DaemonMethodCapability(

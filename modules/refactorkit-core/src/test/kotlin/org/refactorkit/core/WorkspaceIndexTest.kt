@@ -71,6 +71,22 @@ class WorkspaceIndexTest {
     }
 
     @Test
+    fun `session reconciliation atomically publishes inventory and invalidations`() {
+        val first = snapshot()
+        val session = WorkspaceIndexSession()
+        session.open(first)
+        session.contribute(contribution(first))
+        val second = snapshot(java = "package example; public class AccountService {}\n")
+
+        val reconciliation = session.reconcile(second)
+
+        assertEquals(second.hash, session.snapshot()?.snapshotHash)
+        assertEquals(setOf("java-source-declarations-v1"), reconciliation.invalidatedProviders)
+        assertTrue(javaPath in reconciliation.changes.modified)
+        assertEquals(0, session.snapshot()?.symbolCount)
+    }
+
+    @Test
     fun `reconciliation invalidates only providers for changed languages`() {
         val first = snapshot()
         val session = WorkspaceIndexSession()
