@@ -143,6 +143,20 @@ try:
         definition_request["expectedIndexGeneration"] = definition["indexGeneration"]
         cached_definition = call(10, "intelligence.query", definition_request)
         assert cached_definition["cache"]["hits"] == 1
+        references_request = dict(definition_request)
+        references_request.update({
+            "requestId": "packaged-java-references",
+            "expectedIndexGeneration": cached_definition["indexGeneration"],
+            "kind": "references", "includeDeclaration": True, "limit": 10,
+        })
+        references = call(11, "intelligence.query", references_request)
+        assert references["total"] == 2 and references["returned"] == 2 and not references["truncated"]
+        assert references["complete"] is True and references["warningCount"] == 0
+        assert {item["path"] for item in references["references"]} == {
+            "module/src/main/java/com/example/App.java",
+            "module/src/main/java/com/example/Use.java",
+        }
+        assert references["cache"]["hits"] == 2
 
         preview = call(3, "java.importExternalClass", {
             "sourceKind": "clipboard",
@@ -197,4 +211,4 @@ finally:
     if stderr_source_leaked:
         raise AssertionError("raw clipboard source leaked to daemon stderr")
 
-print("Packaged daemon smoke passed: bounded RPC, spaced launcher, preview, exact apply, WAL rollback, EOF shutdown.")
+print("Packaged daemon smoke passed: bounded RPC, cached JDT navigation, preview, exact apply, WAL rollback, EOF shutdown.")

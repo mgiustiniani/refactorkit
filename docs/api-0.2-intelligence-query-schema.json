@@ -6,6 +6,7 @@
     {"$ref": "#/$defs/ready"},
     {"$ref": "#/$defs/completion"},
     {"$ref": "#/$defs/definition"},
+    {"$ref": "#/$defs/references"},
     {"$ref": "#/$defs/hover"},
     {"$ref": "#/$defs/signatureHelp"},
     {"$ref": "#/$defs/refused"}
@@ -104,6 +105,36 @@
             "evidence": {"const": "compiler"}, "completeness": {"const": "semantic"},
             "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "locations": {"type": "array", "maxItems": 1, "items": {"$ref": "#/$defs/location"}},
+            "sourceAuthority": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "contentSha256"], "properties": {
+              "kind": {"const": "saved-snapshot"}, "path": {"type": "string"},
+              "contentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }},
+            "cache": {"type": "object", "additionalProperties": false, "required": ["entries", "hits", "misses"], "properties": {
+              "entries": {"type": "integer", "minimum": 1, "maximum": 2},
+              "hits": {"type": "integer", "minimum": 0}, "misses": {"type": "integer", "minimum": 0}
+            }}
+          }
+        }
+      ]
+    },
+    "references": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "providerId", "backend", "evidence", "completeness", "provenanceHash", "total", "returned", "truncated", "complete", "warningCount", "references", "sourceAuthority", "cache"],
+          "properties": {
+            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
+            "status": {"const": "ready"}, "kind": {"const": "references"},
+            "providerId": {"const": "java-jdt-bindings-v1"},
+            "backend": {"const": "eclipse-jdt-3.44-bindings-v1"},
+            "evidence": {"const": "compiler"}, "completeness": {"const": "semantic"},
+            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "total": {"type": "integer", "minimum": 0}, "returned": {"type": "integer", "minimum": 0, "maximum": 1000},
+            "truncated": {"type": "boolean"}, "complete": {"type": "boolean"},
+            "warningCount": {"type": "integer", "minimum": 0},
+            "references": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/location"}},
             "sourceAuthority": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "contentSha256"], "properties": {
               "kind": {"const": "saved-snapshot"}, "path": {"type": "string"},
               "contentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}

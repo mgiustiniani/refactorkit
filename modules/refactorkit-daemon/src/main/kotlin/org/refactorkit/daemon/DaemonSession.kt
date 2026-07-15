@@ -59,6 +59,7 @@ import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaJdtDefinitionProjection
+import org.refactorkit.java.JavaJdtReferencesProjection
 import org.refactorkit.java.JdtJavaAnalysisCache
 import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
@@ -468,7 +469,7 @@ class DaemonSession(
             "intelligence.indexStale",
             "Expected workspace index generation is stale",
         )
-        if (kind !in setOf("workspaceSymbols", "documentSymbols", "completion", "hover", "signatureHelp", "definition")) return intelligenceRefusal(
+        if (kind !in setOf("workspaceSymbols", "documentSymbols", "completion", "hover", "signatureHelp", "definition", "references")) return intelligenceRefusal(
             requestId,
             kind,
             index,
@@ -480,15 +481,16 @@ class DaemonSession(
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "query is too long")
         }
         val languageId = p.string("languageId")
-        val requestedLimit = p.string("limit")?.toIntOrNull() ?: ProtocolLimits.MAX_SYMBOL_RESULTS
-        if (requestedLimit !in 1..ProtocolLimits.MAX_SYMBOL_RESULTS) {
+        val maximumLimit = if (kind == "references") ProtocolLimits.MAX_REFERENCE_RESULTS else ProtocolLimits.MAX_SYMBOL_RESULTS
+        val requestedLimit = p.string("limit")?.toIntOrNull() ?: maximumLimit
+        if (requestedLimit !in 1..maximumLimit) {
             throw JsonRpcException(
                 JsonRpcErrorCodes.INVALID_PARAMS,
-                "limit must be between 1 and ${ProtocolLimits.MAX_SYMBOL_RESULTS}",
+                "limit must be between 1 and $maximumLimit",
             )
         }
         val path = p.string("path")?.let(::protocolRelativePath)
-        if (kind in setOf("documentSymbols", "definition") && path == null) missing("path")
+        if (kind in setOf("documentSymbols", "definition", "references") && path == null) missing("path")
         val sourceAuthority = p["sourceAuthority"] as? JsonObject
         if (sourceAuthority?.string("kind") == "immutable-editor-overlay") {
             if (kind !in setOf("documentSymbols", "completion", "hover", "signatureHelp") || path == null) return intelligenceRefusal(
@@ -625,13 +627,58 @@ class DaemonSession(
                         requestId, kind, workspaceIndex.snapshot() ?: index,
                         "intelligence.cancelled", "Interactive semantic query was cancelled",
                     )
-                    val updated = ensureJavaJdtContribution(requireSnapshot(), definition)
+                    val updated = ensureJavaJdtContribution(
+                        requireSnapshot(), definition.symbols, definition.provenanceHash,
+                    )
                     javaDefinitionResponse(requestId, updated, targetPath, definition)
                 }
                 is JavaJdtDefinitionProjection.Refused -> intelligenceRefusal(
                     requestId, kind, workspaceIndex.snapshot() ?: index,
                     definition.diagnostic.code ?: "intelligence.definitionUnavailable",
                     definition.diagnostic.message,
+                )
+            }
+        }
+        if (kind == "references") {
+            if (languageId != "java") return intelligenceRefusal(
+                requestId, kind, index, "intelligence.referencesProviderUnsupported",
+                "Saved-snapshot references currently require Java JDT provider authority",
+            )
+            if (sourceAuthority?.string("kind") != "saved-snapshot") return intelligenceRefusal(
+                requestId, kind, index, "intelligence.referencesSavedSnapshotRequired",
+                "Java references require saved-snapshot source authority",
+            )
+            val includeDeclaration = p.string("includeDeclaration")?.toBooleanStrictOrNull()
+                ?: if ("includeDeclaration" in p) throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS, "includeDeclaration must be boolean",
+                ) else true
+            val targetPath = requireNotNull(path)
+            val positionObject = p["position"] as? JsonObject ?: missing("position")
+            val line = positionObject.string("line")?.toIntOrNull() ?: missing("position.line")
+            val character = positionObject.string("character")?.toIntOrNull() ?: missing("position.character")
+            if (line < 0 || character < 0) throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS, "references position must be non-negative",
+            )
+            val location = SourceLocation(
+                targetPath, SourceRange(SourcePosition(line, character), SourcePosition(line, character)),
+            )
+            return when (val references = adapter.semanticReferences(
+                requireSnapshot(), location, includeDeclaration, requestedLimit, cancellation,
+            )) {
+                is JavaJdtReferencesProjection.Available -> {
+                    if (cancellation.isCancellationRequested()) return intelligenceRefusal(
+                        requestId, kind, workspaceIndex.snapshot() ?: index,
+                        "intelligence.cancelled", "Interactive semantic query was cancelled",
+                    )
+                    val updated = ensureJavaJdtContribution(
+                        requireSnapshot(), references.symbols, references.provenanceHash,
+                    )
+                    javaReferencesResponse(requestId, updated, targetPath, references)
+                }
+                is JavaJdtReferencesProjection.Refused -> intelligenceRefusal(
+                    requestId, kind, workspaceIndex.snapshot() ?: index,
+                    references.diagnostic.code ?: "intelligence.referencesUnavailable",
+                    references.diagnostic.message,
                 )
             }
         }
@@ -693,11 +740,12 @@ class DaemonSession(
 
     private fun ensureJavaJdtContribution(
         snapshot: ProjectSnapshot,
-        projection: JavaJdtDefinitionProjection.Available,
+        symbols: List<org.refactorkit.core.Symbol>,
+        provenanceHash: String,
     ): WorkspaceIndex {
         val current = workspaceIndex.snapshot() ?: error("workspace index is not open")
         val existing = current.contributions.singleOrNull { it.providerId == JdtJavaAnalysisCache.PROVIDER_ID }
-        if (existing?.provenanceHash == projection.provenanceHash && existing.snapshotHash == snapshot.hash) return current
+        if (existing?.provenanceHash == provenanceHash && existing.snapshotHash == snapshot.hash) return current
         val limit = ProtocolLimits.MAX_WORKSPACE_INDEX_PROVIDER_SYMBOLS
         return workspaceIndex.contribute(WorkspaceSymbolContribution(
             providerId = JdtJavaAnalysisCache.PROVIDER_ID,
@@ -706,10 +754,36 @@ class DaemonSession(
             evidence = SemanticEvidenceKind.COMPILER,
             completeness = WorkspaceIndexCompleteness.SEMANTIC,
             snapshotHash = snapshot.hash,
-            symbols = projection.symbols.take(limit),
-            truncated = projection.symbols.size > limit,
-            provenanceHash = projection.provenanceHash,
+            symbols = symbols.take(limit),
+            truncated = symbols.size > limit,
+            provenanceHash = provenanceHash,
         ))
+    }
+
+    private fun javaReferencesResponse(
+        requestId: String,
+        index: WorkspaceIndex,
+        path: Path,
+        references: JavaJdtReferencesProjection.Available,
+    ): JsonElement = buildJsonObject {
+        put("schemaVersion", 1); put("requestId", requestId); put("status", "ready"); put("kind", "references")
+        put("snapshotHash", index.snapshotHash); put("indexGeneration", index.generation)
+        put("providerId", JdtJavaAnalysisCache.PROVIDER_ID); put("backend", JdtJavaAnalysisCache.BACKEND)
+        put("evidence", "compiler"); put("completeness", "semantic"); put("provenanceHash", references.provenanceHash)
+        put("total", references.total); put("returned", references.references.size); put("truncated", references.truncated)
+        put("complete", references.complete); put("warningCount", references.warningCount)
+        put("references", buildJsonArray { references.references.forEach { reference ->
+            add(intelligenceLocationToJson(reference.location))
+        } })
+        val source = index.sources.single { it.path == path.normalize() }
+        put("sourceAuthority", buildJsonObject {
+            put("kind", "saved-snapshot"); put("path", ProtocolPath.serialize(source.path))
+            put("contentSha256", source.contentSha256)
+        })
+        val cache = adapter.semanticCacheStatus()
+        put("cache", buildJsonObject {
+            put("entries", cache.entries); put("hits", cache.hits); put("misses", cache.misses)
+        })
     }
 
     private fun javaDefinitionResponse(
@@ -2328,7 +2402,8 @@ class DaemonSession(
                     "definitionAtPosition" to true,
                     "javaSavedSnapshotDefinition" to true,
                     "snapshotKeyedJdtCache" to true,
-                    "referencesAtPosition" to false,
+                    "referencesAtPosition" to true,
+                    "javaSavedSnapshotReferences" to true,
                     "snapshotBound" to true,
                     "typedRefusal" to true,
                     "cooperativeCancellation" to true,

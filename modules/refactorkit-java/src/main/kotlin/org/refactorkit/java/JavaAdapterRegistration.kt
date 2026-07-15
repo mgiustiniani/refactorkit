@@ -19,6 +19,10 @@ object JavaAdapterRegistration {
                     "definition", CapabilityStability.EXPERIMENTAL,
                     SemanticEvidenceKind.COMPILER, MutationAuthority.NONE,
                 ),
+                LanguageCapability(
+                    "references", CapabilityStability.EXPERIMENTAL,
+                    SemanticEvidenceKind.COMPILER, MutationAuthority.NONE,
+                ),
                 stable("renameClass", SemanticEvidenceKind.COMPILER),
                 stable("renameMember", SemanticEvidenceKind.COMPILER),
                 stable("moveClass", SemanticEvidenceKind.COMPILER),

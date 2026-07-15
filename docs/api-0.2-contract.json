@@ -41,7 +41,7 @@
                     "hover": true, "immutableEditorOverlayHover": true,
                     "signatureHelp": true, "immutableEditorOverlaySignatureHelp": true, "definitionAtPosition": true,
                     "javaSavedSnapshotDefinition": true, "snapshotKeyedJdtCache": true,
-                    "referencesAtPosition": false, "snapshotBound": true, "typedRefusal": true,
+                    "referencesAtPosition": true, "javaSavedSnapshotReferences": true, "snapshotBound": true, "typedRefusal": true,
                     "cooperativeCancellation": true, "barrierAwarePriorityScheduling": true,
                     "bounded": true}},
       {"name": "intelligence.cancel", "stability": "experimental", "requiresProject": false, "writesWorkspace": false,

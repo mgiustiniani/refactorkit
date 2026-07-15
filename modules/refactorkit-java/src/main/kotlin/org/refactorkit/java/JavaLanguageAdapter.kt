@@ -31,6 +31,19 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Comparator
 
+sealed interface JavaJdtReferencesProjection {
+    data class Available(
+        val references: List<Reference>,
+        val total: Int,
+        val truncated: Boolean,
+        val complete: Boolean,
+        val warningCount: Int,
+        val symbols: List<Symbol>,
+        val provenanceHash: String,
+    ) : JavaJdtReferencesProjection
+    data class Refused(val diagnostic: Diagnostic) : JavaJdtReferencesProjection
+}
+
 sealed interface JavaJdtDefinitionProjection {
     data class Available(
         val location: SourceLocation?,
@@ -227,20 +240,7 @@ class JavaLanguageAdapter(
         return try {
             val cached = jdtCache.get(project, cancellation)
             val boundSymbols = cached.analysis.symbols.filter { !it.bindingKey.isNullOrBlank() }
-            val declaration = boundSymbols.firstOrNull { symbol ->
-                symbol.path.normalize() == location.path.normalize() && symbol.sourceRange.contains(location.range.start)
-            }
-            val reference = if (declaration == null) cached.analysis.references.firstOrNull { reference ->
-                reference.path.normalize() == location.path.normalize() &&
-                    !reference.bindingKey.isNullOrBlank() && reference.sourceRange.contains(location.range.start)
-            } else null
-            val target = declaration ?: reference?.let { use ->
-                boundSymbols.singleOrNull { it.bindingKey == use.bindingKey }
-                    ?: boundSymbols.singleOrNull {
-                        it.qualifiedName == use.symbolQualifiedName && it.kind == use.symbolKind &&
-                            it.memberSignature == use.symbolSignature
-                    }
-            }
+            val target = boundTarget(cached.analysis, boundSymbols, location)
             val symbols = boundSymbols.map { it.toCoreSymbol() }
                 .distinctBy { it.id to it.location }
                 .sortedWith(compareBy({ it.id.value }, { it.location.path.toString() },
@@ -268,9 +268,90 @@ class JavaLanguageAdapter(
         }
     }
 
+    fun semanticReferences(
+        project: ProjectSnapshot,
+        location: SourceLocation,
+        includeDeclaration: Boolean,
+        limit: Int,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): JavaJdtReferencesProjection {
+        require(limit in 1..org.refactorkit.core.ProtocolLimits.MAX_REFERENCE_RESULTS) {
+            "Java semantic reference limit is invalid"
+        }
+        lastSnapshot = project
+        val file = project.files.singleOrNull { it.path.normalize() == location.path.normalize() && it.languageId == "java" }
+            ?: return JavaJdtReferencesProjection.Refused(Diagnostic(
+                "Java references path is not part of the saved snapshot", Diagnostic.Severity.ERROR, location,
+                code = "java.referencesPathMissing",
+            ))
+        if (!validPosition(file.content, location.range.start)) return JavaJdtReferencesProjection.Refused(Diagnostic(
+            "Java references position is outside the saved document", Diagnostic.Severity.ERROR, location,
+            code = "java.referencesPositionInvalid",
+        ))
+        return try {
+            val cached = jdtCache.get(project, cancellation)
+            val boundSymbols = cached.analysis.symbols.filter { !it.bindingKey.isNullOrBlank() }
+            val target = boundTarget(cached.analysis, boundSymbols, location)
+            val all = if (target == null) emptyList() else buildList {
+                val symbolId = SymbolId(target.qualifiedName)
+                if (includeDeclaration) add(Reference(symbolId, SourceLocation(target.path, target.sourceRange)))
+                cached.analysis.references.filter { it.bindingKey == target.bindingKey }.forEach { use ->
+                    add(Reference(symbolId, SourceLocation(use.path, use.sourceRange)))
+                }
+            }.distinctBy { it.location }.sortedWith(compareBy(
+                { it.location.path.toString() }, { it.location.range.start.line },
+                { it.location.range.start.character }, { it.location.range.end.line },
+                { it.location.range.end.character },
+            ))
+            val symbols = boundSymbols.map { it.toCoreSymbol() }
+                .distinctBy { it.id to it.location }
+                .sortedWith(compareBy({ it.id.value }, { it.location.path.toString() },
+                    { it.location.range.start.line }, { it.location.range.start.character }))
+            JavaJdtReferencesProjection.Available(
+                all.take(limit), all.size, all.size > limit,
+                cached.analysis.warnings.isEmpty(), cached.analysis.warnings.size,
+                symbols, cached.provenanceHash,
+            )
+        } catch (_: JdtJavaAnalysisCancelledException) {
+            JavaJdtReferencesProjection.Refused(Diagnostic(
+                "Java references query was cancelled", Diagnostic.Severity.WARNING, location,
+                code = "java.referencesCancelled",
+            ))
+        } catch (_: JdtJavaAnalysisLimitException) {
+            JavaJdtReferencesProjection.Refused(Diagnostic(
+                "Java references analysis exceeds the bounded source limit", Diagnostic.Severity.ERROR, location,
+                code = "java.referencesSourceLimit",
+            ))
+        } catch (_: RuntimeException) {
+            JavaJdtReferencesProjection.Refused(Diagnostic(
+                "Eclipse JDT references analysis failed", Diagnostic.Severity.ERROR, location,
+                code = "java.referencesUnavailable",
+            ))
+        }
+    }
+
     fun semanticCacheStatus(): JdtJavaAnalysisCacheStatus = jdtCache.status()
 
     fun clearSemanticCache() = jdtCache.clear()
+
+    private fun boundTarget(
+        analysis: JdtJavaSemanticAnalysisResult,
+        boundSymbols: List<JdtJavaSemanticSymbol>,
+        location: SourceLocation,
+    ): JdtJavaSemanticSymbol? {
+        boundSymbols.firstOrNull { symbol ->
+            symbol.path.normalize() == location.path.normalize() && symbol.sourceRange.contains(location.range.start)
+        }?.let { return it }
+        val reference = analysis.references.firstOrNull { reference ->
+            reference.path.normalize() == location.path.normalize() &&
+                !reference.bindingKey.isNullOrBlank() && reference.sourceRange.contains(location.range.start)
+        } ?: return null
+        return boundSymbols.singleOrNull { it.bindingKey == reference.bindingKey }
+            ?: boundSymbols.singleOrNull {
+                it.qualifiedName == reference.symbolQualifiedName && it.kind == reference.symbolKind &&
+                    it.memberSignature == reference.symbolSignature
+            }
+    }
 
     private fun validPosition(content: String, position: SourcePosition): Boolean {
         val lines = content.split('\n')

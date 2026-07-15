@@ -45,6 +45,41 @@ class WorkspaceIndexDaemonTest {
             assertEquals(1, first.getValue("cache").jsonObject.getValue("misses").jsonPrimitive.content.toInt())
             val second = definition(first.getValue("indexGeneration").jsonPrimitive.content.toLong(), "java-def-2")
             assertEquals(1, second.getValue("cache").jsonObject.getValue("hits").jsonPrimitive.content.toInt())
+            fun references(includeDeclaration: Boolean, requestId: String) = session.dispatch(
+                "intelligence.query", buildJsonObject {
+                    put("requestId", requestId); put("expectedSnapshotHash", opened.getValue("snapshotHash"))
+                    put("expectedIndexGeneration", second.getValue("indexGeneration")); put("kind", "references")
+                    put("languageId", "java"); put("path", "src/main/java/example/Use.java")
+                    put("includeDeclaration", includeDeclaration); put("limit", 10)
+                    put("position", buildJsonObject { put("line", 3); put("character", useLine.indexOf("greet") + 1) })
+                    put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+                },
+            ).jsonObject
+            val withDeclaration = references(true, "java-refs-1")
+            assertEquals(2, withDeclaration.getValue("total").jsonPrimitive.content.toInt())
+            assertTrue(withDeclaration.getValue("complete").jsonPrimitive.content.toBoolean())
+            assertEquals(0, withDeclaration.getValue("warningCount").jsonPrimitive.content.toInt())
+            assertEquals(
+                setOf("src/main/java/example/UserService.java", "src/main/java/example/Use.java"),
+                withDeclaration.getValue("references").jsonArray.map {
+                    it.jsonObject.getValue("path").jsonPrimitive.content
+                }.toSet(),
+            )
+            assertEquals(2, withDeclaration.getValue("cache").jsonObject.getValue("hits").jsonPrimitive.content.toInt())
+            val withoutDeclaration = references(false, "java-refs-2")
+            assertEquals(1, withoutDeclaration.getValue("total").jsonPrimitive.content.toInt())
+            assertEquals("src/main/java/example/Use.java", withoutDeclaration.getValue("references").jsonArray.single()
+                .jsonObject.getValue("path").jsonPrimitive.content)
+            val truncated = session.dispatch("intelligence.query", buildJsonObject {
+                put("requestId", "java-refs-truncated"); put("expectedSnapshotHash", opened.getValue("snapshotHash"))
+                put("expectedIndexGeneration", second.getValue("indexGeneration")); put("kind", "references")
+                put("languageId", "java"); put("path", "src/main/java/example/Use.java"); put("limit", 1)
+                put("position", buildJsonObject { put("line", 3); put("character", useLine.indexOf("greet") + 1) })
+                put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+            }).jsonObject
+            assertEquals(2, truncated.getValue("total").jsonPrimitive.content.toInt())
+            assertEquals(1, truncated.getValue("returned").jsonPrimitive.content.toInt())
+            assertTrue(truncated.getValue("truncated").jsonPrimitive.content.toBoolean())
             assertTrue(session.dispatch("index.status", null).jsonObject.getValue("providers").jsonArray.any {
                 it.jsonObject.getValue("providerId").jsonPrimitive.content == "java-jdt-bindings-v1"
             })
