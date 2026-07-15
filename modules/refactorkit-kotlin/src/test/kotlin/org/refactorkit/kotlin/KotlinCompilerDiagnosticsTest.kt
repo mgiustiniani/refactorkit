@@ -351,7 +351,10 @@ class KotlinCompilerDiagnosticsTest {
 
         assertEquals("kotlin.renameVisibilityUnsupported", preview("Renamed", "PublicType").refusalCode)
         root.resolve("src/main/java/fixture").createDirectories()
-        root.resolve("src/main/java/fixture/Caller.java").writeText("package fixture; class Caller {}\n")
+        root.resolve("src/main/java/fixture/Caller.java").writeText(
+            "package fixture; class Caller { PublicType value; }\n",
+        )
+        assertEquals("kotlin.renameCrossLanguageIncomplete", preview("RenamedPublic", "PublicType").refusalCode)
         assertEquals("kotlin.renameCrossLanguageIncomplete", preview("RenamedPrivate", "PrivateType").refusalCode)
     }
 

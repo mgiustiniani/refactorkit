@@ -31,15 +31,15 @@ class KotlinPrivateDeclarationRenamePlanner(
         if (target.kind !in SUPPORTED_KINDS) return refused(
             snapshot, "kotlin.renameKindUnsupported", "Initial Kotlin rename supports compiler-proven types and direct-call functions only",
         )
+        if (snapshot.files.any { it.languageId == "java" }) return refused(
+            snapshot, "kotlin.renameCrossLanguageIncomplete", "Initial Kotlin rename refuses snapshots containing Java sources",
+        )
         if (symbols.declarations[target.id]?.visibility != KotlinDeclarationVisibility.PRIVATE) return refused(
             snapshot, "kotlin.renameVisibilityUnsupported", "Initial Kotlin rename requires an explicitly private declaration",
         )
         if (newName == target.name) return refused(snapshot, "kotlin.renameNoChange", "Kotlin rename target is unchanged")
         if (symbols.index.symbols.any { it.id != target.id && it.name == newName }) return refused(
             snapshot, "kotlin.renameConflict", "Kotlin rename target collides with an existing declaration",
-        )
-        if (snapshot.files.any { it.languageId == "java" }) return refused(
-            snapshot, "kotlin.renameCrossLanguageIncomplete", "Initial Kotlin rename refuses snapshots containing Java sources",
         )
         val kotlinSources = snapshot.files.filter { it.languageId == "kotlin" }
         if (kotlinSources.any { STAR_IMPORT.containsMatchIn(it.content) || ALIAS_IMPORT.containsMatchIn(it.content) || TYPE_ALIAS.containsMatchIn(it.content) }) {

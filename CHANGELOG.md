@@ -34,7 +34,9 @@ review safety boundaries before applying refactorings.
   callable references remain refused. Value parameters of supported functions now
   receive `kotlin-jvm-parameter-v1` IDs from callable owner/name/descriptor plus
   ordinal (not source offset or parameter name); resolved parameter reads feed
-  managed private-function parameter rename. Function type parameters receive a
+  managed private-function parameter rename. Mixed Java/Kotlin snapshots now hit
+  the stable `kotlin.renameCrossLanguageIncomplete` refusal before visibility or
+  lexical planning; a Java source that names a public Kotlin type is covered. Function type parameters receive a
   separate owner/callable-descriptor/ordinal `kotlin-jvm-type-parameter-v1` ID.
   A dedicated first FIR pass binds exact type-parameter symbols before resolved
   type references are collected, enabling staged private-function type-parameter
