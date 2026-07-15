@@ -27,7 +27,8 @@ review safety boundaries before applying refactorings.
   `PROPOSAL_ONLY` until kill recovery and native qualification pass. The same
   planner now accepts private non-overloaded functions when all uses are proven
   direct K2 call names; callable references/imports and operator/infix/override
-  shapes refuse rather than inheriting partial-reference authority. Direct
+  shapes refuse rather than inheriting partial-reference authority. Targets or
+  usages in generated source roots refuse before planning. Direct
   field-backed properties now receive `kotlin-jvm-property-v1` IDs from JVM
   owner/name/field-descriptor evidence; K2-resolved reads/writes feed the same
   private-declaration rename planner. Delegated/constructor properties and

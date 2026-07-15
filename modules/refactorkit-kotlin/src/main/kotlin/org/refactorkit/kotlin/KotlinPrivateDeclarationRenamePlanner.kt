@@ -12,6 +12,7 @@ import org.refactorkit.core.SymbolId
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.owningBuildSourceRoots
 
 /** Requirement-first bootstrap planner; it grants no transport/apply authority by itself. */
 class KotlinPrivateDeclarationRenamePlanner(
@@ -30,6 +31,9 @@ class KotlinPrivateDeclarationRenamePlanner(
             ?: return refused(snapshot, "kotlin.renameTargetMissing", "Kotlin rename target is absent from the attested declaration catalogue")
         if (target.kind !in SUPPORTED_KINDS) return refused(
             snapshot, "kotlin.renameKindUnsupported", "Initial Kotlin rename supports compiler-proven types and direct-call functions only",
+        )
+        if (snapshot.owningBuildSourceRoots(target.location.path).any { it.generated }) return refused(
+            snapshot, "kotlin.renameGeneratedSource", "Kotlin rename target belongs to a generated source root",
         )
         if (snapshot.files.any { it.languageId == "java" }) return refused(
             snapshot, "kotlin.renameCrossLanguageIncomplete", "Initial Kotlin rename refuses snapshots containing Java sources",
@@ -61,6 +65,9 @@ class KotlinPrivateDeclarationRenamePlanner(
         )
         val locations = (listOf(target.location) + symbols.usages.filter { it.targetId == target.id }.map { it.location })
             .distinct().sortedWith(compareBy({ it.path.toString() }, { it.range.start.line }, { it.range.start.character }))
+        if (locations.any { location -> snapshot.owningBuildSourceRoots(location.path).any { it.generated } }) return refused(
+            snapshot, "kotlin.renameGeneratedSource", "Kotlin rename reference belongs to a generated source root",
+        )
         if (locations.isEmpty() || locations.any { location ->
                 val source = snapshot.files.singleOrNull { it.path.normalize() == location.path.normalize() } ?: return@any true
                 selectedText(source.content, location.range) != target.name
