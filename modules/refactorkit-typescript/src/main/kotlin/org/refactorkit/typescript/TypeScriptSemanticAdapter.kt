@@ -29,6 +29,7 @@ import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticEvidenceKind
+import org.refactorkit.core.SemanticSignature
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -45,6 +46,7 @@ import org.refactorkit.treesitter.ExternalLspAdapter
 import org.refactorkit.treesitter.ExternalHoverProjection
 import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import org.refactorkit.treesitter.ExternalSemanticSessionProvenance
+import org.refactorkit.treesitter.ExternalSignatureHelpProjection
 import org.refactorkit.treesitter.ExternalSymbolProjection
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -83,6 +85,16 @@ sealed interface TypeScriptCompletionProjection {
         val provenanceHash: String,
     ) : TypeScriptCompletionProjection
     data class Refused(val diagnostic: Diagnostic) : TypeScriptCompletionProjection
+}
+
+sealed interface TypeScriptSignatureHelpProjection {
+    data class Available(
+        val signatures: List<SemanticSignature>,
+        val activeSignature: Int?,
+        val activeParameter: Int?,
+        val provenanceHash: String,
+    ) : TypeScriptSignatureHelpProjection
+    data class Refused(val diagnostic: Diagnostic) : TypeScriptSignatureHelpProjection
 }
 
 sealed interface TypeScriptHoverProjection {
@@ -136,6 +148,16 @@ interface TypeScriptSemanticClient : AutoCloseable {
         limit: Int,
     ): TypeScriptCompletionProjection = TypeScriptCompletionProjection.Refused(Diagnostic(
         "TypeScript completion is unavailable", Diagnostic.Severity.ERROR, code = "semantic.completionUnavailable",
+    ))
+    fun buildOverlaySignatureHelp(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        triggerCharacter: String?,
+        retrigger: Boolean,
+    ): TypeScriptSignatureHelpProjection = TypeScriptSignatureHelpProjection.Refused(Diagnostic(
+        "TypeScript signature help is unavailable", Diagnostic.Severity.ERROR, code = "semantic.signatureHelpUnavailable",
     ))
     fun buildOverlayHover(
         savedSnapshot: ProjectSnapshot,
@@ -219,6 +241,23 @@ class ExternalTypeScriptSemanticClient(
             projection.items, projection.incomplete, "",
         )
         is ExternalCompletionProjection.Unavailable -> TypeScriptCompletionProjection.Refused(Diagnostic(
+            projection.failure.message, Diagnostic.Severity.ERROR, code = projection.failure.code,
+        ))
+    }
+    override fun buildOverlaySignatureHelp(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        triggerCharacter: String?,
+        retrigger: Boolean,
+    ): TypeScriptSignatureHelpProjection = when (val projection = adapter.buildOverlaySignatureHelp(
+        savedSnapshot, overlay, targetPath, position, triggerCharacter, retrigger,
+    )) {
+        is ExternalSignatureHelpProjection.Available -> TypeScriptSignatureHelpProjection.Available(
+            projection.signatures, projection.activeSignature, projection.activeParameter, "",
+        )
+        is ExternalSignatureHelpProjection.Unavailable -> TypeScriptSignatureHelpProjection.Refused(Diagnostic(
             projection.failure.message, Diagnostic.Severity.ERROR, code = projection.failure.code,
         ))
     }
@@ -479,6 +518,33 @@ class TypeScriptSemanticAdapter(
                 result.copy(provenanceHash = symbolProjectionProvenanceHash())
             }
             is TypeScriptCompletionProjection.Refused -> result
+        }
+    }
+
+    fun overlaySignatureHelp(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        triggerCharacter: String?,
+        retrigger: Boolean,
+    ): TypeScriptSignatureHelpProjection {
+        validateOverlayRequest(savedSnapshot, overlay)?.let { return TypeScriptSignatureHelpProjection.Refused(it) }
+        val source = overlay.providerSnapshot.files.singleOrNull { it.path.normalize() == targetPath.normalize() }
+            ?: return TypeScriptSignatureHelpProjection.Refused(diagnostic(
+                "typescript.signatureHelpTargetMissing", "Signature-help target is not part of the editor overlay",
+            ))
+        if (!validPosition(source.content, position)) return TypeScriptSignatureHelpProjection.Refused(diagnostic(
+            "typescript.signatureHelpPositionInvalid", "Signature-help position is outside the overlay document",
+        ))
+        return when (val result = client.buildOverlaySignatureHelp(
+            savedSnapshot, overlay, targetPath, position, triggerCharacter, retrigger,
+        )) {
+            is TypeScriptSignatureHelpProjection.Available -> {
+                rememberOverlayVersions(overlay)
+                result.copy(provenanceHash = symbolProjectionProvenanceHash())
+            }
+            is TypeScriptSignatureHelpProjection.Refused -> result
         }
     }
 
@@ -1103,6 +1169,7 @@ class TypeScriptSemanticAdapter(
                 LanguageCapability("definition", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("workspaceSymbols", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("hover", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
+                LanguageCapability("signatureHelp", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability("references", CapabilityStability.EXPERIMENTAL, SemanticEvidenceKind.LANGUAGE_SERVER),
                 LanguageCapability(
                     operation = "diagnostics",

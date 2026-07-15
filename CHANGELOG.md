@@ -24,6 +24,10 @@ review safety boundaries before applying refactorings.
   immutable editor overlays. Requests require snapshot/index/lease/path/version
   authority; stale versions refuse, responses omit content, and the persistent
   language server restores saved documents before any later semantic operation.
+- Add typed TypeScript/JavaScript signature help through immutable editor
+  overlays, including bounded overloads, exact parameter-label spans, active
+  signature/parameter state, trigger/retrigger context, provenance and saved-
+  document restoration.
 - Add typed TypeScript/JavaScript completion through immutable editor overlays,
   including invocation/trigger/retrigger context, bounded operation-specific items,
   symbol kinds, insertion/replacement data, additional text edits, incompleteness,

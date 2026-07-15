@@ -153,7 +153,7 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
 
         mark_stage("immutable overlay document symbols")
         saved_service = (workspace / "src" / "core" / "UserService.ts").read_text()
-        overlay_service = saved_service.replace("UserService", "UnsavedService") + "\nconst unsaved = new UnsavedService();\nunsaved.\n"
+        overlay_service = saved_service.replace("UserService", "UnsavedService") + "\nconst unsaved = new UnsavedService();\nunsaved.greet(\n"
         overlay_symbols = exchange("intelligence.query", {
             "requestId": "native-daemon-overlay-symbols",
             "expectedSnapshotHash": opened["result"]["snapshotHash"],
@@ -194,6 +194,27 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
             raise AssertionError(f"overlay completion did not include greet: {completion_result}")
         if any("content" in document for document in completion_result.get("sourceAuthority", {}).get("documents", [])):
             raise AssertionError(f"overlay completion leaked source content: {completion_result}")
+
+        mark_stage("immutable overlay signature help")
+        signature = exchange("intelligence.query", {
+            "requestId": "native-daemon-overlay-signature",
+            "expectedSnapshotHash": opened["result"]["snapshotHash"],
+            "expectedIndexGeneration": restarted["index"]["generation"],
+            "kind": "signatureHelp", "languageId": "typescript", "path": "src/core/UserService.ts",
+            "semanticLease": restarted["semanticLease"], "position": {"line": 7, "character": 14},
+            "triggerCharacter": "(", "retrigger": False,
+            "sourceAuthority": {
+                "kind": "immutable-editor-overlay",
+                "documents": [{"path": "src/core/UserService.ts", "version": 11, "content": overlay_service}],
+            },
+        })
+        signature_result = signature.get("result", {})
+        if signature.get("error") or signature_result.get("status") != "ready" or not signature_result.get("signatures"):
+            raise AssertionError(f"overlay signature help failed: {signature}")
+        if "name: string" not in signature_result["signatures"][0].get("label", ""):
+            raise AssertionError(f"overlay signature help omitted greet parameter: {signature_result}")
+        if any("content" in document for document in signature_result.get("sourceAuthority", {}).get("documents", [])):
+            raise AssertionError(f"overlay signature help leaked source content: {signature_result}")
 
         mark_stage("immutable overlay hover")
         hover = exchange("intelligence.query", {

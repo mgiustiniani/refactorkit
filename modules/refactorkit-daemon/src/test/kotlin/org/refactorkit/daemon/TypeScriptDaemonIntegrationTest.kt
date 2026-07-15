@@ -23,6 +23,8 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
 import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticHoverSection
+import org.refactorkit.core.SemanticSignature
+import org.refactorkit.core.SemanticSignatureParameter
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -37,6 +39,7 @@ import org.refactorkit.typescript.ToolchainFileEvidence
 import org.refactorkit.typescript.TypeScriptClientSymbolProjection
 import org.refactorkit.typescript.TypeScriptCompletionProjection
 import org.refactorkit.typescript.TypeScriptHoverProjection
+import org.refactorkit.typescript.TypeScriptSignatureHelpProjection
 import org.refactorkit.typescript.TypeScriptProjectModel
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptSemanticClient
@@ -207,6 +210,22 @@ class TypeScriptDaemonIntegrationTest {
         }).jsonObject
         assertEquals("ready", completion.getValue("status").jsonPrimitive.content)
         assertEquals("UnsavedService", completion.getValue("items").jsonArray.single().jsonObject
+            .getValue("label").jsonPrimitive.content)
+
+        val signature = session.dispatch("intelligence.query", buildJsonObject {
+            put("requestId", "ts-overlay-signature-1"); put("expectedSnapshotHash", snapshotHash)
+            put("expectedIndexGeneration", indexGeneration); put("kind", "signatureHelp"); put("languageId", "typescript")
+            put("path", "src/service.ts"); put("semanticLease", lease); put("triggerCharacter", "("); put("retrigger", false)
+            put("position", buildJsonObject { put("line", 0); put("character", 16) })
+            put("sourceAuthority", buildJsonObject {
+                put("kind", "immutable-editor-overlay")
+                put("documents", buildJsonArray { add(buildJsonObject {
+                    put("path", "src/service.ts"); put("version", 7); put("content", "export class UnsavedService {}\n")
+                }) })
+            })
+        }).jsonObject
+        assertEquals("ready", signature.getValue("status").jsonPrimitive.content)
+        assertEquals("greet(name: string): string", signature.getValue("signatures").jsonArray.single().jsonObject
             .getValue("label").jsonPrimitive.content)
 
         val hover = session.dispatch("intelligence.query", buildJsonObject {
@@ -509,6 +528,18 @@ class TypeScriptDaemonIntegrationTest {
                 listOf(SemanticCompletionItem(name, Symbol.Kind.CLASS, insertText = name)), false, "",
             )
         }
+        override fun buildOverlaySignatureHelp(
+            savedSnapshot: ProjectSnapshot,
+            overlay: ImmutableEditorOverlay,
+            targetPath: Path,
+            position: SourcePosition,
+            triggerCharacter: String?,
+            retrigger: Boolean,
+        ): TypeScriptSignatureHelpProjection = TypeScriptSignatureHelpProjection.Available(
+            listOf(SemanticSignature(
+                "greet(name: string): string", parameters = listOf(SemanticSignatureParameter(6, 18)),
+            )), 0, 0, "",
+        )
         override fun buildOverlayHover(
             savedSnapshot: ProjectSnapshot,
             overlay: ImmutableEditorOverlay,

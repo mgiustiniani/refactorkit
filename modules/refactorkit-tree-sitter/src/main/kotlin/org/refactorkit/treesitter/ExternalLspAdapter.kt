@@ -11,6 +11,7 @@ import org.refactorkit.core.LanguageCapability
 import org.refactorkit.core.MutationAuthority
 import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticEvidenceKind
+import org.refactorkit.core.SemanticSignature
 import org.refactorkit.core.ExternalSemanticProcessManager
 import org.refactorkit.core.ManagedSemanticProcess
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
@@ -103,6 +104,15 @@ sealed interface ExternalCompletionProjection {
         val incomplete: Boolean,
     ) : ExternalCompletionProjection
     data class Unavailable(val failure: ExternalSemanticFailure) : ExternalCompletionProjection
+}
+
+sealed interface ExternalSignatureHelpProjection {
+    data class Available(
+        val signatures: List<SemanticSignature>,
+        val activeSignature: Int?,
+        val activeParameter: Int?,
+    ) : ExternalSignatureHelpProjection
+    data class Unavailable(val failure: ExternalSemanticFailure) : ExternalSignatureHelpProjection
 }
 
 sealed interface ExternalHoverProjection {
@@ -539,6 +549,79 @@ class ExternalLspAdapter(
         }
         return result ?: ExternalCompletionProjection.Unavailable(
             ExternalSemanticFailure("semantic.completionUnavailable", "External semantic completion is unavailable"),
+        )
+    }
+
+    fun buildOverlaySignatureHelp(
+        savedSnapshot: ProjectSnapshot,
+        overlay: ImmutableEditorOverlay,
+        targetPath: Path,
+        position: SourcePosition,
+        triggerCharacter: String?,
+        retrigger: Boolean,
+        timeoutMillis: Long = requestTimeoutMillis,
+    ): ExternalSignatureHelpProjection {
+        require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
+        val target = targetPath.normalize()
+        require(overlay.document(target) != null) { "signature-help target is not part of the editor overlay" }
+        val saved = savedSnapshot.files.associateBy { it.path.normalize() }
+        val provider = overlay.providerSnapshot.files.associateBy { it.path.normalize() }
+        lastFailure = null
+        if (!isRunning || !supportsServerCapability("signatureHelpProvider")) return ExternalSignatureHelpProjection.Unavailable(
+            ExternalSemanticFailure("semantic.signatureHelpUnavailable", "External semantic signature help is unavailable"),
+        )
+        val changed = overlay.documents.map { it.path.normalize() }.sortedBy(Path::toString)
+        var result: ExternalSignatureHelpProjection? = null
+        try {
+            for (document in overlay.documents) {
+                val path = document.path.normalize()
+                closeDocument(path)
+                if (!openDocument(provider.getValue(path), document.version)) {
+                    result = ExternalSignatureHelpProjection.Unavailable(lastFailure ?: ExternalSemanticFailure(
+                        "semantic.overlaySynchronizationFailed", "Editor overlay document synchronization failed",
+                    ))
+                    break
+                }
+            }
+            if (result == null) {
+                val semantic = semanticPath(target) ?: error("signature-help target has no semantic path")
+                val triggerKind = if (triggerCharacter != null) 2 else if (retrigger) 3 else 1
+                val context = buildString {
+                    append("{\"triggerKind\":").append(triggerKind)
+                    append(",\"isRetrigger\":").append(retrigger)
+                    triggerCharacter?.let { append(",\"triggerCharacter\":").append(LspJson.quote(it)) }
+                    append('}')
+                }
+                val response = sendRequest(
+                    "textDocument/signatureHelp",
+                    """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}},"context":$context}""",
+                    timeoutMillis,
+                )
+                val parsed = response?.let { LspJson.extractField(it, "result") }
+                    ?.let(LspSignatureHelpParser::parse)
+                result = when {
+                    lastFailure != null -> ExternalSignatureHelpProjection.Unavailable(requireNotNull(lastFailure))
+                    parsed == null -> ExternalSignatureHelpProjection.Unavailable(ExternalSemanticFailure(
+                        "semantic.signatureHelpResponseInvalid", "External semantic signature-help response is invalid",
+                    ))
+                    else -> ExternalSignatureHelpProjection.Available(
+                        parsed.signatures, parsed.activeSignature, parsed.activeParameter,
+                    )
+                }
+            }
+        } finally {
+            var restored = true
+            changed.forEach { path ->
+                closeDocument(path)
+                restored = openDocument(saved.getValue(path), 1) && restored
+            }
+            if (!restored) {
+                failAndStop("semantic.overlayRestoreFailed", "Saved document state could not be restored after signature-help query")
+                result = ExternalSignatureHelpProjection.Unavailable(requireNotNull(lastFailure))
+            }
+        }
+        return result ?: ExternalSignatureHelpProjection.Unavailable(
+            ExternalSemanticFailure("semantic.signatureHelpUnavailable", "External semantic signature help is unavailable"),
         )
     }
 
@@ -1330,7 +1413,8 @@ class ExternalLspAdapter(
         private val PROCESS_SEQUENCE = AtomicInteger(1)
         private val KNOWN_SERVER_CAPABILITIES = sortedSetOf(
             "definitionProvider", "referencesProvider", "renameProvider", "prepareRenameProvider",
-            "documentSymbolProvider", "workspaceSymbolProvider", "hoverProvider", "completionProvider", "textDocumentSync",
+            "documentSymbolProvider", "workspaceSymbolProvider", "hoverProvider", "completionProvider",
+            "signatureHelpProvider", "textDocumentSync",
         )
         private val LSP_METHOD = Regex("[A-Za-z0-9_" + '$' + "./-]{1,128}")
 

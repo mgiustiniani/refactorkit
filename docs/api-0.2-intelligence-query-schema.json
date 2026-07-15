@@ -6,6 +6,7 @@
     {"$ref": "#/$defs/ready"},
     {"$ref": "#/$defs/completion"},
     {"$ref": "#/$defs/hover"},
+    {"$ref": "#/$defs/signatureHelp"},
     {"$ref": "#/$defs/refused"}
   ],
   "$defs": {
@@ -133,6 +134,35 @@
             "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "range": {"oneOf": [{"$ref": "#/$defs/location/properties/range"}, {"type": "null"}]},
             "contents": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["format", "value"], "properties": {"format": {"enum": ["plain-text", "markdown"]}, "value": {"type": "string", "maxLength": 16384}}}},
+            "sourceAuthority": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "signatureHelp": {
+      "allOf": [
+        {"$ref": "#/$defs/base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "providerSnapshotHash", "indexGeneration", "providerId", "backend", "evidence", "provenanceHash", "activeSignature", "activeParameter", "signatures", "sourceAuthority"],
+          "properties": {
+            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
+            "status": {"const": "ready"}, "kind": {"const": "signatureHelp"},
+            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "providerId": {"type": "string"}, "backend": {"type": "string"},
+            "evidence": {"const": "language-server"},
+            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "activeSignature": {"type": ["integer", "null"], "minimum": 0},
+            "activeParameter": {"type": ["integer", "null"], "minimum": 0},
+            "signatures": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["label", "parameters"], "properties": {
+              "label": {"type": "string", "minLength": 1, "maxLength": 8192},
+              "documentation": {"type": "string", "maxLength": 16384},
+              "parameters": {"type": "array", "maxItems": 64, "items": {"type": "object", "additionalProperties": false, "required": ["labelStart", "labelEnd"], "properties": {
+                "labelStart": {"type": "integer", "minimum": 0}, "labelEnd": {"type": "integer", "minimum": 0},
+                "documentation": {"type": "string", "maxLength": 16384}
+              }}}
+            }}},
             "sourceAuthority": {"type": "object"}
           }
         }

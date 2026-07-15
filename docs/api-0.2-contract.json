@@ -35,7 +35,7 @@
                     "immutableEditorOverlayDocumentSymbols": true, "semanticLease": true,
                     "completion": true, "immutableEditorOverlayCompletion": true,
                     "hover": true, "immutableEditorOverlayHover": true,
-                    "signatureHelp": false, "definitionAtPosition": false,
+                    "signatureHelp": true, "immutableEditorOverlaySignatureHelp": true, "definitionAtPosition": false,
                     "referencesAtPosition": false, "snapshotBound": true, "typedRefusal": true,
                     "bounded": true}},
       {"name": "typescript.semantic.start", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,

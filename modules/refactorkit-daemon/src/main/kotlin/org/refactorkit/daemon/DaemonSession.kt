@@ -76,6 +76,7 @@ import org.refactorkit.typescript.TypeScriptProjectModelBuilder
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptCompletionProjection
 import org.refactorkit.typescript.TypeScriptHoverProjection
+import org.refactorkit.typescript.TypeScriptSignatureHelpProjection
 import org.refactorkit.typescript.TypeScriptSemanticStart
 import org.refactorkit.typescript.TypeScriptSemanticToolchain
 import org.refactorkit.typescript.TypeScriptSymbolProjection
@@ -316,7 +317,7 @@ class DaemonSession(
             "intelligence.indexStale",
             "Expected workspace index generation is stale",
         )
-        if (kind !in setOf("workspaceSymbols", "documentSymbols", "completion", "hover")) return intelligenceRefusal(
+        if (kind !in setOf("workspaceSymbols", "documentSymbols", "completion", "hover", "signatureHelp")) return intelligenceRefusal(
             requestId,
             kind,
             index,
@@ -339,9 +340,9 @@ class DaemonSession(
         if (kind == "documentSymbols" && path == null) missing("path")
         val sourceAuthority = p["sourceAuthority"] as? JsonObject
         if (sourceAuthority?.string("kind") == "immutable-editor-overlay") {
-            if (kind !in setOf("documentSymbols", "completion", "hover") || path == null) return intelligenceRefusal(
+            if (kind !in setOf("documentSymbols", "completion", "hover", "signatureHelp") || path == null) return intelligenceRefusal(
                 requestId, kind, index, "intelligence.overlayKindUnsupported",
-                "Editor overlay authority currently supports documentSymbols, completion and hover",
+                "Editor overlay authority currently supports documentSymbols, completion, hover and signatureHelp",
             )
             val overlayLanguage = languageId ?: missing("languageId")
             if (overlayLanguage !in setOf("typescript", "javascript")) return intelligenceRefusal(
@@ -361,7 +362,7 @@ class DaemonSession(
                 requestId, kind, index, "intelligence.semanticSessionNotReady",
                 "TypeScript semantic provider is not started",
             )
-            if (kind in setOf("completion", "hover")) {
+            if (kind in setOf("completion", "hover", "signatureHelp")) {
                 val positionObject = p["position"] as? JsonObject ?: missing("position")
                 val line = positionObject.string("line")?.toIntOrNull() ?: missing("position.line")
                 val character = positionObject.string("character")?.toIntOrNull() ?: missing("position.character")
@@ -394,6 +395,28 @@ class DaemonSession(
                         )
                     }
                 }
+                if (kind == "signatureHelp") {
+                    val triggerCharacter = p.string("triggerCharacter")
+                    if (triggerCharacter != null && (triggerCharacter.isEmpty() || triggerCharacter.length > 8)) {
+                        throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "signatureHelp triggerCharacter is invalid")
+                    }
+                    val retrigger = p.string("retrigger")?.toBooleanStrictOrNull()
+                        ?: if ("retrigger" in p) throw JsonRpcException(
+                            JsonRpcErrorCodes.INVALID_PARAMS, "signatureHelp retrigger must be boolean",
+                        ) else false
+                    return when (val signature = semantic.overlaySignatureHelp(
+                        requireSnapshot(), overlay, path, position, triggerCharacter, retrigger,
+                    )) {
+                        is TypeScriptSignatureHelpProjection.Available -> overlaySignatureHelpResponse(
+                            requestId, index, overlayLanguage, overlay, signature,
+                        )
+                        is TypeScriptSignatureHelpProjection.Refused -> intelligenceRefusal(
+                            requestId, kind, index,
+                            signature.diagnostic.code ?: "intelligence.signatureHelpUnavailable",
+                            signature.diagnostic.message,
+                        )
+                    }
+                }
                 return when (val hover = semantic.overlayHover(
                     requireSnapshot(), overlay, path, position,
                 )) {
@@ -416,7 +439,7 @@ class DaemonSession(
                 throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "saved-snapshot sourceAuthority accepts only kind")
             }
         }
-        if (kind in setOf("completion", "hover")) return intelligenceRefusal(
+        if (kind in setOf("completion", "hover", "signatureHelp")) return intelligenceRefusal(
             requestId, kind, index, "intelligence.${kind}OverlayRequired",
             "TypeScript $kind currently requires immutable-editor-overlay authority",
         )
@@ -579,6 +602,30 @@ class DaemonSession(
             put("path", ProtocolPath.serialize(document.path)); put("version", document.version)
             put("contentSha256", overlay.authority(document.path)!!.contentSha256)
         }) } })
+    }
+
+    private fun overlaySignatureHelpResponse(
+        requestId: String,
+        index: WorkspaceIndex,
+        languageId: String,
+        overlay: ImmutableEditorOverlay,
+        signature: TypeScriptSignatureHelpProjection.Available,
+    ): JsonElement = buildJsonObject {
+        put("schemaVersion", 1); put("requestId", requestId); put("status", "ready"); put("kind", "signatureHelp")
+        put("snapshotHash", index.snapshotHash); put("providerSnapshotHash", overlay.providerSnapshot.hash)
+        put("indexGeneration", index.generation)
+        put("providerId", typeScriptIndexProviderId(languageId)); put("backend", TypeScriptToolchainProvenance.PROVIDER_ID)
+        put("evidence", "language-server"); put("provenanceHash", signature.provenanceHash)
+        put("activeSignature", signature.activeSignature?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+        put("activeParameter", signature.activeParameter?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+        put("signatures", buildJsonArray { signature.signatures.forEach { item -> add(buildJsonObject {
+            put("label", item.label); item.documentation?.let { put("documentation", it) }
+            put("parameters", buildJsonArray { item.parameters.forEach { parameter -> add(buildJsonObject {
+                put("labelStart", parameter.labelStart); put("labelEnd", parameter.labelEnd)
+                parameter.documentation?.let { put("documentation", it) }
+            }) } })
+        }) } })
+        put("sourceAuthority", overlaySourceAuthority(overlay))
     }
 
     private fun overlayHoverResponse(
@@ -2003,7 +2050,8 @@ class DaemonSession(
                     "immutableEditorOverlayCompletion" to true,
                     "hover" to true,
                     "immutableEditorOverlayHover" to true,
-                    "signatureHelp" to false,
+                    "signatureHelp" to true,
+                    "immutableEditorOverlaySignatureHelp" to true,
                     "definitionAtPosition" to false,
                     "referencesAtPosition" to false,
                     "snapshotBound" to true,

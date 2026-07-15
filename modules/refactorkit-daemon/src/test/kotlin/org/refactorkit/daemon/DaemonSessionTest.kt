@@ -178,7 +178,7 @@ class DaemonSessionTest {
         assertEquals(
             listOf(
                 "completion", "definition", "diagnostics", "hover", "identifierSearch", "localRename", "outline", "references",
-                "renameSymbol", "workspaceSymbols",
+                "renameSymbol", "signatureHelp", "workspaceSymbols",
             ),
             capabilities.map { it["operation"]!!.jsonPrimitive.content },
         )
