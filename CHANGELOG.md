@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Make every open K5, T5, J1 and I1 row release-blocking for closure of the
+  `0.7.x` band. The completion contract preserves API `0.2`, requirement-first
+  slices, compiler/provider authority, managed transactions and stable refusal;
+  parallel Kotlin, TypeScript/JavaScript and Java/Maven work is no longer optional.
 - Define the K4 managed Kotlin/JVM rename contract. The first implementation row
   is deliberately limited to compiler-attested private source types in a
   Kotlin-only module and requires a complete reference barrier, exact staged K2
