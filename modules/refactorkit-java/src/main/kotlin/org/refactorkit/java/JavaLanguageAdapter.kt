@@ -13,6 +13,7 @@ import org.refactorkit.core.Reference
 import org.refactorkit.core.RefactoringDescriptor
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SemanticCancellationToken
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -30,7 +31,18 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Comparator
 
-class JavaLanguageAdapter : LanguageAdapter {
+sealed interface JavaJdtDefinitionProjection {
+    data class Available(
+        val location: SourceLocation?,
+        val symbols: List<Symbol>,
+        val provenanceHash: String,
+    ) : JavaJdtDefinitionProjection
+    data class Refused(val diagnostic: Diagnostic) : JavaJdtDefinitionProjection
+}
+
+class JavaLanguageAdapter(
+    private val jdtCache: JdtJavaAnalysisCache = JdtJavaAnalysisCache(),
+) : LanguageAdapter {
     @Volatile private var lastSnapshot: ProjectSnapshot? = null
 
     override fun languageId(): String = "java"
@@ -193,9 +205,81 @@ class JavaLanguageAdapter : LanguageAdapter {
             .thenBy { it.location.range.start.character })
     }
 
+    fun semanticDefinition(
+        project: ProjectSnapshot,
+        location: SourceLocation,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): JavaJdtDefinitionProjection {
+        lastSnapshot = project
+        val file = project.files.singleOrNull { it.path.normalize() == location.path.normalize() && it.languageId == "java" }
+            ?: return JavaJdtDefinitionProjection.Refused(Diagnostic(
+                "Java definition path is not part of the saved snapshot",
+                Diagnostic.Severity.ERROR,
+                location,
+                code = "java.definitionPathMissing",
+            ))
+        if (!validPosition(file.content, location.range.start)) return JavaJdtDefinitionProjection.Refused(Diagnostic(
+            "Java definition position is outside the saved document",
+            Diagnostic.Severity.ERROR,
+            location,
+            code = "java.definitionPositionInvalid",
+        ))
+        return try {
+            val cached = jdtCache.get(project, cancellation)
+            val boundSymbols = cached.analysis.symbols.filter { !it.bindingKey.isNullOrBlank() }
+            val declaration = boundSymbols.firstOrNull { symbol ->
+                symbol.path.normalize() == location.path.normalize() && symbol.sourceRange.contains(location.range.start)
+            }
+            val reference = if (declaration == null) cached.analysis.references.firstOrNull { reference ->
+                reference.path.normalize() == location.path.normalize() &&
+                    !reference.bindingKey.isNullOrBlank() && reference.sourceRange.contains(location.range.start)
+            } else null
+            val target = declaration ?: reference?.let { use ->
+                boundSymbols.singleOrNull { it.bindingKey == use.bindingKey }
+                    ?: boundSymbols.singleOrNull {
+                        it.qualifiedName == use.symbolQualifiedName && it.kind == use.symbolKind &&
+                            it.memberSignature == use.symbolSignature
+                    }
+            }
+            val symbols = boundSymbols.map { it.toCoreSymbol() }
+                .distinctBy { it.id to it.location }
+                .sortedWith(compareBy({ it.id.value }, { it.location.path.toString() },
+                    { it.location.range.start.line }, { it.location.range.start.character }))
+            JavaJdtDefinitionProjection.Available(
+                target?.let { SourceLocation(it.path, it.sourceRange) },
+                symbols,
+                cached.provenanceHash,
+            )
+        } catch (_: JdtJavaAnalysisCancelledException) {
+            JavaJdtDefinitionProjection.Refused(Diagnostic(
+                "Java definition query was cancelled", Diagnostic.Severity.WARNING, location,
+                code = "java.definitionCancelled",
+            ))
+        } catch (_: JdtJavaAnalysisLimitException) {
+            JavaJdtDefinitionProjection.Refused(Diagnostic(
+                "Java definition analysis exceeds the bounded source limit", Diagnostic.Severity.ERROR, location,
+                code = "java.definitionSourceLimit",
+            ))
+        } catch (_: RuntimeException) {
+            JavaJdtDefinitionProjection.Refused(Diagnostic(
+                "Eclipse JDT definition analysis failed", Diagnostic.Severity.ERROR, location,
+                code = "java.definitionUnavailable",
+            ))
+        }
+    }
+
+    fun semanticCacheStatus(): JdtJavaAnalysisCacheStatus = jdtCache.status()
+
+    fun clearSemanticCache() = jdtCache.clear()
+
+    private fun validPosition(content: String, position: SourcePosition): Boolean {
+        val lines = content.split('\n')
+        return position.line in lines.indices && position.character <= lines[position.line].length
+    }
+
     private fun findJdtSignedSymbol(project: ProjectSnapshot, symbolId: SymbolId): Symbol? {
         if (!symbolId.value.isSignedMemberId()) return null
-        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        val analysis = jdtCache.get(project).analysis
         if (analysis.warnings.isNotEmpty()) return null
         val semanticSymbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value } ?: return null
         if (semanticSymbol.bindingKey.isNullOrBlank()) return null
@@ -203,7 +287,7 @@ class JavaLanguageAdapter : LanguageAdapter {
     }
 
     private fun findJdtSymbolAtLocation(project: ProjectSnapshot, location: SourceLocation): Symbol? {
-        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        val analysis = jdtCache.get(project).analysis
         if (analysis.warnings.isNotEmpty()) return null
         analysis.symbols.firstOrNull { symbol ->
             symbol.path == location.path &&
@@ -222,7 +306,7 @@ class JavaLanguageAdapter : LanguageAdapter {
     }
 
     private fun signedJdtMemberSymbols(project: ProjectSnapshot): List<Symbol> {
-        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        val analysis = jdtCache.get(project).analysis
         if (analysis.warnings.isNotEmpty()) return emptyList()
         return analysis.symbols
             .filter { symbol ->
@@ -235,7 +319,7 @@ class JavaLanguageAdapter : LanguageAdapter {
 
     private fun findJdtSignedReferences(project: ProjectSnapshot, symbolId: SymbolId): List<Reference>? {
         if (!symbolId.value.isSignedMemberId()) return null
-        val analysis = JdtJavaSemanticAnalyzer().analyze(project)
+        val analysis = jdtCache.get(project).analysis
         val semanticSymbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value } ?: return null
         val bindingKey = semanticSymbol.bindingKey ?: return null
         return analysis.references

@@ -91,13 +91,22 @@ Read-only indexing creates no workspace metadata.
 languages and provider evidence/completeness/truncation without source text or
 local toolchain paths. `intelligence.query` currently implements typed,
 zero-based UTF-16 `workspaceSymbols`, `documentSymbols`, TypeScript/JavaScript
-`completion`, `hover`, and `signatureHelp` results. Requests are bounded and correlated to the exact expected snapshot. Queries accept
+`completion`, `hover`, `signatureHelp`, and saved-snapshot Java `definition`
+results. Requests are bounded and correlated to the exact expected snapshot. Queries accept
 `priority=interactive|normal|background` (default `interactive`). Priority can
 reorder reads only inside the same FIFO stateful/control barrier, so project,
 provider-lifecycle and mutation operations are never crossed.
-Definition-at-position, references-at-position, and unsupported language/provider
-rows remain refused until their implementations qualify. They never fall back to
+References-at-position and unsupported language/provider definition rows remain
+refused until their implementations qualify. They never fall back to
 fabricated lexical semantics.
+
+Java `definition` requires `languageId=java`, a saved-snapshot source authority,
+workspace-relative path and exact zero-based UTF-16 position. Eclipse JDT bindings
+return zero or one exact source location and lazily publish the bounded
+`java-jdt-bindings-v1` partition. Analysis is cached for two exact snapshots,
+limited to 10,000 Java files and 256 MiB aggregate UTF-8 source, and cooperatively cancellable between compilation
+units. The response reports compiler provenance, source content hash, resulting
+index generation and cache counters without exposing binding keys.
 
 TypeScript/JavaScript `documentSymbols`, `completion`, `hover` and `signatureHelp` additionally accept
 `sourceAuthority.kind=immutable-editor-overlay`, versioned existing documents and

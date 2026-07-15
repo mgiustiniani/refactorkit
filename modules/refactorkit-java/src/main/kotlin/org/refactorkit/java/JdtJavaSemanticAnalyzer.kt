@@ -28,6 +28,7 @@ import org.refactorkit.core.BuildModule
 import org.refactorkit.core.BuildSourceSet
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.SemanticCancellationToken
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -44,10 +45,14 @@ import java.nio.file.Path
  * into planners and covered by semantic tests.
  */
 class JdtJavaSemanticAnalyzer {
-    fun analyze(snapshot: ProjectSnapshot): JdtJavaSemanticAnalysisResult {
+    fun analyze(
+        snapshot: ProjectSnapshot,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): JdtJavaSemanticAnalysisResult {
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
             .map { file ->
+                if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
                 val owner = snapshot.modules
                     .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
                     .maxByOrNull { module -> module.root.nameCount }
@@ -91,6 +96,7 @@ class JdtJavaSemanticAnalyzer {
                     ?: 25
                 analyzeFileWithReferences(file, sourceRoots, classpathEntries, sourceLevel)
             }
+        if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
         val symbols = fileAnalyses.flatMap { it.symbols }
         val symbolsByKey = symbols.mapNotNull { symbol -> symbol.bindingKey?.let { it to symbol } }.toMap()
         val symbolsByQualifiedName = symbols.groupBy { it.qualifiedName }
@@ -135,6 +141,7 @@ class JdtJavaSemanticAnalyzer {
             fileAnalyses.flatMap { it.methodBindings },
             fileAnalyses.flatMap { it.inheritances },
         )
+        if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
         return JdtJavaSemanticAnalysisResult(
             symbols = symbols,
             references = references,

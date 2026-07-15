@@ -18,6 +18,49 @@ class WorkspaceIndexDaemonTest {
     @TempDir lateinit var root: Path
 
     @Test
+    fun `java definition uses one snapshot keyed JDT analysis and publishes semantic partition`() {
+        write("src/main/java/example/UserService.java", """
+            package example;
+            public class UserService {
+                public String greet() { return "hello"; }
+            }
+        """.trimIndent())
+        val useLine = "        return service.greet();"
+        write("src/main/java/example/Use.java",
+            "package example;\npublic class Use {\n    String run(UserService service) {\n$useLine\n    }\n}\n")
+        DaemonSession().use { session ->
+            val opened = session.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+            fun definition(generation: Long, requestId: String) = session.dispatch("intelligence.query", buildJsonObject {
+                put("requestId", requestId); put("expectedSnapshotHash", opened.getValue("snapshotHash"))
+                put("expectedIndexGeneration", generation); put("kind", "definition"); put("languageId", "java")
+                put("path", "src/main/java/example/Use.java")
+                put("position", buildJsonObject { put("line", 3); put("character", useLine.indexOf("greet") + 1) })
+                put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+            }).jsonObject
+
+            val first = definition(opened.getValue("indexGeneration").jsonPrimitive.content.toLong(), "java-def-1")
+            assertEquals("ready", first.getValue("status").jsonPrimitive.content)
+            assertEquals("src/main/java/example/UserService.java", first.getValue("locations").jsonArray.single()
+                .jsonObject.getValue("path").jsonPrimitive.content)
+            assertEquals(1, first.getValue("cache").jsonObject.getValue("misses").jsonPrimitive.content.toInt())
+            val second = definition(first.getValue("indexGeneration").jsonPrimitive.content.toLong(), "java-def-2")
+            assertEquals(1, second.getValue("cache").jsonObject.getValue("hits").jsonPrimitive.content.toInt())
+            assertTrue(session.dispatch("index.status", null).jsonObject.getValue("providers").jsonArray.any {
+                it.jsonObject.getValue("providerId").jsonPrimitive.content == "java-jdt-bindings-v1"
+            })
+            write("src/main/java/example/UserService.java", "package example;\npublic class UserService {}\n")
+            val refreshed = session.dispatch("workspace.refresh", null).jsonObject
+            assertTrue(refreshed.getValue("invalidatedProviders").jsonArray.any {
+                it.jsonPrimitive.content == "java-jdt-bindings-v1"
+            })
+            assertTrue(session.dispatch("index.status", null).jsonObject.getValue("providers").jsonArray.none {
+                it.jsonObject.getValue("providerId").jsonPrimitive.content == "java-jdt-bindings-v1"
+            })
+            assertFalse(Files.exists(root.resolve(".refactorkit")))
+        }
+    }
+
+    @Test
     fun `saved file watcher refreshes index before the next read`() {
         write("src/main/java/example/UserService.java", "package example;\npublic class UserService {}\n")
         DaemonSession().use { session ->

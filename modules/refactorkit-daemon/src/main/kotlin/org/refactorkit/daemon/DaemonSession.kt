@@ -58,6 +58,8 @@ import org.refactorkit.java.JavaImportTargetResolution
 import org.refactorkit.java.JavaImportTargetResolver
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaJdtDefinitionProjection
+import org.refactorkit.java.JdtJavaAnalysisCache
 import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
 import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
@@ -233,6 +235,7 @@ class DaemonSession(
     private fun projectOpen(params: JsonObject?): JsonElement {
         closeSavedWorkspaceWatcher()
         closeSemanticAdapters()
+        adapter.clearSemanticCache()
         pendingPlans.clear()
         snapshot = null
         workspaceRoot = null
@@ -465,7 +468,7 @@ class DaemonSession(
             "intelligence.indexStale",
             "Expected workspace index generation is stale",
         )
-        if (kind !in setOf("workspaceSymbols", "documentSymbols", "completion", "hover", "signatureHelp")) return intelligenceRefusal(
+        if (kind !in setOf("workspaceSymbols", "documentSymbols", "completion", "hover", "signatureHelp", "definition")) return intelligenceRefusal(
             requestId,
             kind,
             index,
@@ -485,7 +488,7 @@ class DaemonSession(
             )
         }
         val path = p.string("path")?.let(::protocolRelativePath)
-        if (kind == "documentSymbols" && path == null) missing("path")
+        if (kind in setOf("documentSymbols", "definition") && path == null) missing("path")
         val sourceAuthority = p["sourceAuthority"] as? JsonObject
         if (sourceAuthority?.string("kind") == "immutable-editor-overlay") {
             if (kind !in setOf("documentSymbols", "completion", "hover", "signatureHelp") || path == null) return intelligenceRefusal(
@@ -597,6 +600,41 @@ class DaemonSession(
                 throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "saved-snapshot sourceAuthority accepts only kind")
             }
         }
+        if (kind == "definition") {
+            if (languageId != "java") return intelligenceRefusal(
+                requestId, kind, index, "intelligence.definitionProviderUnsupported",
+                "Saved-snapshot definition currently requires Java JDT provider authority",
+            )
+            if (sourceAuthority?.string("kind") != "saved-snapshot") return intelligenceRefusal(
+                requestId, kind, index, "intelligence.definitionSavedSnapshotRequired",
+                "Java definition requires saved-snapshot source authority",
+            )
+            val targetPath = requireNotNull(path)
+            val positionObject = p["position"] as? JsonObject ?: missing("position")
+            val line = positionObject.string("line")?.toIntOrNull() ?: missing("position.line")
+            val character = positionObject.string("character")?.toIntOrNull() ?: missing("position.character")
+            if (line < 0 || character < 0) throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS, "definition position must be non-negative",
+            )
+            val location = SourceLocation(
+                targetPath, SourceRange(SourcePosition(line, character), SourcePosition(line, character)),
+            )
+            return when (val definition = adapter.semanticDefinition(requireSnapshot(), location, cancellation)) {
+                is JavaJdtDefinitionProjection.Available -> {
+                    if (cancellation.isCancellationRequested()) return intelligenceRefusal(
+                        requestId, kind, workspaceIndex.snapshot() ?: index,
+                        "intelligence.cancelled", "Interactive semantic query was cancelled",
+                    )
+                    val updated = ensureJavaJdtContribution(requireSnapshot(), definition)
+                    javaDefinitionResponse(requestId, updated, targetPath, definition)
+                }
+                is JavaJdtDefinitionProjection.Refused -> intelligenceRefusal(
+                    requestId, kind, workspaceIndex.snapshot() ?: index,
+                    definition.diagnostic.code ?: "intelligence.definitionUnavailable",
+                    definition.diagnostic.message,
+                )
+            }
+        }
         if (kind in setOf("completion", "hover", "signatureHelp")) return intelligenceRefusal(
             requestId, kind, index, "intelligence.${kind}OverlayRequired",
             "TypeScript $kind currently requires immutable-editor-overlay authority",
@@ -651,6 +689,49 @@ class DaemonSession(
                 }
             })
         }
+    }
+
+    private fun ensureJavaJdtContribution(
+        snapshot: ProjectSnapshot,
+        projection: JavaJdtDefinitionProjection.Available,
+    ): WorkspaceIndex {
+        val current = workspaceIndex.snapshot() ?: error("workspace index is not open")
+        val existing = current.contributions.singleOrNull { it.providerId == JdtJavaAnalysisCache.PROVIDER_ID }
+        if (existing?.provenanceHash == projection.provenanceHash && existing.snapshotHash == snapshot.hash) return current
+        val limit = ProtocolLimits.MAX_WORKSPACE_INDEX_PROVIDER_SYMBOLS
+        return workspaceIndex.contribute(WorkspaceSymbolContribution(
+            providerId = JdtJavaAnalysisCache.PROVIDER_ID,
+            languageId = "java",
+            backend = JdtJavaAnalysisCache.BACKEND,
+            evidence = SemanticEvidenceKind.COMPILER,
+            completeness = WorkspaceIndexCompleteness.SEMANTIC,
+            snapshotHash = snapshot.hash,
+            symbols = projection.symbols.take(limit),
+            truncated = projection.symbols.size > limit,
+            provenanceHash = projection.provenanceHash,
+        ))
+    }
+
+    private fun javaDefinitionResponse(
+        requestId: String,
+        index: WorkspaceIndex,
+        path: Path,
+        definition: JavaJdtDefinitionProjection.Available,
+    ): JsonElement = buildJsonObject {
+        put("schemaVersion", 1); put("requestId", requestId); put("status", "ready"); put("kind", "definition")
+        put("snapshotHash", index.snapshotHash); put("indexGeneration", index.generation)
+        put("providerId", JdtJavaAnalysisCache.PROVIDER_ID); put("backend", JdtJavaAnalysisCache.BACKEND)
+        put("evidence", "compiler"); put("completeness", "semantic"); put("provenanceHash", definition.provenanceHash)
+        put("locations", buildJsonArray { definition.location?.let { add(intelligenceLocationToJson(it)) } })
+        val source = index.sources.single { it.path == path.normalize() }
+        put("sourceAuthority", buildJsonObject {
+            put("kind", "saved-snapshot"); put("path", ProtocolPath.serialize(source.path))
+            put("contentSha256", source.contentSha256)
+        })
+        val cache = adapter.semanticCacheStatus()
+        put("cache", buildJsonObject {
+            put("entries", cache.entries); put("hits", cache.hits); put("misses", cache.misses)
+        })
     }
 
     private fun parseIntelligenceOverlay(
@@ -2158,6 +2239,7 @@ class DaemonSession(
     override fun close() {
         closeSavedWorkspaceWatcher()
         closeSemanticAdapters()
+        adapter.clearSemanticCache()
         pendingPlans.clear()
         snapshot = null
         workspaceRoot = null
@@ -2243,7 +2325,9 @@ class DaemonSession(
                     "immutableEditorOverlayHover" to true,
                     "signatureHelp" to true,
                     "immutableEditorOverlaySignatureHelp" to true,
-                    "definitionAtPosition" to false,
+                    "definitionAtPosition" to true,
+                    "javaSavedSnapshotDefinition" to true,
+                    "snapshotKeyedJdtCache" to true,
                     "referencesAtPosition" to false,
                     "snapshotBound" to true,
                     "typedRefusal" to true,

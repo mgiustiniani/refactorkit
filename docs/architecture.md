@@ -36,7 +36,10 @@ The shared `ImmutableEditorOverlay` now derives versioned in-memory provider
 snapshots and binds exact overlay authority into typed semantic-query envelopes;
 TypeScript exact diagnostics consume that shared model. Workspace/document symbol
 queries and the first TypeScript/JavaScript completion, hover, and signature-help
-rows are implemented. A bounded recursive saved-file watcher marks the session
+rows are implemented. Java saved-snapshot definition uses a session-owned,
+two-snapshot Eclipse JDT binding cache and lazily publishes a compiler-evidence
+semantic partition; lexical Java declarations remain separately labeled and are
+never used as semantic fallback. A bounded recursive saved-file watcher marks the session
 for reconciliation; the single daemon worker publishes a new immutable snapshot
 and index generation, preserves unrelated partitions, removes changed-language
 partitions, and invalidates exact-snapshot semantic leases. Watcher failure or

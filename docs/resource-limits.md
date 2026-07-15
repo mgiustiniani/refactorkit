@@ -21,6 +21,7 @@ heap exhaustion.
 | Workspace index | 100,000 sources, 100,000 total symbols, 50,000 symbols/provider | Project open/contribution is rejected at the hard boundary; provider output may be explicitly truncated before contribution |
 | TypeScript/JavaScript saved-snapshot symbol projection | 256 source files, 50,000 symbols, 30-second aggregate deadline | File/evidence/provider/timeout failure publishes no partial partition; symbol-cap overflow contributes the deterministic prefix with `truncated=true` |
 | Intelligence query | 512 query characters, 200 returned symbols, 128 request-ID characters | Invalid input is rejected; result tails are deterministically truncated with total/returned counts |
+| Java JDT semantic cache | 2 exact snapshots, 10,000 Java sources and 256 MiB UTF-8 source/analysis, 50,000 published provider symbols | Source overflow refuses; old snapshots use LRU eviction; changed Java sources invalidate the published partition |
 | Import preview combined rendered/structured diff source lines | 524,288 UTF-8 bytes | `diffTruncated=true` with reasons; never silent |
 | Import preview diff files / hunks per file / lines per hunk | 128 / 64 / 2,000 | Deterministic path ordering and explicit truncation reasons |
 | Import preview/apply/rollback diagnostics | 500 entries, 262,144 UTF-8 bytes, 4,096 characters/message | `diagnosticsTruncated=true`; blockers are evaluated before truncation |

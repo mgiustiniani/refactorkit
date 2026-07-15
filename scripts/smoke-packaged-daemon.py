@@ -67,9 +67,12 @@ try:
         root = temporary_path / "workspace with spaces"
         target_dir = root / "module" / "src" / "main" / "java" / "com" / "example"
         target_dir.mkdir(parents=True)
-        original = b"package com.example;\npublic class App {}\n"
+        original = b"package com.example;\npublic class App { public String greet() { return \"hello\"; } }\n"
         app = target_dir / "App.java"
         app.write_bytes(original)
+        use = target_dir / "Use.java"
+        use_line = "    String run(App app) { return app.greet(); }"
+        use.write_text("package com.example;\npublic class Use {\n" + use_line + "\n}\n", encoding="utf-8")
         imported = target_dir / "ImportedSmoke.java"
 
         command = [str(launcher)] if os.name != "nt" else ["cmd.exe", "/d", "/c", "call", str(launcher)]
@@ -122,7 +125,25 @@ try:
             "targetDirectory", "preview", "renderedDiff", "structuredDiff",
             "previewDiagnostics", "apply", "discard", "rollback",
         ))
-        call(2, "project.open", {"root": str(root)})
+        opened = call(2, "project.open", {"root": str(root)})
+        definition_request = {
+            "requestId": "packaged-java-definition-1",
+            "expectedSnapshotHash": opened["snapshotHash"],
+            "expectedIndexGeneration": opened["indexGeneration"],
+            "kind": "definition", "languageId": "java",
+            "path": "module/src/main/java/com/example/Use.java",
+            "position": {"line": 2, "character": use_line.index("greet") + 1},
+            "sourceAuthority": {"kind": "saved-snapshot"},
+        }
+        definition = call(9, "intelligence.query", definition_request)
+        assert definition["status"] == "ready"
+        assert definition["locations"][0]["path"] == "module/src/main/java/com/example/App.java"
+        assert definition["cache"]["misses"] == 1
+        definition_request["requestId"] = "packaged-java-definition-2"
+        definition_request["expectedIndexGeneration"] = definition["indexGeneration"]
+        cached_definition = call(10, "intelligence.query", definition_request)
+        assert cached_definition["cache"]["hits"] == 1
+
         preview = call(3, "java.importExternalClass", {
             "sourceKind": "clipboard",
             "code": "package old.pkg;\n" + SOURCE_MARKER + " {}",

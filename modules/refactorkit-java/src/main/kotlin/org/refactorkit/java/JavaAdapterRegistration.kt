@@ -15,6 +15,10 @@ object JavaAdapterRegistration {
             extensions = setOf("java"),
             backend = "eclipse-jdt-3.44",
             capabilities = listOf(
+                LanguageCapability(
+                    "definition", CapabilityStability.EXPERIMENTAL,
+                    SemanticEvidenceKind.COMPILER, MutationAuthority.NONE,
+                ),
                 stable("renameClass", SemanticEvidenceKind.COMPILER),
                 stable("renameMember", SemanticEvidenceKind.COMPILER),
                 stable("moveClass", SemanticEvidenceKind.COMPILER),

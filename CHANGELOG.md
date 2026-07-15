@@ -9,6 +9,12 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add the first saved-snapshot Java `definition` query backed only by Eclipse JDT
+  bindings. A two-entry session-owned cache is keyed by the exact project snapshot,
+  capped at 10,000 Java sources, cooperatively cancellable between compilation
+  units, and cleared across workspace sessions. Qualified JDT symbols publish a
+  bounded `java-jdt-bindings-v1` semantic partition with path-free provenance;
+  no lexical fallback receives semantic authority.
 - Add bounded recursive saved-file watching and explicit `workspace.refresh` /
   `workspace.watch.status`. Snapshot reconciliation reports added, modified and
   deleted sources, retains unrelated language partitions, rebuilds invalidated
