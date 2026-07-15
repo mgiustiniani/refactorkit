@@ -21,6 +21,7 @@ import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Reference
+import org.refactorkit.core.SemanticCancellationToken
 import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticHoverSection
 import org.refactorkit.core.SemanticSignature
@@ -520,6 +521,7 @@ class TypeScriptDaemonIntegrationTest {
             trigger: CompletionTrigger,
             triggerCharacter: String?,
             limit: Int,
+            cancellation: SemanticCancellationToken,
         ): TypeScriptCompletionProjection {
             val name = Regex("class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(
                 overlay.providerSnapshot.files.single { it.path == targetPath }.content,
@@ -535,6 +537,7 @@ class TypeScriptDaemonIntegrationTest {
             position: SourcePosition,
             triggerCharacter: String?,
             retrigger: Boolean,
+            cancellation: SemanticCancellationToken,
         ): TypeScriptSignatureHelpProjection = TypeScriptSignatureHelpProjection.Available(
             listOf(SemanticSignature(
                 "greet(name: string): string", parameters = listOf(SemanticSignatureParameter(6, 18)),
@@ -545,6 +548,7 @@ class TypeScriptDaemonIntegrationTest {
             overlay: ImmutableEditorOverlay,
             targetPath: Path,
             position: SourcePosition,
+            cancellation: SemanticCancellationToken,
         ): TypeScriptHoverProjection {
             val name = Regex("class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(
                 overlay.providerSnapshot.files.single { it.path == targetPath }.content,
@@ -560,6 +564,7 @@ class TypeScriptDaemonIntegrationTest {
             overlay: ImmutableEditorOverlay,
             targetPath: Path,
             limit: Int,
+            cancellation: SemanticCancellationToken,
         ): TypeScriptClientSymbolProjection {
             val content = overlay.providerSnapshot.files.single { it.path == targetPath }.content
             val name = Regex("class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(content)?.groupValues?.get(1) ?: "Service"

@@ -7,6 +7,7 @@ import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.ImmutableEditorOverlayDocument
+import org.refactorkit.core.SemanticCancellationToken
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -15,6 +16,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -183,6 +186,61 @@ class ExternalLspAdapterLifecycleTest {
     }
 
     @Test
+    fun completionCancellationIsForwardedAndKeepsAcknowledgingProviderAlive() {
+        val snapshot = org.refactorkit.core.ProjectSnapshot(
+            workspace = org.refactorkit.core.Workspace(Path.of(".")), modules = emptyList(),
+            files = listOf(org.refactorkit.core.SourceFile(Path.of("sample.ts"), "export class Service {}\n", "typescript")),
+        )
+        val overlay = ImmutableEditorOverlay.create(snapshot, listOf(ImmutableEditorOverlayDocument(
+            Path.of("sample.ts"), 7, "export class OverlayService {}\n",
+        )), "typescript")
+        val adapter = adapter("cancel-ack")
+        adapter.start(snapshot)
+        val cancelled = AtomicBoolean()
+        var projection: ExternalCompletionProjection? = null
+        val request = thread {
+            projection = adapter.buildOverlayCompletion(
+                snapshot, overlay, Path.of("sample.ts"), SourcePosition(0, 16),
+                CompletionTrigger.INVOKED, null, 10, SemanticCancellationToken(cancelled::get),
+            )
+        }
+        Thread.sleep(100)
+        cancelled.set(true)
+        request.join(2_000)
+        val unavailable = assertIs<ExternalCompletionProjection.Unavailable>(projection)
+        assertEquals("semantic.requestCancelled", unavailable.failure.code)
+        assertTrue(adapter.isRunning)
+        adapter.close()
+    }
+
+    @Test
+    fun unacknowledgedCompletionCancellationStopsProvider() {
+        val snapshot = org.refactorkit.core.ProjectSnapshot(
+            workspace = org.refactorkit.core.Workspace(Path.of(".")), modules = emptyList(),
+            files = listOf(org.refactorkit.core.SourceFile(Path.of("sample.ts"), "export class Service {}\n", "typescript")),
+        )
+        val overlay = ImmutableEditorOverlay.create(snapshot, listOf(ImmutableEditorOverlayDocument(
+            Path.of("sample.ts"), 7, "export class OverlayService {}\n",
+        )), "typescript")
+        val adapter = adapter("cancel-noack")
+        adapter.start(snapshot)
+        val cancelled = AtomicBoolean()
+        var projection: ExternalCompletionProjection? = null
+        val request = thread {
+            projection = adapter.buildOverlayCompletion(
+                snapshot, overlay, Path.of("sample.ts"), SourcePosition(0, 16),
+                CompletionTrigger.INVOKED, null, 10, SemanticCancellationToken(cancelled::get),
+            )
+        }
+        Thread.sleep(100)
+        cancelled.set(true)
+        request.join(2_000)
+        assertIs<ExternalCompletionProjection.Unavailable>(projection)
+        assertFalse(adapter.isRunning)
+        adapter.close()
+    }
+
+    @Test
     fun overlayDocumentSymbolsRestoreTheSavedProviderDocument() {
         val workspace = Files.createTempDirectory("refactorkit-lsp-overlay-symbols")
         val savedFile = org.refactorkit.core.SourceFile(Path.of("sample.ts"), "export class Service {}\n", "typescript")
@@ -275,6 +333,7 @@ object ExternalLspFixture {
         val output = System.out
         var lastDocumentUri = "\"file:///sample.ts\""
         var overlayDocument = false
+        var pendingCompletionId: String? = null
         while (true) {
             val request = readFrame(input) ?: return
             val method = LspJson.extractField(request, "method")?.let(LspJson::unquote)
@@ -308,8 +367,16 @@ object ExternalLspFixture {
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":[{"name":"$name","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":30}},"selectionRange":{"start":{"line":0,"character":13},"end":{"line":0,"character":${13 + name.length}}}}]}""")
                 }
                 "textDocument/completion" -> {
+                    if (mode.startsWith("cancel-")) {
+                        pendingCompletionId = id
+                        continue
+                    }
                     val name = if (overlayDocument) "OverlayService" else "Service"
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"isIncomplete":false,"items":[{"label":"$name","kind":7,"detail":"class $name","textEdit":{"range":{"start":{"line":0,"character":13},"end":{"line":0,"character":${13 + name.length}}},"newText":"$name"},"additionalTextEdits":[]}]}}""")
+                }
+                "$/cancelRequest" -> pendingCompletionId?.takeIf { mode == "cancel-ack" }?.let { cancelledId ->
+                    writeFrame(output, """{"jsonrpc":"2.0","id":$cancelledId,"error":{"code":-32800,"message":"cancelled"}}""")
+                    pendingCompletionId = null
                 }
                 "textDocument/signatureHelp" -> {
                     writeFrame(output, """{"jsonrpc":"2.0","id":$id,"result":{"signatures":[{"label":"greet(name: string): string","parameters":[{"label":[6,18]}]}],"activeSignature":0,"activeParameter":0}}""")

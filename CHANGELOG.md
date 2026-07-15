@@ -9,12 +9,18 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add barrier-aware daemon scheduling for semantic reads. Interactive, normal and
+  background queries reorder only between FIFO stateful/control barriers.
+  `intelligence.cancel` cancels queued or active requests by semantic request ID;
+  active LSP reads receive `$/cancelRequest`, retain the lease when acknowledged,
+  and stop the provider when cancellation is not acknowledged within 250 ms.
 - Add the first centralized `WorkspaceIndex`: an immutable, snapshot-bound,
   session-owned inventory of every recognized source plus bounded provider symbol
   partitions. Daemon `index.status` and experimental typed `intelligence.query`
   expose workspace/document symbol search; CLI `index` and `intelligence search`
-  provide human output or optional JSON. Completion, hover, signature help and
-  position-based navigation remain explicit typed refusals until provider-backed.
+  provide human output or optional JSON. TypeScript/JavaScript completion, hover,
+  and signature help are provider-backed; position-based navigation and other
+  language/provider rows remain explicit typed refusals.
 - Add the language-neutral immutable editor-overlay foundation: exact saved
   snapshot, document path/version/content-hash authority, deterministic overlay
   hash, in-memory provider snapshot derivation, common semantic-query correlation,

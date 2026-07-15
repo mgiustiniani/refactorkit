@@ -27,6 +27,7 @@ import org.refactorkit.core.RefactoringDescriptor
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SemanticCancellationToken
 import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.SemanticSignature
@@ -134,6 +135,7 @@ interface TypeScriptSemanticClient : AutoCloseable {
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         limit: Int,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptClientSymbolProjection {
         val symbols = buildSymbols(overlay.providerSnapshot).symbols.filter { it.location.path.normalize() == targetPath.normalize() }
         return TypeScriptClientSymbolProjection.Available(SymbolIndex(symbols.take(limit)), symbols.size > limit)
@@ -146,6 +148,7 @@ interface TypeScriptSemanticClient : AutoCloseable {
         trigger: CompletionTrigger,
         triggerCharacter: String?,
         limit: Int,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptCompletionProjection = TypeScriptCompletionProjection.Refused(Diagnostic(
         "TypeScript completion is unavailable", Diagnostic.Severity.ERROR, code = "semantic.completionUnavailable",
     ))
@@ -156,6 +159,7 @@ interface TypeScriptSemanticClient : AutoCloseable {
         position: SourcePosition,
         triggerCharacter: String?,
         retrigger: Boolean,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptSignatureHelpProjection = TypeScriptSignatureHelpProjection.Refused(Diagnostic(
         "TypeScript signature help is unavailable", Diagnostic.Severity.ERROR, code = "semantic.signatureHelpUnavailable",
     ))
@@ -164,6 +168,7 @@ interface TypeScriptSemanticClient : AutoCloseable {
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         position: SourcePosition,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptHoverProjection = TypeScriptHoverProjection.Refused(Diagnostic(
         "TypeScript hover is unavailable", Diagnostic.Severity.ERROR, code = "semantic.hoverUnavailable",
     ))
@@ -216,8 +221,9 @@ class ExternalTypeScriptSemanticClient(
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         limit: Int,
+        cancellation: SemanticCancellationToken,
     ): TypeScriptClientSymbolProjection = when (val projection = adapter.buildOverlayDocumentSymbolProjection(
-        savedSnapshot, overlay, targetPath, limit,
+        savedSnapshot, overlay, targetPath, limit, cancellation,
     )) {
         is ExternalSymbolProjection.Available -> TypeScriptClientSymbolProjection.Available(
             projection.index, projection.truncated,
@@ -234,8 +240,9 @@ class ExternalTypeScriptSemanticClient(
         trigger: CompletionTrigger,
         triggerCharacter: String?,
         limit: Int,
+        cancellation: SemanticCancellationToken,
     ): TypeScriptCompletionProjection = when (val projection = adapter.buildOverlayCompletion(
-        savedSnapshot, overlay, targetPath, position, trigger, triggerCharacter, limit,
+        savedSnapshot, overlay, targetPath, position, trigger, triggerCharacter, limit, cancellation,
     )) {
         is ExternalCompletionProjection.Available -> TypeScriptCompletionProjection.Available(
             projection.items, projection.incomplete, "",
@@ -251,8 +258,9 @@ class ExternalTypeScriptSemanticClient(
         position: SourcePosition,
         triggerCharacter: String?,
         retrigger: Boolean,
+        cancellation: SemanticCancellationToken,
     ): TypeScriptSignatureHelpProjection = when (val projection = adapter.buildOverlaySignatureHelp(
-        savedSnapshot, overlay, targetPath, position, triggerCharacter, retrigger,
+        savedSnapshot, overlay, targetPath, position, triggerCharacter, retrigger, cancellation,
     )) {
         is ExternalSignatureHelpProjection.Available -> TypeScriptSignatureHelpProjection.Available(
             projection.signatures, projection.activeSignature, projection.activeParameter, "",
@@ -266,8 +274,9 @@ class ExternalTypeScriptSemanticClient(
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         position: SourcePosition,
+        cancellation: SemanticCancellationToken,
     ): TypeScriptHoverProjection = when (val projection = adapter.buildOverlayHover(
-        savedSnapshot, overlay, targetPath, position,
+        savedSnapshot, overlay, targetPath, position, cancellation,
     )) {
         is ExternalHoverProjection.Available -> TypeScriptHoverProjection.Available(
             projection.range, projection.sections, "",
@@ -498,7 +507,9 @@ class TypeScriptSemanticAdapter(
         trigger: CompletionTrigger,
         triggerCharacter: String?,
         limit: Int,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptCompletionProjection {
+        if (cancellation.isCancellationRequested()) return TypeScriptCompletionProjection.Refused(cancelledDiagnostic())
         validateOverlayRequest(savedSnapshot, overlay)?.let { return TypeScriptCompletionProjection.Refused(it) }
         val source = overlay.providerSnapshot.files.singleOrNull { it.path.normalize() == targetPath.normalize() }
             ?: return TypeScriptCompletionProjection.Refused(diagnostic(
@@ -508,7 +519,7 @@ class TypeScriptSemanticAdapter(
             "typescript.completionPositionInvalid", "Completion position is outside the overlay document",
         ))
         return when (val result = client.buildOverlayCompletion(
-            savedSnapshot, overlay, targetPath, position, trigger, triggerCharacter, limit,
+            savedSnapshot, overlay, targetPath, position, trigger, triggerCharacter, limit, cancellation,
         )) {
             is TypeScriptCompletionProjection.Available -> {
                 if (!validCompletionEdits(source.content, result.items)) return TypeScriptCompletionProjection.Refused(diagnostic(
@@ -528,7 +539,9 @@ class TypeScriptSemanticAdapter(
         position: SourcePosition,
         triggerCharacter: String?,
         retrigger: Boolean,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptSignatureHelpProjection {
+        if (cancellation.isCancellationRequested()) return TypeScriptSignatureHelpProjection.Refused(cancelledDiagnostic())
         validateOverlayRequest(savedSnapshot, overlay)?.let { return TypeScriptSignatureHelpProjection.Refused(it) }
         val source = overlay.providerSnapshot.files.singleOrNull { it.path.normalize() == targetPath.normalize() }
             ?: return TypeScriptSignatureHelpProjection.Refused(diagnostic(
@@ -538,7 +551,7 @@ class TypeScriptSemanticAdapter(
             "typescript.signatureHelpPositionInvalid", "Signature-help position is outside the overlay document",
         ))
         return when (val result = client.buildOverlaySignatureHelp(
-            savedSnapshot, overlay, targetPath, position, triggerCharacter, retrigger,
+            savedSnapshot, overlay, targetPath, position, triggerCharacter, retrigger, cancellation,
         )) {
             is TypeScriptSignatureHelpProjection.Available -> {
                 rememberOverlayVersions(overlay)
@@ -553,13 +566,15 @@ class TypeScriptSemanticAdapter(
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         position: SourcePosition,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptHoverProjection {
+        if (cancellation.isCancellationRequested()) return TypeScriptHoverProjection.Refused(cancelledDiagnostic())
         validateOverlayRequest(savedSnapshot, overlay)?.let { return TypeScriptHoverProjection.Refused(it) }
         val source = overlay.providerSnapshot.files.single { it.path.normalize() == targetPath.normalize() }
         if (!validPosition(source.content, position)) return TypeScriptHoverProjection.Refused(diagnostic(
             "typescript.hoverPositionInvalid", "Hover position is outside the overlay document",
         ))
-        return when (val result = client.buildOverlayHover(savedSnapshot, overlay, targetPath, position)) {
+        return when (val result = client.buildOverlayHover(savedSnapshot, overlay, targetPath, position, cancellation)) {
             is TypeScriptHoverProjection.Available -> {
                 rememberOverlayVersions(overlay)
                 result.copy(provenanceHash = symbolProjectionProvenanceHash())
@@ -573,11 +588,13 @@ class TypeScriptSemanticAdapter(
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         limit: Int = org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): TypeScriptSymbolProjection {
         require(limit in 1..org.refactorkit.core.ProtocolLimits.MAX_SYMBOL_RESULTS)
+        if (cancellation.isCancellationRequested()) return TypeScriptSymbolProjection.Refused(cancelledDiagnostic())
         validateOverlayRequest(savedSnapshot, overlay)?.let { return TypeScriptSymbolProjection.Refused(it) }
         return when (val result = try {
-            client.buildOverlayDocumentSymbols(savedSnapshot, overlay, targetPath, limit)
+            client.buildOverlayDocumentSymbols(savedSnapshot, overlay, targetPath, limit, cancellation)
         } catch (failure: RuntimeException) {
             return TypeScriptSymbolProjection.Refused(diagnostic(
                 "typescript.overlaySymbolsUnavailable",
@@ -593,6 +610,10 @@ class TypeScriptSemanticAdapter(
             )
         }
     }
+
+    private fun cancelledDiagnostic() = diagnostic(
+        "semantic.requestCancelled", "Interactive semantic query was cancelled",
+    )
 
     private fun validateOverlayRequest(savedSnapshot: ProjectSnapshot, overlay: ImmutableEditorOverlay): Diagnostic? {
         if (!active(savedSnapshot) || overlay.baseSnapshotHash != savedSnapshot.hash) return diagnostic(

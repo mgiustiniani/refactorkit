@@ -3,9 +3,11 @@ package org.refactorkit.daemon
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
-import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.JsonRpcRequest
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.errorResponse
@@ -28,6 +30,10 @@ fun main() {
     val session = DaemonSession()
     val reader = BufferedReader(InputStreamReader(System.`in`, Charsets.UTF_8))
     val out = PrintStream(System.out, true, Charsets.UTF_8)
+    val writeResponse: (org.refactorkit.core.JsonRpcResponse) -> Unit = { response ->
+        synchronized(out) { out.println(json.encodeToString(response)) }
+    }
+    val scheduler = DaemonRequestScheduler(session, writeResponse)
 
     System.err.println("RefactorKit daemon ready (JSON-RPC / NDJSON)")
 
@@ -50,24 +56,25 @@ fun main() {
                 return@forEachLine
             }
 
-            // Notifications: process but don't respond
-            if (isNotification(request)) {
-                runCatching { session.dispatch(request.method, request.params?.jsonObject) }
+            if (request.method == "intelligence.cancel") {
+                val params = request.params as? JsonObject
+                val requestId = (params?.get("requestId") as? JsonPrimitive)?.content
+                if (requestId.isNullOrBlank()) {
+                    if (!isNotification(request)) writeResponse(errorResponse(
+                        request.id, JsonRpcErrorCodes.INVALID_PARAMS, "intelligence.cancel requires requestId",
+                    ))
+                } else {
+                    val cancelled = scheduler.cancel(requestId)
+                    if (!isNotification(request)) writeResponse(successResponse(request.id, buildJsonObject {
+                        put("requestId", requestId); put("status", if (cancelled) "cancelled" else "not-found")
+                    }))
+                }
                 return@forEachLine
             }
-
-            val response = try {
-                val result = session.dispatch(request.method, request.params?.jsonObject)
-                successResponse(request.id, result)
-            } catch (e: JsonRpcException) {
-                errorResponse(request.id, e.code, e.message, e.data)
-            } catch (_: Exception) {
-                errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, "Internal error")
-            }
-
-            out.println(json.encodeToString(response))
+            scheduler.submit(request)
         }
     } finally {
+        scheduler.close()
         session.close()
     }
 }

@@ -12,6 +12,7 @@ heap exhaustion.
 | Resource | `v0.4.0` limit | Behavior |
 |---|---:|---|
 | Daemon NDJSON request | 1,048,576 UTF-8 bytes | JSON-RPC `INVALID_REQUEST`; session continues |
+| Daemon queued requests | 256 | Further requests receive `INVALID_REQUEST`; queued/running intelligence requests remain cancellable |
 | MCP NDJSON request | 1,048,576 UTF-8 bytes | JSON-RPC `INVALID_REQUEST`; session continues |
 | LSP frame | 1,048,576 bytes | JSON-RPC `INVALID_REQUEST`; connection closes because the rejected body is not buffered |
 | Pending plans per daemon/MCP/LSP session | 128 | Least-recently-used plan is evicted; applying an evicted ID returns deterministic invalid-params/not-found |
@@ -59,7 +60,9 @@ limits cannot exceed 512 MiB. Graceful shutdown is bounded to 1..30 seconds befo
 forced process-tree termination. Raw arguments and environment values are not
 included in provenance. LSP transport additionally limits individual frames and
 headers to 8 MiB, pending diagnostic notifications to 500, and request deadlines
-to the configured 100 ms..120 s range (10 s default).
+to the configured 100 ms..120 s range (10 s default). Cooperative cancellation
+is polled every 25 ms; after `$/cancelRequest`, failure to acknowledge within
+250 ms stops the provider rather than leaving a blocked reader or stale lease.
 
 Source-only semantic overlays default to 100,000 files and 512 MiB of UTF-8
 source content. The experimental TypeScript provider adds a constant 512 MiB V8

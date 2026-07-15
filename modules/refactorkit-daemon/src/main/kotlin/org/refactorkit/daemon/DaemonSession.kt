@@ -43,6 +43,7 @@ import org.refactorkit.core.WorkspaceSymbolContribution
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RollbackMode
+import org.refactorkit.core.SemanticCancellationToken
 import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
@@ -134,13 +135,17 @@ class DaemonSession(
 
     // ── public dispatcher ─────────────────────────────────────────────────────
 
-    fun dispatch(method: String, params: JsonObject?): JsonElement = when (method) {
+    fun dispatch(
+        method: String,
+        params: JsonObject?,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): JsonElement = when (method) {
         "server.version"      -> serverVersion()
         "server.capabilities" -> serverCapabilities()
         "project.open"        -> projectOpen(params)
         "project.summary"   -> projectSummary()
         "index.status"      -> indexStatus()
-        "intelligence.query" -> intelligenceQuery(params)
+        "intelligence.query" -> intelligenceQuery(params, cancellation)
         "typescript.semantic.start" -> typeScriptSemanticStart(params)
         "typescript.semantic.restart" -> typeScriptSemanticRestart(params)
         "typescript.semantic.stop" -> typeScriptSemanticStop(params)
@@ -285,7 +290,10 @@ class DaemonSession(
         })
     }
 
-    private fun intelligenceQuery(params: JsonObject?): JsonElement {
+    private fun intelligenceQuery(
+        params: JsonObject?,
+        cancellation: SemanticCancellationToken,
+    ): JsonElement {
         val p = params ?: missing("params")
         val requestId = p.string("requestId") ?: missing("requestId")
         if (requestId.isBlank() || requestId.length > ProtocolLimits.MAX_DIAGNOSTICS_REQUEST_ID_CHARS) {
@@ -297,6 +305,12 @@ class DaemonSession(
             "No project open",
         )
         val kind = p.string("kind") ?: missing("kind")
+        if (p.string("priority") !in setOf(null, "interactive", "normal", "background")) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "intelligence query priority is invalid")
+        }
+        if (cancellation.isCancellationRequested()) return intelligenceRefusal(
+            requestId, kind, index, "intelligence.cancelled", "Interactive semantic query was cancelled",
+        )
         if (expected != index.snapshotHash) return intelligenceRefusal(
             requestId,
             kind,
@@ -382,9 +396,11 @@ class DaemonSession(
                         triggerCharacter != null && (triggerCharacter.isEmpty() || triggerCharacter.length > 8)) {
                         throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "completion triggerCharacter is invalid")
                     }
-                    return when (val completion = semantic.overlayCompletion(
-                        requireSnapshot(), overlay, path, position, trigger, triggerCharacter, requestedLimit,
-                    )) {
+                    val completion = semantic.overlayCompletion(
+                        requireSnapshot(), overlay, path, position, trigger, triggerCharacter, requestedLimit, cancellation,
+                    )
+                    invalidateStoppedTypeScriptProvider(overlayLanguage, semantic)
+                    return when (completion) {
                         is TypeScriptCompletionProjection.Available -> overlayCompletionResponse(
                             requestId, index, overlayLanguage, overlay, completion,
                         )
@@ -404,9 +420,11 @@ class DaemonSession(
                         ?: if ("retrigger" in p) throw JsonRpcException(
                             JsonRpcErrorCodes.INVALID_PARAMS, "signatureHelp retrigger must be boolean",
                         ) else false
-                    return when (val signature = semantic.overlaySignatureHelp(
-                        requireSnapshot(), overlay, path, position, triggerCharacter, retrigger,
-                    )) {
+                    val signature = semantic.overlaySignatureHelp(
+                        requireSnapshot(), overlay, path, position, triggerCharacter, retrigger, cancellation,
+                    )
+                    invalidateStoppedTypeScriptProvider(overlayLanguage, semantic)
+                    return when (signature) {
                         is TypeScriptSignatureHelpProjection.Available -> overlaySignatureHelpResponse(
                             requestId, index, overlayLanguage, overlay, signature,
                         )
@@ -417,9 +435,11 @@ class DaemonSession(
                         )
                     }
                 }
-                return when (val hover = semantic.overlayHover(
-                    requireSnapshot(), overlay, path, position,
-                )) {
+                val hover = semantic.overlayHover(
+                    requireSnapshot(), overlay, path, position, cancellation,
+                )
+                invalidateStoppedTypeScriptProvider(overlayLanguage, semantic)
+                return when (hover) {
                     is TypeScriptHoverProjection.Available -> overlayHoverResponse(
                         requestId, index, overlayLanguage, overlay, hover,
                     )
@@ -428,7 +448,11 @@ class DaemonSession(
                     )
                 }
             }
-            return when (val projection = semantic.overlayDocumentSymbols(requireSnapshot(), overlay, path, requestedLimit)) {
+            val projection = semantic.overlayDocumentSymbols(
+                requireSnapshot(), overlay, path, requestedLimit, cancellation,
+            )
+            invalidateStoppedTypeScriptProvider(overlayLanguage, semantic)
+            return when (projection) {
                 is TypeScriptSymbolProjection.Available -> overlayDocumentSymbolsResponse(requestId, index, overlayLanguage, overlay, projection)
                 is TypeScriptSymbolProjection.Refused -> intelligenceRefusal(
                     requestId, kind, index, projection.diagnostic.code ?: "intelligence.overlayUnavailable", projection.diagnostic.message,
@@ -455,6 +479,9 @@ class DaemonSession(
             relevantProviders.isNotEmpty() -> "declarations"
             else -> "source-inventory"
         }
+        if (cancellation.isCancellationRequested()) return intelligenceRefusal(
+            requestId, kind, index, "intelligence.cancelled", "Interactive semantic query was cancelled",
+        )
         val all = index.searchSymbols(query, languageId, path)
         val returned = all.take(requestedLimit)
         return buildJsonObject {
@@ -1205,6 +1232,14 @@ class DaemonSession(
             "${failure?.code ?: "typescript.semanticProcessStopped"}: " +
                 (failure?.message ?: "TypeScript semantic process stopped during index projection"),
         )
+    }
+
+    private fun invalidateStoppedTypeScriptProvider(languageId: String, semantic: TypeScriptSemanticAdapter) {
+        if (semantic.isRunning()) return
+        semanticAdapters.remove(languageId, semantic)
+        semanticLeases.remove(languageId)
+        removeTypeScriptIndex(languageId)
+        semantic.close()
     }
 
     private fun removeTypeScriptIndex(languageId: String) {
@@ -2056,8 +2091,14 @@ class DaemonSession(
                     "referencesAtPosition" to false,
                     "snapshotBound" to true,
                     "typedRefusal" to true,
+                    "cooperativeCancellation" to true,
+                    "barrierAwarePriorityScheduling" to true,
                     "bounded" to true,
                 ),
+            ),
+            DaemonMethodCapability(
+                "intelligence.cancel", "experimental", false, false,
+                mapOf("requestIdCancellation" to true, "jsonRpcCancellationError" to true),
             ),
             DaemonMethodCapability(
                 "typescript.semantic.start", "experimental", true, false,

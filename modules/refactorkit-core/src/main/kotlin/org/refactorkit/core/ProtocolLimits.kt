@@ -5,6 +5,7 @@ object ProtocolLimits {
     const val MAX_REQUEST_BYTES = 1_048_576
     const val MAX_LSP_FRAME_BYTES = 1_048_576
     const val MAX_PENDING_PLANS = 128
+    const val MAX_DAEMON_QUEUED_REQUESTS = 256
     const val MAX_SYMBOL_RESULTS = 200
     const val MAX_WORKSPACE_INDEX_SOURCES = 100_000
     const val MAX_WORKSPACE_INDEX_SYMBOLS = 100_000

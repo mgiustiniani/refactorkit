@@ -36,7 +36,9 @@ The shared `ImmutableEditorOverlay` now derives versioned in-memory provider
 snapshots and binds exact overlay authority into typed semantic-query envelopes;
 TypeScript exact diagnostics consume that shared model. Workspace/document symbol
 queries and the first TypeScript/JavaScript completion, hover, and signature-help
-rows are implemented. Position-based navigation and other provider rows remain
+rows are implemented. Interactive daemon reads use cooperative cancellation and
+barrier-aware priority scheduling: reads may reorder only between FIFO stateful
+control/mutation barriers. Position-based navigation and other provider rows remain
 refused until their persistent JDT, tsserver and K2 implementations qualify. The long-range `v1.0.0` roadmap evolves
 the language-neutral core into a deep multi-language platform rather than
 freezing a Java-only stable API. Java remains the reference and widest catalogue;

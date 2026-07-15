@@ -91,7 +91,10 @@ Read-only indexing creates no workspace metadata.
 languages and provider evidence/completeness/truncation without source text or
 local toolchain paths. `intelligence.query` currently implements typed,
 zero-based UTF-16 `workspaceSymbols`, `documentSymbols`, TypeScript/JavaScript
-`completion`, `hover`, and `signatureHelp` results. Requests are bounded and correlated to the exact expected snapshot.
+`completion`, `hover`, and `signatureHelp` results. Requests are bounded and correlated to the exact expected snapshot. Queries accept
+`priority=interactive|normal|background` (default `interactive`). Priority can
+reorder reads only inside the same FIFO stateful/control barrier, so project,
+provider-lifecycle and mutation operations are never crossed.
 Definition-at-position, references-at-position, and unsupported language/provider
 rows remain refused until their implementations qualify. They never fall back to
 fabricated lexical semantics.
@@ -109,6 +112,12 @@ plaintext/Markdown sections plus an optional exact range. Signature help returns
 bounded overloads, exact parameter-label spans, and active signature/parameter
 state. The response schema is
 [`api-0.2-intelligence-query-schema.json`](api-0.2-intelligence-query-schema.json).
+
+`intelligence.cancel` accepts a semantic `requestId`. A queued or running query
+finishes with JSON-RPC error `-32800`. Running LSP operations receive
+`$/cancelRequest`; acknowledged cancellation preserves the provider lease, while
+no acknowledgement within 250 ms stops the provider. Cancellation never
+publishes partial semantic results.
 
 ## Experimental TypeScript/JavaScript semantic session
 

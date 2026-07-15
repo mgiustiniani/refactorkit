@@ -94,6 +94,10 @@ def qualify_crash_restart(runtime: Path, workspace: Path, node: Path, server: Pa
         opened = exchange("project.open", {"root": str(workspace)})
         if opened.get("error"):
             raise AssertionError(f"daemon project open failed: {opened}")
+        mark_stage("interactive cancellation transport")
+        cancellation = exchange("intelligence.cancel", {"requestId": "native-no-such-request"})
+        if cancellation.get("error") or cancellation.get("result", {}).get("status") != "not-found":
+            raise AssertionError(f"intelligence.cancel transport failed: {cancellation}")
         parameters = {
             "languageId": "typescript", "nodeExecutable": str(node),
             "languageServerPackageRoot": str(server), "typeScriptPackageRoot": str(compiler),

@@ -9,6 +9,7 @@ import org.refactorkit.core.LanguageAdapterResourceLimits
 import org.refactorkit.core.LanguageAdapterRuntime
 import org.refactorkit.core.LanguageCapability
 import org.refactorkit.core.MutationAuthority
+import org.refactorkit.core.SemanticCancellationToken
 import org.refactorkit.core.SemanticCompletionItem
 import org.refactorkit.core.SemanticEvidenceKind
 import org.refactorkit.core.SemanticSignature
@@ -420,6 +421,7 @@ class ExternalLspAdapter(
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         maxSymbols: Int,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
         timeoutMillis: Long = requestTimeoutMillis,
     ): ExternalSymbolProjection {
         require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
@@ -451,7 +453,7 @@ class ExternalLspAdapter(
             }
             if (result == null) {
                 val targetFile = provider.getValue(target)
-                val returned = requestDocumentSymbols(targetFile, timeoutMillis)
+                val returned = requestDocumentSymbols(targetFile, timeoutMillis, cancellation)
                 result = lastFailure?.let(ExternalSymbolProjection::Unavailable) ?: run {
                     val distinct = returned.distinctBy { it.id }.sortedBy { it.id.value }
                     ExternalSymbolProjection.Available(
@@ -484,6 +486,7 @@ class ExternalLspAdapter(
         trigger: CompletionTrigger,
         triggerCharacter: String?,
         limit: Int,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
         timeoutMillis: Long = requestTimeoutMillis,
     ): ExternalCompletionProjection {
         require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
@@ -525,6 +528,7 @@ class ExternalLspAdapter(
                     "textDocument/completion",
                     """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}},"context":$context}""",
                     timeoutMillis,
+                    cancellation,
                 )
                 val parsed = response?.let { LspJson.extractField(it, "result") }
                     ?.let { LspCompletionParser.parse(it, limit) }
@@ -559,6 +563,7 @@ class ExternalLspAdapter(
         position: SourcePosition,
         triggerCharacter: String?,
         retrigger: Boolean,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
         timeoutMillis: Long = requestTimeoutMillis,
     ): ExternalSignatureHelpProjection {
         require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
@@ -596,6 +601,7 @@ class ExternalLspAdapter(
                     "textDocument/signatureHelp",
                     """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}},"context":$context}""",
                     timeoutMillis,
+                    cancellation,
                 )
                 val parsed = response?.let { LspJson.extractField(it, "result") }
                     ?.let(LspSignatureHelpParser::parse)
@@ -630,6 +636,7 @@ class ExternalLspAdapter(
         overlay: ImmutableEditorOverlay,
         targetPath: Path,
         position: SourcePosition,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
         timeoutMillis: Long = requestTimeoutMillis,
     ): ExternalHoverProjection {
         require(overlay.baseSnapshotHash == savedSnapshot.hash) { "editor overlay snapshot is stale" }
@@ -660,6 +667,7 @@ class ExternalLspAdapter(
                     "textDocument/hover",
                     """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}},"position":{"line":${position.line},"character":${position.character}}}""",
                     timeoutMillis,
+                    cancellation,
                 )
                 val parsed = response?.let { LspJson.extractField(it, "result") }?.let(LspHoverParser::parse)
                 result = when {
@@ -700,12 +708,14 @@ class ExternalLspAdapter(
     private fun requestDocumentSymbols(
         file: SourceFile,
         timeoutMillis: Long = requestTimeoutMillis,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): List<Symbol> {
         val semantic = semanticPath(file.path) ?: return emptyList()
         val response = sendRequest(
             "textDocument/documentSymbol",
             """{"textDocument":{"uri":${LspJson.quote(LspJson.pathToUri(semantic))}}}""",
             timeoutMillis,
+            cancellation,
         ) ?: return emptyList()
         val result = LspJson.extractField(response, "result") ?: return emptyList()
         if (result.trim() == "null") return emptyList()
@@ -1046,6 +1056,7 @@ class ExternalLspAdapter(
         method: String,
         paramsJson: String?,
         timeoutMillis: Long = requestTimeoutMillis,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): String? {
         require(LSP_METHOD.matches(method)) { "LSP method name is invalid" }
         require(paramsJson == null || LspJson.isValidValue(paramsJson)) { "LSP request params are invalid JSON" }
@@ -1059,12 +1070,37 @@ class ExternalLspAdapter(
         writeFramed(body)
         val executor = requestExecutor ?: return null
         val pending = executor.submit<String?> { readMatchingFrame(id) }
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        var cancellationSentAt: Long? = null
         return try {
-            pending.get(timeoutMillis, TimeUnit.MILLISECONDS)
-        } catch (_: TimeoutException) {
-            pending.cancel(true)
-            failAndStop("semantic.requestTimeout", "LSP request '$method' exceeded ${timeoutMillis}ms")
-            null
+            while (true) {
+                if (cancellation.isCancellationRequested() && cancellationSentAt == null) {
+                    sendNotification("$/cancelRequest", """{"id":$id}""")
+                    cancellationSentAt = System.nanoTime()
+                }
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0L) {
+                    pending.cancel(true)
+                    failAndStop("semantic.requestTimeout", "LSP request '$method' exceeded ${timeoutMillis}ms")
+                    return null
+                }
+                if (cancellationSentAt != null && System.nanoTime() - cancellationSentAt >= TimeUnit.MILLISECONDS.toNanos(250)) {
+                    pending.cancel(true)
+                    failAndStop("semantic.cancellationUnacknowledged", "LSP request '$method' did not acknowledge cancellation")
+                    return null
+                }
+                try {
+                    val response = pending.get(minOf(25L, TimeUnit.NANOSECONDS.toMillis(remaining).coerceAtLeast(1L)), TimeUnit.MILLISECONDS)
+                    if (cancellationSentAt != null) {
+                        lastFailure = ExternalSemanticFailure("semantic.requestCancelled", "LSP request '$method' was cancelled")
+                        return null
+                    }
+                    return response
+                } catch (_: TimeoutException) {
+                    // Poll the cooperative cancellation token until the aggregate deadline.
+                }
+            }
+            @Suppress("UNREACHABLE_CODE") null
         } catch (failure: ExecutionException) {
             failAndStop("semantic.protocolFailure", failure.cause?.message ?: "LSP protocol read failed")
             null
