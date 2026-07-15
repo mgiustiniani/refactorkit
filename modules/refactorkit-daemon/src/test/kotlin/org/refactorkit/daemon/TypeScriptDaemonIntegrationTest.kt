@@ -422,7 +422,6 @@ class TypeScriptDaemonIntegrationTest {
             "diagnostics.savedSnapshotStale",
             "diagnostics.snapshotStale",
         ))
-        root.resolve("src/service.ts").writeText("const value = missing;\n")
 
         val stale = session.dispatch("diagnostics.v2", diagnosticsV2Params(
             requestId = "ide-request-stale",
@@ -433,6 +432,11 @@ class TypeScriptDaemonIntegrationTest {
         assertEquals("refused", stale.getValue("status").jsonPrimitive.content)
         assertEquals("diagnostics.snapshotStale", stale.getValue("failure").jsonObject.getValue("code").jsonPrimitive.content)
         assertTrue(stale.getValue("diagnostics").jsonArray.isEmpty())
+
+        root.resolve("src/service.ts").writeText("const value = missing;\n")
+        session.dispatch("workspace.refresh", null)
+        session.dispatch("typescript.semantic.stop", objectParams("languageId" to "typescript"))
+        session.dispatch("typescript.semantic.start", objectParams("languageId" to "typescript"))
 
         client.synchronized = ExternalSemanticDiagnostics.Available((0 until 500).map { index ->
             Diagnostic("$index:${"\\\"".repeat(4_096)}", Diagnostic.Severity.ERROR, code = "TS$index")
