@@ -338,12 +338,77 @@ def main() -> int:
                 process.kill()
                 process.wait(timeout=20)
         java_caller.unlink()
-        java_caller.parent.rmdir()
+        greeting_source = workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt"
+        greeting_original = greeting_source.read_text(encoding="utf-8")
+        greeting_source.write_text(
+            greeting_original + "\nfun publicAccount(): PublicAccount = PublicAccount()\n", encoding="utf-8",
+        )
+        java_type = workspace / "src/main/java/org/refactorkit/samples/PublicAccount.java"
+        java_type.write_text(
+            "package org.refactorkit.samples; public class PublicAccount {}\n", encoding="utf-8",
+        )
+        symmetric_before = tree_hash(workspace / "src")
+        process = subprocess.Popen(
+            command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def symmetric_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"symmetric daemon {method} failed: {response}")
+                return response["result"]
+
+            symmetric_exchange(30, "project.open", {"root": str(workspace)})
+            symmetric_started = symmetric_exchange(31, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            symmetric_index = symmetric_exchange(32, "index.status")
+            symmetric_preview = symmetric_exchange(33, "refactor.preview", {
+                "operation": "renameSymbol", "languageId": "kotlin",
+                "symbol": "org.refactorkit.samples.PublicAccount",
+                "semanticLease": symmetric_started["semanticLease"],
+                "expectedSnapshotHash": symmetric_started["snapshotHash"],
+                "expectedIndexGeneration": symmetric_index["generation"],
+                "arguments": {"newName": "CustomerAccount", "acceptExternalConsumerRisk": True},
+            })
+            if symmetric_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != symmetric_before:
+                raise AssertionError(f"symmetric public Java-type preview is invalid or wrote files: {symmetric_preview}")
+            symmetric_applied = symmetric_exchange(34, "refactor.apply", {
+                "planId": symmetric_preview["planId"], "semanticLease": symmetric_started["semanticLease"],
+                "expectedIndexGeneration": symmetric_index["generation"],
+            })
+            renamed_java = java_type.with_name("CustomerAccount.java")
+            if (symmetric_applied.get("status") != "applied" or java_type.exists() or not renamed_java.exists() or
+                    "CustomerAccount" not in greeting_source.read_text(encoding="utf-8") or
+                    "CustomerAccount" not in renamed_java.read_text(encoding="utf-8")):
+                raise AssertionError(f"symmetric public Java-type apply failed: {symmetric_applied}")
+            symmetric_rollback = symmetric_exchange(35, "patch.rollback", {
+                "transactionId": symmetric_applied["transactionId"],
+            })
+            if symmetric_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != symmetric_before:
+                raise AssertionError(f"symmetric public Java-type rollback failed: {symmetric_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+        java_type.unlink()
+        greeting_source.write_text(greeting_original, encoding="utf-8")
+        java_type.parent.rmdir()
         (workspace / "src/main/java/org/refactorkit").rmdir()
         (workspace / "src/main/java/org").rmdir()
         (workspace / "src/main/java").rmdir()
         if tree_hash(workspace / "src") != source_before:
-            raise AssertionError("mixed Java/Kotlin rollback did not restore source bytes")
+            raise AssertionError("bidirectional Java/Kotlin rollback did not restore source bytes")
 
         source = workspace / "src" / "main" / "kotlin" / "org" / "refactorkit" / "samples" / "Greeting.kt"
         source.write_text("package org.refactorkit.samples\n\nclass Greeting(val missing: MissingType)\n", encoding="utf-8")
@@ -357,7 +422,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 reads, private rename, and mixed public Kotlin/Java apply/rollback.")
+    print("Packaged Kotlin acceptance passed: K2 reads, private rename, and bidirectional public Java/Kotlin apply/rollback.")
     return 0
 
 

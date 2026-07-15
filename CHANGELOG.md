@@ -9,6 +9,13 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add the symmetric public Java-type rename used by Kotlin. A bounded external
+  ECJ process disables annotation processing, compiles the exact immutable Java
+  snapshot into an overlay, packages deterministic hash-bound ephemeral classes,
+  and lets K2 report exact external JVM type/constructor usages. Preview updates
+  JDT-proven Java tokens, K2-proven Kotlin tokens and the Java filename; staged
+  ECJ/K2/JDT diagnostics, one `PatchEngine` transaction and byte-exact rollback
+  are qualified locally and in packaged acceptance.
 - Add the first shared-JVM public-type preview foundation in the new
   `refactorkit-jvm` module. Exact classes emitted in the disposable K2 overlay
   are supplied to JDT as an ephemeral classpath; JDT binding uses retain the

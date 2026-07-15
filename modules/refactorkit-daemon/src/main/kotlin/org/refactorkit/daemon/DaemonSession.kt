@@ -69,6 +69,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
@@ -1564,7 +1565,10 @@ class DaemonSession(
                 "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
                 "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
-                        KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        if (plan.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>().any {
+                                it.path.fileName.toString().endsWith(".java")
+                            }) JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        else KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
                     }
                 } else DiagnosticsGate.enabled("kotlin-k2") { candidate ->
                     kotlinAdapter.compilerDiagnostics(candidate).diagnostics
@@ -1578,7 +1582,10 @@ class DaemonSession(
                     when (pending.languageId) {
                         "java" -> adapter.diagnostics(refreshed)
                         "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
-                            KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
+                            if (plan.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>().any {
+                                    it.path.fileName.toString().endsWith(".java")
+                                }) JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
+                            else KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
                         } else kotlinAdapter.compilerDiagnostics(refreshed).diagnostics
                         else -> emptyList()
                     },

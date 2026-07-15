@@ -43,7 +43,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
             kotlinAdapter = container "Kotlin Language Adapter" "Hash-bound Kotlin/JVM projection, external K2 diagnostics, durable declarations/usages, and bounded managed private-declaration rename proposals over immutable overlays." "Kotlin/JVM library (modules/refactorkit-kotlin)" {
                 tags "Runtime Building Block"
             }
-            jvmComposition = container "Shared JVM Semantic Composition" "Composes exact K2 class-file identity and JDT source bindings for conservative mixed Java/Kotlin semantic plans without coupling core to either adapter." "Kotlin/JVM library (modules/refactorkit-jvm)" {
+            jvmComposition = container "Shared JVM Semantic Composition" "Composes exact K2/JDT and bounded annotation-processing-free ECJ/K2 evidence for bidirectional mixed Java/Kotlin plans without coupling core to either adapter." "Kotlin/JVM library (modules/refactorkit-jvm)" {
                 tags "Runtime Building Block"
             }
             webImporter = container "External Java Class Importer" "Preview-only external source assimilation for Java classes: strips Markdown fences, detects license/provenance, validates package names, detects/splits public types, rewrites packages, organizes imports, refuses conflicts, and emits PatchPlans." "Kotlin/JVM library (modules/refactorkit-web-importer)" {
@@ -101,7 +101,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
         javaAdapter -> core "Builds SymbolIndex, diagnostics, and PatchPlan objects through core contracts" "Kotlin/JVM API"
         kotlinAdapter -> core "Uses immutable overlays/process manager and returns compiler diagnostics, durable declarations/usages and normalized proposals" "Kotlin/JVM API"
         jvmComposition -> core "Produces normalized mixed-language PatchPlans and typed refusals" "Kotlin/JVM API"
-        jvmComposition -> kotlinAdapter "Consumes exact K2 declaration, usage, diagnostics and ephemeral class-file evidence" "Kotlin/JVM API"
+        jvmComposition -> kotlinAdapter "Consumes exact K2 declaration, internal/external usage, diagnostics and hash-bound ephemeral class-file evidence" "Kotlin/JVM API"
         jvmComposition -> javaAdapter "Consumes exact JDT binding uses and diagnostics" "Kotlin/JVM API"
         webImporter -> core "Creates preview PatchPlans and file creation edits" "Kotlin/JVM API"
         webImporter -> javaAdapter "Reuses Java package/import parsing and source-root knowledge" "Kotlin/JVM API"

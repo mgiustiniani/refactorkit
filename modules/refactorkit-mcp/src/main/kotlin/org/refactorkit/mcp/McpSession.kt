@@ -16,6 +16,7 @@ import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.LanguageCapabilityProtocol
@@ -55,6 +56,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
@@ -878,7 +880,10 @@ class McpSession(
                 "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
                 "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
-                        KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        if (plan.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>().any {
+                                it.path.fileName.toString().endsWith(".java")
+                            }) JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        else KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
                     }
                 } else DiagnosticsGate.enabled("kotlin-k2") { candidate ->
                     kotlinAdapter.compilerDiagnostics(candidate).diagnostics

@@ -1,10 +1,12 @@
 # Java/Kotlin shared JVM rename requirements
 
-Status: active requirement-first K5/J1 prerequisite. The Kotlin-to-Java public
-top-level type library preview is implemented with exact K2 class-file and JDT
-binding evidence. Daemon/CLI/MCP routing and combined K2/JDT apply diagnostics are
-implemented; local packaged preview/apply/rollback restores both languages byte
-exactly. Native qualification and the symmetric Java-to-Kotlin row remain pending.
+Status: active native-qualification gate. Both public top-level type directions
+are implemented: K2 class-file evidence lets JDT resolve Java callers of Kotlin,
+while bounded annotation-processing-free ECJ evidence lets K2 resolve Kotlin uses
+of Java. Daemon/CLI/MCP routing and combined staged diagnostics are implemented;
+local packaged preview/apply/rollback restores both languages and Java filenames
+byte exactly. Kotlin-to-Java passed native run `29457693861`; symmetric
+Java-to-Kotlin native qualification remains pending.
 
 ## First qualified row
 

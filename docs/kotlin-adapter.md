@@ -203,8 +203,9 @@ the exact disposable K2 overlay let JDT bind exact Java tokens to the same JVM
 binary name. Public preview requires explicit external-consumer-risk acceptance
 and clean before/staged K2 plus JDT evidence.
 
-Transport apply/rollback and native qualification of that public row, symmetric
-Java-to-Kotlin mutation, members, overloads, delegated/constructor properties,
+Both public top-level type directions now have managed local and packaged
+preview/apply/rollback evidence. Kotlin-to-Java passed the native matrix;
+Java-to-Kotlin native qualification, members, overloads, delegated/constructor properties,
 callable references, aliases, moves, signature/extract/inline operations,
 multiplatform, Android and broader framework boundaries remain pending or
 explicitly refused. No partial read result inherits mutation authority.
