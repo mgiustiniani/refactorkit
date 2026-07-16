@@ -1,7 +1,8 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row. Library, packaged CLI/daemon/MCP and
-four-platform native acceptance are complete. Broader declaration/file/package
+Status: active bounded K5 expansion. The explicit-import row is qualified across
+library, packaged CLI/daemon/MCP and four native platforms. Same-package implicit
+consumer support is specified below and pending executable qualification; broader
 move shapes remain pending.
 
 ## Purpose
@@ -26,10 +27,12 @@ The operation shall accept only when all of the following are proven:
    Kotlin/JVM source set.
 3. The destination is a valid different package in the same source set and its
    destination file and binary identity do not exist.
-4. Every Kotlin use is K2-resolved to the source identity. Cross-package Kotlin
-   consumers use one explicit, non-aliased, non-star import of the old identity.
-5. Every Java use is JDT-bound to the matching ephemeral K2 class. Java consumers
-   use one explicit non-static import of the old identity.
+4. Every Kotlin use is K2-resolved to the source identity. A consumer either uses
+   one explicit, non-aliased, non-star import of the old identity or belongs to
+   the exact old package and resolves the type implicitly.
+5. Every Java use is JDT-bound to the matching ephemeral K2 class. A Java consumer
+   either uses one explicit non-static import of the old identity or belongs to
+   the exact old package and resolves the type implicitly.
 6. The caller explicitly accepts public external-consumer risk.
 
 The first row does not infer Gradle/Maven module or dependency changes.
@@ -42,7 +45,10 @@ The preview shall contain only:
 - one file rename from the authoritative source-root-relative old path to the
   destination package path, preserving the filename;
 - exact explicit Kotlin and Java import-name tokens changed from the old binary
-  identity to the new binary identity.
+  identity to the new binary identity; or
+- for a compiler-proven same-package implicit consumer, one deterministic
+  explicit import of the new identity inserted immediately after its exact
+  package declaration, preserving the file's newline convention.
 
 Comments, strings, unrelated same-spelled identifiers and build output shall not
 be edited. Edits must be normalized and non-overlapping.
@@ -78,8 +84,8 @@ The operation shall refuse with stable structured codes for at least:
 - destination file/type conflict;
 - generated roots, scripts, compiler plugins, multiplatform `expect`/`actual`,
   Android or unsupported build models;
-- alias/star/static imports, qualified-expression uses or same-package implicit
-  consumers outside the first row;
+- alias/star/static imports, qualified-expression uses, ambiguous same-package
+  declarations or import-name conflicts;
 - incomplete K2/JDT evidence, callable/reference ambiguity or stale authority;
 - reflection, serialization or framework candidates requiring a broader row;
 - absent `acceptExternalConsumerRisk=true`.

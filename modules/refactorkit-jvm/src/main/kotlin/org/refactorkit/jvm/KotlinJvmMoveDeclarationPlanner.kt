@@ -135,9 +135,11 @@ class KotlinJvmMoveDeclarationPlanner(
             val consumer = snapshot.file(path) ?: return refused(
                 snapshot, "kotlin.moveReferenceFileMissing", "Kotlin move consumer is absent from the snapshot",
             )
-            val importEdit = importEdit(consumer, declaration.jvmIdentity, newIdentity) ?: return refused(
+            val importEdit = consumerImportEdit(
+                consumer, oldPackage, declaration.jvmIdentity, newIdentity, target.name,
+            ) ?: return refused(
                 snapshot, "kotlin.moveImportShapeUnsupported",
-                "Initial Kotlin move requires one explicit non-aliased, non-star import in every consumer",
+                "Kotlin move requires one exact explicit import or one compiler-proven same-package implicit consumer",
             )
             edits += FileEdit.Modify(path, listOf(importEdit))
         }
@@ -200,12 +202,46 @@ class KotlinJvmMoveDeclarationPlanner(
         return offsetEdit(source.content, range.first, range.last + 1, targetPackage)
     }
 
-    private fun importEdit(source: SourceFile, oldIdentity: String, newIdentity: String): TextEdit? {
-        val suffix = if (source.languageId == "java") "\\s*;" else ""
-        val matches = Regex("(?m)^\\s*import\\s+(${Regex.escape(oldIdentity)})$suffix\\s*$").findAll(source.content).toList()
-        if (matches.size != 1) return null
-        val range = matches.single().groups[1]!!.range
-        return offsetEdit(source.content, range.first, range.last + 1, newIdentity)
+    private fun consumerImportEdit(
+        source: SourceFile,
+        oldPackage: String,
+        oldIdentity: String,
+        newIdentity: String,
+        simpleName: String,
+    ): TextEdit? {
+        val terminator = if (source.languageId == "java") "\\s*;" else ""
+        val explicit = Regex(
+            "(?m)^[ \\t]*import\\s+(${Regex.escape(oldIdentity)})$terminator[ \\t]*$",
+        ).findAll(source.content).toList()
+        if (explicit.size == 1) {
+            val range = explicit.single().groups[1]!!.range
+            return offsetEdit(source.content, range.first, range.last + 1, newIdentity)
+        }
+        if (explicit.isNotEmpty() || exactPackage(source) != oldPackage || oldIdentity in source.content) return null
+        val unsafeImport = Regex(
+            "(?m)^[ \\t]*import\\s+(?:static\\s+)?(?:${Regex.escape(oldPackage)}\\.\\*|" +
+                "[A-Za-z_][A-Za-z0-9_.]*\\.${Regex.escape(simpleName)})(?:\\s+as\\s+\\w+)?[ \\t]*;?[ \\t]*$",
+        )
+        if (unsafeImport.containsMatchIn(source.content)) return null
+        val packageMatch = packageLine(source) ?: return null
+        val newline = if ("\r\n" in source.content) "\r\n" else "\n"
+        var insertionOffset = packageMatch.range.last + 1
+        if (source.content.startsWith(newline, insertionOffset)) insertionOffset += newline.length
+        val semicolon = if (source.languageId == "java") ";" else ""
+        return offsetEdit(
+            source.content, insertionOffset, insertionOffset,
+            "import $newIdentity$semicolon$newline",
+        )
+    }
+
+    private fun exactPackage(source: SourceFile): String? = packageLine(source)?.groups?.get(1)?.value
+
+    private fun packageLine(source: SourceFile): MatchResult? {
+        val terminator = if (source.languageId == "java") "\\s*;" else ""
+        val matches = Regex(
+            "(?m)^[ \\t]*package\\s+([A-Za-z_][A-Za-z0-9_.]*)$terminator[ \\t]*$",
+        ).findAll(source.content).toList()
+        return matches.singleOrNull()
     }
 
     private fun dynamicRisk(snapshot: ProjectSnapshot, simpleName: String): Boolean {
