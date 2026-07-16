@@ -390,12 +390,30 @@ class KotlinCompilerDiagnostics private constructor(
             overlay.root.toString(),
             "--",
         ) + compilerArguments
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(execution.requestTimeoutMillis)
+        repeat(2) { attempt ->
+            val remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime()).coerceAtLeast(1)
+            try {
+                return executeAttempt(arguments, overlay.root, remainingMillis)
+            } catch (failure: KotlinCompilerExecutionException) {
+                if (attempt != 0 || failure.code != "kotlin.compilerDiagnosticsFailed" ||
+                    System.nanoTime() >= deadline) throw failure
+            }
+        }
+        error("unreachable Kotlin compiler attempt state")
+    }
+
+    private fun executeAttempt(
+        arguments: List<String>,
+        workingDirectory: Path,
+        timeoutMillis: Long,
+    ): CompilerExecution {
         val manager = ExternalSemanticProcessManager(maxProcesses = 1)
         val process = manager.launch(SemanticProcessSpec(
             id = "kotlin-compiler-${SEQUENCE.getAndIncrement()}",
             executable = toolchain.javaExecutable,
             arguments = arguments,
-            workingDirectory = overlay.root,
+            workingDirectory = workingDirectory,
             environment = emptyMap(),
             limits = SemanticProcessLimits(
                 maxStdoutBytes = MAX_OUTPUT_BYTES,
@@ -408,7 +426,7 @@ class KotlinCompilerDiagnostics private constructor(
         }
         try {
             val future = reader.submit<String> { process.output.bufferedReader(Charsets.UTF_8).readText() }
-            if (!process.awaitExit(execution.requestTimeoutMillis)) {
+            if (!process.awaitExit(timeoutMillis)) {
                 val provenance = process.provenance
                 process.cancel()
                 throw KotlinCompilerExecutionException(
@@ -416,7 +434,7 @@ class KotlinCompilerDiagnostics private constructor(
                 )
             }
             val text = try {
-                future.get(2, TimeUnit.SECONDS)
+                future.get(minOf(2_000, timeoutMillis), TimeUnit.MILLISECONDS)
             } catch (_: Exception) {
                 throw KotlinCompilerExecutionException(
                     "kotlin.compilerDiagnosticsOutputInvalid",

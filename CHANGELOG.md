@@ -14,6 +14,9 @@ review safety boundaries before applying refactorings.
   explicit imports and the package token are updated exactly, the file remains
   in the same source set, and one diagnostics-gated `PatchEngine` transaction
   supports byte-restoring rollback. CLI, daemon and MCP routes are additive.
+- Retry one transient non-zero K2 worker exit inside the original 30-second
+  aggregate deadline. Timeouts, output/protocol failures and a repeated exit
+  remain fail-closed, and no attempt publishes partial semantic evidence.
 - Normalize K2 PSI offsets back to saved CRLF source offsets before validating
   compiler symbol and usage ranges. Windows no longer loses exact symbol
   evidence after a CRLF-preserving source rewrite.

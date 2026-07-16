@@ -527,6 +527,18 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun transientWorkerExitRetriesOnceWithinAggregateDeadline() {
+        val root = project("class Valid\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = KotlinCompilerDiagnostics(toolchain, 30_000, FlakyKotlinCompilerBridge::class.java)
+            .analyze(snapshot)
+
+        assertIs<KotlinCompilerDiagnosticsResult.Available>(result)
+    }
+
+    @Test
     fun workerTimeoutTerminatesProcessAndReturnsTypedAttestation() {
         val root = project("class Valid\n")
         val toolchain = toolchain(root)
@@ -681,6 +693,20 @@ class KotlinCompilerDiagnosticsTest {
             is KotlinToolchainDiscovery.Available -> discovery.toolchain
             is KotlinToolchainDiscovery.Refused -> error(discovery.diagnostics.joinToString { "${it.code}: ${it.message}" })
         }
+    }
+}
+
+object FlakyKotlinCompilerBridge {
+    @JvmStatic
+    fun main(arguments: Array<String>) {
+        val marker = Path.of(arguments[1]).resolve(".transient-worker-retried")
+        if (Files.notExists(marker)) {
+            Files.createFile(marker)
+            kotlin.system.exitProcess(17)
+        }
+        print("{\"schema\":1,\"complete\":true,\"snapshotHash\":\"${arguments[0]}\"," +
+            "\"exitCode\":\"OK\",\"xmlBase64\":\"PE1FU1NBR0VTLz4=\"," +
+            "\"symbolsComplete\":true,\"symbols\":[],\"usagesComplete\":true,\"usages\":[]}")
     }
 }
 
