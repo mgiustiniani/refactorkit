@@ -536,16 +536,16 @@ def main() -> int:
         )
         portable_greeting = next(item for item in move_symbols.get("symbols", []) if item.get("name") == "PortableGreeting")
         move_java_consumer.unlink()
-        kotlin_only_before = tree_hash(workspace / "src")
+        move_kotlin_consumer.unlink()
+        unused_move_before = tree_hash(workspace / "src")
         cli_move_preview = run(
             cli, workspace, jdk, compiler, classpath, "native-kotlin-move-preview", "move-declaration",
             ["--symbol", portable_greeting["id"], "--to-package", "org.refactorkit.move.api.v2",
              "--accept-external-consumer-risk"],
         )
-        if cli_move_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != kotlin_only_before:
-            raise AssertionError(f"public Kotlin-only CLI move preview is invalid or wrote files: {cli_move_preview}")
+        if cli_move_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != unused_move_before:
+            raise AssertionError(f"unused public Kotlin CLI move preview is invalid or wrote files: {cli_move_preview}")
         move_java_consumer.write_text(move_java_source, encoding="utf-8")
-        move_kotlin_consumer.unlink()
         move_before = tree_hash(workspace / "src")
 
         portable_symbol_id = "kotlin-jvm-type-v1:" + hashlib.sha256(

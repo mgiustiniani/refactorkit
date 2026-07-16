@@ -210,7 +210,8 @@ preview/apply/rollback evidence. The first public top-level Kotlin/JVM
 destination import for compiler-proven same-package consumers, or rewrites exact
 fully-qualified K2/JDT-bound identities, then moves the file within one
 authoritative source set. Kotlin and Java consumer sets are independently
-optional; at least one compiler-proven consumer is required. Both rename directions and the bounded package-move row passed the native matrix,
+optional; zero-consumer public types rely on staged K2 declaration identity and
+explicit external-consumer-risk acceptance. Both rename directions and the bounded package-move row passed the native matrix,
 including CRLF-normalized Windows evidence. Overloads, delegated/constructor
 properties, broader moves, signature/extract/inline operations, multiplatform,
 Android and framework boundaries remain pending or explicitly refused. No partial read result inherits

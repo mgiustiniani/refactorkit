@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Allow bounded Kotlin/JVM `moveDeclaration` for public types with no
+  in-workspace consumers. K2 must still prove the staged destination declaration,
+  external-consumer risk remains explicit and the file move stays transactional.
 - Allow bounded Kotlin/JVM `moveDeclaration` consumer sets to be independently
   Kotlin-only or Java-only instead of fabricating a cross-language requirement.
   Staged validation conditionally proves every consumer set that existed before
