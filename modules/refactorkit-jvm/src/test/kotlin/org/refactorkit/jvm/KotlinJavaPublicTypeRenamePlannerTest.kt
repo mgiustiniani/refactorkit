@@ -187,7 +187,8 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         declaration.writeText(
             "package fixture.api\n" +
                 "private class GreetingState\n" +
-                "private fun greetingState(): GreetingState = GreetingState()\n" +
+                "private val defaultGreetingState: GreetingState = GreetingState()\n" +
+                "private fun greetingState(): GreetingState = defaultGreetingState\n" +
                 "public class PublicGreeting { private val state = greetingState() }\n",
         )
         val beforeBytes = declaration.readBytes()
@@ -206,6 +207,7 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         ))
         val destination = fixture.root.resolve("src/main/kotlin/fixture/api/v2/PublicGreeting.kt")
         assertTrue("private class GreetingState" in destination.readText())
+        assertTrue("private val defaultGreetingState" in destination.readText())
         assertTrue("private fun greetingState()" in destination.readText())
         assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
         assertTrue(beforeBytes.contentEquals(declaration.readBytes()))

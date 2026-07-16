@@ -520,7 +520,8 @@ def main() -> int:
         move_type.write_text(
             "package org.refactorkit.move.api\n" +
             "private class PortableGreetingState\n" +
-            "private fun portableGreetingState(): PortableGreetingState = PortableGreetingState()\n" +
+            "private val defaultPortableGreetingState: PortableGreetingState = PortableGreetingState()\n" +
+            "private fun portableGreetingState(): PortableGreetingState = defaultPortableGreetingState\n" +
             "public class PortableGreeting { private val state = portableGreetingState() }\n",
             encoding="utf-8",
         )
@@ -597,6 +598,7 @@ def main() -> int:
             mcp_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if ("Applied successfully" not in mcp_applied or not mcp_destination.exists() or move_type.exists() or
                     "private class PortableGreetingState" not in mcp_destination.read_text(encoding="utf-8") or
+                    "private val defaultPortableGreetingState" not in mcp_destination.read_text(encoding="utf-8") or
                     "private fun portableGreetingState()" not in mcp_destination.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.*;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
                         move_java_consumer.read_text(encoding="utf-8")):
@@ -652,6 +654,7 @@ def main() -> int:
             move_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if (move_applied.get("status") != "applied" or not move_destination.exists() or move_type.exists() or
                     "private class PortableGreetingState" not in move_destination.read_text(encoding="utf-8") or
+                    "private val defaultPortableGreetingState" not in move_destination.read_text(encoding="utf-8") or
                     "private fun portableGreetingState()" not in move_destination.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.*\nimport org.refactorkit.move.api.v2.PortableGreeting" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
