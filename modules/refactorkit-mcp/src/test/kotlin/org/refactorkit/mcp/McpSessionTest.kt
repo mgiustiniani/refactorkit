@@ -83,6 +83,37 @@ class McpSessionTest {
     }
 
     @Test
+    fun kotlinMoveDeclarationIsListedAndRequiresSemanticAuthority() {
+        val root = createProject(
+            "src/main/kotlin/example/api/Portable.kt" to "package example.api\npublic class Portable\n",
+        )
+        val session = McpSession()
+        val scan = session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        }) as JsonObject
+        val snapshot = firstValueAfter("Snapshot:", contentText(scan))
+        val available = session.dispatch("tools/call", buildJsonObject {
+            put("name", "available_refactorings")
+            put("arguments", buildJsonObject { put("symbol", "kotlin-jvm-type-v1:${"a".repeat(64)}") })
+        }) as JsonObject
+        assertTrue(contentText(available).contains("moveDeclaration"))
+
+        val preview = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "moveDeclaration"); put("languageId", "kotlin")
+                put("symbol", "kotlin-jvm-type-v1:${"a".repeat(64)}")
+                put("semanticLease", "stale"); put("expectedSnapshotHash", snapshot)
+                put("arguments", buildJsonObject {
+                    put("targetPackage", "example.api.v2"); put("acceptExternalConsumerRisk", true)
+                })
+            })
+        }) as JsonObject
+        assertTrue(contentText(preview).contains("kotlin.moveAuthorityStale"))
+    }
+
+    @Test
     fun kotlinDefinitionAcceptsCallableIdShapeBeforeSessionAuthorityRefusal() {
         val root = createProject("src/main/kotlin/example/App.kt" to "package example\nfun run() = Unit\n")
         val session = McpSession()
