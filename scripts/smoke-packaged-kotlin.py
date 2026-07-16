@@ -392,7 +392,8 @@ def main() -> int:
 
         java_caller.unlink()
         greeting_source = workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt"
-        greeting_original = greeting_source.read_text(encoding="utf-8")
+        greeting_original_bytes = greeting_source.read_bytes()
+        greeting_original = greeting_original_bytes.decode("utf-8")
         greeting_source.write_text(
             greeting_original + "\nfun publicAccount(): PublicAccount = PublicAccount()\n" +
             "fun accountLabel(account: PublicAccount): String = account.label(\"x\")\n", encoding="utf-8",
@@ -508,7 +509,7 @@ def main() -> int:
                 process.kill()
                 process.wait(timeout=20)
 
-        greeting_source.write_text(greeting_original, encoding="utf-8")
+        greeting_source.write_bytes(greeting_original_bytes)
         move_type = workspace / "src/main/kotlin/org/refactorkit/move/api/PortableGreeting.kt"
         move_kotlin_consumer = workspace / "src/main/kotlin/org/refactorkit/move/consumer/UsePortableGreeting.kt"
         move_java_consumer = workspace / "src/main/java/org/refactorkit/move/consumer/MoveCaller.java"
@@ -598,7 +599,7 @@ def main() -> int:
         move_java_consumer.parent.parent.rmdir()
 
         java_type.unlink()
-        greeting_source.write_text(greeting_original, encoding="utf-8")
+        greeting_source.write_bytes(greeting_original_bytes)
         java_type.parent.rmdir()
         (workspace / "src/main/java/org/refactorkit").rmdir()
         (workspace / "src/main/java/org").rmdir()
