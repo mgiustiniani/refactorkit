@@ -2,8 +2,9 @@
 
 Status: active bounded K5 expansion. Explicit imports, same-package consumers,
 exact fully-qualified uses, optional consumer sets and zero-consumer types pass
-all acceptance layers. Exact Kotlin alias-import preservation is specified below
-and pending executable qualification. Broader shapes remain pending.
+all acceptance layers. Exact Kotlin alias-import preservation has local and
+packaged executable acceptance; four-platform qualification is pending. Broader
+shapes remain pending.
 
 ## Purpose
 

@@ -520,8 +520,8 @@ def main() -> int:
         move_type.write_text("package org.refactorkit.move.api\npublic class PortableGreeting\n", encoding="utf-8")
         move_kotlin_source = (
             "package org.refactorkit.move.consumer\n" +
-            "fun portableGreeting(): org.refactorkit.move.api.PortableGreeting = " +
-            "org.refactorkit.move.api.PortableGreeting()\n"
+            "import org.refactorkit.move.api.PortableGreeting as PortableApiGreeting\n" +
+            "fun portableGreeting(): PortableApiGreeting = PortableApiGreeting()\n"
         )
         move_java_source = (
             "package org.refactorkit.move.consumer;\n" +
@@ -642,7 +642,10 @@ def main() -> int:
             })
             move_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if (move_applied.get("status") != "applied" or not move_destination.exists() or move_type.exists() or
-                    move_kotlin_consumer.read_text(encoding="utf-8").count("org.refactorkit.move.api.v2.PortableGreeting") != 2 or
+                    "import org.refactorkit.move.api.v2.PortableGreeting as PortableApiGreeting" not in
+                        move_kotlin_consumer.read_text(encoding="utf-8") or
+                    "fun portableGreeting(): PortableApiGreeting = PortableApiGreeting()" not in
+                        move_kotlin_consumer.read_text(encoding="utf-8") or
                     move_java_consumer.read_text(encoding="utf-8").count("org.refactorkit.move.api.v2.PortableGreeting") != 2):
                 raise AssertionError(f"public Kotlin move apply failed: {move_applied}")
             move_rollback = move_exchange(55, "patch.rollback", {"transactionId": move_applied["transactionId"]})

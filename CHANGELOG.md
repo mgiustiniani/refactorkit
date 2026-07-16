@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add compiler-proven Kotlin import-alias usage evidence and preserve exact alias
+  tokens during bounded `moveDeclaration`. FIR-resolved imports bind alias text to
+  source identities; malformed locations and collisions fail with typed codes.
 - Allow bounded Kotlin/JVM `moveDeclaration` for public types with no
   in-workspace consumers. K2 must still prove the staged destination declaration,
   external-consumer risk remains explicit and the file move stays transactional.
