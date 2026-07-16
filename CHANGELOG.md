@@ -9,6 +9,11 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add managed public Kotlin-function rename across direct Java callers. Durable
+  owner/name/descriptor evidence selects the non-overloaded function, K2 supplies
+  exact Kotlin declaration/calls, and JDT binds Java invocations against the
+  ephemeral K2 classes. Overrides, operator/infix shapes, callable references,
+  dynamic/generated/incomplete evidence and unaccepted external consumers refuse.
 - Add the symmetric public Java-type rename used by Kotlin. A bounded external
   ECJ process disables annotation processing, compiles the exact immutable Java
   snapshot into an overlay, packages deterministic hash-bound ephemeral classes,

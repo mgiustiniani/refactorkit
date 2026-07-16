@@ -43,7 +43,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
             kotlinAdapter = container "Kotlin Language Adapter" "Hash-bound Kotlin/JVM projection, external K2 diagnostics, durable declarations/usages, and bounded managed private-declaration rename proposals over immutable overlays." "Kotlin/JVM library (modules/refactorkit-kotlin)" {
                 tags "Runtime Building Block"
             }
-            jvmComposition = container "Shared JVM Semantic Composition" "Composes exact K2/JDT and bounded annotation-processing-free ECJ/K2 evidence for bidirectional mixed Java/Kotlin plans without coupling core to either adapter." "Kotlin/JVM library (modules/refactorkit-jvm)" {
+            jvmComposition = container "Shared JVM Semantic Composition" "Composes exact K2/JDT and bounded annotation-processing-free ECJ/K2 evidence for bidirectional public types and bounded public Kotlin-function/Java-caller plans without coupling core to either adapter." "Kotlin/JVM library (modules/refactorkit-jvm)" {
                 tags "Runtime Building Block"
             }
             webImporter = container "External Java Class Importer" "Preview-only external source assimilation for Java classes: strips Markdown fences, detects license/provenance, validates package names, detects/splits public types, rewrites packages, organizes imports, refuses conflicts, and emits PatchPlans." "Kotlin/JVM library (modules/refactorkit-web-importer)" {

@@ -279,7 +279,7 @@ def main() -> int:
         java_caller = workspace / "src/main/java/org/refactorkit/samples/Caller.java"
         java_caller.parent.mkdir(parents=True, exist_ok=True)
         java_caller.write_text(
-            "package org.refactorkit.samples; class Caller { Greeting value = new Greeting(); }\n",
+            "package org.refactorkit.samples; class Caller { Greeting value = new Greeting(); String render() { return value.render(\"x\"); } }\n",
             encoding="utf-8",
         )
         mixed_before = tree_hash(workspace / "src")
@@ -337,6 +337,59 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=20)
+        function_before = tree_hash(workspace / "src")
+        process = subprocess.Popen(
+            command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def function_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"function daemon {method} failed: {response}")
+                return response["result"]
+
+            function_exchange(26, "project.open", {"root": str(workspace)})
+            function_started = function_exchange(27, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            function_index = function_exchange(28, "index.status")
+            function_preview = function_exchange(29, "refactor.preview", {
+                "operation": "renameSymbol", "languageId": "kotlin", "symbol": render["id"],
+                "semanticLease": function_started["semanticLease"],
+                "expectedSnapshotHash": function_started["snapshotHash"],
+                "expectedIndexGeneration": function_index["generation"],
+                "arguments": {"newName": "display", "acceptExternalConsumerRisk": True},
+            })
+            if function_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != function_before:
+                raise AssertionError(f"public Kotlin-function preview is invalid or wrote files: {function_preview}")
+            function_applied = function_exchange(30, "refactor.apply", {
+                "planId": function_preview["planId"], "semanticLease": function_started["semanticLease"],
+                "expectedIndexGeneration": function_index["generation"],
+            })
+            if (function_applied.get("status") != "applied" or
+                    "fun display" not in (workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt").read_text(encoding="utf-8") or
+                    ".display(" not in java_caller.read_text(encoding="utf-8")):
+                raise AssertionError(f"public Kotlin-function apply failed: {function_applied}")
+            function_rollback = function_exchange(31, "patch.rollback", {
+                "transactionId": function_applied["transactionId"],
+            })
+            if function_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != function_before:
+                raise AssertionError(f"public Kotlin-function rollback failed: {function_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+
         java_caller.unlink()
         greeting_source = workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt"
         greeting_original = greeting_source.read_text(encoding="utf-8")
@@ -422,7 +475,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 reads, private rename, and bidirectional public Java/Kotlin apply/rollback.")
+    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public types, and Kotlin-function/Java-caller apply/rollback.")
     return 0
 
 

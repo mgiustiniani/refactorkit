@@ -203,8 +203,9 @@ the exact disposable K2 overlay let JDT bind exact Java tokens to the same JVM
 binary name. Public preview requires explicit external-consumer-risk acceptance
 and clean before/staged K2 plus JDT evidence.
 
-Both public top-level type directions now have managed local and packaged
-preview/apply/rollback evidence. Kotlin-to-Java passed the native matrix;
+Both public top-level type directions and a non-overloaded public Kotlin function
+with direct Java callers now have managed local and packaged preview/apply/rollback
+evidence. Kotlin-to-Java passed the native matrix;
 Java-to-Kotlin native qualification, members, overloads, delegated/constructor properties,
 callable references, aliases, moves, signature/extract/inline operations,
 multiplatform, Android and broader framework boundaries remain pending or
