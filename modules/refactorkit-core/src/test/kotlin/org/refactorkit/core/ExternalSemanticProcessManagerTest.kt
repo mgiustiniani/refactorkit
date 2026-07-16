@@ -105,7 +105,7 @@ class ExternalSemanticProcessManagerTest {
     ): SemanticProcessSpec = SemanticProcessSpec(
         id = id,
         executable = javaExecutable(),
-        arguments = listOf("-cp", System.getProperty("java.class.path"), SemanticProcessFixture::class.java.name) + fixtureArguments,
+        arguments = listOf("-Xmx64m", "-cp", System.getProperty("java.class.path"), SemanticProcessFixture::class.java.name) + fixtureArguments,
         workingDirectory = Files.createTempDirectory("refactorkit-semantic-process"),
         environment = environment,
         limits = limits,
@@ -148,7 +148,7 @@ object SemanticProcessFixture {
             "spawn" -> {
                 val executable = Path.of(System.getProperty("java.home"), "bin", if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java")
                 val child = ProcessBuilder(
-                    executable.toString(), "-cp", System.getProperty("java.class.path"),
+                    executable.toString(), "-Xmx64m", "-cp", System.getProperty("java.class.path"),
                     SemanticProcessFixture::class.java.name, "sleep",
                 ).start()
                 println(child.pid())
