@@ -234,6 +234,21 @@ class KotlinJvmMoveDeclarationPlanner(
             return listOf(offsetEdit(source.content, range.first, range.last + 1, newIdentity))
         }
         if (aliased.isNotEmpty()) return null
+        val star = Regex(
+            "(?m)^[ \\t]*import\\s+${Regex.escape(oldPackage)}\\.\\*$terminator[ \\t]*$",
+        ).findAll(source.content).toList()
+        if (star.size == 1) {
+            if (oldIdentity in source.content) return null
+            val newline = if ("\r\n" in source.content) "\r\n" else "\n"
+            var insertionOffset = star.single().range.last + 1
+            if (source.content.startsWith(newline, insertionOffset)) insertionOffset += newline.length
+            val semicolon = if (source.languageId == "java") ";" else ""
+            return listOf(offsetEdit(
+                source.content, insertionOffset, insertionOffset,
+                "import $newIdentity$semicolon$newline",
+            ))
+        }
+        if (star.isNotEmpty()) return null
         if (oldIdentity in source.content) return qualifiedUseEdits(
             source, locations, oldIdentity, newIdentity, simpleName,
         )

@@ -1,9 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for explicit and aliased imports, same-package
-consumers, exact fully-qualified uses, optional consumer sets and zero-consumer
-types. Library, packaged CLI/daemon/MCP and all four native platforms pass.
-Broader shapes remain pending.
+Status: active bounded K5 expansion. Explicit/aliased imports, same-package and
+fully-qualified consumers, optional consumer sets and zero-consumer types pass
+all acceptance layers. Exact Kotlin/Java package-star consumers are specified
+below and pending executable qualification. Broader shapes remain pending.
 
 ## Purpose
 
@@ -28,12 +28,13 @@ The operation shall accept only when all of the following are proven:
 3. The destination is a valid different package in the same source set and its
    destination file and binary identity do not exist.
 4. Every Kotlin use is K2-resolved to the source identity. A consumer either uses
-   one explicit non-star import of the old identity, optionally with one exact
-   Kotlin alias, belongs to the exact old package and resolves the type implicitly, or uses the exact old
+   one explicit import of the old identity, optionally with one exact Kotlin
+   alias, has one exact non-static old-package star import, belongs to the exact
+   old package and resolves the type implicitly, or uses the exact old
    fully-qualified identity at every proven target token.
 5. Every Java use is JDT-bound to the matching ephemeral K2 class. A Java consumer
-   either uses one explicit non-static import of the old identity, belongs to the
-   exact old package and resolves the type implicitly, or uses the exact old
+   either uses one explicit non-static import of the old identity, has one exact
+   non-static old-package star import, belongs to the exact old package and resolves the type implicitly, or uses the exact old
    fully-qualified identity at every proven target token.
 6. Kotlin and Java consumer sets are independently optional. A type with no
    in-workspace consumers may still move when K2 proves its declaration and the
@@ -55,6 +56,9 @@ The preview shall contain only:
 - for a compiler-proven same-package implicit consumer, one deterministic
   explicit import of the new identity inserted immediately after its exact
   package declaration, preserving the file's newline convention; or
+- for one exact old-package star import, preserve that import and insert one
+  explicit destination-identity import immediately after it, preserving newline
+  and Java semicolon conventions; or
 - each exact fully-qualified old identity whose final type token is independently
   proven by K2 or JDT changed to the destination identity.
 
@@ -93,8 +97,8 @@ The operation shall refuse with stable structured codes for at least:
 - destination file/type conflict;
 - generated roots, scripts, compiler plugins, multiplatform `expect`/`actual`,
   Android or unsupported build models;
-- star/static imports, multiple or malformed aliases, partially qualified
-  expressions, mixed qualified and unqualified uses in one consumer, ambiguous
+- multiple, static or malformed star imports; multiple or malformed aliases;
+  partially qualified expressions, mixed qualified and unqualified uses in one consumer, ambiguous
   same-package declarations or import-name conflicts;
 - incomplete K2/JDT evidence, callable/reference ambiguity or stale authority;
 - reflection, serialization or framework candidates requiring a broader row;
