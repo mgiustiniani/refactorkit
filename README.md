@@ -453,7 +453,7 @@ The beta workflow is: scan the project, generate a preview, inspect affected fil
 
 MVP limitations remain visible: Java analysis is still mostly lexical, `organize-imports` does not fully remove unused imports, `safe-delete` does not inspect every non-source reference, external importer license detection is heuristic, and extract-method/change-signature support is conservative. See [`docs/release-plan.md`](docs/release-plan.md) and ARC42 risks in [`docs/arc42/11-risks-and-technical-debt.adoc`](docs/arc42/11-risks-and-technical-debt.adoc).
 
-## Self-contained CLI and daemon package
+## Self-contained CLI, daemon and MCP package
 
 Build an unpacked package with an embedded Java runtime:
 
@@ -462,6 +462,8 @@ Build an unpacked package with an embedded Java runtime:
 modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit --help
 # Official NDJSON JSON-RPC stdio launcher; close stdin to shut down.
 modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit-daemon
+# Standalone MCP stdio launcher using the same embedded runtime.
+modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit-mcp
 ```
 
 Build a zip distribution:

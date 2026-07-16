@@ -33,7 +33,9 @@ modules/refactorkit-cli/build/package/refactorkit/
   bin/refactorkit.bat
   bin/refactorkit-daemon
   bin/refactorkit-daemon.bat
-  lib/*.jar (including daemon and protocol dependencies)
+  bin/refactorkit-mcp
+  bin/refactorkit-mcp.bat
+  lib/*.jar (including daemon, MCP and protocol dependencies)
   runtime/bin/java
 ```
 
@@ -161,6 +163,20 @@ copies the complete distribution beneath a path containing spaces, enforces
 startup/per-response/shutdown timeouts, bounds captured stderr, rejects non-JSON
 stdout, kills hung processes, and verifies EOF termination. See
 [Daemon protocol](daemon-protocol.md) for lifecycle and request examples.
+
+## Run packaged MCP server
+
+The distribution also provides a standalone MCP stdio launcher using the same
+embedded runtime and `lib/*` set:
+
+```bash
+env -u JAVA_HOME modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit-mcp
+```
+
+On Windows use `bin\\refactorkit-mcp.bat`. The process accepts one bounded MCP
+JSON-RPC request per line on stdin and writes protocol-only responses to stdout.
+Packaged Kotlin acceptance exercises semantic start, move preview, transactional
+apply and rollback through this launcher.
 
 ## Runtime modules
 

@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Package a standalone `refactorkit-mcp`/`.bat` launcher in the embedded-runtime
+  distribution and qualify Kotlin move semantic start, preview, apply and
+  rollback through its real stdio protocol.
 - Add the first managed Kotlin/JVM `moveDeclaration` row for one public top-level
   type in an authoritative source set. K2/JDT prove Kotlin and Java consumers,
   explicit imports and the package token are updated exactly, the file remains

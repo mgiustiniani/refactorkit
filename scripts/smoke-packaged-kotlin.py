@@ -80,6 +80,7 @@ def main() -> int:
     repository = Path.cwd()
     runtime = (repository / options.runtime).resolve()
     cli = runtime / "bin" / ("refactorkit.bat" if os.name == "nt" else "refactorkit")
+    mcp = runtime / "bin" / ("refactorkit-mcp.bat" if os.name == "nt" else "refactorkit-mcp")
     if not options.jdk_home:
         raise AssertionError("JAVA_HOME or --jdk-home is required")
     jdk = Path(options.jdk_home).resolve()
@@ -538,6 +539,61 @@ def main() -> int:
         )
         if cli_move_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != move_before:
             raise AssertionError(f"public Kotlin CLI move preview is invalid or wrote files: {cli_move_preview}")
+
+        portable_symbol_id = "kotlin-jvm-type-v1:" + hashlib.sha256(
+            b"kotlin-jvm-type-v1\0org.refactorkit.move.api.PortableGreeting"
+        ).hexdigest()
+        process = subprocess.Popen(
+            command_for(mcp, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def mcp_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"move MCP {method} failed: {response}")
+                return response["result"]
+
+            def mcp_tool(request_id: int, name: str, arguments: dict) -> str:
+                result = mcp_exchange(request_id, "tools/call", {"name": name, "arguments": arguments})
+                return result["content"][0]["text"]
+
+            mcp_tool(60, "project_scan", {"root": str(workspace)})
+            mcp_started = mcp_tool(61, "kotlin_semantic_start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            mcp_lease = mcp_started.split("Semantic lease: ", 1)[1].split(". Snapshot:", 1)[0]
+            mcp_snapshot = mcp_started.split(". Snapshot: ", 1)[1].split(".", 1)[0]
+            mcp_preview = mcp_tool(62, "preview_refactoring", {
+                "operation": "moveDeclaration", "languageId": "kotlin", "symbol": portable_symbol_id,
+                "semanticLease": mcp_lease, "expectedSnapshotHash": mcp_snapshot,
+                "arguments": {"targetPackage": "org.refactorkit.move.api.v2", "acceptExternalConsumerRisk": True},
+            })
+            mcp_plan_id = mcp_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+            if "Status   : PREVIEW" not in mcp_preview or tree_hash(workspace / "src") != move_before:
+                raise AssertionError(f"public Kotlin MCP move preview is invalid or wrote files: {mcp_preview}")
+            mcp_applied = mcp_tool(63, "apply_refactoring", {"planId": mcp_plan_id, "semanticLease": mcp_lease})
+            mcp_transaction = mcp_applied.split("Transaction ID: ", 1)[1].splitlines()[0]
+            mcp_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
+            if "Applied successfully" not in mcp_applied or not mcp_destination.exists() or move_type.exists():
+                raise AssertionError(f"public Kotlin MCP move apply failed: {mcp_applied}")
+            mcp_rollback = mcp_tool(64, "rollback_refactoring", {"transactionId": mcp_transaction})
+            if "Rolled back" not in mcp_rollback or tree_hash(workspace / "src") != move_before:
+                raise AssertionError(f"public Kotlin MCP move rollback failed: {mcp_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+
         process = subprocess.Popen(
             command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, encoding="utf-8",

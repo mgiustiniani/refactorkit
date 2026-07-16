@@ -1,8 +1,8 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: active K5 row. The bounded library implementation and packaged CLI/daemon
-acceptance are complete; MCP packaged and four-platform native qualification are
-pending.
+Status: qualified bounded K5 row. Library, packaged CLI/daemon/MCP and
+four-platform native acceptance are complete. Broader declaration/file/package
+move shapes remain pending.
 
 ## Purpose
 

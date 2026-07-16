@@ -1,9 +1,9 @@
 # Java/Kotlin shared JVM member rename requirements
 
-Status: active native-qualification K5/J1 row. Both bounded directions—public
-Kotlin function with Java callers and public Java method with Kotlin callers—have
-library, daemon/CLI/MCP and local packaged apply/rollback evidence. Four-platform
-qualification remains pending.
+Status: qualified bounded K5/J1 row. Both directions—public Kotlin function with
+Java callers and public Java method with Kotlin callers—have library,
+daemon/CLI/MCP, local packaged and four-platform native apply/rollback evidence.
+Broader member shapes remain separate rows.
 
 ## First qualified member
 

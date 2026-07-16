@@ -25,6 +25,7 @@ dependencies {
     implementation(project(":modules:refactorkit-typescript"))
     implementation(project(":modules:refactorkit-kotlin"))
     implementation(project(":modules:refactorkit-testkit"))
+    runtimeOnly(project(":modules:refactorkit-mcp"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }
@@ -115,6 +116,17 @@ tasks.register("writeBundledLaunchers") {
             """.trimMargin(),
         )
         daemonUnix.setExecutable(true)
+        val mcpUnix = out.resolve("refactorkit-mcp")
+        mcpUnix.writeText(
+            """
+            |#!/usr/bin/env sh
+            |set -e
+            |APP_HOME="${'$'}(CDPATH= cd -- "${'$'}(dirname -- "${'$'}0")/.." && pwd)"
+            |exec "${'$'}APP_HOME/runtime/bin/java" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.mcp.RefactorKitMcpKt "${'$'}@"
+            |
+            """.trimMargin(),
+        )
+        mcpUnix.setExecutable(true)
 
         out.resolve("refactorkit.bat").writeText(
             """
@@ -132,6 +144,16 @@ tasks.register("writeBundledLaunchers") {
             |setlocal
             |set "APP_HOME=%~dp0.."
             |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.daemon.RefactorKitDaemonKt %*
+            |exit /b %ERRORLEVEL%
+            |
+            """.trimMargin(),
+        )
+        out.resolve("refactorkit-mcp.bat").writeText(
+            """
+            |@echo off
+            |setlocal
+            |set "APP_HOME=%~dp0.."
+            |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.mcp.RefactorKitMcpKt %*
             |exit /b %ERRORLEVEL%
             |
             """.trimMargin(),
@@ -169,6 +191,7 @@ tasks.register("refactorkitRuntimeDist") {
         }
         out.resolve("bin/refactorkit").setExecutable(true)
         out.resolve("bin/refactorkit-daemon").setExecutable(true)
+        out.resolve("bin/refactorkit-mcp").setExecutable(true)
         println("Self-contained RefactorKit CLI package: ${out.absolutePath}")
     }
 }
