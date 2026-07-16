@@ -208,7 +208,8 @@ rows with direct cross-language callers now have managed local and packaged
 preview/apply/rollback evidence. The first public top-level Kotlin/JVM
 `moveDeclaration` row updates explicit Kotlin/Java imports while preserving
 FIR-resolved Kotlin aliases, or inserts a
-destination import for compiler-proven same-package consumers, or rewrites exact
+destination import for compiler-proven same-package or exact Kotlin/Java
+package-star consumers, or rewrites exact
 fully-qualified K2/JDT-bound identities, then moves the file within one
 authoritative source set. Kotlin and Java consumer sets are independently
 optional; zero-consumer public types rely on staged K2 declaration identity and

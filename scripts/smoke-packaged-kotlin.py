@@ -520,13 +520,13 @@ def main() -> int:
         move_type.write_text("package org.refactorkit.move.api\npublic class PortableGreeting\n", encoding="utf-8")
         move_kotlin_source = (
             "package org.refactorkit.move.consumer\n" +
-            "import org.refactorkit.move.api.PortableGreeting as PortableApiGreeting\n" +
-            "fun portableGreeting(): PortableApiGreeting = PortableApiGreeting()\n"
+            "import org.refactorkit.move.api.*\n" +
+            "fun portableGreeting(): PortableGreeting = PortableGreeting()\n"
         )
         move_java_source = (
             "package org.refactorkit.move.consumer;\n" +
-            "class MoveCaller { org.refactorkit.move.api.PortableGreeting value = " +
-            "new org.refactorkit.move.api.PortableGreeting(); }\n"
+            "import org.refactorkit.move.api.*;\n" +
+            "class MoveCaller { PortableGreeting value = new PortableGreeting(); }\n"
         )
         move_kotlin_consumer.write_text(move_kotlin_source, encoding="utf-8")
         move_java_consumer.write_text(move_java_source, encoding="utf-8")
@@ -590,7 +590,8 @@ def main() -> int:
             mcp_transaction = mcp_applied.split("Transaction ID: ", 1)[1].splitlines()[0]
             mcp_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if ("Applied successfully" not in mcp_applied or not mcp_destination.exists() or move_type.exists() or
-                    move_java_consumer.read_text(encoding="utf-8").count("org.refactorkit.move.api.v2.PortableGreeting") != 2):
+                    "import org.refactorkit.move.api.*;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
+                        move_java_consumer.read_text(encoding="utf-8")):
                 raise AssertionError(f"public Kotlin MCP move apply failed: {mcp_applied}")
             mcp_rollback = mcp_tool(64, "rollback_refactoring", {"transactionId": mcp_transaction})
             if "Rolled back" not in mcp_rollback or tree_hash(workspace / "src") != move_before:
@@ -642,11 +643,12 @@ def main() -> int:
             })
             move_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if (move_applied.get("status") != "applied" or not move_destination.exists() or move_type.exists() or
-                    "import org.refactorkit.move.api.v2.PortableGreeting as PortableApiGreeting" not in
+                    "import org.refactorkit.move.api.*\nimport org.refactorkit.move.api.v2.PortableGreeting" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
-                    "fun portableGreeting(): PortableApiGreeting = PortableApiGreeting()" not in
+                    "fun portableGreeting(): PortableGreeting = PortableGreeting()" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
-                    move_java_consumer.read_text(encoding="utf-8").count("org.refactorkit.move.api.v2.PortableGreeting") != 2):
+                    "import org.refactorkit.move.api.*;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
+                        move_java_consumer.read_text(encoding="utf-8")):
                 raise AssertionError(f"public Kotlin move apply failed: {move_applied}")
             move_rollback = move_exchange(55, "patch.rollback", {"transactionId": move_applied["transactionId"]})
             if move_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != move_before:

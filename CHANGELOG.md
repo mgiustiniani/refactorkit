@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Support compiler-proven Kotlin and Java package-star consumers during bounded
+  `moveDeclaration`. The old star import remains unchanged and one exact
+  destination-type import is inserted after it, preserving LF/CRLF and Java
+  semicolon conventions; multiple, static and malformed shapes still refuse.
 - Add compiler-proven Kotlin import-alias usage evidence and preserve exact alias
   tokens during bounded `moveDeclaration`. FIR-resolved imports bind alias text to
   source identities; malformed locations and collisions fail with typed codes.

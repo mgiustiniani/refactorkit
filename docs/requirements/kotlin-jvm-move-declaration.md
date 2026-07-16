@@ -2,8 +2,9 @@
 
 Status: active bounded K5 expansion. Explicit/aliased imports, same-package and
 fully-qualified consumers, optional consumer sets and zero-consumer types pass
-all acceptance layers. Exact Kotlin/Java package-star consumers are specified
-below and pending executable qualification. Broader shapes remain pending.
+all acceptance layers. Exact Kotlin/Java package-star consumers have local and
+packaged executable acceptance; four-platform qualification is pending. Broader
+shapes remain pending.
 
 ## Purpose
 

@@ -78,8 +78,9 @@ compatible.
 non-override Java methods may update compiler-bound callers in the other language;
 unsupported callable shapes refuse. Additive `moveDeclaration` accepts only the
 bounded public top-level Kotlin/JVM type row, updates exact imports while
-preserving K2-proven Kotlin aliases, inserts a
-destination import for compiler-proven same-package consumers, or rewrites exact
+preserving K2-proven Kotlin aliases, inserts a destination import for
+compiler-proven same-package or exact Kotlin/Java package-star consumers, or
+rewrites exact
 fully-qualified K2/JDT-bound target identities. Kotlin and Java consumer sets are
 independently optional, and a K2-proven public type with zero in-workspace
 consumers may move without fabricated usage evidence. The operation requires `targetPackage` plus external-consumer-risk acceptance, and preserves the same
