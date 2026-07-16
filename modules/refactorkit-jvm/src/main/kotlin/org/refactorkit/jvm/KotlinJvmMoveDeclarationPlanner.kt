@@ -161,7 +161,7 @@ class KotlinJvmMoveDeclarationPlanner(
                 else "kotlin.movePublicSiblingImportUnsupported",
                 if (publicTypes.size == 1)
                     "Kotlin move requires an exact import, same-package use, or fully-qualified compiler-proven target"
-                else "Additional public file types require exact explicit/aliased imports or one package-star import",
+                else "Additional public file types require exact explicit/aliased, package-star, or same-package consumers",
             )
             edits += FileEdit.Modify(path, consumerEdits)
         }
@@ -257,9 +257,11 @@ class KotlinJvmMoveDeclarationPlanner(
         val stars = Regex(
             "(?m)^[ \\t]*import\\s+${Regex.escape(oldPackage)}\\.\\*$terminator[ \\t]*$",
         ).findAll(source.content).toList()
-        if (stars.size != 1) return null
+        val samePackage = exactPackage(source) == oldPackage
+        if ((!samePackage && stars.size != 1) || (samePackage && stars.isNotEmpty())) return null
+        val anchor = if (samePackage) packageLine(source) ?: return null else stars.single()
         val newline = if ("\r\n" in source.content) "\r\n" else "\n"
-        var insertionOffset = stars.single().range.last + 1
+        var insertionOffset = anchor.range.last + 1
         if (source.content.startsWith(newline, insertionOffset)) insertionOffset += newline.length
         val semicolon = if (source.languageId == "java") ";" else ""
         val imports = oldIdentities.map { movedIdentities.getValue(it) }.sorted()

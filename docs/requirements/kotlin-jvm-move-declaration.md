@@ -1,9 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for whole-file movement with private helpers,
-public sibling types and exact explicit/FIR-aliased/package-star Kotlin/Java
-consumers, plus the previously qualified consumer shapes. Library, packaged
-CLI/daemon/MCP and all four native platforms pass. Broader shapes remain pending.
+Status: active bounded K5 expansion. Whole-file public-sibling movement with
+explicit/aliased/package-star consumers passes all acceptance layers.
+Compiler-proven same-package implicit sibling consumers are specified below and
+pending executable qualification. Broader shapes remain pending.
 
 ## Purpose
 
@@ -24,9 +24,10 @@ The operation shall accept only when all of the following are proven:
    interface, object, enum or annotation class.
 2. The target and any co-located public top-level types are compiler-proven and
    move with the whole file. Additional public types are supported only when all
-   Java consumers use exact explicit imports or one exact non-static old-package
-   star import. Kotlin consumers use exact explicit imports, optionally with one
-   FIR-proven alias, or one exact old-package star import.
+   Java consumers use exact explicit imports, one exact non-static old-package
+   star import, or exact old-package implicit resolution. Kotlin consumers use
+   exact explicit imports, optionally with one FIR-proven alias, one exact
+   old-package star import, or exact old-package implicit resolution.
    Other co-located helpers are compiler-proven `private` types, functions or
    properties. The file has an
    explicit non-default package and belongs to one authoritative, non-generated
@@ -99,7 +100,7 @@ The operation shall refuse with stable structured codes for at least:
 
 - missing, ambiguous, non-public, local, nested or unsupported declarations;
 - any additional protected/internal top-level declaration, any additional public
-  function/property, or any same-package, qualified, mixed import style,
+  function/property, or any ambiguous same-package, qualified, mixed import style,
   static/multiple/malformed star, malformed/multiple alias consumer of an
   additional public type;
   unsupported/typealias/file-facade ambiguity or filename/declaration ambiguity;
