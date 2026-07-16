@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Expand bounded Kotlin/JVM `moveDeclaration` to exact fully-qualified Kotlin
+  and Java type uses. Every rewritten final type token is independently K2/JDT
+  bound, all textual old identities must correspond exactly to proven ranges,
+  and mixed imported/qualified or partially-qualified shapes refuse.
 - Expand bounded Kotlin/JVM `moveDeclaration` to compiler-proven same-package
   Kotlin and Java consumers. The planner inserts one deterministic explicit
   destination import after the exact package line, preserves LF/CRLF, refuses

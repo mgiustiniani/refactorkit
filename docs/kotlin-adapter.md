@@ -207,8 +207,9 @@ Both public top-level type directions and bounded non-overloaded public member
 rows with direct cross-language callers now have managed local and packaged
 preview/apply/rollback evidence. The first public top-level Kotlin/JVM
 `moveDeclaration` row updates explicit Kotlin/Java imports or inserts a
-destination import for compiler-proven same-package consumers, then moves the
-file within one authoritative source set. Both rename directions and the bounded package-move row passed the native matrix,
+destination import for compiler-proven same-package consumers, or rewrites exact
+fully-qualified K2/JDT-bound identities, then moves the file within one
+authoritative source set. Both rename directions and the bounded package-move row passed the native matrix,
 including CRLF-normalized Windows evidence. Overloads, delegated/constructor
 properties, broader moves, signature/extract/inline operations, multiplatform,
 Android and framework boundaries remain pending or explicitly refused. No partial read result inherits

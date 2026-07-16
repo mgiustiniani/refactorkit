@@ -77,8 +77,9 @@ compatible.
 | `refactorkit kotlin symbols <root> ...` / `kotlin definition` / `kotlin references` / `kotlin rename` | `experimental` | Saved-snapshot compiler declarations/usages plus bounded K4 private-declaration managed rename. In mixed snapshots, `--accept-external-consumer-risk` admits bounded public top-level type preview in either direction: ephemeral K2 classes feed exact JDT Java bindings, while bounded annotation-processing-free ECJ classes feed exact K2 external-type usages. Direction-specific staged compiler evidence must remain clean. Bounded public non-overloaded direct Kotlin functions and public non-overloaded,
 non-override Java methods may update compiler-bound callers in the other language;
 unsupported callable shapes refuse. Additive `moveDeclaration` accepts only the
-bounded public top-level Kotlin/JVM type row, updates exact imports or inserts a
-destination import for compiler-proven same-package consumers, requires
+bounded public top-level Kotlin/JVM type row, updates exact imports, inserts a
+destination import for compiler-proven same-package consumers, or rewrites exact
+fully-qualified K2/JDT-bound target identities; it requires
 `targetPackage` plus external-consumer-risk acceptance, and preserves the same
 lease/snapshot/index authority and one-transaction apply boundary. Incomplete
 shapes still refuse without fallback. |

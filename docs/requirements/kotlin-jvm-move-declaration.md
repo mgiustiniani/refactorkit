@@ -2,8 +2,9 @@
 
 Status: active bounded K5 expansion. Explicit-import and compiler-proven
 same-package rows pass library, packaged CLI/daemon/MCP and all four native
-platforms. Exact fully-qualified type uses are specified below and pending
-executable qualification; broader move shapes remain pending.
+platforms. Exact fully-qualified Kotlin/Java uses have local and packaged
+executable acceptance; four-platform qualification is pending. Broader move
+shapes remain pending.
 
 ## Purpose
 
