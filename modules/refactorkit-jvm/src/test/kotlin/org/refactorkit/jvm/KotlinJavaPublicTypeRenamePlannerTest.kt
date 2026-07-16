@@ -141,6 +141,79 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicKotlinTypeMoveRequiresExternalConsumerApproval() {
+        val fixture = moveFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(fixture.snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            fixture.snapshot, target.id, "fixture.api.v2",
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.moveExternalConsumerApprovalRequired", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
+    fun publicKotlinTypeMoveRefusesConsumerWithoutExplicitImport() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.api\nfun greeting(): PublicGreeting = PublicGreeting()\n",
+        )
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.moveImportShapeUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
+    fun publicKotlinTypeMoveUpdatesExplicitKotlinAndJavaImportsAndRollsBack() {
+        val fixture = moveFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(fixture.snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+        val planner = KotlinJvmMoveDeclarationPlanner(adapter)
+        val plan = planner.preview(
+            fixture.snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(
+            setOf(
+                Path.of("src/main/kotlin/fixture/api/PublicGreeting.kt"),
+                Path.of("src/main/kotlin/fixture/api/v2/PublicGreeting.kt"),
+                Path.of("src/main/kotlin/fixture/consumer/UseGreeting.kt"),
+                Path.of("src/main/java/fixture/consumer/Caller.java"),
+            ),
+            plan.affectedFiles,
+        )
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("kotlin-move-integration-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        val destination = fixture.root.resolve("src/main/kotlin/fixture/api/v2/PublicGreeting.kt")
+        assertTrue(Files.exists(destination))
+        assertTrue(Files.readString(destination).contains("package fixture.api.v2"))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt"))
+            .contains("import fixture.api.v2.PublicGreeting"))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/java/fixture/consumer/Caller.java"))
+            .contains("import fixture.api.v2.PublicGreeting;"))
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(Files.exists(fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt")))
+        assertTrue(!Files.exists(destination))
+    }
+
+    @Test
     fun publicKotlinFunctionRenameUpdatesJavaCallerAndRollsBack() {
         val fixture = fixture()
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
@@ -246,6 +319,35 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         val snapshot: org.refactorkit.core.ProjectSnapshot,
         val toolchain: KotlinSemanticToolchain,
     )
+
+    private fun moveFixture(): Fixture {
+        val root = temporaryDirectory("rk-jvm-public-move")
+        root.resolve("pom.xml").writeText("""
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>fixture</groupId><artifactId>mixed</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <build><plugins><plugin>
+                <groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-maven-plugin</artifactId><version>2.0.21</version>
+                <configuration><jvmTarget>21</jvmTarget><jdkToolchain><version>21</version></jdkToolchain></configuration>
+              </plugin></plugins></build>
+            </project>
+        """.trimIndent())
+        root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.api\npublic class PublicGreeting\n")
+        }
+        root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.consumer\nimport fixture.api.PublicGreeting\nfun greeting(): PublicGreeting = PublicGreeting()\n")
+        }
+        root.resolve("src/main/java/fixture/consumer/Caller.java").apply {
+            parent.createDirectories()
+            writeText("package fixture.consumer;\nimport fixture.api.PublicGreeting;\nclass Caller { PublicGreeting value = new PublicGreeting(); }\n")
+        }
+        val toolchain = toolchain(root)
+        return Fixture(root, KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain), toolchain)
+    }
 
     private fun javaDeclarationFixture(): Fixture {
         val root = temporaryDirectory("rk-jvm-java-declaration")
