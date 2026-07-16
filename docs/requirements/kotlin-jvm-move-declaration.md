@@ -1,8 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for explicit-import and compiler-proven
-same-package consumers. Library, packaged CLI/daemon/MCP and all four native
-platforms pass. Qualified-expression and broader move shapes remain pending.
+Status: active bounded K5 expansion. Explicit-import and compiler-proven
+same-package rows pass library, packaged CLI/daemon/MCP and all four native
+platforms. Exact fully-qualified type uses are specified below and pending
+executable qualification; broader move shapes remain pending.
 
 ## Purpose
 
@@ -27,11 +28,13 @@ The operation shall accept only when all of the following are proven:
 3. The destination is a valid different package in the same source set and its
    destination file and binary identity do not exist.
 4. Every Kotlin use is K2-resolved to the source identity. A consumer either uses
-   one explicit, non-aliased, non-star import of the old identity or belongs to
-   the exact old package and resolves the type implicitly.
+   one explicit, non-aliased, non-star import of the old identity, belongs to the
+   exact old package and resolves the type implicitly, or uses the exact old
+   fully-qualified identity at every proven target token.
 5. Every Java use is JDT-bound to the matching ephemeral K2 class. A Java consumer
-   either uses one explicit non-static import of the old identity or belongs to
-   the exact old package and resolves the type implicitly.
+   either uses one explicit non-static import of the old identity, belongs to the
+   exact old package and resolves the type implicitly, or uses the exact old
+   fully-qualified identity at every proven target token.
 6. The caller explicitly accepts public external-consumer risk.
 
 The first row does not infer Gradle/Maven module or dependency changes.
@@ -47,7 +50,9 @@ The preview shall contain only:
   identity to the new binary identity; or
 - for a compiler-proven same-package implicit consumer, one deterministic
   explicit import of the new identity inserted immediately after its exact
-  package declaration, preserving the file's newline convention.
+  package declaration, preserving the file's newline convention; or
+- each exact fully-qualified old identity whose final type token is independently
+  proven by K2 or JDT changed to the destination identity.
 
 Comments, strings, unrelated same-spelled identifiers and build output shall not
 be edited. Edits must be normalized and non-overlapping.
@@ -83,8 +88,9 @@ The operation shall refuse with stable structured codes for at least:
 - destination file/type conflict;
 - generated roots, scripts, compiler plugins, multiplatform `expect`/`actual`,
   Android or unsupported build models;
-- alias/star/static imports, qualified-expression uses, ambiguous same-package
-  declarations or import-name conflicts;
+- alias/star/static imports, partially qualified expressions, mixed qualified and
+  unqualified uses in one consumer, ambiguous same-package declarations or
+  import-name conflicts;
 - incomplete K2/JDT evidence, callable/reference ambiguity or stale authority;
 - reflection, serialization or framework candidates requiring a broader row;
 - absent `acceptExternalConsumerRisk=true`.

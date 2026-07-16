@@ -158,6 +158,58 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicKotlinTypeMoveRefusesMixedImportedAndQualifiedUses() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.consumer\nimport fixture.api.PublicGreeting\n" +
+                "fun greeting(value: PublicGreeting): PublicGreeting = fixture.api.PublicGreeting()\n",
+        )
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.moveImportShapeUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
+    fun publicKotlinTypeMoveUpdatesCompilerProvenFullyQualifiedUses() {
+        val fixture = moveFixture()
+        val kotlinConsumer = fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt")
+        val javaConsumer = fixture.root.resolve("src/main/java/fixture/consumer/Caller.java")
+        kotlinConsumer.writeText(
+            "package fixture.consumer\nfun greeting(): fixture.api.PublicGreeting = fixture.api.PublicGreeting()\n",
+        )
+        javaConsumer.writeText(
+            "package fixture.consumer;\nclass Caller { fixture.api.PublicGreeting value = new fixture.api.PublicGreeting(); }\n",
+        )
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+        val planner = KotlinJvmMoveDeclarationPlanner(adapter)
+
+        val plan = planner.preview(snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true)
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, snapshot, ApplyAuthorization.explicit("kotlin-qualified-move-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertEquals(2, Regex(Regex.escape("fixture.api.v2.PublicGreeting")).findAll(kotlinConsumer.readText()).count())
+        assertEquals(2, Regex(Regex.escape("fixture.api.v2.PublicGreeting")).findAll(javaConsumer.readText()).count())
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertEquals(2, Regex(Regex.escape("fixture.api.PublicGreeting")).findAll(kotlinConsumer.readText()).count())
+        assertEquals(2, Regex(Regex.escape("fixture.api.PublicGreeting")).findAll(javaConsumer.readText()).count())
+    }
+
+    @Test
     fun publicKotlinTypeMoveRefusesSamePackageStarImport() {
         val fixture = moveFixture()
         fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(

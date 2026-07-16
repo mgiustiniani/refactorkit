@@ -117,13 +117,17 @@ class KotlinJvmMoveDeclarationPlanner(
         if (javaUses.isEmpty()) return refused(
             snapshot, "kotlin.moveCrossLanguageReferenceMissing", "Kotlin move requires at least one JDT-bound Java consumer",
         )
-        val kotlinUsageFiles = catalogue.usages.filter { it.targetId == target.id }
-            .map { it.location.path.normalize() }.filter { it != source.path.normalize() }.toSet()
+        val kotlinUsageLocations = catalogue.usages.filter {
+            it.targetId == target.id && it.location.path.normalize() != source.path.normalize()
+        }.map { it.location }
+        val kotlinUsageFiles = kotlinUsageLocations.map { it.path.normalize() }.toSet()
         if (kotlinUsageFiles.isEmpty()) return refused(
             snapshot, "kotlin.moveKotlinReferenceMissing", "Kotlin move requires at least one K2-bound Kotlin consumer",
         )
-        val javaUsageFiles = javaUses.map { it.path.normalize() }.toSet()
+        val javaUsageLocations = javaUses.map { SourceLocation(it.path, it.sourceRange) }
+        val javaUsageFiles = javaUsageLocations.map { it.path.normalize() }.toSet()
         val consumerPaths = kotlinUsageFiles + javaUsageFiles
+        val consumerLocations = (kotlinUsageLocations + javaUsageLocations).groupBy { it.path.normalize() }
         if (consumerPaths.any { path -> snapshot.owningBuildSourceRoots(path).any { it.generated } }) return refused(
             snapshot, "kotlin.moveGeneratedReference", "Kotlin move consumer belongs to generated source",
         )
@@ -135,13 +139,14 @@ class KotlinJvmMoveDeclarationPlanner(
             val consumer = snapshot.file(path) ?: return refused(
                 snapshot, "kotlin.moveReferenceFileMissing", "Kotlin move consumer is absent from the snapshot",
             )
-            val importEdit = consumerImportEdit(
-                consumer, oldPackage, declaration.jvmIdentity, newIdentity, target.name,
+            val consumerEdits = consumerEdits(
+                consumer, consumerLocations[path].orEmpty(), oldPackage,
+                declaration.jvmIdentity, newIdentity, target.name,
             ) ?: return refused(
                 snapshot, "kotlin.moveImportShapeUnsupported",
-                "Kotlin move requires one exact explicit import or one compiler-proven same-package implicit consumer",
+                "Kotlin move requires an exact import, same-package use, or fully-qualified compiler-proven target",
             )
-            edits += FileEdit.Modify(path, listOf(importEdit))
+            edits += FileEdit.Modify(path, consumerEdits)
         }
         edits += FileEdit.Rename(source.path, destination)
         val workspaceEdit = WorkspaceEdit(edits)
@@ -202,22 +207,28 @@ class KotlinJvmMoveDeclarationPlanner(
         return offsetEdit(source.content, range.first, range.last + 1, targetPackage)
     }
 
-    private fun consumerImportEdit(
+    private fun consumerEdits(
         source: SourceFile,
+        locations: List<SourceLocation>,
         oldPackage: String,
         oldIdentity: String,
         newIdentity: String,
         simpleName: String,
-    ): TextEdit? {
+    ): List<TextEdit>? {
         val terminator = if (source.languageId == "java") "\\s*;" else ""
         val explicit = Regex(
             "(?m)^[ \\t]*import\\s+(${Regex.escape(oldIdentity)})$terminator[ \\t]*$",
         ).findAll(source.content).toList()
         if (explicit.size == 1) {
             val range = explicit.single().groups[1]!!.range
-            return offsetEdit(source.content, range.first, range.last + 1, newIdentity)
+            if (occurrenceOffsets(source.content, oldIdentity) != listOf(range.first)) return null
+            return listOf(offsetEdit(source.content, range.first, range.last + 1, newIdentity))
         }
-        if (explicit.isNotEmpty() || exactPackage(source) != oldPackage || oldIdentity in source.content) return null
+        if (explicit.isNotEmpty()) return null
+        if (oldIdentity in source.content) return qualifiedUseEdits(
+            source, locations, oldIdentity, newIdentity, simpleName,
+        )
+        if (exactPackage(source) != oldPackage) return null
         val unsafeImport = Regex(
             "(?m)^[ \\t]*import\\s+(?:static\\s+)?(?:${Regex.escape(oldPackage)}\\.\\*|" +
                 "[A-Za-z_][A-Za-z0-9_.]*\\.${Regex.escape(simpleName)})(?:\\s+as\\s+\\w+)?[ \\t]*;?[ \\t]*$",
@@ -228,10 +239,45 @@ class KotlinJvmMoveDeclarationPlanner(
         var insertionOffset = packageMatch.range.last + 1
         if (source.content.startsWith(newline, insertionOffset)) insertionOffset += newline.length
         val semicolon = if (source.languageId == "java") ";" else ""
-        return offsetEdit(
+        return listOf(offsetEdit(
             source.content, insertionOffset, insertionOffset,
             "import $newIdentity$semicolon$newline",
-        )
+        ))
+    }
+
+    private fun qualifiedUseEdits(
+        source: SourceFile,
+        locations: List<SourceLocation>,
+        oldIdentity: String,
+        newIdentity: String,
+        simpleName: String,
+    ): List<TextEdit>? {
+        val prefixLength = oldIdentity.length - simpleName.length
+        val ranges = locations.map { location ->
+            val tokenStart = runCatching { TextEdits.offsetOf(source.content, location.range.start) }.getOrNull()
+                ?: return null
+            val tokenEnd = runCatching { TextEdits.offsetOf(source.content, location.range.end) }.getOrNull()
+                ?: return null
+            val start = tokenStart - prefixLength
+            if (start < 0 || tokenEnd <= tokenStart ||
+                source.content.substring(tokenStart, tokenEnd) != simpleName ||
+                source.content.substring(start, tokenEnd) != oldIdentity) return null
+            start until tokenEnd
+        }.distinctBy { it.first to it.last }.sortedBy { it.first }
+        if (ranges.isEmpty() || occurrenceOffsets(source.content, oldIdentity) != ranges.map { it.first }) return null
+        return ranges.map { range ->
+            offsetEdit(source.content, range.first, range.last + 1, newIdentity)
+        }
+    }
+
+    private fun occurrenceOffsets(content: String, value: String): List<Int> {
+        val offsets = mutableListOf<Int>()
+        var next = content.indexOf(value)
+        while (next >= 0) {
+            offsets += next
+            next = content.indexOf(value, next + value.length)
+        }
+        return offsets
     }
 
     private fun exactPackage(source: SourceFile): String? = packageLine(source)?.groups?.get(1)?.value
