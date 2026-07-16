@@ -153,7 +153,12 @@ class JavaKotlinPublicTypeRenamePlanner(
             compilation.code, compilation.message,
         )
         return when (val result = kotlinEvidence) {
-            is KotlinCompilerDiagnosticsResult.Available -> MixedEvidence.Available(result, java.analyze(snapshot))
+            is KotlinCompilerDiagnosticsResult.Available -> result.symbolFailure?.let { failure ->
+                MixedEvidence.Refused(
+                    failure.code ?: "jvm.renameKotlinUsageEvidenceUnavailable",
+                    failure.message,
+                )
+            } ?: MixedEvidence.Available(result, java.analyze(snapshot))
             is KotlinCompilerDiagnosticsResult.Refused -> MixedEvidence.Refused(
                 result.reason.code ?: "jvm.renameEvidenceUnavailable", result.reason.message,
             )

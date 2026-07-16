@@ -55,6 +55,7 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         val compiled = assertIs<JavaEphemeralCompilationResult.Available>(compilation, compilation.toString())
         assertTrue(compiled.outputHash.matches(Regex("[0-9a-f]{64}")))
         val available = assertIs<org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult.Available>(kotlinResult, kotlinResult.toString())
+        assertEquals(null, available.symbolFailure)
         val usages = available.externalTypeUsages.filter { it.jvmBinaryName == "fixture.PublicAccount" }
         assertTrue(usages.size >= 2, "expected exact K2 uses of Java binary identity, got $usages")
         assertTrue(available.attestation.ephemeralClasspathHash.matches(Regex("[0-9a-f]{64}")))
