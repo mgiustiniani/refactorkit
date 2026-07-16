@@ -518,29 +518,35 @@ def main() -> int:
         move_kotlin_consumer.parent.mkdir(parents=True, exist_ok=True)
         move_java_consumer.parent.mkdir(parents=True, exist_ok=True)
         move_type.write_text("package org.refactorkit.move.api\npublic class PortableGreeting\n", encoding="utf-8")
-        move_kotlin_consumer.write_text(
+        move_kotlin_source = (
             "package org.refactorkit.move.consumer\n" +
             "fun portableGreeting(): org.refactorkit.move.api.PortableGreeting = " +
-            "org.refactorkit.move.api.PortableGreeting()\n", encoding="utf-8",
+            "org.refactorkit.move.api.PortableGreeting()\n"
         )
-        move_java_consumer.write_text(
+        move_java_source = (
             "package org.refactorkit.move.consumer;\n" +
             "class MoveCaller { org.refactorkit.move.api.PortableGreeting value = " +
-            "new org.refactorkit.move.api.PortableGreeting(); }\n", encoding="utf-8",
+            "new org.refactorkit.move.api.PortableGreeting(); }\n"
         )
+        move_kotlin_consumer.write_text(move_kotlin_source, encoding="utf-8")
+        move_java_consumer.write_text(move_java_source, encoding="utf-8")
         move_symbols = run(
             cli, workspace, jdk, compiler, classpath, "native-kotlin-move-symbols", "symbols",
             ["--file", "src/main/kotlin/org/refactorkit/move/api/PortableGreeting.kt"],
         )
         portable_greeting = next(item for item in move_symbols.get("symbols", []) if item.get("name") == "PortableGreeting")
-        move_before = tree_hash(workspace / "src")
+        move_java_consumer.unlink()
+        kotlin_only_before = tree_hash(workspace / "src")
         cli_move_preview = run(
             cli, workspace, jdk, compiler, classpath, "native-kotlin-move-preview", "move-declaration",
             ["--symbol", portable_greeting["id"], "--to-package", "org.refactorkit.move.api.v2",
              "--accept-external-consumer-risk"],
         )
-        if cli_move_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != move_before:
-            raise AssertionError(f"public Kotlin CLI move preview is invalid or wrote files: {cli_move_preview}")
+        if cli_move_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != kotlin_only_before:
+            raise AssertionError(f"public Kotlin-only CLI move preview is invalid or wrote files: {cli_move_preview}")
+        move_java_consumer.write_text(move_java_source, encoding="utf-8")
+        move_kotlin_consumer.unlink()
+        move_before = tree_hash(workspace / "src")
 
         portable_symbol_id = "kotlin-jvm-type-v1:" + hashlib.sha256(
             b"kotlin-jvm-type-v1\0org.refactorkit.move.api.PortableGreeting"
@@ -584,7 +590,6 @@ def main() -> int:
             mcp_transaction = mcp_applied.split("Transaction ID: ", 1)[1].splitlines()[0]
             mcp_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if ("Applied successfully" not in mcp_applied or not mcp_destination.exists() or move_type.exists() or
-                    move_kotlin_consumer.read_text(encoding="utf-8").count("org.refactorkit.move.api.v2.PortableGreeting") != 2 or
                     move_java_consumer.read_text(encoding="utf-8").count("org.refactorkit.move.api.v2.PortableGreeting") != 2):
                 raise AssertionError(f"public Kotlin MCP move apply failed: {mcp_applied}")
             mcp_rollback = mcp_tool(64, "rollback_refactoring", {"transactionId": mcp_transaction})
@@ -598,6 +603,8 @@ def main() -> int:
                 process.kill()
                 process.wait(timeout=20)
 
+        move_kotlin_consumer.write_text(move_kotlin_source, encoding="utf-8")
+        move_before = tree_hash(workspace / "src")
         process = subprocess.Popen(
             command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, encoding="utf-8",

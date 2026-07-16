@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Allow bounded Kotlin/JVM `moveDeclaration` consumer sets to be independently
+  Kotlin-only or Java-only instead of fabricating a cross-language requirement.
+  Staged validation conditionally proves every consumer set that existed before
+  planning and still requires at least one compiler-proven consumer overall.
 - Expand bounded Kotlin/JVM `moveDeclaration` to exact fully-qualified Kotlin
   and Java type uses. Every rewritten final type token is independently K2/JDT
   bound, all textual old identities must correspond exactly to proven ranges,

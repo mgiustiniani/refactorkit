@@ -79,8 +79,9 @@ non-override Java methods may update compiler-bound callers in the other languag
 unsupported callable shapes refuse. Additive `moveDeclaration` accepts only the
 bounded public top-level Kotlin/JVM type row, updates exact imports, inserts a
 destination import for compiler-proven same-package consumers, or rewrites exact
-fully-qualified K2/JDT-bound target identities; it requires
-`targetPackage` plus external-consumer-risk acceptance, and preserves the same
+fully-qualified K2/JDT-bound target identities. Kotlin and Java consumer sets are
+independently optional, with at least one compiler-proven consumer overall. The
+operation requires `targetPackage` plus external-consumer-risk acceptance, and preserves the same
 lease/snapshot/index authority and one-transaction apply boundary. Incomplete
 shapes still refuse without fallback. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
