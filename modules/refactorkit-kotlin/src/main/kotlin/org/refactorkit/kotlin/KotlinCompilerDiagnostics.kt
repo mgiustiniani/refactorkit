@@ -641,32 +641,37 @@ class KotlinCompilerDiagnostics private constructor(
                 val name = identity.substringAfterLast('#', "")
                 (owner to name).takeIf { SYMBOL_IDENTITY.matches(owner) && JVM_NAME.matches(name) }
             }
-            check(targetId != null || externalTypeIdentity != null || externalCallableIdentity != null) {
-                "Kotlin compiler usage target is unknown"
+            if (targetId == null && externalTypeIdentity == null && externalCallableIdentity == null) {
+                throw SymbolPayloadException("kotlin.compilerUsageTargetInvalid")
             }
             val selectionText = value.string("selectionText")?.takeIf {
                 it.length in 1..MAX_SYMBOL_NAME_CHARS && JVM_NAME.matches(it)
             } ?: error("Kotlin compiler usage selection is invalid")
             val rawPath = value.string("path") ?: error("Kotlin compiler usage path is missing")
-            val reported = Path.of(rawPath).toAbsolutePath().normalize()
-            check(!Files.isSymbolicLink(reported) && Files.isRegularFile(reported, LinkOption.NOFOLLOW_LINKS)) {
-                "Kotlin compiler usage path is unsafe"
+            val reported = runCatching { Path.of(rawPath).toAbsolutePath().normalize() }.getOrElse {
+                throw SymbolPayloadException("kotlin.compilerUsagePathInvalid")
             }
-            val canonical = reported.toRealPath()
-            check(canonical.startsWith(overlayRoot) && canonical != overlayRoot) {
-                "Kotlin compiler usage path escapes overlay"
+            if (Files.isSymbolicLink(reported) || !Files.isRegularFile(reported, LinkOption.NOFOLLOW_LINKS)) {
+                throw SymbolPayloadException("kotlin.compilerUsagePathInvalid")
+            }
+            val canonical = runCatching { reported.toRealPath() }.getOrElse {
+                throw SymbolPayloadException("kotlin.compilerUsagePathInvalid")
+            }
+            if (!canonical.startsWith(overlayRoot) || canonical == overlayRoot) {
+                throw SymbolPayloadException("kotlin.compilerUsagePathInvalid")
             }
             val relative = overlayRoot.relativize(canonical).normalize()
-            val source = sourcePaths[relative] ?: error("Kotlin compiler usage source is outside snapshot")
+            val source = sourcePaths[relative]
+                ?: throw SymbolPayloadException("kotlin.compilerUsagePathInvalid")
             val start = value.int("startOffset") ?: error("Kotlin compiler usage start is invalid")
             val end = value.int("endOffset") ?: error("Kotlin compiler usage end is invalid")
-            check(start >= 0 && end > start && end <= source.content.length &&
-                source.content.substring(start, end) == selectionText) {
-                "Kotlin compiler usage range is invalid"
+            if (start < 0 || end <= start || end > source.content.length ||
+                source.content.substring(start, end) != selectionText) {
+                throw SymbolPayloadException("kotlin.compilerUsageRangeInvalid")
             }
             val targetKey = targetId?.value ?: externalTypeIdentity ?: externalCallableIdentity!!.let { "${it.first}#${it.second}" }
-            check(unique.add("$relative\u0000$start\u0000$end\u0000$targetKey")) {
-                "Kotlin compiler usage is duplicated"
+            if (!unique.add("$relative\u0000$start\u0000$end\u0000$targetKey")) {
+                throw SymbolPayloadException("kotlin.compilerUsageDuplicate")
             }
             val location = SourceLocation(relative, SourceRange(position(source.content, start), position(source.content, end)))
             when {
@@ -717,6 +722,10 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.usagePathInvalid" -> "Kotlin usage path is invalid"
                 "kotlin.usageLimitExceeded" -> "Kotlin usage result exceeded the bounded limit"
                 "kotlin.usageExtractionFailed" -> "Kotlin compiler usage extraction failed"
+                "kotlin.compilerUsageTargetInvalid" -> "Kotlin compiler usage target payload is invalid"
+                "kotlin.compilerUsagePathInvalid" -> "Kotlin compiler usage path payload is invalid"
+                "kotlin.compilerUsageRangeInvalid" -> "Kotlin compiler usage range payload is invalid"
+                "kotlin.compilerUsageDuplicate" -> "Kotlin compiler usage payload contains duplicates"
                 else -> "Kotlin compiler symbol extraction failed"
             },
         )
@@ -1052,6 +1061,10 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.usagePathInvalid",
             "kotlin.usageLimitExceeded",
             "kotlin.usageExtractionFailed",
+            "kotlin.compilerUsageTargetInvalid",
+            "kotlin.compilerUsagePathInvalid",
+            "kotlin.compilerUsageRangeInvalid",
+            "kotlin.compilerUsageDuplicate",
         )
         private val SUPPORTED_JVM_TARGETS = setOf("1.8", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21")
     }
