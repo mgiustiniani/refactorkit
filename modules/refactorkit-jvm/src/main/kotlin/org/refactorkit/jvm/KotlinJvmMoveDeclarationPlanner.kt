@@ -121,9 +121,6 @@ class KotlinJvmMoveDeclarationPlanner(
         val javaUsageLocations = javaUses.map { SourceLocation(it.path, it.sourceRange) }
         val javaUsageFiles = javaUsageLocations.map { it.path.normalize() }.toSet()
         val consumerPaths = kotlinUsageFiles + javaUsageFiles
-        if (consumerPaths.isEmpty()) return refused(
-            snapshot, "kotlin.moveConsumerMissing", "Kotlin move requires at least one compiler-proven consumer",
-        )
         val consumerLocations = (kotlinUsageLocations + javaUsageLocations).groupBy { it.path.normalize() }
         if (consumerPaths.any { path -> snapshot.owningBuildSourceRoots(path).any { it.generated } }) return refused(
             snapshot, "kotlin.moveGeneratedReference", "Kotlin move consumer belongs to generated source",

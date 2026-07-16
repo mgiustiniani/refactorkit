@@ -160,6 +160,30 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicKotlinTypeMoveSupportsNoInWorkspaceConsumers() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").deleteExisting()
+        fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+        val planner = KotlinJvmMoveDeclarationPlanner(adapter)
+
+        val plan = planner.preview(snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true)
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertTrue(plan.summary.contains("0 compiler-proven consumer file(s)"))
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, snapshot, ApplyAuthorization.explicit("unused-kotlin-move-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertTrue(fixture.root.resolve("src/main/kotlin/fixture/api/v2/PublicGreeting.kt").exists())
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").exists())
+    }
+
+    @Test
     fun publicKotlinTypeMoveSupportsKotlinOnlyConsumers() {
         val fixture = moveFixture()
         fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()

@@ -1,9 +1,10 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for explicit imports, compiler-proven
+Status: active bounded K5 expansion. Explicit imports, compiler-proven
 same-package consumers, exact fully-qualified uses and independently optional
-Kotlin-only or Java-only consumer sets. Library, packaged CLI/daemon/MCP and all
-four native platforms pass. Broader shapes remain pending.
+Kotlin/Java consumer sets pass all acceptance layers. A zero-consumer public type
+row is specified below and pending executable qualification. Broader shapes
+remain pending.
 
 ## Purpose
 
@@ -35,9 +36,10 @@ The operation shall accept only when all of the following are proven:
    either uses one explicit non-static import of the old identity, belongs to the
    exact old package and resolves the type implicitly, or uses the exact old
    fully-qualified identity at every proven target token.
-6. At least one compiler-proven consumer exists. Kotlin and Java consumer sets
-   are independently optional; the operation does not invent a cross-language
-   consumer requirement.
+6. Kotlin and Java consumer sets are independently optional. A type with no
+   in-workspace consumers may still move when K2 proves its declaration and the
+   caller accepts unknown external-consumer risk; the operation does not invent
+   consumer requirements.
 7. The caller explicitly accepts public external-consumer risk.
 
 The first row does not infer Gradle/Maven module or dependency changes.
@@ -112,7 +114,8 @@ transaction with WAL, recovery and byte-exact rollback.
 Promotion requires:
 
 - executable success and refusal tests;
-- independently executable Kotlin-only, Java-only and mixed Kotlin/Java fixtures;
+- independently executable zero-consumer, Kotlin-only, Java-only and mixed
+  Kotlin/Java fixtures;
 - preview-read-only, apply, diagnostics, WAL and rollback tests;
 - packaged daemon/CLI/MCP smoke;
 - Linux x86-64, Windows x86-64, macOS x86-64 and macOS arm64 qualification.
