@@ -1,9 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for import/consumer shapes, zero-consumer types
-and whole-file movement with compiler-proven private top-level type, function and
-property helpers. Library, packaged CLI/daemon/MCP and all four native platforms
-pass. Broader shapes remain pending.
+Status: active bounded K5 expansion. Single-public-target file and consumer rows
+pass all acceptance layers. Whole-file movement with additional public top-level
+types and explicit imports is specified below and pending executable
+qualification. Broader shapes remain pending.
 
 ## Purpose
 
@@ -22,9 +22,11 @@ The operation shall accept only when all of the following are proven:
 
 1. K2 and generated class evidence identify exactly one public top-level class,
    interface, object, enum or annotation class.
-2. The target is the only non-private top-level declaration in its `.kt` file.
-   Any co-located top-level helpers are compiler-proven `private` types,
-   functions or properties that move with the whole file. The file has an
+2. The target and any co-located public top-level types are compiler-proven and
+   move with the whole file. Additional public types are supported only when all
+   their Kotlin/Java consumers use exact non-aliased, non-star explicit imports.
+   Other co-located helpers are compiler-proven `private` types, functions or
+   properties. The file has an
    explicit non-default package and belongs to one authoritative, non-generated
    Kotlin/JVM source set.
 3. The destination is a valid different package in the same source set and its
@@ -94,7 +96,8 @@ No source, class or JAR may be published into the user workspace during preview.
 The operation shall refuse with stable structured codes for at least:
 
 - missing, ambiguous, non-public, local, nested or unsupported declarations;
-- any additional public, protected or internal top-level declaration;
+- any additional protected/internal top-level declaration, any additional public
+  function/property, or any non-explicit consumer of an additional public type;
   unsupported/typealias/file-facade ambiguity or filename/declaration ambiguity;
 - default package, invalid target package or cross-source-set destination;
 - destination file/type conflict;
