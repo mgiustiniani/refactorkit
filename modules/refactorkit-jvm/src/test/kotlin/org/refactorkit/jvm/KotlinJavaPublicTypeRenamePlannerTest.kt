@@ -113,6 +113,36 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicKotlinFunctionRenameUpdatesJavaCallerAndRollsBack() {
+        val fixture = fixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(fixture.snapshot))
+            .index.symbols.single { it.name == "render" }
+        val planner = KotlinJavaPublicTypeRenamePlanner(adapter)
+        val plan = planner.preview(
+            fixture.snapshot, target.id, "display", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(
+            setOf(
+                Path.of("src/main/kotlin/fixture/PublicGreeting.kt"),
+                Path.of("src/main/java/fixture/Caller.java"),
+            ),
+            plan.affectedFiles,
+        )
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("jvm-function-integration-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/kotlin/fixture/PublicGreeting.kt")).contains("fun display"))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/java/fixture/Caller.java")).contains(".display("))
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/kotlin/fixture/PublicGreeting.kt")).contains("fun render"))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/java/fixture/Caller.java")).contains(".render("))
+    }
+
+    @Test
     fun publicKotlinTypeRenameRequiresExplicitExternalConsumerAcceptance() {
         val fixture = fixture()
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
@@ -231,7 +261,9 @@ class KotlinJavaPublicTypeRenamePlannerTest {
             parent.createDirectories()
             writeText("""
                 package fixture
-                public class PublicGreeting
+                public class PublicGreeting {
+                    public fun render(value: String): String = value
+                }
                 public fun localGreeting(): PublicGreeting = PublicGreeting()
             """.trimIndent() + "\n")
         }
@@ -241,6 +273,7 @@ class KotlinJavaPublicTypeRenamePlannerTest {
                 package fixture;
                 class Caller {
                     PublicGreeting value = new PublicGreeting();
+                    String render() { return value.render("x"); }
                 }
             """.trimIndent() + "\n")
         }

@@ -62,9 +62,16 @@ class KotlinJavaPublicTypeRenamePlanner(
             ?: return refused(snapshot, "jvm.renameTargetMissing", "Kotlin target is absent from the attested declaration catalogue")
         val declaration = symbols.declarations[target.id]
             ?: return refused(snapshot, "jvm.renameIdentityUnavailable", "Kotlin target lacks JVM declaration evidence")
-        if (target.kind !in TYPE_KINDS || declaration.visibility != KotlinDeclarationVisibility.PUBLIC ||
-            declaration.jvmIdentity != declaration.jvmOwner || declaration.jvmDescriptor.isNotEmpty() || '$' in declaration.jvmIdentity) {
-            return refused(snapshot, "jvm.renamePublicTypeUnsupported", "Initial shared JVM rename requires a public top-level Kotlin type")
+        val supportedType = target.kind in TYPE_KINDS && declaration.jvmIdentity == declaration.jvmOwner &&
+            declaration.jvmDescriptor.isEmpty() && '$' !in declaration.jvmIdentity
+        val supportedFunction = target.kind == Symbol.Kind.FUNCTION && '$' !in declaration.jvmOwner &&
+            declaration.jvmDescriptor.startsWith("(") &&
+            declaration.jvmIdentity == "${declaration.jvmOwner}#${target.name}${declaration.jvmDescriptor}"
+        if (declaration.visibility != KotlinDeclarationVisibility.PUBLIC || (!supportedType && !supportedFunction)) {
+            return refused(
+                snapshot, "jvm.renamePublicDeclarationUnsupported",
+                "Initial shared JVM rename requires a public top-level Kotlin type or one non-overloaded direct JVM function",
+            )
         }
         if (!acceptExternalConsumerRisk) return refused(
             snapshot, "jvm.renameExternalConsumerApprovalRequired",
@@ -78,6 +85,16 @@ class KotlinJavaPublicTypeRenamePlanner(
             snapshot, "jvm.renameGeneratedSource", "Shared JVM rename target belongs to generated source",
         )
         dynamicRisk(snapshot, target.name)?.let { return refused(snapshot, "jvm.renameDynamicReference", it) }
+        if (supportedFunction) {
+            val callableReference = Regex("::\\s*${Regex.escape(target.name)}\\b")
+            val unsupportedModifier = Regex("\\b(?:operator|infix|override)\\s+fun\\s+${Regex.escape(target.name)}\\b")
+            if (snapshot.files.filter { it.languageId == "kotlin" }.any {
+                    callableReference.containsMatchIn(it.content) || unsupportedModifier.containsMatchIn(it.content)
+                }) return refused(
+                snapshot, "jvm.renameReferenceCompletenessUnavailable",
+                "Callable references or unsupported Kotlin function shapes prevent complete shared JVM rename",
+            )
+        }
 
         val beforeEvidence = analyzeMixed(snapshot)
         val before = when (beforeEvidence) {
@@ -88,7 +105,10 @@ class KotlinJavaPublicTypeRenamePlanner(
             snapshot, "jvm.renameBaselineIncomplete", "Initial shared JVM rename requires a clean K2 and JDT baseline",
             before.kotlin.diagnostics + javaDiagnostics(before.java),
         )
-        val javaUses = before.java.bindingUses.filter { it.symbolQualifiedName == declaration.jvmIdentity }
+        val javaUses = before.java.bindingUses.filter {
+            if (supportedType) it.symbolQualifiedName == declaration.jvmIdentity
+            else it.symbolQualifiedName?.startsWith("${declaration.jvmOwner}#${target.name}(") == true
+        }
             .distinctBy { Triple(it.path.normalize(), it.sourceRange.start, it.sourceRange.end) }
         if (javaUses.isEmpty()) return refused(
             snapshot, "jvm.renameCrossLanguageReferenceMissing", "JDT found no Java binding use for the Kotlin binary identity",
@@ -122,15 +142,19 @@ class KotlinJavaPublicTypeRenamePlanner(
         if (introduced.isNotEmpty()) return refused(
             snapshot, "jvm.renameDiagnosticsRegression", "Shared JVM rename introduces ${introduced.size} compiler error(s)", introduced,
         )
-        val renamedIdentity = declaration.jvmIdentity.substringBeforeLast('.', "")
+        val renamedIdentity = if (supportedType) declaration.jvmIdentity.substringBeforeLast('.', "")
             .let { if (it.isEmpty()) newName else "$it.$newName" }
-        if (after.java.bindingUses.none { it.symbolQualifiedName == renamedIdentity }) return refused(
+        else "${declaration.jvmOwner}#$newName("
+        if (after.java.bindingUses.none {
+                if (supportedType) it.symbolQualifiedName == renamedIdentity
+                else it.symbolQualifiedName?.startsWith(renamedIdentity) == true
+            }) return refused(
             snapshot, "jvm.renamePostImageIdentityMissing", "JDT did not resolve the renamed Kotlin binary identity in the staged snapshot",
         )
         return PatchPlan(
             operation = "renameSymbol", status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash,
             confidence = 0.92, requiresUserApproval = true,
-            summary = "Rename public Kotlin type '${target.name}' to '$newName' across ${locations.size} K2/JDT-proven token(s).",
+            summary = "Rename public Kotlin ${if (supportedType) "type" else "function"} '${target.name}' to '$newName' across ${locations.size} K2/JDT-proven token(s).",
             affectedFiles = edit.affectedFiles(), workspaceEdit = edit,
             diagnosticsBefore = before.kotlin.diagnostics + javaDiagnostics(before.java),
             diagnosticsAfterPreview = after.kotlin.diagnostics + javaDiagnostics(after.java),
@@ -145,7 +169,11 @@ class KotlinJavaPublicTypeRenamePlanner(
             javaEvidence = java.analyze(snapshot, additionalClasspathEntries = listOf(output))
         }
         return when (kotlinResult) {
-            is KotlinCompilerDiagnosticsResult.Available -> javaEvidence?.let { MixedEvidence.Available(kotlinResult, it) }
+            is KotlinCompilerDiagnosticsResult.Available -> kotlinResult.symbolFailure?.let { failure ->
+                MixedEvidence.Refused(
+                    failure.code ?: "jvm.renameKotlinUsageEvidenceUnavailable", failure.message,
+                )
+            } ?: javaEvidence?.let { MixedEvidence.Available(kotlinResult, it) }
                 ?: MixedEvidence.Refused("jvm.renameBinaryEvidenceUnavailable", "Kotlin compilation did not publish complete JVM binary evidence")
             is KotlinCompilerDiagnosticsResult.Refused -> MixedEvidence.Refused(
                 kotlinResult.reason.code ?: "jvm.renameEvidenceUnavailable", kotlinResult.reason.message,
