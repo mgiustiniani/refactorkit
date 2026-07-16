@@ -2,8 +2,9 @@
 
 Status: active bounded K5 expansion. Whole-file movement with public siblings and
 non-aliased explicit consumers passes all acceptance layers. FIR-proven Kotlin
-alias imports for public sibling consumers are specified below and pending
-executable qualification. Broader shapes remain pending.
+alias imports for public sibling consumers have local and packaged executable
+acceptance; four-platform qualification is pending. Broader shapes remain
+pending.
 
 ## Purpose
 

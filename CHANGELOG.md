@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Preserve FIR-proven Kotlin aliases for consumers of additional public sibling
+  types during whole-file moves. Java remains exact-explicit-only; sibling star,
+  same-package, qualified and malformed/multiple-alias shapes refuse.
 - Move whole Kotlin files containing additional compiler-proven public top-level
   types when every Kotlin/Java consumer uses exact explicit non-aliased imports.
   All public identities, usages, destination conflicts and staged K2/JDT evidence

@@ -529,8 +529,8 @@ def main() -> int:
         move_kotlin_source = (
             "package org.refactorkit.move.consumer\n" +
             "import org.refactorkit.move.api.PortableGreeting\n" +
-            "import org.refactorkit.move.api.PortableGreetingPort\n" +
-            "fun portableGreeting(port: PortableGreetingPort): PortableGreeting = PortableGreeting()\n"
+            "import org.refactorkit.move.api.PortableGreetingPort as PortablePort\n" +
+            "fun portableGreeting(port: PortablePort): PortableGreeting = PortableGreeting()\n"
         )
         move_java_source = (
             "package org.refactorkit.move.consumer;\n" +
@@ -665,9 +665,9 @@ def main() -> int:
                     "public interface PortableGreetingPort" not in move_destination.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.v2.PortableGreeting" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
-                    "import org.refactorkit.move.api.v2.PortableGreetingPort" not in
+                    "import org.refactorkit.move.api.v2.PortableGreetingPort as PortablePort" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
-                    "fun portableGreeting(port: PortableGreetingPort): PortableGreeting = PortableGreeting()" not in
+                    "fun portableGreeting(port: PortablePort): PortableGreeting = PortableGreeting()" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.v2.PortableGreeting;" not in
                         move_java_consumer.read_text(encoding="utf-8") or
