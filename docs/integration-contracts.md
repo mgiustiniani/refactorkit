@@ -76,7 +76,10 @@ compatible.
 | `refactorkit kotlin diagnostics <root> --jdk-home ... --compiler-jar ... [--compiler-classpath ...]` | `experimental` | One-shot explicit JDK 21/Kotlin 2.0.21 K2 diagnostics with exact snapshot/lease, build/toolchain hashes, line-only/no-location precision and process attestation; no mutation authority. |
 | `refactorkit kotlin symbols <root> ...` / `kotlin definition` / `kotlin references` / `kotlin rename` | `experimental` | Saved-snapshot compiler declarations/usages plus bounded K4 private-declaration managed rename. In mixed snapshots, `--accept-external-consumer-risk` admits bounded public top-level type preview in either direction: ephemeral K2 classes feed exact JDT Java bindings, while bounded annotation-processing-free ECJ classes feed exact K2 external-type usages. Direction-specific staged compiler evidence must remain clean. Bounded public non-overloaded direct Kotlin functions and public non-overloaded,
 non-override Java methods may update compiler-bound callers in the other language;
-unsupported callable shapes refuse. Lease/snapshot/index authority is mandatory; symmetric Java-to-Kotlin, members and incomplete shapes still refuse without fallback. |
+unsupported callable shapes refuse. Additive `moveDeclaration` accepts only the
+bounded public top-level Kotlin/JVM type row, requires `targetPackage` plus
+external-consumer-risk acceptance, and preserves the same lease/snapshot/index
+authority and one-transaction apply boundary. Lease/snapshot/index authority is mandatory; symmetric Java-to-Kotlin, members and incomplete shapes still refuse without fallback. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index [path] [--json]` | `additive-api-0.2` | Builds the session-scoped whole-workspace source/declaration index and prints human or typed JSON status without workspace writes. |
 | `refactorkit intelligence search [path] ... [--json]` | `experimental` | Bounded workspace/document symbol search over the central index. Completion, hover and signature-help kinds return typed refusal until provider-qualified. |

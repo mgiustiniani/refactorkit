@@ -204,9 +204,12 @@ binary name. Public preview requires explicit external-consumer-risk acceptance
 and clean before/staged K2 plus JDT evidence.
 
 Both public top-level type directions and bounded non-overloaded public member
-rows with direct cross-language callers now have managed local and packaged preview/apply/rollback
-evidence. Kotlin-to-Java passed the native matrix;
-Java-to-Kotlin native qualification, members, overloads, delegated/constructor properties,
-callable references, aliases, moves, signature/extract/inline operations,
-multiplatform, Android and broader framework boundaries remain pending or
-explicitly refused. No partial read result inherits mutation authority.
+rows with direct cross-language callers now have managed local and packaged
+preview/apply/rollback evidence. The first public top-level Kotlin/JVM
+`moveDeclaration` row additionally updates explicit Kotlin and Java imports and
+moves the file within one authoritative source set. Kotlin-to-Java rename passed
+the native matrix; CRLF-normalized symmetric rename and package-move native
+qualification, overloads, delegated/constructor properties, broader moves,
+signature/extract/inline operations, multiplatform, Android and framework
+boundaries remain pending or explicitly refused. No partial read result inherits
+mutation authority.

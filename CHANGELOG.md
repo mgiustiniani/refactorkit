@@ -9,6 +9,14 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add the first managed Kotlin/JVM `moveDeclaration` row for one public top-level
+  type in an authoritative source set. K2/JDT prove Kotlin and Java consumers,
+  explicit imports and the package token are updated exactly, the file remains
+  in the same source set, and one diagnostics-gated `PatchEngine` transaction
+  supports byte-restoring rollback. CLI, daemon and MCP routes are additive.
+- Normalize K2 PSI offsets back to saved CRLF source offsets before validating
+  compiler symbol and usage ranges. Windows no longer loses exact symbol
+  evidence after a CRLF-preserving source rewrite.
 - Add the symmetric public Java-method rename across direct Kotlin callers. JDT
   proves one public non-overloaded non-override method, bounded ECJ supplies its
   hash-bound binary owner, and K2 publishes exact external callable tokens. Java

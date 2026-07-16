@@ -16,7 +16,7 @@ See AGENTS.md for the authoritative initial architecture and implementation rule
 | `refactorkit-tree-sitter` | ✅ Kernel    | Packaged TypeScript/JavaScript Tree-sitter JNI, bounded external LSP lifecycle, overlays and untrusted edit normalization |
 | `refactorkit-typescript`  | ✅ v0.6+    | Explicit bounded toolchain/project models, semantic reads, managed rename, and IDE-grade `diagnostics.v2` compiler authority/ranges |
 | `refactorkit-kotlin`      | 🚧 v0.7     | Hash-bound K2 diagnostics, durable type/callable/property/parameter identities, exact usage reads, and bounded managed private-declaration rename proposals |
-| `refactorkit-jvm`         | 🚧 v0.7     | Shared Java/Kotlin JVM identity, bidirectional public-type and bounded public-member planners across K2/JDT/ECJ-bound callers; explicit external-consumer risk acceptance required |
+| `refactorkit-jvm`         | 🚧 v0.7     | Shared Java/Kotlin JVM identity, bidirectional public-type/member rename and bounded public Kotlin package-move planners across K2/JDT/ECJ-bound callers; explicit external-consumer risk acceptance required |
 | `refactorkit-testkit`     | ✅ MVP       | GoldenTestLoader/Runner, AgentSimulation scenarios         |
 
 See individual docs/ files for each subsystem.
@@ -27,7 +27,7 @@ Published `v0.6.2` delivers the managed TypeScript/JavaScript semantic foundatio
 on the `v0.5.0` cross-platform multi-language kernel and hardened Java/transaction
 base. Main develops `0.7.0-SNAPSHOT`; `refactorkit-kotlin` exposes qualified
 compiler-backed diagnostics, declarations/usages and the bounded K4 managed
-private-declaration rename. `refactorkit-jvm` now owns cross-adapter composition:
+private-declaration rename. `refactorkit-jvm` now owns cross-adapter rename and move composition:
 ephemeral class files from the exact K2 overlay let JDT prove Java bindings to a
 public Kotlin binary identity without publishing build output into the workspace.
 The symmetric row runs bounded annotation-processing-free ECJ in another overlay,
