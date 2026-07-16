@@ -155,7 +155,7 @@ class KotlinJvmMoveDeclarationPlanner(
                 pathUses.map { it.oldIdentity }.distinct().sorted().map { oldIdentity ->
                     exactImportEdit(consumer, oldIdentity, movedIdentities.getValue(oldIdentity)) ?: return refused(
                         snapshot, "kotlin.movePublicSiblingImportUnsupported",
-                        "Additional public file types require exact explicit non-aliased imports in every consumer",
+                        "Additional public file types require exact explicit imports with only FIR-proven Kotlin aliases",
                     )
                 }
             } ?: return refused(
@@ -243,9 +243,14 @@ class KotlinJvmMoveDeclarationPlanner(
 
     private fun exactImportEdit(source: SourceFile, oldIdentity: String, newIdentity: String): TextEdit? {
         val terminator = if (source.languageId == "java") "\\s*;" else ""
-        val matches = Regex(
+        val explicit = Regex(
             "(?m)^[ \\t]*import\\s+(${Regex.escape(oldIdentity)})$terminator[ \\t]*$",
         ).findAll(source.content).toList()
+        val aliased = if (source.languageId == "kotlin") Regex(
+            "(?m)^[ \\t]*import\\s+(${Regex.escape(oldIdentity)})\\s+as\\s+" +
+                "[A-Za-z_][A-Za-z0-9_]*[ \\t]*$",
+        ).findAll(source.content).toList() else emptyList()
+        val matches = explicit + aliased
         if (matches.size != 1) return null
         val range = matches.single().groups[1]!!.range
         if (occurrenceOffsets(source.content, oldIdentity) != listOf(range.first)) return null

@@ -1,10 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for whole-file movement with private helpers,
-additional public top-level types and exact explicit Kotlin/Java sibling
-consumers, plus the previously qualified import/consumer shapes. Library,
-packaged CLI/daemon/MCP and all four native platforms pass. Broader shapes remain
-pending.
+Status: active bounded K5 expansion. Whole-file movement with public siblings and
+non-aliased explicit consumers passes all acceptance layers. FIR-proven Kotlin
+alias imports for public sibling consumers are specified below and pending
+executable qualification. Broader shapes remain pending.
 
 ## Purpose
 
@@ -25,7 +24,8 @@ The operation shall accept only when all of the following are proven:
    interface, object, enum or annotation class.
 2. The target and any co-located public top-level types are compiler-proven and
    move with the whole file. Additional public types are supported only when all
-   their Kotlin/Java consumers use exact non-aliased, non-star explicit imports.
+   Java consumers use exact non-star explicit imports and all Kotlin consumers
+   use exact non-star explicit imports, optionally with one FIR-proven alias.
    Other co-located helpers are compiler-proven `private` types, functions or
    properties. The file has an
    explicit non-default package and belongs to one authoritative, non-generated
@@ -98,7 +98,8 @@ The operation shall refuse with stable structured codes for at least:
 
 - missing, ambiguous, non-public, local, nested or unsupported declarations;
 - any additional protected/internal top-level declaration, any additional public
-  function/property, or any non-explicit consumer of an additional public type;
+  function/property, or any same-package, star, qualified, malformed/multiple
+  alias consumer of an additional public type;
   unsupported/typealias/file-facade ambiguity or filename/declaration ambiguity;
 - default package, invalid target package or cross-source-set destination;
 - destination file/type conflict;
