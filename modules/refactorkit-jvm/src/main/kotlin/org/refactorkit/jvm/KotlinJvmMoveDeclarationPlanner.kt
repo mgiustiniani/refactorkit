@@ -152,15 +152,16 @@ class KotlinJvmMoveDeclarationPlanner(
                     declaration.jvmIdentity, newIdentity, target.name,
                 )
             } else {
-                pathUses.map { it.oldIdentity }.distinct().sorted().map { oldIdentity ->
-                    exactImportEdit(consumer, oldIdentity, movedIdentities.getValue(oldIdentity)) ?: return refused(
-                        snapshot, "kotlin.movePublicSiblingImportUnsupported",
-                        "Additional public file types require exact explicit imports with only FIR-proven Kotlin aliases",
-                    )
-                }
+                publicSiblingConsumerEdits(
+                    consumer, pathUses.map { it.oldIdentity }.distinct().sorted(), movedIdentities, oldPackage,
+                )
             } ?: return refused(
-                snapshot, "kotlin.moveImportShapeUnsupported",
-                "Kotlin move requires an exact import, same-package use, or fully-qualified compiler-proven target",
+                snapshot,
+                if (publicTypes.size == 1) "kotlin.moveImportShapeUnsupported"
+                else "kotlin.movePublicSiblingImportUnsupported",
+                if (publicTypes.size == 1)
+                    "Kotlin move requires an exact import, same-package use, or fully-qualified compiler-proven target"
+                else "Additional public file types require exact explicit/aliased imports or one package-star import",
             )
             edits += FileEdit.Modify(path, consumerEdits)
         }
@@ -239,6 +240,31 @@ class KotlinJvmMoveDeclarationPlanner(
         val match = Regex("(?m)^package\\s+(${Regex.escape(oldPackage)})\\s*$").find(source.content) ?: return null
         val range = match.groups[1]!!.range
         return offsetEdit(source.content, range.first, range.last + 1, targetPackage)
+    }
+
+    private fun publicSiblingConsumerEdits(
+        source: SourceFile,
+        oldIdentities: List<String>,
+        movedIdentities: Map<String, String>,
+        oldPackage: String,
+    ): List<TextEdit>? {
+        val explicit = oldIdentities.mapNotNull { oldIdentity ->
+            exactImportEdit(source, oldIdentity, movedIdentities.getValue(oldIdentity))
+        }
+        if (explicit.size == oldIdentities.size) return explicit
+        if (oldIdentities.any { it in source.content }) return null
+        val terminator = if (source.languageId == "java") "\\s*;" else ""
+        val stars = Regex(
+            "(?m)^[ \\t]*import\\s+${Regex.escape(oldPackage)}\\.\\*$terminator[ \\t]*$",
+        ).findAll(source.content).toList()
+        if (stars.size != 1) return null
+        val newline = if ("\r\n" in source.content) "\r\n" else "\n"
+        var insertionOffset = stars.single().range.last + 1
+        if (source.content.startsWith(newline, insertionOffset)) insertionOffset += newline.length
+        val semicolon = if (source.languageId == "java") ";" else ""
+        val imports = oldIdentities.map { movedIdentities.getValue(it) }.sorted()
+            .joinToString(separator = newline, postfix = newline) { "import $it$semicolon" }
+        return listOf(offsetEdit(source.content, insertionOffset, insertionOffset, imports))
     }
 
     private fun exactImportEdit(source: SourceFile, oldIdentity: String, newIdentity: String): TextEdit? {
