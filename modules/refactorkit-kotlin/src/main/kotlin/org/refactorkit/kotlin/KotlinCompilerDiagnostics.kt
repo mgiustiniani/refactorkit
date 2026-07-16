@@ -754,6 +754,8 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.usageTargetLocationUnavailable" -> "Kotlin usage target lacks an exact source location"
                 "kotlin.usageTargetMissing" -> "Kotlin usage target is absent from the proven declaration catalogue"
                 "kotlin.usageLocationUnavailable" -> "Kotlin usage lacks an exact source range"
+                "kotlin.usageAliasLocationUnavailable" -> "Kotlin resolved import alias lacks an exact source location"
+                "kotlin.usageAliasCollision" -> "Kotlin resolved import alias has conflicting compiler targets"
                 "kotlin.usagePathInvalid" -> "Kotlin usage path is invalid"
                 "kotlin.usageLimitExceeded" -> "Kotlin usage result exceeded the bounded limit"
                 "kotlin.usageExtractionFailed" -> "Kotlin compiler usage extraction failed"
@@ -1129,6 +1131,8 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.usageTargetLocationUnavailable",
             "kotlin.usageTargetMissing",
             "kotlin.usageLocationUnavailable",
+            "kotlin.usageAliasLocationUnavailable",
+            "kotlin.usageAliasCollision",
             "kotlin.usagePathInvalid",
             "kotlin.usageLimitExceeded",
             "kotlin.usageExtractionFailed",

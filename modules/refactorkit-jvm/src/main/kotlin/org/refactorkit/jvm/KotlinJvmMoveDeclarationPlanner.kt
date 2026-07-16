@@ -224,6 +224,16 @@ class KotlinJvmMoveDeclarationPlanner(
             return listOf(offsetEdit(source.content, range.first, range.last + 1, newIdentity))
         }
         if (explicit.isNotEmpty()) return null
+        val aliased = if (source.languageId == "kotlin") Regex(
+            "(?m)^[ \\t]*import\\s+(${Regex.escape(oldIdentity)})\\s+as\\s+" +
+                "[A-Za-z_][A-Za-z0-9_]*[ \\t]*$",
+        ).findAll(source.content).toList() else emptyList()
+        if (aliased.size == 1) {
+            val range = aliased.single().groups[1]!!.range
+            if (occurrenceOffsets(source.content, oldIdentity) != listOf(range.first)) return null
+            return listOf(offsetEdit(source.content, range.first, range.last + 1, newIdentity))
+        }
+        if (aliased.isNotEmpty()) return null
         if (oldIdentity in source.content) return qualifiedUseEdits(
             source, locations, oldIdentity, newIdentity, simpleName,
         )

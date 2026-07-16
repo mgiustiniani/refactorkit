@@ -21,6 +21,7 @@ import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.exists
+import kotlin.io.path.readBytes
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -157,6 +158,34 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         assertEquals(PatchStatus.REFUSED, plan.status)
         assertEquals("kotlin.moveExternalConsumerApprovalRequired", plan.refusalCode)
         assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
+    fun publicKotlinTypeMovePreservesExactKotlinImportAlias() {
+        val fixture = moveFixture()
+        val kotlinConsumer = fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt")
+        kotlinConsumer.writeText(
+            "package fixture.consumer\nimport fixture.api.PublicGreeting as ApiGreeting\n" +
+                "fun greeting(): ApiGreeting = ApiGreeting()\n",
+        )
+        val beforeBytes = kotlinConsumer.readBytes()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+        val planner = KotlinJvmMoveDeclarationPlanner(adapter)
+
+        val plan = planner.preview(snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true)
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, snapshot, ApplyAuthorization.explicit("aliased-kotlin-move-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertTrue("import fixture.api.v2.PublicGreeting as ApiGreeting" in kotlinConsumer.readText())
+        assertTrue("fun greeting(): ApiGreeting = ApiGreeting()" in kotlinConsumer.readText())
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(beforeBytes.contentEquals(kotlinConsumer.readBytes()))
     }
 
     @Test

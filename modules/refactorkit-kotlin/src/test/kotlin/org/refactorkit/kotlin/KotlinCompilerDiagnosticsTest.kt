@@ -236,6 +236,33 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun successfulK2CompilationReturnsAliasUsesForTheResolvedSourceType() {
+        val root = project("class PublicGreeting\n")
+        root.resolve("src/main/kotlin/consumer").createDirectories()
+        val consumer = root.resolve("src/main/kotlin/consumer/Aliased.kt")
+        consumer.writeText(
+            "package consumer\nimport fixture.PublicGreeting as ApiGreeting\n" +
+                "fun greeting(value: ApiGreeting): ApiGreeting = ApiGreeting()\n",
+        )
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
+        val target = result.index.symbols.single { it.name == "PublicGreeting" }
+        val selections = result.usages.filter { it.targetId == target.id && it.location.path == root.relativize(consumer) }
+            .map { usage ->
+                val source = consumer.readText()
+                val start = org.refactorkit.core.TextEdits.offsetOf(source, usage.location.range.start)
+                val end = org.refactorkit.core.TextEdits.offsetOf(source, usage.location.range.end)
+                source.substring(start, end)
+            }
+
+        assertTrue(selections.contains("PublicGreeting"), selections.toString())
+        assertTrue(selections.count { it == "ApiGreeting" } >= 3, selections.toString())
+    }
+
+    @Test
     fun privateTypeRenamePreviewUsesCompleteK2TokensAndStagedCompilerDiagnostics() {
         val root = project("""
             private class Secret

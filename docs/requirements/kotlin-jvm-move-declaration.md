@@ -1,9 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for explicit imports, compiler-proven
-same-package consumers, exact fully-qualified uses, optional Kotlin/Java consumer
-sets and zero-consumer public types. Library, packaged CLI/daemon/MCP and all four
-native platforms pass. Broader shapes remain pending.
+Status: active bounded K5 expansion. Explicit imports, same-package consumers,
+exact fully-qualified uses, optional consumer sets and zero-consumer types pass
+all acceptance layers. Exact Kotlin alias-import preservation is specified below
+and pending executable qualification. Broader shapes remain pending.
 
 ## Purpose
 
@@ -28,8 +28,8 @@ The operation shall accept only when all of the following are proven:
 3. The destination is a valid different package in the same source set and its
    destination file and binary identity do not exist.
 4. Every Kotlin use is K2-resolved to the source identity. A consumer either uses
-   one explicit, non-aliased, non-star import of the old identity, belongs to the
-   exact old package and resolves the type implicitly, or uses the exact old
+   one explicit non-star import of the old identity, optionally with one exact
+   Kotlin alias, belongs to the exact old package and resolves the type implicitly, or uses the exact old
    fully-qualified identity at every proven target token.
 5. Every Java use is JDT-bound to the matching ephemeral K2 class. A Java consumer
    either uses one explicit non-static import of the old identity, belongs to the
@@ -51,7 +51,7 @@ The preview shall contain only:
 - one file rename from the authoritative source-root-relative old path to the
   destination package path, preserving the filename;
 - exact explicit Kotlin and Java import-name tokens changed from the old binary
-  identity to the new binary identity; or
+  identity to the new binary identity, preserving an exact Kotlin alias token; or
 - for a compiler-proven same-package implicit consumer, one deterministic
   explicit import of the new identity inserted immediately after its exact
   package declaration, preserving the file's newline convention; or
@@ -93,9 +93,9 @@ The operation shall refuse with stable structured codes for at least:
 - destination file/type conflict;
 - generated roots, scripts, compiler plugins, multiplatform `expect`/`actual`,
   Android or unsupported build models;
-- alias/star/static imports, partially qualified expressions, mixed qualified and
-  unqualified uses in one consumer, ambiguous same-package declarations or
-  import-name conflicts;
+- star/static imports, multiple or malformed aliases, partially qualified
+  expressions, mixed qualified and unqualified uses in one consumer, ambiguous
+  same-package declarations or import-name conflicts;
 - incomplete K2/JDT evidence, callable/reference ambiguity or stale authority;
 - reflection, serialization or framework candidates requiring a broader row;
 - absent `acceptExternalConsumerRisk=true`.

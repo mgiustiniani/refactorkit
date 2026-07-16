@@ -138,6 +138,7 @@ final class KotlinCompilerUsageExtractor {
             final Set<String> identities = new HashSet<String>();
             final Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters =
                 new HashMap<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol>();
+            final Map<String, String> importAliases = new HashMap<String, String>();
             FirVisitorVoid typeParameterVisitor = new FirVisitorVoid() {
                 @Override public void visitElement(FirElement element) { element.acceptChildren(this); }
                 @Override public Object visitElement(FirElement element, Object ignored) {
@@ -147,6 +148,10 @@ final class KotlinCompilerUsageExtractor {
                 @Override public void visitTypeParameter(FirTypeParameter parameter) {
                     collectTypeParameter(parameter, declarationTargets, typeParameters);
                     parameter.acceptChildren(this);
+                }
+                @Override public void visitResolvedImport(FirResolvedImport resolvedImport) {
+                    collectImportAlias(resolvedImport, typeTargets, importAliases);
+                    resolvedImport.acceptChildren(this);
                 }
             };
             for (ModuleCompilerAnalyzedOutput output : result.getOutputs()) {
@@ -159,7 +164,7 @@ final class KotlinCompilerUsageExtractor {
                     return null;
                 }
                 @Override public void visitResolvedNamedReference(FirResolvedNamedReference reference) {
-                    collectNamedReference(reference, declarationTargets, identities, usages);
+                    collectNamedReference(reference, declarationTargets, importAliases, identities, usages);
                     reference.acceptChildren(this);
                 }
                 @Override public void visitTypeParameter(FirTypeParameter parameter) {
@@ -167,11 +172,11 @@ final class KotlinCompilerUsageExtractor {
                     parameter.acceptChildren(this);
                 }
                 @Override public void visitResolvedTypeRef(FirResolvedTypeRef typeRef) {
-                    collectTypeReference(typeRef, typeTargets, typeParameters, identities, usages);
+                    collectTypeReference(typeRef, typeTargets, typeParameters, importAliases, identities, usages);
                     typeRef.acceptChildren(this);
                 }
                 @Override public void visitResolvedQualifier(FirResolvedQualifier qualifier) {
-                    collectQualifier(qualifier, declarationTargets, identities, usages);
+                    collectQualifier(qualifier, declarationTargets, importAliases, identities, usages);
                     qualifier.acceptChildren(this);
                 }
                 @Override public void visitResolvedImport(FirResolvedImport resolvedImport) {
@@ -198,6 +203,7 @@ final class KotlinCompilerUsageExtractor {
     private static void collectNamedReference(
         FirResolvedNamedReference reference,
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Map<String, String> importAliases,
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
@@ -265,7 +271,7 @@ final class KotlinCompilerUsageExtractor {
         PsiElement usageIdentifier = ((KtNameReferenceExpression) usagePsi).getReferencedNameElement();
         if (usageIdentifier == null) throw failure("kotlin.usageLocationUnavailable");
         if (!usageIdentifier.getText().equals(reference.getName().asString()) ||
-            !usageIdentifier.getText().equals(target.name())) return;
+            !matchesTargetName(usageIdentifier, target, importAliases)) return;
         addUsage(usageIdentifier, target, identities, usages);
     }
 
@@ -290,6 +296,7 @@ final class KotlinCompilerUsageExtractor {
         FirResolvedTypeRef typeRef,
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
         Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters,
+        Map<String, String> importAliases,
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
@@ -308,7 +315,7 @@ final class KotlinCompilerUsageExtractor {
         PsiElement identifier = typeIdentifier(((KtPsiSourceElement) typeRef.getSource()).getPsi());
         if (identifier == null) return;
         if (target != null) {
-            if (!identifier.getText().equals(target.name())) return;
+            if (!matchesTargetName(identifier, target, importAliases)) return;
             addUsage(identifier, target, identities, usages);
         } else if (externalIdentity != null &&
             identifier.getText().equals(externalIdentity.substring(
@@ -321,6 +328,7 @@ final class KotlinCompilerUsageExtractor {
     private static void collectQualifier(
         FirResolvedQualifier qualifier,
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Map<String, String> importAliases,
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
@@ -337,7 +345,7 @@ final class KotlinCompilerUsageExtractor {
                 declarationKey(canonicalPath(type.getContainingKtFile()), targetIdentifier.getTextRange().getStartOffset())
             );
             if (target == null) throw failure("kotlin.usageTargetMissing");
-            if (identifier.getText().equals(target.name())) addUsage(identifier, target, identities, usages);
+            if (matchesTargetName(identifier, target, importAliases)) addUsage(identifier, target, identities, usages);
         } else {
             String binaryIdentity = binaryName(qualifier.getClassId());
             String simpleName = binaryIdentity.substring(
@@ -347,14 +355,39 @@ final class KotlinCompilerUsageExtractor {
         }
     }
 
+    private static void collectImportAlias(
+        FirResolvedImport resolvedImport,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Map<String, String> importAliases
+    ) {
+        Name alias = resolvedImport.getAliasName();
+        if (resolvedImport.isAllUnder() || alias == null || resolvedImport.getImportedFqName() == null ||
+            !(resolvedImport.getSource() instanceof KtPsiSourceElement)) return;
+        Name importedName = resolvedImport.getImportedName();
+        if (importedName == null) return;
+        ClassId parent = resolvedImport.getResolvedParentClassId();
+        ClassId classId = parent == null ? ClassId.topLevel(resolvedImport.getImportedFqName()) :
+            parent.createNestedClassId(importedName);
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryName(classId));
+        if (target == null) return;
+        PsiElement source = ((KtPsiSourceElement) resolvedImport.getSource()).getPsi();
+        KtImportDirective directive = source instanceof KtImportDirective ?
+            (KtImportDirective) source : parent(source, KtImportDirective.class);
+        if (directive == null || !alias.asString().equals(directive.getAliasName())) {
+            throw failure("kotlin.usageAliasLocationUnavailable");
+        }
+        String key = aliasKey(canonicalPath(directive.getContainingKtFile()), alias.asString());
+        String previous = importAliases.put(key, target.identity());
+        if (previous != null && !previous.equals(target.identity())) throw failure("kotlin.usageAliasCollision");
+    }
+
     private static void collectImport(
         FirResolvedImport resolvedImport,
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
-        if (resolvedImport.isAllUnder() || resolvedImport.getAliasName() != null ||
-            !(resolvedImport.getSource() instanceof KtPsiSourceElement)) return;
+        if (resolvedImport.isAllUnder() || !(resolvedImport.getSource() instanceof KtPsiSourceElement)) return;
         Name importedName = resolvedImport.getImportedName();
         if (importedName == null || resolvedImport.getImportedFqName() == null) return;
         ClassId parent = resolvedImport.getResolvedParentClassId();
@@ -370,6 +403,23 @@ final class KotlinCompilerUsageExtractor {
         } else if (identifier.getText().equals(importedName.asString())) {
             addExternalUsage(identifier, binaryIdentity, identities, usages);
         }
+    }
+
+    private static boolean matchesTargetName(
+        PsiElement identifier,
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target,
+        Map<String, String> importAliases
+    ) {
+        if (identifier.getText().equals(target.name())) return true;
+        if (!(identifier.getContainingFile() instanceof KtFile)) return false;
+        String aliasedTarget = importAliases.get(aliasKey(
+            canonicalPath((KtFile) identifier.getContainingFile()), identifier.getText()
+        ));
+        return target.identity().equals(aliasedTarget);
+    }
+
+    private static String aliasKey(Path path, String alias) {
+        return path + "\u0000" + alias;
     }
 
     private static void addUsage(
