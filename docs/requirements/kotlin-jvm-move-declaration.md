@@ -2,8 +2,8 @@
 
 Status: active bounded K5 expansion. Whole-file public-sibling movement with
 explicit/aliased consumers passes all acceptance layers. Exact Kotlin/Java
-package-star sibling consumers are specified below and pending executable
-qualification. Broader shapes remain pending.
+package-star sibling consumers have local and packaged executable acceptance;
+four-platform qualification is pending. Broader shapes remain pending.
 
 ## Purpose
 

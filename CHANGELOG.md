@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Support exact Kotlin/Java package-star consumers for multiple public sibling
+  types. The old star remains and one sorted explicit destination-import block is
+  inserted for all compiler-proven moved identities; mixed/static/malformed star
+  shapes still refuse.
 - Preserve FIR-proven Kotlin aliases for consumers of additional public sibling
   types during whole-file moves. Java remains exact-explicit-only; sibling star,
   same-package, qualified and malformed/multiple-alias shapes refuse.
