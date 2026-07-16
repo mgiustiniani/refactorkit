@@ -511,6 +511,7 @@ class KotlinCompilerDiagnostics private constructor(
         val overlayRoot = overlay.root.toRealPath()
         val sourcePaths = snapshot.files.associateBy { it.path.normalize() }
         val ids = linkedSetOf<SymbolId>()
+        val offsetMappers = mutableMapOf<Path, CompilerOffsetMapper>()
         val identityIds = linkedMapOf<String, SymbolId>()
         val declarations = linkedMapOf<SymbolId, KotlinCompilerDeclarationEvidence>()
         val symbols = encoded.map { item ->
@@ -575,8 +576,11 @@ class KotlinCompilerDiagnostics private constructor(
             }
             val relative = overlayRoot.relativize(canonical).normalize()
             val source = sourcePaths[relative] ?: error("Kotlin compiler symbol source is outside snapshot")
-            val start = value.int("startOffset") ?: error("Kotlin compiler symbol start is invalid")
-            val end = value.int("endOffset") ?: error("Kotlin compiler symbol end is invalid")
+            val compilerStart = value.int("startOffset") ?: error("Kotlin compiler symbol start is invalid")
+            val compilerEnd = value.int("endOffset") ?: error("Kotlin compiler symbol end is invalid")
+            val offsetMapper = offsetMappers.getOrPut(relative) { CompilerOffsetMapper(source.content) }
+            val start = offsetMapper.sourceOffset(compilerStart) ?: error("Kotlin compiler symbol start is invalid")
+            val end = offsetMapper.sourceOffset(compilerEnd) ?: error("Kotlin compiler symbol end is invalid")
             check(start >= 0 && end > start && end <= source.content.length &&
                 source.content.substring(start, end) == selectionText) {
                 "Kotlin compiler symbol range is invalid"
@@ -600,7 +604,7 @@ class KotlinCompilerDiagnostics private constructor(
             )
         }.sortedBy { it.id.value }
         val index = SymbolIndex(symbols)
-        val usages = parseUsages(payload, sourcePaths, overlayRoot, identityIds)
+        val usages = parseUsages(payload, sourcePaths, overlayRoot, identityIds, offsetMappers)
         ParsedKotlinSymbols(index, usages.internal, usages.externalTypes, usages.externalCallables, declarations.toMap())
     }
 
@@ -615,6 +619,7 @@ class KotlinCompilerDiagnostics private constructor(
         sourcePaths: Map<Path, org.refactorkit.core.SourceFile>,
         overlayRoot: Path,
         identityIds: Map<String, SymbolId>,
+        offsetMappers: MutableMap<Path, CompilerOffsetMapper>,
     ): ParsedUsageEvidence {
         if (payload.boolean("usagesComplete") != true) {
             throw SymbolPayloadException("kotlin.compilerUsageEnvelopeInvalid")
@@ -668,9 +673,14 @@ class KotlinCompilerDiagnostics private constructor(
             val relative = overlayRoot.relativize(canonical).normalize()
             val source = sourcePaths[relative]
                 ?: throw SymbolPayloadException("kotlin.compilerUsagePathInvalid")
-            val start = value.int("startOffset")
+            val compilerStart = value.int("startOffset")
                 ?: throw SymbolPayloadException("kotlin.compilerUsageOffsetInvalid")
-            val end = value.int("endOffset")
+            val compilerEnd = value.int("endOffset")
+                ?: throw SymbolPayloadException("kotlin.compilerUsageOffsetInvalid")
+            val offsetMapper = offsetMappers.getOrPut(relative) { CompilerOffsetMapper(source.content) }
+            val start = offsetMapper.sourceOffset(compilerStart)
+                ?: throw SymbolPayloadException("kotlin.compilerUsageOffsetInvalid")
+            val end = offsetMapper.sourceOffset(compilerEnd)
                 ?: throw SymbolPayloadException("kotlin.compilerUsageOffsetInvalid")
             if (start < 0 || end <= start || end > source.content.length ||
                 source.content.substring(start, end) != selectionText) {
@@ -742,6 +752,37 @@ class KotlinCompilerDiagnostics private constructor(
             },
         )
         else -> diagnostic("kotlin.compilerSymbolsInvalid", "Kotlin compiler symbol payload is invalid")
+    }
+
+    private class CompilerOffsetMapper(private val content: String) {
+        private val offsets: IntArray? = if ("\r\n" in content) buildOffsets(content) else null
+
+        fun sourceOffset(compilerOffset: Int): Int? {
+            if (compilerOffset < 0) return null
+            val mapped = offsets ?: return compilerOffset.takeIf { it <= content.length }
+            return mapped.getOrNull(compilerOffset)
+        }
+
+        private fun buildOffsets(content: String): IntArray {
+            var crlfCount = 0
+            var index = 0
+            while (index + 1 < content.length) {
+                if (content[index] == '\r' && content[index + 1] == '\n') {
+                    crlfCount++
+                    index += 2
+                } else index++
+            }
+            val result = IntArray(content.length - crlfCount + 1)
+            var sourceOffset = 0
+            var compilerOffset = 0
+            while (sourceOffset < content.length) {
+                sourceOffset += if (content[sourceOffset] == '\r' && sourceOffset + 1 < content.length &&
+                    content[sourceOffset + 1] == '\n') 2 else 1
+                compilerOffset++
+                result[compilerOffset] = sourceOffset
+            }
+            return result
+        }
     }
 
     private fun position(content: String, offset: Int): SourcePosition {

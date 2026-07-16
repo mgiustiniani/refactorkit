@@ -266,7 +266,7 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         }
         root.resolve("src/main/kotlin/fixture/UseAccount.kt").apply {
             parent.createDirectories()
-            writeText("package fixture\nfun account(): PublicAccount = PublicAccount()\nfun label(account: PublicAccount): String = account.label(\"x\")\n")
+            writeText("package fixture\r\nfun account(): PublicAccount = PublicAccount()\r\nfun label(account: PublicAccount): String = account.label(\"x\")\r\n")
         }
         val toolchain = toolchain(root)
         return Fixture(root, KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain), toolchain)
