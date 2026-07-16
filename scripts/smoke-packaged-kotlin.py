@@ -527,13 +527,11 @@ def main() -> int:
             encoding="utf-8",
         )
         move_kotlin_source = (
-            "package org.refactorkit.move.consumer\n" +
-            "import org.refactorkit.move.api.*\n" +
+            "package org.refactorkit.move.api\n" +
             "fun portableGreeting(port: PortableGreetingPort): PortableGreeting = PortableGreeting()\n"
         )
         move_java_source = (
-            "package org.refactorkit.move.consumer;\n" +
-            "import org.refactorkit.move.api.*;\n" +
+            "package org.refactorkit.move.api;\n" +
             "class MoveCaller { PortableGreetingPort port; PortableGreeting value = new PortableGreeting(); }\n"
         )
         move_kotlin_consumer.write_text(move_kotlin_source, encoding="utf-8")
@@ -602,7 +600,7 @@ def main() -> int:
                     "private val defaultPortableGreetingState" not in mcp_destination.read_text(encoding="utf-8") or
                     "private fun portableGreetingState()" not in mcp_destination.read_text(encoding="utf-8") or
                     "public interface PortableGreetingPort" not in mcp_destination.read_text(encoding="utf-8") or
-                    "import org.refactorkit.move.api.*;" not in
+                    "package org.refactorkit.move.api;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
                         move_java_consumer.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.v2.PortableGreeting;" not in
                         move_java_consumer.read_text(encoding="utf-8") or
@@ -663,7 +661,7 @@ def main() -> int:
                     "private val defaultPortableGreetingState" not in move_destination.read_text(encoding="utf-8") or
                     "private fun portableGreetingState()" not in move_destination.read_text(encoding="utf-8") or
                     "public interface PortableGreetingPort" not in move_destination.read_text(encoding="utf-8") or
-                    "import org.refactorkit.move.api.*" not in
+                    "package org.refactorkit.move.api\nimport org.refactorkit.move.api.v2.PortableGreeting" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.v2.PortableGreeting" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
@@ -671,7 +669,7 @@ def main() -> int:
                         move_kotlin_consumer.read_text(encoding="utf-8") or
                     "fun portableGreeting(port: PortableGreetingPort): PortableGreeting = PortableGreeting()" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
-                    "import org.refactorkit.move.api.*;" not in
+                    "package org.refactorkit.move.api;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
                         move_java_consumer.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.v2.PortableGreeting;" not in
                         move_java_consumer.read_text(encoding="utf-8") or

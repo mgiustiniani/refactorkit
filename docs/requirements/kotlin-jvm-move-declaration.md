@@ -2,8 +2,9 @@
 
 Status: active bounded K5 expansion. Whole-file public-sibling movement with
 explicit/aliased/package-star consumers passes all acceptance layers.
-Compiler-proven same-package implicit sibling consumers are specified below and
-pending executable qualification. Broader shapes remain pending.
+Compiler-proven same-package implicit sibling consumers have local and packaged
+executable acceptance; four-platform qualification is pending. Broader shapes
+remain pending.
 
 ## Purpose
 

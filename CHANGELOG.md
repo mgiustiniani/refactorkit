@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Support compiler-proven same-package implicit Kotlin/Java consumers for
+  multiple public sibling types. One sorted destination-import block is inserted
+  after the exact package declaration while preserving newline/semicolon style.
 - Support exact Kotlin/Java package-star consumers for multiple public sibling
   types. The old star remains and one sorted explicit destination-import block is
   inserted for all compiler-proven moved identities; mixed/static/malformed star
