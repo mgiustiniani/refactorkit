@@ -65,6 +65,12 @@ data class KotlinCompilerExternalTypeUsage(
     val location: SourceLocation,
 )
 
+data class KotlinCompilerExternalCallableUsage(
+    val jvmOwner: String,
+    val callableName: String,
+    val location: SourceLocation,
+)
+
 enum class KotlinDeclarationVisibility { PUBLIC, INTERNAL, PROTECTED, PRIVATE }
 
 data class KotlinCompilerDeclarationEvidence(
@@ -81,6 +87,7 @@ private data class ParsedKotlinSymbols(
     val index: SymbolIndex,
     val usages: List<KotlinCompilerResolvedUsage>,
     val externalTypeUsages: List<KotlinCompilerExternalTypeUsage>,
+    val externalCallableUsages: List<KotlinCompilerExternalCallableUsage>,
     val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence>,
 )
 
@@ -94,6 +101,7 @@ sealed interface KotlinCompilerDiagnosticsResult {
         val symbols: SymbolIndex? = null,
         val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
         val externalTypeUsages: List<KotlinCompilerExternalTypeUsage> = emptyList(),
+        val externalCallableUsages: List<KotlinCompilerExternalCallableUsage> = emptyList(),
         val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence> = emptyMap(),
         val symbolFailure: Diagnostic? = null,
     ) : KotlinCompilerDiagnosticsResult
@@ -121,6 +129,7 @@ sealed interface KotlinCompilerSymbolsResult {
         override val attestation: KotlinCompilerDiagnosticsAttestation,
         val usages: List<KotlinCompilerResolvedUsage> = emptyList(),
         val externalTypeUsages: List<KotlinCompilerExternalTypeUsage> = emptyList(),
+        val externalCallableUsages: List<KotlinCompilerExternalCallableUsage> = emptyList(),
         val declarations: Map<SymbolId, KotlinCompilerDeclarationEvidence> = emptyMap(),
     ) : KotlinCompilerSymbolsResult
 
@@ -311,7 +320,8 @@ class KotlinCompilerDiagnostics private constructor(
             val attestation = result.attestation.copy(backend = SYMBOL_BACKEND)
             when {
                 result.symbols != null -> KotlinCompilerSymbolsResult.Available(
-                    result.symbols, attestation, result.usages, result.externalTypeUsages, result.declarations,
+                    result.symbols, attestation, result.usages, result.externalTypeUsages,
+                    result.externalCallableUsages, result.declarations,
                 )
                 result.symbolFailure?.code == "kotlin.compilerSymbolsInvalid" ->
                     KotlinCompilerSymbolsResult.Error(result.symbolFailure, attestation)
@@ -479,6 +489,7 @@ class KotlinCompilerDiagnostics private constructor(
             symbols = symbols.getOrNull()?.index,
             usages = symbols.getOrNull()?.usages.orEmpty(),
             externalTypeUsages = symbols.getOrNull()?.externalTypeUsages.orEmpty(),
+            externalCallableUsages = symbols.getOrNull()?.externalCallableUsages.orEmpty(),
             declarations = symbols.getOrNull()?.declarations.orEmpty(),
             symbolFailure = symbols.exceptionOrNull()?.asSymbolDiagnostic(),
         )
@@ -590,12 +601,13 @@ class KotlinCompilerDiagnostics private constructor(
         }.sortedBy { it.id.value }
         val index = SymbolIndex(symbols)
         val usages = parseUsages(payload, sourcePaths, overlayRoot, identityIds)
-        ParsedKotlinSymbols(index, usages.internal, usages.external, declarations.toMap())
+        ParsedKotlinSymbols(index, usages.internal, usages.externalTypes, usages.externalCallables, declarations.toMap())
     }
 
     private data class ParsedUsageEvidence(
         val internal: List<KotlinCompilerResolvedUsage>,
-        val external: List<KotlinCompilerExternalTypeUsage>,
+        val externalTypes: List<KotlinCompilerExternalTypeUsage>,
+        val externalCallables: List<KotlinCompilerExternalCallableUsage>,
     )
 
     private fun parseUsages(
@@ -609,19 +621,29 @@ class KotlinCompilerDiagnostics private constructor(
         check(encoded.size <= MAX_USAGES) { "Kotlin compiler usage limit exceeded" }
         val unique = linkedSetOf<String>()
         val internal = mutableListOf<KotlinCompilerResolvedUsage>()
-        val external = mutableListOf<KotlinCompilerExternalTypeUsage>()
+        val externalTypes = mutableListOf<KotlinCompilerExternalTypeUsage>()
+        val externalCallables = mutableListOf<KotlinCompilerExternalCallableUsage>()
         encoded.forEach { item ->
             val value = item as? JsonObject ?: error("Kotlin compiler usage is not an object")
             check(value.keys == USAGE_FIELDS) { "Kotlin compiler usage fields are invalid" }
             val targetIdentity = value.string("targetIdentity")?.takeIf {
-                it.length in 1..(MAX_SYMBOL_IDENTITY_CHARS + EXTERNAL_JVM_TYPE_PREFIX.length)
+                it.length in 1..(MAX_SYMBOL_IDENTITY_CHARS + EXTERNAL_JVM_CALLABLE_PREFIX.length + MAX_SYMBOL_NAME_CHARS)
             } ?: error("Kotlin compiler usage target is invalid")
             val targetId = identityIds[targetIdentity]
-            val externalIdentity = targetIdentity.removePrefix(EXTERNAL_JVM_TYPE_PREFIX).takeIf {
+            val externalTypeIdentity = targetIdentity.removePrefix(EXTERNAL_JVM_TYPE_PREFIX).takeIf {
                 targetId == null && targetIdentity.startsWith(EXTERNAL_JVM_TYPE_PREFIX) &&
                     it.length in 1..MAX_SYMBOL_IDENTITY_CHARS && SYMBOL_IDENTITY.matches(it)
             }
-            check(targetId != null || externalIdentity != null) { "Kotlin compiler usage target is unknown" }
+            val externalCallableIdentity = targetIdentity.removePrefix(EXTERNAL_JVM_CALLABLE_PREFIX).takeIf {
+                targetId == null && targetIdentity.startsWith(EXTERNAL_JVM_CALLABLE_PREFIX)
+            }?.let { identity ->
+                val owner = identity.substringBeforeLast('#', "")
+                val name = identity.substringAfterLast('#', "")
+                (owner to name).takeIf { SYMBOL_IDENTITY.matches(owner) && JVM_NAME.matches(name) }
+            }
+            check(targetId != null || externalTypeIdentity != null || externalCallableIdentity != null) {
+                "Kotlin compiler usage target is unknown"
+            }
             val selectionText = value.string("selectionText")?.takeIf {
                 it.length in 1..MAX_SYMBOL_NAME_CHARS && JVM_NAME.matches(it)
             } ?: error("Kotlin compiler usage selection is invalid")
@@ -642,19 +664,26 @@ class KotlinCompilerDiagnostics private constructor(
                 source.content.substring(start, end) == selectionText) {
                 "Kotlin compiler usage range is invalid"
             }
-            val targetKey = targetId?.value ?: externalIdentity!!
+            val targetKey = targetId?.value ?: externalTypeIdentity ?: externalCallableIdentity!!.let { "${it.first}#${it.second}" }
             check(unique.add("$relative\u0000$start\u0000$end\u0000$targetKey")) {
                 "Kotlin compiler usage is duplicated"
             }
             val location = SourceLocation(relative, SourceRange(position(source.content, start), position(source.content, end)))
-            if (targetId != null) internal += KotlinCompilerResolvedUsage(targetId, location)
-            else external += KotlinCompilerExternalTypeUsage(externalIdentity!!, location)
+            when {
+                targetId != null -> internal += KotlinCompilerResolvedUsage(targetId, location)
+                externalTypeIdentity != null -> externalTypes += KotlinCompilerExternalTypeUsage(externalTypeIdentity, location)
+                else -> externalCallables += KotlinCompilerExternalCallableUsage(
+                    externalCallableIdentity!!.first, externalCallableIdentity.second, location,
+                )
+            }
         }
         return ParsedUsageEvidence(
             internal.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
                 { it.location.range.start.character }, { it.targetId.value })),
-            external.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
+            externalTypes.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
                 { it.location.range.start.character }, { it.jvmBinaryName })),
+            externalCallables.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
+                { it.location.range.start.character }, { it.jvmOwner }, { it.callableName })),
         )
     }
 
@@ -972,6 +1001,7 @@ class KotlinCompilerDiagnostics private constructor(
         private const val MAX_EPHEMERAL_CLASS_FILES = 10_000
         private const val MAX_EPHEMERAL_CLASS_BYTES = 128L * 1024L * 1024L
         private const val EXTERNAL_JVM_TYPE_PREFIX = "external-jvm-type-v1:"
+        private const val EXTERNAL_JVM_CALLABLE_PREFIX = "external-jvm-callable-v1:"
         private const val MAX_XML_BYTES = 6 * 1024 * 1024
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = false }
         private val SEQUENCE = AtomicLong(1)

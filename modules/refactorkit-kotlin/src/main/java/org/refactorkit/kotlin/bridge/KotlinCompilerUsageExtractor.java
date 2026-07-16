@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
 import org.jetbrains.kotlin.fir.types.ConeTypeParameterType;
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
 import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol;
+import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol;
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
 import org.jetbrains.kotlin.name.ClassId;
@@ -217,6 +218,14 @@ final class KotlinCompilerUsageExtractor {
                         addExternalUsage(usagePsi, binaryIdentity, identities, usages);
                     }
                 }
+            } else if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol) {
+                FirNamedFunctionSymbol function = (FirNamedFunctionSymbol) reference.getResolvedSymbol();
+                ClassId classId = function.getCallableId().getClassId();
+                if (classId != null && !classId.isLocal() && usagePsi.getText().equals(function.getName().asString())) {
+                    addExternalCallableUsage(
+                        usagePsi, binaryName(classId), function.getName().asString(), identities, usages
+                    );
+                }
             }
             return;
         }
@@ -390,6 +399,24 @@ final class KotlinCompilerUsageExtractor {
         int start = identifier.getTextRange().getStartOffset();
         int end = identifier.getTextRange().getEndOffset();
         String targetIdentity = "external-jvm-type-v1:" + jvmBinaryName;
+        String identity = path + "\u0000" + start + "\u0000" + end + "\u0000" + targetIdentity;
+        if (!identities.add(identity)) return;
+        if (usages.size() >= MAX_USAGES) throw failure("kotlin.usageLimitExceeded");
+        usages.add(new ExtractedUsage(path.toString(), targetIdentity, identifier.getText(), start, end));
+    }
+
+    private static void addExternalCallableUsage(
+        PsiElement identifier,
+        String jvmOwner,
+        String callableName,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (!(identifier.getContainingFile() instanceof KtFile)) throw failure("kotlin.usageLocationUnavailable");
+        Path path = canonicalPath((KtFile) identifier.getContainingFile());
+        int start = identifier.getTextRange().getStartOffset();
+        int end = identifier.getTextRange().getEndOffset();
+        String targetIdentity = "external-jvm-callable-v1:" + jvmOwner + "#" + callableName;
         String identity = path + "\u0000" + start + "\u0000" + end + "\u0000" + targetIdentity;
         if (!identities.add(identity)) return;
         if (usages.size() >= MAX_USAGES) throw failure("kotlin.usageLimitExceeded");

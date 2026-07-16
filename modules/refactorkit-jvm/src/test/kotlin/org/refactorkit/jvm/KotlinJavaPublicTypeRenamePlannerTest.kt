@@ -59,6 +59,34 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         val usages = available.externalTypeUsages.filter { it.jvmBinaryName == "fixture.PublicAccount" }
         assertTrue(usages.size >= 2, "expected exact K2 uses of Java binary identity, got $usages")
         assertTrue(available.attestation.ephemeralClasspathHash.matches(Regex("[0-9a-f]{64}")))
+        assertTrue(available.externalCallableUsages.any {
+            it.jvmOwner == "fixture.PublicAccount" && it.callableName == "label"
+        }, "expected exact K2 Java-method call evidence: ${available.externalCallableUsages}")
+    }
+
+    @Test
+    fun publicJavaMethodRenameUpdatesKotlinCallerAndRollsBack() {
+        val fixture = javaDeclarationFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val planner = JavaKotlinPublicTypeRenamePlanner(adapter)
+        val plan = planner.preview(
+            fixture.snapshot,
+            org.refactorkit.core.SymbolId("fixture.PublicAccount#label(java.lang.String)"),
+            "describe",
+            acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertTrue(plan.workspaceEdit.edits.none { it is FileEdit.Rename })
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("jvm-java-method-integration-test"),
+            DiagnosticsGate.enabled("java-ecj-kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/java/fixture/PublicAccount.java")).contains("String describe("))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/kotlin/fixture/UseAccount.kt")).contains("account.describe("))
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/java/fixture/PublicAccount.java")).contains("String label("))
+        assertTrue(Files.readString(fixture.root.resolve("src/main/kotlin/fixture/UseAccount.kt")).contains("account.label("))
     }
 
     @Test
@@ -234,11 +262,11 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         """.trimIndent())
         root.resolve("src/main/java/fixture/PublicAccount.java").apply {
             parent.createDirectories()
-            writeText("package fixture; public class PublicAccount {}\n")
+            writeText("package fixture; public class PublicAccount { public String label(String value) { return value; } }\n")
         }
         root.resolve("src/main/kotlin/fixture/UseAccount.kt").apply {
             parent.createDirectories()
-            writeText("package fixture\nfun account(): PublicAccount = PublicAccount()\n")
+            writeText("package fixture\nfun account(): PublicAccount = PublicAccount()\nfun label(account: PublicAccount): String = account.label(\"x\")\n")
         }
         val toolchain = toolchain(root)
         return Fixture(root, KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain), toolchain)

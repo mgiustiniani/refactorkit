@@ -1,9 +1,9 @@
 # Java/Kotlin shared JVM member rename requirements
 
-Status: active native-qualification K5/J1 row. The first public Kotlin-function
-to Java-caller row has library, daemon/CLI/MCP and local packaged apply/rollback
-evidence. Four-platform qualification and the symmetric Java-method-to-Kotlin row
-remain pending.
+Status: active native-qualification K5/J1 row. Both bounded directions—public
+Kotlin function with Java callers and public Java method with Kotlin callers—have
+library, daemon/CLI/MCP and local packaged apply/rollback evidence. Four-platform
+qualification remains pending.
 
 ## First qualified member
 
@@ -42,11 +42,12 @@ revalidates semantic authority under lock and commits all edits through one
 
 ## Symmetric row
 
-A public Java method used by Kotlin is independently mandatory. JDT must prove the
+A public Java method used by Kotlin is independently qualified. JDT must prove the
 Java declaration/calls, bounded annotation-processing-free ECJ must produce the
 exact hash-bound method owner/descriptor, and K2 must report exact external JVM
-callable usages. The Java row does not inherit authority from type usages or from
-the Kotlin-function row.
+callable usages. The implemented row restricts authority to one public non-overloaded,
+non-override JDT-bound method; it does not inherit authority from type usages or
+from the Kotlin-function row.
 
 ## Acceptance
 

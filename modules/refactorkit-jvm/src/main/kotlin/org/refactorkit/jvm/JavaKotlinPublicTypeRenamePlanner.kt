@@ -54,22 +54,38 @@ class JavaKotlinPublicTypeRenamePlanner(
             snapshot, "jvm.renameBaselineIncomplete", "Java-to-Kotlin rename requires a clean JDT baseline",
             javaDiagnostics(initialJava),
         )
-        val target = initialJava.symbols.singleOrNull {
-            it.qualifiedName == symbolId.value && it.kind == JdtJavaSemanticSymbolKind.CLASS && it.ownerQualifiedName == null
-        } ?: return refused(
-            snapshot, "jvm.renameJavaTargetMissing", "Initial Java-to-Kotlin rename requires one JDT-bound top-level Java class",
-        )
-        if (target.bindingKey.isNullOrBlank() || !isExplicitPublicClass(snapshot, target)) return refused(
-            snapshot, "jvm.renamePublicTypeUnsupported", "Initial Java-to-Kotlin rename requires an explicitly public JDT-bound class",
+        val target = initialJava.symbols.singleOrNull { it.qualifiedName == symbolId.value }
+            ?: return refused(
+                snapshot, "jvm.renameJavaTargetMissing",
+                "Initial Java-to-Kotlin rename requires one JDT-bound Java class or method",
+            )
+        val supportedClass = target.kind == JdtJavaSemanticSymbolKind.CLASS && target.ownerQualifiedName == null &&
+            isExplicitPublicClass(snapshot, target)
+        val supportedMethod = target.kind == JdtJavaSemanticSymbolKind.METHOD && target.ownerQualifiedName != null &&
+            isExplicitPublicMethod(snapshot, target) && initialJava.symbols.count {
+                it.kind == JdtJavaSemanticSymbolKind.METHOD && it.ownerQualifiedName == target.ownerQualifiedName &&
+                    it.simpleName == target.simpleName
+            } == 1 && initialJava.overrideRelations.none {
+                it.overridingSymbolQualifiedName == target.qualifiedName || it.overriddenSymbolQualifiedName == target.qualifiedName
+            }
+        if (target.bindingKey.isNullOrBlank() || (!supportedClass && !supportedMethod)) return refused(
+            snapshot, "jvm.renamePublicDeclarationUnsupported",
+            "Initial Java-to-Kotlin rename requires an explicitly public top-level class or one non-overloaded non-override public method",
         )
         if (!acceptExternalConsumerRisk) return refused(
             snapshot, "jvm.renameExternalConsumerApprovalRequired",
             "Public JVM rename requires explicit acceptance of unknown external-consumer risk",
         )
         if (newName == target.simpleName) return refused(snapshot, "jvm.renameNoChange", "Shared JVM rename target is unchanged")
-        val packageName = target.qualifiedName.substringBeforeLast('.', "")
-        val renamedIdentity = if (packageName.isEmpty()) newName else "$packageName.$newName"
-        if (initialJava.symbols.any { it.qualifiedName == renamedIdentity }) return refused(
+        val renamedIdentity = if (supportedClass) {
+            val packageName = target.qualifiedName.substringBeforeLast('.', "")
+            if (packageName.isEmpty()) newName else "$packageName.$newName"
+        } else {
+            "${target.ownerQualifiedName}#$newName(${target.qualifiedName.substringAfter('(', "").removeSuffix(")")})"
+        }
+        if (initialJava.symbols.any { it.qualifiedName == renamedIdentity } || supportedMethod && initialJava.symbols.any {
+                it.ownerQualifiedName == target.ownerQualifiedName && it.simpleName == newName
+            }) return refused(
             snapshot, "jvm.renameConflict", "Shared JVM rename target collides with an existing Java declaration",
         )
         if (snapshot.owningBuildSourceRoots(target.path).any { it.generated }) return refused(
@@ -78,8 +94,9 @@ class JavaKotlinPublicTypeRenamePlanner(
         dynamicRisk(snapshot, target.simpleName)?.let { return refused(snapshot, "jvm.renameDynamicReference", it) }
         val targetFile = snapshot.files.singleOrNull { it.path.normalize() == target.path.normalize() }
             ?: return refused(snapshot, "jvm.renameRangeInvalid", "Java target file is absent from the immutable snapshot")
-        val destination = target.path.resolveSibling("$newName.java")
-        if (destination != target.path && (snapshot.files.any { it.path.normalize() == destination.normalize() } ||
+        val destination = if (supportedClass) target.path.resolveSibling("$newName.java") else target.path
+        if (supportedClass && destination != target.path &&
+            (snapshot.files.any { it.path.normalize() == destination.normalize() } ||
                 Files.exists(snapshot.workspace.root.resolve(destination)))) return refused(
             snapshot, "jvm.renameFileConflict", "Renamed Java source filename already exists",
         )
@@ -93,13 +110,19 @@ class JavaKotlinPublicTypeRenamePlanner(
             snapshot, "jvm.renameBaselineIncomplete", "Java-to-Kotlin rename requires clean ECJ/K2/JDT evidence",
             before.kotlin.diagnostics + javaDiagnostics(before.java),
         )
-        val kotlinUses = before.kotlin.externalTypeUsages.filter { it.jvmBinaryName == target.qualifiedName }
-        if (kotlinUses.isEmpty()) return refused(
+        val kotlinUseLocations = if (supportedClass) {
+            before.kotlin.externalTypeUsages.filter { it.jvmBinaryName == target.qualifiedName }.map { it.location }
+        } else {
+            before.kotlin.externalCallableUsages.filter {
+                it.jvmOwner == target.ownerQualifiedName && it.callableName == target.simpleName
+            }.map { it.location }
+        }
+        if (kotlinUseLocations.isEmpty()) return refused(
             snapshot, "jvm.renameCrossLanguageReferenceMissing", "K2 found no Kotlin use for the Java binary identity",
         )
         val javaLocations = (listOf(SourceLocation(target.path, target.sourceRange)) + initialJava.references
             .filter { it.symbolQualifiedName == target.qualifiedName }.map { SourceLocation(it.path, it.sourceRange) })
-        val locations = (javaLocations + kotlinUses.map { it.location }).distinct()
+        val locations = (javaLocations + kotlinUseLocations).distinct()
             .sortedWith(compareBy({ it.path.toString() }, { it.range.start.line }, { it.range.start.character }))
         if (locations.any { snapshot.owningBuildSourceRoots(it.path).any { owner -> owner.generated } }) return refused(
             snapshot, "jvm.renameGeneratedSource", "Shared JVM rename reference belongs to generated source",
@@ -112,7 +135,9 @@ class JavaKotlinPublicTypeRenamePlanner(
         val modifications = locations.groupBy { it.path.normalize() }.toSortedMap(compareBy { it.toString() }).map { (path, ranges) ->
             FileEdit.Modify(path, ranges.map { TextEdit(it.range, newName) })
         }
-        val edit = WorkspaceEdit(modifications + FileEdit.Rename(targetFile.path, destination))
+        val edit = WorkspaceEdit(
+            modifications + if (supportedClass) listOf(FileEdit.Rename(targetFile.path, destination)) else emptyList(),
+        )
         val staged = runCatching { WorkspaceEditSimulator.apply(snapshot, edit) }.getOrElse {
             return refused(snapshot, "jvm.renamePreviewInvalid", it.message ?: "Shared JVM preview is invalid")
         }
@@ -128,14 +153,23 @@ class JavaKotlinPublicTypeRenamePlanner(
         if (introduced.isNotEmpty()) return refused(
             snapshot, "jvm.renameDiagnosticsRegression", "Shared JVM rename introduces ${introduced.size} compiler error(s)", introduced,
         )
-        if (after.java.symbols.none { it.qualifiedName == renamedIdentity && it.kind == JdtJavaSemanticSymbolKind.CLASS } ||
-            after.kotlin.externalTypeUsages.none { it.jvmBinaryName == renamedIdentity }) return refused(
+        val postJavaResolved = after.java.symbols.any {
+            it.qualifiedName == renamedIdentity && it.kind == if (supportedClass) JdtJavaSemanticSymbolKind.CLASS else JdtJavaSemanticSymbolKind.METHOD
+        }
+        val postKotlinResolved = if (supportedClass) {
+            after.kotlin.externalTypeUsages.any { it.jvmBinaryName == renamedIdentity }
+        } else {
+            after.kotlin.externalCallableUsages.any {
+                it.jvmOwner == target.ownerQualifiedName && it.callableName == newName
+            }
+        }
+        if (!postJavaResolved || !postKotlinResolved) return refused(
             snapshot, "jvm.renamePostImageIdentityMissing", "K2/JDT did not resolve the renamed Java binary identity",
         )
         return PatchPlan(
             operation = "renameSymbol", status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash,
             confidence = 0.92, requiresUserApproval = true,
-            summary = "Rename public Java type '${target.simpleName}' to '$newName' across ${locations.size} JDT/K2-proven token(s).",
+            summary = "Rename public Java ${if (supportedClass) "type" else "method"} '${target.simpleName}' to '$newName' across ${locations.size} JDT/K2-proven token(s).",
             affectedFiles = edit.affectedFiles(), workspaceEdit = edit,
             diagnosticsBefore = before.kotlin.diagnostics + javaDiagnostics(before.java),
             diagnosticsAfterPreview = after.kotlin.diagnostics + javaDiagnostics(after.java),
@@ -173,6 +207,14 @@ class JavaKotlinPublicTypeRenamePlanner(
         val source = snapshot.files.singleOrNull { it.path.normalize() == target.path.normalize() } ?: return false
         return Regex("\\bpublic\\s+(?:(?:final|abstract|sealed|non-sealed)\\s+)*class\\s+${Regex.escape(target.simpleName)}\\b")
             .containsMatchIn(source.content)
+    }
+
+    private fun isExplicitPublicMethod(snapshot: ProjectSnapshot, target: JdtJavaSemanticSymbol): Boolean {
+        val source = snapshot.files.singleOrNull { it.path.normalize() == target.path.normalize() } ?: return false
+        return Regex(
+            "\\bpublic\\s+(?:(?:final|abstract|static|synchronized|native|strictfp)\\s+)*" +
+                "[^;{}=]+\\s+${Regex.escape(target.simpleName)}\\s*\\(",
+        ).containsMatchIn(source.content)
     }
 
     private fun javaDiagnostics(result: JdtJavaSemanticAnalysisResult) = result.warnings.map { warning ->
