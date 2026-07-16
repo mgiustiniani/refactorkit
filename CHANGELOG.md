@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Move whole Kotlin files containing additional compiler-proven public top-level
+  types when every Kotlin/Java consumer uses exact explicit non-aliased imports.
+  All public identities, usages, destination conflicts and staged K2/JDT evidence
+  are validated as one file-level move; other consumer shapes refuse.
 - Move whole Kotlin files containing one public target plus compiler-proven
   private top-level helper types, functions or properties. FIR/JVM owner evidence
   rejects non-private or ambiguous declarations, and staged K2 identities verify

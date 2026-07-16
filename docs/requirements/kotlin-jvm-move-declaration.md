@@ -2,8 +2,9 @@
 
 Status: active bounded K5 expansion. Single-public-target file and consumer rows
 pass all acceptance layers. Whole-file movement with additional public top-level
-types and explicit imports is specified below and pending executable
-qualification. Broader shapes remain pending.
+types and exact explicit Kotlin/Java consumers has local and packaged executable
+acceptance; four-platform qualification is pending. Broader shapes remain
+pending.
 
 ## Purpose
 

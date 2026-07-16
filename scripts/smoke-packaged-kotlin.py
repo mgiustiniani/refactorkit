@@ -522,18 +522,21 @@ def main() -> int:
             "private class PortableGreetingState\n" +
             "private val defaultPortableGreetingState: PortableGreetingState = PortableGreetingState()\n" +
             "private fun portableGreetingState(): PortableGreetingState = defaultPortableGreetingState\n" +
-            "public class PortableGreeting { private val state = portableGreetingState() }\n",
+            "public interface PortableGreetingPort\n" +
+            "public class PortableGreeting : PortableGreetingPort { private val state = portableGreetingState() }\n",
             encoding="utf-8",
         )
         move_kotlin_source = (
             "package org.refactorkit.move.consumer\n" +
-            "import org.refactorkit.move.api.*\n" +
-            "fun portableGreeting(): PortableGreeting = PortableGreeting()\n"
+            "import org.refactorkit.move.api.PortableGreeting\n" +
+            "import org.refactorkit.move.api.PortableGreetingPort\n" +
+            "fun portableGreeting(port: PortableGreetingPort): PortableGreeting = PortableGreeting()\n"
         )
         move_java_source = (
             "package org.refactorkit.move.consumer;\n" +
-            "import org.refactorkit.move.api.*;\n" +
-            "class MoveCaller { PortableGreeting value = new PortableGreeting(); }\n"
+            "import org.refactorkit.move.api.PortableGreeting;\n" +
+            "import org.refactorkit.move.api.PortableGreetingPort;\n" +
+            "class MoveCaller { PortableGreetingPort port; PortableGreeting value = new PortableGreeting(); }\n"
         )
         move_kotlin_consumer.write_text(move_kotlin_source, encoding="utf-8")
         move_java_consumer.write_text(move_java_source, encoding="utf-8")
@@ -600,7 +603,10 @@ def main() -> int:
                     "private class PortableGreetingState" not in mcp_destination.read_text(encoding="utf-8") or
                     "private val defaultPortableGreetingState" not in mcp_destination.read_text(encoding="utf-8") or
                     "private fun portableGreetingState()" not in mcp_destination.read_text(encoding="utf-8") or
-                    "import org.refactorkit.move.api.*;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
+                    "public interface PortableGreetingPort" not in mcp_destination.read_text(encoding="utf-8") or
+                    "import org.refactorkit.move.api.v2.PortableGreeting;" not in
+                        move_java_consumer.read_text(encoding="utf-8") or
+                    "import org.refactorkit.move.api.v2.PortableGreetingPort;" not in
                         move_java_consumer.read_text(encoding="utf-8")):
                 raise AssertionError(f"public Kotlin MCP move apply failed: {mcp_applied}")
             mcp_rollback = mcp_tool(64, "rollback_refactoring", {"transactionId": mcp_transaction})
@@ -656,11 +662,16 @@ def main() -> int:
                     "private class PortableGreetingState" not in move_destination.read_text(encoding="utf-8") or
                     "private val defaultPortableGreetingState" not in move_destination.read_text(encoding="utf-8") or
                     "private fun portableGreetingState()" not in move_destination.read_text(encoding="utf-8") or
-                    "import org.refactorkit.move.api.*\nimport org.refactorkit.move.api.v2.PortableGreeting" not in
+                    "public interface PortableGreetingPort" not in move_destination.read_text(encoding="utf-8") or
+                    "import org.refactorkit.move.api.v2.PortableGreeting" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
-                    "fun portableGreeting(): PortableGreeting = PortableGreeting()" not in
+                    "import org.refactorkit.move.api.v2.PortableGreetingPort" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
-                    "import org.refactorkit.move.api.*;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
+                    "fun portableGreeting(port: PortableGreetingPort): PortableGreeting = PortableGreeting()" not in
+                        move_kotlin_consumer.read_text(encoding="utf-8") or
+                    "import org.refactorkit.move.api.v2.PortableGreeting;" not in
+                        move_java_consumer.read_text(encoding="utf-8") or
+                    "import org.refactorkit.move.api.v2.PortableGreetingPort;" not in
                         move_java_consumer.read_text(encoding="utf-8")):
                 raise AssertionError(f"public Kotlin move apply failed: {move_applied}")
             move_rollback = move_exchange(55, "patch.rollback", {"transactionId": move_applied["transactionId"]})
