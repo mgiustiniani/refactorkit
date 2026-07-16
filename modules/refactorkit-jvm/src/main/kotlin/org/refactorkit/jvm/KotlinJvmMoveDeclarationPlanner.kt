@@ -22,6 +22,7 @@ import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.owningBuildSourceRoots
 import org.refactorkit.java.JdtJavaSemanticAnalysisResult
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
+import org.refactorkit.kotlin.KotlinCompilerDeclarationEvidence
 import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinDeclarationVisibility
@@ -81,10 +82,11 @@ class KotlinJvmMoveDeclarationPlanner(
         val source = snapshot.file(target.location.path) ?: return refused(
             snapshot, "kotlin.moveDeclarationFileMissing", "Kotlin declaration file is absent from the snapshot",
         )
-        if (!hasOneTopLevelDeclaration(source, target.name)) return refused(
-            snapshot, "kotlin.moveFileShapeUnsupported",
-            "Initial Kotlin move requires the target to be the only top-level declaration in its file",
-        )
+        val fileDeclarations = supportedFileDeclarations(catalogue, source, target, oldPackage)
+            ?: return refused(
+                snapshot, "kotlin.moveFileShapeUnsupported",
+                "Kotlin move requires one public target plus only compiler-proven private top-level helpers",
+            )
         if (dynamicRisk(snapshot, target.name)) return refused(
             snapshot, "kotlin.moveDynamicOrFrameworkReference",
             "Quoted reflection, serialization or framework evidence prevents the initial Kotlin move row",
@@ -160,12 +162,20 @@ class KotlinJvmMoveDeclarationPlanner(
             "Kotlin move introduces ${introduced.size} compiler error(s)", introduced,
         )
         val stagedDeclaration = after.kotlin.declarations.entries.singleOrNull { it.value.jvmIdentity == newIdentity }
+        val oldDescriptorPackage = "L${oldPackage.replace('.', '/')}"
+        val targetDescriptorPackage = "L${targetPackage.replace('.', '/')}"
+        val expectedMovedIdentities = fileDeclarations.map { evidence ->
+            "$targetPackage.${evidence.jvmIdentity.removePrefix("$oldPackage.")}".replace(
+                oldDescriptorPackage, targetDescriptorPackage,
+            )
+        }.toSet()
+        val stagedIdentities = after.kotlin.declarations.values.map { it.jvmIdentity }.toSet()
         val stagedKotlinUseCount = stagedDeclaration?.let { entry ->
             after.kotlin.usages.count { it.targetId == entry.key && it.location.path.normalize() != destination }
         } ?: -1
         val stagedJavaUseCount = after.java.bindingUses.count { it.symbolQualifiedName == newIdentity }
-        if (stagedDeclaration == null || stagedKotlinUseCount < kotlinUsageLocations.size ||
-            stagedJavaUseCount < javaUses.size) return refused(
+        if (stagedDeclaration == null || !stagedIdentities.containsAll(expectedMovedIdentities) ||
+            stagedKotlinUseCount < kotlinUsageLocations.size || stagedJavaUseCount < javaUses.size) return refused(
             snapshot, "kotlin.movePostImageIdentityMissing",
             "Staged K2/JDT evidence does not resolve every moved JVM identity use",
         )
@@ -323,11 +333,33 @@ class KotlinJvmMoveDeclarationPlanner(
         }
     }
 
-    private fun hasOneTopLevelDeclaration(source: SourceFile, name: String): Boolean {
-        val declarations = Regex(
-            "(?m)^(?:(?:public|internal|private|protected|open|abstract|sealed|data|value|enum|annotation)\\s+)*(?:class|interface|object|fun|val|var|typealias)\\s+([A-Za-z_][A-Za-z0-9_]*)",
-        ).findAll(source.content).toList()
-        return declarations.size == 1 && declarations.single().groups[1]?.value == name
+    private fun supportedFileDeclarations(
+        catalogue: KotlinCompilerSymbolsResult.Available,
+        source: SourceFile,
+        target: Symbol,
+        oldPackage: String,
+    ): List<KotlinCompilerDeclarationEvidence>? {
+        val facadeOwner = "$oldPackage.${source.path.fileName.toString().removeSuffix(".kt")}Kt"
+        val semantic = catalogue.index.symbols.filter { it.location.path.normalize() == source.path.normalize() }
+            .mapNotNull { symbol ->
+                val evidence = catalogue.declarations[symbol.id] ?: return@mapNotNull null
+                val topLevel = when (symbol.kind) {
+                    in TYPE_KINDS -> evidence.jvmIdentity == evidence.jvmOwner && '$' !in evidence.jvmIdentity
+                    Symbol.Kind.FUNCTION, Symbol.Kind.PROPERTY -> evidence.jvmOwner == facadeOwner
+                    else -> false
+                }
+                if (topLevel) symbol to evidence else null
+            }
+        if (semantic.none { it.first.id == target.id } ||
+            semantic.filterNot { it.first.id == target.id }.any {
+                it.second.visibility != KotlinDeclarationVisibility.PRIVATE
+            }) return null
+        val lexicalNames = Regex(
+            "(?m)^(?:(?:public|internal|private|protected|open|abstract|sealed|data|value|enum|annotation)\\s+)*" +
+                "(?:class|interface|object|fun|val|var|typealias)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+        ).findAll(source.content).mapNotNull { it.groups[1]?.value }.sorted().toList()
+        if (lexicalNames != semantic.map { it.first.name }.sorted()) return null
+        return semantic.map { it.second }
     }
 
     private fun offsetEdit(content: String, start: Int, end: Int, replacement: String) = TextEdit(

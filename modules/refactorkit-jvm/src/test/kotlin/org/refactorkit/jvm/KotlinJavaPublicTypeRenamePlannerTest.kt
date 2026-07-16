@@ -161,6 +161,57 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicKotlinTypeMoveRefusesNonPrivateTopLevelHelper() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").writeText(
+            "package fixture.api\ninternal class SharedGreetingState\npublic class PublicGreeting\n",
+        )
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.moveFileShapeUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
+    fun publicKotlinTypeMoveCarriesCompilerProvenPrivateTopLevelHelpers() {
+        val fixture = moveFixture()
+        val declaration = fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt")
+        declaration.writeText(
+            "package fixture.api\n" +
+                "private class GreetingState\n" +
+                "private fun greetingState(): GreetingState = GreetingState()\n" +
+                "public class PublicGreeting { private val state = greetingState() }\n",
+        )
+        val beforeBytes = declaration.readBytes()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+        val planner = KotlinJvmMoveDeclarationPlanner(adapter)
+
+        val plan = planner.preview(snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true)
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, snapshot, ApplyAuthorization.explicit("private-helper-kotlin-move-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        val destination = fixture.root.resolve("src/main/kotlin/fixture/api/v2/PublicGreeting.kt")
+        assertTrue("private class GreetingState" in destination.readText())
+        assertTrue("private fun greetingState()" in destination.readText())
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(beforeBytes.contentEquals(declaration.readBytes()))
+    }
+
+    @Test
     fun publicKotlinTypeMovePreservesExactKotlinImportAlias() {
         val fixture = moveFixture()
         val kotlinConsumer = fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt")
