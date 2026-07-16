@@ -650,14 +650,19 @@ class RefactorKitCli(
 
     private fun cmdKotlin(args: List<String>): Int {
         val operation = args.firstOrNull()
-        if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename")) {
-            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, or rename")
+        if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename", "move-declaration")) {
+            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, rename, or move-declaration")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
         val positionNavigation = operation in setOf("definition", "references") && parsed.options["symbol"] == null
         if (operation == "rename" && (parsed.options["symbol"] == null || parsed.options["to"] == null)) {
             System.err.println("Kotlin rename requires --symbol and --to")
+            return 2
+        }
+        if (operation == "move-declaration" &&
+            (parsed.options["symbol"] == null || parsed.options["to-package"] == null)) {
+            System.err.println("Kotlin move-declaration requires --symbol and --to-package")
             return 2
         }
         if (positionNavigation && listOf("file", "line", "character").any { parsed.options[it] == null }) {
@@ -688,17 +693,18 @@ class RefactorKitCli(
                 put("compilerClasspath", buildJsonArray { compilerClasspath.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
                 put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
             }).jsonObject
-            val result = if (operation == "rename") {
+            val result = if (operation in setOf("rename", "move-declaration")) {
                 val index = session.dispatch("index.status", null).jsonObject
                 val generation = index.getValue("generation").jsonPrimitive.content.toLong()
                 val preview = session.dispatch("refactor.preview", buildJsonObject {
-                    put("operation", "renameSymbol"); put("languageId", "kotlin")
+                    put("operation", if (operation == "rename") "renameSymbol" else "moveDeclaration"); put("languageId", "kotlin")
                     put("symbol", parsed.options.getValue("symbol"))
                     put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
                     put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
                     put("expectedIndexGeneration", generation)
                     put("arguments", buildJsonObject {
-                        put("newName", parsed.options.getValue("to"))
+                        if (operation == "rename") put("newName", parsed.options.getValue("to"))
+                        else put("targetPackage", parsed.options.getValue("to-package"))
                         put("acceptExternalConsumerRisk", "accept-external-consumer-risk" in parsed.flags)
                     })
                 })
@@ -992,6 +998,7 @@ class RefactorKitCli(
           refactorkit kotlin definition <root> --file <relative.kt> --line <zero-based> --character <zero-based> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin references <root> --file <relative.kt> --line <zero-based> --character <zero-based> [--exclude-declaration] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin rename <root> --symbol <jvm-symbol-id> --to <new-name> [--accept-external-consumer-risk] [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin move-declaration <root> --symbol <jvm-symbol-id> --to-package <package> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

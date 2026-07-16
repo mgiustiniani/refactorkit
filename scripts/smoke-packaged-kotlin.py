@@ -508,6 +508,95 @@ def main() -> int:
                 process.kill()
                 process.wait(timeout=20)
 
+        greeting_source.write_text(greeting_original, encoding="utf-8")
+        move_type = workspace / "src/main/kotlin/org/refactorkit/move/api/PortableGreeting.kt"
+        move_kotlin_consumer = workspace / "src/main/kotlin/org/refactorkit/move/consumer/UsePortableGreeting.kt"
+        move_java_consumer = workspace / "src/main/java/org/refactorkit/move/consumer/MoveCaller.java"
+        move_type.parent.mkdir(parents=True, exist_ok=True)
+        move_kotlin_consumer.parent.mkdir(parents=True, exist_ok=True)
+        move_java_consumer.parent.mkdir(parents=True, exist_ok=True)
+        move_type.write_text("package org.refactorkit.move.api\npublic class PortableGreeting\n", encoding="utf-8")
+        move_kotlin_consumer.write_text(
+            "package org.refactorkit.move.consumer\nimport org.refactorkit.move.api.PortableGreeting\n" +
+            "fun portableGreeting(): PortableGreeting = PortableGreeting()\n", encoding="utf-8",
+        )
+        move_java_consumer.write_text(
+            "package org.refactorkit.move.consumer;\nimport org.refactorkit.move.api.PortableGreeting;\n" +
+            "class MoveCaller { PortableGreeting value = new PortableGreeting(); }\n", encoding="utf-8",
+        )
+        move_symbols = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-move-symbols", "symbols",
+            ["--file", "src/main/kotlin/org/refactorkit/move/api/PortableGreeting.kt"],
+        )
+        portable_greeting = next(item for item in move_symbols.get("symbols", []) if item.get("name") == "PortableGreeting")
+        move_before = tree_hash(workspace / "src")
+        cli_move_preview = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-move-preview", "move-declaration",
+            ["--symbol", portable_greeting["id"], "--to-package", "org.refactorkit.move.api.v2",
+             "--accept-external-consumer-risk"],
+        )
+        if cli_move_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != move_before:
+            raise AssertionError(f"public Kotlin CLI move preview is invalid or wrote files: {cli_move_preview}")
+        process = subprocess.Popen(
+            command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def move_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"move daemon {method} failed: {response}")
+                return response["result"]
+
+            move_exchange(50, "project.open", {"root": str(workspace)})
+            move_started = move_exchange(51, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            move_index = move_exchange(52, "index.status")
+            move_preview = move_exchange(53, "refactor.preview", {
+                "operation": "moveDeclaration", "languageId": "kotlin", "symbol": portable_greeting["id"],
+                "semanticLease": move_started["semanticLease"],
+                "expectedSnapshotHash": move_started["snapshotHash"],
+                "expectedIndexGeneration": move_index["generation"],
+                "arguments": {"targetPackage": "org.refactorkit.move.api.v2", "acceptExternalConsumerRisk": True},
+            })
+            if move_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != move_before:
+                raise AssertionError(f"public Kotlin move preview is invalid or wrote files: {move_preview}")
+            move_applied = move_exchange(54, "refactor.apply", {
+                "planId": move_preview["planId"], "semanticLease": move_started["semanticLease"],
+                "expectedIndexGeneration": move_index["generation"],
+            })
+            move_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
+            if (move_applied.get("status") != "applied" or not move_destination.exists() or move_type.exists() or
+                    "import org.refactorkit.move.api.v2.PortableGreeting" not in move_kotlin_consumer.read_text(encoding="utf-8") or
+                    "import org.refactorkit.move.api.v2.PortableGreeting;" not in move_java_consumer.read_text(encoding="utf-8")):
+                raise AssertionError(f"public Kotlin move apply failed: {move_applied}")
+            move_rollback = move_exchange(55, "patch.rollback", {"transactionId": move_applied["transactionId"]})
+            if move_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != move_before:
+                raise AssertionError(f"public Kotlin move rollback failed: {move_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+
+        move_type.unlink()
+        move_kotlin_consumer.unlink()
+        move_java_consumer.unlink()
+        move_kotlin_consumer.parent.rmdir()
+        move_type.parent.rmdir()
+        move_type.parent.parent.rmdir()
+        move_java_consumer.parent.rmdir()
+        move_java_consumer.parent.parent.rmdir()
+
         java_type.unlink()
         greeting_source.write_text(greeting_original, encoding="utf-8")
         java_type.parent.rmdir()
@@ -529,7 +618,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public types and bidirectional public member apply/rollback.")
+    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public type/member rename, and public Kotlin package move apply/rollback.")
     return 0
 
 

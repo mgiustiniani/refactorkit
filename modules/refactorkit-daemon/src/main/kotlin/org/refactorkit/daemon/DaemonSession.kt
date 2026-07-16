@@ -72,6 +72,7 @@ import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
+import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
 import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
@@ -1461,6 +1462,29 @@ class DaemonSession(
                     ))
                 }
             }
+            "moveDeclaration" -> {
+                if (requestedLanguage != "kotlin") throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS, "moveDeclaration requires languageId=kotlin",
+                )
+                val lease = p.string("semanticLease") ?: missing("semanticLease")
+                val expected = p.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                val generation = p.string("expectedIndexGeneration")?.toLongOrNull()
+                    ?: missing("expectedIndexGeneration")
+                val currentGeneration = workspaceIndex.snapshot()?.generation
+                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin workspace index is unavailable")
+                if (lease != kotlinSemanticLease) throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.moveSessionStale",
+                )
+                if (expected != snap.hash || generation != currentGeneration) throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.moveAuthorityStale",
+                )
+                KotlinJvmMoveDeclarationPlanner(kotlinAdapter).preview(
+                    snap,
+                    SymbolId(symbol ?: missing("symbol")),
+                    args["targetPackage"] ?: missing("arguments.targetPackage"),
+                    args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
+            }
             "renameClass" -> {
                 val newName = args["newName"] ?: missing("arguments.newName")
                 JavaRenameClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), newName)
@@ -1566,8 +1590,11 @@ class DaemonSession(
                 "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
                 "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
-                        if (plan.evidence == RefactoringEvidence.JDT_BINDING) JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
-                        else KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        when {
+                            plan.operation == "moveDeclaration" -> KotlinJvmMoveDeclarationPlanner(kotlinAdapter).diagnostics(candidate)
+                            plan.evidence == RefactoringEvidence.JDT_BINDING -> JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                            else -> KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        }
                     }
                 } else DiagnosticsGate.enabled("kotlin-k2") { candidate ->
                     kotlinAdapter.compilerDiagnostics(candidate).diagnostics
@@ -1581,8 +1608,11 @@ class DaemonSession(
                     when (pending.languageId) {
                         "java" -> adapter.diagnostics(refreshed)
                         "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
-                            if (plan.evidence == RefactoringEvidence.JDT_BINDING) JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
-                            else KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
+                            when {
+                                plan.operation == "moveDeclaration" -> KotlinJvmMoveDeclarationPlanner(kotlinAdapter).diagnostics(refreshed)
+                                plan.evidence == RefactoringEvidence.JDT_BINDING -> JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
+                                else -> KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
+                            }
                         } else kotlinAdapter.compilerDiagnostics(refreshed).diagnostics
                         else -> emptyList()
                     },

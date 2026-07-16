@@ -58,6 +58,7 @@ import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
+import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
 import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
 import org.refactorkit.kotlin.KotlinToolchainDiscoverer
@@ -744,7 +745,8 @@ class McpSession(
             "- changeSignature.addParameter: add a method parameter with a default call-site expression\n" +
             "- changeSignature.reorderParameters: reorder method parameters and call-site arguments\n" +
             "- changeSignature.removeParameter: remove an unused method parameter and call-site argument\n" +
-            "- moveClass: move to a different package\n" +
+            "- moveClass: move a Java class to a different package\n" +
+            "- moveDeclaration: move one supported public Kotlin/JVM type to a different package\n" +
             "- safeDelete: delete if no references exist\n" +
             "- organizeImports: sort and deduplicate imports in the declaring file"
     }
@@ -787,6 +789,19 @@ class McpSession(
                     "renameSymbol", selected?.id, CodeSelection(location), opArgs, snap,
                 ))
                 }
+            }
+            "moveDeclaration" -> {
+                if (languageId != "kotlin") missing("languageId=kotlin")
+                val lease = args.string("semanticLease") ?: missing("semanticLease")
+                val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                if (lease != kotlinSemanticLease || expected != snap.hash) {
+                    return "Refused [kotlin.moveAuthorityStale]: Kotlin move authority is stale."
+                }
+                KotlinJvmMoveDeclarationPlanner(kotlinAdapter).preview(
+                    snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
+                    opArgs["targetPackage"] ?: missing("arguments.targetPackage"),
+                    opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
             }
             "renameClass"  -> JavaRenameClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
             "renameMember" -> JavaRenameMemberPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
@@ -880,8 +895,11 @@ class McpSession(
                 "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
                 "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
-                        if (plan.evidence == RefactoringEvidence.JDT_BINDING) JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
-                        else KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        when {
+                            plan.operation == "moveDeclaration" -> KotlinJvmMoveDeclarationPlanner(kotlinAdapter).diagnostics(candidate)
+                            plan.evidence == RefactoringEvidence.JDT_BINDING -> JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                            else -> KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
+                        }
                     }
                 } else DiagnosticsGate.enabled("kotlin-k2") { candidate ->
                     kotlinAdapter.compilerDiagnostics(candidate).diagnostics
