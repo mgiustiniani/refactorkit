@@ -1,10 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: active bounded K5 expansion. Explicit imports, compiler-proven
-same-package consumers and exact fully-qualified Kotlin/Java uses pass all
-acceptance layers. Independently optional Kotlin-only and Java-only consumer sets
-are specified below and pending executable qualification. Broader shapes remain
-pending.
+Status: qualified bounded K5 row for explicit imports, compiler-proven
+same-package consumers, exact fully-qualified uses and independently optional
+Kotlin-only or Java-only consumer sets. Library, packaged CLI/daemon/MCP and all
+four native platforms pass. Broader shapes remain pending.
 
 ## Purpose
 
