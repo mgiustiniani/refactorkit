@@ -1,9 +1,10 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for explicit imports, compiler-proven
-same-package consumers and exact fully-qualified Kotlin/Java uses. Library,
-packaged CLI/daemon/MCP and all four native platforms pass. Broader move shapes
-remain pending.
+Status: active bounded K5 expansion. Explicit imports, compiler-proven
+same-package consumers and exact fully-qualified Kotlin/Java uses pass all
+acceptance layers. Independently optional Kotlin-only and Java-only consumer sets
+are specified below and pending executable qualification. Broader shapes remain
+pending.
 
 ## Purpose
 
@@ -35,7 +36,10 @@ The operation shall accept only when all of the following are proven:
    either uses one explicit non-static import of the old identity, belongs to the
    exact old package and resolves the type implicitly, or uses the exact old
    fully-qualified identity at every proven target token.
-6. The caller explicitly accepts public external-consumer risk.
+6. At least one compiler-proven consumer exists. Kotlin and Java consumer sets
+   are independently optional; the operation does not invent a cross-language
+   consumer requirement.
+7. The caller explicitly accepts public external-consumer risk.
 
 The first row does not infer Gradle/Maven module or dependency changes.
 
@@ -72,7 +76,8 @@ The staged overlay shall then:
 1. compile Kotlin with K2;
 2. resolve the moved binary identity and every staged Kotlin use;
 3. supply staged K2 classes to JDT;
-4. resolve every staged Java use to the moved identity;
+4. when Java consumers existed before planning, resolve every staged Java use to
+   the moved identity; when none existed, do not require fabricated JDT uses;
 5. reject introduced diagnostics under normal mode and any staged diagnostic
    under strict mode.
 
@@ -108,7 +113,7 @@ transaction with WAL, recovery and byte-exact rollback.
 Promotion requires:
 
 - executable success and refusal tests;
-- Kotlin-only and mixed Kotlin/Java fixtures;
+- independently executable Kotlin-only, Java-only and mixed Kotlin/Java fixtures;
 - preview-read-only, apply, diagnostics, WAL and rollback tests;
 - packaged daemon/CLI/MCP smoke;
 - Linux x86-64, Windows x86-64, macOS x86-64 and macOS arm64 qualification.

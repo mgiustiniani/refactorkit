@@ -114,19 +114,16 @@ class KotlinJvmMoveDeclarationPlanner(
             before.kotlin.diagnostics + javaDiagnostics(before.java),
         )
         val javaUses = before.java.bindingUses.filter { it.symbolQualifiedName == declaration.jvmIdentity }
-        if (javaUses.isEmpty()) return refused(
-            snapshot, "kotlin.moveCrossLanguageReferenceMissing", "Kotlin move requires at least one JDT-bound Java consumer",
-        )
         val kotlinUsageLocations = catalogue.usages.filter {
             it.targetId == target.id && it.location.path.normalize() != source.path.normalize()
         }.map { it.location }
         val kotlinUsageFiles = kotlinUsageLocations.map { it.path.normalize() }.toSet()
-        if (kotlinUsageFiles.isEmpty()) return refused(
-            snapshot, "kotlin.moveKotlinReferenceMissing", "Kotlin move requires at least one K2-bound Kotlin consumer",
-        )
         val javaUsageLocations = javaUses.map { SourceLocation(it.path, it.sourceRange) }
         val javaUsageFiles = javaUsageLocations.map { it.path.normalize() }.toSet()
         val consumerPaths = kotlinUsageFiles + javaUsageFiles
+        if (consumerPaths.isEmpty()) return refused(
+            snapshot, "kotlin.moveConsumerMissing", "Kotlin move requires at least one compiler-proven consumer",
+        )
         val consumerLocations = (kotlinUsageLocations + javaUsageLocations).groupBy { it.path.normalize() }
         if (consumerPaths.any { path -> snapshot.owningBuildSourceRoots(path).any { it.generated } }) return refused(
             snapshot, "kotlin.moveGeneratedReference", "Kotlin move consumer belongs to generated source",
@@ -165,10 +162,15 @@ class KotlinJvmMoveDeclarationPlanner(
             snapshot, "kotlin.moveDiagnosticsRegression",
             "Kotlin move introduces ${introduced.size} compiler error(s)", introduced,
         )
-        if (after.kotlin.declarations.values.none { it.jvmIdentity == newIdentity } ||
-            after.java.bindingUses.none { it.symbolQualifiedName == newIdentity }) return refused(
+        val stagedDeclaration = after.kotlin.declarations.entries.singleOrNull { it.value.jvmIdentity == newIdentity }
+        val stagedKotlinUseCount = stagedDeclaration?.let { entry ->
+            after.kotlin.usages.count { it.targetId == entry.key && it.location.path.normalize() != destination }
+        } ?: -1
+        val stagedJavaUseCount = after.java.bindingUses.count { it.symbolQualifiedName == newIdentity }
+        if (stagedDeclaration == null || stagedKotlinUseCount < kotlinUsageLocations.size ||
+            stagedJavaUseCount < javaUses.size) return refused(
             snapshot, "kotlin.movePostImageIdentityMissing",
-            "Staged K2/JDT evidence does not resolve the moved JVM identity",
+            "Staged K2/JDT evidence does not resolve every moved JVM identity use",
         )
         return PatchPlan(
             operation = "moveDeclaration", status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash,
