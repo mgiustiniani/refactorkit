@@ -2,8 +2,8 @@
 
 Status: active bounded K5 expansion. Import/consumer and zero-consumer rows pass
 all acceptance layers. Whole-file movement with compiler-proven private top-level
-helper declarations is specified below and pending executable qualification.
-Broader shapes remain pending.
+helper declarations has local and packaged executable acceptance; four-platform
+qualification is pending. Broader shapes remain pending.
 
 ## Purpose
 

@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Move whole Kotlin files containing one public target plus compiler-proven
+  private top-level helper types, functions or properties. FIR/JVM owner evidence
+  rejects non-private or ambiguous declarations, and staged K2 identities verify
+  package and descriptor changes for every moved helper.
 - Support compiler-proven Kotlin and Java package-star consumers during bounded
   `moveDeclaration`. The old star import remains unchanged and one exact
   destination-type import is inserted after it, preserving LF/CRLF and Java

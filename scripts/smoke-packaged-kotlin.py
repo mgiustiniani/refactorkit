@@ -517,7 +517,13 @@ def main() -> int:
         move_type.parent.mkdir(parents=True, exist_ok=True)
         move_kotlin_consumer.parent.mkdir(parents=True, exist_ok=True)
         move_java_consumer.parent.mkdir(parents=True, exist_ok=True)
-        move_type.write_text("package org.refactorkit.move.api\npublic class PortableGreeting\n", encoding="utf-8")
+        move_type.write_text(
+            "package org.refactorkit.move.api\n" +
+            "private class PortableGreetingState\n" +
+            "private fun portableGreetingState(): PortableGreetingState = PortableGreetingState()\n" +
+            "public class PortableGreeting { private val state = portableGreetingState() }\n",
+            encoding="utf-8",
+        )
         move_kotlin_source = (
             "package org.refactorkit.move.consumer\n" +
             "import org.refactorkit.move.api.*\n" +
@@ -590,6 +596,8 @@ def main() -> int:
             mcp_transaction = mcp_applied.split("Transaction ID: ", 1)[1].splitlines()[0]
             mcp_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if ("Applied successfully" not in mcp_applied or not mcp_destination.exists() or move_type.exists() or
+                    "private class PortableGreetingState" not in mcp_destination.read_text(encoding="utf-8") or
+                    "private fun portableGreetingState()" not in mcp_destination.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.*;\nimport org.refactorkit.move.api.v2.PortableGreeting;" not in
                         move_java_consumer.read_text(encoding="utf-8")):
                 raise AssertionError(f"public Kotlin MCP move apply failed: {mcp_applied}")
@@ -643,6 +651,8 @@ def main() -> int:
             })
             move_destination = workspace / "src/main/kotlin/org/refactorkit/move/api/v2/PortableGreeting.kt"
             if (move_applied.get("status") != "applied" or not move_destination.exists() or move_type.exists() or
+                    "private class PortableGreetingState" not in move_destination.read_text(encoding="utf-8") or
+                    "private fun portableGreetingState()" not in move_destination.read_text(encoding="utf-8") or
                     "import org.refactorkit.move.api.*\nimport org.refactorkit.move.api.v2.PortableGreeting" not in
                         move_kotlin_consumer.read_text(encoding="utf-8") or
                     "fun portableGreeting(): PortableGreeting = PortableGreeting()" not in
