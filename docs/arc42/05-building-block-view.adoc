@@ -83,9 +83,9 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 
 |Shared JVM Semantic Composition
 |Kotlin/JVM library
-|`refactorkit-jvm` composes independently attested Kotlin K2 and Java JDT evidence without coupling core to either adapter. Kotlin-to-Java exposes compiler-generated classes only inside the disposable K2 overlay so JDT can bind Java uses. Java-to-Kotlin launches bounded ECJ with annotation processing disabled, packages hash-bound ephemeral classes, and lets K2 prove exact Kotlin type/constructor uses. Both public top-level type directions and the first non-overloaded public Kotlin-function/Java-caller row require explicit external-consumer-risk acceptance, re-run direction-specific staged compiler evidence, and refuse missing, dirty, generated, dynamic or ambiguous boundaries.
+|`refactorkit-jvm` composes independently attested Kotlin K2 and Java JDT evidence without coupling core to either adapter. Kotlin-to-Java exposes compiler-generated classes only inside the disposable K2 overlay so JDT can bind Java uses. Java-to-Kotlin launches bounded ECJ with annotation processing disabled, packages hash-bound ephemeral classes, and lets K2 prove exact Kotlin type/constructor uses. Both public top-level type directions and bounded non-overloaded public member rows in each direction require explicit external-consumer-risk acceptance, re-run direction-specific staged compiler evidence, and refuse missing, dirty, generated, dynamic or ambiguous boundaries.
 |`modules/refactorkit-jvm`, `docs/requirements/java-kotlin-shared-jvm-rename.md`.
-|bidirectional public types and first Kotlin-function/Java-caller preview/apply/rollback implemented; native/member expansion pending
+|bidirectional public type/member preview/apply/rollback implemented; native and broader member expansion pending
 
 |External Java Class Importer
 |Kotlin/JVM library

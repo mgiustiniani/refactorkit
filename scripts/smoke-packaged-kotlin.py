@@ -394,11 +394,12 @@ def main() -> int:
         greeting_source = workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt"
         greeting_original = greeting_source.read_text(encoding="utf-8")
         greeting_source.write_text(
-            greeting_original + "\nfun publicAccount(): PublicAccount = PublicAccount()\n", encoding="utf-8",
+            greeting_original + "\nfun publicAccount(): PublicAccount = PublicAccount()\n" +
+            "fun accountLabel(account: PublicAccount): String = account.label(\"x\")\n", encoding="utf-8",
         )
         java_type = workspace / "src/main/java/org/refactorkit/samples/PublicAccount.java"
         java_type.write_text(
-            "package org.refactorkit.samples; public class PublicAccount {}\n", encoding="utf-8",
+            "package org.refactorkit.samples; public class PublicAccount { public String label(String value) { return value; } }\n", encoding="utf-8",
         )
         symmetric_before = tree_hash(workspace / "src")
         process = subprocess.Popen(
@@ -454,6 +455,59 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=20)
+        java_method_before = tree_hash(workspace / "src")
+        process = subprocess.Popen(
+            command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def java_method_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"Java-method daemon {method} failed: {response}")
+                return response["result"]
+
+            java_method_exchange(40, "project.open", {"root": str(workspace)})
+            java_method_started = java_method_exchange(41, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            java_method_index = java_method_exchange(42, "index.status")
+            java_method_preview = java_method_exchange(43, "refactor.preview", {
+                "operation": "renameSymbol", "languageId": "kotlin",
+                "symbol": "org.refactorkit.samples.PublicAccount#label(java.lang.String)",
+                "semanticLease": java_method_started["semanticLease"],
+                "expectedSnapshotHash": java_method_started["snapshotHash"],
+                "expectedIndexGeneration": java_method_index["generation"],
+                "arguments": {"newName": "describe", "acceptExternalConsumerRisk": True},
+            })
+            if java_method_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != java_method_before:
+                raise AssertionError(f"public Java-method preview is invalid or wrote files: {java_method_preview}")
+            java_method_applied = java_method_exchange(44, "refactor.apply", {
+                "planId": java_method_preview["planId"], "semanticLease": java_method_started["semanticLease"],
+                "expectedIndexGeneration": java_method_index["generation"],
+            })
+            if (java_method_applied.get("status") != "applied" or "String describe(" not in java_type.read_text(encoding="utf-8") or
+                    "account.describe(" not in greeting_source.read_text(encoding="utf-8")):
+                raise AssertionError(f"public Java-method apply failed: {java_method_applied}")
+            java_method_rollback = java_method_exchange(45, "patch.rollback", {
+                "transactionId": java_method_applied["transactionId"],
+            })
+            if java_method_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != java_method_before:
+                raise AssertionError(f"public Java-method rollback failed: {java_method_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+
         java_type.unlink()
         greeting_source.write_text(greeting_original, encoding="utf-8")
         java_type.parent.rmdir()
@@ -475,7 +529,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public types, and Kotlin-function/Java-caller apply/rollback.")
+    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public types and bidirectional public member apply/rollback.")
     return 0
 
 

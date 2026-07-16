@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add the symmetric public Java-method rename across direct Kotlin callers. JDT
+  proves one public non-overloaded non-override method, bounded ECJ supplies its
+  hash-bound binary owner, and K2 publishes exact external callable tokens. Java
+  and Kotlin edits use staged ECJ/K2/JDT diagnostics and one rollbackable plan.
 - Add managed public Kotlin-function rename across direct Java callers. Durable
   owner/name/descriptor evidence selects the non-overloaded function, K2 supplies
   exact Kotlin declaration/calls, and JDT binds Java invocations against the
