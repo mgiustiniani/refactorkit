@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Expand bounded Kotlin/JVM `moveDeclaration` to compiler-proven same-package
+  Kotlin and Java consumers. The planner inserts one deterministic explicit
+  destination import after the exact package line, preserves LF/CRLF, refuses
+  star/alias/conflicting/qualified shapes, and revalidates staged K2/JDT identity.
 - Package a standalone `refactorkit-mcp`/`.bat` launcher in the embedded-runtime
   distribution and qualify Kotlin move semantic start, preview, apply and
   rollback through its real stdio protocol.

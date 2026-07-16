@@ -519,11 +519,11 @@ def main() -> int:
         move_java_consumer.parent.mkdir(parents=True, exist_ok=True)
         move_type.write_text("package org.refactorkit.move.api\npublic class PortableGreeting\n", encoding="utf-8")
         move_kotlin_consumer.write_text(
-            "package org.refactorkit.move.consumer\nimport org.refactorkit.move.api.PortableGreeting\n" +
+            "package org.refactorkit.move.api\n" +
             "fun portableGreeting(): PortableGreeting = PortableGreeting()\n", encoding="utf-8",
         )
         move_java_consumer.write_text(
-            "package org.refactorkit.move.consumer;\nimport org.refactorkit.move.api.PortableGreeting;\n" +
+            "package org.refactorkit.move.api;\n" +
             "class MoveCaller { PortableGreeting value = new PortableGreeting(); }\n", encoding="utf-8",
         )
         move_symbols = run(

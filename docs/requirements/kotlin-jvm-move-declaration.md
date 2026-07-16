@@ -2,8 +2,8 @@
 
 Status: active bounded K5 expansion. The explicit-import row is qualified across
 library, packaged CLI/daemon/MCP and four native platforms. Same-package implicit
-consumer support is specified below and pending executable qualification; broader
-move shapes remain pending.
+consumer support has local and packaged executable acceptance; four-platform
+qualification is pending. Broader move shapes remain pending.
 
 ## Purpose
 
