@@ -1,10 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: active bounded K5 qualification. Whole-file public-sibling consumer rows
-pass all acceptance layers when the filename-matching type leads the request.
-Selecting any other compiler-proven public sibling while preserving the original
-filename is specified below and pending executable qualification. Broader shapes
-remain pending.
+Status: qualified bounded K5 row for whole-file movement led by any
+compiler-proven public sibling while preserving the original filename, with the
+qualified private-helper and consumer shapes below. Library, packaged
+CLI/daemon/MCP and all four native platforms pass. Broader shapes remain pending.
 
 ## Purpose
 
