@@ -78,10 +78,10 @@ compatible.
 non-override Java methods may update compiler-bound callers in the other language;
 unsupported callable shapes refuse. Additive `moveDeclaration` accepts only the
 bounded public top-level Kotlin/JVM type row plus co-located compiler-proven
-private helpers and public sibling types with exact explicit/FIR-aliased imports
-or exact Kotlin/Java package-star/same-package/fully-qualified consumers, updates
-exact imports while
-preserving K2-proven Kotlin aliases, inserts a destination import for
+private helpers and public sibling types; any public sibling may lead while the
+original filename is preserved. Consumers use exact explicit/FIR-aliased imports
+or exact Kotlin/Java package-star/same-package/fully-qualified consumers. It
+updates exact imports while preserving K2-proven Kotlin aliases, inserts a destination import for
 compiler-proven same-package or exact Kotlin/Java package-star consumers, or
 rewrites exact
 fully-qualified K2/JDT-bound target identities. Kotlin and Java consumer sets are

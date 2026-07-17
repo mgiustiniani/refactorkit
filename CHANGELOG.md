@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Allow any compiler-proven public sibling to lead a whole-file move while
+  preserving the original filename; the selected declaration name never infers a
+  file rename.
 - Support exact fully-qualified Kotlin/Java consumers for multiple public sibling
   types. Each old identity is joined to every compiler-proven final type token;
   partial or mixed qualified/import shapes refuse.

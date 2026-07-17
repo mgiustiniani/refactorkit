@@ -1,9 +1,10 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: qualified bounded K5 row for whole-file movement with private helpers,
-public sibling types and exact explicit/FIR-aliased/package-star/same-package/
-fully-qualified Kotlin/Java consumers. Library, packaged CLI/daemon/MCP and all
-four native platforms pass. Broader shapes remain pending.
+Status: active bounded K5 qualification. Whole-file public-sibling consumer rows
+pass all acceptance layers when the filename-matching type leads the request.
+Selecting any other compiler-proven public sibling while preserving the original
+filename is specified below and pending executable qualification. Broader shapes
+remain pending.
 
 ## Purpose
 
@@ -20,8 +21,10 @@ authority from text matching.
 
 The operation shall accept only when all of the following are proven:
 
-1. K2 and generated class evidence identify exactly one public top-level class,
-   interface, object, enum or annotation class.
+1. K2 and generated class evidence identify the requested public top-level class,
+   interface, object, enum or annotation class. The target may be any public
+   sibling in the file; the original filename is preserved and is not inferred
+   from the selected sibling name.
 2. The target and any co-located public top-level types are compiler-proven and
    move with the whole file. Additional public types are supported only when all
    Java consumers use exact explicit imports, one exact non-static old-package
@@ -106,7 +109,8 @@ The operation shall refuse with stable structured codes for at least:
   qualified/import style,
   static/multiple/malformed star, malformed/multiple alias consumer of an
   additional public type;
-  unsupported/typealias/file-facade ambiguity or filename/declaration ambiguity;
+  unsupported/typealias/file-facade ambiguity, destination filename conflict or
+  declaration identity ambiguity;
 - default package, invalid target package or cross-source-set destination;
 - destination file/type conflict;
 - generated roots, scripts, compiler plugins, multiplatform `expect`/`actual`,

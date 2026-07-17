@@ -207,7 +207,8 @@ Both public top-level type directions and bounded non-overloaded public member
 rows with direct cross-language callers now have managed local and packaged
 preview/apply/rollback evidence. The first public top-level Kotlin/JVM
 `moveDeclaration` row moves one public target with optional compiler-proven
-private helpers and public sibling types whose consumers use exact
+private helpers and public sibling types; any public sibling may lead while the
+original filename is preserved. Consumers use exact
 explicit/FIR-aliased imports or exact Kotlin/Java
 package-star/same-package/fully-qualified consumers, updates imports while preserving
 FIR-resolved Kotlin aliases, or inserts a

@@ -331,7 +331,7 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
-    fun publicKotlinTypeMoveCarriesAdditionalPublicTypeWithExplicitConsumers() {
+    fun publicKotlinTypeMoveCanSelectNonFilenamePublicSibling() {
         val fixture = moveFixture()
         val declaration = fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt")
         val kotlinConsumer = fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt")
@@ -352,20 +352,22 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
         val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
-            .index.symbols.single { it.name == "PublicGreeting" }
+            .index.symbols.single { it.name == "PublicGreetingPort" }
         val planner = KotlinJvmMoveDeclarationPlanner(adapter)
 
         val plan = planner.preview(snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true)
 
         assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertTrue(plan.summary.contains("led by 'PublicGreetingPort'"))
         val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
-            plan, snapshot, ApplyAuthorization.explicit("public-sibling-kotlin-move-test"),
+            plan, snapshot, ApplyAuthorization.explicit("selected-public-sibling-kotlin-move-test"),
             DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
         ))
         assertTrue("import fixture.api.v2.PublicGreetingPort" in kotlinConsumer.readText())
         assertTrue("import fixture.api.v2.PublicGreeting" in kotlinConsumer.readText())
         assertTrue("import fixture.api.v2.PublicGreetingPort;" in javaConsumer.readText())
         assertTrue("import fixture.api.v2.PublicGreeting;" in javaConsumer.readText())
+        assertTrue(fixture.root.resolve("src/main/kotlin/fixture/api/v2/PublicGreeting.kt").exists())
         assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
         assertTrue(kotlinBefore.contentEquals(kotlinConsumer.readBytes()))
         assertTrue(javaBefore.contentEquals(javaConsumer.readBytes()))

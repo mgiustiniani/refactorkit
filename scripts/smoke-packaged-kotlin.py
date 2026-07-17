@@ -543,7 +543,7 @@ def main() -> int:
             cli, workspace, jdk, compiler, classpath, "native-kotlin-move-symbols", "symbols",
             ["--file", "src/main/kotlin/org/refactorkit/move/api/PortableGreeting.kt"],
         )
-        portable_greeting = next(item for item in move_symbols.get("symbols", []) if item.get("name") == "PortableGreeting")
+        portable_greeting = next(item for item in move_symbols.get("symbols", []) if item.get("name") == "PortableGreetingPort")
         move_java_consumer.unlink()
         move_kotlin_consumer.unlink()
         unused_move_before = tree_hash(workspace / "src")
@@ -558,7 +558,7 @@ def main() -> int:
         move_before = tree_hash(workspace / "src")
 
         portable_symbol_id = "kotlin-jvm-type-v1:" + hashlib.sha256(
-            b"kotlin-jvm-type-v1\0org.refactorkit.move.api.PortableGreeting"
+            b"kotlin-jvm-type-v1\0org.refactorkit.move.api.PortableGreetingPort"
         ).hexdigest()
         process = subprocess.Popen(
             command_for(mcp, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
