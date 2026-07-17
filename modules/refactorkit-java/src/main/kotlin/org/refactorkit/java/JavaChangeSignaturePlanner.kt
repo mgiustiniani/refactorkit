@@ -239,8 +239,11 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         val staged = analyzeStaged(stagedSnapshot(snapshot, fileEdits))
         val introduced = introducedJdtWarningCount(selection.analysis, staged)
         if (introduced > 0) return refused(snapshot, operation, "Staged JDT validation introduced $introduced error(s)")
+        val originalTypes = methodParameterTypes(selection.method)
+        val expectedTypes = reorderedIndexes.map { originalTypes[it] }
         val stagedMethod = staged.methods.singleOrNull { candidate ->
             candidate.qualifiedName.substringBefore('(') == selection.method.qualifiedName.substringBefore('(') &&
+                methodParameterTypes(candidate) == expectedTypes &&
                 staged.parameters.filter { it.methodQualifiedName == candidate.qualifiedName }.sortedBy { it.index }.map { it.name } == requested
         } ?: return refused(snapshot, operation, "Staged JDT method/parameter identity could not be re-established")
         val stagedInvocations = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
@@ -306,9 +309,12 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         val staged = analyzeStaged(stagedSnapshot)
         val introduced = introducedJdtWarningCount(selection.analysis, staged)
         if (introduced > 0) return refused(snapshot, operation, "Staged JDT validation introduced $introduced error(s)")
-        val stagedMethod = staged.methods.singleOrNull {
-            it.qualifiedName.substringBefore('(') == selection.method.qualifiedName.substringBefore('(') &&
-                staged.parameters.count { parameter -> parameter.methodQualifiedName == it.qualifiedName } == selection.parameters.size - 1
+        val expectedNames = selection.parameters.filterIndexed { index, _ -> index != removeIndex }.map { it.name }
+        val expectedTypes = methodParameterTypes(selection.method).filterIndexed { index, _ -> index != removeIndex }
+        val stagedMethod = staged.methods.singleOrNull { candidate ->
+            candidate.qualifiedName.substringBefore('(') == selection.method.qualifiedName.substringBefore('(') &&
+                methodParameterTypes(candidate) == expectedTypes &&
+                staged.parameters.filter { it.methodQualifiedName == candidate.qualifiedName }.sortedBy { it.index }.map { it.name } == expectedNames
         } ?: return refused(snapshot, operation, "Staged JDT method identity could not be re-established after parameter removal")
         val stagedInvocations = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
         if (stagedInvocations.size != selection.invocations.size || stagedInvocations.any {
@@ -447,6 +453,14 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             val edit = edits[file.path]
             if (edit == null) file else file.copy(content = TextEdits.apply(file.content, edit.textEdits))
         })
+    }
+
+    private fun methodParameterTypes(method: JdtJavaSemanticMethod): List<String> {
+        val signature = method.signature
+        val open = signature.indexOf('(')
+        val close = signature.lastIndexOf(')')
+        if (open < 0 || close < open) return emptyList()
+        return splitTopLevelCommas(signature.substring(open + 1, close)).map(String::trim).filter(String::isNotEmpty)
     }
 
     private fun sourceText(content: String, range: org.refactorkit.core.SourceRange): String = content.substring(

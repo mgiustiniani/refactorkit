@@ -64,10 +64,11 @@ def stop(process: subprocess.Popen) -> None:
         raise AssertionError(f"packaged process exited {process.returncode}: {process.stderr.read()}")
 
 
-def assert_renamed(path: Path) -> None:
+def assert_contains(path: Path, required: list[str]) -> None:
     text = path.read_text(encoding="utf-8")
-    if "find(String lookupKey) { return lookupKey.trim() + this.key; }" not in text:
-        raise AssertionError(f"selected JDT parameter was not renamed: {text}")
+    missing = [item for item in required if item not in text]
+    if missing:
+        raise AssertionError(f"expected Java post-image fragments missing {missing}: {text}")
     if "find(int key) { return String.valueOf(key); }" not in text or "private String key" not in text:
         raise AssertionError(f"same-name field/overload was changed: {text}")
 
@@ -86,12 +87,13 @@ def main() -> int:
         original = (
             b"package com.acme;\npublic class Service {\n"
             b"    private String key = \"field\";\n"
-            b"    String find(String key) { return key.trim() + this.key; }\n"
-            b"    String find(int key) { return String.valueOf(key); }\n}\n"
+            b"    String find(String key, boolean unused) { return key.trim() + this.key; }\n"
+            b"    String find(int key) { return String.valueOf(key); }\n"
+            b"    String run() { return find(\"x\", true); }\n}\n"
         )
         source.write_bytes(original)
         before = source_hash(root)
-        symbol = "com.acme.Service#find(java.lang.String)"
+        symbol = "com.acme.Service#find(java.lang.String,boolean)"
 
         process = start(mcp)
         try:
@@ -111,12 +113,46 @@ def main() -> int:
                 "name": "apply_refactoring", "arguments": {"planId": plan_id},
             })["content"][0]["text"]
             transaction_id = applied.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_renamed(source)
+            assert_contains(source, [
+                "find(String lookupKey, boolean unused) { return lookupKey.trim() + this.key; }",
+            ])
             rolled_back = exchange(process, 4, "tools/call", {
                 "name": "rollback_refactoring", "arguments": {"transactionId": transaction_id},
             })["content"][0]["text"]
             if "Rolled back" not in rolled_back or source.read_bytes() != original:
                 raise AssertionError(f"MCP rollback failed: {rolled_back}")
+
+            cases = [
+                ("changeSignature.addParameter", {"type": "int", "name": "limit", "default": "10"},
+                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"]),
+                ("changeSignature.reorderParameters", {"order": "unused,key"},
+                 ["find(boolean unused, String key)", "find(true, \"x\")"]),
+                ("changeSignature.removeParameter", {"name": "unused"},
+                 ["find(String key)", "find(\"x\")"]),
+            ]
+            request_id = 20
+            for operation, arguments, required in cases:
+                preview_result = exchange(process, request_id, "tools/call", {
+                    "name": "preview_refactoring", "arguments": {
+                        "operation": operation, "symbol": symbol, "arguments": arguments,
+                    },
+                })["content"][0]["text"]
+                if "Status   : PREVIEW" not in preview_result:
+                    raise AssertionError(f"MCP {operation} preview refused: {preview_result}")
+                plan = preview_result.split("Plan ID  : ", 1)[1].splitlines()[0]
+                apply_text = exchange(process, request_id + 1, "tools/call", {
+                    "name": "apply_refactoring", "arguments": {"planId": plan},
+                })["content"][0]["text"]
+                if "Transaction ID: " not in apply_text:
+                    raise AssertionError(f"MCP {operation} apply did not return a transaction: {apply_text}")
+                transaction = apply_text.split("Transaction ID: ", 1)[1].splitlines()[0]
+                assert_contains(source, required)
+                exchange(process, request_id + 2, "tools/call", {
+                    "name": "rollback_refactoring", "arguments": {"transactionId": transaction},
+                })
+                if source.read_bytes() != original:
+                    raise AssertionError(f"MCP {operation} rollback did not restore exact bytes")
+                request_id += 3
         finally:
             stop(process)
 
@@ -132,16 +168,42 @@ def main() -> int:
             applied = exchange(process, 12, "refactor.apply", {"planId": preview["planId"]})
             if applied.get("status") != "applied":
                 raise AssertionError(f"daemon apply failed: {applied}")
-            assert_renamed(source)
+            assert_contains(source, [
+                "find(String lookupKey, boolean unused) { return lookupKey.trim() + this.key; }",
+            ])
             rolled_back = exchange(process, 13, "patch.rollback", {
                 "transactionId": applied["transactionId"],
             })
             if rolled_back.get("status") != "rolledBack" or source.read_bytes() != original:
                 raise AssertionError(f"daemon rollback failed: {rolled_back}")
+
+            cases = [
+                ("changeSignature.addParameter", {"type": "int", "name": "limit", "default": "10"},
+                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"]),
+                ("changeSignature.reorderParameters", {"order": "unused,key"},
+                 ["find(boolean unused, String key)", "find(true, \"x\")"]),
+                ("changeSignature.removeParameter", {"name": "unused"},
+                 ["find(String key)", "find(\"x\")"]),
+            ]
+            request_id = 30
+            for operation, arguments, required in cases:
+                preview_result = exchange(process, request_id, "refactor.preview", {
+                    "operation": operation, "symbol": symbol, "arguments": arguments,
+                })
+                applied_result = exchange(process, request_id + 1, "refactor.apply", {
+                    "planId": preview_result["planId"],
+                })
+                assert_contains(source, required)
+                exchange(process, request_id + 2, "patch.rollback", {
+                    "transactionId": applied_result["transactionId"],
+                })
+                if source.read_bytes() != original:
+                    raise AssertionError(f"daemon {operation} rollback did not restore exact bytes")
+                request_id += 3
         finally:
             stop(process)
 
-    print("Packaged Java JDT parameter rename passed: MCP and daemon preview/apply/rollback restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/add/reorder/remove restored exact bytes.")
     return 0
 
 
