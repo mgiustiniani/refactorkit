@@ -153,7 +153,7 @@ class KotlinJvmMoveDeclarationPlanner(
                 )
             } else {
                 publicSiblingConsumerEdits(
-                    consumer, pathUses.map { it.oldIdentity }.distinct().sorted(), movedIdentities, oldPackage,
+                    consumer, pathUses, movedIdentities, oldPackage,
                 )
             } ?: return refused(
                 snapshot,
@@ -161,7 +161,7 @@ class KotlinJvmMoveDeclarationPlanner(
                 else "kotlin.movePublicSiblingImportUnsupported",
                 if (publicTypes.size == 1)
                     "Kotlin move requires an exact import, same-package use, or fully-qualified compiler-proven target"
-                else "Additional public file types require exact explicit/aliased, package-star, or same-package consumers",
+                else "Additional public file types require exact explicit/aliased, package-star, same-package, or fully-qualified consumers",
             )
             edits += FileEdit.Modify(path, consumerEdits)
         }
@@ -244,14 +244,26 @@ class KotlinJvmMoveDeclarationPlanner(
 
     private fun publicSiblingConsumerEdits(
         source: SourceFile,
-        oldIdentities: List<String>,
+        uses: List<ConsumerUse>,
         movedIdentities: Map<String, String>,
         oldPackage: String,
     ): List<TextEdit>? {
+        val oldIdentities = uses.map { it.oldIdentity }.distinct().sorted()
         val explicit = oldIdentities.mapNotNull { oldIdentity ->
             exactImportEdit(source, oldIdentity, movedIdentities.getValue(oldIdentity))
         }
         if (explicit.size == oldIdentities.size) return explicit
+        if (explicit.isNotEmpty()) return null
+        if (oldIdentities.all { it in source.content }) {
+            val qualified = mutableListOf<TextEdit>()
+            for (oldIdentity in oldIdentities) {
+                qualified += qualifiedUseEdits(
+                    source, uses.filter { it.oldIdentity == oldIdentity }.map { it.location },
+                    oldIdentity, movedIdentities.getValue(oldIdentity), oldIdentity.substringAfterLast('.'),
+                ) ?: return null
+            }
+            return qualified
+        }
         if (oldIdentities.any { it in source.content }) return null
         val terminator = if (source.languageId == "java") "\\s*;" else ""
         val stars = Regex(

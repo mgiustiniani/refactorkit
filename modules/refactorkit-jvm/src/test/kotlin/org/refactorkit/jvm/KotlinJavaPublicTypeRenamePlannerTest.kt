@@ -161,6 +161,47 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicKotlinTypeMoveUpdatesFullyQualifiedPublicTypeConsumers() {
+        val fixture = moveFixture()
+        val kotlinConsumer = fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt")
+        val javaConsumer = fixture.root.resolve("src/main/java/fixture/consumer/Caller.java")
+        fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").writeText(
+            "package fixture.api\npublic interface GreetingPort\npublic class PublicGreeting : GreetingPort\n",
+        )
+        kotlinConsumer.writeText(
+            "package fixture.consumer\n" +
+                "fun greeting(port: fixture.api.GreetingPort): fixture.api.PublicGreeting = " +
+                "fixture.api.PublicGreeting()\n",
+        )
+        javaConsumer.writeText(
+            "package fixture.consumer;\nclass Caller { fixture.api.GreetingPort port; " +
+                "fixture.api.PublicGreeting value = new fixture.api.PublicGreeting(); }\n",
+        )
+        val kotlinBefore = kotlinConsumer.readBytes()
+        val javaBefore = javaConsumer.readBytes()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+            .index.symbols.single { it.name == "PublicGreeting" }
+        val planner = KotlinJvmMoveDeclarationPlanner(adapter)
+
+        val plan = planner.preview(snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true)
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, snapshot, ApplyAuthorization.explicit("qualified-public-sibling-move-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertEquals(1, kotlinConsumer.readText().split("fixture.api.v2.GreetingPort").size - 1)
+        assertEquals(2, kotlinConsumer.readText().split("fixture.api.v2.PublicGreeting").size - 1)
+        assertEquals(1, javaConsumer.readText().split("fixture.api.v2.GreetingPort").size - 1)
+        assertEquals(2, javaConsumer.readText().split("fixture.api.v2.PublicGreeting").size - 1)
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(kotlinBefore.contentEquals(kotlinConsumer.readBytes()))
+        assertTrue(javaBefore.contentEquals(javaConsumer.readBytes()))
+    }
+
+    @Test
     fun publicKotlinTypeMoveAddsImportsForSamePackagePublicTypeConsumers() {
         val fixture = moveFixture()
         val kotlinConsumer = fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt")
