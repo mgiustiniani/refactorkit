@@ -1,7 +1,8 @@
 # Java JDT change-signature requirement
 
-Status: active J1 expansion; the exact parameter-rename row has local library
-acceptance. Packaged transport and four-platform qualification remain pending.
+Status: active J1 expansion; the exact parameter-rename row has library and
+packaged CLI preview/apply/rollback acceptance on all four native platforms.
+Daemon/MCP transport qualification and broader signature rows remain pending.
 
 ## Purpose
 
