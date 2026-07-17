@@ -1,10 +1,9 @@
 # Kotlin/JVM managed move-declaration requirement
 
-Status: active bounded K5 expansion. Whole-file public-sibling movement with
-explicit/aliased/package-star/same-package consumers passes all acceptance
-layers. Exact fully-qualified sibling consumers have local and packaged
-executable acceptance; four-platform qualification is pending. Broader shapes
-remain pending.
+Status: qualified bounded K5 row for whole-file movement with private helpers,
+public sibling types and exact explicit/FIR-aliased/package-star/same-package/
+fully-qualified Kotlin/Java consumers. Library, packaged CLI/daemon/MCP and all
+four native platforms pass. Broader shapes remain pending.
 
 ## Purpose
 
