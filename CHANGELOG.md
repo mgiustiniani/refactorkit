@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Support exact fully-qualified Kotlin/Java consumers for multiple public sibling
+  types. Each old identity is joined to every compiler-proven final type token;
+  partial or mixed qualified/import shapes refuse.
 - Support compiler-proven same-package implicit Kotlin/Java consumers for
   multiple public sibling types. One sorted destination-import block is inserted
   after the exact package declaration while preserving newline/semicolon style.

@@ -208,8 +208,8 @@ rows with direct cross-language callers now have managed local and packaged
 preview/apply/rollback evidence. The first public top-level Kotlin/JVM
 `moveDeclaration` row moves one public target with optional compiler-proven
 private helpers and public sibling types whose consumers use exact
-explicit/FIR-aliased imports or exact Kotlin/Java package-star/same-package
-implicit consumers, updates imports while preserving
+explicit/FIR-aliased imports or exact Kotlin/Java
+package-star/same-package/fully-qualified consumers, updates imports while preserving
 FIR-resolved Kotlin aliases, or inserts a
 destination import for compiler-proven same-package or exact Kotlin/Java
 package-star consumers, or rewrites exact
