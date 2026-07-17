@@ -44,6 +44,22 @@ public class ServiceClient {
     String number(Service service) { return service.find(7); }
 }
 JAVA
+cat >"$fixture/src/main/java/com/acme/Lookup.java" <<'JAVA'
+package com.acme;
+public interface Lookup { String find(String key); }
+JAVA
+cat >"$fixture/src/main/java/com/acme/DefaultLookup.java" <<'JAVA'
+package com.acme;
+public class DefaultLookup implements Lookup {
+    @Override public String find(String value) { return value; }
+}
+JAVA
+cat >"$fixture/src/main/java/com/acme/HierarchyCaller.java" <<'JAVA'
+package com.acme;
+class HierarchyCaller {
+    String run(Lookup lookup) { return lookup.find("x"); }
+}
+JAVA
 cat >"$fixture/structural.ts" <<'TS'
 // class FakeNativeBinding {}
 export interface NativeService { run(): void }
@@ -126,6 +142,22 @@ if [[ "$before" != "$(source_hashes)" ]]; then
   exit 1
 fi
 
+hierarchy_output="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String)' --type int --name limit --default 10 --include-hierarchy --accept-external-consumer-risk --apply "$fixture")"
+hierarchy_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$hierarchy_output" | tail -1)"
+if [[ -z "$hierarchy_transaction" ]] ||
+   ! grep -Fq 'find(String key, int limit)' "$fixture/src/main/java/com/acme/Lookup.java" ||
+   ! grep -Fq 'find(String value, int limit)' "$fixture/src/main/java/com/acme/DefaultLookup.java" ||
+   ! grep -Fq 'find("x", 10)' "$fixture/src/main/java/com/acme/HierarchyCaller.java"; then
+  echo "Packaged JDT hierarchy change failed:" >&2
+  echo "$hierarchy_output" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$hierarchy_transaction" --root "$fixture" >/dev/null
+if [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT hierarchy rollback did not restore Java sources" >&2
+  exit 1
+fi
+
 format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
 transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"
 if [[ -z "$transaction_id" ]] || ! grep -Fq 'String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then
@@ -144,4 +176,4 @@ fi
 python3 scripts/test-smoke-packaged-daemon-timeout.py
 python3 scripts/smoke-packaged-daemon.py "$daemon_launcher"
 python3 scripts/smoke-packaged-java-change-signature.py "$package_root"
-printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors and JDT parameter rename exact; managed apply/rollback restored sources; daemon lifecycle verified."
+printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors and JDT parameter/hierarchy changes exact; managed apply/rollback restored sources; daemon lifecycle verified."

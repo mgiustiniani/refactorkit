@@ -3,7 +3,9 @@
 Status: active J1 expansion. Exact rename/add/remove/reorder have packaged
 CLI/daemon/MCP preview/apply/rollback acceptance on all four native platforms.
 The bounded JDT parameter-type-change row also has packaged CLI/daemon/MCP
-acceptance on all four native platforms. Hierarchy families remain pending.
+acceptance on all four native platforms. A bounded whole-source override/implementer add-parameter family has local
+library and packaged CLI/daemon/MCP acceptance; four-platform qualification is
+pending.
 
 ## Purpose
 
@@ -62,10 +64,23 @@ uses and introduce no diagnostics. A changed overload selection, incompatible
 body/caller, duplicate signature, annotation/vararg/array or incomplete evidence
 refuses.
 
+## Bounded override/implementer family
+
+`addParameter` may set `includeHierarchy=true` only with
+`acceptExternalConsumerRisk=true`. JDT must connect the selected declaration to
+every source override/implementer transitively, and every family binding key must
+have one editable non-generated source declaration. The operation appends the
+same parameter to all family declarations and the caller-supplied default to all
+exact calls bound to any family member. Method references, external hierarchy
+declarations, incomplete call evidence, comments/varargs, duplicate names,
+introduced diagnostics, lost override edges or changed call-location bindings
+refuse. Public/external consumers remain a high-risk explicit warning; acceptance
+does not permit editing unknown code.
+
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- complete overload families and override/implementer hierarchies;
+- remove/reorder/type changes across complete override/implementer hierarchies;
 - constructors, varargs, generic methods, records and annotations;
 - method references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

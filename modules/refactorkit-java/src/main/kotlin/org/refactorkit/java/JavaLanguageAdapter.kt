@@ -804,7 +804,15 @@ class JavaLanguageAdapter(
         val defaultExpression = request.arguments["default"]
             ?: request.arguments["defaultExpression"]
             ?: return notImplemented(request, "addParameter requires arguments.default")
-        return JavaChangeSignaturePlanner(this).previewAddParameter(request.snapshot, symbol, type, name, defaultExpression)
+        return JavaChangeSignaturePlanner(this).previewAddParameter(
+            request.snapshot,
+            symbol,
+            type,
+            name,
+            defaultExpression,
+            includeHierarchy = request.arguments["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+            acceptExternalConsumerRisk = request.arguments["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+        )
     }
 
     private fun applyReorderParameters(request: RefactoringRequest): PatchPlan {

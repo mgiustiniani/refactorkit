@@ -402,6 +402,44 @@ class McpSessionTest {
     }
 
     @Test
+    fun toolCallPreviewAddParameterAcrossJdtHierarchy() {
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public interface Lookup { String find(String key); }
+            """.trimIndent() + "\n",
+            "src/main/java/com/example/DefaultLookup.java" to """
+                package com.example;
+                public class DefaultLookup implements Lookup {
+                    @Override public String find(String value) { return value; }
+                }
+            """.trimIndent() + "\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "changeSignature.addParameter")
+                put("symbol", "com.example.Lookup#find(java.lang.String)")
+                put("arguments", buildJsonObject {
+                    put("type", "int")
+                    put("name", "limit")
+                    put("default", "10")
+                    put("includeHierarchy", "true")
+                    put("acceptExternalConsumerRisk", "true")
+                })
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Status   : PREVIEW"), text)
+        assertTrue(text.contains("2 JDT-connected"), text)
+    }
+
+    @Test
     fun toolCallPreviewStructuralChangeSignatureReturnsPlanId() {
         val root = createProject(
             "src/main/java/com/example/UserService.java" to """

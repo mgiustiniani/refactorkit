@@ -343,6 +343,15 @@ refactorkit change-signature \
   --default '"User"' \
   samples/java-maven-simple
 
+# Add across every JDT-connected source override/implementer declaration.
+# Public consumers outside the workspace remain an explicitly accepted risk.
+refactorkit change-signature \
+  --operation add-parameter \
+  --symbol 'com.example.UserLookup#find(java.lang.String)' \
+  --type int --name limit --default 10 \
+  --include-hierarchy --accept-external-consumer-risk \
+  samples/java-maven-simple
+
 # Reorder or remove parameters when the planner can prove the change is safe.
 refactorkit change-signature \
   --operation reorder-parameters \

@@ -36,6 +36,22 @@ public class ServiceClient {
 }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "ServiceClient.java")
     @'
+package com.acme;
+public interface Lookup { String find(String key); }
+'@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "Lookup.java")
+    @'
+package com.acme;
+public class DefaultLookup implements Lookup {
+    @Override public String find(String value) { return value; }
+}
+'@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "DefaultLookup.java")
+    @'
+package com.acme;
+class HierarchyCaller {
+    String run(Lookup lookup) { return lookup.find("x"); }
+}
+'@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "HierarchyCaller.java")
+    @'
 // class FakeNativeBinding {}
 export interface NativeService { run(): void }
 export class RealNativeBinding { run(): void {} }
@@ -103,6 +119,22 @@ export class RealNativeBinding { run(): void {} }
         throw "Packaged JDT parameter type rollback failed: $TypeRollback"
     }
 
+    $HierarchyOutput = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String)' --type int --name limit --default 10 --include-hierarchy --accept-external-consumer-risk --apply $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Packaged JDT hierarchy change failed: $HierarchyOutput" }
+    $HierarchyMatch = [regex]::Match($HierarchyOutput, 'transaction-[0-9a-f-]+')
+    $LookupContent = Get-Content -Raw (Join-Path $SourceDir "Lookup.java")
+    $ImplementationContent = Get-Content -Raw (Join-Path $SourceDir "DefaultLookup.java")
+    $HierarchyCallerContent = Get-Content -Raw (Join-Path $SourceDir "HierarchyCaller.java")
+    if (-not $HierarchyMatch.Success -or $LookupContent -notmatch 'find\(String key, int limit\)' -or
+        $ImplementationContent -notmatch 'find\(String value, int limit\)' -or
+        $HierarchyCallerContent -notmatch 'find\("x", 10\)') {
+        throw "Packaged JDT hierarchy post-image mismatch: $HierarchyOutput"
+    }
+    $HierarchyRollback = (& $Launcher patch rollback $HierarchyMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT hierarchy rollback failed: $HierarchyRollback"
+    }
+
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw "Managed format smoke failed: $FormatOutput" }
     $Match = [regex]::Match($FormatOutput, 'transaction-[0-9a-f-]+')
@@ -119,7 +151,7 @@ export class RealNativeBinding { run(): void {} }
     if ($LASTEXITCODE -ne 0) { throw "Packaged daemon smoke failed" }
     & python scripts/smoke-packaged-java-change-signature.py $PackageRoot
     if ($LASTEXITCODE -ne 0) { throw "Packaged Java change-signature transport smoke failed" }
-    Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors and JDT parameter rename exact; managed apply/rollback restored sources; daemon lifecycle verified."
+    Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors and JDT parameter/hierarchy changes exact; managed apply/rollback restored sources; daemon lifecycle verified."
 }
 finally {
     Remove-Item -Recurse -Force $Fixture -ErrorAction SilentlyContinue

@@ -832,6 +832,8 @@ class McpSession(
                 opArgs["type"] ?: opArgs["parameterType"] ?: missing("arguments.type"),
                 opArgs["name"] ?: opArgs["parameterName"] ?: missing("arguments.name"),
                 opArgs["default"] ?: opArgs["defaultExpression"] ?: missing("arguments.default"),
+                includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
             )
             "changeSignature.reorderParameters", "reorderParameters" -> JavaChangeSignaturePlanner(adapter).previewReorderParameters(
                 snap,

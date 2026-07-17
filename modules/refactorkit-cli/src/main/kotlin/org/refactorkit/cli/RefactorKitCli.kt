@@ -69,6 +69,7 @@ class RefactorKitCli(
     private val booleanOptions = setOf(
         "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
         "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references", "json",
+        "include-hierarchy", "accept-external-consumer-risk",
     )
 
     fun run(args: List<String>): Int {
@@ -355,7 +356,11 @@ class RefactorKitCli(
                 val defaultExpression = parsed.options["default"]
                     ?: parsed.options["default-expression"]
                     ?: run { System.err.println("change-signature add-parameter requires --default <expression>"); return 2 }
-                planner.previewAddParameter(snap, symbol, type, name, defaultExpression)
+                planner.previewAddParameter(
+                    snap, symbol, type, name, defaultExpression,
+                    includeHierarchy = "include-hierarchy" in parsed.flags,
+                    acceptExternalConsumerRisk = "accept-external-consumer-risk" in parsed.flags,
+                )
             }
             "reorder-parameters", "reorderParameters", "changeSignature.reorderParameters" -> {
                 val order = parsed.options["order"]
@@ -1000,6 +1005,7 @@ class RefactorKitCli(
           refactorkit change-signature  --symbol <FQN#method> --old-name <param> --new-name <param> [--apply] [<path>]
           refactorkit change-signature  --operation add-parameter --symbol <FQN#method> --type <javaType> --name <param> --default <expr> [--apply] [<path>]
           refactorkit change-signature  --operation change-parameter-type --symbol <FQN#method> --name <param> --type <javaType> [--apply] [<path>]
+          refactorkit change-signature  --operation add-parameter --symbol <FQN#method> --type <javaType> --name <param> --default <expression> [--include-hierarchy --accept-external-consumer-risk] [--apply] [<path>]
           refactorkit change-signature  --operation reorder-parameters --symbol <FQN#method> --order <param1,param2,...> [--apply] [<path>]
           refactorkit change-signature  --operation remove-parameter --symbol <FQN#method> --name <param> [--apply] [<path>]
           refactorkit move-class        --symbol <fqcn> --to-package <pkg>        [--apply] [<path>]

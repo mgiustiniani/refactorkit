@@ -69,7 +69,8 @@ def assert_contains(path: Path, required: list[str]) -> None:
     missing = [item for item in required if item not in text]
     if missing:
         raise AssertionError(f"expected Java post-image fragments missing {missing}: {text}")
-    if "find(int key) { return String.valueOf(key); }" not in text or "private String key" not in text:
+    if path.name == "Service.java" and (
+            "find(int key) { return String.valueOf(key); }" not in text or "private String key" not in text):
         raise AssertionError(f"same-name field/overload was changed: {text}")
 
 
@@ -94,6 +95,19 @@ def main() -> int:
             b"    int sizeRun() { return size(\"abc\"); }\n}\n"
         )
         source.write_bytes(original)
+        lookup = root / "src/main/java/com/acme/Lookup.java"
+        implementation = root / "src/main/java/com/acme/DefaultLookup.java"
+        hierarchy_caller = root / "src/main/java/com/acme/HierarchyCaller.java"
+        lookup.write_bytes(b"package com.acme; public interface Lookup { String find(String key); }\n")
+        implementation.write_bytes(
+            b"package com.acme; public class DefaultLookup implements Lookup { "
+            b"@Override public String find(String value) { return value; } }\n"
+        )
+        hierarchy_caller.write_bytes(
+            b"package com.acme; class HierarchyCaller { "
+            b"String api(Lookup lookup) { return lookup.find(\"a\"); } "
+            b"String impl(DefaultLookup lookup) { return lookup.find(\"b\"); } }\n"
+        )
         before = source_hash(root)
         symbol = "com.acme.Service#find(java.lang.String,boolean)"
 
@@ -157,6 +171,32 @@ def main() -> int:
                 if source.read_bytes() != original:
                     raise AssertionError(f"MCP {operation} rollback did not restore exact bytes")
                 request_id += 3
+
+            hierarchy_preview = exchange(process, 50, "tools/call", {
+                "name": "preview_refactoring", "arguments": {
+                    "operation": "changeSignature.addParameter",
+                    "symbol": "com.acme.Lookup#find(java.lang.String)",
+                    "arguments": {
+                        "type": "int", "name": "limit", "default": "10",
+                        "includeHierarchy": True, "acceptExternalConsumerRisk": True,
+                    },
+                },
+            })["content"][0]["text"]
+            if "Status   : PREVIEW" not in hierarchy_preview or "2 JDT-connected" not in hierarchy_preview:
+                raise AssertionError(f"MCP hierarchy preview failed: {hierarchy_preview}")
+            hierarchy_plan = hierarchy_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+            hierarchy_apply = exchange(process, 51, "tools/call", {
+                "name": "apply_refactoring", "arguments": {"planId": hierarchy_plan},
+            })["content"][0]["text"]
+            hierarchy_transaction = hierarchy_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
+            assert_contains(lookup, ["find(String key, int limit)"])
+            assert_contains(implementation, ["find(String value, int limit)"])
+            assert_contains(hierarchy_caller, ["find(\"a\", 10)", "find(\"b\", 10)"])
+            exchange(process, 52, "tools/call", {
+                "name": "rollback_refactoring", "arguments": {"transactionId": hierarchy_transaction},
+            })
+            if source_hash(root) != before:
+                raise AssertionError("MCP hierarchy rollback did not restore exact source bytes")
         finally:
             stop(process)
 
@@ -206,10 +246,26 @@ def main() -> int:
                 if source.read_bytes() != original:
                     raise AssertionError(f"daemon {operation} rollback did not restore exact bytes")
                 request_id += 3
+
+            hierarchy_preview = exchange(process, 60, "refactor.preview", {
+                "operation": "changeSignature.addParameter",
+                "symbol": "com.acme.Lookup#find(java.lang.String)",
+                "arguments": {
+                    "type": "int", "name": "limit", "default": "10",
+                    "includeHierarchy": True, "acceptExternalConsumerRisk": True,
+                },
+            })
+            hierarchy_apply = exchange(process, 61, "refactor.apply", {"planId": hierarchy_preview["planId"]})
+            assert_contains(lookup, ["find(String key, int limit)"])
+            assert_contains(implementation, ["find(String value, int limit)"])
+            assert_contains(hierarchy_caller, ["find(\"a\", 10)", "find(\"b\", 10)"])
+            exchange(process, 62, "patch.rollback", {"transactionId": hierarchy_apply["transactionId"]})
+            if source_hash(root) != before:
+                raise AssertionError("daemon hierarchy rollback did not restore exact source bytes")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy add restored exact bytes.")
     return 0
 
 

@@ -1515,7 +1515,15 @@ class DaemonSession(
                 val type = args["type"] ?: args["parameterType"] ?: missing("arguments.type")
                 val name = args["name"] ?: args["parameterName"] ?: missing("arguments.name")
                 val defaultExpression = args["default"] ?: args["defaultExpression"] ?: missing("arguments.default")
-                JavaChangeSignaturePlanner(adapter).previewAddParameter(snap, symbol ?: missing("symbol"), type, name, defaultExpression)
+                JavaChangeSignaturePlanner(adapter).previewAddParameter(
+                    snap,
+                    symbol ?: missing("symbol"),
+                    type,
+                    name,
+                    defaultExpression,
+                    includeHierarchy = args["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                    acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
             }
             "changeSignature.reorderParameters", "reorderParameters" -> {
                 val order = args["order"] ?: args["newOrder"] ?: missing("arguments.order")

@@ -259,6 +259,74 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun addsParameterAcrossCompleteJdtOverrideFamilyWithExplicitRiskAcceptance() {
+        val root = tempProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public interface Lookup { String find(String key); }
+            """.trimIndent() + "\n",
+            "src/main/java/com/example/DefaultLookup.java" to """
+                package com.example;
+                public class DefaultLookup implements Lookup {
+                    @Override public String find(String value) { return value.trim(); }
+                }
+            """.trimIndent() + "\n",
+            "src/main/java/com/example/Caller.java" to """
+                package com.example;
+                class Caller {
+                    String viaApi(Lookup lookup) { return lookup.find("api"); }
+                    String viaImpl(DefaultLookup lookup) { return lookup.find("impl"); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val refused = planner.previewAddParameter(
+            snap, "com.example.Lookup#find(java.lang.String)", "int", "limit", "10",
+            includeHierarchy = true,
+        )
+        assertEquals(PatchStatus.REFUSED, refused.status)
+        assertTrue(refused.summary.contains("acceptExternalConsumerRisk=true"), refused.summary)
+
+        val plan = planner.previewAddParameter(
+            snap, "com.example.Lookup#find(java.lang.String)", "int", "limit", "10",
+            includeHierarchy = true, acceptExternalConsumerRisk = true,
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        assertEquals(RiskLevel.HIGH, plan.riskLevel)
+        assertEquals(3, plan.affectedFiles.size)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        assertTrue(root.resolve("src/main/java/com/example/Lookup.java").readText().contains("find(String key, int limit)"))
+        assertTrue(root.resolve("src/main/java/com/example/DefaultLookup.java").readText().contains("find(String value, int limit)"))
+        val caller = root.resolve("src/main/java/com/example/Caller.java").readText()
+        assertTrue(caller.contains("find(\"api\", 10)"), caller)
+        assertTrue(caller.contains("find(\"impl\", 10)"), caller)
+    }
+
+    @Test
+    fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
+        val root = tempProject(
+            "src/main/java/com/example/Upper.java" to """
+                package com.example;
+                import java.util.function.UnaryOperator;
+                public class Upper implements UnaryOperator<String> {
+                    @Override public String apply(String value) { return value.toUpperCase(); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewAddParameter(
+            snap, "com.example.Upper#apply(java.lang.String)", "int", "limit", "10",
+            includeHierarchy = true, acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("outside the editable source workspace"), plan.summary)
+    }
+
+    @Test
     fun addParameterUpdatesDeclarationAndInScopeCallSites() {
         val root = tempProject(
             "src/main/java/com/example/UserService.java" to """

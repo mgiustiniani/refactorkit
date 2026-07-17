@@ -633,6 +633,38 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun previewAddParameterAcrossJdtHierarchyRequiresExplicitRiskAcceptance() {
+        val root = createProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public interface Lookup { String find(String key); }
+            """.trimIndent() + "\n",
+            "src/main/java/com/example/DefaultLookup.java" to """
+                package com.example;
+                public class DefaultLookup implements Lookup {
+                    @Override public String find(String value) { return value; }
+                }
+            """.trimIndent() + "\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val result = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "changeSignature.addParameter")
+            put("symbol", "com.example.Lookup#find(java.lang.String)")
+            put("arguments", buildJsonObject {
+                put("type", "int")
+                put("name", "limit")
+                put("default", "10")
+                put("includeHierarchy", "true")
+                put("acceptExternalConsumerRisk", "true")
+            })
+        }) as JsonObject
+
+        assertEquals("PREVIEW", result["status"]!!.jsonPrimitive.content)
+        assertTrue(result["summary"]!!.jsonPrimitive.content.contains("2 JDT-connected"))
+    }
+
+    @Test
     fun previewStructuralChangeSignatureOperationsReturnPlanIds() {
         val root = createProject(
             "src/main/java/com/example/UserService.java" to """
