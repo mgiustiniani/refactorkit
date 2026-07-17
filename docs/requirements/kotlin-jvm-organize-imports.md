@@ -1,9 +1,9 @@
 # Kotlin/JVM organize-imports requirement
 
-Status: active bounded K5 expansion. Explicit and aliased type imports pass all
-acceptance layers. Exact package-star preservation/sorting has local and packaged
-CLI/daemon/MCP acceptance; four-platform qualification is pending. Callable
-imports and project-style-aware formatting remain pending.
+Status: qualified bounded K5 row for explicit, FIR-aliased and exact package-star
+type imports across library, CLI, daemon, MCP and packaged execution on all four
+native platforms. Callable imports and project-style-aware formatting remain
+pending.
 
 ## Purpose
 
