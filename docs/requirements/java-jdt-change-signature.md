@@ -1,9 +1,8 @@
 # Java JDT change-signature requirement
 
-Status: active J1 expansion. Exact rename has four-platform packaged CLI
-qualification. JDT-bound add/remove/reorder rows and packaged daemon/MCP rename
-acceptance are implemented locally; their four-platform qualification remains
-pending. Type change and hierarchy families remain pending.
+Status: active J1 expansion. Exact rename/add/remove/reorder have packaged
+CLI/daemon/MCP preview/apply/rollback acceptance on all four native platforms.
+Type change and hierarchy families remain pending.
 
 ## Purpose
 
