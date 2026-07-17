@@ -207,6 +207,58 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun changesOneJdtBoundParameterTypeWithoutEditingCallArguments() {
+        val root = tempProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                class UserService {
+                    int size(CharSequence value) { return value.length(); }
+                    int run() { return size("abc"); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewChangeParameterType(
+            snap,
+            "com.example.UserService#size(java.lang.CharSequence)",
+            "value",
+            "String",
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val modify = plan.workspaceEdit.edits.single() as org.refactorkit.core.FileEdit.Modify
+        assertEquals(1, modify.textEdits.size)
+        val content = org.refactorkit.core.TextEdits.apply(snap.files.single().content, modify.textEdits)
+        assertTrue(content.contains("size(String value)"), content)
+        assertTrue(content.contains("return size(\"abc\");"), content)
+    }
+
+    @Test
+    fun parameterTypeChangeRefusesIncompatibleBodyOrCallSite() {
+        val root = tempProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                class UserService {
+                    String clean(String value) { return value.trim(); }
+                    String run() { return clean("abc"); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewChangeParameterType(
+            snap,
+            "com.example.UserService#clean(java.lang.String)",
+            "value",
+            "int",
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("introduced"), plan.summary)
+    }
+
+    @Test
     fun addParameterUpdatesDeclarationAndInScopeCallSites() {
         val root = tempProject(
             "src/main/java/com/example/UserService.java" to """

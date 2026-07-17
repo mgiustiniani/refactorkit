@@ -704,6 +704,7 @@ class JavaLanguageAdapter(
         RefactoringDescriptor("renameMember", "Rename Java method or field", RiskLevel.LOW),
         RefactoringDescriptor("extractMethod", "Extract Java method (limited MVP)", RiskLevel.MEDIUM),
         RefactoringDescriptor("changeSignature.renameParameter", "Rename Java parameter (limited change signature)", RiskLevel.MEDIUM),
+        RefactoringDescriptor("changeSignature.changeParameterType", "Change one JDT-bound Java parameter type", RiskLevel.MEDIUM),
         RefactoringDescriptor("changeSignature.addParameter", "Add Java parameter with default call-site expression", RiskLevel.MEDIUM),
         RefactoringDescriptor("changeSignature.reorderParameters", "Reorder Java parameters and call-site arguments", RiskLevel.MEDIUM),
         RefactoringDescriptor("changeSignature.removeParameter", "Remove unused Java parameter and call-site argument", RiskLevel.MEDIUM),
@@ -719,6 +720,7 @@ class JavaLanguageAdapter(
         "renameMember" -> applyRenameMember(request)
         "extractMethod" -> applyExtractMethod(request)
         "changeSignature.renameParameter", "renameParameter" -> applyRenameParameter(request)
+        "changeSignature.changeParameterType", "changeParameterType" -> applyChangeParameterType(request)
         "changeSignature.addParameter", "addParameter" -> applyAddParameter(request)
         "changeSignature.reorderParameters", "reorderParameters" -> applyReorderParameters(request)
         "changeSignature.removeParameter", "removeParameter" -> applyRemoveParameter(request)
@@ -776,6 +778,18 @@ class JavaLanguageAdapter(
             ?: request.arguments["newParameterName"]
             ?: return notImplemented(request, "renameParameter requires arguments.newName")
         return JavaChangeSignaturePlanner(this).previewRenameParameter(request.snapshot, symbol, oldName, newName)
+    }
+
+    private fun applyChangeParameterType(request: RefactoringRequest): PatchPlan {
+        val symbol = request.symbolId?.value
+            ?: return notImplemented(request, "changeParameterType requires symbolId")
+        val name = request.arguments["name"]
+            ?: request.arguments["parameterName"]
+            ?: return notImplemented(request, "changeParameterType requires arguments.name")
+        val type = request.arguments["type"]
+            ?: request.arguments["newType"]
+            ?: return notImplemented(request, "changeParameterType requires arguments.type")
+        return JavaChangeSignaturePlanner(this).previewChangeParameterType(request.snapshot, symbol, name, type)
     }
 
     private fun applyAddParameter(request: RefactoringRequest): PatchPlan {

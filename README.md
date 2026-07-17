@@ -326,6 +326,14 @@ refactorkit change-signature \
   --new-name userName \
   samples/java-maven-simple
 
+# Change one JDT-bound parameter type while preserving exact call-site bindings.
+refactorkit change-signature \
+  --operation change-parameter-type \
+  --symbol 'com.example.UserManager#displayName(java.lang.CharSequence)' \
+  --name username \
+  --type String \
+  samples/java-maven-simple
+
 # Add a parameter with a default expression at call sites.
 refactorkit change-signature \
   --operation add-parameter \

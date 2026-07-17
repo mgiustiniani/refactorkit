@@ -2,7 +2,9 @@
 
 Status: active J1 expansion. Exact rename/add/remove/reorder have packaged
 CLI/daemon/MCP preview/apply/rollback acceptance on all four native platforms.
-Type change and hierarchy families remain pending.
+The bounded JDT parameter-type-change row has local library and packaged
+CLI/daemon/MCP acceptance; four-platform qualification is pending. Hierarchy
+families remain pending.
 
 ## Purpose
 
@@ -50,11 +52,20 @@ changed method plus every call site in a disposable staged source overlay.
 Remove additionally requires zero bound body uses. Caller-provided add defaults
 must compile at every bound call site.
 
+## Bounded parameter type change
+
+Type change accepts one regular non-vararg, non-array, unannotated parameter in a
+package/private non-hierarchy method. JDT must publish the exact type token,
+parameter binding and every invocation. The edit changes only that type token;
+call arguments remain byte-identical. Disposable staged JDT analysis must resolve
+all original invocation locations to the changed method, preserve parameter body
+uses and introduce no diagnostics. A changed overload selection, incompatible
+body/caller, duplicate signature, annotation/vararg/array or incomplete evidence
+refuses.
+
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-
-- parameter type-change operations using JDT-bound call sites;
 - complete overload families and override/implementer hierarchies;
 - constructors, varargs, generic methods, records and annotations;
 - method references, lambdas and external/public consumer boundaries;

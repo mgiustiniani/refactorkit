@@ -23,8 +23,9 @@ try {
     @'
 package com.acme;
 public class Service {
-    public String find(String key) { return key; }
-    public String find(int id) { return String.valueOf(id); }
+    String find(String key) { return key; }
+    String find(int id) { return String.valueOf(id); }
+    int size(CharSequence text) { return text.length(); }
 }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "Service.java")
     @'
@@ -88,6 +89,18 @@ export class RealNativeBinding { run(): void {} }
     $SignatureRollback = (& $Launcher patch rollback $SignatureMatch.Value --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
         throw "Packaged JDT parameter rollback failed: $SignatureRollback"
+    }
+
+    $TypeOutput = (& $Launcher change-signature --operation change-parameter-type --symbol 'com.acme.Service#size(java.lang.CharSequence)' --name text --type String --apply $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Packaged JDT parameter type change failed: $TypeOutput" }
+    $TypeMatch = [regex]::Match($TypeOutput, 'transaction-[0-9a-f-]+')
+    $TypeContent = Get-Content -Raw (Join-Path $SourceDir "Service.java")
+    if (-not $TypeMatch.Success -or $TypeContent -notmatch 'size\(String text\)') {
+        throw "Packaged JDT parameter type post-image mismatch: $TypeOutput"
+    }
+    $TypeRollback = (& $Launcher patch rollback $TypeMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT parameter type rollback failed: $TypeRollback"
     }
 
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"

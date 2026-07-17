@@ -256,7 +256,7 @@ class McpSession(
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation", "symbol"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | organizeImports | formatFile | safeDelete",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
                     "languageId" to "string: java | kotlin | typescript | javascript (default java)",
                     "expectedSnapshotHash" to "string: required for Kotlin rename",
@@ -743,6 +743,7 @@ class McpSession(
             "- renameMember: rename a method or field\n" +
             "- extractMethod: extract selected Java lines into a private void method\n" +
             "- changeSignature.renameParameter: rename a method parameter\n" +
+            "- changeSignature.changeParameterType: change one JDT-bound method parameter type\n" +
             "- changeSignature.addParameter: add a method parameter with a default call-site expression\n" +
             "- changeSignature.reorderParameters: reorder method parameters and call-site arguments\n" +
             "- changeSignature.removeParameter: remove an unused method parameter and call-site argument\n" +
@@ -818,6 +819,12 @@ class McpSession(
                 symbol ?: missing("symbol"),
                 opArgs["oldName"] ?: opArgs["oldParameterName"] ?: missing("arguments.oldName"),
                 opArgs["newName"] ?: opArgs["newParameterName"] ?: missing("arguments.newName"),
+            )
+            "changeSignature.changeParameterType", "changeParameterType" -> JavaChangeSignaturePlanner(adapter).previewChangeParameterType(
+                snap,
+                symbol ?: missing("symbol"),
+                opArgs["name"] ?: opArgs["parameterName"] ?: missing("arguments.name"),
+                opArgs["type"] ?: opArgs["newType"] ?: missing("arguments.type"),
             )
             "changeSignature.addParameter", "addParameter" -> JavaChangeSignaturePlanner(adapter).previewAddParameter(
                 snap,

@@ -369,6 +369,39 @@ class McpSessionTest {
     }
 
     @Test
+    fun toolCallPreviewJdtParameterTypeChangeReturnsPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                class UserService {
+                    int size(CharSequence value) { return value.length(); }
+                    int run() { return size("abc"); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+
+        val result = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "changeSignature.changeParameterType")
+                put("symbol", "com.example.UserService#size(java.lang.CharSequence)")
+                put("arguments", buildJsonObject {
+                    put("name", "value")
+                    put("type", "String")
+                })
+            })
+        }) as JsonObject
+        val text = result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(text.contains("Plan ID"), text)
+        assertTrue(text.contains("Change JDT-proven parameter"), text)
+    }
+
+    @Test
     fun toolCallPreviewStructuralChangeSignatureReturnsPlanId() {
         val root = createProject(
             "src/main/java/com/example/UserService.java" to """

@@ -36,6 +36,7 @@ object JavaAdapterRegistration {
                 stable("safeDelete", SemanticEvidenceKind.COMPILER),
                 experimental("extractMethod"),
                 experimental("changeSignature.renameParameter"),
+                experimental("changeSignature.changeParameterType"),
                 experimental("changeSignature.addParameter"),
                 experimental("changeSignature.reorderParameters"),
                 experimental("changeSignature.removeParameter"),

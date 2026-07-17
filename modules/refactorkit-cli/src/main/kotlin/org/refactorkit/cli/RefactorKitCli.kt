@@ -335,6 +335,15 @@ class RefactorKitCli(
                     ?: run { System.err.println("change-signature rename-parameter requires --new-name <param>"); return 2 }
                 planner.previewRenameParameter(snap, symbol, oldName, newName)
             }
+            "change-parameter-type", "changeParameterType", "changeSignature.changeParameterType" -> {
+                val name = parsed.options["name"]
+                    ?: parsed.options["parameter-name"]
+                    ?: run { System.err.println("change-signature change-parameter-type requires --name <param>"); return 2 }
+                val type = parsed.options["type"]
+                    ?: parsed.options["new-type"]
+                    ?: run { System.err.println("change-signature change-parameter-type requires --type <javaType>"); return 2 }
+                planner.previewChangeParameterType(snap, symbol, name, type)
+            }
             "add-parameter", "addParameter", "changeSignature.addParameter" -> {
                 val type = parsed.options["type"]
                     ?: parsed.options["parameter-type"]
@@ -362,7 +371,7 @@ class RefactorKitCli(
                 planner.previewRemoveParameter(snap, symbol, name)
             }
             else -> {
-                System.err.println("change-signature supports --operation rename-parameter, add-parameter, reorder-parameters, or remove-parameter")
+                System.err.println("change-signature supports --operation rename-parameter, change-parameter-type, add-parameter, reorder-parameters, or remove-parameter")
                 return 2
             }
         }
@@ -990,6 +999,7 @@ class RefactorKitCli(
           refactorkit extract-method    --file <path> --start-line <n> --end-line <n> --method-name <name> [--apply] [--root <path>]
           refactorkit change-signature  --symbol <FQN#method> --old-name <param> --new-name <param> [--apply] [<path>]
           refactorkit change-signature  --operation add-parameter --symbol <FQN#method> --type <javaType> --name <param> --default <expr> [--apply] [<path>]
+          refactorkit change-signature  --operation change-parameter-type --symbol <FQN#method> --name <param> --type <javaType> [--apply] [<path>]
           refactorkit change-signature  --operation reorder-parameters --symbol <FQN#method> --order <param1,param2,...> [--apply] [<path>]
           refactorkit change-signature  --operation remove-parameter --symbol <FQN#method> --name <param> [--apply] [<path>]
           refactorkit move-class        --symbol <fqcn> --to-package <pkg>        [--apply] [<path>]

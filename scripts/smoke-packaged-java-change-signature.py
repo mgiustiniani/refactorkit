@@ -89,7 +89,9 @@ def main() -> int:
             b"    private String key = \"field\";\n"
             b"    String find(String key, boolean unused) { return key.trim() + this.key; }\n"
             b"    String find(int key) { return String.valueOf(key); }\n"
-            b"    String run() { return find(\"x\", true); }\n}\n"
+            b"    String run() { return find(\"x\", true); }\n"
+            b"    int size(CharSequence text) { return text.length(); }\n"
+            b"    int sizeRun() { return size(\"abc\"); }\n}\n"
         )
         source.write_bytes(original)
         before = source_hash(root)
@@ -123,18 +125,20 @@ def main() -> int:
                 raise AssertionError(f"MCP rollback failed: {rolled_back}")
 
             cases = [
+                ("changeSignature.changeParameterType", {"name": "text", "type": "String"},
+                 ["size(String text)", "size(\"abc\")"], "com.acme.Service#size(java.lang.CharSequence)"),
                 ("changeSignature.addParameter", {"type": "int", "name": "limit", "default": "10"},
-                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"]),
+                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"], symbol),
                 ("changeSignature.reorderParameters", {"order": "unused,key"},
-                 ["find(boolean unused, String key)", "find(true, \"x\")"]),
+                 ["find(boolean unused, String key)", "find(true, \"x\")"], symbol),
                 ("changeSignature.removeParameter", {"name": "unused"},
-                 ["find(String key)", "find(\"x\")"]),
+                 ["find(String key)", "find(\"x\")"], symbol),
             ]
             request_id = 20
-            for operation, arguments, required in cases:
+            for operation, arguments, required, case_symbol in cases:
                 preview_result = exchange(process, request_id, "tools/call", {
                     "name": "preview_refactoring", "arguments": {
-                        "operation": operation, "symbol": symbol, "arguments": arguments,
+                        "operation": operation, "symbol": case_symbol, "arguments": arguments,
                     },
                 })["content"][0]["text"]
                 if "Status   : PREVIEW" not in preview_result:
@@ -178,17 +182,19 @@ def main() -> int:
                 raise AssertionError(f"daemon rollback failed: {rolled_back}")
 
             cases = [
+                ("changeSignature.changeParameterType", {"name": "text", "type": "String"},
+                 ["size(String text)", "size(\"abc\")"], "com.acme.Service#size(java.lang.CharSequence)"),
                 ("changeSignature.addParameter", {"type": "int", "name": "limit", "default": "10"},
-                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"]),
+                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"], symbol),
                 ("changeSignature.reorderParameters", {"order": "unused,key"},
-                 ["find(boolean unused, String key)", "find(true, \"x\")"]),
+                 ["find(boolean unused, String key)", "find(true, \"x\")"], symbol),
                 ("changeSignature.removeParameter", {"name": "unused"},
-                 ["find(String key)", "find(\"x\")"]),
+                 ["find(String key)", "find(\"x\")"], symbol),
             ]
             request_id = 30
-            for operation, arguments, required in cases:
+            for operation, arguments, required, case_symbol in cases:
                 preview_result = exchange(process, request_id, "refactor.preview", {
-                    "operation": operation, "symbol": symbol, "arguments": arguments,
+                    "operation": operation, "symbol": case_symbol, "arguments": arguments,
                 })
                 applied_result = exchange(process, request_id + 1, "refactor.apply", {
                     "planId": preview_result["planId"],
@@ -203,7 +209,7 @@ def main() -> int:
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/add/reorder/remove restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove restored exact bytes.")
     return 0
 
 

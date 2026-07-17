@@ -606,6 +606,33 @@ class DaemonSessionTest {
     }
 
     @Test
+    fun previewJdtParameterTypeChangeReturnsPlanId() {
+        val root = createProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                class UserService {
+                    int size(CharSequence value) { return value.length(); }
+                    int run() { return size("abc"); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val result = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "changeSignature.changeParameterType")
+            put("symbol", "com.example.UserService#size(java.lang.CharSequence)")
+            put("arguments", buildJsonObject {
+                put("name", "value")
+                put("type", "String")
+            })
+        }) as JsonObject
+
+        assertEquals("changeSignature.changeParameterType", result["operation"]!!.jsonPrimitive.content)
+        assertEquals("PREVIEW", result["status"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun previewStructuralChangeSignatureOperationsReturnPlanIds() {
         val root = createProject(
             "src/main/java/com/example/UserService.java" to """

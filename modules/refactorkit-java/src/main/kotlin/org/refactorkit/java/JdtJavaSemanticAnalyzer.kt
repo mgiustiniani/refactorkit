@@ -438,6 +438,7 @@ class JdtJavaSemanticAnalyzer {
                         index = index,
                         path = file.path,
                         declarationRange = rangeFor(compilationUnit, parameter.startPosition, parameter.length),
+                        typeRange = rangeFor(compilationUnit, parameter.type.startPosition, parameter.type.length),
                         sourceRange = rangeFor(compilationUnit, identifier.startPosition, identifier.length),
                         evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                     )
@@ -966,6 +967,7 @@ data class JdtJavaSemanticParameter(
     val index: Int,
     val path: Path,
     val declarationRange: SourceRange,
+    val typeRange: SourceRange,
     val sourceRange: SourceRange,
     val evidence: JdtJavaSemanticEvidence,
 )

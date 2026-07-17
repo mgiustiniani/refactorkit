@@ -11,6 +11,7 @@ review safety boundaries before applying refactorings.
 
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
+  bounded type change preserves exact call-site bindings and argument bytes;
   bounded add/remove/reorder update only bound argument lists and revalidate a
   disposable staged source overlay. Packaged CLI/daemon/MCP apply and byte-exact
   rollback are covered locally.

@@ -32,8 +32,9 @@ mkdir -p "$fixture/src/main/java/com/acme"
 cat >"$fixture/src/main/java/com/acme/Service.java" <<'JAVA'
 package com.acme;
 public class Service {
-    public String find(String key) { return key; }
-    public String find(int id) { return String.valueOf(id); }
+    String find(String key) { return key; }
+    String find(int id) { return String.valueOf(id); }
+    int size(CharSequence text) { return text.length(); }
 }
 JAVA
 cat >"$fixture/src/main/java/com/acme/ServiceClient.java" <<'JAVA'
@@ -112,9 +113,22 @@ if [[ "$before" != "$(source_hashes)" ]]; then
   exit 1
 fi
 
+type_output="$(env -u JAVA_HOME "$launcher" change-signature --operation change-parameter-type --symbol 'com.acme.Service#size(java.lang.CharSequence)' --name text --type String --apply "$fixture")"
+type_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$type_output" | tail -1)"
+if [[ -z "$type_transaction" ]] || ! grep -Fq 'size(String text)' "$fixture/src/main/java/com/acme/Service.java"; then
+  echo "Packaged JDT parameter type change failed:" >&2
+  echo "$type_output" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$type_transaction" --root "$fixture" >/dev/null
+if [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT parameter type rollback did not restore Java sources" >&2
+  exit 1
+fi
+
 format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
 transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"
-if [[ -z "$transaction_id" ]] || ! grep -Fq 'public String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then
+if [[ -z "$transaction_id" ]] || ! grep -Fq 'String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then
   echo "Packaged managed format smoke failed:" >&2
   echo "$format_output" >&2
   exit 1

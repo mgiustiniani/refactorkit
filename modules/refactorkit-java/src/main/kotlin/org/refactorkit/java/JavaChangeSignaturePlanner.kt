@@ -119,6 +119,83 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         )
     }
 
+    fun previewChangeParameterType(
+        snapshot: ProjectSnapshot,
+        symbolFqnWithMethod: String,
+        parameterName: String,
+        newType: String,
+    ): PatchPlan {
+        val operation = "changeSignature.changeParameterType"
+        if (!isValidJavaIdentifier(parameterName)) return refused(snapshot, operation, "Invalid parameter name: $parameterName")
+        if (!isSupportedParameterType(newType)) return refused(snapshot, operation, "Unsupported or unsafe parameter type: $newType")
+        val (selection, selectionRefusal) = selectJdtMethod(snapshot, symbolFqnWithMethod, operation)
+        if (selection == null) return selectionRefusal!!
+        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        val parameter = selection.parameters.singleOrNull { it.name == parameterName }
+            ?: return refused(snapshot, operation, "JDT parameter '$parameterName' is missing or ambiguous in ${selection.method.qualifiedName}")
+        val declarationText = sourceText(selection.file.content, parameter.declarationRange)
+        val oldType = sourceText(selection.file.content, parameter.typeRange)
+        val requestedType = newType.trim()
+        if (oldType == requestedType) return refused(snapshot, operation, "New parameter type is identical to '$oldType'")
+        if (declarationText.contains("@") || declarationText.contains("...") ||
+            declarationText.contains("[") || declarationText.contains("]")) {
+            return refused(snapshot, operation, "Annotated, vararg, and array parameters are outside the bounded type-change row")
+        }
+        if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
+            return refused(snapshot, operation, "JDT invocation argument evidence is incomplete")
+        }
+
+        val edit = FileEdit.Modify(selection.file.path, listOf(TextEdit(parameter.typeRange, requestedType)))
+        val fileEdits = listOf(edit)
+        val stagedSnapshot = stagedSnapshot(snapshot, fileEdits)
+        val staged = analyzeStaged(stagedSnapshot)
+        val introduced = introducedJdtWarningCount(selection.analysis, staged)
+        if (introduced > 0) return refused(snapshot, operation, "Staged JDT validation introduced $introduced error(s)")
+        val expectedNames = selection.parameters.map { it.name }
+        val stagedFile = stagedSnapshot.files.single { it.path == selection.file.path }
+        val stagedCandidates = staged.methods.filter { candidate ->
+            candidate.qualifiedName.substringBefore('(') == selection.method.qualifiedName.substringBefore('(') &&
+                staged.parameters.filter { it.methodQualifiedName == candidate.qualifiedName }.sortedBy { it.index }.map { it.name } == expectedNames
+        }.filter { candidate ->
+            val candidateParameter = staged.parameters.singleOrNull {
+                it.methodQualifiedName == candidate.qualifiedName && it.index == parameter.index
+            }
+            candidateParameter != null && sourceText(stagedFile.content, candidateParameter.typeRange) == requestedType
+        }
+        if (stagedCandidates.size != 1) {
+            return refused(snapshot, operation, "Staged JDT changed-method identity is missing or ambiguous")
+        }
+        val stagedMethod = stagedCandidates.single()
+        val beforeCalls = selection.invocations.map(::invocationLocationIdentity).toSet()
+        val stagedCalls = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
+        val afterCalls = stagedCalls.map(::invocationLocationIdentity).toSet()
+        if (beforeCalls != afterCalls || stagedCalls.any { it.argumentRanges.size != selection.parameters.size }) {
+            return refused(snapshot, operation, "Staged JDT call-site binding changed after parameter type replacement")
+        }
+        val beforeUses = selection.analysis.bindingUses.count { it.bindingKey == parameter.parameterBindingKey }
+        val stagedParameter = staged.parameters.single {
+            it.methodQualifiedName == stagedMethod.qualifiedName && it.index == parameter.index
+        }
+        val stagedUses = staged.bindingUses.count { it.bindingKey == stagedParameter.parameterBindingKey }
+        if (beforeUses != stagedUses) {
+            return refused(snapshot, operation, "Staged JDT parameter body-use count changed from $beforeUses to $stagedUses")
+        }
+
+        return PatchPlan(
+            operation = operation,
+            status = PatchStatus.PREVIEW,
+            snapshotHash = snapshot.hash,
+            confidence = 0.97,
+            requiresUserApproval = true,
+            summary = "Change JDT-proven parameter '$parameterName' type from '$oldType' to '$requestedType' in ${selection.method.qualifiedName}; ${selection.invocations.size} call site(s) remain bound.",
+            affectedFiles = setOf(selection.file.path),
+            workspaceEdit = WorkspaceEdit(fileEdits),
+            diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
+            warnings = listOf("Only the exact JDT parameter type range changes; call arguments remain byte-identical."),
+            riskLevel = RiskLevel.MEDIUM,
+        )
+    }
+
     fun previewAddParameter(
         snapshot: ProjectSnapshot,
         symbolFqnWithMethod: String,
@@ -454,6 +531,10 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             if (edit == null) file else file.copy(content = TextEdits.apply(file.content, edit.textEdits))
         })
     }
+
+    private fun invocationLocationIdentity(invocation: JdtJavaSemanticInvocation): String =
+        "${invocation.path}|${invocation.nameRange.start.line}:${invocation.nameRange.start.character}|" +
+            "${invocation.nameRange.end.line}:${invocation.nameRange.end.character}"
 
     private fun methodParameterTypes(method: JdtJavaSemanticMethod): List<String> {
         val signature = method.signature
