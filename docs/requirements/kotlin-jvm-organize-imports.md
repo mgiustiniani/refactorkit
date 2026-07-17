@@ -1,8 +1,7 @@
 # Kotlin/JVM organize-imports requirement
 
-Status: active bounded K5 slice with local library apply/rollback acceptance.
-CLI/daemon/MCP routing, packaged smoke and four-platform qualification remain
-pending.
+Status: bounded K5 library row qualified locally and on all four native test
+platforms. CLI/daemon/MCP routing and packaged operation smoke remain pending.
 
 ## Purpose
 
