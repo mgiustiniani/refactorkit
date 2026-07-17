@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Expand Kotlin/JVM `organizeImports` to exact package-star directives. Stars are
+  preserved unconditionally, sorted with retained explicit imports and never
+  assigned unsupported unused-import authority.
 - Expand Kotlin/JVM `organizeImports` to FIR-proven source/external type aliases.
   Alias-to-identity evidence now covers external constructor, qualifier and type
   uses; unused aliased imports may be removed while retained aliases are sorted

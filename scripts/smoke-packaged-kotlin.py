@@ -693,7 +693,9 @@ def main() -> int:
         imports_file.write_bytes(
             b"package org.refactorkit.imports\r\n"
             b"import java.util.UUID as Id\r\n"
+            b"import java.util.*\r\n"
             b"import java.util.concurrent.atomic.AtomicInteger as Counter\r\n"
+            b"import java.time.*\r\n"
             b"import java.time.Instant as Moment\r\n"
             b"fun values(): Pair<Moment, Counter> = Moment.now() to Counter()\r\n"
         )
@@ -744,7 +746,9 @@ def main() -> int:
             imports_transaction = imports_applied.split("Transaction ID: ", 1)[1].splitlines()[0]
             organized_bytes = imports_file.read_bytes()
             if (b"java.util.UUID" in organized_bytes or
+                    b"import java.time.*\r\n"
                     b"import java.time.Instant as Moment\r\n"
+                    b"import java.util.*\r\n"
                     b"import java.util.concurrent.atomic.AtomicInteger as Counter" not in organized_bytes):
                 raise AssertionError(f"Kotlin organize-imports MCP apply failed: {imports_applied}")
             imports_rollback = imports_mcp_tool(74, "rollback_refactoring", {"transactionId": imports_transaction})

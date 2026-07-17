@@ -317,7 +317,9 @@ class KotlinCompilerDiagnosticsTest {
     fun organizeImportsRemovesCompilerProvenUnusedTypeAndSortsCrLfBlock() {
         val root = project(
             "import java.util.UUID as Id\r\n" +
+                "import java.util.*\r\n" +
                 "import java.util.concurrent.atomic.AtomicInteger as Counter\r\n" +
+                "import java.time.*\r\n" +
                 "import java.time.Instant as Moment\r\n" +
                 "fun values(): Pair<Moment, Counter> = Moment.now() to Counter()\r\n",
         )
@@ -338,7 +340,9 @@ class KotlinCompilerDiagnosticsTest {
             ),
         )
         assertTrue(source.readText().contains(
-            "import java.time.Instant as Moment\r\n" +
+            "import java.time.*\r\n" +
+                "import java.time.Instant as Moment\r\n" +
+                "import java.util.*\r\n" +
                 "import java.util.concurrent.atomic.AtomicInteger as Counter\r\nfun values()",
         ))
         assertTrue("java.util.UUID" !in source.readText())

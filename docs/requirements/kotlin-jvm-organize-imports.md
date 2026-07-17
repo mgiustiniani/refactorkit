@@ -1,9 +1,9 @@
 # Kotlin/JVM organize-imports requirement
 
-Status: qualified bounded K5 row for explicit and FIR-proven aliased
-source/external type imports across library, CLI, daemon, MCP and packaged
-execution on all four native platforms. Star/callable imports and
-project-style-aware formatting remain pending.
+Status: active bounded K5 expansion. Explicit and aliased type imports pass all
+acceptance layers. Exact package-star preservation/sorting has local and packaged
+CLI/daemon/MCP acceptance; four-platform qualification is pending. Callable
+imports and project-style-aware formatting remain pending.
 
 ## Purpose
 
@@ -18,12 +18,14 @@ The operation accepts one saved `.kt` file only when:
 1. the file belongs to one authoritative, non-generated Kotlin/JVM source set;
 2. the hash-bound K2 snapshot compiles without errors;
 3. imports form one contiguous block after the exact package declaration, with one
-   explicit type directive per line, at most one exact alias, and no comments
-   inside or attached to the block;
-4. FIR resolves each alias to its exact imported source/external JVM type and K2
-   publishes complete usage evidence; a directive is unused only when its sole target usage is the exact
-   import token itself;
-5. all remaining directives can be sorted deterministically by their complete
+   directive per line, at most one exact alias on non-star directives, and no
+   comments inside or attached to the block;
+4. Package-star directives are preserved unconditionally because bounded K2
+   evidence does not attribute every resolution to one competing star scope;
+5. FIR resolves each alias to its exact imported source/external JVM type and K2
+   publishes complete usage evidence; a non-star directive is unused only when
+   its sole target usage is the exact import token itself;
+6. all remaining directives can be sorted deterministically by their complete
    directive text.
 
 Scripts, compiler plugins, conditional/generated sources and formatter inference
@@ -34,7 +36,8 @@ are outside this row.
 The preview contains at most one text edit replacing the complete import block.
 It shall:
 
-- delete only directives whose K2-resolved type has no non-import usage;
+- delete only non-star directives whose K2-resolved type has no non-import usage;
+- preserve every exact package-star directive without claiming unused authority;
 - sort remaining directive lines by Unicode code-point order of the complete
   trimmed directive;
 - preserve each retained directive byte-for-byte apart from line order;
@@ -59,8 +62,8 @@ The operation refuses with structured codes for at least:
 
 - missing/non-Kotlin/generated/ambiguous source ownership;
 - baseline compiler errors or incomplete K2 evidence;
-- default-package, split, commented, multiline, star, callable or malformed/
-  duplicate-alias import blocks;
+- default-package, split, commented, multiline, aliased-star, callable or
+  malformed/duplicate-alias import blocks;
 - resolved import evidence that does not map one-to-one to exact import lines;
 - no-op organization;
 - staged diagnostics regression or remaining unused imports;
