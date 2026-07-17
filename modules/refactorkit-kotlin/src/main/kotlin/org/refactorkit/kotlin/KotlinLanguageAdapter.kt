@@ -194,7 +194,7 @@ object KotlinAdapterRegistration {
                 when (operation) {
                     "diagnostics" -> diagnosticsCapability()
                     "workspaceSymbols", "documentSymbols", "definition" -> symbolCapability(operation)
-                    "renameSymbol" -> renameCapability()
+                    "renameSymbol", "organizeImports" -> mutationCapability(operation)
                     else -> refused(operation, setOf("kt"))
                 }
             } + refused("scriptSemantics", setOf("kts"))
@@ -251,8 +251,8 @@ object KotlinAdapterRegistration {
         extensions = setOf("kt"),
     )
 
-    private fun renameCapability() = LanguageCapability(
-        operation = "renameSymbol",
+    private fun mutationCapability(operation: String) = LanguageCapability(
+        operation = operation,
         stability = CapabilityStability.EXPERIMENTAL,
         evidence = SemanticEvidenceKind.COMPILER,
         mutationAuthority = MutationAuthority.PROPOSAL_ONLY,

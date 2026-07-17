@@ -168,13 +168,17 @@ class DaemonSessionTest {
         })
         assertTrue(kotlinCapabilities.filter {
             it["operation"]!!.jsonPrimitive.content !in setOf(
-                "diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol",
+                "diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol", "organizeImports",
             )
         }.all { it["stability"]!!.jsonPrimitive.content == "refused" && it["evidence"]!!.jsonPrimitive.content == "none" })
         val kotlinRename = kotlinCapabilities.single { it["operation"]!!.jsonPrimitive.content == "renameSymbol" }
         assertEquals("experimental", kotlinRename["stability"]!!.jsonPrimitive.content)
         assertEquals("compiler", kotlinRename["evidence"]!!.jsonPrimitive.content)
         assertEquals("proposal-only", kotlinRename["mutationAuthority"]!!.jsonPrimitive.content)
+        val kotlinImports = kotlinCapabilities.single { it["operation"]!!.jsonPrimitive.content == "organizeImports" }
+        assertEquals("experimental", kotlinImports["stability"]!!.jsonPrimitive.content)
+        assertEquals("compiler", kotlinImports["evidence"]!!.jsonPrimitive.content)
+        assertEquals("proposal-only", kotlinImports["mutationAuthority"]!!.jsonPrimitive.content)
         assertTrue(byName.keys.containsAll(setOf("kotlin.symbols", "kotlin.definition")))
         val typescript = languageAdapters.single { it["languageId"]!!.jsonPrimitive.content == "typescript" }
         val capabilities = typescript["capabilities"]!!.jsonArray.map { it.jsonObject }

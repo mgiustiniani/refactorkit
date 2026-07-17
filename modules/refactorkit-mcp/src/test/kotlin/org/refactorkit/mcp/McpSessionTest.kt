@@ -83,7 +83,7 @@ class McpSessionTest {
     }
 
     @Test
-    fun kotlinMoveDeclarationIsListedAndRequiresSemanticAuthority() {
+    fun kotlinMutationsAreListedAndRequireSemanticAuthority() {
         val root = createProject(
             "src/main/kotlin/example/api/Portable.kt" to "package example.api\npublic class Portable\n",
         )
@@ -98,6 +98,7 @@ class McpSessionTest {
             put("arguments", buildJsonObject { put("symbol", "kotlin-jvm-type-v1:${"a".repeat(64)}") })
         }) as JsonObject
         assertTrue(contentText(available).contains("moveDeclaration"))
+        assertTrue(contentText(available).contains("organizeImports"))
 
         val preview = session.dispatch("tools/call", buildJsonObject {
             put("name", "preview_refactoring")
@@ -111,6 +112,16 @@ class McpSessionTest {
             })
         }) as JsonObject
         assertTrue(contentText(preview).contains("kotlin.moveAuthorityStale"))
+
+        val imports = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "organizeImports"); put("languageId", "kotlin")
+                put("semanticLease", "stale"); put("expectedSnapshotHash", snapshot)
+                put("arguments", buildJsonObject { put("file", "src/main/kotlin/example/api/Portable.kt") })
+            })
+        }) as JsonObject
+        assertTrue(contentText(imports).contains("kotlin.organizeImportsAuthorityStale"))
     }
 
     @Test

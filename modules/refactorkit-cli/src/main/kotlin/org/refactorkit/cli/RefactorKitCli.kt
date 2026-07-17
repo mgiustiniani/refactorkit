@@ -650,8 +650,8 @@ class RefactorKitCli(
 
     private fun cmdKotlin(args: List<String>): Int {
         val operation = args.firstOrNull()
-        if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename", "move-declaration")) {
-            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, rename, or move-declaration")
+        if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename", "move-declaration", "organize-imports")) {
+            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, rename, move-declaration, or organize-imports")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
@@ -663,6 +663,10 @@ class RefactorKitCli(
         if (operation == "move-declaration" &&
             (parsed.options["symbol"] == null || parsed.options["to-package"] == null)) {
             System.err.println("Kotlin move-declaration requires --symbol and --to-package")
+            return 2
+        }
+        if (operation == "organize-imports" && parsed.options["file"] == null) {
+            System.err.println("Kotlin organize-imports requires --file")
             return 2
         }
         if (positionNavigation && listOf("file", "line", "character").any { parsed.options[it] == null }) {
@@ -693,18 +697,25 @@ class RefactorKitCli(
                 put("compilerClasspath", buildJsonArray { compilerClasspath.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
                 put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
             }).jsonObject
-            val result = if (operation in setOf("rename", "move-declaration")) {
+            val result = if (operation in setOf("rename", "move-declaration", "organize-imports")) {
                 val index = session.dispatch("index.status", null).jsonObject
                 val generation = index.getValue("generation").jsonPrimitive.content.toLong()
                 val preview = session.dispatch("refactor.preview", buildJsonObject {
-                    put("operation", if (operation == "rename") "renameSymbol" else "moveDeclaration"); put("languageId", "kotlin")
-                    put("symbol", parsed.options.getValue("symbol"))
+                    put("operation", when (operation) {
+                        "rename" -> "renameSymbol"
+                        "move-declaration" -> "moveDeclaration"
+                        else -> "organizeImports"
+                    }); put("languageId", "kotlin")
+                    parsed.options["symbol"]?.let { put("symbol", it) }
                     put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
                     put("semanticLease", started.getValue("semanticLease").jsonPrimitive.content)
                     put("expectedIndexGeneration", generation)
                     put("arguments", buildJsonObject {
-                        if (operation == "rename") put("newName", parsed.options.getValue("to"))
-                        else put("targetPackage", parsed.options.getValue("to-package"))
+                        when (operation) {
+                            "rename" -> put("newName", parsed.options.getValue("to"))
+                            "move-declaration" -> put("targetPackage", parsed.options.getValue("to-package"))
+                            else -> put("file", parsed.options.getValue("file"))
+                        }
                         put("acceptExternalConsumerRisk", "accept-external-consumer-risk" in parsed.flags)
                     })
                 })
@@ -999,6 +1010,7 @@ class RefactorKitCli(
           refactorkit kotlin references <root> --file <relative.kt> --line <zero-based> --character <zero-based> [--exclude-declaration] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin rename <root> --symbol <jvm-symbol-id> --to <new-name> [--accept-external-consumer-risk] [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin move-declaration <root> --symbol <jvm-symbol-id> --to-package <package> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin organize-imports <root> --file <relative.kt> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

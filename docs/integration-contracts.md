@@ -74,7 +74,7 @@ compatible.
 | `refactorkit capabilities` | `experimental` | Emits language-kernel capability schema v1 with deterministic adapter, backend, operation, evidence, authority, execution, timeout/cancellation, overlay, provenance, and resource-limit fields. |
 | `refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename>` | `experimental` | One-shot explicit-toolchain semantic session; startup builds a bounded attested central-index declaration partition, `diagnostics-v2` emits the IDE-grade saved-disk authority envelope, legacy `diagnostics` remains compatible, preview is default, and managed apply requires `--apply`. |
 | `refactorkit kotlin diagnostics <root> --jdk-home ... --compiler-jar ... [--compiler-classpath ...]` | `experimental` | One-shot explicit JDK 21/Kotlin 2.0.21 K2 diagnostics with exact snapshot/lease, build/toolchain hashes, line-only/no-location precision and process attestation; no mutation authority. |
-| `refactorkit kotlin symbols <root> ...` / `kotlin definition` / `kotlin references` / `kotlin rename` | `experimental` | Saved-snapshot compiler declarations/usages plus bounded K4 private-declaration managed rename. In mixed snapshots, `--accept-external-consumer-risk` admits bounded public top-level type preview in either direction: ephemeral K2 classes feed exact JDT Java bindings, while bounded annotation-processing-free ECJ classes feed exact K2 external-type usages. Direction-specific staged compiler evidence must remain clean. Bounded public non-overloaded direct Kotlin functions and public non-overloaded,
+| `refactorkit kotlin symbols <root> ...` / `kotlin definition` / `kotlin references` / `kotlin rename` / `kotlin organize-imports` | `experimental` | Saved-snapshot compiler declarations/usages plus bounded K4 private-declaration managed rename. In mixed snapshots, `--accept-external-consumer-risk` admits bounded public top-level type preview in either direction: ephemeral K2 classes feed exact JDT Java bindings, while bounded annotation-processing-free ECJ classes feed exact K2 external-type usages. Direction-specific staged compiler evidence must remain clean. Bounded public non-overloaded direct Kotlin functions and public non-overloaded,
 non-override Java methods may update compiler-bound callers in the other language;
 unsupported callable shapes refuse. Additive `moveDeclaration` accepts only the
 bounded public top-level Kotlin/JVM type row plus co-located compiler-proven
@@ -87,8 +87,10 @@ rewrites exact
 fully-qualified K2/JDT-bound target identities. Kotlin and Java consumer sets are
 independently optional, and a K2-proven public type with zero in-workspace
 consumers may move without fabricated usage evidence. The operation requires `targetPackage` plus external-consumer-risk acceptance, and preserves the same
-lease/snapshot/index authority and one-transaction apply boundary. Incomplete
-shapes still refuse without fallback. |
+lease/snapshot/index authority and one-transaction apply boundary. Bounded `organizeImports` removes only K2-proven unused explicit type imports,
+sorts the retained uncommented contiguous block, preserves CRLF and shares the
+same lease/snapshot/index and transaction boundaries. Incomplete shapes still
+refuse without fallback. |
 | `refactorkit scan <path>` | `beta-contract` | Read-only project scan summary. |
 | `refactorkit index [path] [--json]` | `additive-api-0.2` | Builds the session-scoped whole-workspace source/declaration index and prints human or typed JSON status without workspace writes. |
 | `refactorkit intelligence search [path] ... [--json]` | `experimental` | Bounded workspace/document symbol search over the central index. Completion, hover and signature-help kinds return typed refusal until provider-qualified. |

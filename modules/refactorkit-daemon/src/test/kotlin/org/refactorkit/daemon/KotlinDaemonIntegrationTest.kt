@@ -61,6 +61,18 @@ class KotlinDaemonIntegrationTest {
         }).jsonObject
         assertEquals("started", started.getValue("status").jsonPrimitive.content)
         assertEquals("kotlin-compiler-diagnostics-k2-v1", started.getValue("backend").jsonPrimitive.content)
+        val generation = session.dispatch("index.status", null).jsonObject
+            .getValue("generation").jsonPrimitive.content.toLong()
+        val staleImports = assertFailsWith<org.refactorkit.core.JsonRpcException> {
+            session.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "organizeImports"); put("languageId", "kotlin")
+                put("semanticLease", "stale")
+                put("expectedSnapshotHash", started.getValue("snapshotHash").jsonPrimitive.content)
+                put("expectedIndexGeneration", generation)
+                put("arguments", buildJsonObject { put("file", "src/main/kotlin/fixture/App.kt") })
+            })
+        }
+        assertTrue(staleImports.message.orEmpty().contains("kotlin.organizeImportsSessionStale"))
 
         val stale = session.dispatch("kotlin.diagnostics", buildJsonObject {
             put("requestId", "kotlin-stale")

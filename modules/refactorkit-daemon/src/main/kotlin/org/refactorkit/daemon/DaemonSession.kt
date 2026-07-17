@@ -70,6 +70,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.kotlin.KotlinOrganizeImportsPlanner
 import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
@@ -1530,7 +1531,23 @@ class DaemonSession(
             }
             "organizeImports" -> {
                 val file = args["file"] ?: symbol ?: missing("arguments.file")
-                JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(file))
+                if (requestedLanguage == "kotlin") {
+                    val lease = p.string("semanticLease") ?: missing("semanticLease")
+                    val expected = p.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                    val generation = p.string("expectedIndexGeneration")?.toLongOrNull()
+                        ?: missing("expectedIndexGeneration")
+                    val currentGeneration = workspaceIndex.snapshot()?.generation
+                        ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin workspace index is unavailable")
+                    if (lease != kotlinSemanticLease) throw JsonRpcException(
+                        JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.organizeImportsSessionStale",
+                    )
+                    if (expected != snap.hash || generation != currentGeneration) throw JsonRpcException(
+                        JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.organizeImportsAuthorityStale",
+                    )
+                    KotlinOrganizeImportsPlanner(kotlinAdapter).preview(snap, Paths.get(file))
+                } else {
+                    JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(file))
+                }
             }
             "formatFile" -> {
                 val file = args["file"] ?: symbol ?: missing("arguments.file")

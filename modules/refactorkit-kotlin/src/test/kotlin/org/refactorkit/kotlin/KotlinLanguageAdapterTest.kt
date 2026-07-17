@@ -44,13 +44,15 @@ class KotlinLanguageAdapterTest {
                 it.backend == KotlinCompilerDiagnostics.SYMBOL_BACKEND
         })
         assertTrue(descriptor.capabilities.filter {
-            it.operation !in setOf("diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol")
+            it.operation !in setOf("diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol", "organizeImports")
         }.all { it.stability == CapabilityStability.REFUSED && it.evidence == SemanticEvidenceKind.NONE })
-        val rename = descriptor.capabilities.single { it.operation == "renameSymbol" }
-        assertEquals(CapabilityStability.EXPERIMENTAL, rename.stability)
-        assertEquals(SemanticEvidenceKind.COMPILER, rename.evidence)
-        assertEquals(MutationAuthority.PROPOSAL_ONLY, rename.mutationAuthority)
-        assertTrue(descriptor.capabilities.filter { it.operation != "renameSymbol" }
+        val mutations = descriptor.capabilities.filter { it.operation in setOf("renameSymbol", "organizeImports") }
+        assertTrue(mutations.all {
+            it.stability == CapabilityStability.EXPERIMENTAL &&
+                it.evidence == SemanticEvidenceKind.COMPILER &&
+                it.mutationAuthority == MutationAuthority.PROPOSAL_ONLY
+        })
+        assertTrue(descriptor.capabilities.filter { it.operation !in setOf("renameSymbol", "organizeImports") }
             .all { it.mutationAuthority == MutationAuthority.NONE })
         assertEquals(setOf("kts"), descriptor.capabilities.single { it.operation == "scriptSemantics" }.extensions)
         assertTrue(descriptor.capabilities.filter { it.operation != "scriptSemantics" }.all {

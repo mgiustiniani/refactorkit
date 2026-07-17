@@ -56,6 +56,7 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.kotlin.KotlinOrganizeImportsPlanner
 import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
@@ -748,7 +749,7 @@ class McpSession(
             "- moveClass: move a Java class to a different package\n" +
             "- moveDeclaration: move one supported public Kotlin/JVM type to a different package\n" +
             "- safeDelete: delete if no references exist\n" +
-            "- organizeImports: sort and deduplicate imports in the declaring file"
+            "- organizeImports: organize one Java or compiler-proven Kotlin import block"
     }
 
     private fun toolPreviewRefactoring(args: JsonObject): String {
@@ -839,7 +840,17 @@ class McpSession(
             "moveSourceRoot" -> JavaMoveSourceRootPlanner(adapter).preview(
                 snap, Paths.get(opArgs["from"] ?: missing("arguments.from")), Paths.get(opArgs["to"] ?: missing("arguments.to")),
             )
-            "organizeImports" -> JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
+            "organizeImports" -> {
+                val file = Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file"))
+                if (languageId == "kotlin") {
+                    val lease = args.string("semanticLease") ?: missing("semanticLease")
+                    val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                    if (lease != kotlinSemanticLease || expected != snap.hash) {
+                        return "Refused [kotlin.organizeImportsAuthorityStale]: Kotlin organize-imports authority is stale."
+                    }
+                    KotlinOrganizeImportsPlanner(kotlinAdapter).preview(snap, file)
+                } else JavaOrganizeImportsPlanner().previewSingleFile(snap, file)
+            }
             "formatFile" -> JavaFormatFilePlanner(adapter).preview(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
             "safeDelete"   -> JavaSafeDeletePlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["force"]?.toBoolean() ?: false)
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")

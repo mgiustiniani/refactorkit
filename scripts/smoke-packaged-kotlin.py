@@ -688,6 +688,126 @@ def main() -> int:
                 process.kill()
                 process.wait(timeout=20)
 
+        imports_file = workspace / "src/main/kotlin/org/refactorkit/imports/Imports.kt"
+        imports_file.parent.mkdir(parents=True, exist_ok=True)
+        imports_file.write_bytes(
+            b"package org.refactorkit.imports\r\n"
+            b"import java.util.UUID\r\n"
+            b"import java.util.concurrent.atomic.AtomicInteger\r\n"
+            b"import java.time.Instant\r\n"
+            b"fun values(): Pair<Instant, AtomicInteger> = Instant.now() to AtomicInteger()\r\n"
+        )
+        imports_before = tree_hash(workspace / "src")
+        imports_preview = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-organize-imports-preview", "organize-imports",
+            ["--file", "src/main/kotlin/org/refactorkit/imports/Imports.kt"],
+        )
+        if imports_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != imports_before:
+            raise AssertionError(f"Kotlin organize-imports CLI preview failed or wrote files: {imports_preview}")
+
+        process = subprocess.Popen(
+            command_for(mcp, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def imports_mcp_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"organize-imports MCP {method} failed: {response}")
+                return response["result"]
+
+            def imports_mcp_tool(request_id: int, name: str, arguments: dict) -> str:
+                result = imports_mcp_exchange(request_id, "tools/call", {"name": name, "arguments": arguments})
+                return result["content"][0]["text"]
+
+            imports_mcp_tool(70, "project_scan", {"root": str(workspace)})
+            imports_started = imports_mcp_tool(71, "kotlin_semantic_start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            imports_lease = imports_started.split("Semantic lease: ", 1)[1].split(". Snapshot:", 1)[0]
+            imports_snapshot = imports_started.split(". Snapshot: ", 1)[1].split(".", 1)[0]
+            imports_mcp_preview = imports_mcp_tool(72, "preview_refactoring", {
+                "operation": "organizeImports", "languageId": "kotlin",
+                "semanticLease": imports_lease, "expectedSnapshotHash": imports_snapshot,
+                "arguments": {"file": "src/main/kotlin/org/refactorkit/imports/Imports.kt"},
+            })
+            imports_plan = imports_mcp_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+            imports_applied = imports_mcp_tool(73, "apply_refactoring", {
+                "planId": imports_plan, "semanticLease": imports_lease,
+            })
+            imports_transaction = imports_applied.split("Transaction ID: ", 1)[1].splitlines()[0]
+            organized_bytes = imports_file.read_bytes()
+            if (b"java.util.UUID" in organized_bytes or
+                    b"import java.time.Instant\r\nimport java.util.concurrent.atomic.AtomicInteger" not in organized_bytes):
+                raise AssertionError(f"Kotlin organize-imports MCP apply failed: {imports_applied}")
+            imports_rollback = imports_mcp_tool(74, "rollback_refactoring", {"transactionId": imports_transaction})
+            if "Rolled back" not in imports_rollback or tree_hash(workspace / "src") != imports_before:
+                raise AssertionError(f"Kotlin organize-imports MCP rollback failed: {imports_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+
+        process = subprocess.Popen(
+            command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def imports_exchange(request_id: int, method: str, params: dict | None = None) -> dict:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+                if params is not None:
+                    request["params"] = params
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"organize-imports daemon {method} failed: {response}")
+                return response["result"]
+
+            imports_exchange(80, "project.open", {"root": str(workspace)})
+            imports_daemon_started = imports_exchange(81, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            imports_index = imports_exchange(82, "index.status")
+            imports_daemon_preview = imports_exchange(83, "refactor.preview", {
+                "operation": "organizeImports", "languageId": "kotlin",
+                "semanticLease": imports_daemon_started["semanticLease"],
+                "expectedSnapshotHash": imports_daemon_started["snapshotHash"],
+                "expectedIndexGeneration": imports_index["generation"],
+                "arguments": {"file": "src/main/kotlin/org/refactorkit/imports/Imports.kt"},
+            })
+            imports_daemon_applied = imports_exchange(84, "refactor.apply", {
+                "planId": imports_daemon_preview["planId"],
+                "semanticLease": imports_daemon_started["semanticLease"],
+                "expectedIndexGeneration": imports_index["generation"],
+            })
+            if (imports_daemon_applied.get("status") != "applied" or b"java.util.UUID" in imports_file.read_bytes()):
+                raise AssertionError(f"Kotlin organize-imports daemon apply failed: {imports_daemon_applied}")
+            imports_daemon_rollback = imports_exchange(85, "patch.rollback", {
+                "transactionId": imports_daemon_applied["transactionId"],
+            })
+            if imports_daemon_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != imports_before:
+                raise AssertionError(f"Kotlin organize-imports daemon rollback failed: {imports_daemon_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=20)
+        imports_file.unlink()
+        imports_file.parent.rmdir()
+
         move_type.unlink()
         move_kotlin_consumer.unlink()
         move_java_consumer.unlink()

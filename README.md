@@ -170,6 +170,12 @@ refactorkit kotlin symbols /workspace --query Greeting \
   --jdk-home /tools/jdk-21 \
   --compiler-jar /tools/kotlin/kotlin-compiler-embeddable-2.0.21.jar \
   --compiler-classpath "/tools/kotlin/kotlin-stdlib-2.0.21.jar:/tools/kotlin/trove4j.jar:..."
+
+refactorkit kotlin organize-imports /workspace \
+  --file src/main/kotlin/example/Greeting.kt \
+  --jdk-home /tools/jdk-21 \
+  --compiler-jar /tools/kotlin/kotlin-compiler-embeddable-2.0.21.jar \
+  --compiler-classpath "/tools/kotlin/kotlin-stdlib-2.0.21.jar:/tools/kotlin/trove4j.jar:..."
 ```
 
 The current symbol catalogue accepts successfully compiled top-level and nested
@@ -177,8 +183,10 @@ classes, named/data/companion objects, interfaces, enum classes and annotation
 classes plus the first non-overloaded top-level and direct member function row.
 Anonymous objects, properties and ambiguous/renamed JVM callables remain outside
 the catalogue. Definition takes the opaque type or callable ID returned by
-`symbols`. These reads have no mutation authority; references and all Kotlin
-refactorings remain refused. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
+`symbols`. Reads have no mutation authority. Qualified bounded rename, whole-file
+package move and explicit-type `organizeImports` rows expose proposal-only
+compiler authority with preview, staged diagnostics, apply and rollback; broader
+shapes still refuse. See [`docs/kotlin-adapter.md`](docs/kotlin-adapter.md).
 
 ## Build
 
