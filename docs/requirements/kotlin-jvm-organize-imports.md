@@ -1,8 +1,8 @@
 # Kotlin/JVM organize-imports requirement
 
-Status: bounded K5 row routed through CLI/daemon/MCP with local and packaged
-preview/apply/rollback acceptance. Four-platform packaged operation qualification
-is pending.
+Status: qualified bounded K5 row across library, daemon API `0.2`, CLI, MCP and
+packaged preview/apply/rollback on all four native platforms. Broader imports and
+project-style-aware formatting remain pending.
 
 ## Purpose
 
