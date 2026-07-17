@@ -114,12 +114,15 @@ class KotlinOrganizeImportsPlanner(
         val packageMatch = Regex("(?m)^[ \\t]*package\\s+[A-Za-z_][A-Za-z0-9_.]*[ \\t]*$").find(source.content)
             ?: return null
         val importRegex = Regex(
-            "(?m)^([ \\t]*import\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+)[ \\t]*)$",
+            "(?m)^([ \\t]*import\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+)" +
+                "(?:\\s+as\\s+([A-Za-z_][A-Za-z0-9_]*))?[ \\t]*)$",
         )
         val matches = importRegex.findAll(source.content).toList()
         if (matches.isEmpty()) return null
         val lines = source.content.lineSequence().toList()
         if (lines.any { it.trimStart().startsWith("import ") && !IMPORT_LINE.matches(it) }) return null
+        val aliases = matches.mapNotNull { it.groups[3]?.value }
+        if (aliases.size != aliases.distinct().size) return null
         val imports = matches.map { match ->
             val start = match.range.first
             val line = TextEdits.positionForOffset(source.content, start).line
@@ -162,7 +165,8 @@ class KotlinOrganizeImportsPlanner(
 
     companion object {
         private val IMPORT_LINE = Regex(
-            "[ \\t]*import\\s+[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+[ \\t]*",
+            "[ \\t]*import\\s+[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+" +
+                "(?:\\s+as\\s+[A-Za-z_][A-Za-z0-9_]*)?[ \\t]*",
         )
     }
 }

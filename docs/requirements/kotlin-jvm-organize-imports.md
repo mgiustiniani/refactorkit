@@ -1,8 +1,9 @@
 # Kotlin/JVM organize-imports requirement
 
-Status: qualified bounded K5 row across library, daemon API `0.2`, CLI, MCP and
-packaged preview/apply/rollback on all four native platforms. Broader imports and
-project-style-aware formatting remain pending.
+Status: active bounded K5 expansion. Explicit non-aliased type imports pass all
+acceptance layers. FIR-proven external/source type aliases have local and packaged
+CLI/daemon/MCP acceptance; four-platform qualification is pending. Star/callable
+imports and project-style-aware formatting remain pending.
 
 ## Purpose
 
@@ -17,10 +18,10 @@ The operation accepts one saved `.kt` file only when:
 1. the file belongs to one authoritative, non-generated Kotlin/JVM source set;
 2. the hash-bound K2 snapshot compiles without errors;
 3. imports form one contiguous block after the exact package declaration, with one
-   explicit non-aliased type directive per line and no comments inside or
-   attached to the block;
-4. K2 resolves each imported source/external JVM type and publishes complete usage
-   evidence; a directive is unused only when its sole target usage is the exact
+   explicit type directive per line, at most one exact alias, and no comments
+   inside or attached to the block;
+4. FIR resolves each alias to its exact imported source/external JVM type and K2
+   publishes complete usage evidence; a directive is unused only when its sole target usage is the exact
    import token itself;
 5. all remaining directives can be sorted deterministically by their complete
    directive text.
@@ -58,8 +59,8 @@ The operation refuses with structured codes for at least:
 
 - missing/non-Kotlin/generated/ambiguous source ownership;
 - baseline compiler errors or incomplete K2 evidence;
-- default-package, split, commented, multiline, star, alias, callable or malformed
-  import blocks;
+- default-package, split, commented, multiline, star, callable or malformed/
+  duplicate-alias import blocks;
 - resolved import evidence that does not map one-to-one to exact import lines;
 - no-op organization;
 - staged diagnostics regression or remaining unused imports;

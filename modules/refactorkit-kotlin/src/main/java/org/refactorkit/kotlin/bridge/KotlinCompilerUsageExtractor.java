@@ -220,7 +220,8 @@ final class KotlinCompilerUsageExtractor {
                     String simpleName = binaryIdentity.substring(
                         Math.max(binaryIdentity.lastIndexOf('.'), binaryIdentity.lastIndexOf('$')) + 1
                     );
-                    if (usagePsi.getText().equals(simpleName)) {
+                    if (usagePsi.getText().equals(simpleName) ||
+                        matchesAliasIdentity(usagePsi, externalTypeIdentity(binaryIdentity), importAliases)) {
                         addExternalUsage(usagePsi, binaryIdentity, identities, usages);
                     }
                 }
@@ -318,9 +319,9 @@ final class KotlinCompilerUsageExtractor {
             if (!matchesTargetName(identifier, target, importAliases)) return;
             addUsage(identifier, target, identities, usages);
         } else if (externalIdentity != null &&
-            identifier.getText().equals(externalIdentity.substring(
+            (identifier.getText().equals(externalIdentity.substring(
                 Math.max(externalIdentity.lastIndexOf('.'), externalIdentity.lastIndexOf('$')) + 1
-            ))) {
+            )) || matchesAliasIdentity(identifier, externalTypeIdentity(externalIdentity), importAliases))) {
             addExternalUsage(identifier, externalIdentity, identities, usages);
         }
     }
@@ -351,7 +352,10 @@ final class KotlinCompilerUsageExtractor {
             String simpleName = binaryIdentity.substring(
                 Math.max(binaryIdentity.lastIndexOf('.'), binaryIdentity.lastIndexOf('$')) + 1
             );
-            if (identifier.getText().equals(simpleName)) addExternalUsage(identifier, binaryIdentity, identities, usages);
+            if (identifier.getText().equals(simpleName) ||
+                matchesAliasIdentity(identifier, externalTypeIdentity(binaryIdentity), importAliases)) {
+                addExternalUsage(identifier, binaryIdentity, identities, usages);
+            }
         }
     }
 
@@ -368,8 +372,9 @@ final class KotlinCompilerUsageExtractor {
         ClassId parent = resolvedImport.getResolvedParentClassId();
         ClassId classId = parent == null ? ClassId.topLevel(resolvedImport.getImportedFqName()) :
             parent.createNestedClassId(importedName);
-        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryName(classId));
-        if (target == null) return;
+        String binaryIdentity = binaryName(classId);
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryIdentity);
+        String targetIdentity = target == null ? externalTypeIdentity(binaryIdentity) : target.identity();
         PsiElement source = ((KtPsiSourceElement) resolvedImport.getSource()).getPsi();
         KtImportDirective directive = source instanceof KtImportDirective ?
             (KtImportDirective) source : parent(source, KtImportDirective.class);
@@ -377,8 +382,8 @@ final class KotlinCompilerUsageExtractor {
             throw failure("kotlin.usageAliasLocationUnavailable");
         }
         String key = aliasKey(canonicalPath(directive.getContainingKtFile()), alias.asString());
-        String previous = importAliases.put(key, target.identity());
-        if (previous != null && !previous.equals(target.identity())) throw failure("kotlin.usageAliasCollision");
+        String previous = importAliases.put(key, targetIdentity);
+        if (previous != null && !previous.equals(targetIdentity)) throw failure("kotlin.usageAliasCollision");
     }
 
     private static void collectImport(
@@ -405,17 +410,28 @@ final class KotlinCompilerUsageExtractor {
         }
     }
 
+    private static boolean matchesAliasIdentity(
+        PsiElement identifier,
+        String targetIdentity,
+        Map<String, String> importAliases
+    ) {
+        if (!(identifier.getContainingFile() instanceof KtFile)) return false;
+        return targetIdentity.equals(importAliases.get(aliasKey(
+            canonicalPath((KtFile) identifier.getContainingFile()), identifier.getText()
+        )));
+    }
+
+    private static String externalTypeIdentity(String binaryIdentity) {
+        return "external-jvm-type-v1:" + binaryIdentity;
+    }
+
     private static boolean matchesTargetName(
         PsiElement identifier,
         KotlinCompilerSymbolExtractor.ExtractedSymbol target,
         Map<String, String> importAliases
     ) {
         if (identifier.getText().equals(target.name())) return true;
-        if (!(identifier.getContainingFile() instanceof KtFile)) return false;
-        String aliasedTarget = importAliases.get(aliasKey(
-            canonicalPath((KtFile) identifier.getContainingFile()), identifier.getText()
-        ));
-        return target.identity().equals(aliasedTarget);
+        return matchesAliasIdentity(identifier, target.identity(), importAliases);
     }
 
     private static String aliasKey(Path path, String alias) {

@@ -189,6 +189,23 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun successfulK2CompilationProvesExternalTypeAliasUses() {
+        val root = project(
+            "import java.time.Instant as Moment\nfun now(): Moment = Moment.now()\n",
+        )
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+        val usages = result.externalTypeUsages.filter { it.jvmBinaryName == "java.time.Instant" }
+
+        assertEquals(3, usages.size)
+        assertEquals(setOf(1, 2), usages.map { it.location.range.start.line }.toSet())
+    }
+
+    @Test
     fun successfulK2CompilationProvesImportedTypeWithoutFabricatingAUse() {
         val root = project("import java.util.UUID\nfun answer(): Int = 42\n")
         val toolchain = toolchain(root)
@@ -299,10 +316,10 @@ class KotlinCompilerDiagnosticsTest {
     @Test
     fun organizeImportsRemovesCompilerProvenUnusedTypeAndSortsCrLfBlock() {
         val root = project(
-            "import java.util.UUID\r\n" +
-                "import java.util.concurrent.atomic.AtomicInteger\r\n" +
-                "import java.time.Instant\r\n" +
-                "fun values(): Pair<Instant, AtomicInteger> = Instant.now() to AtomicInteger()\r\n",
+            "import java.util.UUID as Id\r\n" +
+                "import java.util.concurrent.atomic.AtomicInteger as Counter\r\n" +
+                "import java.time.Instant as Moment\r\n" +
+                "fun values(): Pair<Moment, Counter> = Moment.now() to Counter()\r\n",
         )
         val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
         val beforeBytes = source.readBytes()
@@ -321,7 +338,8 @@ class KotlinCompilerDiagnosticsTest {
             ),
         )
         assertTrue(source.readText().contains(
-            "import java.time.Instant\r\nimport java.util.concurrent.atomic.AtomicInteger\r\nfun values()",
+            "import java.time.Instant as Moment\r\n" +
+                "import java.util.concurrent.atomic.AtomicInteger as Counter\r\nfun values()",
         ))
         assertTrue("java.util.UUID" !in source.readText())
         assertIs<org.refactorkit.core.ApplyResult.Applied>(

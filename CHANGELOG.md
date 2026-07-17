@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Expand Kotlin/JVM `organizeImports` to FIR-proven source/external type aliases.
+  Alias-to-identity evidence now covers external constructor, qualifier and type
+  uses; unused aliased imports may be removed while retained aliases are sorted
+  and preserved byte-for-byte.
 - Route bounded Kotlin/JVM `organizeImports` through daemon API `0.2`, CLI and MCP
   with semantic lease/snapshot/index authority and packaged preview/apply/rollback
   acceptance.
