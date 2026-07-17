@@ -1,5 +1,6 @@
 package org.refactorkit.java
 
+import org.eclipse.jdt.core.dom.Modifier
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -9,7 +10,9 @@ import org.refactorkit.core.Symbol
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
+import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Comparator
 
 /**
  * Conservative Java Change Signature planner.
@@ -123,90 +126,68 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         parameterName: String,
         defaultExpression: String,
     ): PatchPlan {
-        val resolved = resolveSingleMethod(snapshot, symbolFqnWithMethod, "changeSignature.addParameter")
-            ?: return lastRefusal ?: refused(snapshot, "changeSignature.addParameter", "Unable to resolve method: $symbolFqnWithMethod")
-        val (ownerFqn, methodName, owner, declarationFile, method) = resolved
-
-        if (methodName == "<init>") return refused(snapshot, "changeSignature.addParameter", "Constructor add-parameter is not supported yet")
-        blockingSignatureDeclarationRisk(declarationFile, method, owner, "add-parameter")?.let { reason ->
-            return refused(snapshot, "changeSignature.addParameter", reason)
-        }
-        if (!isSupportedParameterType(parameterType)) return refused(snapshot, "changeSignature.addParameter", "Unsupported or unsafe parameter type: $parameterType")
-        if (!isValidJavaIdentifier(parameterName)) return refused(snapshot, "changeSignature.addParameter", "Invalid parameter name: $parameterName")
-        if (findParameterNameRange(declarationFile.content, method.paramsStart + 1, method.paramsEnd, parameterName) != null) {
-            return refused(snapshot, "changeSignature.addParameter", "Parameter '$parameterName' already exists in $ownerFqn#$methodName")
-        }
-        val currentParams = parseParameters(declarationFile.content, method.paramsStart + 1, method.paramsEnd)
-        if (currentParams.any { it.text.contains("...") }) {
-            return refused(snapshot, "changeSignature.addParameter", "Cannot add a parameter after an existing varargs parameter in $ownerFqn#$methodName")
-        }
+        val operation = "changeSignature.addParameter"
+        if (!isSupportedParameterType(parameterType)) return refused(snapshot, operation, "Unsupported or unsafe parameter type: $parameterType")
+        if (!isValidJavaIdentifier(parameterName)) return refused(snapshot, operation, "Invalid parameter name: $parameterName")
         if (!isSafeDefaultExpression(defaultExpression)) {
-            return refused(snapshot, "changeSignature.addParameter", "Default expression must be a single Java expression without semicolons, newlines, or top-level commas")
+            return refused(snapshot, operation, "Default expression must be a single Java expression without semicolons, newlines, or top-level commas")
         }
-
-        val scopedFiles = scopedFiles(snapshot, ownerFqn, methodName, declarationFile.path)
-        val methodReference = firstMethodReference(scopedFiles, methodName)
-        if (methodReference != null) {
-            return refused(snapshot, "changeSignature.addParameter", "Method reference '$methodName' found at $methodReference. Add-parameter cannot safely update method references; rewrite or remove the method reference first.")
+        val (selection, selectionRefusal) = selectJdtMethod(snapshot, symbolFqnWithMethod, operation)
+        if (selection == null) return selectionRefusal!!
+        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        if (selection.parameters.any { it.name == parameterName }) {
+            return refused(snapshot, operation, "Parameter '$parameterName' already exists in ${selection.method.qualifiedName}")
         }
-        blockingChangeSignatureRisk(declarationFile, scopedFiles, methodName)?.let { reason ->
-            return refused(snapshot, "changeSignature.addParameter", reason)
+        if (selection.parameters.any { sourceText(selection.file.content, it.declarationRange).contains("...") }) {
+            return refused(snapshot, operation, "Cannot add a parameter after an existing varargs parameter")
         }
-        val risk = assessChangeSignatureRisk(declarationFile, method, ownerFqn, "add-parameter")
+        if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
+            return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
+        }
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
-        val existingParams = declarationFile.content.substring(method.paramsStart + 1, method.paramsEnd).trim()
-        val declarationInsertion = if (existingParams.isEmpty()) {
-            "${parameterType.trim()} $parameterName"
-        } else {
-            ", ${parameterType.trim()} $parameterName"
-        }
-        editsByPath.getOrPut(declarationFile.path) { mutableListOf() } += TextEdit(
-            range = TextEdits.rangeForOffset(declarationFile.content, method.paramsEnd, 0),
-            newText = declarationInsertion,
+        val existingDeclaration = sourceText(selection.file.content, selection.method.parameterListRange).trim()
+        val newDeclaration = listOf(existingDeclaration, "${parameterType.trim()} $parameterName")
+            .filter(String::isNotEmpty).joinToString(", ")
+        editsByPath.getOrPut(selection.file.path) { mutableListOf() } += TextEdit(
+            selection.method.parameterListRange,
+            newDeclaration,
         )
-
-        val defaultArg = defaultExpression.trim()
-        for (sourceFile in scopedFiles) {
-            val declarationOffsets = findMethodDeclarations(sourceFile.content, methodName).map { it.nameStart }.toSet()
-            val invocations = findMethodInvocations(sourceFile.content, methodName)
-                .filterNot { it.nameStart in declarationOffsets }
-                .filter { isLikelyTargetInvocation(sourceFile, it, declarationFile.path, ownerFqn, methodName) }
-
-            for (invocation in invocations) {
-                val existingArgs = sourceFile.content.substring(invocation.argsStart + 1, invocation.argsEnd).trim()
-                val insertion = if (existingArgs.isEmpty()) defaultArg else ", $defaultArg"
-                editsByPath.getOrPut(sourceFile.path) { mutableListOf() } += TextEdit(
-                    range = TextEdits.rangeForOffset(sourceFile.content, invocation.argsEnd, 0),
-                    newText = insertion,
-                )
-            }
+        val defaultArgument = defaultExpression.trim()
+        selection.invocations.forEach { invocation ->
+            val source = snapshot.files.singleOrNull { it.path == invocation.path }
+                ?: return refused(snapshot, operation, "JDT invocation source is missing: ${invocation.path}")
+            val existingArguments = sourceText(source.content, invocation.argumentListRange).trim()
+            val newArguments = listOf(existingArguments, defaultArgument).filter(String::isNotEmpty).joinToString(", ")
+            editsByPath.getOrPut(source.path) { mutableListOf() } += TextEdit(invocation.argumentListRange, newArguments)
         }
-
-        val fileEdits = editsByPath.mapNotNull { (path, edits) ->
-            val sorted = dedupeAndSort(edits)
-            if (sorted.isEmpty()) null else FileEdit.Modify(path, sorted)
-        }
+        val fileEdits = editsByPath.map { (path, edits) -> FileEdit.Modify(path, dedupeAndSort(edits)) }
+        val staged = analyzeStaged(stagedSnapshot(snapshot, fileEdits))
+        val introduced = introducedJdtWarningCount(selection.analysis, staged)
+        if (introduced > 0) return refused(snapshot, operation, "Staged JDT validation introduced $introduced error(s)")
+        val expectedNames = selection.parameters.map { it.name } + parameterName
+        val stagedMethod = staged.methods.singleOrNull { candidate ->
+            candidate.qualifiedName.substringBefore('(') == selection.method.qualifiedName.substringBefore('(') &&
+                staged.parameters.filter { it.methodQualifiedName == candidate.qualifiedName }.sortedBy { it.index }.map { it.name } == expectedNames
+        } ?: return refused(snapshot, operation, "Staged JDT method/new-parameter identity could not be re-established")
+        val stagedInvocations = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
+        if (stagedInvocations.size != selection.invocations.size || stagedInvocations.any {
+                it.argumentRanges.size != expectedNames.size
+            }) return refused(snapshot, operation, "Staged JDT invocation identity/count changed")
 
         val affected = fileEdits.map { it.path }.toSet()
-        val callSiteCount = fileEdits.sumOf { it.textEdits.size } - 1
-
         return PatchPlan(
-            operation = "changeSignature.addParameter",
+            operation = operation,
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 0.82,
+            confidence = 0.97,
             requiresUserApproval = true,
-            summary = "Add parameter '${parameterType.trim()} $parameterName' to $ownerFqn#$methodName and update $callSiteCount in-scope call site(s). ${affected.size} file(s) affected.",
+            summary = "Add JDT-proven parameter '${parameterType.trim()} $parameterName' to ${selection.method.qualifiedName} and update ${selection.invocations.size} in-scope call site(s) proven by JDT bindings.",
             affectedFiles = affected,
             workspaceEdit = WorkspaceEdit(fileEdits),
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
-            warnings = risk.warnings + listOf(
-                "Change Signature add-parameter is lexical and requires manual review of the preview.",
-                "Method references, generated declaration files, and string-literal method-name references are detected and refused.",
-                "Call-site updates are limited to likely target invocations in files that appear to reference $ownerFqn.",
-            ),
-            riskLevel = risk.riskLevel,
+            warnings = listOf("Declaration and call-site argument lists are exact JDT-bound ranges."),
+            riskLevel = RiskLevel.MEDIUM,
         )
     }
 
@@ -215,98 +196,71 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         symbolFqnWithMethod: String,
         newOrder: List<String>,
     ): PatchPlan {
-        val resolved = resolveSingleMethod(snapshot, symbolFqnWithMethod, "changeSignature.reorderParameters")
-            ?: return lastRefusal ?: refused(snapshot, "changeSignature.reorderParameters", "Unable to resolve method: $symbolFqnWithMethod")
-        val (ownerFqn, methodName, owner, declarationFile, method) = resolved
+        val operation = "changeSignature.reorderParameters"
+        val (selection, selectionRefusal) = selectJdtMethod(snapshot, symbolFqnWithMethod, operation)
+        if (selection == null) return selectionRefusal!!
+        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        if (selection.parameters.size < 2) return refused(snapshot, operation, "Method must have at least two parameters to reorder")
+        val requested = newOrder.map(String::trim).filter(String::isNotEmpty)
+        val existing = selection.parameters.map { it.name }
+        if (requested.size != existing.size || requested.toSet() != existing.toSet() || requested.distinct().size != requested.size) {
+            return refused(snapshot, operation, "New order must list each existing parameter exactly once: ${existing.joinToString(", ")}")
+        }
+        if (requested == existing) return refused(snapshot, operation, "New parameter order is identical to the current order")
+        val indexByName = existing.withIndex().associate { it.value to it.index }
+        val reorderedIndexes = requested.map(indexByName::getValue)
+        val varargs = selection.parameters.indexOfFirst {
+            sourceText(selection.file.content, it.declarationRange).contains("...")
+        }
+        if (varargs >= 0 && reorderedIndexes.last() != varargs) {
+            return refused(snapshot, operation, "Varargs parameter '${selection.parameters[varargs].name}' must remain last")
+        }
+        if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
+            return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
+        }
 
-        if (methodName == "<init>") return refused(snapshot, "changeSignature.reorderParameters", "Constructor parameter reorder is not supported yet")
-        blockingSignatureDeclarationRisk(declarationFile, method, owner, "reorder-parameters")?.let { reason ->
-            return refused(snapshot, "changeSignature.reorderParameters", reason)
-        }
-        val params = parseParameters(declarationFile.content, method.paramsStart + 1, method.paramsEnd)
-        if (params.size < 2) return refused(snapshot, "changeSignature.reorderParameters", "Method '$methodName' must have at least two parameters to reorder")
-
-        val requested = newOrder.map { it.trim() }.filter { it.isNotEmpty() }
-        if (requested.size != params.size) {
-            return refused(snapshot, "changeSignature.reorderParameters", "New order must list exactly ${params.size} parameter name(s): ${params.joinToString(", ") { it.name }}")
-        }
-        if (requested.toSet().size != requested.size) return refused(snapshot, "changeSignature.reorderParameters", "New order contains duplicate parameter names: ${requested.joinToString(", ")}")
-
-        val existingNames = params.map { it.name }
-        if (requested.toSet() != existingNames.toSet()) {
-            return refused(snapshot, "changeSignature.reorderParameters", "New order must contain the existing parameter names only: ${existingNames.joinToString(", ")}")
-        }
-        if (requested == existingNames) return refused(snapshot, "changeSignature.reorderParameters", "New parameter order is identical to the current order")
-
-        val scopedFiles = scopedFiles(snapshot, ownerFqn, methodName, declarationFile.path)
-        val methodReference = firstMethodReference(scopedFiles, methodName)
-        if (methodReference != null) {
-            return refused(snapshot, "changeSignature.reorderParameters", "Method reference '$methodName' found at $methodReference. Reorder-parameters cannot safely update method references; rewrite or remove the method reference first.")
-        }
-        blockingChangeSignatureRisk(declarationFile, scopedFiles, methodName)?.let { reason ->
-            return refused(snapshot, "changeSignature.reorderParameters", reason)
-        }
-        val risk = assessChangeSignatureRisk(declarationFile, method, ownerFqn, "reorder-parameters")
-
-        val oldIndexByName = existingNames.withIndex().associate { it.value to it.index }
-        val reorderedIndexes = requested.map { oldIndexByName.getValue(it) }
-        val varargsIndex = params.indexOfFirst { it.text.contains("...") }
-        if (varargsIndex >= 0 && reorderedIndexes.last() != varargsIndex) {
-            return refused(snapshot, "changeSignature.reorderParameters", "Varargs parameter '${params[varargsIndex].name}' must remain last")
-        }
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
-
-        val reorderedDeclaration = reorderedIndexes.joinToString(", ") { params[it].text.trim() }
-        editsByPath.getOrPut(declarationFile.path) { mutableListOf() } += TextEdit(
-            range = TextEdits.rangeForOffset(declarationFile.content, method.paramsStart + 1, method.paramsEnd - method.paramsStart - 1),
-            newText = reorderedDeclaration,
+        editsByPath.getOrPut(selection.file.path) { mutableListOf() } += TextEdit(
+            selection.method.parameterListRange,
+            reorderedIndexes.joinToString(", ") {
+                sourceText(selection.file.content, selection.parameters[it].declarationRange).trim()
+            },
         )
-
-        var callSiteCount = 0
-        for (sourceFile in scopedFiles) {
-            val declarationOffsets = findMethodDeclarations(sourceFile.content, methodName).map { it.nameStart }.toSet()
-            val invocations = findMethodInvocations(sourceFile.content, methodName)
-                .filterNot { it.nameStart in declarationOffsets }
-                .filter { isLikelyTargetInvocation(sourceFile, it, declarationFile.path, ownerFqn, methodName) }
-
-            for (invocation in invocations) {
-                val argsText = sourceFile.content.substring(invocation.argsStart + 1, invocation.argsEnd)
-                val args = splitTopLevelCommas(argsText).map { it.trim() }
-                if (args.size != params.size || args.any { it.isEmpty() }) {
-                    val location = "${sourceFile.path}:${TextEdits.positionForOffset(sourceFile.content, invocation.nameStart).line + 1}"
-                    return refused(snapshot, "changeSignature.reorderParameters", "Cannot safely reorder call site at $location: expected ${params.size} argument(s), found ${args.count { it.isNotEmpty() }}")
-                }
-                val reorderedArgs = reorderedIndexes.joinToString(", ") { args[it] }
-                editsByPath.getOrPut(sourceFile.path) { mutableListOf() } += TextEdit(
-                    range = TextEdits.rangeForOffset(sourceFile.content, invocation.argsStart + 1, invocation.argsEnd - invocation.argsStart - 1),
-                    newText = reorderedArgs,
-                )
-                callSiteCount++
-            }
+        selection.invocations.forEach { invocation ->
+            val source = snapshot.files.singleOrNull { it.path == invocation.path }
+                ?: return refused(snapshot, operation, "JDT invocation source is missing: ${invocation.path}")
+            val arguments = invocation.argumentRanges.map { sourceText(source.content, it).trim() }
+            editsByPath.getOrPut(source.path) { mutableListOf() } += TextEdit(
+                invocation.argumentListRange,
+                reorderedIndexes.joinToString(", ") { arguments[it] },
+            )
         }
+        val fileEdits = editsByPath.map { (path, edits) -> FileEdit.Modify(path, dedupeAndSort(edits)) }
+        val staged = analyzeStaged(stagedSnapshot(snapshot, fileEdits))
+        val introduced = introducedJdtWarningCount(selection.analysis, staged)
+        if (introduced > 0) return refused(snapshot, operation, "Staged JDT validation introduced $introduced error(s)")
+        val stagedMethod = staged.methods.singleOrNull { candidate ->
+            candidate.qualifiedName.substringBefore('(') == selection.method.qualifiedName.substringBefore('(') &&
+                staged.parameters.filter { it.methodQualifiedName == candidate.qualifiedName }.sortedBy { it.index }.map { it.name } == requested
+        } ?: return refused(snapshot, operation, "Staged JDT method/parameter identity could not be re-established")
+        val stagedInvocations = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
+        if (stagedInvocations.size != selection.invocations.size || stagedInvocations.any {
+                it.argumentRanges.size != selection.parameters.size
+            }) return refused(snapshot, operation, "Staged JDT invocation identity/count changed")
 
-        val fileEdits = editsByPath.mapNotNull { (path, edits) ->
-            val sorted = dedupeAndSort(edits)
-            if (sorted.isEmpty()) null else FileEdit.Modify(path, sorted)
-        }
         val affected = fileEdits.map { it.path }.toSet()
-
         return PatchPlan(
-            operation = "changeSignature.reorderParameters",
+            operation = operation,
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 0.80,
+            confidence = 0.97,
             requiresUserApproval = true,
-            summary = "Reorder parameters of $ownerFqn#$methodName to (${requested.joinToString(", ")}) and update $callSiteCount in-scope call site(s). ${affected.size} file(s) affected.",
+            summary = "Reorder JDT-proven parameters of ${selection.method.qualifiedName} to (${requested.joinToString(", ")}) and update ${selection.invocations.size} bound call site(s).",
             affectedFiles = affected,
             workspaceEdit = WorkspaceEdit(fileEdits),
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
-            warnings = risk.warnings + listOf(
-                "Change Signature reorder-parameters is lexical and requires manual review of the preview.",
-                "Method references, generated declaration files, and string-literal method-name references are detected and refused.",
-                "Call-site updates are limited to likely target invocations in files that appear to reference $ownerFqn.",
-            ),
-            riskLevel = risk.riskLevel,
+            warnings = listOf("Declaration and call-site argument lists are exact JDT-bound ranges."),
+            riskLevel = RiskLevel.MEDIUM,
         )
     }
 
@@ -315,89 +269,199 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         symbolFqnWithMethod: String,
         parameterName: String,
     ): PatchPlan {
-        val resolved = resolveSingleMethod(snapshot, symbolFqnWithMethod, "changeSignature.removeParameter")
-            ?: return lastRefusal ?: refused(snapshot, "changeSignature.removeParameter", "Unable to resolve method: $symbolFqnWithMethod")
-        val (ownerFqn, methodName, owner, declarationFile, method) = resolved
-
-        if (methodName == "<init>") return refused(snapshot, "changeSignature.removeParameter", "Constructor parameter removal is not supported yet")
-        blockingSignatureDeclarationRisk(declarationFile, method, owner, "remove-parameter")?.let { reason ->
-            return refused(snapshot, "changeSignature.removeParameter", reason)
+        val operation = "changeSignature.removeParameter"
+        if (!isValidJavaIdentifier(parameterName)) return refused(snapshot, operation, "Invalid parameter name: $parameterName")
+        val (selection, selectionRefusal) = selectJdtMethod(snapshot, symbolFqnWithMethod, operation)
+        if (selection == null) return selectionRefusal!!
+        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        val removeIndex = selection.parameters.indexOfFirst { it.name == parameterName }
+        if (removeIndex < 0) return refused(snapshot, operation, "JDT parameter '$parameterName' not found in ${selection.method.qualifiedName}")
+        val parameter = selection.parameters[removeIndex]
+        val uses = selection.analysis.bindingUses.filter { it.bindingKey == parameter.parameterBindingKey }
+        if (uses.isNotEmpty()) {
+            return refused(snapshot, operation, "JDT parameter '$parameterName' is used in the method body (${uses.size} bound use(s))")
         }
-        if (!isValidJavaIdentifier(parameterName)) return refused(snapshot, "changeSignature.removeParameter", "Invalid parameter name: $parameterName")
-
-        val params = parseParameters(declarationFile.content, method.paramsStart + 1, method.paramsEnd)
-        val removeIndex = params.indexOfFirst { it.name == parameterName }
-        if (removeIndex < 0) return refused(snapshot, "changeSignature.removeParameter", "Parameter '$parameterName' not found in $ownerFqn#$methodName")
-
-        val bodyContent = declarationFile.content.substring(method.bodyStart + 1, method.bodyEnd)
-        if (JavaLexer.findOccurrences(bodyContent, parameterName).isNotEmpty()) {
-            return refused(snapshot, "changeSignature.removeParameter", "Parameter '$parameterName' is used in the method body of $ownerFqn#$methodName; remove-parameter cannot safely rewrite the implementation")
+        if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
+            return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
         }
-
-        val scopedFiles = scopedFiles(snapshot, ownerFqn, methodName, declarationFile.path)
-        val methodReference = firstMethodReference(scopedFiles, methodName)
-        if (methodReference != null) {
-            return refused(snapshot, "changeSignature.removeParameter", "Method reference '$methodName' found at $methodReference. Remove-parameter cannot safely update method references; rewrite or remove the method reference first.")
-        }
-        blockingChangeSignatureRisk(declarationFile, scopedFiles, methodName)?.let { reason ->
-            return refused(snapshot, "changeSignature.removeParameter", reason)
-        }
-        val risk = assessChangeSignatureRisk(declarationFile, method, ownerFqn, "remove-parameter")
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
-        val newDeclarationParams = params.filterIndexed { index, _ -> index != removeIndex }
-            .joinToString(", ") { it.text.trim() }
-        editsByPath.getOrPut(declarationFile.path) { mutableListOf() } += TextEdit(
-            range = TextEdits.rangeForOffset(declarationFile.content, method.paramsStart + 1, method.paramsEnd - method.paramsStart - 1),
-            newText = newDeclarationParams,
+        val declarationText = selection.parameters.filterIndexed { index, _ -> index != removeIndex }
+            .joinToString(", ") { sourceText(selection.file.content, it.declarationRange).trim() }
+        editsByPath.getOrPut(selection.file.path) { mutableListOf() } += TextEdit(
+            selection.method.parameterListRange,
+            declarationText,
         )
-
-        var callSiteCount = 0
-        for (sourceFile in scopedFiles) {
-            val declarationOffsets = findMethodDeclarations(sourceFile.content, methodName).map { it.nameStart }.toSet()
-            val invocations = findMethodInvocations(sourceFile.content, methodName)
-                .filterNot { it.nameStart in declarationOffsets }
-                .filter { isLikelyTargetInvocation(sourceFile, it, declarationFile.path, ownerFqn, methodName) }
-
-            for (invocation in invocations) {
-                val argsText = sourceFile.content.substring(invocation.argsStart + 1, invocation.argsEnd)
-                val args = splitTopLevelCommas(argsText).map { it.trim() }
-                if (args.size != params.size || args.any { it.isEmpty() }) {
-                    val location = "${sourceFile.path}:${TextEdits.positionForOffset(sourceFile.content, invocation.nameStart).line + 1}"
-                    return refused(snapshot, "changeSignature.removeParameter", "Cannot safely remove argument at $location: expected ${params.size} argument(s), found ${args.count { it.isNotEmpty() }}")
-                }
-                val newArgs = args.filterIndexed { index, _ -> index != removeIndex }.joinToString(", ")
-                editsByPath.getOrPut(sourceFile.path) { mutableListOf() } += TextEdit(
-                    range = TextEdits.rangeForOffset(sourceFile.content, invocation.argsStart + 1, invocation.argsEnd - invocation.argsStart - 1),
-                    newText = newArgs,
-                )
-                callSiteCount++
-            }
+        selection.invocations.forEach { invocation ->
+            val source = snapshot.files.singleOrNull { it.path == invocation.path }
+                ?: return refused(snapshot, operation, "JDT invocation source is missing: ${invocation.path}")
+            val arguments = invocation.argumentRanges.map { sourceText(source.content, it).trim() }
+            editsByPath.getOrPut(source.path) { mutableListOf() } += TextEdit(
+                invocation.argumentListRange,
+                arguments.filterIndexed { index, _ -> index != removeIndex }.joinToString(", "),
+            )
         }
+        val fileEdits = editsByPath.map { (path, edits) -> FileEdit.Modify(path, dedupeAndSort(edits)) }
+        val stagedSnapshot = stagedSnapshot(snapshot, fileEdits)
+        val staged = analyzeStaged(stagedSnapshot)
+        val introduced = introducedJdtWarningCount(selection.analysis, staged)
+        if (introduced > 0) return refused(snapshot, operation, "Staged JDT validation introduced $introduced error(s)")
+        val stagedMethod = staged.methods.singleOrNull {
+            it.qualifiedName.substringBefore('(') == selection.method.qualifiedName.substringBefore('(') &&
+                staged.parameters.count { parameter -> parameter.methodQualifiedName == it.qualifiedName } == selection.parameters.size - 1
+        } ?: return refused(snapshot, operation, "Staged JDT method identity could not be re-established after parameter removal")
+        val stagedInvocations = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
+        if (stagedInvocations.size != selection.invocations.size || stagedInvocations.any {
+                it.argumentRanges.size != selection.parameters.size - 1
+            }) return refused(snapshot, operation, "Staged JDT invocation identity/count changed")
 
-        val fileEdits = editsByPath.mapNotNull { (path, edits) ->
-            val sorted = dedupeAndSort(edits)
-            if (sorted.isEmpty()) null else FileEdit.Modify(path, sorted)
-        }
         val affected = fileEdits.map { it.path }.toSet()
-
         return PatchPlan(
-            operation = "changeSignature.removeParameter",
+            operation = operation,
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 0.80,
+            confidence = 0.97,
             requiresUserApproval = true,
-            summary = "Remove parameter '$parameterName' from $ownerFqn#$methodName and update $callSiteCount in-scope call site(s). ${affected.size} file(s) affected.",
+            summary = "Remove JDT-proven unused parameter '$parameterName' from ${selection.method.qualifiedName} and update ${selection.invocations.size} bound call site(s).",
             affectedFiles = affected,
             workspaceEdit = WorkspaceEdit(fileEdits),
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
-            warnings = risk.warnings + listOf(
-                "Change Signature remove-parameter is lexical and requires manual review of the preview.",
-                "The parameter must be unused in the method body; method references, generated declaration files, and string-literal method-name references are detected and refused.",
-                "Call-site updates are limited to likely target invocations in files that appear to reference $ownerFqn.",
-            ),
-            riskLevel = risk.riskLevel,
+            warnings = listOf("JDT remove-parameter declaration and call sites are exact bindings; method references and hierarchy/public boundaries remain refused."),
+            riskLevel = RiskLevel.MEDIUM,
         )
+    }
+
+    private data class JdtMethodSelection(
+        val analysis: JdtJavaSemanticAnalysisResult,
+        val method: JdtJavaSemanticMethod,
+        val symbol: JdtJavaSemanticSymbol,
+        val file: org.refactorkit.core.SourceFile,
+        val parameters: List<JdtJavaSemanticParameter>,
+        val invocations: List<JdtJavaSemanticInvocation>,
+    )
+
+    private fun selectJdtMethod(
+        snapshot: ProjectSnapshot,
+        selectorText: String,
+        operation: String,
+    ): Pair<JdtMethodSelection?, PatchPlan?> {
+        val hash = selectorText.indexOf('#')
+        if (hash <= 0 || hash == selectorText.lastIndex) {
+            return null to refused(snapshot, operation, "Symbol must be <FQN>#<method> or <FQN>#<method>(<types>)")
+        }
+        val owner = selectorText.substring(0, hash)
+        val selector = selectorText.substring(hash + 1)
+        val prefix = "$owner#${selector.substringBefore('(')}"
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        val methods = analysis.methods.filter {
+            if ('(' in selector) it.qualifiedName == "$owner#$selector"
+            else it.qualifiedName.substringBefore('(') == prefix
+        }
+        if (methods.isEmpty()) return null to refused(snapshot, operation, "JDT method not found: $selectorText")
+        if (methods.size != 1) return null to refused(
+            snapshot,
+            operation,
+            "Method selector is overloaded or ambiguous; use exact signed selector <FQN>#<method>(<types>)",
+        )
+        val method = methods.single()
+        if (method.constructor) return null to refused(snapshot, operation, "Constructor change signature is not supported")
+        val symbol = analysis.symbols.singleOrNull {
+            it.kind == JdtJavaSemanticSymbolKind.METHOD && it.qualifiedName == method.qualifiedName
+        } ?: return null to refused(snapshot, operation, "JDT method symbol is missing or ambiguous: ${method.qualifiedName}")
+        val file = snapshot.files.singleOrNull { it.path == method.path }
+            ?: return null to refused(snapshot, operation, "Authoritative method source is missing: ${method.path}")
+        JavaGeneratedSourcePolicy.reason(file)?.let { reason ->
+            return null to refused(snapshot, operation, "Declaration file ${file.path} is generated code ($reason)")
+        }
+        val parameters = analysis.parameters.filter { it.methodQualifiedName == method.qualifiedName }.sortedBy { it.index }
+        val invocations = analysis.invocations.filter { it.methodQualifiedName == method.qualifiedName }
+        return JdtMethodSelection(analysis, method, symbol, file, parameters, invocations) to null
+    }
+
+    private fun boundedJdtSignatureRisk(
+        snapshot: ProjectSnapshot,
+        selection: JdtMethodSelection,
+        operation: String,
+    ): String? {
+        val ownerName = selection.method.qualifiedName.substringBefore('#')
+        val owner = selection.analysis.symbols.singleOrNull {
+            it.qualifiedName == ownerName && it.kind in setOf(
+                JdtJavaSemanticSymbolKind.CLASS,
+                JdtJavaSemanticSymbolKind.INTERFACE,
+                JdtJavaSemanticSymbolKind.ENUM,
+                JdtJavaSemanticSymbolKind.RECORD,
+            )
+        }
+        if (owner?.kind == JdtJavaSemanticSymbolKind.INTERFACE) {
+            return "$operation refuses interface methods until the complete implementer hierarchy is selected"
+        }
+        if (Modifier.isPublic(selection.method.modifiers) || Modifier.isProtected(selection.method.modifiers)) {
+            return "$operation refuses public method or protected method until external-consumer risk and hierarchy evidence are complete"
+        }
+        if (selection.analysis.overrideRelations.any {
+                it.overridingSymbolQualifiedName == selection.method.qualifiedName ||
+                    it.overriddenSymbolQualifiedName == selection.method.qualifiedName
+            }) return "$operation refuses @Override/implementer families until every hierarchy declaration is selected"
+        val methodName = selection.method.qualifiedName.substringAfter('#').substringBefore('(')
+        val scoped = scopedFiles(snapshot, ownerName, methodName, selection.file.path)
+        if (firstMethodReference(scoped, methodName) != null) {
+            return "$operation refuses Method reference targets until functional signatures are updated"
+        }
+        firstStringLiteralContaining(scoped, methodName)?.let { location ->
+            return "$operation refuses String literal method-name risk at $location"
+        }
+        val parameterList = sourceText(selection.file.content, selection.method.parameterListRange)
+        if (parameterList.contains("//") || parameterList.contains("/*")) {
+            return "$operation refuses comments inside the bounded parameter list"
+        }
+        return null
+    }
+
+    private fun analyzeStaged(snapshot: ProjectSnapshot): JdtJavaSemanticAnalysisResult {
+        val temporaryRoot = Files.createTempDirectory("refactorkit-jdt-staged-")
+        try {
+            snapshot.files.forEach { file ->
+                require(!file.path.isAbsolute && !file.path.normalize().startsWith("..")) {
+                    "staged JDT source path must remain workspace-relative: ${file.path}"
+                }
+                val target = temporaryRoot.resolve(file.path).normalize()
+                require(target.startsWith(temporaryRoot)) { "staged JDT source escapes disposable root" }
+                Files.createDirectories(target.parent)
+                Files.writeString(target, file.content, Charsets.UTF_8)
+            }
+            return JdtJavaSemanticAnalyzer().analyze(
+                snapshot.copy(workspace = snapshot.workspace.copy(root = temporaryRoot)),
+            )
+        } finally {
+            if (Files.exists(temporaryRoot)) {
+                Files.walk(temporaryRoot).use { paths ->
+                    paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+                }
+            }
+        }
+    }
+
+    private fun stagedSnapshot(snapshot: ProjectSnapshot, fileEdits: List<FileEdit>): ProjectSnapshot {
+        val edits = fileEdits.filterIsInstance<FileEdit.Modify>().associateBy { it.path }
+        return snapshot.copy(files = snapshot.files.map { file ->
+            val edit = edits[file.path]
+            if (edit == null) file else file.copy(content = TextEdits.apply(file.content, edit.textEdits))
+        })
+    }
+
+    private fun sourceText(content: String, range: org.refactorkit.core.SourceRange): String = content.substring(
+        TextEdits.offsetOf(content, range.start),
+        TextEdits.offsetOf(content, range.end),
+    )
+
+    private fun introducedJdtWarningCount(
+        before: JdtJavaSemanticAnalysisResult,
+        staged: JdtJavaSemanticAnalysisResult,
+    ): Int {
+        val baseline = before.warnings.groupingBy(::jdtWarningIdentity).eachCount()
+        return staged.warnings.groupingBy(::jdtWarningIdentity).eachCount().entries.sumOf { (identity, count) ->
+            (count - baseline.getOrDefault(identity, 0)).coerceAtLeast(0)
+        }
     }
 
     private var lastRefusal: PatchPlan? = null

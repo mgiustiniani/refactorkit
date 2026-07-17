@@ -18,7 +18,9 @@ import org.eclipse.jdt.core.dom.ITypeBinding
 import org.eclipse.jdt.core.dom.IVariableBinding
 import org.eclipse.jdt.core.dom.SimpleName
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration
+import org.eclipse.jdt.core.dom.SuperMethodInvocation
 import org.eclipse.jdt.core.dom.MethodDeclaration
+import org.eclipse.jdt.core.dom.MethodInvocation
 import org.eclipse.jdt.core.dom.Modifier
 import org.eclipse.jdt.core.dom.RecordDeclaration
 import org.eclipse.jdt.core.dom.TypeDeclaration
@@ -151,6 +153,8 @@ class JdtJavaSemanticAnalyzer {
         }
         val warnings = fileAnalyses.flatMap { it.warnings }
         val parameters = fileAnalyses.flatMap { it.parameters }
+        val methods = fileAnalyses.flatMap { it.methods }
+        val invocations = fileAnalyses.flatMap { it.invocations }
         val overrideRelations = buildOverrideRelations(
             fileAnalyses.flatMap { it.methodBindings },
             fileAnalyses.flatMap { it.inheritances },
@@ -163,6 +167,8 @@ class JdtJavaSemanticAnalyzer {
             overrideRelations = overrideRelations,
             bindingUses = bindingUses,
             parameters = parameters,
+            methods = methods,
+            invocations = invocations,
         )
     }
 
@@ -249,7 +255,7 @@ class JdtJavaSemanticAnalyzer {
         classpathEntries: Array<String>,
         sourceLevel: Int,
     ): FileAnalysis {
-        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel)
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
@@ -258,6 +264,8 @@ class JdtJavaSemanticAnalyzer {
         val inheritances = mutableListOf<TypeInheritanceRecord>()
         val ownerStack = mutableListOf<String>()
         val parameters = mutableListOf<JdtJavaSemanticParameter>()
+        val methods = mutableListOf<JdtJavaSemanticMethod>()
+        val invocations = mutableListOf<JdtJavaSemanticInvocation>()
 
         compilationUnit.accept(object : ASTVisitor() {
             override fun visit(node: TypeDeclaration): Boolean {
@@ -404,6 +412,20 @@ class JdtJavaSemanticAnalyzer {
                 if (binding != null && !node.isConstructor) {
                     methodBindings += MethodBindingRecord(methodSymbol, binding)
                 }
+                if (binding != null) {
+                    val bounds = parenthesisInterior(file.content, node.name.startPosition + node.name.length)
+                        ?: return true
+                    methods += JdtJavaSemanticMethod(
+                        qualifiedName = methodSymbol.qualifiedName,
+                        signature = signature,
+                        bindingKey = binding.methodDeclaration.key,
+                        path = file.path,
+                        parameterListRange = rangeFor(compilationUnit, bounds.first, bounds.last - bounds.first + 1),
+                        constructor = node.isConstructor,
+                        modifiers = node.modifiers,
+                        evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                    )
+                }
                 node.parameters().filterIsInstance<SingleVariableDeclaration>().forEachIndexed { index, parameter ->
                     val parameterBinding = parameter.resolveBinding()?.variableDeclaration ?: return@forEachIndexed
                     val identifier = parameter.name
@@ -415,10 +437,47 @@ class JdtJavaSemanticAnalyzer {
                         name = identifier.identifier,
                         index = index,
                         path = file.path,
+                        declarationRange = rangeFor(compilationUnit, parameter.startPosition, parameter.length),
                         sourceRange = rangeFor(compilationUnit, identifier.startPosition, identifier.length),
                         evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                     )
                 }
+                return true
+            }
+
+            override fun visit(node: MethodInvocation): Boolean {
+                val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                val bounds = parenthesisInterior(file.content, node.name.startPosition + node.name.length)
+                    ?: return true
+                invocations += JdtJavaSemanticInvocation(
+                    methodQualifiedName = binding.qualifiedName(),
+                    methodBindingKey = binding.key,
+                    path = file.path,
+                    nameRange = rangeFor(compilationUnit, node.name.startPosition, node.name.length),
+                    argumentListRange = rangeFor(compilationUnit, bounds.first, bounds.last - bounds.first + 1),
+                    argumentRanges = node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map {
+                        rangeFor(compilationUnit, it.startPosition, it.length)
+                    },
+                    evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                )
+                return true
+            }
+
+            override fun visit(node: SuperMethodInvocation): Boolean {
+                val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                val bounds = parenthesisInterior(file.content, node.name.startPosition + node.name.length)
+                    ?: return true
+                invocations += JdtJavaSemanticInvocation(
+                    methodQualifiedName = binding.qualifiedName(),
+                    methodBindingKey = binding.key,
+                    path = file.path,
+                    nameRange = rangeFor(compilationUnit, node.name.startPosition, node.name.length),
+                    argumentListRange = rangeFor(compilationUnit, bounds.first, bounds.last - bounds.first + 1),
+                    argumentRanges = node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map {
+                        rangeFor(compilationUnit, it.startPosition, it.length)
+                    },
+                    evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                )
                 return true
             }
 
@@ -510,7 +569,7 @@ class JdtJavaSemanticAnalyzer {
                     evidence = JdtJavaSemanticEvidence.JDT_PARSE,
                 )
             }
-        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances, parameters)
+        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances, parameters, methods, invocations)
     }
 
     private fun declarationBindingKey(binding: IBinding?): String? = when (binding) {
@@ -797,6 +856,38 @@ class JdtJavaSemanticAnalyzer {
         }
     }
 
+    private fun parenthesisInterior(content: String, from: Int): IntRange? {
+        val open = content.indexOf('(', from)
+        if (open < 0) return null
+        var depth = 0
+        var index = open
+        while (index < content.length) {
+            when (content[index]) {
+                '(' -> depth++
+                ')' -> {
+                    depth--
+                    if (depth == 0) return (open + 1)..(index - 1)
+                }
+                '"' -> {
+                    index++
+                    while (index < content.length && content[index] != '"') {
+                        if (content[index] == '\\') index++
+                        index++
+                    }
+                }
+                '\'' -> {
+                    index++
+                    while (index < content.length && content[index] != '\'') {
+                        if (content[index] == '\\') index++
+                        index++
+                    }
+                }
+            }
+            index++
+        }
+        return null
+    }
+
     private companion object {
         const val MAX_HOVER_SIGNATURE_CHARS = 8_192
         const val MAX_HOVER_DOCUMENTATION_CHARS = 16_384
@@ -809,6 +900,8 @@ class JdtJavaSemanticAnalyzer {
         val methodBindings: List<MethodBindingRecord>,
         val inheritances: List<TypeInheritanceRecord>,
         val parameters: List<JdtJavaSemanticParameter>,
+        val methods: List<JdtJavaSemanticMethod>,
+        val invocations: List<JdtJavaSemanticInvocation>,
     )
 
     private data class MethodBindingRecord(
@@ -839,6 +932,29 @@ data class JdtJavaSemanticAnalysisResult(
     val overrideRelations: List<JdtJavaSemanticOverrideRelation> = emptyList(),
     val bindingUses: List<JdtJavaSemanticBindingUse> = emptyList(),
     val parameters: List<JdtJavaSemanticParameter> = emptyList(),
+    val methods: List<JdtJavaSemanticMethod> = emptyList(),
+    val invocations: List<JdtJavaSemanticInvocation> = emptyList(),
+)
+
+data class JdtJavaSemanticMethod(
+    val qualifiedName: String,
+    val signature: String,
+    val bindingKey: String,
+    val path: Path,
+    val parameterListRange: SourceRange,
+    val constructor: Boolean,
+    val modifiers: Int,
+    val evidence: JdtJavaSemanticEvidence,
+)
+
+data class JdtJavaSemanticInvocation(
+    val methodQualifiedName: String,
+    val methodBindingKey: String,
+    val path: Path,
+    val nameRange: SourceRange,
+    val argumentListRange: SourceRange,
+    val argumentRanges: List<SourceRange>,
+    val evidence: JdtJavaSemanticEvidence,
 )
 
 data class JdtJavaSemanticParameter(
@@ -849,6 +965,7 @@ data class JdtJavaSemanticParameter(
     val name: String,
     val index: Int,
     val path: Path,
+    val declarationRange: SourceRange,
     val sourceRange: SourceRange,
     val evidence: JdtJavaSemanticEvidence,
 )

@@ -524,7 +524,7 @@ class JavaChangeSignaturePlannerTest {
         )
         val snap = JavaProjectScanner().scan(root)
         val plan = planner.previewRemoveParameter(snap, "com.example.UserService#findName", "unused")
-        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
         assertEquals("changeSignature.removeParameter", plan.operation)
 
         val applied = PatchEngine(root).apply(plan, snap)
@@ -534,6 +534,37 @@ class JavaChangeSignaturePlannerTest {
         assertTrue(service.contains("findName(String id)"), service)
         assertTrue(service.contains("return findName(\"a\");"), service)
         assertTrue(app.contains("service.findName(\"b\")"), app)
+    }
+
+    @Test
+    fun signedSelectorRemovesOnlyOneJdtBoundOverloadParameterAndArguments() {
+        val root = tempProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                class UserService {
+                    String label(String value, boolean unused) { return value; }
+                    String label(int value, boolean keep) { return String.valueOf(value + (keep ? 1 : 0)); }
+                    String run() { return label("x", true) + label(1, false); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewRemoveParameter(
+            snap,
+            "com.example.UserService#label(java.lang.String,boolean)",
+            "unused",
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val content = org.refactorkit.core.TextEdits.apply(
+            snap.files.single().content,
+            (plan.workspaceEdit.edits.single() as org.refactorkit.core.FileEdit.Modify).textEdits,
+        )
+        assertTrue(content.contains("label(String value)"), content)
+        assertTrue(content.contains("label(\"x\")"), content)
+        assertTrue(content.contains("label(int value, boolean keep)"), content)
+        assertTrue(content.contains("label(1, false)"), content)
     }
 
     @Test

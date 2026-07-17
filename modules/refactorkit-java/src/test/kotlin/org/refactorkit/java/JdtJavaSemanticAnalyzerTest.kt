@@ -5,6 +5,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import javax.tools.ToolProvider
 import kotlin.io.path.exists
+import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -127,6 +128,39 @@ class JdtJavaSemanticAnalyzerTest {
         assertEquals(0, parameter.index)
         assertEquals(2, uses.size)
         assertTrue(uses.all { it.simpleName == "value" && it.path == parameter.path })
+    }
+
+    @Test
+    fun publishesExactMethodAndInvocationArgumentEvidence() {
+        val root = Files.createTempDirectory("rk-jdt-invocation-test")
+        root.resolve("src/main/java/com/acme/User.java").apply {
+            Files.createDirectories(parent)
+            writeText(
+                "package com.acme; class User { " +
+                    "String label(String value, int count) { return value.repeat(count); } " +
+                    "String run() { return label(\"x\", 2); } }\n",
+            )
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+        val method = result.methods.single { it.qualifiedName == "com.acme.User#label(java.lang.String,int)" }
+        val invocation = result.invocations.single { it.methodQualifiedName == method.qualifiedName }
+        val source = root.resolve(invocation.path).readText()
+
+        assertEquals("String value, int count", source.substring(
+            org.refactorkit.core.TextEdits.offsetOf(source, method.parameterListRange.start),
+            org.refactorkit.core.TextEdits.offsetOf(source, method.parameterListRange.end),
+        ))
+        assertEquals("\"x\", 2", source.substring(
+            org.refactorkit.core.TextEdits.offsetOf(source, invocation.argumentListRange.start),
+            org.refactorkit.core.TextEdits.offsetOf(source, invocation.argumentListRange.end),
+        ))
+        assertEquals(listOf("\"x\"", "2"), invocation.argumentRanges.map { range ->
+            source.substring(
+                org.refactorkit.core.TextEdits.offsetOf(source, range.start),
+                org.refactorkit.core.TextEdits.offsetOf(source, range.end),
+            )
+        })
     }
 
     @Test

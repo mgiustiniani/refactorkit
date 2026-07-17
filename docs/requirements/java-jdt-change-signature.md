@@ -1,8 +1,9 @@
 # Java JDT change-signature requirement
 
-Status: active J1 expansion; the exact parameter-rename row has library and
-packaged CLI preview/apply/rollback acceptance on all four native platforms.
-Daemon/MCP transport qualification and broader signature rows remain pending.
+Status: active J1 expansion. Exact rename has four-platform packaged CLI
+qualification. JDT-bound add/remove/reorder rows and packaged daemon/MCP rename
+acceptance are implemented locally; their four-platform qualification remains
+pending. Type change and hierarchy families remain pending.
 
 ## Purpose
 
@@ -40,12 +41,22 @@ Stable refusals cover malformed/ambiguous selectors, unresolved overloads,
 missing/ambiguous parameters, generated declarations, incomplete bindings,
 introduced staged JDT errors, range mismatches, duplicate evidence and staged identity/usage drift.
 
+## Bounded structural rows
+
+Add, remove and reorder accept package/private non-hierarchy methods only. They
+require exact JDT method, parameter and invocation argument-list evidence; reject
+method references, strings, comments in bounded parameter lists, vararg-invalid
+shapes and public/protected/interface/override boundaries; and re-establish the
+changed method plus every call site in a disposable staged source overlay.
+Remove additionally requires zero bound body uses. Caller-provided add defaults
+must compile at every bound call site.
+
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
 
-- add, remove, reorder and type-change operations using JDT-bound call sites;
-- overload families and override/implementer hierarchies;
+- parameter type-change operations using JDT-bound call sites;
+- complete overload families and override/implementer hierarchies;
 - constructors, varargs, generic methods, records and annotations;
 - method references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

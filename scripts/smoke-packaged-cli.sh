@@ -129,4 +129,5 @@ fi
 
 python3 scripts/test-smoke-packaged-daemon-timeout.py
 python3 scripts/smoke-packaged-daemon.py "$daemon_launcher"
+python3 scripts/smoke-packaged-java-change-signature.py "$package_root"
 printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors and JDT parameter rename exact; managed apply/rollback restored sources; daemon lifecycle verified."

@@ -104,6 +104,8 @@ export class RealNativeBinding { run(): void {} }
     if ($LASTEXITCODE -ne 0) { throw "Packaged daemon timeout self-test failed" }
     & python scripts/smoke-packaged-daemon.py $DaemonLauncher
     if ($LASTEXITCODE -ne 0) { throw "Packaged daemon smoke failed" }
+    & python scripts/smoke-packaged-java-change-signature.py $PackageRoot
+    if ($LASTEXITCODE -ne 0) { throw "Packaged Java change-signature transport smoke failed" }
     Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors and JDT parameter rename exact; managed apply/rollback restored sources; daemon lifecycle verified."
 }
 finally {
