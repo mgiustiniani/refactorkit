@@ -106,6 +106,38 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun signedSelectorRenamesOnlyOneJdtBoundOverloadParameter() {
+        val root = tempProject(
+            "src/main/java/com/example/UserService.java" to """
+                package com.example;
+                public class UserService {
+                    private String value = "field";
+                    String findName(String value) { return value.trim() + this.value; }
+                    String findName(Long value) { return value.toString(); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewRenameParameter(
+            snap,
+            "com.example.UserService#findName(java.lang.String)",
+            "value",
+            "input",
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.warnings.any { it.contains("JDT variable identity") }, plan.warnings.toString())
+        val content = org.refactorkit.core.TextEdits.apply(
+            snap.files.single().content,
+            (plan.workspaceEdit.edits.single() as org.refactorkit.core.FileEdit.Modify).textEdits,
+        )
+        assertTrue(content.contains("findName(String input) { return input.trim() + this.value; }"), content)
+        assertTrue(content.contains("findName(Long value) { return value.toString(); }"), content)
+        assertTrue(content.contains("private String value"), content)
+    }
+
+    @Test
     fun refusesMissingParameter() {
         val root = tempProject(
             "src/main/java/com/example/UserService.java" to """

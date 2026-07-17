@@ -108,6 +108,28 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun publishesExactMethodParameterBindingEvidence() {
+        val root = Files.createTempDirectory("rk-jdt-parameter-test")
+        root.resolve("src/main/java/com/acme/User.java").apply {
+            Files.createDirectories(parent)
+            writeText(
+                "package com.acme; public class User { " +
+                    "String label(String value) { return value.trim() + value; } }\n",
+            )
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+        val parameter = result.parameters.single { it.name == "value" }
+        val uses = result.bindingUses.filter { it.bindingKey == parameter.parameterBindingKey }
+
+        assertEquals("com.acme.User#label(java.lang.String)", parameter.methodQualifiedName)
+        assertEquals("label(java.lang.String)", parameter.methodSignature)
+        assertEquals(0, parameter.index)
+        assertEquals(2, uses.size)
+        assertTrue(uses.all { it.simpleName == "value" && it.path == parameter.path })
+    }
+
+    @Test
     fun jdtEvidenceFindsMethodsFieldsAndReferences() {
         val root = Files.createTempDirectory("rk-jdt-member-test")
         root.resolve("src/main/java/com/acme/User.java").apply {

@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Replace lexical Java parameter rename authority with exact JDT method/parameter
+  bindings, signed overload selection, one-to-one declaration/use ranges and
+  baseline-aware staged JDT validation. Same-name fields and other overloads are
+  excluded by identity; packaged CLI preview/apply/rollback is covered locally.
 - Expand Kotlin/JVM `organizeImports` to exact package-star directives. Stars are
   preserved unconditionally, sorted with retained explicit imports and never
   assigned unsupported unused-import authority.

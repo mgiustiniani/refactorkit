@@ -91,6 +91,27 @@ if [[ "$before" != "$after" ]]; then
   exit 1
 fi
 
+signature_preview="$(env -u JAVA_HOME "$launcher" change-signature --symbol "$symbol" --old-name key --new-name lookupKey "$fixture")"
+if ! grep -Fq 'Rename JDT-proven parameter' <<<"$signature_preview" || [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT parameter preview failed or wrote sources:" >&2
+  echo "$signature_preview" >&2
+  exit 1
+fi
+signature_output="$(env -u JAVA_HOME "$launcher" change-signature --symbol "$symbol" --old-name key --new-name lookupKey --apply "$fixture")"
+signature_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$signature_output" | tail -1)"
+if [[ -z "$signature_transaction" ]] ||
+   ! grep -Fq 'find(String lookupKey) { return lookupKey; }' "$fixture/src/main/java/com/acme/Service.java" ||
+   ! grep -Fq 'find(int id) { return String.valueOf(id); }' "$fixture/src/main/java/com/acme/Service.java"; then
+  echo "Packaged JDT parameter apply failed:" >&2
+  echo "$signature_output" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$signature_transaction" --root "$fixture" >/dev/null
+if [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT parameter rollback did not restore Java sources" >&2
+  exit 1
+fi
+
 format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
 transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"
 if [[ -z "$transaction_id" ]] || ! grep -Fq 'public String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then
@@ -108,4 +129,4 @@ fi
 
 python3 scripts/test-smoke-packaged-daemon-timeout.py
 python3 scripts/smoke-packaged-daemon.py "$daemon_launcher"
-printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources; daemon lifecycle verified."
+printf '%s\n' "Packaged runtime smoke passed: java.compiler present; signed selectors and JDT parameter rename exact; managed apply/rollback restored sources; daemon lifecycle verified."

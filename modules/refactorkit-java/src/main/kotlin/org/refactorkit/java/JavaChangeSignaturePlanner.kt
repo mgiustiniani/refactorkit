@@ -15,12 +15,11 @@ import java.nio.file.Path
  * Conservative Java Change Signature planner.
  *
  * Supported operations:
- * - rename one method parameter inside a non-overloaded method declaration and body;
- * - add one method parameter and update in-scope call sites with a caller-provided default expression.
+ * - rename one JDT-bound method parameter, with exact signed overload selection;
+ * - bounded lexical add/remove/reorder rows retained as experimental compatibility
+ *   operations until their JDT-backed replacements are independently qualified.
  *
- * The planner refuses overloaded methods to avoid guessing which declaration/call
- * sites should be changed. It remains lexical and preview-only until the patch is
- * explicitly applied through PatchEngine.
+ * Every result is preview-only until explicitly applied through PatchEngine.
  */
 class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
 
@@ -30,53 +29,90 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         oldParameterName: String,
         newParameterName: String,
     ): PatchPlan {
-        val resolved = resolveSingleMethod(snapshot, symbolFqnWithMethod, "changeSignature.renameParameter")
-            ?: return lastRefusal ?: refused(snapshot, "changeSignature.renameParameter", "Unable to resolve method: $symbolFqnWithMethod")
-        val (ownerFqn, methodName, _, file, method) = resolved
+        val operation = "changeSignature.renameParameter"
+        if (!isValidJavaIdentifier(oldParameterName)) return refused(snapshot, operation, "Invalid old parameter name: $oldParameterName")
+        if (!isValidJavaIdentifier(newParameterName)) return refused(snapshot, operation, "Invalid new parameter name: $newParameterName")
+        if (oldParameterName == newParameterName) return refused(snapshot, operation, "Old and new parameter names are the same: $oldParameterName")
+        val hash = symbolFqnWithMethod.indexOf('#')
+        if (hash <= 0 || hash == symbolFqnWithMethod.lastIndex) {
+            return refused(snapshot, operation, "Symbol must be in the form <FQN>#<method> or <FQN>#<method>(<types>)")
+        }
+        val ownerFqn = symbolFqnWithMethod.substring(0, hash)
+        val selector = symbolFqnWithMethod.substring(hash + 1)
+        if (selector.substringBefore('(') == "<init>") return refused(snapshot, operation, "Constructor parameter rename is not supported")
 
-        if (!isValidJavaIdentifier(oldParameterName)) return refused(snapshot, "changeSignature.renameParameter", "Invalid old parameter name: $oldParameterName")
-        if (!isValidJavaIdentifier(newParameterName)) return refused(snapshot, "changeSignature.renameParameter", "Invalid new parameter name: $newParameterName")
-        if (oldParameterName == newParameterName) return refused(snapshot, "changeSignature.renameParameter", "Old and new parameter names are the same: $oldParameterName")
-        if (methodName == "<init>") return refused(snapshot, "changeSignature.renameParameter", "Constructor parameter rename is not supported in this MVP")
-
-        val paramRange = findParameterNameRange(file.content, method.paramsStart + 1, method.paramsEnd, oldParameterName)
-            ?: return refused(snapshot, "changeSignature.renameParameter", "Parameter '$oldParameterName' not found in $ownerFqn#$methodName")
-
-        val edits = mutableListOf<TextEdit>()
-        edits += TextEdit(
-            range = TextEdits.rangeForOffset(file.content, paramRange.first, oldParameterName.length),
-            newText = newParameterName,
-        )
-
-        val bodyContent = file.content.substring(method.bodyStart + 1, method.bodyEnd)
-        val bodyBaseOffset = method.bodyStart + 1
-        for (occurrence in JavaLexer.findOccurrences(bodyContent, oldParameterName)) {
-            val absolute = bodyBaseOffset + occurrence.first
-            edits += TextEdit(
-                range = TextEdits.rangeForOffset(file.content, absolute, oldParameterName.length),
-                newText = newParameterName,
-            )
+        val analyzer = JdtJavaSemanticAnalyzer()
+        val before = analyzer.analyze(snapshot)
+        val methodPrefix = "$ownerFqn#${selector.substringBefore('(')}"
+        val methods = before.symbols.filter { symbol ->
+            symbol.kind == JdtJavaSemanticSymbolKind.METHOD &&
+                if ('(' in selector) symbol.qualifiedName == "$ownerFqn#$selector"
+                else symbol.qualifiedName.substringBefore('(') == methodPrefix
+        }
+        if (methods.isEmpty()) return refused(snapshot, operation, "JDT method not found: $symbolFqnWithMethod")
+        if (methods.size != 1) {
+            return refused(snapshot, operation, "Method selector is overloaded or ambiguous; use the exact signed selector <FQN>#<method>(<types>)")
+        }
+        val method = methods.single()
+        val parameters = before.parameters.filter { it.methodQualifiedName == method.qualifiedName && it.name == oldParameterName }
+        if (parameters.size != 1) return refused(snapshot, operation, "JDT parameter '$oldParameterName' is missing or ambiguous in ${method.qualifiedName}")
+        val parameter = parameters.single()
+        val file = snapshot.files.singleOrNull { it.path == parameter.path }
+            ?: return refused(snapshot, operation, "Authoritative parameter source is missing: ${parameter.path}")
+        JavaGeneratedSourcePolicy.reason(file)?.let { reason ->
+            return refused(snapshot, operation, "Declaration file ${file.path} is generated code ($reason)")
+        }
+        val uses = before.bindingUses.filter { it.bindingKey == parameter.parameterBindingKey }
+        val ranges = listOf(parameter.sourceRange) + uses.map { it.sourceRange }
+        if (ranges.any { range ->
+                val start = TextEdits.offsetOf(file.content, range.start)
+                val end = TextEdits.offsetOf(file.content, range.end)
+                file.content.substring(start, end) != oldParameterName
+            }) {
+            return refused(snapshot, operation, "JDT parameter evidence does not map one-to-one to exact '$oldParameterName' tokens")
+        }
+        val edits = dedupeAndSort(ranges.map { TextEdit(it, newParameterName) })
+        if (edits.size != ranges.size) return refused(snapshot, operation, "JDT parameter evidence contains duplicate ranges")
+        val fileEdits = listOf(FileEdit.Modify(file.path, edits))
+        val stagedFiles = snapshot.files.map { source ->
+            if (source.path == file.path) source.copy(content = TextEdits.apply(source.content, edits)) else source
+        }
+        val stagedSnapshot = snapshot.copy(files = stagedFiles)
+        val staged = analyzer.analyze(stagedSnapshot)
+        val baselineWarningCounts = before.warnings.groupingBy(::jdtWarningIdentity).eachCount()
+        val stagedWarningCounts = staged.warnings.groupingBy(::jdtWarningIdentity).eachCount()
+        val introducedWarnings = stagedWarningCounts.filter { (identity, count) ->
+            count > baselineWarningCounts.getOrDefault(identity, 0)
+        }
+        if (introducedWarnings.isNotEmpty()) {
+            val introducedCount = introducedWarnings.entries.sumOf { (identity, count) ->
+                count - baselineWarningCounts.getOrDefault(identity, 0)
+            }
+            return refused(snapshot, operation, "Staged JDT validation introduced $introducedCount error(s)")
+        }
+        val stagedParameter = staged.parameters.singleOrNull {
+            it.methodQualifiedName == method.qualifiedName && it.index == parameter.index && it.name == newParameterName
+        } ?: return refused(snapshot, operation, "Staged JDT parameter identity could not be re-established")
+        val stagedUses = staged.bindingUses.count { it.bindingKey == stagedParameter.parameterBindingKey }
+        if (stagedUses != uses.size) {
+            return refused(snapshot, operation, "Staged JDT parameter usage count changed from ${uses.size} to $stagedUses")
         }
 
-        val sorted = dedupeAndSort(edits)
-        val fileEdits = listOf(FileEdit.Modify(file.path, sorted))
-
         return PatchPlan(
-            operation = "changeSignature.renameParameter",
+            operation = operation,
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 0.86,
+            confidence = 0.98,
             requiresUserApproval = true,
-            summary = "Rename parameter '$oldParameterName' → '$newParameterName' in $ownerFqn#$methodName. 1 file affected.",
+            summary = "Rename JDT-proven parameter '$oldParameterName' → '$newParameterName' in ${method.qualifiedName}. 1 file affected.",
             affectedFiles = setOf(file.path),
             workspaceEdit = WorkspaceEdit(fileEdits),
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
             warnings = listOf(
-                "Change Signature: parameter rename updates the declaration and method body only; Java call sites do not contain parameter names.",
-                "Overloaded methods and constructor parameters are not supported yet.",
-                "Reflection, serialization frameworks, dependency injection, and annotation processors may reference parameter names.",
+                "Declaration plus ${uses.size} parameter use(s) are bound to one exact JDT variable identity.",
+                "Reflection, serialization frameworks, dependency injection, and annotation processors may observe parameter names.",
             ),
-            riskLevel = RiskLevel.MEDIUM,
+            riskLevel = if (method.hoverSignature.contains("public ") || method.hoverSignature.contains("protected ")) RiskLevel.HIGH else RiskLevel.MEDIUM,
         )
     }
 
@@ -810,6 +846,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         warnings = listOf(reason),
         riskLevel = RiskLevel.HIGH,
     )
+
+    private fun jdtWarningIdentity(warning: JdtJavaSemanticWarning): String =
+        "${warning.path}|${warning.problemId}|${warning.message}"
 
     private fun dedupeAndSort(edits: List<TextEdit>): List<TextEdit> = edits
         .distinctBy { "${it.range.start.line}:${it.range.start.character}:${it.range.end.line}:${it.range.end.character}:${it.newText}" }

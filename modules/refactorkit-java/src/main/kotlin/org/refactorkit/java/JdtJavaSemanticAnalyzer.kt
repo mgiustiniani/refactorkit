@@ -150,6 +150,7 @@ class JdtJavaSemanticAnalyzer {
             }
         }
         val warnings = fileAnalyses.flatMap { it.warnings }
+        val parameters = fileAnalyses.flatMap { it.parameters }
         val overrideRelations = buildOverrideRelations(
             fileAnalyses.flatMap { it.methodBindings },
             fileAnalyses.flatMap { it.inheritances },
@@ -161,6 +162,7 @@ class JdtJavaSemanticAnalyzer {
             warnings = warnings,
             overrideRelations = overrideRelations,
             bindingUses = bindingUses,
+            parameters = parameters,
         )
     }
 
@@ -247,7 +249,7 @@ class JdtJavaSemanticAnalyzer {
         classpathEntries: Array<String>,
         sourceLevel: Int,
     ): FileAnalysis {
-        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel)
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
@@ -255,6 +257,7 @@ class JdtJavaSemanticAnalyzer {
         val methodBindings = mutableListOf<MethodBindingRecord>()
         val inheritances = mutableListOf<TypeInheritanceRecord>()
         val ownerStack = mutableListOf<String>()
+        val parameters = mutableListOf<JdtJavaSemanticParameter>()
 
         compilationUnit.accept(object : ASTVisitor() {
             override fun visit(node: TypeDeclaration): Boolean {
@@ -401,6 +404,21 @@ class JdtJavaSemanticAnalyzer {
                 if (binding != null && !node.isConstructor) {
                     methodBindings += MethodBindingRecord(methodSymbol, binding)
                 }
+                node.parameters().filterIsInstance<SingleVariableDeclaration>().forEachIndexed { index, parameter ->
+                    val parameterBinding = parameter.resolveBinding()?.variableDeclaration ?: return@forEachIndexed
+                    val identifier = parameter.name
+                    parameters += JdtJavaSemanticParameter(
+                        methodQualifiedName = methodSymbol.qualifiedName,
+                        methodSignature = methodSymbol.memberSignature ?: return@forEachIndexed,
+                        methodBindingKey = binding?.methodDeclaration?.key ?: return@forEachIndexed,
+                        parameterBindingKey = parameterBinding.key,
+                        name = identifier.identifier,
+                        index = index,
+                        path = file.path,
+                        sourceRange = rangeFor(compilationUnit, identifier.startPosition, identifier.length),
+                        evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                    )
+                }
                 return true
             }
 
@@ -492,7 +510,7 @@ class JdtJavaSemanticAnalyzer {
                     evidence = JdtJavaSemanticEvidence.JDT_PARSE,
                 )
             }
-        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances)
+        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances, parameters)
     }
 
     private fun declarationBindingKey(binding: IBinding?): String? = when (binding) {
@@ -790,6 +808,7 @@ class JdtJavaSemanticAnalyzer {
         val warnings: List<JdtJavaSemanticWarning>,
         val methodBindings: List<MethodBindingRecord>,
         val inheritances: List<TypeInheritanceRecord>,
+        val parameters: List<JdtJavaSemanticParameter>,
     )
 
     private data class MethodBindingRecord(
@@ -819,6 +838,19 @@ data class JdtJavaSemanticAnalysisResult(
     val warnings: List<JdtJavaSemanticWarning> = emptyList(),
     val overrideRelations: List<JdtJavaSemanticOverrideRelation> = emptyList(),
     val bindingUses: List<JdtJavaSemanticBindingUse> = emptyList(),
+    val parameters: List<JdtJavaSemanticParameter> = emptyList(),
+)
+
+data class JdtJavaSemanticParameter(
+    val methodQualifiedName: String,
+    val methodSignature: String,
+    val methodBindingKey: String,
+    val parameterBindingKey: String,
+    val name: String,
+    val index: Int,
+    val path: Path,
+    val sourceRange: SourceRange,
+    val evidence: JdtJavaSemanticEvidence,
 )
 
 data class JdtJavaSemanticSymbol(

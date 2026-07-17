@@ -71,6 +71,25 @@ export class RealNativeBinding { run(): void {} }
     }
     if ($Before -ne $After) { throw "Packaged read-only smoke modified Java sources" }
 
+    $SignaturePreview = (& $Launcher change-signature --symbol $Symbol --old-name key --new-name lookupKey $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $SignaturePreview -notmatch 'Rename JDT-proven parameter' -or
+        $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT parameter preview failed or wrote sources: $SignaturePreview"
+    }
+    $SignatureOutput = (& $Launcher change-signature --symbol $Symbol --old-name key --new-name lookupKey --apply $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Packaged JDT parameter apply failed: $SignatureOutput" }
+    $SignatureMatch = [regex]::Match($SignatureOutput, 'transaction-[0-9a-f-]+')
+    $ServiceContent = Get-Content -Raw (Join-Path $SourceDir "Service.java")
+    if (-not $SignatureMatch.Success -or
+        $ServiceContent -notmatch 'find\(String lookupKey\) \{ return lookupKey; \}' -or
+        $ServiceContent -notmatch 'find\(int id\) \{ return String\.valueOf\(id\); \}') {
+        throw "Packaged JDT parameter apply changed the wrong overload: $SignatureOutput"
+    }
+    $SignatureRollback = (& $Launcher patch rollback $SignatureMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT parameter rollback failed: $SignatureRollback"
+    }
+
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw "Managed format smoke failed: $FormatOutput" }
     $Match = [regex]::Match($FormatOutput, 'transaction-[0-9a-f-]+')
@@ -85,7 +104,7 @@ export class RealNativeBinding { run(): void {} }
     if ($LASTEXITCODE -ne 0) { throw "Packaged daemon timeout self-test failed" }
     & python scripts/smoke-packaged-daemon.py $DaemonLauncher
     if ($LASTEXITCODE -ne 0) { throw "Packaged daemon smoke failed" }
-    Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors exact; managed format/apply/rollback restored sources; daemon lifecycle verified."
+    Write-Output "Packaged Windows runtime smoke passed: java.compiler present; signed selectors and JDT parameter rename exact; managed apply/rollback restored sources; daemon lifecycle verified."
 }
 finally {
     Remove-Item -Recurse -Force $Fixture -ErrorAction SilentlyContinue
