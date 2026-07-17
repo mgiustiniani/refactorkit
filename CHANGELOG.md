@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add bounded Kotlin/JVM organize-imports library planning for explicit type
+  imports. Complete K2 usage evidence distinguishes import tokens from real uses,
+  removes only proven-unused directives, sorts retained lines, preserves CRLF,
+  recompiles staged overlays and rolls back byte-exactly.
 - Allow any compiler-proven public sibling to lead a whole-file move while
   preserving the original filename; the selected declaration name never infers a
   file rename.

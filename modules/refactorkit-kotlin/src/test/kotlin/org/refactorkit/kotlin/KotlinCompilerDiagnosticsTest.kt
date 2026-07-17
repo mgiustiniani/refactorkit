@@ -8,6 +8,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
+import kotlin.io.path.readBytes
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -188,6 +189,22 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun successfulK2CompilationProvesImportedTypeWithoutFabricatingAUse() {
+        val root = project("import java.util.UUID\nfun answer(): Int = 42\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+        val usages = result.externalTypeUsages.filter { it.jvmBinaryName == "java.util.UUID" }
+
+        assertEquals(1, usages.size)
+        assertEquals(java.nio.file.Path.of("src/main/kotlin/fixture/Broken.kt"), usages.single().location.path)
+        assertEquals(1, usages.single().location.range.start.line)
+    }
+
+    @Test
     fun successfulK2CompilationReturnsCompilerProvenTypeUsagesWithExactPsiRanges() {
         val root = project("""
             annotation class Marker
@@ -260,6 +277,57 @@ class KotlinCompilerDiagnosticsTest {
 
         assertTrue(selections.contains("PublicGreeting"), selections.toString())
         assertTrue(selections.count { it == "ApiGreeting" } >= 3, selections.toString())
+    }
+
+    @Test
+    fun organizeImportsRefusesCommentAttachedToImportBlock() {
+        val root = project(
+            "// import rationale\nimport java.time.Instant\nfun value(): Instant = Instant.now()\n",
+        )
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val plan = KotlinOrganizeImportsPlanner(
+            KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)),
+        ).preview(snapshot, java.nio.file.Path.of("src/main/kotlin/fixture/Broken.kt"))
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.organizeImportsShapeUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
+    fun organizeImportsRemovesCompilerProvenUnusedTypeAndSortsCrLfBlock() {
+        val root = project(
+            "import java.util.UUID\r\n" +
+                "import java.util.concurrent.atomic.AtomicInteger\r\n" +
+                "import java.time.Instant\r\n" +
+                "fun values(): Pair<Instant, AtomicInteger> = Instant.now() to AtomicInteger()\r\n",
+        )
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val beforeBytes = source.readBytes()
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val planner = KotlinOrganizeImportsPlanner(adapter)
+
+        val plan = planner.preview(snapshot, root.relativize(source))
+
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        val applied = assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(root).apply(
+                plan, snapshot, org.refactorkit.core.ApplyAuthorization.explicit("kotlin-organize-imports-test"),
+                org.refactorkit.core.DiagnosticsGate.enabled("kotlin-k2", planner::diagnostics),
+            ),
+        )
+        assertTrue(source.readText().contains(
+            "import java.time.Instant\r\nimport java.util.concurrent.atomic.AtomicInteger\r\nfun values()",
+        ))
+        assertTrue("java.util.UUID" !in source.readText())
+        assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(root).rollback(applied.transaction),
+        )
+        assertTrue(beforeBytes.contentEquals(source.readBytes()))
     }
 
     @Test
