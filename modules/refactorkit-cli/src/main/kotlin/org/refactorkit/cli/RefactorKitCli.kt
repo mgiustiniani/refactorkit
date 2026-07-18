@@ -224,7 +224,21 @@ class RefactorKitCli(
     private fun cmdDiagnostics(args: List<String>): Int {
         val parsed = parseOptions(args)
         val snap = scanFrom(parsed.positionals.firstOrNull() ?: ".", parsed.flags) ?: return 1
-        val diags = javaAdapter.diagnostics(snap, verbose = "verbose" in parsed.flags)
+        val platformHome = parsed.options["jdk-home"]
+            ?: System.getProperty("refactorkit.java.platform.home")
+            ?: System.getenv("REFACTORKIT_JAVA_PLATFORM_HOME")
+        val allDiagnostics = javaAdapter.authoritativeDiagnostics(
+            snap,
+            platformHome?.let(Paths::get),
+            verbose = "verbose" in parsed.flags,
+        )
+        val diags = try {
+            parsed.options["module"]?.let { javaAdapter.filterDiagnosticsForModule(snap, allDiagnostics, it) }
+                ?: allDiagnostics
+        } catch (failure: IllegalArgumentException) {
+            System.err.println(failure.message)
+            return 2
+        }
         if (diags.isEmpty()) { println("No diagnostics."); return 0 }
         diags.forEach { println("${it.severity}${it.code?.let { code -> " [$code]" }.orEmpty()}: ${it.message}") }
         return if (diags.any { it.severity.name == "ERROR" }) 1 else 0

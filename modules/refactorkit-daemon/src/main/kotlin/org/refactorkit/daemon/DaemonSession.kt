@@ -1369,10 +1369,17 @@ class DaemonSession(
         val snap = requireSnapshot()
         val verbose = params?.string("verbose")?.toBooleanStrictOrNull() ?: false
         val languageId = params?.string("languageId") ?: "java"
+        val platformHome = params?.string("jdkHome")
+            ?: System.getProperty("refactorkit.java.platform.home")
+            ?: System.getenv("REFACTORKIT_JAVA_PLATFORM_HOME")
+        val javaDiagnostics = lazy {
+            val all = adapter.authoritativeDiagnostics(snap, platformHome?.let(Paths::get), verbose)
+            params?.string("module")?.let { adapter.filterDiagnosticsForModule(snap, all, it) } ?: all
+        }
         val diagnosticsByLanguage = when (languageId) {
-            "java" -> adapter.diagnostics(snap, verbose).map { "java" to it }
+            "java" -> javaDiagnostics.value.map { "java" to it }
             "kotlin" -> kotlinAdapter.diagnostics(snap).map { "kotlin" to it }
-            "jvm" -> (adapter.diagnostics(snap, verbose).map { "java" to it } +
+            "jvm" -> (javaDiagnostics.value.map { "java" to it } +
                 kotlinAdapter.diagnostics(snap).map { "kotlin" to it })
                 .distinctBy { (owner, diagnostic) -> listOf(
                     owner,

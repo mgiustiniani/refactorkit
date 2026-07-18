@@ -87,7 +87,12 @@ class JavaReleasePlatformAuthorityTest {
     private fun syntheticJdk(token: String, entry: String): Path {
         val jdk = temporary.resolve("jdk-$token-${System.nanoTime()}")
         Files.createDirectories(jdk.resolve("lib"))
-        Files.writeString(jdk.resolve("release"), "JAVA_VERSION=\"21\"\nIMPLEMENTOR=\"fixture\"\n")
+        Files.writeString(
+            jdk.resolve("release"),
+            "JAVA_VERSION=\"21\"\nIMPLEMENTOR=\"fixture\"\nMODULES=\"java.base java.se\"\n",
+        )
+        Files.write(jdk.resolve("lib/modules"), byteArrayOf(4, 5, 6))
+        Files.write(jdk.resolve("lib/jrt-fs.jar"), byteArrayOf(7, 8, 9))
         writeCtSym(jdk, token, entry)
         return jdk
     }

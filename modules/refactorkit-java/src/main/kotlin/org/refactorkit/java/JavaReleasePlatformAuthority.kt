@@ -20,6 +20,9 @@ data class JavaReleasePlatformAuthority(
     val jdkReleaseMetadataSha256: String,
     val signatureArchive: Path,
     val signatureArchiveSha256: String,
+    val platformRelease: Int,
+    val currentSystemModules: Path?,
+    val currentSystemModulesSha256: String?,
     val identitySha256: String,
 )
 
@@ -48,6 +51,11 @@ class JavaReleasePlatformAuthorityResolver(
         )
         val releaseMetadata = home.resolve("release")
         val signatures = home.resolve("lib").resolve("ct.sym")
+        val releaseText = runCatching { Files.readString(releaseMetadata) }.getOrNull()
+            ?: return refused("java.platform.releaseMetadataUnavailable", "Configured JDK release metadata could not be read")
+        val platformRelease = Regex("(?m)^JAVA_VERSION=\\\"?(\\d+)").find(releaseText)
+            ?.groupValues?.get(1)?.toIntOrNull()
+            ?: return refused("java.platform.releaseMetadataMalformed", "Configured JDK release metadata has no Java version")
         if (!Files.isRegularFile(releaseMetadata)) return refused(
             "java.platform.releaseMetadataUnavailable",
             "Configured JDK release metadata is unavailable",
@@ -90,9 +98,26 @@ class JavaReleasePlatformAuthorityResolver(
             "java.platform.releaseSignaturesUnavailable",
             "Configured JDK ct.sym does not contain Java $release signatures",
         )
+        val currentRelease = release == platformRelease
+        val systemModules = home.resolve("lib/modules").takeIf { currentRelease }
+        val systemModulesHash = if (currentRelease) {
+            if (!releaseText.lineSequence().firstOrNull { it.startsWith("MODULES=") }.orEmpty()
+                    .removePrefix("MODULES=").contains("java.se")) return refused(
+                "java.platform.currentModulesIncomplete",
+                "Configured current-release runtime is not a complete java.se image",
+            )
+            if (!Files.isRegularFile(systemModules) || !Files.isRegularFile(home.resolve("lib/jrt-fs.jar"))) return refused(
+                "java.platform.currentModulesUnavailable",
+                "Configured current-release system module image is unavailable",
+            )
+            stableSha256(requireNotNull(systemModules)) ?: return refused(
+                "java.platform.evidenceDrift",
+                "Configured current-release system modules changed while they were being attested",
+            )
+        } else null
         val identity = sha256(
-            "java-release-platform-v1\n$release\n${home.toString().replace('\\', '/')}\n$metadataHash\n$signatureHash\n"
-                .toByteArray(Charsets.UTF_8),
+            ("java-release-platform-v2\n$release\n$platformRelease\n${home.toString().replace('\\', '/')}\n" +
+                "$metadataHash\n$signatureHash\n${systemModulesHash.orEmpty()}\n").toByteArray(Charsets.UTF_8),
         )
         return JavaReleasePlatformResolution.Available(
             JavaReleasePlatformAuthority(
@@ -101,6 +126,9 @@ class JavaReleasePlatformAuthorityResolver(
                 jdkReleaseMetadataSha256 = metadataHash,
                 signatureArchive = signatures.toRealPath(),
                 signatureArchiveSha256 = signatureHash,
+                platformRelease = platformRelease,
+                currentSystemModules = systemModules?.toRealPath(),
+                currentSystemModulesSha256 = systemModulesHash,
                 identitySha256 = identity,
             ),
         )

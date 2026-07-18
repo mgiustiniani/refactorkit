@@ -45,11 +45,12 @@ tasks.test {
 // ── self-contained CLI packaging ─────────────────────────────────────────────
 
 val runtimeModules = providers.gradleProperty("refactorkit.runtime.modules")
-    .orElse("java.base,java.compiler,java.desktop,java.logging,java.xml,jdk.unsupported")
+    .orElse("java.se,jdk.unsupported")
 
 val packageDir = layout.buildDirectory.dir("package/refactorkit")
 val runtimeDir = layout.buildDirectory.dir("jlink/runtime")
 val bundledLauncherDir = layout.buildDirectory.dir("generated/bundled-launchers")
+val bundledJavaPlatformDir = layout.buildDirectory.dir("generated/java-platform/jdk")
 
 fun javaTool(toolName: String): String {
     val javaHome = System.getProperty("java.home")
@@ -84,6 +85,27 @@ tasks.register<Exec>("jlinkRuntime") {
     )
 }
 
+/** Stage immutable release signatures separately from the reduced runtime image. */
+tasks.register("stageJavaPlatformEvidence") {
+    group = "distribution"
+    description = "Stage the build JDK release metadata and ct.sym for release-aware Java diagnostics."
+    val javaHome = File(System.getProperty("java.home"))
+    val releaseMetadata = javaHome.resolve("release")
+    val signatures = javaHome.resolve("lib/ct.sym")
+    inputs.files(releaseMetadata, signatures)
+    outputs.dir(bundledJavaPlatformDir)
+    doLast {
+        require(releaseMetadata.isFile && signatures.isFile) {
+            "The packaging JDK must provide release metadata and lib/ct.sym"
+        }
+        val output = bundledJavaPlatformDir.get().asFile
+        delete(output)
+        output.resolve("lib").mkdirs()
+        releaseMetadata.copyTo(output.resolve("release"), overwrite = true)
+        signatures.copyTo(output.resolve("lib/ct.sym"), overwrite = true)
+    }
+}
+
 /** Write launchers that always use the bundled runtime instead of PATH java. */
 tasks.register("writeBundledLaunchers") {
     group = "distribution"
@@ -100,7 +122,7 @@ tasks.register("writeBundledLaunchers") {
             |#!/usr/bin/env sh
             |set -e
             |APP_HOME="${'$'}(CDPATH= cd -- "${'$'}(dirname -- "${'$'}0")/.." && pwd)"
-            |exec "${'$'}APP_HOME/runtime/bin/java" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.cli.RefactorKitCliKt "${'$'}@"
+            |exec "${'$'}APP_HOME/runtime/bin/java" -Drefactorkit.java.platform.home="${'$'}APP_HOME/runtime" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.cli.RefactorKitCliKt "${'$'}@"
             |
             """.trimMargin(),
         )
@@ -111,7 +133,7 @@ tasks.register("writeBundledLaunchers") {
             |#!/usr/bin/env sh
             |set -e
             |APP_HOME="${'$'}(CDPATH= cd -- "${'$'}(dirname -- "${'$'}0")/.." && pwd)"
-            |exec "${'$'}APP_HOME/runtime/bin/java" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.daemon.RefactorKitDaemonKt "${'$'}@"
+            |exec "${'$'}APP_HOME/runtime/bin/java" -Drefactorkit.java.platform.home="${'$'}APP_HOME/runtime" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.daemon.RefactorKitDaemonKt "${'$'}@"
             |
             """.trimMargin(),
         )
@@ -122,7 +144,7 @@ tasks.register("writeBundledLaunchers") {
             |#!/usr/bin/env sh
             |set -e
             |APP_HOME="${'$'}(CDPATH= cd -- "${'$'}(dirname -- "${'$'}0")/.." && pwd)"
-            |exec "${'$'}APP_HOME/runtime/bin/java" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.mcp.RefactorKitMcpKt "${'$'}@"
+            |exec "${'$'}APP_HOME/runtime/bin/java" -Drefactorkit.java.platform.home="${'$'}APP_HOME/runtime" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.mcp.RefactorKitMcpKt "${'$'}@"
             |
             """.trimMargin(),
         )
@@ -133,7 +155,7 @@ tasks.register("writeBundledLaunchers") {
             |@echo off
             |setlocal
             |set "APP_HOME=%~dp0.."
-            |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.cli.RefactorKitCliKt %*
+            |"%APP_HOME%\runtime\bin\java.exe" -Drefactorkit.java.platform.home="%APP_HOME%\runtime" -cp "%APP_HOME%\lib\*" org.refactorkit.cli.RefactorKitCliKt %*
             |exit /b %ERRORLEVEL%
             |
             """.trimMargin(),
@@ -143,7 +165,7 @@ tasks.register("writeBundledLaunchers") {
             |@echo off
             |setlocal
             |set "APP_HOME=%~dp0.."
-            |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.daemon.RefactorKitDaemonKt %*
+            |"%APP_HOME%\runtime\bin\java.exe" -Drefactorkit.java.platform.home="%APP_HOME%\runtime" -cp "%APP_HOME%\lib\*" org.refactorkit.daemon.RefactorKitDaemonKt %*
             |exit /b %ERRORLEVEL%
             |
             """.trimMargin(),
@@ -153,7 +175,7 @@ tasks.register("writeBundledLaunchers") {
             |@echo off
             |setlocal
             |set "APP_HOME=%~dp0.."
-            |"%APP_HOME%\runtime\bin\java.exe" -cp "%APP_HOME%\lib\*" org.refactorkit.mcp.RefactorKitMcpKt %*
+            |"%APP_HOME%\runtime\bin\java.exe" -Drefactorkit.java.platform.home="%APP_HOME%\runtime" -cp "%APP_HOME%\lib\*" org.refactorkit.mcp.RefactorKitMcpKt %*
             |exit /b %ERRORLEVEL%
             |
             """.trimMargin(),
@@ -165,11 +187,12 @@ tasks.register("writeBundledLaunchers") {
 tasks.register("refactorkitRuntimeDist") {
     group = "distribution"
     description = "Assemble a self-contained RefactorKit CLI distribution with embedded Java runtime."
-    dependsOn("installDist", "jlinkRuntime", "writeBundledLaunchers")
+    dependsOn("installDist", "jlinkRuntime", "stageJavaPlatformEvidence", "writeBundledLaunchers")
 
     inputs.dir(layout.buildDirectory.dir("install/refactorkit"))
     inputs.dir(runtimeDir)
     inputs.dir(bundledLauncherDir)
+    inputs.dir(bundledJavaPlatformDir)
     outputs.dir(packageDir)
 
     doLast {
@@ -188,6 +211,10 @@ tasks.register("refactorkitRuntimeDist") {
         copy {
             from(bundledLauncherDir)
             into(out.resolve("bin"))
+        }
+        copy {
+            from(bundledJavaPlatformDir.map { it.file("lib/ct.sym") })
+            into(out.resolve("runtime/lib"))
         }
         out.resolve("bin/refactorkit").setExecutable(true)
         out.resolve("bin/refactorkit-daemon").setExecutable(true)

@@ -512,9 +512,93 @@ class JavaLanguageAdapter(
 
     override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> = diagnostics(project, verbose = false)
 
-    fun diagnostics(project: ProjectSnapshot, verbose: Boolean): List<Diagnostic> {
+    fun diagnostics(project: ProjectSnapshot, verbose: Boolean): List<Diagnostic> =
+        diagnostics(project, verbose, analyzeDiagnosticsOverlay(project), emptyList(), false)
+
+    /**
+     * Release-aware diagnostics for CLI/daemon product authority. The configured
+     * platform is explicit input; the running VM is never substituted.
+     */
+    fun authoritativeDiagnostics(project: ProjectSnapshot, platformHome: Path?, verbose: Boolean = false): List<Diagnostic> {
+        val sourceSets = project.buildModels.flatMap { model -> model.modules.flatMap { module ->
+            module.sourceSets.filter { sourceSet -> sourceSet.sourceRoots.any { root ->
+                project.files.any { it.languageId == "java" && it.path.startsWith(root) }
+            } }.map { sourceSet -> Triple(module.id, sourceSet.id, sourceSet.attributes["java.release"]?.toIntOrNull()) }
+        } }
+        val unavailable = mutableListOf<Diagnostic>()
+        sourceSets.filter { it.third == null }.forEach { (module, sourceSet, _) ->
+            unavailable += unavailableSourceSet(
+                module, sourceSet, "java.platform.explicitJdkRequired",
+                "No effective Maven --release is available; an explicit qualified JDK platform policy is required",
+            )
+        }
+        if (platformHome == null) sourceSets.filter { it.third != null }.forEach { (module, sourceSet, release) ->
+            unavailable += unavailableSourceSet(
+                module, sourceSet, "java.platform.authorityUnavailable",
+                "No explicit Java $release platform authority was configured",
+            )
+        }
+        if (unavailable.isNotEmpty()) {
+            return diagnostics(project, verbose, analyzeDiagnosticsOverlay(project), unavailable, true)
+        }
+        val authorities = sourceSets.mapNotNull { it.third }.distinct().associateWith { release ->
+            when (val resolved = JavaReleasePlatformAuthorityResolver().resolve(requireNotNull(platformHome), release)) {
+                is JavaReleasePlatformResolution.Available -> resolved.authority
+                is JavaReleasePlatformResolution.Refused -> {
+                    sourceSets.filter { it.third == release }.forEach { (module, sourceSet, _) ->
+                        unavailable += unavailableSourceSet(module, sourceSet, resolved.code, resolved.message)
+                    }
+                    null
+                }
+            }
+        }.filterValues { it != null }.mapValues { requireNotNull(it.value) }
+        if (unavailable.isNotEmpty()) {
+            return diagnostics(project, verbose, analyzeDiagnosticsOverlay(project), unavailable, true)
+        }
+        return when (val resolved = analyzeAuthoritativeDiagnosticsOverlay(project, authorities)) {
+            is JdtAuthoritativeJavaAnalysisResolution.Available ->
+                diagnostics(project, verbose, resolved.analysis, emptyList(), false)
+            is JdtAuthoritativeJavaAnalysisResolution.Refused -> {
+                sourceSets.forEach { (module, sourceSet, _) ->
+                    unavailable += unavailableSourceSet(module, sourceSet, resolved.code, resolved.message)
+                }
+                diagnostics(project, verbose, analyzeDiagnosticsOverlay(project), unavailable, true)
+            }
+        }
+    }
+
+    fun filterDiagnosticsForModule(
+        project: ProjectSnapshot,
+        diagnostics: List<Diagnostic>,
+        moduleId: String,
+    ): List<Diagnostic> {
+        val matches = project.buildModels.flatMap { it.modules }.filter { it.id == moduleId || it.name == moduleId }
+        require(matches.size == 1) { "Java diagnostics module selector is unknown or ambiguous: $moduleId" }
+        val module = matches.single()
+        val roots = module.sourceSets.flatMap { it.sourceRoots }.map(Path::normalize)
+        return diagnostics.filter { diagnostic ->
+            diagnostic.location?.path?.normalize()?.let { path -> roots.any(path::startsWith) }
+                ?: diagnostic.message.contains("source set '${module.id}:")
+        }
+    }
+
+    private fun unavailableSourceSet(module: String, sourceSet: String, code: String, detail: String) = Diagnostic(
+        message = "Java analysis unavailable for source set '$module:$sourceSet': $detail",
+        severity = Diagnostic.Severity.ERROR,
+        code = code,
+        evidence = DiagnosticEvidence.STRUCTURAL,
+        category = DiagnosticCategory.PROJECT_STRUCTURE,
+    )
+
+    private fun diagnostics(
+        project: ProjectSnapshot,
+        verbose: Boolean,
+        semanticAnalysis: JdtJavaSemanticAnalysisResult,
+        additionalUnavailable: List<Diagnostic>,
+        suppressTypeResolution: Boolean,
+    ): List<Diagnostic> {
         lastSnapshot = project
-        val diagnostics = mutableListOf<Diagnostic>()
+        val diagnostics = additionalUnavailable.toMutableList()
         val unavailableModules = project.modules.filter { module ->
             module.languageSettings["java.buildModel.status"] == "unavailable" ||
                 module.languageSettings["java.classpath.status"] == "unavailable" ||
@@ -536,13 +620,13 @@ class JavaLanguageAdapter(
                 category = DiagnosticCategory.PROJECT_STRUCTURE,
             )
         }
-        val semanticAnalysis = analyzeDiagnosticsOverlay(project)
         diagnostics += semanticAnalysis.warnings.filterNot { warning ->
             isResolvedModuleExportWarning(project, warning)
         }.filter { warning ->
-            verbose || warning.category == JdtJavaDiagnosticCategory.SYNTAX || unavailableModules.none { module ->
-                sourceRoots(project, module.name, module.root).any { warning.path.normalize().startsWith(it.normalize()) }
-            }
+            (!suppressTypeResolution && verbose) || warning.category == JdtJavaDiagnosticCategory.SYNTAX ||
+                (!suppressTypeResolution && unavailableModules.none { module ->
+                    sourceRoots(project, module.name, module.root).any { warning.path.normalize().startsWith(it.normalize()) }
+                })
         }.map { warning ->
             val syntax = warning.category == JdtJavaDiagnosticCategory.SYNTAX
             Diagnostic(
@@ -644,7 +728,17 @@ class JavaLanguageAdapter(
             ?.sourceRoots.orEmpty()
     }
 
-    private fun analyzeDiagnosticsOverlay(project: ProjectSnapshot): JdtJavaSemanticAnalysisResult {
+    private fun analyzeDiagnosticsOverlay(project: ProjectSnapshot): JdtJavaSemanticAnalysisResult =
+        withDiagnosticsOverlay(project, JdtJavaSemanticAnalyzer()::analyze)
+
+    internal fun analyzeAuthoritativeDiagnosticsOverlay(
+        project: ProjectSnapshot,
+        authorities: Map<Int, JavaReleasePlatformAuthority>,
+    ): JdtAuthoritativeJavaAnalysisResolution = withDiagnosticsOverlay(project) { overlay ->
+        JdtJavaSemanticAnalyzer().analyzeAuthoritatively(overlay, authorities)
+    }
+
+    private fun <T> withDiagnosticsOverlay(project: ProjectSnapshot, analyze: (ProjectSnapshot) -> T): T {
         val overlayRoot = Files.createTempDirectory("refactorkit-jdt-diagnostics-")
         return try {
             project.files.filter { it.languageId == "java" }.forEach { file ->
@@ -659,11 +753,8 @@ class JavaLanguageAdapter(
             }
             val modules = project.modules.map { module ->
                 val moduleRoot = module.root.toAbsolutePath().normalize()
-                val relativeRoot = if (moduleRoot.startsWith(originalRoot)) {
-                    originalRoot.relativize(moduleRoot)
-                } else {
-                    Path.of(module.name.replace(':', '/'))
-                }
+                val relativeRoot = if (moduleRoot.startsWith(originalRoot)) originalRoot.relativize(moduleRoot)
+                    else Path.of(module.name.replace(':', '/'))
                 module.copy(
                     root = overlayRoot.resolve(relativeRoot),
                     classpathEntries = originalClasspath(module.classpathEntries),
@@ -671,27 +762,18 @@ class JavaLanguageAdapter(
                     testClasspathEntries = originalClasspath(module.testClasspathEntries),
                 )
             }
-            val buildModels = project.buildModels.map { model ->
-                model.copy(modules = model.modules.map { module ->
-                    val moduleRoot = module.root.toAbsolutePath().normalize()
-                    val relativeRoot = if (moduleRoot.startsWith(originalRoot)) {
-                        originalRoot.relativize(moduleRoot)
-                    } else {
-                        Path.of(module.id.replace(':', '/'))
-                    }
-                    module.copy(
-                        root = overlayRoot.resolve(relativeRoot),
-                        sourceSets = module.sourceSets.map { sourceSet ->
-                            sourceSet.copy(classpathEntries = originalClasspath(sourceSet.classpathEntries))
-                        },
-                    )
-                })
-            }
-            JdtJavaSemanticAnalyzer().analyze(project.copy(
-                workspace = Workspace(overlayRoot),
-                modules = modules,
-                buildModels = buildModels,
-            ))
+            val buildModels = project.buildModels.map { model -> model.copy(modules = model.modules.map { module ->
+                val moduleRoot = module.root.toAbsolutePath().normalize()
+                val relativeRoot = if (moduleRoot.startsWith(originalRoot)) originalRoot.relativize(moduleRoot)
+                    else Path.of(module.id.replace(':', '/'))
+                module.copy(
+                    root = overlayRoot.resolve(relativeRoot),
+                    sourceSets = module.sourceSets.map { sourceSet ->
+                        sourceSet.copy(classpathEntries = originalClasspath(sourceSet.classpathEntries))
+                    },
+                )
+            }) }
+            analyze(project.copy(workspace = Workspace(overlayRoot), modules = modules, buildModels = buildModels))
         } finally {
             Files.walk(overlayRoot).use { stream ->
                 stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)

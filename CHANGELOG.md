@@ -9,6 +9,15 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add the first authoritative Java/Maven diagnostics platform row. Effective
+  Maven `--release` is distinct from grammar level; historical APIs come from a
+  bounded hash-attested `ct.sym` projection, while the current release binds a
+  complete `java.se` image. Packaged CLI/daemon/MCP resolve Java 21 `java.sql`,
+  `java.net.http`, and transitive reactor sources with `JAVA_HOME` unset, reject
+  post-Java-8 APIs under release 8, support post-model module filtering, and emit
+  concise typed roots when platform evidence is unavailable. The full Java 8–25,
+  source-set availability, exact delta, JPMS, SBOM/license and native matrix
+  remain release gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

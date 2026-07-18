@@ -717,7 +717,13 @@ class McpSession(
     private fun toolDiagnostics(args: JsonObject = JsonObject(emptyMap())): String {
         val snap = requireSnapshot()
         val languageId = args.string("languageId") ?: "java"
-        val diags = if (languageId == "java") adapter.diagnostics(snap) else requireSemanticAdapter(languageId).diagnostics(snap)
+        val platformHome = args.string("jdkHome")
+            ?: System.getProperty("refactorkit.java.platform.home")
+            ?: System.getenv("REFACTORKIT_JAVA_PLATFORM_HOME")
+        val diags = if (languageId == "java") {
+            val all = adapter.authoritativeDiagnostics(snap, platformHome?.let(Paths::get))
+            args.string("module")?.let { adapter.filterDiagnosticsForModule(snap, all, it) } ?: all
+        } else requireSemanticAdapter(languageId).diagnostics(snap)
         if (diags.isEmpty()) return "No diagnostics."
         return diags.joinToString("\n") { "[${it.severity}] ${it.message}${it.location?.let { loc -> " at ${loc.path}:${loc.range.start.line + 1}" } ?: ""}" }
     }
@@ -1023,7 +1029,9 @@ class McpSession(
         val includeSnippets = args.string("includeSnippets")?.toBooleanStrictOrNull() ?: true
         val index = adapter.buildSymbols(snap)
         val symbols = if (query.isBlank()) index.symbols.take(maxSymbols) else index.search(query).take(maxSymbols)
-        val diags = adapter.diagnostics(snap)
+        val platformHome = System.getProperty("refactorkit.java.platform.home")
+            ?: System.getenv("REFACTORKIT_JAVA_PLATFORM_HOME")
+        val diags = adapter.authoritativeDiagnostics(snap, platformHome?.let(Paths::get))
         return buildString {
             appendLine("## Project")
             appendLine("Root: ${snap.workspace.root}")

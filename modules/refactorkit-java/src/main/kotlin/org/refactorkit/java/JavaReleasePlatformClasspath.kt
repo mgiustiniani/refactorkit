@@ -7,9 +7,12 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
 /** Disposable classpath projection of one attested `ct.sym` release. */
-internal class JavaReleasePlatformClasspath private constructor(val path: Path) : AutoCloseable {
+internal class JavaReleasePlatformClasspath private constructor(
+    val path: Path,
+    private val disposable: Boolean,
+) : AutoCloseable {
     override fun close() {
-        Files.deleteIfExists(path)
+        if (disposable) Files.deleteIfExists(path)
     }
 
     companion object {
@@ -17,6 +20,12 @@ internal class JavaReleasePlatformClasspath private constructor(val path: Path) 
         private const val MAXIMUM_UNCOMPRESSED_BYTES = 512L * 1024L * 1024L
 
         fun materialize(authority: JavaReleasePlatformAuthority): JavaReleasePlatformClasspath {
+            if (authority.release == authority.platformRelease) {
+                check(authority.currentSystemModules != null && authority.currentSystemModulesSha256 != null) {
+                    "Current-release system module evidence is unavailable"
+                }
+                return JavaReleasePlatformClasspath(authority.platformHome.resolve("lib/jrt-fs.jar"), false)
+            }
             val target = Files.createTempFile("refactorkit-java-platform-${authority.release}-", ".jar")
             try {
                 val token = releaseToken(authority.release)
@@ -56,7 +65,7 @@ internal class JavaReleasePlatformClasspath private constructor(val path: Path) 
                     }
                 }
                 check(count > 0) { "Java platform signatures are empty" }
-                return JavaReleasePlatformClasspath(target)
+                return JavaReleasePlatformClasspath(target, true)
             } catch (failure: Exception) {
                 Files.deleteIfExists(target)
                 throw failure

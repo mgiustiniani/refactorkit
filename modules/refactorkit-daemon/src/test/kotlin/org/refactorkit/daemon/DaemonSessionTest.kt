@@ -1168,20 +1168,28 @@ class DaemonSessionTest {
             put("languageId", "jvm")
         }).jsonArray
 
-        assertEquals(1, diagnostics.size)
-        assertEquals("kotlin", diagnostics.single().jsonObject["languageId"]!!.jsonPrimitive.content)
-        assertEquals("kotlin.toolchainNotConfigured", diagnostics.single().jsonObject["code"]!!.jsonPrimitive.content)
+        assertEquals(2, diagnostics.size)
+        assertEquals(
+            setOf("java" to "java.platform.explicitJdkRequired", "kotlin" to "kotlin.toolchainNotConfigured"),
+            diagnostics.map { row -> row.jsonObject.let {
+                it["languageId"]!!.jsonPrimitive.content to it["code"]!!.jsonPrimitive.content
+            } }.toSet(),
+        )
         assertTrue(!Files.exists(Paths.get(root).resolve(".refactorkit")))
     }
 
     @Test
-    fun diagnosticsReturnsEmptyListForCleanProject() {
+    fun diagnosticsReturnsTypedPlatformRootForSourceOnlyProject() {
         val root = createProject(
             "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",
         )
         val session = DaemonSession()
         session.dispatch("project.open", params("root" to root))
-        val diags = session.dispatch("diagnostics", null)
-        assertEquals("[]", diags.toString())
+        val diags = session.dispatch("diagnostics", null).jsonArray
+        assertEquals(1, diags.size)
+        assertEquals(
+            "java.platform.explicitJdkRequired",
+            diags.single().jsonObject["code"]!!.jsonPrimitive.content,
+        )
     }
 }

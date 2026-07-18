@@ -60,6 +60,11 @@ class MavenReactorAnalysisAcceptanceTest {
         val adapter = JavaLanguageAdapter()
         val diagnostics = adapter.diagnostics(snapshot).filter { it.severity == Diagnostic.Severity.ERROR }
         assertTrue(diagnostics.isEmpty(), diagnostics.toString())
+        val authoritativeDiagnostics = adapter.authoritativeDiagnostics(
+            snapshot,
+            Path.of(System.getProperty("java.home")),
+        ).filter { it.severity == Diagnostic.Severity.ERROR }
+        assertTrue(authoritativeDiagnostics.isEmpty(), authoritativeDiagnostics.toString())
         val symbols = adapter.buildSymbols(snapshot)
         assertTrue(symbols.symbols.any { it.id.value == "fixture.domain.DomainValue" })
         val definition = adapter.findSymbol(snapshot, org.refactorkit.core.SymbolId("fixture.domain.DomainValue"))
