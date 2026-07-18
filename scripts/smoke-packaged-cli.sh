@@ -257,6 +257,34 @@ if ! grep -Fq 'Status: REFUSED' <<<"$mixed_refusal" || ! grep -Fq 'Kotlin' <<<"$
   exit 1
 fi
 
+cat >"$fixture/src/main/java/com/acme/References.java" <<'JAVA'
+package com.acme;
+import java.util.function.Function;
+final class References {
+    private static String find(String value) { return value; }
+    Function<String, String> reference() { return References::find; }
+}
+JAVA
+reference_before="$(sha256sum "$fixture/src/main/java/com/acme/References.java")"
+reference_refusal="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.References#find(java.lang.String)' --type int --name rank --default 0 "$fixture" || true)"
+if ! grep -Fq 'Status: REFUSED' <<<"$reference_refusal" || ! grep -qi 'reference' <<<"$reference_refusal" || [[ "$reference_before" != "$(sha256sum "$fixture/src/main/java/com/acme/References.java")" ]]; then
+  echo "Packaged method-reference refusal failed: $reference_refusal" >&2
+  exit 1
+fi
+rm "$fixture/src/main/java/com/acme/References.java"
+
+cat >"$fixture/src/main/java/com/acme/User.java" <<'JAVA'
+package com.acme;
+public record User(String name) { public User(String name) { this.name = name; } }
+JAVA
+record_before="$(sha256sum "$fixture/src/main/java/com/acme/User.java")"
+record_refusal="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.User#<init>(java.lang.String)' --type boolean --name trusted --default false --accept-external-consumer-risk "$fixture" || true)"
+if ! grep -Fq 'Status: REFUSED' <<<"$record_refusal" || [[ "$record_before" != "$(sha256sum "$fixture/src/main/java/com/acme/User.java")" ]]; then
+  echo "Packaged record-constructor refusal failed: $record_refusal" >&2
+  exit 1
+fi
+rm "$fixture/src/main/java/com/acme/User.java"
+
 format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
 transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"
 if [[ -z "$transaction_id" ]] || ! grep -Fq 'String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then

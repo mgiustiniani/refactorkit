@@ -189,6 +189,22 @@ export class RealNativeBinding { run(): void {} }
         throw "Packaged mixed-JVM signature refusal failed: $MixedRefusal"
     }
 
+    $ReferenceSource = Join-Path $SourceDir "References.java"
+    @'
+package com.acme;
+import java.util.function.Function;
+final class References {
+    private static String find(String value) { return value; }
+    Function<String, String> reference() { return References::find; }
+}
+'@ | Set-Content -NoNewline -Encoding utf8 $ReferenceSource
+    $ReferenceBefore = (Get-FileHash $ReferenceSource -Algorithm SHA256).Hash
+    $ReferenceRefusal = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.References#find(java.lang.String)' --type int --name rank --default 0 $Fixture) -join "`n"
+    if ($ReferenceRefusal -notmatch 'Status: REFUSED' -or $ReferenceRefusal -notmatch 'reference' -or $ReferenceBefore -ne (Get-FileHash $ReferenceSource -Algorithm SHA256).Hash) {
+        throw "Packaged method-reference refusal failed: $ReferenceRefusal"
+    }
+    Remove-Item -Force $ReferenceSource
+
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw "Managed format smoke failed: $FormatOutput" }
     $Match = [regex]::Match($FormatOutput, 'transaction-[0-9a-f-]+')
