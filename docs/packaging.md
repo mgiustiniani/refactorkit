@@ -183,7 +183,7 @@ apply and rollback through this launcher.
 Default `jlink` module set:
 
 ```text
-java.se,jdk.unsupported
+java.se,jdk.httpserver,jdk.unsupported
 ```
 
 `java.compiler` is required by JDT-backed signed member lookups through
@@ -194,7 +194,7 @@ Override if needed:
 
 ```bash
 ./gradlew :modules:refactorkit-cli:jlinkRuntime \
-  -Prefactorkit.runtime.modules=java.se,jdk.unsupported
+  -Prefactorkit.runtime.modules=java.se,jdk.httpserver,jdk.unsupported
 ```
 
 ## Java platform signature evidence

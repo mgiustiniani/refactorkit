@@ -87,8 +87,9 @@ class JavaAuthoritativeDiagnosticsAcceptanceTest {
             import fixture.api.ReactorApi;
             import java.sql.Connection;
             import java.net.http.HttpClient;
+            import com.sun.net.httpserver.HttpServer;
             public final class RepositoryAdapter {
-              ReactorApi api; Connection connection; HttpClient client = HttpClient.newHttpClient();
+              ReactorApi api; Connection connection; HttpClient client = HttpClient.newHttpClient(); HttpServer server;
               boolean blank(String value) { return value.isBlank(); }
             }
         """.trimIndent())

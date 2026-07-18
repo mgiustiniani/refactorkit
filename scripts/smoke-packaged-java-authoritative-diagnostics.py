@@ -51,8 +51,9 @@ def write_reactor(root: Path, release: int) -> None:
         "import fixture.api.ReactorApi;\n"
         "import java.sql.Connection;\n"
         "import java.net.http.HttpClient;\n"
+        "import com.sun.net.httpserver.HttpServer;\n"
         "public final class RepositoryAdapter {\n"
-        "  ReactorApi api; Connection connection; HttpClient client = HttpClient.newHttpClient();\n"
+        "  ReactorApi api; Connection connection; HttpClient client = HttpClient.newHttpClient(); HttpServer server;\n"
         "  boolean blank(String value) { return value.isBlank(); }\n"
         "}\n",
         encoding="utf-8",

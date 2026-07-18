@@ -101,10 +101,11 @@ class JavaReleasePlatformAuthorityResolver(
         val currentRelease = release == platformRelease
         val systemModules = home.resolve("lib/modules").takeIf { currentRelease }
         val systemModulesHash = if (currentRelease) {
-            if (!releaseText.lineSequence().firstOrNull { it.startsWith("MODULES=") }.orEmpty()
-                    .removePrefix("MODULES=").contains("java.se")) return refused(
+            val configuredModules = releaseText.lineSequence().firstOrNull { it.startsWith("MODULES=") }.orEmpty()
+                .removePrefix("MODULES=")
+            if (listOf("java.se", "jdk.httpserver").any { it !in configuredModules.split(' ', '\"') }) return refused(
                 "java.platform.currentModulesIncomplete",
-                "Configured current-release runtime is not a complete java.se image",
+                "Configured current-release runtime lacks required java.se or jdk.httpserver modules",
             )
             if (!Files.isRegularFile(systemModules) || !Files.isRegularFile(home.resolve("lib/jrt-fs.jar"))) return refused(
                 "java.platform.currentModulesUnavailable",

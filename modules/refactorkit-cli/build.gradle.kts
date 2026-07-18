@@ -45,7 +45,7 @@ tasks.test {
 // ── self-contained CLI packaging ─────────────────────────────────────────────
 
 val runtimeModules = providers.gradleProperty("refactorkit.runtime.modules")
-    .orElse("java.se,jdk.unsupported")
+    .orElse("java.se,jdk.httpserver,jdk.unsupported")
 
 val packageDir = layout.buildDirectory.dir("package/refactorkit")
 val runtimeDir = layout.buildDirectory.dir("jlink/runtime")
