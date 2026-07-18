@@ -111,8 +111,8 @@ def main() -> int:
             b"String impl(DefaultLookup lookup) { return lookup.find(\"b\", false); } }\n"
         )
         token.write_bytes(
-            b"package com.acme; final class Token { "
-            b"private Token(String value) { value.toString(); } "
+            b"package com.acme; public final class Token { "
+            b"public Token(String value) { value.toString(); } "
             b"private Token() { this(\"default\"); } "
             b"static Token create() { return new Token(\"x\"); } }\n"
         )
@@ -272,7 +272,7 @@ def main() -> int:
                 "name": "preview_refactoring", "arguments": {
                     "operation": "changeSignature.addParameter",
                     "symbol": "com.acme.Token#<init>(java.lang.String)",
-                    "arguments": {"type": "boolean", "name": "trusted", "default": "false"},
+                    "arguments": {"type": "boolean", "name": "trusted", "default": "false", "acceptExternalConsumerRisk": True},
                 },
             })["content"][0]["text"]
             constructor_plan = constructor_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
@@ -404,7 +404,7 @@ def main() -> int:
             constructor_preview = exchange(process, 72, "refactor.preview", {
                 "operation": "changeSignature.renameParameter",
                 "symbol": "com.acme.Token#<init>(java.lang.String)",
-                "arguments": {"oldName": "value", "newName": "text"},
+                "arguments": {"oldName": "value", "newName": "text", "acceptExternalConsumerRisk": True},
             })
             constructor_apply = exchange(process, 73, "refactor.apply", {"planId": constructor_preview["planId"]})
             assert_contains(token, ["Token(String text)", "text.toString()"])

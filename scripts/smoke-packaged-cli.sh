@@ -62,8 +62,8 @@ class HierarchyCaller {
 JAVA
 cat >"$fixture/src/main/java/com/acme/Token.java" <<'JAVA'
 package com.acme;
-final class Token {
-    private Token(String value) { value.toString(); }
+public final class Token {
+    public Token(String value) { value.toString(); }
     private Token() { this("default"); }
     static Token create() { return new Token("x"); }
 }
@@ -211,7 +211,7 @@ if [[ "$before" != "$(source_hashes)" ]]; then
   exit 1
 fi
 
-constructor_add="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.Token#<init>(java.lang.String)' --type boolean --name trusted --default false --apply "$fixture")"
+constructor_add="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.Token#<init>(java.lang.String)' --type boolean --name trusted --default false --accept-external-consumer-risk --apply "$fixture")"
 constructor_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$constructor_add" | tail -1)"
 if [[ -z "$constructor_transaction" ]] || ! grep -Fq 'Token(String value, boolean trusted)' "$fixture/src/main/java/com/acme/Token.java" || ! grep -Fq 'this("default", false)' "$fixture/src/main/java/com/acme/Token.java" || ! grep -Fq 'new Token("x", false)' "$fixture/src/main/java/com/acme/Token.java"; then
   echo "Packaged JDT constructor add failed: $constructor_add" >&2
