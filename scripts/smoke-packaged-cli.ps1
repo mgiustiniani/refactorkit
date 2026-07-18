@@ -194,14 +194,20 @@ export class RealNativeBinding { run(): void {} }
 package com.acme;
 import java.util.function.Function;
 final class References {
-    private static String find(String value) { return value; }
-    Function<String, String> reference() { return References::find; }
+    private static String map(String value) { return value; }
+    Function<String, String> reference() { return References::map; }
 }
 '@ | Set-Content -NoNewline -Encoding utf8 $ReferenceSource
     $ReferenceBefore = (Get-FileHash $ReferenceSource -Algorithm SHA256).Hash
-    $ReferenceRefusal = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.References#find(java.lang.String)' --type int --name rank --default 0 $Fixture) -join "`n"
-    if ($ReferenceRefusal -notmatch 'Status: REFUSED' -or $ReferenceRefusal -notmatch 'reference' -or $ReferenceBefore -ne (Get-FileHash $ReferenceSource -Algorithm SHA256).Hash) {
-        throw "Packaged method-reference refusal failed: $ReferenceRefusal"
+    $ReferenceMigration = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.References#map(java.lang.String)' --type int --name rank --default 0 --migrate-functional-references --apply $Fixture) -join "`n"
+    $ReferenceMatch = [regex]::Match($ReferenceMigration, 'transaction-[0-9a-f-]+')
+    $ReferenceContent = Get-Content -Raw $ReferenceSource
+    if ($LASTEXITCODE -ne 0 -or -not $ReferenceMatch.Success -or $ReferenceContent -notmatch '\(arg0\) -> References\.find\(arg0, 0\)') {
+        throw "Packaged method-reference migration failed: $ReferenceMigration"
+    }
+    $ReferenceRollback = (& $Launcher patch rollback $ReferenceMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $ReferenceBefore -ne (Get-FileHash $ReferenceSource -Algorithm SHA256).Hash) {
+        throw "Packaged method-reference migration rollback failed: $ReferenceRollback"
     }
     Remove-Item -Force $ReferenceSource
 

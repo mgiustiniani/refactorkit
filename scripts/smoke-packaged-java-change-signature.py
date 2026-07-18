@@ -100,6 +100,7 @@ def main() -> int:
         hierarchy_caller = root / "src/main/java/com/acme/HierarchyCaller.java"
         token = root / "src/main/java/com/acme/Token.java"
         shapes = root / "src/main/java/com/acme/SignatureShapes.java"
+        references = root / "src/main/java/com/acme/References.java"
         lookup.write_bytes(b"package com.acme; public interface Lookup { String find(String key, boolean unused); }\n")
         implementation.write_bytes(
             b"package com.acme; public class DefaultLookup implements Lookup { "
@@ -115,6 +116,11 @@ def main() -> int:
             b"public Token(String value) { value.toString(); } "
             b"private Token() { this(\"default\"); } "
             b"static Token create() { return new Token(\"x\"); } }\n"
+        )
+        references.write_bytes(
+            b"package com.acme; import java.util.function.Function; final class References { "
+            b"private static String map(String value) { return value; } "
+            b"Function<String, String> reference() { return References::map; } }\n"
         )
         shapes.write_bytes(
             b"package com.acme; import java.util.function.Supplier; final class SignatureShapes { "
@@ -293,6 +299,7 @@ def main() -> int:
                 (65, "changeSignature.removeParameter", "com.acme.SignatureShapes#select", {"name": "unused"}, "select(\"x\")"),
                 (68, "changeSignature.reorderParameters", "com.acme.SignatureShapes#annotated(java.lang.String,int)", {"order": "rank,value"}, "annotated(3, \"c\")"),
                 (79, "changeSignature.addParameter", "com.acme.SignatureShapes#find(java.lang.String)", {"type": "boolean", "name": "trusted", "default": "false"}, "find(\"lambda\", false)"),
+                (82, "changeSignature.addParameter", "com.acme.References#map(java.lang.String)", {"type": "int", "name": "rank", "default": "0", "migrateFunctionalReferences": True}, "(arg0) -> References.map(arg0, 0)"),
             ]:
                 shape_preview = exchange(process, request_id, "tools/call", {
                     "name": "preview_refactoring", "arguments": {"operation": operation, "symbol": shape_symbol, "arguments": arguments},
@@ -302,7 +309,7 @@ def main() -> int:
                     "name": "apply_refactoring", "arguments": {"planId": shape_plan},
                 })["content"][0]["text"]
                 shape_transaction = shape_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-                assert_contains(shapes, [expected])
+                assert_contains(references if "References#" in shape_symbol else shapes, [expected])
                 exchange(process, request_id + 2, "tools/call", {
                     "name": "rollback_refactoring", "arguments": {"transactionId": shape_transaction},
                 })
@@ -435,10 +442,20 @@ def main() -> int:
             exchange(process, 81, "patch.rollback", {"transactionId": overload_apply["transactionId"]})
             if source_hash(root) != before:
                 raise AssertionError("daemon overload/lambda rollback did not restore exact bytes")
+            reference_preview = exchange(process, 82, "refactor.preview", {
+                "operation": "changeSignature.addParameter",
+                "symbol": "com.acme.References#map(java.lang.String)",
+                "arguments": {"type": "int", "name": "rank", "default": "0", "migrateFunctionalReferences": True},
+            })
+            reference_apply = exchange(process, 83, "refactor.apply", {"planId": reference_preview["planId"]})
+            assert_contains(references, ["(arg0) -> References.map(arg0, 0)"])
+            exchange(process, 84, "patch.rollback", {"transactionId": reference_apply["transactionId"]})
+            if source_hash(root) != before:
+                raise AssertionError("daemon functional-reference rollback did not restore exact bytes")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy, constructor, generic, varargs, annotation, overload, and lambda rows restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy, constructor, generic, varargs, annotation, overload, lambda, and functional-reference rows restored exact bytes.")
     return 0
 
 

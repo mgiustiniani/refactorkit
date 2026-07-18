@@ -261,14 +261,20 @@ cat >"$fixture/src/main/java/com/acme/References.java" <<'JAVA'
 package com.acme;
 import java.util.function.Function;
 final class References {
-    private static String find(String value) { return value; }
-    Function<String, String> reference() { return References::find; }
+    private static String map(String value) { return value; }
+    Function<String, String> reference() { return References::map; }
 }
 JAVA
 reference_before="$(sha256sum "$fixture/src/main/java/com/acme/References.java")"
-reference_refusal="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.References#find(java.lang.String)' --type int --name rank --default 0 "$fixture" || true)"
-if ! grep -Fq 'Status: REFUSED' <<<"$reference_refusal" || ! grep -qi 'reference' <<<"$reference_refusal" || [[ "$reference_before" != "$(sha256sum "$fixture/src/main/java/com/acme/References.java")" ]]; then
-  echo "Packaged method-reference refusal failed: $reference_refusal" >&2
+reference_migration="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.References#map(java.lang.String)' --type int --name rank --default 0 --migrate-functional-references --apply "$fixture")"
+reference_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$reference_migration" | tail -1)"
+if [[ -z "$reference_transaction" ]] || ! grep -Fq '(arg0) -> References.map(arg0, 0)' "$fixture/src/main/java/com/acme/References.java"; then
+  echo "Packaged method-reference migration failed: $reference_migration" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$reference_transaction" --root "$fixture" >/dev/null
+if [[ "$reference_before" != "$(sha256sum "$fixture/src/main/java/com/acme/References.java")" ]]; then
+  echo "Packaged method-reference migration rollback failed" >&2
   exit 1
 fi
 rm "$fixture/src/main/java/com/acme/References.java"
