@@ -133,7 +133,18 @@ when external-consumer risk was accepted. A future cross-language operation must
 join exact JDT declaration/call identities with complete K2 JVM callable/call
 evidence; risk acceptance cannot substitute for that proof.
 
+## Shared Java/Kotlin caller mutation
+
+The initial cross-language `addParameter` row targets one non-overloaded,
+non-hierarchy public Java method. Disposable ECJ output lets K2 publish exact
+external JVM callable uses; JDT supplies the Java declaration and Java calls.
+The planner appends the validated default to every JDT argument list and to the
+argument list normalized from each K2-proven Kotlin call token, then recompiles
+both languages. K2 callable identity/count and staged JDT method identity must
+remain complete. Kotlin callable references, generated sources, dirty baselines,
+and partial call shapes refuse without edits.
+
 ## Remaining J1 signature catalogue
 
-Separate requirement-first rows are still required for:
-- an actual Java/Kotlin shared-caller mutation operation.
+The bounded Java change-signature catalogue has no unqualified implementation
+row; packaged transports and four-platform qualification remain release gates.

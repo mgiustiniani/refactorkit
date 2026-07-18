@@ -12,6 +12,7 @@ import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SymbolId
 import org.refactorkit.core.TextEdit
+import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.owningBuildSourceRoots
@@ -178,6 +179,113 @@ class JavaKotlinPublicTypeRenamePlanner(
         )
     }
 
+    fun previewAddParameter(
+        snapshot: ProjectSnapshot,
+        symbolId: SymbolId,
+        parameterType: String,
+        parameterName: String,
+        defaultExpression: String,
+        acceptExternalConsumerRisk: Boolean = false,
+    ): PatchPlan {
+        val operation = "changeSignature.addParameter"
+        if (snapshot.files.none { it.languageId == "java" } || snapshot.files.none { it.languageId == "kotlin" }) {
+            return refused(snapshot, "jvm.signatureMixedSnapshotRequired", "Shared JVM add-parameter requires Java and Kotlin sources", operation = operation)
+        }
+        if (!acceptExternalConsumerRisk) return refused(snapshot, "jvm.signatureExternalConsumerApprovalRequired", "Public JVM signature change requires explicit external-consumer risk acceptance", operation = operation)
+        if (!IDENTIFIER.matches(parameterName) || !SAFE_TYPE.matches(parameterType.trim()) || !SAFE_DEFAULT.matches(defaultExpression.trim())) {
+            return refused(snapshot, "jvm.signatureArgumentInvalid", "Shared JVM add-parameter arguments are not in the bounded safe grammar", operation = operation)
+        }
+        val before = when (val evidence = analyzeMixed(snapshot)) {
+            is MixedEvidence.Available -> evidence
+            is MixedEvidence.Refused -> return refused(snapshot, evidence.code, evidence.message, operation = operation)
+        }
+        val baseline = before.kotlin.diagnostics + javaDiagnostics(before.java)
+        if (baseline.any { it.severity == Diagnostic.Severity.ERROR }) return refused(snapshot, "jvm.signatureBaselineIncomplete", "Shared JVM add-parameter requires clean ECJ/K2/JDT evidence", baseline, operation)
+        val target = before.java.symbols.singleOrNull { it.qualifiedName == symbolId.value && it.kind == JdtJavaSemanticSymbolKind.METHOD }
+            ?: return refused(snapshot, "jvm.signatureJavaTargetMissing", "Shared JVM add-parameter requires one exact JDT method identity", operation = operation)
+        if (!isExplicitPublicMethod(snapshot, target) || before.java.symbols.count {
+                it.ownerQualifiedName == target.ownerQualifiedName && it.simpleName == target.simpleName && it.kind == JdtJavaSemanticSymbolKind.METHOD
+            } != 1 || before.java.overrideRelations.any {
+                it.overridingSymbolQualifiedName == target.qualifiedName || it.overriddenSymbolQualifiedName == target.qualifiedName
+            }) return refused(snapshot, "jvm.signaturePublicMethodUnsupported", "Initial shared JVM add-parameter requires one non-overloaded non-hierarchy public method", operation = operation)
+        if (snapshot.owningBuildSourceRoots(target.path).any { it.generated }) return refused(snapshot, "jvm.signatureGeneratedSource", "Shared JVM target belongs to generated source", operation = operation)
+        if (snapshot.files.filter { it.languageId == "kotlin" }.any { Regex("::\\s*${Regex.escape(target.simpleName)}\\b").containsMatchIn(it.content) }) {
+            return refused(snapshot, "jvm.signatureCallableReferenceUnsupported", "Kotlin callable references require a separate functional migration", operation = operation)
+        }
+        val method = before.java.methods.singleOrNull { it.qualifiedName == target.qualifiedName }
+            ?: return refused(snapshot, "jvm.signatureMethodEvidenceMissing", "JDT method range evidence is missing", operation = operation)
+        val parameters = before.java.parameters.filter { it.methodQualifiedName == method.qualifiedName }.sortedBy { it.index }
+        if (parameters.any { it.name == parameterName }) return refused(snapshot, "jvm.signatureParameterConflict", "Parameter already exists", operation = operation)
+        val javaCalls = before.java.invocations.filter { it.methodQualifiedName == method.qualifiedName }
+        if (javaCalls.any { it.argumentRanges.size != parameters.size }) return refused(snapshot, "jvm.signatureJavaCallsIncomplete", "JDT Java invocation evidence is incomplete", operation = operation)
+        val kotlinCalls = before.kotlin.externalCallableUsages.filter {
+            it.jvmOwner == target.ownerQualifiedName && it.callableName == target.simpleName
+        }
+        if (kotlinCalls.isEmpty()) return refused(snapshot, "jvm.signatureKotlinCallerMissing", "K2 found no Kotlin caller for the Java JVM identity", operation = operation)
+        val edits = linkedMapOf<java.nio.file.Path, MutableList<TextEdit>>()
+        val declarationFile = snapshot.files.single { it.path == method.path }
+        val declaration = selectedText(declarationFile.content, SourceLocation(method.path, method.parameterListRange)).trim()
+        edits.getOrPut(method.path) { mutableListOf() } += TextEdit(method.parameterListRange,
+            listOf(declaration, "${parameterType.trim()} $parameterName").filter { it.isNotEmpty() }.joinToString(", "))
+        javaCalls.forEach { call ->
+            val file = snapshot.files.single { it.path == call.path }
+            val current = selectedText(file.content, SourceLocation(file.path, call.argumentListRange)).trim()
+            edits.getOrPut(file.path) { mutableListOf() } += TextEdit(call.argumentListRange,
+                listOf(current, defaultExpression.trim()).filter { it.isNotEmpty() }.joinToString(", "))
+        }
+        kotlinCalls.forEach { usage ->
+            val file = snapshot.files.singleOrNull { it.path.normalize() == usage.location.path.normalize() }
+                ?: return refused(snapshot, "jvm.signatureKotlinRangeInvalid", "K2 Kotlin caller file is absent", operation = operation)
+            val range = callArgumentInterior(file.content, usage.location)
+                ?: return refused(snapshot, "jvm.signatureKotlinCallShapeUnsupported", "K2 usage is not one bounded Kotlin call expression", operation = operation)
+            val current = selectedText(file.content, SourceLocation(file.path, range)).trim()
+            edits.getOrPut(file.path) { mutableListOf() } += TextEdit(range,
+                listOf(current, defaultExpression.trim()).filter { it.isNotEmpty() }.joinToString(", "))
+        }
+        val workspaceEdit = WorkspaceEdit(edits.map { (path, values) -> FileEdit.Modify(path, values.distinctBy { it.range }.sortedByDescending { TextEdits.offsetOf(snapshot.files.single { file -> file.path == path }.content, it.range.start) }) })
+        val staged = runCatching { WorkspaceEditSimulator.apply(snapshot, workspaceEdit) }.getOrElse {
+            return refused(snapshot, "jvm.signaturePreviewInvalid", it.message ?: "Shared JVM signature preview is invalid", operation = operation)
+        }
+        val after = when (val evidence = analyzeMixed(staged)) {
+            is MixedEvidence.Available -> evidence
+            is MixedEvidence.Refused -> return refused(snapshot, evidence.code, evidence.message, operation = operation)
+        }
+        val introduced = introducedDiagnostics(baseline, after.kotlin.diagnostics + javaDiagnostics(after.java))
+        if (introduced.isNotEmpty()) return refused(snapshot, "jvm.signatureDiagnosticsRegression", "Shared JVM add-parameter introduces ${introduced.size} compiler error(s)", introduced, operation)
+        val stagedMethod = after.java.methods.singleOrNull {
+            it.qualifiedName.substringBefore('(') == method.qualifiedName.substringBefore('(') &&
+                after.java.parameters.count { parameter -> parameter.methodQualifiedName == it.qualifiedName } == parameters.size + 1
+        } ?: return refused(snapshot, "jvm.signaturePostImageIdentityMissing", "JDT did not resolve the changed method identity", operation = operation)
+        val stagedKotlinCalls = after.kotlin.externalCallableUsages.count { it.jvmOwner == target.ownerQualifiedName && it.callableName == target.simpleName }
+        if (stagedKotlinCalls != kotlinCalls.size) return refused(snapshot, "jvm.signatureKotlinCallerDrift", "K2 Kotlin caller identity/count changed", operation = operation)
+        return PatchPlan(operation = operation, status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash, confidence = 0.93,
+            requiresUserApproval = true, summary = "Add '$parameterType $parameterName' to ${target.qualifiedName}; update ${javaCalls.size} JDT and ${kotlinCalls.size} K2 caller(s).",
+            affectedFiles = workspaceEdit.affectedFiles(), workspaceEdit = workspaceEdit, diagnosticsBefore = baseline,
+            diagnosticsAfterPreview = after.kotlin.diagnostics + javaDiagnostics(after.java),
+            warnings = listOf("Public JVM API change: unknown external consumers were explicitly accepted."), riskLevel = RiskLevel.HIGH,
+            evidence = RefactoringEvidence.JDT_BINDING)
+    }
+
+    private fun callArgumentInterior(content: String, location: SourceLocation): org.refactorkit.core.SourceRange? {
+        var index = TextEdits.offsetOf(content, location.range.end)
+        while (index < content.length && content[index].isWhitespace()) index++
+        if (index >= content.length || content[index] != '(') return null
+        val open = index++
+        var depth = 1
+        while (index < content.length) {
+            when (content[index]) {
+                '(' -> depth++
+                ')' -> if (--depth == 0) return TextEdits.rangeForOffset(content, open + 1, index - open - 1)
+                '"', '\'' -> {
+                    val quote = content[index++]
+                    while (index < content.length && content[index] != quote) { if (content[index] == '\\') index++; index++ }
+                }
+            }
+            index++
+        }
+        return null
+    }
+
     private fun analyzeMixed(snapshot: ProjectSnapshot): MixedEvidence {
         var kotlinEvidence: KotlinCompilerDiagnosticsResult? = null
         val compilation = javaCompiler.compile(snapshot) { javaJar ->
@@ -256,8 +364,9 @@ class JavaKotlinPublicTypeRenamePlanner(
         code: String,
         message: String,
         diagnostics: List<Diagnostic> = emptyList(),
+        operation: String = "renameSymbol",
     ) = PatchPlan(
-        operation = "renameSymbol", status = PatchStatus.REFUSED, snapshotHash = snapshot.hash,
+        operation = operation, status = PatchStatus.REFUSED, snapshotHash = snapshot.hash,
         confidence = 0.0, requiresUserApproval = false, summary = message,
         affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), diagnosticsAfterPreview = diagnostics,
         warnings = listOf(message), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.JDT_BINDING,
@@ -274,6 +383,8 @@ class JavaKotlinPublicTypeRenamePlanner(
 
     companion object {
         private val IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]{0,511}")
+        private val SAFE_TYPE = Regex("[A-Za-z_$][A-Za-z0-9_$.]*(?:<[^;{}()]+>)?(?:\\[\\])?")
+        private val SAFE_DEFAULT = Regex("[^;\\r\\n,]{1,1024}")
         private val KEYWORDS = setOf(
             "class", "interface", "enum", "record", "public", "private", "protected", "static", "final",
             "abstract", "sealed", "return", "package", "import", "object", "fun", "val", "var", "when",

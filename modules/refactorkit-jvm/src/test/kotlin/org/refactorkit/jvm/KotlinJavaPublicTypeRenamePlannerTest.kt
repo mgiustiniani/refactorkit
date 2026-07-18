@@ -69,6 +69,33 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicJavaAddParameterUpdatesK2ProvenKotlinCallerAndRollsBack() {
+        val fixture = javaDeclarationFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val planner = JavaKotlinPublicTypeRenamePlanner(adapter)
+
+        val plan = planner.previewAddParameter(
+            fixture.snapshot,
+            org.refactorkit.core.SymbolId("fixture.PublicAccount#label(java.lang.String)"),
+            "boolean",
+            "trusted",
+            "false",
+            acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan, fixture.snapshot, ApplyAuthorization.explicit("jvm-java-signature-integration-test"),
+            DiagnosticsGate.enabled("java-ecj-kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        assertTrue(fixture.root.resolve("src/main/java/fixture/PublicAccount.java").readText().contains("label(String value, boolean trusted)"))
+        assertTrue(fixture.root.resolve("src/main/kotlin/fixture/UseAccount.kt").readText().contains("label(\"x\", false)"))
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(fixture.root.resolve("src/main/java/fixture/PublicAccount.java").readText().contains("label(String value)"))
+        assertTrue(fixture.root.resolve("src/main/kotlin/fixture/UseAccount.kt").readText().contains("label(\"x\")"))
+    }
+
+    @Test
     fun publicJavaMethodRenameUpdatesKotlinCallerAndRollsBack() {
         val fixture = javaDeclarationFixture()
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
