@@ -77,12 +77,14 @@ refuse. Public/external consumers remain a high-risk explicit warning; acceptanc
 does not permit editing unknown code. Remove-parameter uses the selected
 parameter index across declarations whose names may differ, requires zero bound
 body uses for every removed family parameter, and applies the same index removal
-to all bound calls.
+to all bound calls. Reorder maps the selected declaration's requested names to an
+index permutation, then applies that permutation to every declaration (whose
+names may differ) and all family-bound calls.
 
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- reorder/type changes across complete override/implementer hierarchies;
+- type changes across complete override/implementer hierarchies;
 - constructors, varargs, generic methods, records and annotations;
 - method references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

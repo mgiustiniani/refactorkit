@@ -1527,7 +1527,11 @@ class DaemonSession(
             }
             "changeSignature.reorderParameters", "reorderParameters" -> {
                 val order = args["order"] ?: args["newOrder"] ?: missing("arguments.order")
-                JavaChangeSignaturePlanner(adapter).previewReorderParameters(snap, symbol ?: missing("symbol"), order.split(','))
+                JavaChangeSignaturePlanner(adapter).previewReorderParameters(
+                    snap, symbol ?: missing("symbol"), order.split(','),
+                    includeHierarchy = args["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                    acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
             }
             "changeSignature.removeParameter", "removeParameter" -> {
                 val name = args["name"] ?: args["parameterName"] ?: missing("arguments.name")

@@ -338,6 +338,26 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun reordersParameterIndexesAcrossCompleteJdtOverrideFamily() {
+        val root = tempProject(
+            "src/main/java/com/example/Lookup.java" to "package com.example; public interface Lookup { String find(String key, int limit); }\n",
+            "src/main/java/com/example/DefaultLookup.java" to "package com.example; public class DefaultLookup implements Lookup { @Override public String find(String value, int maximum) { return value; } }\n",
+            "src/main/java/com/example/Caller.java" to "package com.example; class Caller { String run(Lookup value) { return value.find(\"x\", 10); } }\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.previewReorderParameters(
+            snap, "com.example.Lookup#find(java.lang.String,int)", listOf("limit", "key"),
+            includeHierarchy = true, acceptExternalConsumerRisk = true,
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        assertTrue(root.resolve("src/main/java/com/example/Lookup.java").readText().contains("find(int limit, String key)"))
+        assertTrue(root.resolve("src/main/java/com/example/DefaultLookup.java").readText().contains("find(int maximum, String value)"))
+        assertTrue(root.resolve("src/main/java/com/example/Caller.java").readText().contains("find(10, \"x\")"))
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """

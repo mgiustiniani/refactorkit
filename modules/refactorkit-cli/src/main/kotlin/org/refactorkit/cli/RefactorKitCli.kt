@@ -366,7 +366,11 @@ class RefactorKitCli(
                 val order = parsed.options["order"]
                     ?: parsed.options["new-order"]
                     ?: run { System.err.println("change-signature reorder-parameters requires --order <param1,param2,...>"); return 2 }
-                planner.previewReorderParameters(snap, symbol, order.split(','))
+                planner.previewReorderParameters(
+                    snap, symbol, order.split(','),
+                    includeHierarchy = "include-hierarchy" in parsed.flags,
+                    acceptExternalConsumerRisk = "accept-external-consumer-risk" in parsed.flags,
+                )
             }
             "remove-parameter", "removeParameter", "changeSignature.removeParameter" -> {
                 val name = parsed.options["name"]

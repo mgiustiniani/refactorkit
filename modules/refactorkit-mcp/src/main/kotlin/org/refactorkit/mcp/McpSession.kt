@@ -839,6 +839,8 @@ class McpSession(
                 snap,
                 symbol ?: missing("symbol"),
                 (opArgs["order"] ?: opArgs["newOrder"] ?: missing("arguments.order")).split(','),
+                includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
             )
             "changeSignature.removeParameter", "removeParameter" -> JavaChangeSignaturePlanner(adapter).previewRemoveParameter(
                 snap,

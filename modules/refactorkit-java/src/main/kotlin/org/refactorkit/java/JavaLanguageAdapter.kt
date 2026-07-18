@@ -821,7 +821,11 @@ class JavaLanguageAdapter(
         val order = request.arguments["order"]
             ?: request.arguments["newOrder"]
             ?: return notImplemented(request, "reorderParameters requires arguments.order")
-        return JavaChangeSignaturePlanner(this).previewReorderParameters(request.snapshot, symbol, order.split(','))
+        return JavaChangeSignaturePlanner(this).previewReorderParameters(
+            request.snapshot, symbol, order.split(','),
+            includeHierarchy = request.arguments["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+            acceptExternalConsumerRisk = request.arguments["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+        )
     }
 
     private fun applyRemoveParameter(request: RefactoringRequest): PatchPlan {

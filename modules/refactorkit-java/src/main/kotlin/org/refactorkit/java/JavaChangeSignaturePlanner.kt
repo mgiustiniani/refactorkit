@@ -425,10 +425,16 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         snapshot: ProjectSnapshot,
         symbolFqnWithMethod: String,
         newOrder: List<String>,
+        includeHierarchy: Boolean = false,
+        acceptExternalConsumerRisk: Boolean = false,
     ): PatchPlan {
         val operation = "changeSignature.reorderParameters"
         val (selection, selectionRefusal) = selectJdtMethod(snapshot, symbolFqnWithMethod, operation)
         if (selection == null) return selectionRefusal!!
+        if (includeHierarchy) {
+            if (!acceptExternalConsumerRisk) return refused(snapshot, operation, "Hierarchy change signature requires acceptExternalConsumerRisk=true")
+            return previewReorderParameterHierarchy(snapshot, selection, newOrder)
+        }
         boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
         if (selection.parameters.size < 2) return refused(snapshot, operation, "Method must have at least two parameters to reorder")
         val requested = newOrder.map(String::trim).filter(String::isNotEmpty)
@@ -573,6 +579,86 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             warnings = listOf("JDT remove-parameter declaration and call sites are exact bindings; method references and hierarchy/public boundaries remain refused."),
             riskLevel = RiskLevel.MEDIUM,
         )
+    }
+
+    private fun previewReorderParameterHierarchy(
+        snapshot: ProjectSnapshot,
+        selection: JdtMethodSelection,
+        newOrder: List<String>,
+    ): PatchPlan {
+        val operation = "changeSignature.reorderParameters"
+        val requested = newOrder.map(String::trim).filter(String::isNotEmpty)
+        val selectedNames = selection.parameters.map { it.name }
+        if (requested.size != selectedNames.size || requested.toSet() != selectedNames.toSet() || requested.distinct().size != requested.size) {
+            return refused(snapshot, operation, "New order must list each selected parameter exactly once")
+        }
+        val indexByName = selectedNames.withIndex().associate { it.value to it.index }
+        val indexes = requested.map(indexByName::getValue)
+        val selectedKey = selection.symbol.bindingKey ?: return refused(snapshot, operation, "Selected method has no JDT binding key")
+        val keys = linkedSetOf(selectedKey)
+        var changed: Boolean
+        do {
+            changed = false
+            selection.analysis.overrideRelations.forEach { relation ->
+                if (relation.overridingBindingKey in keys) changed = keys.add(relation.overriddenBindingKey) || changed
+                if (relation.overriddenBindingKey in keys) changed = keys.add(relation.overridingBindingKey) || changed
+            }
+        } while (changed)
+        val methods = selection.analysis.methods.filter { it.bindingKey in keys }
+        if (methods.size < 2 || methods.map { it.bindingKey }.toSet() != keys) return refused(snapshot, operation, "Override family is incomplete or external")
+        val params = methods.associateWith { method -> selection.analysis.parameters.filter { it.methodQualifiedName == method.qualifiedName }.sortedBy { it.index } }
+        if (params.values.any { it.size != indexes.size }) return refused(snapshot, operation, "Hierarchy parameter evidence is inconsistent")
+        val sources = snapshot.files.associateBy { it.path }
+        methods.forEach { method ->
+            val source = sources[method.path] ?: return refused(snapshot, operation, "Hierarchy source is missing")
+            JavaGeneratedSourcePolicy.reason(source)?.let { return refused(snapshot, operation, "Hierarchy source is generated ($it)") }
+            val text = sourceText(source.content, method.parameterListRange)
+            if (text.contains("//") || text.contains("/*") || text.contains("...")) return refused(snapshot, operation, "Comments/varargs are unsupported")
+        }
+        val names = methods.map { it.qualifiedName }.toSet()
+        val calls = selection.analysis.invocations.filter { it.methodQualifiedName in names }
+        if (calls.any { it.argumentRanges.size != indexes.size }) return refused(snapshot, operation, "Hierarchy invocation evidence is incomplete")
+        val edits = linkedMapOf<Path, MutableList<TextEdit>>()
+        methods.forEach { method ->
+            val source = sources.getValue(method.path)
+            edits.getOrPut(source.path) { mutableListOf() } += TextEdit(method.parameterListRange, indexes.joinToString(", ") { sourceText(source.content, params.getValue(method)[it].declarationRange).trim() })
+        }
+        calls.forEach { call ->
+            val source = sources.getValue(call.path)
+            val args = call.argumentRanges.map { sourceText(source.content, it).trim() }
+            edits.getOrPut(source.path) { mutableListOf() } += TextEdit(call.argumentListRange, indexes.joinToString(", ") { args[it] })
+        }
+        val fileEdits = edits.map { (path, values) -> FileEdit.Modify(path, dedupeAndSort(values)) }
+        val staged = analyzeStaged(stagedSnapshot(snapshot, fileEdits))
+        val introduced = introducedJdtWarningCount(selection.analysis, staged)
+        if (introduced > 0) return refused(snapshot, operation, "Staged hierarchy validation introduced $introduced error(s)")
+        val stagedMethods = methods.map { original ->
+            val expectedNames = indexes.map { params.getValue(original)[it].name }
+            val expectedTypes = indexes.map { methodParameterTypes(original)[it] }
+            staged.methods.singleOrNull { candidate ->
+                candidate.qualifiedName.substringBefore('(') == original.qualifiedName.substringBefore('(') && methodParameterTypes(candidate) == expectedTypes &&
+                    staged.parameters.filter { it.methodQualifiedName == candidate.qualifiedName }.sortedBy { it.index }.map { it.name } == expectedNames
+            } ?: return refused(snapshot, operation, "Staged hierarchy declaration is missing")
+        }
+        val stagedKeys = stagedMethods.map { it.bindingKey }.toSet()
+        val connected = linkedSetOf(stagedMethods.first().bindingKey)
+        do {
+            changed = false
+            staged.overrideRelations.forEach { relation ->
+                if (relation.overridingBindingKey in stagedKeys && relation.overriddenBindingKey in stagedKeys) {
+                    if (relation.overridingBindingKey in connected) changed = connected.add(relation.overriddenBindingKey) || changed
+                    if (relation.overriddenBindingKey in connected) changed = connected.add(relation.overridingBindingKey) || changed
+                }
+            }
+        } while (changed)
+        if (connected != stagedKeys) return refused(snapshot, operation, "Staged hierarchy lost connectivity")
+        val stagedNames = stagedMethods.map { it.qualifiedName }.toSet()
+        val stagedCalls = staged.invocations.filter { it.methodQualifiedName in stagedNames }
+        if (calls.groupingBy { it.path }.eachCount() != stagedCalls.groupingBy { it.path }.eachCount()) return refused(snapshot, operation, "Staged call bindings changed")
+        return PatchPlan(operation = operation, status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash, confidence = 0.94,
+            requiresUserApproval = true, summary = "Reorder ${methods.size} JDT-connected declarations and ${calls.size} bound call site(s).",
+            affectedFiles = fileEdits.map { it.path }.toSet(), workspaceEdit = WorkspaceEdit(fileEdits), diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
+            warnings = listOf("Public hierarchy change accepted explicit external-consumer risk."), riskLevel = RiskLevel.HIGH)
     }
 
     private fun previewRemoveParameterHierarchy(
