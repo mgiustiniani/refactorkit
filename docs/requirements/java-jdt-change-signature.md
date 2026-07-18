@@ -92,9 +92,20 @@ therefore use the same staged call-identity and diagnostics gates as methods.
 Constructor references (`Type::new`) refuse until functional-interface migration
 is independently implemented. Public constructors remain outside this bounded row.
 
+## Bounded generic, varargs, and annotation rows
+
+Private generic methods support rename/remove/reorder when exact JDT method,
+parameter, invocation, staged diagnostics, and usage identities remain complete.
+A varargs method supports parameter rename and, when every bound call supplies
+exactly one explicit vararg argument, removal or reorder with the varargs
+parameter remaining last. Arbitrary zero/many vararg expansion remains refused.
+Parameter annotations are preserved as part of exact declaration ranges during
+reorder; annotated type replacement remains refused.
+
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- public constructors, compact/canonical records, varargs, generic methods and annotations;
+- public constructors, compact/canonical records, arbitrary vararg expansion,
+  broader generic type changes and annotation mutation;
 - method and constructor references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

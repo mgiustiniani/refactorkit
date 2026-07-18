@@ -428,6 +428,65 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun supportsBoundedGenericMethodSignatureChanges() {
+        val root = tempProject(
+            "src/main/java/com/example/GenericOps.java" to """
+                package com.example;
+                final class GenericOps {
+                    private static <T> T select(T value, int unused) { return value; }
+                    static String run() { return select("x", 1); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val symbol = "com.example.GenericOps#select"
+        val rename = planner.previewRenameParameter(snap, symbol, "value", "candidate")
+        val remove = planner.previewRemoveParameter(snap, symbol, "unused")
+        val reorder = planner.previewReorderParameters(snap, symbol, listOf("unused", "value"))
+        listOf(rename, remove, reorder).forEach { assertEquals(PatchStatus.PREVIEW, it.status, it.summary) }
+    }
+
+    @Test
+    fun supportsBoundedSingleArgumentVarargsRenameRemoveAndReorder() {
+        val root = tempProject(
+            "src/main/java/com/example/VarargsOps.java" to """
+                package com.example;
+                final class VarargsOps {
+                    private static String join(String prefix, int count, String... parts) { return prefix; }
+                    static String run() { return join("x", 1, "y"); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val symbol = "com.example.VarargsOps#join(java.lang.String,int,java.lang.String[])"
+        val rename = planner.previewRenameParameter(snap, symbol, "parts", "suffixes")
+        val remove = planner.previewRemoveParameter(snap, symbol, "parts")
+        val reorder = planner.previewReorderParameters(snap, symbol, listOf("count", "prefix", "parts"))
+        listOf(rename, remove, reorder).forEach { assertEquals(PatchStatus.PREVIEW, it.status, it.summary) }
+    }
+
+    @Test
+    fun preservesParameterAnnotationsDuringBoundedReorder() {
+        val root = tempProject(
+            "src/main/java/com/example/AnnotatedOps.java" to """
+                package com.example;
+                final class AnnotatedOps {
+                    private static String select(@Deprecated String value, int rank) { return value; }
+                    static String run() { return select("x", 1); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.previewReorderParameters(
+            snap, "com.example.AnnotatedOps#select(java.lang.String,int)", listOf("rank", "value"),
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        assertTrue(root.resolve("src/main/java/com/example/AnnotatedOps.java").readText().contains("select(int rank, @Deprecated String value)"))
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """
