@@ -570,6 +570,49 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun migratesStaticMethodAndConstructorReferencesToBoundLambdas() {
+        val methodRoot = tempProject(
+            "src/main/java/com/example/References.java" to """
+                package com.example;
+                import java.util.function.Function;
+                final class References {
+                    private static String find(String value) { return value; }
+                    Function<String, String> reference() { return References::find; }
+                }
+            """.trimIndent() + "\n",
+        )
+        val methodSnapshot = JavaProjectScanner().scan(methodRoot)
+        val methodEvidence = JdtJavaSemanticAnalyzer().analyze(methodSnapshot)
+        assertTrue(methodEvidence.methodReferences.isNotEmpty(), methodEvidence.methodReferences.toString())
+        val methodPlan = planner.previewAddParameter(
+            methodSnapshot, "com.example.References#find(java.lang.String)", "int", "rank", "0",
+            migrateFunctionalReferences = true,
+        )
+        assertEquals(PatchStatus.PREVIEW, methodPlan.status, methodPlan.summary)
+        assertIs<ApplyResult.Applied>(PatchEngine(methodRoot).apply(methodPlan, methodSnapshot))
+        assertTrue(methodRoot.resolve("src/main/java/com/example/References.java").readText().contains("(arg0) -> References.find(arg0, 0)"))
+
+        val constructorRoot = tempProject(
+            "src/main/java/com/example/Token.java" to """
+                package com.example;
+                import java.util.function.Function;
+                final class Token {
+                    private Token(String value) {}
+                    Function<String, Token> reference() { return Token::new; }
+                }
+            """.trimIndent() + "\n",
+        )
+        val constructorSnapshot = JavaProjectScanner().scan(constructorRoot)
+        val constructorPlan = planner.previewAddParameter(
+            constructorSnapshot, "com.example.Token#<init>(java.lang.String)", "boolean", "trusted", "false",
+            migrateFunctionalReferences = true,
+        )
+        assertEquals(PatchStatus.PREVIEW, constructorPlan.status, constructorPlan.summary)
+        assertIs<ApplyResult.Applied>(PatchEngine(constructorRoot).apply(constructorPlan, constructorSnapshot))
+        assertTrue(constructorRoot.resolve("src/main/java/com/example/Token.java").readText().contains("(arg0) -> new Token(arg0, false)"))
+    }
+
+    @Test
     fun arbitraryExpandedVarargsCallRefusesWithoutPartialPlan() {
         val root = tempProject(
             "src/main/java/com/example/Varargs.java" to "package com.example; final class Varargs { private static String join(String prefix, String... parts) { return prefix; } static String run() { return join(\"x\", \"a\", \"b\"); } }\n",

@@ -8,9 +8,11 @@ import org.eclipse.jdt.core.dom.ASTVisitor
 import org.eclipse.jdt.core.dom.AnnotationTypeDeclaration
 import org.eclipse.jdt.core.dom.AnnotationTypeMemberDeclaration
 import org.eclipse.jdt.core.dom.ClassInstanceCreation
+import org.eclipse.jdt.core.dom.CreationReference
 import org.eclipse.jdt.core.dom.CompilationUnit
 import org.eclipse.jdt.core.dom.ConstructorInvocation
 import org.eclipse.jdt.core.dom.EnumDeclaration
+import org.eclipse.jdt.core.dom.ExpressionMethodReference
 import org.eclipse.jdt.core.dom.FieldDeclaration
 import org.eclipse.jdt.core.dom.IBinding
 import org.eclipse.jdt.core.dom.IMethodBinding
@@ -26,6 +28,7 @@ import org.eclipse.jdt.core.dom.MethodInvocation
 import org.eclipse.jdt.core.dom.Modifier
 import org.eclipse.jdt.core.dom.RecordDeclaration
 import org.eclipse.jdt.core.dom.TypeDeclaration
+import org.eclipse.jdt.core.dom.TypeMethodReference
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModule
@@ -157,6 +160,7 @@ class JdtJavaSemanticAnalyzer {
         val parameters = fileAnalyses.flatMap { it.parameters }
         val methods = fileAnalyses.flatMap { it.methods }
         val invocations = fileAnalyses.flatMap { it.invocations }
+        val methodReferences = fileAnalyses.flatMap { it.methodReferences }
         val overrideRelations = buildOverrideRelations(
             fileAnalyses.flatMap { it.methodBindings },
             fileAnalyses.flatMap { it.inheritances },
@@ -171,6 +175,7 @@ class JdtJavaSemanticAnalyzer {
             parameters = parameters,
             methods = methods,
             invocations = invocations,
+            methodReferences = methodReferences,
         )
     }
 
@@ -257,7 +262,7 @@ class JdtJavaSemanticAnalyzer {
         classpathEntries: Array<String>,
         sourceLevel: Int,
     ): FileAnalysis {
-        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel)
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
@@ -268,6 +273,7 @@ class JdtJavaSemanticAnalyzer {
         val parameters = mutableListOf<JdtJavaSemanticParameter>()
         val methods = mutableListOf<JdtJavaSemanticMethod>()
         val invocations = mutableListOf<JdtJavaSemanticInvocation>()
+        val methodReferences = mutableListOf<JdtJavaSemanticMethodReference>()
 
         compilationUnit.accept(object : ASTVisitor() {
             override fun visit(node: TypeDeclaration): Boolean {
@@ -484,6 +490,26 @@ class JdtJavaSemanticAnalyzer {
                 return true
             }
 
+            override fun visit(node: TypeMethodReference): Boolean {
+                val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                if (!Modifier.isStatic(binding.modifiers)) return true
+                methodReferences += semanticMethodReference(compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.STATIC_METHOD)
+                return true
+            }
+
+            override fun visit(node: ExpressionMethodReference): Boolean {
+                val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                if (!Modifier.isStatic(binding.modifiers)) return true
+                methodReferences += semanticMethodReference(compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.STATIC_METHOD)
+                return true
+            }
+
+            override fun visit(node: CreationReference): Boolean {
+                val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                methodReferences += semanticMethodReference(compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.CONSTRUCTOR)
+                return true
+            }
+
             override fun visit(node: FieldDeclaration): Boolean {
                 val owner = ownerStack.lastOrNull() ?: JavaPackageUtil.fqn(packageName, file.path.fileName.toString().removeSuffix(".java"))
                 node.fragments().filterIsInstance<VariableDeclarationFragment>().forEach { fragment ->
@@ -597,7 +623,7 @@ class JdtJavaSemanticAnalyzer {
                     evidence = JdtJavaSemanticEvidence.JDT_PARSE,
                 )
             }
-        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances, parameters, methods, invocations)
+        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances, parameters, methods, invocations, methodReferences)
     }
 
     private fun declarationBindingKey(binding: IBinding?): String? = when (binding) {
@@ -719,6 +745,19 @@ class JdtJavaSemanticAnalyzer {
         }
         return result
     }
+
+    private fun semanticMethodReference(
+        compilationUnit: CompilationUnit,
+        file: SourceFile,
+        binding: IMethodBinding,
+        start: Int,
+        length: Int,
+        kind: JdtJavaSemanticMethodReferenceKind,
+    ) = JdtJavaSemanticMethodReference(
+        methodQualifiedName = binding.qualifiedName(), methodBindingKey = binding.key,
+        path = file.path, sourceRange = rangeFor(compilationUnit, start, length),
+        kind = kind, evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+    )
 
     private fun constructorInvocation(
         compilationUnit: CompilationUnit,
@@ -948,6 +987,7 @@ class JdtJavaSemanticAnalyzer {
         val parameters: List<JdtJavaSemanticParameter>,
         val methods: List<JdtJavaSemanticMethod>,
         val invocations: List<JdtJavaSemanticInvocation>,
+        val methodReferences: List<JdtJavaSemanticMethodReference>,
     )
 
     private data class MethodBindingRecord(
@@ -980,6 +1020,7 @@ data class JdtJavaSemanticAnalysisResult(
     val parameters: List<JdtJavaSemanticParameter> = emptyList(),
     val methods: List<JdtJavaSemanticMethod> = emptyList(),
     val invocations: List<JdtJavaSemanticInvocation> = emptyList(),
+    val methodReferences: List<JdtJavaSemanticMethodReference> = emptyList(),
 )
 
 data class JdtJavaSemanticMethod(
@@ -1002,6 +1043,17 @@ data class JdtJavaSemanticInvocation(
     val argumentRanges: List<SourceRange>,
     val evidence: JdtJavaSemanticEvidence,
 )
+
+data class JdtJavaSemanticMethodReference(
+    val methodQualifiedName: String,
+    val methodBindingKey: String,
+    val path: Path,
+    val sourceRange: SourceRange,
+    val kind: JdtJavaSemanticMethodReferenceKind,
+    val evidence: JdtJavaSemanticEvidence,
+)
+
+enum class JdtJavaSemanticMethodReferenceKind { STATIC_METHOD, CONSTRUCTOR }
 
 data class JdtJavaSemanticParameter(
     val methodQualifiedName: String,

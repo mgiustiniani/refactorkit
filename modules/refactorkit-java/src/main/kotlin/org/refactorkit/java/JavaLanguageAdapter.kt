@@ -819,6 +819,7 @@ class JavaLanguageAdapter(
             defaultExpression,
             includeHierarchy = request.arguments["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
             acceptExternalConsumerRisk = request.arguments["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+            migrateFunctionalReferences = request.arguments["migrateFunctionalReferences"]?.toBooleanStrictOrNull() ?: false,
         )
     }
 

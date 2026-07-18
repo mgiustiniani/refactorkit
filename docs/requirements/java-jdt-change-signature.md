@@ -115,6 +115,16 @@ because changing their functional-interface signature is a separate coordinated
 operation. Expanded varargs calls with zero or multiple trailing arguments also
 refuse without a partial edit.
 
+## Bounded functional-reference migration
+
+`addParameter` may opt into `migrateFunctionalReferences=true`. JDT-bound static
+method references and constructor references are rewritten to explicit lambdas
+whose generated arguments preserve the old functional signature and append the
+validated default expression. Staged JDT must bind each generated invocation to
+the changed declaration, eliminate the old reference identity, preserve ordinary
+call counts, and introduce no diagnostics. Bound/unbound instance references and
+other ambiguous shapes remain fail-closed.
+
 ## Mixed-JVM caller authority boundary
 
 JDT-only evidence never authorizes public-constructor or hierarchy signature
@@ -126,6 +136,4 @@ evidence; risk acceptance cannot substitute for that proof.
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- coordinated compact/canonical record changes;
-- method/constructor-reference functional-interface migration;
 - an actual Java/Kotlin shared-caller mutation operation.

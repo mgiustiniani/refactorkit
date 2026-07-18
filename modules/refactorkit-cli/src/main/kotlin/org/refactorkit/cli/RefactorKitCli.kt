@@ -367,6 +367,7 @@ class RefactorKitCli(
                     snap, symbol, type, name, defaultExpression,
                     includeHierarchy = "include-hierarchy" in parsed.flags,
                     acceptExternalConsumerRisk = "accept-external-consumer-risk" in parsed.flags,
+                    migrateFunctionalReferences = "migrate-functional-references" in parsed.flags,
                 )
             }
             "reorder-parameters", "reorderParameters", "changeSignature.reorderParameters" -> {

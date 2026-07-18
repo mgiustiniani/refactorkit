@@ -1530,6 +1530,7 @@ class DaemonSession(
                     defaultExpression,
                     includeHierarchy = args["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
                     acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                    migrateFunctionalReferences = args["migrateFunctionalReferences"]?.toBooleanStrictOrNull() ?: false,
                 )
             }
             "changeSignature.reorderParameters", "reorderParameters" -> {

@@ -837,6 +837,7 @@ class McpSession(
                 opArgs["default"] ?: opArgs["defaultExpression"] ?: missing("arguments.default"),
                 includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
                 acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                migrateFunctionalReferences = opArgs["migrateFunctionalReferences"]?.toBooleanStrictOrNull() ?: false,
             )
             "changeSignature.reorderParameters", "reorderParameters" -> JavaChangeSignaturePlanner(adapter).previewReorderParameters(
                 snap,

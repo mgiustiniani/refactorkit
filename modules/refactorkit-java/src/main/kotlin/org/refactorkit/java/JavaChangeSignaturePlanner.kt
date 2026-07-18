@@ -219,6 +219,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         defaultExpression: String,
         includeHierarchy: Boolean = false,
         acceptExternalConsumerRisk: Boolean = false,
+        migrateFunctionalReferences: Boolean = false,
     ): PatchPlan {
         val operation = "changeSignature.addParameter"
         if (!isSupportedParameterType(parameterType)) return refused(snapshot, operation, "Unsupported or unsafe parameter type: $parameterType")
@@ -236,7 +237,10 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
                 snapshot, selection, parameterType.trim(), parameterName, defaultExpression.trim(),
             )
         }
-        boundedJdtSignatureRisk(snapshot, selection, operation, acceptExternalConsumerRisk)?.let { return refused(snapshot, operation, it) }
+        boundedJdtSignatureRisk(
+            snapshot, selection, operation, acceptExternalConsumerRisk,
+            allowFunctionalReferences = migrateFunctionalReferences,
+        )?.let { return refused(snapshot, operation, it) }
         if (selection.parameters.any { it.name == parameterName }) {
             return refused(snapshot, operation, "Parameter '$parameterName' already exists in ${selection.method.qualifiedName}")
         }
@@ -245,6 +249,20 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         }
         if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
             return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
+        }
+        val functionalReferences = selection.analysis.methodReferences.filter {
+            it.methodQualifiedName == selection.method.qualifiedName
+        }
+        if (migrateFunctionalReferences) {
+            val methodName = selection.method.qualifiedName.substringAfter('#').substringBefore('(')
+            val scoped = scopedFiles(snapshot, selection.method.qualifiedName.substringBefore('#'), methodName, selection.file.path)
+            val lexicalReference = if (selection.method.constructor) scoped.any { it.content.contains("::new") }
+                else firstMethodReference(scoped, methodName) != null
+            if (lexicalReference && functionalReferences.isEmpty()) {
+                return refused(snapshot, operation, "Functional reference shape is not a supported static-method or constructor JDT binding")
+            }
+        } else if (functionalReferences.isNotEmpty()) {
+            return refused(snapshot, operation, "Functional references require migrateFunctionalReferences=true")
         }
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
@@ -263,6 +281,21 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             val newArguments = listOf(existingArguments, defaultArgument).filter(String::isNotEmpty).joinToString(", ")
             editsByPath.getOrPut(source.path) { mutableListOf() } += TextEdit(invocation.argumentListRange, newArguments)
         }
+        functionalReferences.forEach { reference ->
+            val source = snapshot.files.singleOrNull { it.path == reference.path }
+                ?: return refused(snapshot, operation, "JDT functional-reference source is missing: ${reference.path}")
+            val text = sourceText(source.content, reference.sourceRange)
+            val qualifier = text.substringBefore("::").trim()
+            val arguments = selection.parameters.indices.map { "arg$it" }
+            val invocationArguments = (arguments + defaultArgument).joinToString(", ")
+            val target = when (reference.kind) {
+                JdtJavaSemanticMethodReferenceKind.STATIC_METHOD -> "$qualifier.${selection.symbol.simpleName}($invocationArguments)"
+                JdtJavaSemanticMethodReferenceKind.CONSTRUCTOR -> "new $qualifier($invocationArguments)"
+            }
+            editsByPath.getOrPut(source.path) { mutableListOf() } += TextEdit(
+                reference.sourceRange, "(${arguments.joinToString(", ")}) -> $target",
+            )
+        }
         val fileEdits = editsByPath.map { (path, edits) -> FileEdit.Modify(path, dedupeAndSort(edits)) }
         val staged = analyzeStaged(stagedSnapshot(snapshot, fileEdits))
         val introduced = introducedJdtWarningCount(selection.analysis, staged)
@@ -273,9 +306,10 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
                 staged.parameters.filter { it.methodQualifiedName == candidate.qualifiedName }.sortedBy { it.index }.map { it.name } == expectedNames
         } ?: return refused(snapshot, operation, "Staged JDT method/new-parameter identity could not be re-established")
         val stagedInvocations = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
-        if (stagedInvocations.size != selection.invocations.size || stagedInvocations.any {
-                it.argumentRanges.size != expectedNames.size
-            }) return refused(snapshot, operation, "Staged JDT invocation identity/count changed")
+        if (stagedInvocations.size != selection.invocations.size + functionalReferences.size ||
+            stagedInvocations.any { it.argumentRanges.size != expectedNames.size } ||
+            staged.methodReferences.any { it.methodQualifiedName == stagedMethod.qualifiedName }
+        ) return refused(snapshot, operation, "Staged JDT invocation/reference identity or count changed")
 
         val affected = fileEdits.map { it.path }.toSet()
         return PatchPlan(
@@ -918,6 +952,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         selection: JdtMethodSelection,
         operation: String,
         acceptExternalConsumerRisk: Boolean = false,
+        allowFunctionalReferences: Boolean = false,
     ): String? {
         val ownerName = selection.method.qualifiedName.substringBefore('#')
         val owner = selection.analysis.symbols.singleOrNull {
@@ -945,10 +980,10 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             }) return "$operation refuses @Override/implementer families until every hierarchy declaration is selected"
         val methodName = selection.method.qualifiedName.substringAfter('#').substringBefore('(')
         val scoped = scopedFiles(snapshot, ownerName, methodName, selection.file.path)
-        if (selection.method.constructor && scoped.any { it.content.contains("::new") }) {
+        if (!allowFunctionalReferences && selection.method.constructor && scoped.any { it.content.contains("::new") }) {
             return "$operation refuses constructor references until functional signatures are updated"
         }
-        if (!selection.method.constructor && firstMethodReference(scoped, methodName) != null) {
+        if (!allowFunctionalReferences && !selection.method.constructor && firstMethodReference(scoped, methodName) != null) {
             return "$operation refuses Method reference targets until functional signatures are updated"
         }
         firstStringLiteralContaining(scoped, methodName)?.let { location ->
