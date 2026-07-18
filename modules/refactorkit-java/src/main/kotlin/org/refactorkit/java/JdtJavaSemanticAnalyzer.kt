@@ -9,6 +9,7 @@ import org.eclipse.jdt.core.dom.AnnotationTypeDeclaration
 import org.eclipse.jdt.core.dom.AnnotationTypeMemberDeclaration
 import org.eclipse.jdt.core.dom.ClassInstanceCreation
 import org.eclipse.jdt.core.dom.CompilationUnit
+import org.eclipse.jdt.core.dom.ConstructorInvocation
 import org.eclipse.jdt.core.dom.EnumDeclaration
 import org.eclipse.jdt.core.dom.FieldDeclaration
 import org.eclipse.jdt.core.dom.IBinding
@@ -18,6 +19,7 @@ import org.eclipse.jdt.core.dom.ITypeBinding
 import org.eclipse.jdt.core.dom.IVariableBinding
 import org.eclipse.jdt.core.dom.SimpleName
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration
+import org.eclipse.jdt.core.dom.SuperConstructorInvocation
 import org.eclipse.jdt.core.dom.SuperMethodInvocation
 import org.eclipse.jdt.core.dom.MethodDeclaration
 import org.eclipse.jdt.core.dom.MethodInvocation
@@ -522,7 +524,12 @@ class JdtJavaSemanticAnalyzer {
             }
 
             override fun visit(node: ClassInstanceCreation): Boolean {
-                val binding = node.resolveConstructorBinding() ?: return true
+                val binding = node.resolveConstructorBinding()?.methodDeclaration ?: return true
+                val bounds = parenthesisInterior(file.content, node.type.startPosition + node.type.length)
+                if (bounds != null) invocations += constructorInvocation(
+                    compilationUnit, file, binding, node.type.startPosition, node.type.length, bounds,
+                    node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map { it.startPosition to it.length },
+                )
                 rawReferences += RawReference(
                     simpleName = binding.declaringClass?.name ?: node.type.toString(),
                     path = file.path,
@@ -531,6 +538,26 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = declarationBindingKey(binding),
                     symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = false,
+                )
+                return true
+            }
+
+            override fun visit(node: ConstructorInvocation): Boolean {
+                val binding = node.resolveConstructorBinding()?.methodDeclaration ?: return true
+                val bounds = parenthesisInterior(file.content, node.startPosition)
+                if (bounds != null) invocations += constructorInvocation(
+                    compilationUnit, file, binding, node.startPosition, minOf(4, node.length), bounds,
+                    node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map { it.startPosition to it.length },
+                )
+                return true
+            }
+
+            override fun visit(node: SuperConstructorInvocation): Boolean {
+                val binding = node.resolveConstructorBinding()?.methodDeclaration ?: return true
+                val bounds = parenthesisInterior(file.content, node.startPosition)
+                if (bounds != null) invocations += constructorInvocation(
+                    compilationUnit, file, binding, node.startPosition, minOf(5, node.length), bounds,
+                    node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map { it.startPosition to it.length },
                 )
                 return true
             }
@@ -692,6 +719,24 @@ class JdtJavaSemanticAnalyzer {
         }
         return result
     }
+
+    private fun constructorInvocation(
+        compilationUnit: CompilationUnit,
+        file: SourceFile,
+        binding: IMethodBinding,
+        nameStart: Int,
+        nameLength: Int,
+        bounds: IntRange,
+        arguments: List<Pair<Int, Int>>,
+    ): JdtJavaSemanticInvocation = JdtJavaSemanticInvocation(
+        methodQualifiedName = binding.qualifiedName(),
+        methodBindingKey = binding.key,
+        path = file.path,
+        nameRange = rangeFor(compilationUnit, nameStart, nameLength),
+        argumentListRange = rangeFor(compilationUnit, bounds.first, bounds.last - bounds.first + 1),
+        argumentRanges = arguments.map { (start, length) -> rangeFor(compilationUnit, start, length) },
+        evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+    )
 
     private fun IMethodBinding.qualifiedName(): String {
         val owner = declaringClass?.qualifiedName.orEmpty()

@@ -83,9 +83,18 @@ names may differ) and all family-bound calls. Type change replaces the exact JDT
 type range at the selected index in every declaration and requires staged family
 connectivity, unchanged body-use counts, and preserved call-site identities.
 
+## Bounded private-constructor row
+
+Private/package constructors use exact `<init>(qualified.types)` JDT identities.
+Class creation, `this(...)`, and `super(...)` arguments are published as bound
+constructor invocations. Rename, add, remove, reorder, and parameter-type change
+therefore use the same staged call-identity and diagnostics gates as methods.
+Constructor references (`Type::new`) refuse until functional-interface migration
+is independently implemented. Public constructors remain outside this bounded row.
+
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- constructors, varargs, generic methods, records and annotations;
-- method references, lambdas and external/public consumer boundaries;
+- public constructors, compact/canonical records, varargs, generic methods and annotations;
+- method and constructor references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

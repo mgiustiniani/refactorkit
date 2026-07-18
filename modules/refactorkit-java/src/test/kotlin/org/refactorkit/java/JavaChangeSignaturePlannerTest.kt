@@ -378,6 +378,56 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun addsParameterToPrivateConstructorAndBoundCreations() {
+        val root = tempProject(
+            "src/main/java/com/example/Token.java" to """
+                package com.example;
+                public final class Token {
+                    private final String value;
+                    private Token(String value) { this.value = value; }
+                    private Token() { this("default"); }
+                    static Token create() { return new Token("x"); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.previewAddParameter(
+            snap, "com.example.Token#<init>(java.lang.String)", "boolean", "trusted", "false",
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        val content = root.resolve("src/main/java/com/example/Token.java").readText()
+        assertTrue(content.contains("Token(String value, boolean trusted)"))
+        assertTrue(content.contains("this(\"default\", false)"))
+        assertTrue(content.contains("new Token(\"x\", false)"))
+    }
+
+    @Test
+    fun previewsBoundedPrivateConstructorRenameRemoveReorderAndTypeChange() {
+        val root = tempProject(
+            "src/main/java/com/example/Token.java" to """
+                package com.example;
+                public final class Token {
+                    private Token(String value, int count) { value.toString(); }
+                    static Token create() { return new Token("x", 1); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val symbol = "com.example.Token#<init>(java.lang.String,int)"
+        val rename = planner.previewRenameParameter(snap, symbol, "count", "copies")
+        val remove = planner.previewRemoveParameter(snap, symbol, "count")
+        val reorder = planner.previewReorderParameters(snap, symbol, listOf("count", "value"))
+        val type = planner.previewChangeParameterType(snap, symbol, "value", "CharSequence")
+        listOf(rename, remove, reorder, type).forEach { assertEquals(PatchStatus.PREVIEW, it.status, it.summary) }
+        assertTrue(rename.workspaceEdit.edits.isNotEmpty())
+        assertTrue(remove.workspaceEdit.edits.isNotEmpty())
+        assertTrue(reorder.workspaceEdit.edits.isNotEmpty())
+        assertTrue(type.workspaceEdit.edits.isNotEmpty())
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """

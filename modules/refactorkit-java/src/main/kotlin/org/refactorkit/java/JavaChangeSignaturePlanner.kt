@@ -42,13 +42,13 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         }
         val ownerFqn = symbolFqnWithMethod.substring(0, hash)
         val selector = symbolFqnWithMethod.substring(hash + 1)
-        if (selector.substringBefore('(') == "<init>") return refused(snapshot, operation, "Constructor parameter rename is not supported")
+        val constructor = selector.substringBefore('(') == "<init>"
 
         val analyzer = JdtJavaSemanticAnalyzer()
         val before = analyzer.analyze(snapshot)
         val methodPrefix = "$ownerFqn#${selector.substringBefore('(')}"
         val methods = before.symbols.filter { symbol ->
-            symbol.kind == JdtJavaSemanticSymbolKind.METHOD &&
+            symbol.kind == (if (constructor) JdtJavaSemanticSymbolKind.CONSTRUCTOR else JdtJavaSemanticSymbolKind.METHOD) &&
                 if ('(' in selector) symbol.qualifiedName == "$ownerFqn#$selector"
                 else symbol.qualifiedName.substringBefore('(') == methodPrefix
         }
@@ -886,9 +886,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             "Method selector is overloaded or ambiguous; use exact signed selector <FQN>#<method>(<types>)",
         )
         val method = methods.single()
-        if (method.constructor) return null to refused(snapshot, operation, "Constructor change signature is not supported")
+        val expectedKind = if (method.constructor) JdtJavaSemanticSymbolKind.CONSTRUCTOR else JdtJavaSemanticSymbolKind.METHOD
         val symbol = analysis.symbols.singleOrNull {
-            it.kind == JdtJavaSemanticSymbolKind.METHOD && it.qualifiedName == method.qualifiedName
+            it.kind == expectedKind && it.qualifiedName == method.qualifiedName
         } ?: return null to refused(snapshot, operation, "JDT method symbol is missing or ambiguous: ${method.qualifiedName}")
         val file = snapshot.files.singleOrNull { it.path == method.path }
             ?: return null to refused(snapshot, operation, "Authoritative method source is missing: ${method.path}")
@@ -926,7 +926,10 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             }) return "$operation refuses @Override/implementer families until every hierarchy declaration is selected"
         val methodName = selection.method.qualifiedName.substringAfter('#').substringBefore('(')
         val scoped = scopedFiles(snapshot, ownerName, methodName, selection.file.path)
-        if (firstMethodReference(scoped, methodName) != null) {
+        if (selection.method.constructor && scoped.any { it.content.contains("::new") }) {
+            return "$operation refuses constructor references until functional signatures are updated"
+        }
+        if (!selection.method.constructor && firstMethodReference(scoped, methodName) != null) {
             return "$operation refuses Method reference targets until functional signatures are updated"
         }
         firstStringLiteralContaining(scoped, methodName)?.let { location ->
