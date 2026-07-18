@@ -583,6 +583,36 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun publicAndHierarchySignatureChangesRefuseMixedJvmWithoutSharedCallerEvidence() {
+        val constructorRoot = tempProject(
+            "src/main/java/com/example/Token.java" to "package com.example; public final class Token { public Token(String value) {} }\n",
+            "src/main/kotlin/com/example/Use.kt" to "package com.example\nfun use() = Token(\"x\")\n",
+        )
+        val constructorSnapshot = JavaProjectScanner().scan(constructorRoot)
+        val constructor = planner.previewAddParameter(
+            constructorSnapshot, "com.example.Token#<init>(java.lang.String)", "boolean", "trusted", "false",
+            acceptExternalConsumerRisk = true,
+        )
+        assertEquals(PatchStatus.REFUSED, constructor.status)
+        assertTrue(constructor.workspaceEdit.edits.isEmpty())
+        assertTrue(constructor.summary.contains("Kotlin"), constructor.summary)
+
+        val hierarchyRoot = tempProject(
+            "src/main/java/com/example/Lookup.java" to "package com.example; public interface Lookup { String find(String key); }\n",
+            "src/main/java/com/example/DefaultLookup.java" to "package com.example; public class DefaultLookup implements Lookup { public String find(String value) { return value; } }\n",
+            "src/main/kotlin/com/example/Use.kt" to "package com.example\nfun use(value: Lookup) = value.find(\"x\")\n",
+        )
+        val hierarchySnapshot = JavaProjectScanner().scan(hierarchyRoot)
+        val hierarchy = planner.previewAddParameter(
+            hierarchySnapshot, "com.example.Lookup#find(java.lang.String)", "boolean", "trusted", "false",
+            includeHierarchy = true, acceptExternalConsumerRisk = true,
+        )
+        assertEquals(PatchStatus.REFUSED, hierarchy.status)
+        assertTrue(hierarchy.workspaceEdit.edits.isEmpty())
+        assertTrue(hierarchy.summary.contains("Kotlin"), hierarchy.summary)
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """

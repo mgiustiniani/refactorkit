@@ -68,6 +68,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         }
         val methodEvidence = before.methods.singleOrNull { it.qualifiedName == method.qualifiedName }
             ?: return refused(snapshot, operation, "JDT method evidence is missing: ${method.qualifiedName}")
+        if (constructor && Modifier.isPublic(methodEvidence.modifiers) && hasKotlinSources(snapshot)) {
+            return refused(snapshot, operation, "Public constructor change signature refuses mixed Java/Kotlin workspaces until shared JVM caller evidence is supplied")
+        }
         if (constructor && Modifier.isPublic(methodEvidence.modifiers) && !acceptExternalConsumerRisk) {
             return refused(snapshot, operation, "Public constructor change signature requires acceptExternalConsumerRisk=true")
         }
@@ -298,6 +301,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         defaultExpression: String,
     ): PatchPlan {
         val operation = "changeSignature.addParameter"
+        if (hasKotlinSources(snapshot)) return mixedJvmSignatureRefusal(snapshot, operation)
         val selectedKey = selection.symbol.bindingKey
             ?: return refused(snapshot, operation, "Selected hierarchy method has no JDT binding key")
         val familyKeys = linkedSetOf(selectedKey)
@@ -595,6 +599,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
 
     private fun previewChangeParameterTypeHierarchy(snapshot: ProjectSnapshot, selection: JdtMethodSelection, parameterName: String, newType: String): PatchPlan {
         val operation = "changeSignature.changeParameterType"
+        if (hasKotlinSources(snapshot)) return mixedJvmSignatureRefusal(snapshot, operation)
         val index = selection.parameters.indexOfFirst { it.name == parameterName }
         if (index < 0) return refused(snapshot, operation, "Selected JDT parameter '$parameterName' was not found")
         val selectedKey = selection.symbol.bindingKey ?: return refused(snapshot, operation, "Selected method has no JDT binding key")
@@ -668,6 +673,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         newOrder: List<String>,
     ): PatchPlan {
         val operation = "changeSignature.reorderParameters"
+        if (hasKotlinSources(snapshot)) return mixedJvmSignatureRefusal(snapshot, operation)
         val requested = newOrder.map(String::trim).filter(String::isNotEmpty)
         val selectedNames = selection.parameters.map { it.name }
         if (requested.size != selectedNames.size || requested.toSet() != selectedNames.toSet() || requested.distinct().size != requested.size) {
@@ -748,6 +754,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         selectedParameterName: String,
     ): PatchPlan {
         val operation = "changeSignature.removeParameter"
+        if (hasKotlinSources(snapshot)) return mixedJvmSignatureRefusal(snapshot, operation)
         val selectedIndex = selection.parameters.indexOfFirst { it.name == selectedParameterName }
         if (selectedIndex < 0) return refused(snapshot, operation, "Selected JDT parameter '$selectedParameterName' was not found")
         val selectedKey = selection.symbol.bindingKey
@@ -923,6 +930,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         }
         if (owner?.kind == JdtJavaSemanticSymbolKind.INTERFACE) {
             return "$operation refuses interface methods until the complete implementer hierarchy is selected"
+        }
+        if (selection.method.constructor && Modifier.isPublic(selection.method.modifiers) && hasKotlinSources(snapshot)) {
+            return "$operation refuses mixed Java/Kotlin workspaces until shared JVM caller evidence is supplied"
         }
         if (Modifier.isPublic(selection.method.modifiers) || Modifier.isProtected(selection.method.modifiers)) {
             if (!(selection.method.constructor && acceptExternalConsumerRisk)) {
@@ -1443,6 +1453,12 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         val selector = symbol.substring(hash + 1)
         return symbol.substring(0, hash) to selector.substringBefore('(')
     }
+
+    private fun hasKotlinSources(snapshot: ProjectSnapshot): Boolean =
+        snapshot.files.any { it.languageId == "kotlin" || it.path.toString().endsWith(".kt") }
+
+    private fun mixedJvmSignatureRefusal(snapshot: ProjectSnapshot, operation: String): PatchPlan =
+        refused(snapshot, operation, "Mixed Java/Kotlin change signature requires shared JVM caller identity and is not authorized by JDT-only evidence")
 
     private fun refused(snapshot: ProjectSnapshot, operation: String, reason: String) = PatchPlan(
         operation = operation,

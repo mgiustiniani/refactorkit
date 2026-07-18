@@ -115,9 +115,17 @@ because changing their functional-interface signature is a separate coordinated
 operation. Expanded varargs calls with zero or multiple trailing arguments also
 refuse without a partial edit.
 
+## Mixed-JVM caller authority boundary
+
+JDT-only evidence never authorizes public-constructor or hierarchy signature
+mutation when Kotlin sources are present. Such previews refuse with no edits even
+when external-consumer risk was accepted. A future cross-language operation must
+join exact JDT declaration/call identities with complete K2 JVM callable/call
+evidence; risk acceptance cannot substitute for that proof.
+
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- coordinated compact/canonical record changes and annotation mutation;
-- method/constructor-reference functional-interface migration and external/public consumer boundaries;
-- Java/Kotlin callers through shared JVM identity.
+- coordinated compact/canonical record changes;
+- method/constructor-reference functional-interface migration;
+- an actual Java/Kotlin shared-caller mutation operation.
