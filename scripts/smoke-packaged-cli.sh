@@ -51,7 +51,7 @@ JAVA
 cat >"$fixture/src/main/java/com/acme/DefaultLookup.java" <<'JAVA'
 package com.acme;
 public class DefaultLookup implements Lookup {
-    @Override public String find(String value, boolean ignored) { return value; }
+    @Override public String find(String value, boolean ignored) { return value.toString(); }
 }
 JAVA
 cat >"$fixture/src/main/java/com/acme/HierarchyCaller.java" <<'JAVA'
@@ -179,6 +179,18 @@ fi
 env -u JAVA_HOME "$launcher" patch rollback "$hierarchy_reorder_transaction" --root "$fixture" >/dev/null
 if [[ "$before" != "$(source_hashes)" ]]; then
   echo "Packaged JDT hierarchy reorder rollback did not restore Java sources" >&2
+  exit 1
+fi
+
+hierarchy_type="$(env -u JAVA_HOME "$launcher" change-signature --operation change-parameter-type --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --name key --type CharSequence --include-hierarchy --accept-external-consumer-risk --apply "$fixture")"
+hierarchy_type_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$hierarchy_type" | tail -1)"
+if [[ -z "$hierarchy_type_transaction" ]] || ! grep -Fq 'find(CharSequence key, boolean unused)' "$fixture/src/main/java/com/acme/Lookup.java" || ! grep -Fq 'find(CharSequence value, boolean ignored)' "$fixture/src/main/java/com/acme/DefaultLookup.java"; then
+  echo "Packaged JDT hierarchy type change failed: $hierarchy_type" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$hierarchy_type_transaction" --root "$fixture" >/dev/null
+if [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT hierarchy type rollback did not restore Java sources" >&2
   exit 1
 fi
 

@@ -42,7 +42,7 @@ public interface Lookup { String find(String key, boolean unused); }
     @'
 package com.acme;
 public class DefaultLookup implements Lookup {
-    @Override public String find(String value, boolean ignored) { return value; }
+    @Override public String find(String value, boolean ignored) { return value.toString(); }
 }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "DefaultLookup.java")
     @'
@@ -158,6 +158,19 @@ export class RealNativeBinding { run(): void {} }
     $HierarchyReorderRollback = (& $Launcher patch rollback $HierarchyReorderMatch.Value --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
         throw "Packaged JDT hierarchy reorder rollback failed: $HierarchyReorderRollback"
+    }
+
+    $HierarchyType = (& $Launcher change-signature --operation change-parameter-type --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --name key --type CharSequence --include-hierarchy --accept-external-consumer-risk --apply $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Packaged JDT hierarchy type change failed: $HierarchyType" }
+    $HierarchyTypeMatch = [regex]::Match($HierarchyType, 'transaction-[0-9a-f-]+')
+    $LookupContent = Get-Content -Raw (Join-Path $SourceDir "Lookup.java")
+    $ImplementationContent = Get-Content -Raw (Join-Path $SourceDir "DefaultLookup.java")
+    if (-not $HierarchyTypeMatch.Success -or $LookupContent -notmatch 'find\(CharSequence key, boolean unused\)' -or $ImplementationContent -notmatch 'find\(CharSequence value, boolean ignored\)') {
+        throw "Packaged JDT hierarchy type post-image mismatch: $HierarchyType"
+    }
+    $HierarchyTypeRollback = (& $Launcher patch rollback $HierarchyTypeMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT hierarchy type rollback failed: $HierarchyTypeRollback"
     }
 
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"

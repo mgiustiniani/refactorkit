@@ -101,7 +101,7 @@ def main() -> int:
         lookup.write_bytes(b"package com.acme; public interface Lookup { String find(String key, boolean unused); }\n")
         implementation.write_bytes(
             b"package com.acme; public class DefaultLookup implements Lookup { "
-            b"@Override public String find(String value, boolean ignored) { return value; } }\n"
+            b"@Override public String find(String value, boolean ignored) { return value.toString(); } }\n"
         )
         hierarchy_caller.write_bytes(
             b"package com.acme; class HierarchyCaller { "
@@ -234,6 +234,25 @@ def main() -> int:
             })
             if source_hash(root) != before:
                 raise AssertionError("MCP hierarchy reorder rollback did not restore exact bytes")
+            type_preview = exchange(process, 59, "tools/call", {
+                "name": "preview_refactoring", "arguments": {
+                    "operation": "changeSignature.changeParameterType",
+                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
+                    "arguments": {"name": "key", "type": "CharSequence", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
+                },
+            })["content"][0]["text"]
+            type_plan = type_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+            type_apply = exchange(process, 60, "tools/call", {
+                "name": "apply_refactoring", "arguments": {"planId": type_plan},
+            })["content"][0]["text"]
+            type_transaction = type_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
+            assert_contains(lookup, ["find(CharSequence key, boolean unused)"])
+            assert_contains(implementation, ["find(CharSequence value, boolean ignored)"])
+            exchange(process, 61, "tools/call", {
+                "name": "rollback_refactoring", "arguments": {"transactionId": type_transaction},
+            })
+            if source_hash(root) != before:
+                raise AssertionError("MCP hierarchy type rollback did not restore exact bytes")
         finally:
             stop(process)
 
@@ -320,10 +339,21 @@ def main() -> int:
             exchange(process, 68, "patch.rollback", {"transactionId": reorder_apply["transactionId"]})
             if source_hash(root) != before:
                 raise AssertionError("daemon hierarchy reorder rollback did not restore exact bytes")
+            type_preview = exchange(process, 69, "refactor.preview", {
+                "operation": "changeSignature.changeParameterType",
+                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
+                "arguments": {"name": "key", "type": "CharSequence", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
+            })
+            type_apply = exchange(process, 70, "refactor.apply", {"planId": type_preview["planId"]})
+            assert_contains(lookup, ["find(CharSequence key, boolean unused)"])
+            assert_contains(implementation, ["find(CharSequence value, boolean ignored)"])
+            exchange(process, 71, "patch.rollback", {"transactionId": type_apply["transactionId"]})
+            if source_hash(root) != before:
+                raise AssertionError("daemon hierarchy type rollback did not restore exact bytes")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy add/remove/reorder restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy add/remove/reorder/type restored exact bytes.")
     return 0
 
 
