@@ -98,15 +98,15 @@ def main() -> int:
         lookup = root / "src/main/java/com/acme/Lookup.java"
         implementation = root / "src/main/java/com/acme/DefaultLookup.java"
         hierarchy_caller = root / "src/main/java/com/acme/HierarchyCaller.java"
-        lookup.write_bytes(b"package com.acme; public interface Lookup { String find(String key); }\n")
+        lookup.write_bytes(b"package com.acme; public interface Lookup { String find(String key, boolean unused); }\n")
         implementation.write_bytes(
             b"package com.acme; public class DefaultLookup implements Lookup { "
-            b"@Override public String find(String value) { return value; } }\n"
+            b"@Override public String find(String value, boolean ignored) { return value; } }\n"
         )
         hierarchy_caller.write_bytes(
             b"package com.acme; class HierarchyCaller { "
-            b"String api(Lookup lookup) { return lookup.find(\"a\"); } "
-            b"String impl(DefaultLookup lookup) { return lookup.find(\"b\"); } }\n"
+            b"String api(Lookup lookup) { return lookup.find(\"a\", true); } "
+            b"String impl(DefaultLookup lookup) { return lookup.find(\"b\", false); } }\n"
         )
         before = source_hash(root)
         symbol = "com.acme.Service#find(java.lang.String,boolean)"
@@ -175,7 +175,7 @@ def main() -> int:
             hierarchy_preview = exchange(process, 50, "tools/call", {
                 "name": "preview_refactoring", "arguments": {
                     "operation": "changeSignature.addParameter",
-                    "symbol": "com.acme.Lookup#find(java.lang.String)",
+                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
                     "arguments": {
                         "type": "int", "name": "limit", "default": "10",
                         "includeHierarchy": True, "acceptExternalConsumerRisk": True,
@@ -189,14 +189,32 @@ def main() -> int:
                 "name": "apply_refactoring", "arguments": {"planId": hierarchy_plan},
             })["content"][0]["text"]
             hierarchy_transaction = hierarchy_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_contains(lookup, ["find(String key, int limit)"])
-            assert_contains(implementation, ["find(String value, int limit)"])
-            assert_contains(hierarchy_caller, ["find(\"a\", 10)", "find(\"b\", 10)"])
+            assert_contains(lookup, ["find(String key, boolean unused, int limit)"])
+            assert_contains(implementation, ["find(String value, boolean ignored, int limit)"])
+            assert_contains(hierarchy_caller, ["find(\"a\", true, 10)", "find(\"b\", false, 10)"])
             exchange(process, 52, "tools/call", {
                 "name": "rollback_refactoring", "arguments": {"transactionId": hierarchy_transaction},
             })
             if source_hash(root) != before:
                 raise AssertionError("MCP hierarchy rollback did not restore exact source bytes")
+            remove_preview = exchange(process, 53, "tools/call", {
+                "name": "preview_refactoring", "arguments": {
+                    "operation": "changeSignature.removeParameter",
+                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
+                    "arguments": {"name": "unused", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
+                },
+            })["content"][0]["text"]
+            remove_plan = remove_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+            remove_apply = exchange(process, 54, "tools/call", {
+                "name": "apply_refactoring", "arguments": {"planId": remove_plan},
+            })["content"][0]["text"]
+            remove_transaction = remove_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
+            assert_contains(hierarchy_caller, ["find(\"a\")", "find(\"b\")"])
+            exchange(process, 55, "tools/call", {
+                "name": "rollback_refactoring", "arguments": {"transactionId": remove_transaction},
+            })
+            if source_hash(root) != before:
+                raise AssertionError("MCP hierarchy remove rollback did not restore exact bytes")
         finally:
             stop(process)
 
@@ -249,23 +267,33 @@ def main() -> int:
 
             hierarchy_preview = exchange(process, 60, "refactor.preview", {
                 "operation": "changeSignature.addParameter",
-                "symbol": "com.acme.Lookup#find(java.lang.String)",
+                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
                 "arguments": {
                     "type": "int", "name": "limit", "default": "10",
                     "includeHierarchy": True, "acceptExternalConsumerRisk": True,
                 },
             })
             hierarchy_apply = exchange(process, 61, "refactor.apply", {"planId": hierarchy_preview["planId"]})
-            assert_contains(lookup, ["find(String key, int limit)"])
-            assert_contains(implementation, ["find(String value, int limit)"])
-            assert_contains(hierarchy_caller, ["find(\"a\", 10)", "find(\"b\", 10)"])
+            assert_contains(lookup, ["find(String key, boolean unused, int limit)"])
+            assert_contains(implementation, ["find(String value, boolean ignored, int limit)"])
+            assert_contains(hierarchy_caller, ["find(\"a\", true, 10)", "find(\"b\", false, 10)"])
             exchange(process, 62, "patch.rollback", {"transactionId": hierarchy_apply["transactionId"]})
             if source_hash(root) != before:
                 raise AssertionError("daemon hierarchy rollback did not restore exact source bytes")
+            remove_preview = exchange(process, 63, "refactor.preview", {
+                "operation": "changeSignature.removeParameter",
+                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
+                "arguments": {"name": "unused", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
+            })
+            remove_apply = exchange(process, 64, "refactor.apply", {"planId": remove_preview["planId"]})
+            assert_contains(hierarchy_caller, ["find(\"a\")", "find(\"b\")"])
+            exchange(process, 65, "patch.rollback", {"transactionId": remove_apply["transactionId"]})
+            if source_hash(root) != before:
+                raise AssertionError("daemon hierarchy remove rollback did not restore exact bytes")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy add restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy add/remove restored exact bytes.")
     return 0
 
 

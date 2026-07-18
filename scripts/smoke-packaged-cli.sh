@@ -46,18 +46,18 @@ public class ServiceClient {
 JAVA
 cat >"$fixture/src/main/java/com/acme/Lookup.java" <<'JAVA'
 package com.acme;
-public interface Lookup { String find(String key); }
+public interface Lookup { String find(String key, boolean unused); }
 JAVA
 cat >"$fixture/src/main/java/com/acme/DefaultLookup.java" <<'JAVA'
 package com.acme;
 public class DefaultLookup implements Lookup {
-    @Override public String find(String value) { return value; }
+    @Override public String find(String value, boolean ignored) { return value; }
 }
 JAVA
 cat >"$fixture/src/main/java/com/acme/HierarchyCaller.java" <<'JAVA'
 package com.acme;
 class HierarchyCaller {
-    String run(Lookup lookup) { return lookup.find("x"); }
+    String run(Lookup lookup) { return lookup.find("x", true); }
 }
 JAVA
 cat >"$fixture/structural.ts" <<'TS'
@@ -142,12 +142,12 @@ if [[ "$before" != "$(source_hashes)" ]]; then
   exit 1
 fi
 
-hierarchy_output="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String)' --type int --name limit --default 10 --include-hierarchy --accept-external-consumer-risk --apply "$fixture")"
+hierarchy_output="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --type int --name limit --default 10 --include-hierarchy --accept-external-consumer-risk --apply "$fixture")"
 hierarchy_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$hierarchy_output" | tail -1)"
 if [[ -z "$hierarchy_transaction" ]] ||
-   ! grep -Fq 'find(String key, int limit)' "$fixture/src/main/java/com/acme/Lookup.java" ||
-   ! grep -Fq 'find(String value, int limit)' "$fixture/src/main/java/com/acme/DefaultLookup.java" ||
-   ! grep -Fq 'find("x", 10)' "$fixture/src/main/java/com/acme/HierarchyCaller.java"; then
+   ! grep -Fq 'find(String key, boolean unused, int limit)' "$fixture/src/main/java/com/acme/Lookup.java" ||
+   ! grep -Fq 'find(String value, boolean ignored, int limit)' "$fixture/src/main/java/com/acme/DefaultLookup.java" ||
+   ! grep -Fq 'find("x", true, 10)' "$fixture/src/main/java/com/acme/HierarchyCaller.java"; then
   echo "Packaged JDT hierarchy change failed:" >&2
   echo "$hierarchy_output" >&2
   exit 1
@@ -155,6 +155,18 @@ fi
 env -u JAVA_HOME "$launcher" patch rollback "$hierarchy_transaction" --root "$fixture" >/dev/null
 if [[ "$before" != "$(source_hashes)" ]]; then
   echo "Packaged JDT hierarchy rollback did not restore Java sources" >&2
+  exit 1
+fi
+
+hierarchy_remove="$(env -u JAVA_HOME "$launcher" change-signature --operation remove-parameter --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --name unused --include-hierarchy --accept-external-consumer-risk --apply "$fixture")"
+hierarchy_remove_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$hierarchy_remove" | tail -1)"
+if [[ -z "$hierarchy_remove_transaction" ]] || ! grep -Fq 'find("x")' "$fixture/src/main/java/com/acme/HierarchyCaller.java"; then
+  echo "Packaged JDT hierarchy remove failed: $hierarchy_remove" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$hierarchy_remove_transaction" --root "$fixture" >/dev/null
+if [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT hierarchy remove rollback did not restore Java sources" >&2
   exit 1
 fi
 

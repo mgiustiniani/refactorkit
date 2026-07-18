@@ -1531,7 +1531,13 @@ class DaemonSession(
             }
             "changeSignature.removeParameter", "removeParameter" -> {
                 val name = args["name"] ?: args["parameterName"] ?: missing("arguments.name")
-                JavaChangeSignaturePlanner(adapter).previewRemoveParameter(snap, symbol ?: missing("symbol"), name)
+                JavaChangeSignaturePlanner(adapter).previewRemoveParameter(
+                    snap,
+                    symbol ?: missing("symbol"),
+                    name,
+                    includeHierarchy = args["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                    acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
             }
             "moveClass" -> {
                 val pkg = args["targetPackage"] ?: missing("arguments.targetPackage")

@@ -74,12 +74,15 @@ exact calls bound to any family member. Method references, external hierarchy
 declarations, incomplete call evidence, comments/varargs, duplicate names,
 introduced diagnostics, lost override edges or changed call-location bindings
 refuse. Public/external consumers remain a high-risk explicit warning; acceptance
-does not permit editing unknown code.
+does not permit editing unknown code. Remove-parameter uses the selected
+parameter index across declarations whose names may differ, requires zero bound
+body uses for every removed family parameter, and applies the same index removal
+to all bound calls.
 
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- remove/reorder/type changes across complete override/implementer hierarchies;
+- reorder/type changes across complete override/implementer hierarchies;
 - constructors, varargs, generic methods, records and annotations;
 - method references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

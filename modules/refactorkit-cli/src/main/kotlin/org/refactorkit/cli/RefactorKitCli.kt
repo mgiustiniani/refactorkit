@@ -373,7 +373,11 @@ class RefactorKitCli(
                     ?: parsed.options["param-name"]
                     ?: parsed.options["parameter-name"]
                     ?: run { System.err.println("change-signature remove-parameter requires --name <param>"); return 2 }
-                planner.previewRemoveParameter(snap, symbol, name)
+                planner.previewRemoveParameter(
+                    snap, symbol, name,
+                    includeHierarchy = "include-hierarchy" in parsed.flags,
+                    acceptExternalConsumerRisk = "accept-external-consumer-risk" in parsed.flags,
+                )
             }
             else -> {
                 System.err.println("change-signature supports --operation rename-parameter, change-parameter-type, add-parameter, reorder-parameters, or remove-parameter")

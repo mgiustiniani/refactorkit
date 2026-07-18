@@ -830,7 +830,13 @@ class JavaLanguageAdapter(
         val name = request.arguments["name"]
             ?: request.arguments["parameterName"]
             ?: return notImplemented(request, "removeParameter requires arguments.name")
-        return JavaChangeSignaturePlanner(this).previewRemoveParameter(request.snapshot, symbol, name)
+        return JavaChangeSignaturePlanner(this).previewRemoveParameter(
+            request.snapshot,
+            symbol,
+            name,
+            includeHierarchy = request.arguments["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+            acceptExternalConsumerRisk = request.arguments["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+        )
     }
 
     private fun applyMoveClass(request: RefactoringRequest): PatchPlan {

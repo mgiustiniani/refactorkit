@@ -305,6 +305,39 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun removesUnusedParameterIndexAcrossCompleteJdtOverrideFamily() {
+        val root = tempProject(
+            "src/main/java/com/example/Lookup.java" to """
+                package com.example;
+                public interface Lookup { String find(String key, boolean unused); }
+            """.trimIndent() + "\n",
+            "src/main/java/com/example/DefaultLookup.java" to """
+                package com.example;
+                public class DefaultLookup implements Lookup {
+                    @Override public String find(String value, boolean ignored) { return value; }
+                }
+            """.trimIndent() + "\n",
+            "src/main/java/com/example/Caller.java" to """
+                package com.example;
+                class Caller { String run(Lookup lookup) { return lookup.find("x", true); } }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+
+        val plan = planner.previewRemoveParameter(
+            snap, "com.example.Lookup#find(java.lang.String,boolean)", "unused",
+            includeHierarchy = true, acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        assertTrue(root.resolve("src/main/java/com/example/Lookup.java").readText().contains("find(String key)"))
+        assertTrue(root.resolve("src/main/java/com/example/DefaultLookup.java").readText().contains("find(String value)"))
+        assertTrue(root.resolve("src/main/java/com/example/Caller.java").readText().contains("find(\"x\")"))
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """

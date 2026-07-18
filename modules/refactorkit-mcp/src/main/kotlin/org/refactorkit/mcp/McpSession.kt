@@ -844,6 +844,8 @@ class McpSession(
                 snap,
                 symbol ?: missing("symbol"),
                 opArgs["name"] ?: opArgs["parameterName"] ?: missing("arguments.name"),
+                includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
             )
             "moveClass"    -> JavaMoveClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["targetPackage"] ?: missing("arguments.targetPackage"))
             "moveSourceRoot" -> JavaMoveSourceRootPlanner(adapter).preview(

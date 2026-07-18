@@ -37,18 +37,18 @@ public class ServiceClient {
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "ServiceClient.java")
     @'
 package com.acme;
-public interface Lookup { String find(String key); }
+public interface Lookup { String find(String key, boolean unused); }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "Lookup.java")
     @'
 package com.acme;
 public class DefaultLookup implements Lookup {
-    @Override public String find(String value) { return value; }
+    @Override public String find(String value, boolean ignored) { return value; }
 }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "DefaultLookup.java")
     @'
 package com.acme;
 class HierarchyCaller {
-    String run(Lookup lookup) { return lookup.find("x"); }
+    String run(Lookup lookup) { return lookup.find("x", true); }
 }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "HierarchyCaller.java")
     @'
@@ -119,20 +119,32 @@ export class RealNativeBinding { run(): void {} }
         throw "Packaged JDT parameter type rollback failed: $TypeRollback"
     }
 
-    $HierarchyOutput = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String)' --type int --name limit --default 10 --include-hierarchy --accept-external-consumer-risk --apply $Fixture) -join "`n"
+    $HierarchyOutput = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --type int --name limit --default 10 --include-hierarchy --accept-external-consumer-risk --apply $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw "Packaged JDT hierarchy change failed: $HierarchyOutput" }
     $HierarchyMatch = [regex]::Match($HierarchyOutput, 'transaction-[0-9a-f-]+')
     $LookupContent = Get-Content -Raw (Join-Path $SourceDir "Lookup.java")
     $ImplementationContent = Get-Content -Raw (Join-Path $SourceDir "DefaultLookup.java")
     $HierarchyCallerContent = Get-Content -Raw (Join-Path $SourceDir "HierarchyCaller.java")
-    if (-not $HierarchyMatch.Success -or $LookupContent -notmatch 'find\(String key, int limit\)' -or
-        $ImplementationContent -notmatch 'find\(String value, int limit\)' -or
-        $HierarchyCallerContent -notmatch 'find\("x", 10\)') {
+    if (-not $HierarchyMatch.Success -or $LookupContent -notmatch 'find\(String key, boolean unused, int limit\)'  -or
+        $ImplementationContent -notmatch 'find\(String value, boolean ignored, int limit\)'  -or
+        $HierarchyCallerContent -notmatch 'find\("x", true, 10\)' ) {
         throw "Packaged JDT hierarchy post-image mismatch: $HierarchyOutput"
     }
     $HierarchyRollback = (& $Launcher patch rollback $HierarchyMatch.Value --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
         throw "Packaged JDT hierarchy rollback failed: $HierarchyRollback"
+    }
+
+    $HierarchyRemove = (& $Launcher change-signature --operation remove-parameter --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --name unused --include-hierarchy --accept-external-consumer-risk --apply $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Packaged JDT hierarchy remove failed: $HierarchyRemove" }
+    $HierarchyRemoveMatch = [regex]::Match($HierarchyRemove, 'transaction-[0-9a-f-]+')
+    $HierarchyCallerContent = Get-Content -Raw (Join-Path $SourceDir "HierarchyCaller.java")
+    if (-not $HierarchyRemoveMatch.Success -or $HierarchyCallerContent -notmatch 'find\("x"\)') {
+        throw "Packaged JDT hierarchy remove post-image mismatch: $HierarchyRemove"
+    }
+    $HierarchyRemoveRollback = (& $Launcher patch rollback $HierarchyRemoveMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT hierarchy remove rollback failed: $HierarchyRemoveRollback"
     }
 
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"

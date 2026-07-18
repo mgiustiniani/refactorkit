@@ -15,7 +15,8 @@ review safety boundaries before applying refactorings.
   bounded add/remove/reorder update only bound argument lists and revalidate a
   disposable staged source overlay. Add-parameter can update a complete
   JDT-connected source override/implementer family only with explicit external
-  consumer-risk acceptance. Packaged CLI/daemon/MCP apply and byte-exact
+  consumer-risk acceptance. Remove-parameter can remove one zero-use parameter
+  index across the same complete family and all bound calls. Packaged CLI/daemon/MCP apply and byte-exact
   rollback are covered locally.
 - Expand Kotlin/JVM `organizeImports` to exact package-star directives. Stars are
   preserved unconditionally, sorted with retained explicit imports and never
