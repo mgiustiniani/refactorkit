@@ -404,6 +404,32 @@ def main() -> int:
             "package org.refactorkit.samples; public class PublicAccount { public String label(String value) { return value; } }\n", encoding="utf-8",
         )
         symmetric_before = tree_hash(workspace / "src")
+        signature_args = [
+            "--symbol", "org.refactorkit.samples.PublicAccount#label(java.lang.String)",
+            "--type", "boolean", "--name", "trusted", "--default", "false",
+            "--accept-external-consumer-risk",
+        ]
+        cli_signature_preview = run(
+            cli, workspace, jdk, compiler, classpath, "native-shared-signature-preview",
+            "change-signature", signature_args,
+        )
+        if cli_signature_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != symmetric_before:
+            raise AssertionError(f"shared Java/Kotlin CLI preview failed: {cli_signature_preview}")
+        cli_signature_apply = run(
+            cli, workspace, jdk, compiler, classpath, "native-shared-signature-apply",
+            "change-signature", signature_args + ["--apply"],
+        )
+        if (cli_signature_apply.get("status") != "applied" or
+                "label(String value, boolean trusted)" not in java_type.read_text(encoding="utf-8") or
+                "account.label(\"x\", false)" not in greeting_source.read_text(encoding="utf-8")):
+            raise AssertionError(f"shared Java/Kotlin CLI apply failed: {cli_signature_apply}")
+        rollback = subprocess.run(
+            command_for(cli, ["patch", "rollback", cli_signature_apply["transactionId"], "--root", str(workspace)]),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60,
+        )
+        if rollback.returncode != 0 or tree_hash(workspace / "src") != symmetric_before:
+            raise AssertionError(f"shared Java/Kotlin CLI rollback failed: {rollback.stdout} {rollback.stderr}")
+
         process = subprocess.Popen(
             command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, encoding="utf-8",
@@ -502,6 +528,33 @@ def main() -> int:
             })
             if java_method_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != java_method_before:
                 raise AssertionError(f"public Java-method rollback failed: {java_method_rollback}")
+            signature_started = java_method_exchange(46, "kotlin.semantic.start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            signature_index = java_method_exchange(47, "index.status")
+            signature_preview = java_method_exchange(48, "refactor.preview", {
+                "operation": "changeSignature.addParameter",
+                "symbol": "org.refactorkit.samples.PublicAccount#label(java.lang.String)",
+                "semanticLease": signature_started["semanticLease"],
+                "expectedSnapshotHash": signature_started["snapshotHash"],
+                "expectedIndexGeneration": signature_index["generation"],
+                "arguments": {"type": "boolean", "name": "trusted", "default": "false",
+                              "includeKotlinCallers": True, "acceptExternalConsumerRisk": True},
+            })
+            if signature_preview.get("status") != "PREVIEW" or tree_hash(workspace / "src") != java_method_before:
+                raise AssertionError(f"shared Java/Kotlin signature preview is invalid: {signature_preview}")
+            signature_applied = java_method_exchange(49, "refactor.apply", {
+                "planId": signature_preview["planId"], "semanticLease": signature_started["semanticLease"],
+                "expectedIndexGeneration": signature_index["generation"],
+            })
+            if (signature_applied.get("status") != "applied" or
+                    "label(String value, boolean trusted)" not in java_type.read_text(encoding="utf-8") or
+                    "account.label(\"x\", false)" not in greeting_source.read_text(encoding="utf-8")):
+                raise AssertionError(f"shared Java/Kotlin signature apply failed: {signature_applied}")
+            signature_rollback = java_method_exchange(50, "patch.rollback", {"transactionId": signature_applied["transactionId"]})
+            if signature_rollback.get("status") != "rolledBack" or tree_hash(workspace / "src") != java_method_before:
+                raise AssertionError(f"shared Java/Kotlin signature rollback failed: {signature_rollback}")
         finally:
             process.terminate()
             try:
@@ -509,6 +562,53 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=20)
+
+        process = subprocess.Popen(
+            command_for(mcp, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        )
+        try:
+            def signature_mcp_tool(request_id: int, name: str, arguments: dict) -> str:
+                request = {"jsonrpc": "2.0", "id": request_id, "method": "tools/call",
+                           "params": {"name": name, "arguments": arguments}}
+                process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                if response.get("error") is not None:
+                    raise AssertionError(f"signature MCP {name} failed: {response}")
+                return response["result"]["content"][0]["text"]
+
+            signature_mcp_tool(50, "project_scan", {"root": str(workspace)})
+            signature_started = signature_mcp_tool(51, "kotlin_semantic_start", {
+                "jdkHome": str(jdk), "compilerJar": str(compiler),
+                "compilerClasspath": [str(item) for item in classpath],
+            })
+            signature_lease = signature_started.split("Semantic lease: ", 1)[1].split(". Snapshot:", 1)[0]
+            signature_snapshot = signature_started.split(". Snapshot: ", 1)[1].split(".", 1)[0]
+            signature_preview = signature_mcp_tool(52, "preview_refactoring", {
+                "operation": "changeSignature.addParameter",
+                "symbol": "org.refactorkit.samples.PublicAccount#label(java.lang.String)",
+                "semanticLease": signature_lease, "expectedSnapshotHash": signature_snapshot,
+                "arguments": {"type": "boolean", "name": "trusted", "default": "false",
+                              "includeKotlinCallers": True, "acceptExternalConsumerRisk": True},
+            })
+            signature_plan = signature_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+            if "Status   : PREVIEW" not in signature_preview or tree_hash(workspace / "src") != java_method_before:
+                raise AssertionError(f"shared signature MCP preview invalid: {signature_preview}")
+            signature_applied = signature_mcp_tool(53, "apply_refactoring", {"planId": signature_plan, "semanticLease": signature_lease})
+            signature_transaction = signature_applied.split("Transaction ID: ", 1)[1].splitlines()[0]
+            if ("label(String value, boolean trusted)" not in java_type.read_text(encoding="utf-8") or
+                    "account.label(\"x\", false)" not in greeting_source.read_text(encoding="utf-8")):
+                raise AssertionError(f"shared signature MCP apply invalid: {signature_applied}")
+            signature_rollback = signature_mcp_tool(54, "rollback_refactoring", {"transactionId": signature_transaction})
+            if "Rolled back" not in signature_rollback or tree_hash(workspace / "src") != java_method_before:
+                raise AssertionError(f"shared signature MCP rollback invalid: {signature_rollback}")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                process.kill(); process.wait(timeout=20)
 
         greeting_source.write_bytes(greeting_original_bytes)
         move_type = workspace / "src/main/kotlin/org/refactorkit/move/api/PortableGreeting.kt"
@@ -843,7 +943,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public type/member rename, and public Kotlin package move apply/rollback.")
+    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public type/member rename, shared Java/Kotlin add-parameter, and public Kotlin package move apply/rollback.")
     return 0
 
 
