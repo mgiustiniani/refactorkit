@@ -238,6 +238,8 @@ private object JavaModuleBuildModelProjector {
         listOf(
             "java.sourceLevel.status",
             "java.sourceLevelEvidence",
+            "java.release",
+            "java.platformSelection",
             "kotlin.platform",
             "kotlin.jvmTarget",
             "kotlin.targetJdk",

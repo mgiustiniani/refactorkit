@@ -67,6 +67,77 @@ class JdtJavaSemanticAnalyzer {
         snapshot: ProjectSnapshot,
         cancellation: SemanticCancellationToken,
         additionalClasspathEntries: List<Path>,
+    ): JdtJavaSemanticAnalysisResult = analyzeInternal(snapshot, cancellation, additionalClasspathEntries, emptyMap(), emptyMap())
+
+    fun analyzeAuthoritatively(
+        snapshot: ProjectSnapshot,
+        platformAuthorities: Map<Int, JavaReleasePlatformAuthority>,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): JdtAuthoritativeJavaAnalysisResolution {
+        val requiredReleases = snapshot.files.filter { it.languageId == "java" }.map { file ->
+            val owner = findBuildOwner(snapshot, file.path)
+                ?: return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                    "java.diagnostics.sourceSetUnavailable",
+                    "Java source has no unique authoritative build source-set owner",
+                )
+            owner.second.sourceSets.filter { sourceSet ->
+                sourceSet.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) }
+            }.maxByOrNull { sourceSet -> sourceSet.sourceRoots.maxOfOrNull(Path::getNameCount) ?: 0 }
+                ?.attributes?.get("java.release")?.toIntOrNull()
+                ?: return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                    "java.platform.explicitJdkRequired",
+                    "Java source set has no effective Maven --release; an explicit qualified JDK platform is required",
+                )
+        }.toSet()
+        val rebound = requiredReleases.associateWith { release ->
+            val configured = platformAuthorities[release]
+                ?: return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                    "java.platform.authorityUnavailable",
+                    "No Java $release platform authority was configured",
+                )
+            val current = JavaReleasePlatformAuthorityResolver().resolve(configured.platformHome, release)
+            val authority = (current as? JavaReleasePlatformResolution.Available)?.authority
+                ?: return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                    (current as JavaReleasePlatformResolution.Refused).code,
+                    current.message,
+                )
+            if (authority.identitySha256 != configured.identitySha256) return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                "java.platform.evidenceDrift",
+                "Java $release platform evidence changed after configuration",
+            )
+            authority
+        }
+        val projections = try {
+            rebound.mapValues { JavaReleasePlatformClasspath.materialize(it.value) }
+        } catch (failure: Exception) {
+            return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                "java.platform.classpathProjectionFailed",
+                "Attested Java platform signatures could not be projected within safety limits: ${failure.message}",
+            )
+        }
+        val result = try {
+            analyzeInternal(snapshot, cancellation, emptyList(), rebound, projections.mapValues { it.value.path })
+        } finally {
+            projections.values.forEach(JavaReleasePlatformClasspath::close)
+        }
+        rebound.forEach { (release, configured) ->
+            val after = JavaReleasePlatformAuthorityResolver().resolve(configured.platformHome, release)
+            if ((after as? JavaReleasePlatformResolution.Available)?.authority?.identitySha256 != configured.identitySha256) {
+                return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                    "java.platform.evidenceDrift",
+                    "Java $release platform evidence changed during analysis",
+                )
+            }
+        }
+        return JdtAuthoritativeJavaAnalysisResolution.Available(result, rebound.mapValues { it.value.identitySha256 })
+    }
+
+    private fun analyzeInternal(
+        snapshot: ProjectSnapshot,
+        cancellation: SemanticCancellationToken,
+        additionalClasspathEntries: List<Path>,
+        platformAuthorities: Map<Int, JavaReleasePlatformAuthority>,
+        platformClasspaths: Map<Int, Path>,
     ): JdtJavaSemanticAnalysisResult {
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
@@ -113,7 +184,10 @@ class JdtJavaSemanticAnalyzer {
                 val sourceLevel = buildEnvironment?.sourceLevel
                     ?: owner?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()?.coerceIn(8, 25)
                     ?: 25
-                analyzeFileWithReferences(file, sourceRoots, classpathEntries, sourceLevel)
+                analyzeFileWithReferences(
+                    file, sourceRoots, classpathEntries, sourceLevel,
+                    platformAuthorities[sourceLevel], platformClasspaths[sourceLevel],
+                )
             }
         if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
         val symbols = fileAnalyses.flatMap { it.symbols }
@@ -254,16 +328,18 @@ class JdtJavaSemanticAnalyzer {
     }
 
     fun analyzeFile(file: SourceFile, sourceLevel: Int = 25): List<JdtJavaSemanticSymbol> =
-        analyzeFileWithReferences(file, emptyArray(), emptyArray(), sourceLevel.coerceIn(8, 25)).symbols
+        analyzeFileWithReferences(file, emptyArray(), emptyArray(), sourceLevel.coerceIn(8, 25), null, null).symbols
 
     private fun analyzeFileWithReferences(
         file: SourceFile,
         sourceRoots: Array<String>,
         classpathEntries: Array<String>,
         sourceLevel: Int,
+        platformAuthority: JavaReleasePlatformAuthority?,
+        platformClasspath: Path?,
     ): FileAnalysis {
         if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
-        val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel)
+        val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel, platformAuthority, platformClasspath)
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
         val rawReferences = mutableListOf<RawReference>()
@@ -831,6 +907,8 @@ class JdtJavaSemanticAnalyzer {
         sourceRoots: Array<String>,
         classpathEntries: Array<String>,
         sourceLevel: Int,
+        platformAuthority: JavaReleasePlatformAuthority?,
+        platformClasspath: Path?,
     ): CompilationUnit {
         val parser = ASTParser.newParser(AST.JLS25)
         parser.setKind(ASTParser.K_COMPILATION_UNIT)
@@ -842,9 +920,15 @@ class JdtJavaSemanticAnalyzer {
         }
         parser.setUnitName(unitName)
         val compliance = if (sourceLevel == 8) JavaCore.VERSION_1_8 else sourceLevel.toString()
-        parser.setCompilerOptions(JavaCore.getOptions().also { JavaCore.setComplianceOptions(compliance, it) })
-        if (sourceRoots.isNotEmpty() || classpathEntries.isNotEmpty()) {
-            parser.setEnvironment(classpathEntries, sourceRoots, null, true)
+        parser.setCompilerOptions(JavaCore.getOptions().also { options ->
+            JavaCore.setComplianceOptions(compliance, options)
+            if (platformAuthority != null) options[JavaCore.COMPILER_RELEASE] = JavaCore.ENABLED
+        })
+        val effectiveClasspath = if (platformAuthority == null) classpathEntries else {
+            arrayOf(requireNotNull(platformClasspath).toString()) + classpathEntries
+        }
+        if (sourceRoots.isNotEmpty() || effectiveClasspath.isNotEmpty()) {
+            parser.setEnvironment(effectiveClasspath, sourceRoots, null, platformAuthority == null)
         }
         parser.setResolveBindings(true)
         parser.setBindingsRecovery(true)
@@ -1009,6 +1093,15 @@ class JdtJavaSemanticAnalyzer {
         val symbolQualifiedName: String?,
         val isImport: Boolean,
     )
+}
+
+sealed interface JdtAuthoritativeJavaAnalysisResolution {
+    data class Available(
+        val analysis: JdtJavaSemanticAnalysisResult,
+        val platformIdentitiesByRelease: Map<Int, String>,
+    ) : JdtAuthoritativeJavaAnalysisResolution
+
+    data class Refused(val code: String, val message: String) : JdtAuthoritativeJavaAnalysisResolution
 }
 
 data class JdtJavaSemanticAnalysisResult(

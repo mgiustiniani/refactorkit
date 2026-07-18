@@ -130,6 +130,8 @@ class JavaProjectScanner(
                     maven.modelFailure?.let { put("java.buildModel.message", it) }
                     put("java.sourceLevel.status", if (maven.sourceLevel == null) "unavailable" else "available")
                     if (maven.sourceLevel == null) put("java.sourceLevel.message", "Effective Maven source level could not be resolved")
+                    maven.releaseLevel?.let { put("java.release", it.toString()) }
+                    put("java.platformSelection", if (maven.releaseLevel == null) "explicit-jdk-required" else "maven-release")
                     put("kotlin.platform", if (maven.kotlinPluginConfigured) "jvm" else "unconfigured")
                     maven.kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
                     maven.kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }

@@ -34,6 +34,7 @@ internal data class MavenModuleModel(
     val coordinate: MavenCoordinate,
     val packaging: String,
     val sourceLevel: Int?,
+    val releaseLevel: Int?,
     val mainSourceDirectories: List<Path>,
     val testSourceDirectories: List<Path>,
     val mainDependencies: List<MavenCoordinate>,
@@ -96,6 +97,7 @@ internal class MavenEffectiveReactorBuilder(
                     coordinate = fallback,
                     packaging = "jar",
                     sourceLevel = null,
+                    releaseLevel = null,
                     mainSourceDirectories = emptyList(),
                     testSourceDirectories = emptyList(),
                     mainDependencies = emptyList(),
@@ -147,6 +149,7 @@ internal class MavenEffectiveReactorBuilder(
             coordinate = requireNotNull(model.coordinate()),
             packaging = model.packaging?.takeIf(String::isNotBlank) ?: "jar",
             sourceLevel = sourceLevel(model),
+            releaseLevel = releaseLevel(model),
             mainSourceDirectories = sourceDirectories.main,
             testSourceDirectories = sourceDirectories.test,
             mainDependencies = mainRepositoryDirect.filter(::isReactorSourceDependency)
@@ -389,6 +392,13 @@ internal class MavenEffectiveReactorBuilder(
         setProperty("java.vendor", System.getProperty("java.vendor"))
         setProperty("file.separator", System.getProperty("file.separator"))
     }
+
+    private fun releaseLevel(model: Model): Int? = listOf(
+        model.properties.getProperty("maven.compiler.release"),
+        model.build?.plugins?.firstOrNull { it.artifactId == "maven-compiler-plugin" }
+            ?.configuration?.let { it as? org.codehaus.plexus.util.xml.Xpp3Dom }?.getChild("release")?.value,
+    ).filterNotNull().map(String::trim).filter(String::isNotBlank)
+        .firstNotNullOfOrNull { it.removePrefix("1.").toIntOrNull()?.takeIf { level -> level in 8..25 } }
 
     private fun sourceLevel(model: Model): Int? {
         val values = listOf(

@@ -9,9 +9,65 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class JdtJavaSemanticAnalyzerTest {
+
+    @Test
+    fun authoritativeMavenReleaseUsesAttestedReleasePlatformInsteadOfHostApis() {
+        val root = Files.createTempDirectory("refactorkit-jdt-release-8")
+        val source = root.resolve("src/main/java/example/ReleaseApi.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package example; class ReleaseApi { java.util.List<String> values = java.util.List.of(); }\n")
+        Files.writeString(
+            root.resolve("pom.xml"),
+            "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId><artifactId>release-api</artifactId>" +
+                "<version>1</version><properties><maven.compiler.release>8</maven.compiler.release></properties></project>",
+        )
+        val snapshot = JavaProjectScanner().scan(root)
+        val sourceSet = snapshot.buildModels.single { it.providerId == "maven-effective-v1" }
+            .modules.single().sourceSets.single { it.id == "main" }
+        assertEquals("8", sourceSet.attributes["java.release"])
+        assertEquals("maven-release", sourceSet.attributes["java.platformSelection"])
+        val platform = assertIs<JavaReleasePlatformResolution.Available>(
+            JavaReleasePlatformAuthorityResolver().resolve(Paths.get(System.getProperty("java.home")), 8),
+        ).authority
+
+        val resolved = assertIs<JdtAuthoritativeJavaAnalysisResolution.Available>(
+            JdtJavaSemanticAnalyzer().analyzeAuthoritatively(snapshot, mapOf(8 to platform)),
+        )
+
+        assertEquals(platform.identitySha256, resolved.platformIdentitiesByRelease[8])
+        assertTrue(resolved.analysis.warnings.any {
+            it.path.toString().endsWith("ReleaseApi.java") && it.message.contains("of") && it.message.contains("undefined")
+        }, resolved.analysis.warnings.toString())
+        assertTrue(resolved.analysis.warnings.none { it.message.contains("java.lang.Object") }, resolved.analysis.warnings.toString())
+    }
+
+    @Test
+    fun authoritativeAnalysisRefusesSourceLevelWithoutReleasePlatformSelection() {
+        val root = Files.createTempDirectory("refactorkit-jdt-source-only")
+        val source = root.resolve("src/main/java/example/SourceOnly.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package example; class SourceOnly {}\n")
+        Files.writeString(
+            root.resolve("pom.xml"),
+            "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId><artifactId>source-only</artifactId>" +
+                "<version>1</version><properties><maven.compiler.source>8</maven.compiler.source></properties></project>",
+        )
+        val snapshot = JavaProjectScanner().scan(root)
+        val sourceSet = snapshot.buildModels.single { it.providerId == "maven-effective-v1" }
+            .modules.single().sourceSets.single { it.id == "main" }
+        assertEquals(null, sourceSet.attributes["java.release"])
+        assertEquals("explicit-jdk-required", sourceSet.attributes["java.platformSelection"])
+
+        val refused = assertIs<JdtAuthoritativeJavaAnalysisResolution.Refused>(
+            JdtJavaSemanticAnalyzer().analyzeAuthoritatively(snapshot, emptyMap()),
+        )
+
+        assertEquals("java.platform.explicitJdkRequired", refused.code)
+    }
 
     @Test
     fun parsesRepresentativeJava8Through25LanguageConstructsAtDetectedCompliance() {
