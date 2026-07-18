@@ -16,8 +16,12 @@ review safety boundaries before applying refactorings.
   disposable staged source overlay. Add-parameter can update a complete
   JDT-connected source override/implementer family only with explicit external
   consumer-risk acceptance. Remove-parameter can remove one zero-use parameter
-  index across the same complete family and all bound calls. Packaged CLI/daemon/MCP apply and byte-exact
-  rollback are covered locally.
+  index across the same complete family and all bound calls. The qualified
+  catalogue also covers hierarchy reorder/type change, private and explicit-risk
+  public constructors, bounded generics/varargs/annotations, exact overload and
+  lambda callers, opt-in static/constructor-reference migration, and shared
+  Java/Kotlin add-parameter through ECJ/K2/JDT evidence. Packaged CLI/daemon/MCP
+  apply and byte-exact rollback pass on all four native platforms.
 - Expand Kotlin/JVM `organizeImports` to exact package-star directives. Stars are
   preserved unconditionally, sorted with retained explicit imports and never
   assigned unsupported unused-import authority.

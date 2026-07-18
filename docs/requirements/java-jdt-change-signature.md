@@ -146,5 +146,6 @@ and partial call shapes refuse without edits.
 
 ## Remaining J1 signature catalogue
 
-The bounded Java change-signature catalogue has no unqualified implementation
-row; packaged transports and four-platform qualification remain release gates.
+The bounded Java change-signature catalogue has no unqualified implementation or
+promotion row. Library, CLI, daemon, MCP, WAL/rollback, and four-platform native
+acceptance are complete. Broader shapes require new requirement-first rows.
