@@ -60,6 +60,14 @@ class HierarchyCaller {
     String run(Lookup lookup) { return lookup.find("x", true); }
 }
 JAVA
+cat >"$fixture/src/main/java/com/acme/Token.java" <<'JAVA'
+package com.acme;
+final class Token {
+    private Token(String value) { value.toString(); }
+    private Token() { this("default"); }
+    static Token create() { return new Token("x"); }
+}
+JAVA
 cat >"$fixture/structural.ts" <<'TS'
 // class FakeNativeBinding {}
 export interface NativeService { run(): void }
@@ -191,6 +199,18 @@ fi
 env -u JAVA_HOME "$launcher" patch rollback "$hierarchy_type_transaction" --root "$fixture" >/dev/null
 if [[ "$before" != "$(source_hashes)" ]]; then
   echo "Packaged JDT hierarchy type rollback did not restore Java sources" >&2
+  exit 1
+fi
+
+constructor_add="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.Token#<init>(java.lang.String)' --type boolean --name trusted --default false --apply "$fixture")"
+constructor_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$constructor_add" | tail -1)"
+if [[ -z "$constructor_transaction" ]] || ! grep -Fq 'Token(String value, boolean trusted)' "$fixture/src/main/java/com/acme/Token.java" || ! grep -Fq 'this("default", false)' "$fixture/src/main/java/com/acme/Token.java" || ! grep -Fq 'new Token("x", false)' "$fixture/src/main/java/com/acme/Token.java"; then
+  echo "Packaged JDT constructor add failed: $constructor_add" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$constructor_transaction" --root "$fixture" >/dev/null
+if [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT constructor rollback did not restore Java sources" >&2
   exit 1
 fi
 

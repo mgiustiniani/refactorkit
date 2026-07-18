@@ -52,6 +52,14 @@ class HierarchyCaller {
 }
 '@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "HierarchyCaller.java")
     @'
+package com.acme;
+final class Token {
+    private Token(String value) { value.toString(); }
+    private Token() { this("default"); }
+    static Token create() { return new Token("x"); }
+}
+'@ | Set-Content -NoNewline -Encoding utf8 (Join-Path $SourceDir "Token.java")
+    @'
 // class FakeNativeBinding {}
 export interface NativeService { run(): void }
 export class RealNativeBinding { run(): void {} }
@@ -171,6 +179,18 @@ export class RealNativeBinding { run(): void {} }
     $HierarchyTypeRollback = (& $Launcher patch rollback $HierarchyTypeMatch.Value --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
         throw "Packaged JDT hierarchy type rollback failed: $HierarchyTypeRollback"
+    }
+
+    $ConstructorAdd = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.Token#<init>(java.lang.String)' --type boolean --name trusted --default false --apply $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Packaged JDT constructor add failed: $ConstructorAdd" }
+    $ConstructorMatch = [regex]::Match($ConstructorAdd, 'transaction-[0-9a-f-]+')
+    $TokenContent = Get-Content -Raw (Join-Path $SourceDir "Token.java")
+    if (-not $ConstructorMatch.Success -or $TokenContent -notmatch 'Token\(String value, boolean trusted\)' -or $TokenContent -notmatch 'this\("default", false\)' -or $TokenContent -notmatch 'new Token\("x", false\)') {
+        throw "Packaged JDT constructor post-image mismatch: $ConstructorAdd"
+    }
+    $ConstructorRollback = (& $Launcher patch rollback $ConstructorMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT constructor rollback failed: $ConstructorRollback"
     }
 
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"
