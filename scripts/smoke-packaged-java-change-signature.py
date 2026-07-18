@@ -215,6 +215,25 @@ def main() -> int:
             })
             if source_hash(root) != before:
                 raise AssertionError("MCP hierarchy remove rollback did not restore exact bytes")
+            reorder_preview = exchange(process, 56, "tools/call", {
+                "name": "preview_refactoring", "arguments": {
+                    "operation": "changeSignature.reorderParameters",
+                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
+                    "arguments": {"order": "unused,key", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
+                },
+            })["content"][0]["text"]
+            reorder_plan = reorder_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+            reorder_apply = exchange(process, 57, "tools/call", {
+                "name": "apply_refactoring", "arguments": {"planId": reorder_plan},
+            })["content"][0]["text"]
+            reorder_transaction = reorder_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
+            assert_contains(implementation, ["find(boolean ignored, String value)"])
+            assert_contains(hierarchy_caller, ["find(true, \"a\")", "find(false, \"b\")"])
+            exchange(process, 58, "tools/call", {
+                "name": "rollback_refactoring", "arguments": {"transactionId": reorder_transaction},
+            })
+            if source_hash(root) != before:
+                raise AssertionError("MCP hierarchy reorder rollback did not restore exact bytes")
         finally:
             stop(process)
 
@@ -290,10 +309,21 @@ def main() -> int:
             exchange(process, 65, "patch.rollback", {"transactionId": remove_apply["transactionId"]})
             if source_hash(root) != before:
                 raise AssertionError("daemon hierarchy remove rollback did not restore exact bytes")
+            reorder_preview = exchange(process, 66, "refactor.preview", {
+                "operation": "changeSignature.reorderParameters",
+                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
+                "arguments": {"order": "unused,key", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
+            })
+            reorder_apply = exchange(process, 67, "refactor.apply", {"planId": reorder_preview["planId"]})
+            assert_contains(implementation, ["find(boolean ignored, String value)"])
+            assert_contains(hierarchy_caller, ["find(true, \"a\")", "find(false, \"b\")"])
+            exchange(process, 68, "patch.rollback", {"transactionId": reorder_apply["transactionId"]})
+            if source_hash(root) != before:
+                raise AssertionError("daemon hierarchy reorder rollback did not restore exact bytes")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy add/remove restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy add/remove/reorder restored exact bytes.")
     return 0
 
 

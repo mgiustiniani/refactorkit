@@ -170,6 +170,18 @@ if [[ "$before" != "$(source_hashes)" ]]; then
   exit 1
 fi
 
+hierarchy_reorder="$(env -u JAVA_HOME "$launcher" change-signature --operation reorder-parameters --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --order unused,key --include-hierarchy --accept-external-consumer-risk --apply "$fixture")"
+hierarchy_reorder_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$hierarchy_reorder" | tail -1)"
+if [[ -z "$hierarchy_reorder_transaction" ]] || ! grep -Fq 'find(true, "x")' "$fixture/src/main/java/com/acme/HierarchyCaller.java" || ! grep -Fq 'find(boolean ignored, String value)' "$fixture/src/main/java/com/acme/DefaultLookup.java"; then
+  echo "Packaged JDT hierarchy reorder failed: $hierarchy_reorder" >&2
+  exit 1
+fi
+env -u JAVA_HOME "$launcher" patch rollback "$hierarchy_reorder_transaction" --root "$fixture" >/dev/null
+if [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged JDT hierarchy reorder rollback did not restore Java sources" >&2
+  exit 1
+fi
+
 format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
 transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"
 if [[ -z "$transaction_id" ]] || ! grep -Fq 'String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then

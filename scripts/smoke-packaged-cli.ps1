@@ -147,6 +147,19 @@ export class RealNativeBinding { run(): void {} }
         throw "Packaged JDT hierarchy remove rollback failed: $HierarchyRemoveRollback"
     }
 
+    $HierarchyReorder = (& $Launcher change-signature --operation reorder-parameters --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --order unused,key --include-hierarchy --accept-external-consumer-risk --apply $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Packaged JDT hierarchy reorder failed: $HierarchyReorder" }
+    $HierarchyReorderMatch = [regex]::Match($HierarchyReorder, 'transaction-[0-9a-f-]+')
+    $HierarchyCallerContent = Get-Content -Raw (Join-Path $SourceDir "HierarchyCaller.java")
+    $ImplementationContent = Get-Content -Raw (Join-Path $SourceDir "DefaultLookup.java")
+    if (-not $HierarchyReorderMatch.Success -or $HierarchyCallerContent -notmatch 'find\(true, "x"\)' -or $ImplementationContent -notmatch 'find\(boolean ignored, String value\)') {
+        throw "Packaged JDT hierarchy reorder post-image mismatch: $HierarchyReorder"
+    }
+    $HierarchyReorderRollback = (& $Launcher patch rollback $HierarchyReorderMatch.Value --root $Fixture) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged JDT hierarchy reorder rollback failed: $HierarchyReorderRollback"
+    }
+
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw "Managed format smoke failed: $FormatOutput" }
     $Match = [regex]::Match($FormatOutput, 'transaction-[0-9a-f-]+')
