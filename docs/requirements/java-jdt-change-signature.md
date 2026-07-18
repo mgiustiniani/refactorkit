@@ -3,9 +3,8 @@
 Status: active J1 expansion. Exact rename/add/remove/reorder have packaged
 CLI/daemon/MCP preview/apply/rollback acceptance on all four native platforms.
 The bounded JDT parameter-type-change row also has packaged CLI/daemon/MCP
-acceptance on all four native platforms. A bounded whole-source override/implementer add-parameter family has local
-library and packaged CLI/daemon/MCP acceptance; four-platform qualification is
-pending.
+acceptance on all four native platforms. A bounded whole-source override/implementer add-parameter family has library and
+packaged CLI/daemon/MCP acceptance on all four native platforms.
 
 ## Purpose
 
