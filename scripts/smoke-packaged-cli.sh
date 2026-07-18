@@ -246,6 +246,17 @@ for shape in \
   fi
 done
 
+cat >"$fixture/src/main/java/com/acme/Use.kt" <<'KOTLIN'
+package com.acme
+fun use(value: Lookup) = value.find("x", true)
+KOTLIN
+mixed_refusal="$(env -u JAVA_HOME "$launcher" change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --type int --name rank --default 0 --include-hierarchy --accept-external-consumer-risk "$fixture" || true)"
+rm "$fixture/src/main/java/com/acme/Use.kt"
+if ! grep -Fq 'Status: REFUSED' <<<"$mixed_refusal" || ! grep -Fq 'Kotlin' <<<"$mixed_refusal" || [[ "$before" != "$(source_hashes)" ]]; then
+  echo "Packaged mixed-JVM signature refusal failed: $mixed_refusal" >&2
+  exit 1
+fi
+
 format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
 transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"
 if [[ -z "$transaction_id" ]] || ! grep -Fq 'String find(String key) {' "$fixture/src/main/java/com/acme/Service.java"; then

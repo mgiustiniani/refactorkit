@@ -181,6 +181,14 @@ export class RealNativeBinding { run(): void {} }
         throw "Packaged JDT hierarchy type rollback failed: $HierarchyTypeRollback"
     }
 
+    $KotlinCaller = Join-Path $SourceDir "Use.kt"
+    "package com.acme`nfun use(value: Lookup) = value.find(`"x`", true)`n" | Set-Content -NoNewline -Encoding utf8 $KotlinCaller
+    $MixedRefusal = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.Lookup#find(java.lang.String,boolean)' --type int --name rank --default 0 --include-hierarchy --accept-external-consumer-risk $Fixture) -join "`n"
+    Remove-Item -Force $KotlinCaller
+    if ($MixedRefusal -notmatch 'Status: REFUSED' -or $MixedRefusal -notmatch 'Kotlin' -or $Before -ne ((Get-SourceHashes) -join "`n")) {
+        throw "Packaged mixed-JVM signature refusal failed: $MixedRefusal"
+    }
+
     $FormatOutput = (& $Launcher format-file src/main/java/com/acme/Service.java --apply --root $Fixture) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw "Managed format smoke failed: $FormatOutput" }
     $Match = [regex]::Match($FormatOutput, 'transaction-[0-9a-f-]+')
