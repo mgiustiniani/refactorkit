@@ -202,7 +202,7 @@ final class References {
     $ReferenceMigration = (& $Launcher change-signature --operation add-parameter --symbol 'com.acme.References#map(java.lang.String)' --type int --name rank --default 0 --migrate-functional-references --apply $Fixture) -join "`n"
     $ReferenceMatch = [regex]::Match($ReferenceMigration, 'transaction-[0-9a-f-]+')
     $ReferenceContent = Get-Content -Raw $ReferenceSource
-    if ($LASTEXITCODE -ne 0 -or -not $ReferenceMatch.Success -or $ReferenceContent -notmatch '\(arg0\) -> References\.find\(arg0, 0\)') {
+    if ($LASTEXITCODE -ne 0 -or -not $ReferenceMatch.Success -or $ReferenceContent -notmatch '\(arg0\) -> References\.map\(arg0, 0\)') {
         throw "Packaged method-reference migration failed: $ReferenceMigration"
     }
     $ReferenceRollback = (& $Launcher patch rollback $ReferenceMatch.Value --root $Fixture) -join "`n"
