@@ -68,6 +68,15 @@ final class Token {
     static Token create() { return new Token("x"); }
 }
 JAVA
+cat >"$fixture/src/main/java/com/acme/SignatureShapes.java" <<'JAVA'
+package com.acme;
+final class SignatureShapes {
+    private static <T> T select(T value, int unused) { return value; }
+    private static String join(String prefix, int count, String... parts) { return prefix; }
+    private static String annotated(@Deprecated String value, int rank) { return value; }
+    static String run() { return select("x", 1) + join("a", 2, "b") + annotated("c", 3); }
+}
+JAVA
 cat >"$fixture/structural.ts" <<'TS'
 // class FakeNativeBinding {}
 export interface NativeService { run(): void }
@@ -213,6 +222,24 @@ if [[ "$before" != "$(source_hashes)" ]]; then
   echo "Packaged JDT constructor rollback did not restore Java sources" >&2
   exit 1
 fi
+
+for shape in \
+  "remove-parameter|com.acme.SignatureShapes#select|--name unused|select(\"x\")" \
+  "reorder-parameters|com.acme.SignatureShapes#join(java.lang.String,int,java.lang.String[])|--order count,prefix,parts|join(2, \"a\", \"b\")" \
+  "reorder-parameters|com.acme.SignatureShapes#annotated(java.lang.String,int)|--order rank,value|annotated(3, \"c\")"; do
+  IFS='|' read -r operation symbol arguments expected <<<"$shape"
+  shape_output="$(env -u JAVA_HOME "$launcher" change-signature --operation "$operation" --symbol "$symbol" $arguments --apply "$fixture")"
+  shape_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$shape_output" | tail -1)"
+  if [[ -z "$shape_transaction" ]] || ! grep -Fq "$expected" "$fixture/src/main/java/com/acme/SignatureShapes.java"; then
+    echo "Packaged JDT signature shape failed: $shape_output" >&2
+    exit 1
+  fi
+  env -u JAVA_HOME "$launcher" patch rollback "$shape_transaction" --root "$fixture" >/dev/null
+  if [[ "$before" != "$(source_hashes)" ]]; then
+    echo "Packaged JDT signature shape rollback did not restore Java sources" >&2
+    exit 1
+  fi
+done
 
 format_output="$(env -u JAVA_HOME "$launcher" format-file src/main/java/com/acme/Service.java --apply --root "$fixture")"
 transaction_id="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$format_output" | tail -1)"

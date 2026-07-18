@@ -99,6 +99,7 @@ def main() -> int:
         implementation = root / "src/main/java/com/acme/DefaultLookup.java"
         hierarchy_caller = root / "src/main/java/com/acme/HierarchyCaller.java"
         token = root / "src/main/java/com/acme/Token.java"
+        shapes = root / "src/main/java/com/acme/SignatureShapes.java"
         lookup.write_bytes(b"package com.acme; public interface Lookup { String find(String key, boolean unused); }\n")
         implementation.write_bytes(
             b"package com.acme; public class DefaultLookup implements Lookup { "
@@ -114,6 +115,13 @@ def main() -> int:
             b"private Token(String value) { value.toString(); } "
             b"private Token() { this(\"default\"); } "
             b"static Token create() { return new Token(\"x\"); } }\n"
+        )
+        shapes.write_bytes(
+            b"package com.acme; final class SignatureShapes { "
+            b"private static <T> T select(T value, int unused) { return value; } "
+            b"private static String join(String prefix, int count, String... parts) { return prefix; } "
+            b"private static String annotated(@Deprecated String value, int rank) { return value; } "
+            b"static String run() { return select(\"x\", 1) + join(\"a\", 2, \"b\") + annotated(\"c\", 3); } }\n"
         )
         before = source_hash(root)
         symbol = "com.acme.Service#find(java.lang.String,boolean)"
@@ -278,6 +286,24 @@ def main() -> int:
             })
             if source_hash(root) != before:
                 raise AssertionError("MCP constructor rollback did not restore exact bytes")
+            for request_id, operation, shape_symbol, arguments, expected in [
+                (65, "changeSignature.removeParameter", "com.acme.SignatureShapes#select", {"name": "unused"}, "select(\"x\")"),
+                (68, "changeSignature.reorderParameters", "com.acme.SignatureShapes#annotated(java.lang.String,int)", {"order": "rank,value"}, "annotated(3, \"c\")"),
+            ]:
+                shape_preview = exchange(process, request_id, "tools/call", {
+                    "name": "preview_refactoring", "arguments": {"operation": operation, "symbol": shape_symbol, "arguments": arguments},
+                })["content"][0]["text"]
+                shape_plan = shape_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
+                shape_apply = exchange(process, request_id + 1, "tools/call", {
+                    "name": "apply_refactoring", "arguments": {"planId": shape_plan},
+                })["content"][0]["text"]
+                shape_transaction = shape_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
+                assert_contains(shapes, [expected])
+                exchange(process, request_id + 2, "tools/call", {
+                    "name": "rollback_refactoring", "arguments": {"transactionId": shape_transaction},
+                })
+                if source_hash(root) != before:
+                    raise AssertionError("MCP bounded signature shape rollback did not restore exact bytes")
         finally:
             stop(process)
 
@@ -385,10 +411,20 @@ def main() -> int:
             exchange(process, 74, "patch.rollback", {"transactionId": constructor_apply["transactionId"]})
             if source_hash(root) != before:
                 raise AssertionError("daemon constructor rollback did not restore exact bytes")
+            shape_preview = exchange(process, 76, "refactor.preview", {
+                "operation": "changeSignature.reorderParameters",
+                "symbol": "com.acme.SignatureShapes#join(java.lang.String,int,java.lang.String[])",
+                "arguments": {"order": "count,prefix,parts"},
+            })
+            shape_apply = exchange(process, 77, "refactor.apply", {"planId": shape_preview["planId"]})
+            assert_contains(shapes, ["join(int count, String prefix, String... parts)", "join(2, \"a\", \"b\")"])
+            exchange(process, 78, "patch.rollback", {"transactionId": shape_apply["transactionId"]})
+            if source_hash(root) != before:
+                raise AssertionError("daemon bounded varargs rollback did not restore exact bytes")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy and private-constructor rows restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy, constructor, generic, varargs, and annotation rows restored exact bytes.")
     return 0
 
 
