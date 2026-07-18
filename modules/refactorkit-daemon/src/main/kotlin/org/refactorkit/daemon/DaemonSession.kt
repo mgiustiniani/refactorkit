@@ -1522,7 +1522,12 @@ class DaemonSession(
                 val type = args["type"] ?: args["parameterType"] ?: missing("arguments.type")
                 val name = args["name"] ?: args["parameterName"] ?: missing("arguments.name")
                 val defaultExpression = args["default"] ?: args["defaultExpression"] ?: missing("arguments.default")
-                JavaChangeSignaturePlanner(adapter).previewAddParameter(
+                if (args["includeKotlinCallers"]?.toBooleanStrictOrNull() == true) {
+                    JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).previewAddParameter(
+                        snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")), type, name, defaultExpression,
+                        acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                    )
+                } else JavaChangeSignaturePlanner(adapter).previewAddParameter(
                     snap,
                     symbol ?: missing("symbol"),
                     type,

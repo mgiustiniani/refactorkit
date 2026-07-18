@@ -829,16 +829,23 @@ class McpSession(
                 includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
                 acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
             )
-            "changeSignature.addParameter", "addParameter" -> JavaChangeSignaturePlanner(adapter).previewAddParameter(
-                snap,
-                symbol ?: missing("symbol"),
-                opArgs["type"] ?: opArgs["parameterType"] ?: missing("arguments.type"),
-                opArgs["name"] ?: opArgs["parameterName"] ?: missing("arguments.name"),
-                opArgs["default"] ?: opArgs["defaultExpression"] ?: missing("arguments.default"),
-                includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
-                acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
-                migrateFunctionalReferences = opArgs["migrateFunctionalReferences"]?.toBooleanStrictOrNull() ?: false,
-            )
+            "changeSignature.addParameter", "addParameter" -> {
+                val target = symbol ?: missing("symbol")
+                val type = opArgs["type"] ?: opArgs["parameterType"] ?: missing("arguments.type")
+                val name = opArgs["name"] ?: opArgs["parameterName"] ?: missing("arguments.name")
+                val defaultExpression = opArgs["default"] ?: opArgs["defaultExpression"] ?: missing("arguments.default")
+                if (opArgs["includeKotlinCallers"]?.toBooleanStrictOrNull() == true) {
+                    JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).previewAddParameter(
+                        snap, org.refactorkit.core.SymbolId(target), type, name, defaultExpression,
+                        acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                    )
+                } else JavaChangeSignaturePlanner(adapter).previewAddParameter(
+                    snap, target, type, name, defaultExpression,
+                    includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                    acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                    migrateFunctionalReferences = opArgs["migrateFunctionalReferences"]?.toBooleanStrictOrNull() ?: false,
+                )
+            }
             "changeSignature.reorderParameters", "reorderParameters" -> JavaChangeSignaturePlanner(adapter).previewReorderParameters(
                 snap,
                 symbol ?: missing("symbol"),
