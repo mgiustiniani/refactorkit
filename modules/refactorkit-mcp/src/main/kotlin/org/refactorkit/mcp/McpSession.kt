@@ -825,6 +825,8 @@ class McpSession(
                 symbol ?: missing("symbol"),
                 opArgs["name"] ?: opArgs["parameterName"] ?: missing("arguments.name"),
                 opArgs["type"] ?: opArgs["newType"] ?: missing("arguments.type"),
+                includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
             )
             "changeSignature.addParameter", "addParameter" -> JavaChangeSignaturePlanner(adapter).previewAddParameter(
                 snap,

@@ -1509,7 +1509,11 @@ class DaemonSession(
             "changeSignature.changeParameterType", "changeParameterType" -> {
                 val name = args["name"] ?: args["parameterName"] ?: missing("arguments.name")
                 val type = args["type"] ?: args["newType"] ?: missing("arguments.type")
-                JavaChangeSignaturePlanner(adapter).previewChangeParameterType(snap, symbol ?: missing("symbol"), name, type)
+                JavaChangeSignaturePlanner(adapter).previewChangeParameterType(
+                    snap, symbol ?: missing("symbol"), name, type,
+                    includeHierarchy = args["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+                    acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
             }
             "changeSignature.addParameter", "addParameter" -> {
                 val type = args["type"] ?: args["parameterType"] ?: missing("arguments.type")

@@ -79,12 +79,13 @@ parameter index across declarations whose names may differ, requires zero bound
 body uses for every removed family parameter, and applies the same index removal
 to all bound calls. Reorder maps the selected declaration's requested names to an
 index permutation, then applies that permutation to every declaration (whose
-names may differ) and all family-bound calls.
+names may differ) and all family-bound calls. Type change replaces the exact JDT
+type range at the selected index in every declaration and requires staged family
+connectivity, unchanged body-use counts, and preserved call-site identities.
 
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- type changes across complete override/implementer hierarchies;
 - constructors, varargs, generic methods, records and annotations;
 - method references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

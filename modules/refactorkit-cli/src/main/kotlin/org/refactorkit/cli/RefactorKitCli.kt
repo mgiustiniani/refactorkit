@@ -343,7 +343,11 @@ class RefactorKitCli(
                 val type = parsed.options["type"]
                     ?: parsed.options["new-type"]
                     ?: run { System.err.println("change-signature change-parameter-type requires --type <javaType>"); return 2 }
-                planner.previewChangeParameterType(snap, symbol, name, type)
+                planner.previewChangeParameterType(
+                    snap, symbol, name, type,
+                    includeHierarchy = "include-hierarchy" in parsed.flags,
+                    acceptExternalConsumerRisk = "accept-external-consumer-risk" in parsed.flags,
+                )
             }
             "add-parameter", "addParameter", "changeSignature.addParameter" -> {
                 val type = parsed.options["type"]

@@ -358,6 +358,26 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun changesParameterTypeAcrossCompleteJdtOverrideFamily() {
+        val root = tempProject(
+            "src/main/java/com/example/Lookup.java" to "package com.example; public interface Lookup { String find(String key); }\n",
+            "src/main/java/com/example/DefaultLookup.java" to "package com.example; public class DefaultLookup implements Lookup { @Override public String find(String value) { return value.toString(); } }\n",
+            "src/main/java/com/example/Caller.java" to "package com.example; class Caller { String run(Lookup value) { return value.find(\"x\"); } }\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.previewChangeParameterType(
+            snap, "com.example.Lookup#find(java.lang.String)", "key", "CharSequence",
+            includeHierarchy = true, acceptExternalConsumerRisk = true,
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        assertTrue(root.resolve("src/main/java/com/example/Lookup.java").readText().contains("find(CharSequence key)"))
+        assertTrue(root.resolve("src/main/java/com/example/DefaultLookup.java").readText().contains("find(CharSequence value)"))
+        assertTrue(root.resolve("src/main/java/com/example/Caller.java").readText().contains("find(\"x\")"))
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """

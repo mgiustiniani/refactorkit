@@ -789,7 +789,11 @@ class JavaLanguageAdapter(
         val type = request.arguments["type"]
             ?: request.arguments["newType"]
             ?: return notImplemented(request, "changeParameterType requires arguments.type")
-        return JavaChangeSignaturePlanner(this).previewChangeParameterType(request.snapshot, symbol, name, type)
+        return JavaChangeSignaturePlanner(this).previewChangeParameterType(
+            request.snapshot, symbol, name, type,
+            includeHierarchy = request.arguments["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
+            acceptExternalConsumerRisk = request.arguments["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+        )
     }
 
     private fun applyAddParameter(request: RefactoringRequest): PatchPlan {
