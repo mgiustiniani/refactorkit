@@ -12,6 +12,11 @@ import sys
 root = Path(sys.argv[1]) / "src/main/java/benchmark"
 count = int(sys.argv[2])
 root.mkdir(parents=True)
+root.parents[3].joinpath("pom.xml").write_text(
+    "<project><modelVersion>4.0.0</modelVersion><groupId>benchmark</groupId>"
+    "<artifactId>benchmark</artifactId><version>1</version>"
+    "<properties><maven.compiler.release>21</maven.compiler.release></properties></project>\n"
+)
 for i in range(count):
     (root / f"Type{i}.java").write_text(
         "package benchmark;\n"
