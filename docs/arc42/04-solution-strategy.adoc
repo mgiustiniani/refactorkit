@@ -46,6 +46,11 @@ The release strategy published the hardened Java/transaction foundation as `v0.4
 |ADR 0008; signed method and unambiguous field member-rename, class-rename, move-class, safe-delete, annotation-type, annotation-element, and organize-imports planners/analyzers and tests.
 |implementation-informed
 
+|Authoritative Java/Maven semantic environments
+|For managed Java operations, RefactorKit—not Maven—is the definitive semantic diagnostics authority. The planned product-critical epic constructs the full declared reactor before module-result filtering, models independent main/test environments, consumes exact release-aware platform signatures, returns typed unavailability for incomplete affected environments, and qualifies classpath reactors before JPMS. Maven builds remain supplementary acceptance only.
+|ADR 0012; `docs/requirements/java-maven-authoritative-diagnostics.md`.
+|confirmed architecture; planned, product-critical
+
 |Framework risk awareness
 |Spring, JPA/Jakarta Persistence, and Jackson annotations raise risk and warnings for selected Java refactorings.
 |`JavaFrameworkDetector`, `docs/framework-awareness.md`.
@@ -99,6 +104,11 @@ These are shown as containers/building blocks in `docs/c4/workspace.dsl`.
 |Avoid requiring users to install Java globally and make promoted release assets independently verifiable.
 |implementation-informed; `v0.3.0` runtime/checksum smoke evidence recorded, stable evidence planned
 
+|Java platform evidence
+|Immutable, licensed, integrity-verified and hash-attested release-specific Java SE signature catalogue, distributed or securely resolved independently of the host JDK and reduced jlink runtime
+|Make Maven `--release 8..25` API diagnostics exact and reproducible.
+|confirmed architecture; planned, product-critical
+
 |Architecture model
 |Structurizr DSL C4 model
 |Docs-as-code architecture model suitable for system/context and container views.
@@ -107,4 +117,4 @@ These are shown as containers/building blocks in `docs/c4/workspace.dsl`.
 
 == Links to Decisions
 
-Chapter 9 indexes the repository ADRs. ADRs 0002, 0004, 0005, 0006, and 0008 jointly record the stable safety, integration-boundary, packaging, least-privilege, and compiler-backed Java strategies. No new architectural decision was required for the stable-release activation; the existing decisions were tightened with evidence-gated promotion criteria.
+Chapter 9 indexes the repository ADRs. ADRs 0002, 0004, 0005, 0006, and 0008 jointly record the stable safety, integration-boundary, packaging, least-privilege, and compiler-backed Java strategies. ADRs 0010 and 0011 define effective Build Model and non-executable/credential-free provider boundaries. ADR 0012 makes full-reactor, release-aware Java/Maven diagnostics a product-critical planned authority boundary without claiming implementation.

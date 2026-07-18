@@ -3,7 +3,7 @@
 :sectnums:
 :icons: font
 
-Status: implementation-informed baseline aligned with the `v0.4.0` hardening release and supreme multi-language `v1.0.0` roadmap; all-language acceptance remains planned.
+Status: implementation-informed baseline aligned with the `v0.4.0` hardening release and supreme multi-language `v1.0.0` roadmap. The authoritative Java/Maven diagnostics epic is active and product-critical; first platform/module-filter rows are implemented, but epic completion and all-language acceptance remain open.
 
 This directory contains the arc42 documentation for RefactorKit, the deterministic refactoring and code-intelligence engine in this repository.
 
@@ -40,6 +40,8 @@ The current baseline was created from repository evidence:
 * `docs/releases/v0.4.0-plan.md`
 * `docs/releases/v1.0.0-plan.md`
 * `docs/adr/0009-supreme-multilanguage-v1-roadmap.adoc`
+* `docs/adr/0012-authoritative-release-aware-java-maven-diagnostics.adoc`
+* `docs/requirements/java-maven-authoritative-diagnostics.md`
 * Gradle module descriptors and source files under `modules/`
 * `samples/`
 * `recipes/`

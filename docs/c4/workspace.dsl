@@ -17,7 +17,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
         targetWorkspace = softwareSystem "Target Source Workspace" "User-owned Java or multi-language source tree, build metadata, recipes, and .refactorkit transaction logs." {
             tags "External System"
         }
-        buildToolchain = softwareSystem "Java Build Toolchain" "External Maven, Gradle, JDK, jlink, and test tooling used for project discovery, diagnostics, tests, and runtime packaging." {
+        buildToolchain = softwareSystem "Java Build Toolchain" "External Gradle, JDK, K2, jlink, Maven, and test tools used for packaging, explicit compiler workers, and caller-selected smoke checks." {
             tags "External System"
         }
         externalCodeSources = softwareSystem "External Code Sources" "Clipboard, local files, URLs, snippets, or LLM responses used by the external Java class importer." {
@@ -37,8 +37,11 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
             core = container "Core Patch and Model Engine" "Language-independent models, project snapshots, source files, text/file/workspace edits, patch plans, previews, apply/rollback engine, transaction log, diagnostics, JSON-RPC primitives, symbols, references, and LanguageAdapter contract." "Kotlin/JVM library (modules/refactorkit-core)" {
                 tags "Runtime Building Block"
             }
-            javaAdapter = container "Java Language Adapter" "Java project scanner and lexical Java intelligence for source roots, packages, classes, methods, fields, imports, symbols, references, diagnostics, rename class/member, move class, organize imports, safe delete, extract method, change signature, recipes, and framework-aware risk detection." "Kotlin/JVM library (modules/refactorkit-java)" {
+            javaAdapter = container "Java Language Adapter" "Builds full Maven reactor classpath source sets and release-aware diagnostics; filters module output; returns typed unavailability or JPMS-unsupported results." "Kotlin/JVM library (modules/refactorkit-java)" {
                 tags "Runtime Building Block"
+            }
+            javaPlatformSignatures = container "Java Platform Signature Catalog" "Immutable, licensed, integrity-verified Java SE API signatures for supported releases, independent of the host JDK and reduced jlink runtime." "Immutable hash-attested data" {
+                tags "Data Store"
             }
             kotlinAdapter = container "Kotlin Language Adapter" "Hash-bound Kotlin/JVM projection, external K2 diagnostics, durable declarations/usages, and bounded managed private-declaration rename proposals over immutable overlays." "Kotlin/JVM library (modules/refactorkit-kotlin)" {
                 tags "Runtime Building Block"
@@ -99,6 +102,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
         embeddedRuntime -> treeSitterFoundation "Can use structural multi-language outline/search/local rename" "In-process calls"
 
         javaAdapter -> core "Builds SymbolIndex, diagnostics, and PatchPlan objects through core contracts" "Kotlin/JVM API"
+        javaAdapter -> javaPlatformSignatures "Consumes exact release platform signatures as semantic evidence" "Hash-attested reads"
         kotlinAdapter -> core "Uses immutable overlays/process manager and returns compiler diagnostics, durable declarations/usages and normalized proposals" "Kotlin/JVM API"
         jvmComposition -> core "Produces normalized mixed-language PatchPlans and typed refusals" "Kotlin/JVM API"
         jvmComposition -> kotlinAdapter "Consumes exact K2 declaration, internal/external usage, diagnostics and hash-bound ephemeral class-file evidence" "Kotlin/JVM API"
@@ -113,11 +117,10 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
 
         core -> targetWorkspace "Scans files, computes snapshot hashes, previews edits, applies workspace edits, and restores rollback metadata" "Local filesystem"
         core -> transactionLog "Writes and reads transaction metadata" "Local filesystem"
-        javaAdapter -> targetWorkspace "Reads Java source, package declarations, imports, build files, recipes, and framework annotations" "Local filesystem"
+        javaAdapter -> targetWorkspace "Reads declared reactor root and source-set evidence without build execution" "Credential-free, confined filesystem reads"
         webImporter -> targetWorkspace "Checks target source roots, existing files, and naming conflicts before creating import previews" "Local filesystem"
         treeSitterFoundation -> targetWorkspace "Scans supported language files and plans local renames" "Local filesystem"
         transactionLog -> targetWorkspace "Stores rollback metadata inside the workspace" "Local filesystem"
-        javaAdapter -> buildToolchain "Discovers Maven/Gradle project structure and supports diagnostics/build-aware workflows" "Build metadata / shell"
         kotlinAdapter -> buildToolchain "Executes the explicitly supplied hash-bound JDK/K2 compiler in a bounded external process for read-only diagnostics and regular-class symbols" "External Java process"
         cli -> externalCodeSources "Accepts file, URL, clipboard, snippet, or LLM-provided Java source for import preview" "User-provided source"
         mcp -> externalCodeSources "Accepts agent-provided Java source for import preview" "MCP tool input"

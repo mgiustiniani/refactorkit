@@ -1,0 +1,219 @@
+= ADR 0012: Make RefactorKit the Definitive Release-Aware Java/Maven Diagnostics Authority
+:status: accepted
+:date: 2026-07-18
+
+== Status
+
+This architecture decision is *Accepted*. Implementation of the
+`RPK-JAVA-DIAG-001` through `RPK-JAVA-DIAG-007` epic is *active and
+product-critical*. The first release-8/current-release platform and full-reactor
+module-filter rows have local packaged evidence, but the epic is not complete or
+qualified. Accepting this decision does not by itself qualify Java/Maven
+diagnostics or any semantic refactoring that depends on them.
+
+== Context
+
+Semantic refactoring authority requires more than parsing Java grammar or
+observing that Maven can compile a project. RefactorKit must know the exact
+Maven source-set environment, Java platform API, reactor visibility, external
+classpath, diagnostic provider, and workspace state used to derive bindings and
+diagnostics. If any required input is incomplete, a plausible-looking list of
+unresolved types is less truthful than a precise refusal.
+
+The self-contained runtime from ADR 0005 is an execution environment for
+RefactorKit. It is deliberately reduced and is not evidence of the Java SE API
+available to an analyzed project. Likewise, Maven compile or test execution is
+useful external acceptance evidence but cannot validate that RefactorKit used
+the correct semantic environment.
+
+ADRs 0001, 0002, 0008, 0010, and 0011 already separate runtime compatibility,
+managed writes, compiler-backed Java analysis, offline effective build models,
+and privileged build-provider boundaries. This decision defines how those
+boundaries combine into authoritative Java/Maven diagnostics.
+
+== Decision
+
+. *Semantic authority and failure semantics.* RefactorKit is the definitive
+  semantic diagnostics and refactoring authority for its managed operations.
+  Maven compile and test results are supplementary evidence only; they never
+  suppress, downgrade, or excuse false RefactorKit diagnostics. An incomplete
+  model, classpath, platform, provider, or other required environment produces a
+  typed unavailability result for the affected source set. RefactorKit must not
+  fabricate diagnostics from a guessed or known-incomplete environment.
+
+. *Declared reactor boundary.* The declared full Maven reactor root is both
+  workspace authority and effective-model authority. RefactorKit constructs the
+  active reactor model and required dependency and impact closures within that
+  boundary before filtering diagnostic results for a module-targeted request.
+  Module targeting does not redefine the workspace or authorize a partial child
+  model. RefactorKit performs no implicit ancestor, sibling, upward, or outward
+  discovery beyond the declared workspace; reactor siblings are visible only
+  when the declared reactor model contains them.
+
+. *Release-aware Java platform authority.* For an effective Maven `--release R`,
+  where `R` is any release from Java 8 through Java 25, RefactorKit requires the
+  exact Java SE platform signatures for `R`. Those signatures are immutable,
+  integrity-verified and hash-attested, licensed, and covered by the product
+  SBOM. Grammar parsing, source compliance, or compiler release flags alone are
+  not platform authority. The running host platform and the reduced jlink image
+  from ADR 0005 are not project-platform authority. A source-only or otherwise
+  no-release configuration requires an explicitly configured and independently
+  qualified JDK platform; without one, the affected source set is typed
+  unavailable rather than silently bound to the host or a newer API release.
+
+. *Non-executable generated-source and discovery boundary.* Generated sources
+  are analysis-visible only when they are safely declared and already
+  materialized. Discovery and diagnostics never implicitly execute Maven, Maven
+  wrappers, lifecycle goals, plugins, annotation processors, credential helpers,
+  Maven settings credentials, or other build code. Offline/no-network operation
+  remains the default, and the provider and credential boundaries of ADR 0011
+  remain unchanged. Generated roots retain the ownership and rewrite guardrails
+  of ADR 0010.
+
+. *Independent source-set environments.* Main and test are independent semantic
+  environments with complete Maven visibility for their respective effective
+  source roots, generated roots, reactor closure, outputs, dependency scopes,
+  external artifacts, compiler settings, and Java platform. Main never gains
+  test-only visibility; test receives only its effective Maven test visibility.
+  Availability and derivative-diagnostic cascade suppression are source-set
+  scoped. A missing test input does not make main unavailable, and suppression
+  never hides genuine source diagnostics from an otherwise complete environment.
+
+. *Change-specific diagnostic authority.* Managed diagnostic delta defaults to
+  no introduced errors. A strict mode additionally requires zero staged errors.
+  Any unavailable affected source-set or dependent-impact environment always
+  blocks authoritative preview and apply, even when the same unavailability was
+  present at baseline. Every baseline, exact staged post-image, post-apply, and
+  rollback result used for authority is bound to the exact workspace snapshot,
+  overlay or disk mode, effective-model/classpath evidence, affected source-set
+  closure, Java release and platform-signature identity, and diagnostic
+  provider identity and configuration. Provider failure, evidence drift, or
+  incomplete/truncated blocker evidence fails closed.
+
+. *Qualification order and JPMS boundary.* RefactorKit qualifies unnamed-module,
+  classpath-based Maven reactors first. Named JPMS or module-path reactors return
+  typed unsupported or unavailable results rather than being flattened into a
+  guessed classpath. They gain semantic authority only through a dedicated,
+  complete, independently accepted JPMS slice.
+
+== Consequences
+
+=== Positive
+
+* RefactorKit diagnostics remain truthful product evidence instead of being
+  retrospectively justified by a different compiler invocation.
+* Java 8 through Java 25 API availability can be reproduced independently of the
+  host JDK and the packaged runtime's reduced module image.
+* Full-reactor modeling preserves Maven dependency visibility while retaining an
+  explicit workspace security boundary.
+* Main failures, test failures, and missing environment inputs can be reported
+  and suppressed at the correct source-set scope.
+* Preview, apply, post-apply, and rollback validation can refer to the same exact
+  evidence rather than similarly configured but unbound analyses.
+
+=== Costs and limitations
+
+* The distribution or its approved platform source must supply and maintain
+  licensed, integrity-attested, SBOM-covered signatures for every advertised
+  Java release.
+* Full-reactor and dependent-impact analysis costs more memory and time than
+  analyzing an isolated requested module.
+* More projects will receive typed unavailability until their exact Maven and
+  platform shapes are qualified. Maven build success does not relax that
+  limitation.
+* Source-only/no-release projects need an explicit qualified JDK platform.
+* Named JPMS/module-path reactors remain unavailable for semantic authority until
+  the dedicated slice is complete.
+* The epic requires the full permanent fixture and packaged-runtime matrix;
+  the first platform/module-filter fixture does not qualify the remaining rows.
+
+== Alternatives Considered
+
+=== Treat Maven compile or test as the final diagnostics authority
+
+Rejected. Maven is valuable supplementary evidence, but a successful build does
+not prove that RefactorKit used complete bindings, correct release signatures,
+or the exact staged snapshot. It cannot excuse false RefactorKit diagnostics or
+make an unavailable semantic planner safe.
+
+=== Use source compliance, the host JDK, or the running jlink image as the platform
+
+Rejected. Source grammar does not define release-specific API availability, and
+a newer host can incorrectly expose APIs absent from the configured release. A
+reduced jlink runtime can also omit standard modules that belong to the analyzed
+release.
+
+=== Discover from the targeted child module and search upward or sideways as needed
+
+Rejected. Implicit discovery makes workspace authority ambiguous, can read
+outside the caller-declared boundary, and can construct different models for the
+same reactor. Module selection is therefore an output filter over the declared
+full-reactor model.
+
+=== Execute Maven, plugins, wrappers, or annotation processors to complete the model
+
+Rejected for the accepted provider boundary. Project build code and host
+credentials are not safe implicit inputs. Any future executable or credentialed
+provider requires the separate identity, policy, provenance, isolation, and
+review required by ADR 0011 and still cannot replace RefactorKit authority.
+
+=== Collapse main and test into one workspace-wide JDT environment
+
+Rejected. It leaks test-only types into production analysis, broadens failures,
+and makes diagnostic-cascade suppression imprecise.
+
+=== Approximate named JPMS reactors on the classpath
+
+Rejected. Flattening module-path semantics can hide readability, export, and
+split-package failures and therefore cannot support authoritative refactoring.
+
+== Guardrails
+
+* Never convert Maven success into suppression or acceptance of a RefactorKit
+  semantic error.
+* Never substitute the host JDK, a newer platform, or the reduced jlink runtime
+  when exact platform signatures are unavailable.
+* Never let a module filter narrow model construction or widen the declared
+  workspace boundary.
+* Never execute build or credential-bearing machinery implicitly; ADRs 0010 and
+  0011 remain in force.
+* Never grant semantic mutation authority from a partial source-set environment,
+  guessed classpath, stale output, provider failure, or unavailable affected
+  closure.
+* Keep generated sources analysis-only unless a separate capability proves safe
+  ownership and mutation semantics.
+* Do not claim Java/Maven diagnostics authority implemented until
+  `RPK-JAVA-DIAG-001` through `RPK-JAVA-DIAG-007`, including packaged and
+  permanent-fixture acceptance, have production behavior and semantic validation
+  evidence.
+
+== Related Requirements
+
+* `RPK-JAVA-DIAG-001` -- release-aware Java platform authority.
+* `RPK-JAVA-DIAG-002` -- full-reactor, per-source-set project model.
+* `RPK-JAVA-DIAG-003` -- Maven compile/test visibility and external classpath.
+* `RPK-JAVA-DIAG-004` -- source-set availability roots and bounded cascade
+  suppression.
+* `RPK-JAVA-DIAG-005` -- change-specific before/after diagnostic authority.
+* `RPK-JAVA-DIAG-006` -- offline, plugin-free, secure, reproducible discovery.
+* `RPK-JAVA-DIAG-007` -- minimal permanent acceptance fixture and qualification
+  matrix.
+* `RPK-PKG-007` -- baseline-aware diagnostic delta and strict mode.
+* `RPK-PKG-009` -- offline Maven reactor source/classpath visibility.
+* `REQ-TX-007` -- authoritative diagnostics and regression gates across preview,
+  simulation, apply, and rollback.
+
+== Related ADRs
+
+* link:0001-kotlin-jvm-java-8-bytecode.adoc[ADR 0001] -- separates RefactorKit
+  runtime bytecode from analyzed Java source/platform support.
+* link:0002-patchplan-patchengine-safety-model.adoc[ADR 0002] -- requires managed
+  preview, diagnostics gates, apply, and rollback evidence.
+* link:0005-jlink-self-contained-cli-packaging.adoc[ADR 0005] -- defines the
+  self-contained runtime, which is not the analyzed project platform.
+* link:0008-compiler-backed-java-analysis-strategy.adoc[ADR 0008] -- selects JDT
+  as the compiler-backed Java analysis strategy.
+* link:0010-offline-build-models-and-source-ownership.adoc[ADR 0010] -- defines
+  offline effective models, source-set ownership, and generated-root boundaries.
+* link:0011-credential-and-executable-build-provider-boundaries.adoc[ADR 0011] --
+  preserves credential-free and non-executable provider boundaries.

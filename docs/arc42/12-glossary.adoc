@@ -93,6 +93,31 @@ Status: implementation-informed. Terms are sourced from repository docs and sour
 |Core
 |`Models.kt`
 
+|Diagnostics Authority
+|The right to use a diagnostic result as semantic evidence for a managed operation. For planned Java/Maven authority, the result must bind a complete source-set environment, exact workspace/overlay, Build Model/classpath, Java platform signatures, and provider; Maven build success is supplementary only.
+|Core / Java / safety
+|ADR 0012; `RPK-JAVA-DIAG-005`
+
+|Java Platform Signature Catalog
+|Immutable, licensed, integrity-verified, hash-attested and SBOM-covered Java SE types, members, and release-appropriate module metadata used for exact `--release` diagnostics. It is distinct from source grammar, the host JDK, and RefactorKit's reduced jlink runtime.
+|Java / packaging
+|ADR 0012; `RPK-JAVA-DIAG-001`
+
+|Maven Source-set Semantic Environment
+|Complete hash-bound compile view for one active reactor module and one main or test source set: source/materialized-generated roots, outputs, Maven-scoped reactor/external visibility, Java settings/platform, provider evidence, and source-set availability.
+|Build Model / Java
+|ADR 0012; `RPK-JAVA-DIAG-002..004`
+
+|Reactor-root Workspace Authority
+|Rule that the caller-declared full Maven reactor root defines both the readable workspace and effective-model boundary. Module targeting filters results after model construction and never authorizes implicit upward or outward discovery.
+|Build Model / security
+|ADR 0012; `RPK-JAVA-DIAG-002`
+
+|Typed Unavailability
+|A concise structured result stating that a required semantic input or supported shape is unavailable for an affected source set. It replaces guessed diagnostics and blocks semantic mutation; it is not equivalent to a source compiler error.
+|Diagnostics / safety
+|ADR 0012; `RPK-JAVA-DIAG-004..005`
+
 |RiskLevel
 |Risk classification for a patch or refactoring: LOW, MEDIUM, HIGH.
 |Core / safety

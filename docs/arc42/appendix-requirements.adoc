@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, needs-review. No Gherkin `.feature` files were found in the repository during this baseline. This appendix therefore records requirements/use cases from repository documentation, module evidence, samples, recipes, golden tests, and CI. It does not claim Gherkin coverage where none exists.
+Status: implementation-informed, needs-review. The `RPK-JAVA-DIAG-001..007` Java/Maven diagnostics-authority epic is active and product-critical; first platform/module-filter rows are implemented, but the epic is not claimed complete. No Gherkin `.feature` files were found in the repository during this baseline. This appendix therefore records requirements/use cases from repository documentation, module evidence, samples, recipes, golden tests, and CI. It does not claim Gherkin coverage where none exists.
 
 == Requirement Sources
 
@@ -21,6 +21,10 @@ Status: implementation-informed, needs-review. No Gherkin `.feature` files were 
 |`docs/*.md`
 |Subsystem behavior and limitations. `docs/transactionality-audit.md` is the evidence baseline for current apply, compensation, journal, LSP, recipe, and recovery limitations `TX-001` through `TX-018`.
 |implementation-informed
+
+|`docs/requirements/java-maven-authoritative-diagnostics.md`
+|Normative repository contract for exact release platforms, full-reactor source-set visibility, typed availability, change-specific authority, secure discovery, and permanent qualification.
+|planned, product-critical, release-blocking
 
 |`modules/*`
 |Implementation and test evidence.
@@ -124,9 +128,9 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-DIAGNOSTICS
 |Run diagnostics
 |Developer, CI, Agent, Editor
-|Report structured warnings/errors such as duplicate symbols, package/path mismatch, or file-name mismatch.
-|Java adapter tests, integration docs.
-|implementation-informed
+|Report structural findings and, for the planned authoritative Java/Maven slice, either source-accurate semantic diagnostics from a complete attested source-set environment or concise typed unavailability. Maven compile/test remains supplementary evidence.
+|Current Java adapter tests plus planned `RPK-JAVA-DIAG-001..007` permanent/native packaged acceptance.
+|generic command implementation-informed; authoritative epic planned, product-critical
 
 |UC-PREVIEW-REFACTOR
 |Preview refactoring
@@ -272,6 +276,10 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |REQ-SCAN-001
 |README CLI example; `JavaProjectScanner`; CI packaged CLI smoke scan.
 
+|UC-DIAGNOSTICS
+|RPK-JAVA-DIAG-001 through RPK-JAVA-DIAG-007; antecedents RPK-PKG-007/009, REQ-TX-007, RPK-JVM-DIAG-002/003/005/006
+|`docs/requirements/java-maven-authoritative-diagnostics.md`; ADR 0012; chapters 6, 8, and 10. Epic status is active/product-critical; linked executable acceptance, not this mapping, is implementation evidence.
+
 |UC-PREVIEW-REFACTOR
 |REQ-SAFE-001
 |`PatchPlan`, Java planners, MCP/LSP/daemon preview contracts.
@@ -304,6 +312,52 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |REQ-PACKAGE-001
 |Gradle jlink tasks, packaging docs, CI.
 |===
+
+== Java/Maven Diagnostics Authority Epic
+
+The detailed normative requirements remain in `docs/requirements/java-maven-authoritative-diagnostics.md`; this appendix provides the integrated catalogue and does not duplicate a competing requirement body. The IDs do not conflict with existing repository conventions.
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Slice |Acceptance owner/evidence |Status
+
+|RPK-JAVA-DIAG-001
+|Exact immutable Java 8-25 release-platform signatures; explicit qualified JDK platform or typed unavailability for no-release/source-only configurations.
+|Java adapter and packaging acceptance; ADR 0012.
+|planned, product-critical
+
+|RPK-JAVA-DIAG-002
+|Declared full-reactor authority, independent source sets, and module filtering after model construction without implicit outward discovery.
+|Build Model and Java adapter acceptance.
+|planned, product-critical
+
+|RPK-JAVA-DIAG-003
+|Exact Maven main/test reactor and external-artifact visibility.
+|Build Model/JDT permanent reactor fixture.
+|planned, product-critical
+
+|RPK-JAVA-DIAG-004
+|Source-set typed availability roots and bounded causal cascade suppression.
+|Diagnostics provider and protocol acceptance.
+|planned, product-critical
+
+|RPK-JAVA-DIAG-005
+|Snapshot/evidence-bound before, staged, after, and rollback diagnostics; default no-introduced-errors, strict zero, and affected-unavailability blocker.
+|Core diagnostics gate plus integration acceptance.
+|planned, product-critical
+
+|RPK-JAVA-DIAG-006
+|Bounded, offline-default, plugin/lifecycle/processor/credential-free reproducibility and drift refusal.
+|Build Model/security/native acceptance.
+|planned, product-critical
+
+|RPK-JAVA-DIAG-007
+|Permanent minimal reactor and four-platform packaged qualification; classpath reactors first and typed JPMS refusal.
+|Testkit, packaging, CLI/daemon/MCP release gates.
+|planned, product-critical
+|===
+
+No row in this epic is marked implemented by this architecture phase. Existing precursor code, tests, or Maven successes must be evaluated separately and cannot satisfy the epic without the listed end-to-end authority evidence.
 
 == Transactionality Requirement Clarifications
 
@@ -408,6 +462,10 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |No confirmed stakeholder/business priorities
 |Functional catalogue may not reflect product priorities.
 |needs-review
+
+|Authoritative Java/Maven diagnostic evidence is incomplete
+|Managed Java mutation cannot claim definitive semantic authority until every affected source set has exact full-reactor/classpath/platform/provider evidence and `RPK-JAVA-DIAG-001..007` packaged acceptance. Maven success is not a substitute.
+|planned, product-critical release blocker
 
 |Transaction semantics exceed implementation evidence
 |The transactionality audit narrows remaining gaps to metadata/journal hardening, and destructive fault evidence. Managed writes and recipes now have WAL-backed staged boundaries, but one filesystem-wide ACID guarantee is not claimed.

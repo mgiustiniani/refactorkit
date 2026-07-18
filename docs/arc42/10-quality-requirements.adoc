@@ -16,6 +16,11 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 ** Symbol-aware Java operations where supported
 ** Conservative refusal instead of guessing
 ** Diagnostics before/after preview where supported
+* Java/Maven diagnostics authority
+** RefactorKit semantic evidence is definitive; Maven builds are supplementary
+** Exact release-aware Java platforms and full-reactor source-set environments
+** Typed unavailability and bounded cascade suppression instead of fabricated errors
+** Default no-introduced-errors and optional strict-zero staged policy
 * Extensibility
 ** Language-independent core
 ** Language adapter contract
@@ -201,6 +206,36 @@ Status: implementation-informed, needs-review for priorities and measurable targ
 |Stable diagnostics acceptance matrix; ADRs 0002 and 0008.
 |confirmed target; planned evidence
 
+|QS-DIAG-002
+|Semantic correctness
+|For a supported Java/Maven request, RefactorKit either returns diagnostics from a complete attested source-set environment or one concise typed unavailability root. A successful Maven compile/test may be reported separately but never suppresses or excuses a RefactorKit finding.
+|`RPK-JAVA-DIAG-003..006`; ADR 0012; permanent reactor fixture.
+|planned, product-critical release blocker
+
+|QS-DIAG-003
+|Java compatibility and portability
+|With `JAVA_HOME` unset, the packaged launcher resolves `java.sql.Connection` and `java.net.http.HttpClient` for a release-21 fixture. A release-8 fixture rejects `HttpClient` and `String.isBlank`, while release 11+ accepts them, using immutable hash-attested platform signatures rather than the running jlink image.
+|`RPK-JAVA-DIAG-001` and `007`; four-platform packaged acceptance.
+|planned, product-critical release blocker
+
+|QS-DIAG-004
+|Project-model correctness and security
+|A module-targeted request opened at the declared reactor root resolves only its effective Maven main/test dependency closure after full-reactor construction; unrelated siblings remain hidden. Opening a child directory neither discovers parents/siblings nor reads outside the declared workspace.
+|`RPK-JAVA-DIAG-002..003`; full-reactor fixture and workspace-boundary tests.
+|planned, product-critical release blocker
+
+|QS-DIAG-005
+|Change safety
+|Before and exact staged diagnostics bind snapshot, overlay mode, source-set/impact closure, model/classpath evidence, platform, and provider. Default mode rejects introduced errors, strict mode requires zero staged errors, and any unavailable affected environment blocks even when unavailable at baseline. File-move mapping preserves an unchanged error while the same message at a new location is introduced.
+|`RPK-JAVA-DIAG-004..005`; ADRs 0002 and 0012; exact delta acceptance.
+|planned, product-critical release blocker
+
+|QS-DIAG-006
+|Reproducibility and least privilege
+|Diagnostics include only safely declared, already materialized generated sources and cause no Maven/wrapper/lifecycle/plugin/annotation-processor/credential/network execution or workspace write. Named JPMS/module-path reactors return typed unsupported until their dedicated complete slice is accepted.
+|`RPK-JAVA-DIAG-006..007`; ADRs 0010-0012; hostile-workspace and read-only acceptance.
+|planned, product-critical release blocker
+
 |QS-API-002
 |Interoperability
 |API `1.0` CLI and daemon clients receive versioned capability metadata and deterministic outcomes for unknown methods/fields, invalid parameters, stale plans, rollback failures, and supported `0.2` transition behavior or explicit version refusal.
@@ -282,6 +317,10 @@ modules/refactorkit-cli/build/package/refactorkit/bin/refactorkit scan samples/j
 |Transactionality guarantees exceed current evidence
 |Managed writes now have one-writer locking, affected-file revalidation, durable write-ahead lifecycle, compatible startup compensation, explicit recovery-required blocking, and supported-filesystem staged/forced/atomic replacement. Declared source scope is hash-bound and independently rescanned under lock; Java classpath entries, prospective outputs, local JAR directories, and declaration files are content-fingerprinted and revalidated before journaling. Same-file coordinates, cross-entry overlaps, complete preflight rendering, and line/character bounds are now enforced. Managed Java flows use central staged JDT diagnostics gates, and direct apply requires an explicit gate. Auditable approval, error mapping, and daemon refresh are implemented. Native LSP writes are version-checked and explicitly client-managed; recipes use one staged managed transaction.
 |release blocker; remaining and partially evidenced `TX` findings require closure plus destructive fault acceptance
+
+|Authoritative Java/Maven diagnostics are not yet claimed complete
+|The current syntax/compliance, Build Model, diagnostic-gate, and platform-attestation precursors do not by themselves prove full-reactor, source-set, release-specific API authority. False JDK, external, or sibling-reactor diagnostics would invalidate managed semantic authority even when Maven later succeeds.
+|planned, product-critical release blocker (`RPK-JAVA-DIAG-001..007`)
 
 |Stable acceptance evidence incomplete
 |API `1.0`, Java 8–25, diagnostics, protocol classification, packaging, supply-chain, reproducibility, and narrowed-or-evidenced transactionality claims cannot be marked stable until the immutable RC acceptance matrix passes.

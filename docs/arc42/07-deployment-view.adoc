@@ -21,8 +21,13 @@ RefactorKit is a local tool/library, not a hosted service. Current repository ev
 
 |Packaged CLI distribution
 |`bin/refactorkit`, `bin/refactorkit.bat`, module jars under `lib/`, embedded runtime under `runtime/`.
-|Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`; includes official `refactorkit` and `refactorkit-daemon` launchers, daemon JAR/dependencies, and `java.compiler`. Stable promotion additionally verifies checksum, SBOM, provenance/attestation, reproducibility evidence or limits, archive layout, permissions, licenses, version metadata, `JAVA_HOME`-unset execution, and daemon preview/apply/rollback smoke.
+|Created by `packageCliRuntime` / `distCliRuntimeZip` using `jlink`; includes official `refactorkit` and `refactorkit-daemon` launchers, daemon JAR/dependencies, and `java.compiler`. Stable promotion additionally verifies checksum, SBOM, provenance/attestation, reproducibility evidence or limits, archive layout, permissions, licenses, version metadata, `JAVA_HOME`-unset execution, and daemon preview/apply/rollback smoke. The reduced runtime executes RefactorKit but is not Java project-platform evidence.
 |implementation-informed; published `v0.3.0` runtime/checksum smoke verified, stable evidence planned
+
+|Java Platform Signature Catalog
+|Immutable Java SE release-signature data distributed with approved packages or resolved through an equivalently integrity-verified source.
+|Carries hash-attested platform evidence for requested Java releases without silently substituting a host JDK or newer release. The first package co-locates packaging-JDK `ct.sym` with a complete current-release `java.se` image under `runtime/`; logical platform evidence remains distinct from execution authority.
+|first Java 8/21 row implemented; full Java 8-25 catalogue, SBOM/license review and native qualification remain product-critical
 
 |Editor host process
 |`refactorkit-lsp` process launched by an external editor/IDE.
@@ -55,6 +60,7 @@ Status: implementation-informed for `v0.3.0`. This does not satisfy the remainin
 
 * Build-time JDK is required for Gradle and `jlink` packaging.
 * The packaged CLI is intended not to require a globally installed Java runtime because it contains an embedded runtime.
+* Planned authoritative Maven `--release` diagnostics additionally require exact Java platform signatures; the embedded reduced runtime is not those signatures. Source-only/no-release projects instead require an explicitly configured qualified JDK platform or receive typed unavailability.
 * Stable assets are promoted from immutable `v1.0.0-rc.N` tags only after the multi-language roadmap and alpha/beta gates complete and independent verification passes; failed tagged candidates are replaced by a new commit and RC number, never by moving a tag.
 * Release classification, version metadata, checksum, SBOM, provenance/attestation, and packaged smoke results must agree with the promoted artifact.
 * Maven/Gradle projects are scanned from local workspace files.

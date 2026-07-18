@@ -1,6 +1,8 @@
 # Authoritative release-aware Java/Maven diagnostics requirements
 
-Status: active, release-blocking J1 prerequisite.
+Status: active, product-critical, release-blocking J1 prerequisite. The first
+release-8/current-release platform, full-reactor module-filter and concise missing-
+platform rows have local and packaged evidence; the complete epic is not qualified.
 
 ## Purpose
 
@@ -11,16 +13,22 @@ acceptance evidence and never repairs incomplete RefactorKit evidence.
 ## RPK-JAVA-DIAG-001 — Release-aware Java platform authority
 
 For every effective `--release` from Java 8 through Java 25, authoritative
-analysis requires explicitly configured, immutable Java platform signatures for
-that release. The provider records the canonical platform home, JDK release
-metadata hash, signature archive hash, requested release and one deterministic
-identity. It verifies the evidence with bounded double reads and refuses missing,
+analysis requires explicitly selected, immutable Java platform signatures for
+that release. The provider records the requested release, signature-content hash,
+platform provider/version and license provenance, and one deterministic identity.
+When a qualified JDK supplies the evidence, its canonical platform home and JDK
+release metadata hash are also bound. Bounded double reads refuse missing,
 malformed, drifting or release-incomplete inputs. The host JVM and packaged jlink
 runtime are not implicit project-platform evidence.
 
-The first implementation slice only resolves and attests a configured JDK
-`lib/ct.sym`. It does not yet grant JDT diagnostic or mutation authority; that
-requires a separately tested JDT environment integration.
+A source-only/no-release configuration must select an explicitly qualified JDK
+platform and bind that identity into the source-set environment. Otherwise the
+source set is typed unavailable; a `<source>` level must never be mislabeled as
+`--release` API authority.
+
+Configuring or attesting a JDK `lib/ct.sym` alone does not grant JDT diagnostic
+or mutation authority. Release authority requires the complete, separately
+accepted JDT environment integration and qualification defined by this epic.
 
 ## RPK-JAVA-DIAG-002 — Full-reactor per-source-set model
 

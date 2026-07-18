@@ -183,7 +183,7 @@ apply and rollback through this launcher.
 Default `jlink` module set:
 
 ```text
-java.base,java.compiler,java.logging,java.xml,jdk.unsupported
+java.se,jdk.unsupported
 ```
 
 `java.compiler` is required by JDT-backed signed member lookups through
@@ -194,8 +194,35 @@ Override if needed:
 
 ```bash
 ./gradlew :modules:refactorkit-cli:jlinkRuntime \
-  -Prefactorkit.runtime.modules=java.base,java.compiler,java.logging,java.xml,jdk.unsupported
+  -Prefactorkit.runtime.modules=java.se,jdk.unsupported
 ```
+
+## Java platform signature evidence
+
+Status: first Java 8/21 local packaged row implemented; full Java 8–25,
+license/SBOM and four-platform promotion remain product-critical release gates.
+
+The jlink image is RefactorKit's execution runtime, not the Java SE platform of an
+analyzed Maven project. Authoritative `--release 8..25` diagnostics require a
+separate immutable, licensed, SBOM-covered, integrity-verified and hash-attested
+platform signature catalogue for the exact requested release. Enlarging the
+runtime module list or reading the running VM is not a substitute for historical
+release API/member/module signatures.
+
+The current package stages the packaging JDK's `ct.sym` into `runtime/lib`, uses
+a complete `java.se` current-release image, and configures that runtime explicitly
+for CLI, daemon and MCP. Historical releases use a bounded disposable classpath
+projection from attested `ct.sym`; the current release binds and double-hashes the
+complete `java.se` module image. `scripts/smoke-packaged-java-authoritative-diagnostics.py`
+proves release 21 JDK/reactor visibility and the release 8 API boundary with
+`JAVA_HOME` unset. Releases absent from the packaging JDK remain typed unavailable.
+
+A promoted package must contain the full catalogue or securely resolve equivalent
+immutable evidence, attest its identity in diagnostics, and pass the fixture on
+every supported native platform. Source-only/no-release projects require an explicitly configured qualified
+JDK platform or receive typed unavailability. Named JPMS/module-path reactors
+remain typed unsupported until separately qualified. See ADR 0012 and
+[`requirements/java-maven-authoritative-diagnostics.md`](requirements/java-maven-authoritative-diagnostics.md).
 
 ## Packaged Build Model acceptance
 

@@ -79,6 +79,26 @@ Status: implementation-informed, needs-review for priority and completeness.
 |Any stable transactionality claim must define and evidence its mutation boundary, filesystem capability/degradation, write-ahead recovery lifecycle, one-writer isolation, affected-file preconditions, conflict-safe compensation, journal security/integrity, complete edit rendering, diagnostics gates, approval semantics, and recovery/error states. Until then, documentation must use the narrower compensatable-batch classification.
 |ADRs 0002 and 0004; `docs/transactionality-audit.md` (`TX-001` through `TX-018`).
 |planned release constraint; needs-review
+
+|C-TECH-015
+|RefactorKit is the definitive semantic diagnostics and refactoring authority for managed Java operations. Maven compile/test is supplementary evidence only and must never excuse a false RefactorKit diagnostic; an incomplete required environment yields typed source-set unavailability rather than guessed diagnostics or mutation authority.
+|ADR 0012; `RPK-JAVA-DIAG-001..007`.
+|confirmed architecture; planned, product-critical
+
+|C-TECH-016
+|The caller-declared full Maven reactor root remains workspace and effective-model authority. Module targeting filters results only after full-reactor model, dependency-closure, and impact-closure construction. No implicit ancestor, sibling, upward, or outward discovery may widen that workspace.
+|ADR 0012; `RPK-JAVA-DIAG-002`.
+|confirmed architecture; planned
+
+|C-TECH-017
+|Exact Maven `--release` diagnostics require immutable, integrity-verified, hash-attested, licensed, and SBOM-covered release-aware Java platform signatures. Source compliance, the host JDK, and the reduced running jlink image are insufficient. A no-release/source-only project must name a qualified JDK platform or receive typed unavailability.
+|ADR 0012; `RPK-JAVA-DIAG-001`.
+|confirmed architecture; planned, product-critical
+
+|C-TECH-018
+|Only safely declared, already materialized generated sources may enter analysis. Discovery must not implicitly execute Maven or wrappers, lifecycle goals, plugins, annotation processors, credential helpers, Maven settings credentials, or other build code. Unnamed/classpath Maven reactors are qualified first; named JPMS/module-path reactors remain typed unsupported until a complete dedicated slice is accepted.
+|ADRs 0010-0012; `RPK-JAVA-DIAG-006..007`.
+|confirmed architecture; planned
 |===
 
 == Architectural Boundary Constraints
@@ -153,4 +173,9 @@ Status: implementation-informed, needs-review for priority and completeness.
 |Stable self-contained release assets require checksum, SBOM, provenance/attestation, clean-build reproducibility comparison, archive-layout verification, and `JAVA_HOME`-unset smoke evidence.
 |`docs/releases/v1.0.0-plan.md`; ADR 0005.
 |confirmed target; planned acceptance
+
+|C-PROC-008
+|The `RPK-JAVA-DIAG-001..007` epic is a product-critical release prerequisite. Acceptance must prove exact release platforms, full-reactor main/test visibility, source-set availability roots, exact before/staged/after/rollback evidence, non-executable discovery, and the permanent native packaged fixture before architecture or product docs claim definitive Java/Maven diagnostics implemented.
+|`docs/requirements/java-maven-authoritative-diagnostics.md`; ADR 0012.
+|confirmed architecture; planned release blocker
 |===

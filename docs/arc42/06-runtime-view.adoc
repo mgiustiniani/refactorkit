@@ -163,6 +163,36 @@ Status: implementation-informed from `docs/transactionality-audit.md`; `TX-008` 
 
 Status: implementation-informed from `docs/external-class-importer.md`.
 
+== Runtime Scenario: Authoritative Module-targeted Maven Diagnostics
+
+Status: confirmed architecture; active, product-critical. The first release-8/current-release packaged and post-model module-filter rows are implemented; this scenario does not claim completion of `RPK-JAVA-DIAG-001..007`.
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|The caller opens the declared full Maven reactor root. RefactorKit treats that root as workspace and effective-model authority and performs no implicit upward, sibling, or outward discovery.
+
+|2
+|The Build Model provider constructs the active full reactor and independent main/test source-set environments from non-executable evidence. Only safely declared, already materialized generated sources are included; Maven, wrappers, lifecycle goals, plugins, annotation processors, credential helpers, and settings credentials do not execute.
+
+|3
+|For each affected source set, the Java adapter selects the exact immutable, hash-attested Java platform signatures for effective `--release R`. A no-release/source-only configuration requires an explicitly qualified JDK platform. Missing or unqualified platform evidence makes only the dependent source-set closure typed unavailable.
+
+|4
+|A module-targeted request computes the selected module's Maven dependency and dependent-impact closures over the already constructed full-reactor model. The module selector filters returned rows; it does not redefine the workspace or model.
+
+|5
+|If any required affected environment is unavailable, RefactorKit returns concise typed source-set roots, preserves genuine syntax findings, suppresses only derivative binding cascades, and grants no semantic mutation authority. Named JPMS/module-path reactors return typed unsupported until their dedicated slice is accepted.
+
+|6
+|If the environment is complete, JDT produces RefactorKit diagnostics bound to snapshot, overlay/disk mode, source-set closure, model/classpath evidence, platform-signature identity, and provider identity. Maven compile/test may be reported separately but cannot suppress or excuse these diagnostics.
+
+|7
+|Managed preview/apply compares baseline and exact staged post-image diagnostics across the affected and dependent-impact closure. Default policy rejects introduced errors; strict mode requires zero staged errors. Any affected-environment unavailability blocks regardless of baseline, and post-apply/rollback results bind the committed/restored snapshots.
+|===
+
 == Runtime Diagrams
 
-No runtime/dynamic C4 diagrams were added in this baseline. This is an actionable documentation gap if scenario visualization becomes necessary.
+No runtime/dynamic C4 diagrams were added in this baseline. This remains an actionable documentation gap if scenario visualization becomes necessary; the new diagnostics flow is documented textually until a dynamic view adds enduring value.

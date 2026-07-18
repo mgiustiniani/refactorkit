@@ -22,6 +22,13 @@ errors (for example forced safe delete) are treated as approved diagnostics;
 `PatchEngine` still blocks every additional unapproved regression. Daemon responses and
 LSP diagnostic `data` expose evidence/category fields.
 
+This is an implementation-informed baseline, not completion of the active
+product-critical Java/Maven diagnostics-authority epic. Module-level availability,
+source compliance, a successful Maven build, or diagnostics from the running JVM
+must not be presented as the complete source-set/release authority defined by
+[`requirements/java-maven-authoritative-diagnostics.md`](requirements/java-maven-authoritative-diagnostics.md)
+and ADR 0012.
+
 ## Evidence and apply authority
 
 Every Java plan classifies itself as `JDT_BINDING`, `STRUCTURAL`, or
@@ -38,6 +45,33 @@ by stable file-rewriter planners. A shared policy detects conventional generated
 paths, `@Generated` variants, and generated/do-not-edit headers. Rename type,
 move type, rename member, safe delete (including force), extract method, change
 signature, and organize imports conservatively refuse before producing edits.
+
+## Release-aware Maven authority
+
+Status: active, product-critical. Release 8/current-release packaged diagnostics
+and post-model module filtering are implemented; the full epic remains open.
+
+For managed Java semantic operations, RefactorKit is the definitive authority and
+Maven compile/test is supplementary evidence only. The declared full reactor root
+remains workspace/model authority; module targeting filters after the active
+reactor, source-set dependency closure, and affected dependent-impact closure are
+constructed. No child request triggers implicit upward or outward discovery.
+
+Effective Maven `--release 8..25` requires immutable, licensed, SBOM-covered,
+hash-attested Java platform signatures. JDT grammar compliance and release flags
+alone are insufficient, and the host or reduced jlink runtime is never a silent
+substitute. Source-only/no-release configurations require an explicit qualified
+JDK platform or typed unavailability. Main and test availability is independent;
+only safely declared and already materialized generated sources are visible.
+Named JPMS/module-path reactors return typed unsupported until a dedicated
+complete slice is accepted. Discovery continues to prohibit implicit Maven,
+wrapper, lifecycle, plugin, annotation-processor, credential, or build-code
+execution.
+
+Default staged policy rejects introduced errors; strict mode requires zero staged
+errors. An unavailable affected source-set/impact environment always blocks, even
+at baseline, and all authoritative rows bind snapshot/overlay mode, model and
+classpath evidence, platform identity, source-set closure, and provider identity.
 
 ## Source compatibility
 
@@ -67,9 +101,12 @@ content-hash evidence for drift protection, not a claim of repository
 provenance/authenticity.
 Independent main/test source and class paths preserve Maven scope visibility,
 including generated read-only roots. Gradle toolchain/source-compatibility
-heuristics remain supported. Unconfigured projects default
-to Java 8 semantics; direct synthetic snapshots without module metadata use the
-latest supported level.
+heuristics remain supported. The current compatibility scanner defaults
+unconfigured projects to Java 8 grammar semantics; direct synthetic snapshots without module metadata
+use the latest supported grammar level. Neither default is exact Java SE API
+platform authority. Under the active ADR 0012 contract, source-only/no-release
+semantic authority instead requires an explicitly qualified JDK platform or a
+typed unavailable result.
 
 The normalized `java.sourceLevel` is stored in hash-bound `Module.languageSettings`.
 Maven/Gradle descriptors are independently fingerprinted as declaration evidence,

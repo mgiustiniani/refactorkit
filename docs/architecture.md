@@ -63,7 +63,16 @@ internal Build Model SPI and completed P2B Maven/Gradle productionization gate i
 `0.5.x`. The Gradle default is the bounded,
 non-executable `gradle-declarative-v1` model documented in
 [`gradle-build-model.md`](gradle-build-model.md); package/FQCN identity is
-kept separate from source-set/module ownership. See `docs/kotlin-adapter.md`,
+kept separate from source-set/module ownership.
+
+The active product-critical Java/Maven diagnostics-authority epic is integrated
+in ARC42 chapters 4 and 8, specified in
+[`requirements/java-maven-authoritative-diagnostics.md`](requirements/java-maven-authoritative-diagnostics.md),
+and accepted architecturally by ADR 0012. The first release-platform and
+full-reactor module-filter rows are implemented; this satellite does not claim
+completion of the epic.
+
+See `docs/kotlin-adapter.md`,
 `docs/kotlin-toolchain.md`, `docs/kotlin-build-model.md`,
 `docs/releases/v0.7.0-plan.md`,
-`docs/releases/v1.0.0-plan.md`, ADR 0009, ADR 0010, and ADR 0011.
+`docs/releases/v1.0.0-plan.md`, ADR 0009, ADR 0010, ADR 0011, and ADR 0012.

@@ -83,6 +83,31 @@ leaking local repository layout or secrets. Capability discovery advertises
 MCP `project_summary` exposes the same high-level provider/status/source-set
 information without classpath contents.
 
+## Authoritative Java/Maven diagnostics boundary
+
+Status: active, product-critical. Full-reactor modeling and post-model module
+filtering have a first packaged row; no complete epic claim. See
+[`arc42/08-crosscutting-concepts.adoc`](arc42/08-crosscutting-concepts.adoc),
+[`requirements/java-maven-authoritative-diagnostics.md`](requirements/java-maven-authoritative-diagnostics.md),
+and ADR 0012.
+
+For authoritative Java diagnostics, a `BuildModelRequest` starts at the
+caller-declared full Maven reactor root. The provider constructs the active
+reactor and independent main/test environments before a module selector filters
+results. A child path is not a license to discover ancestors or siblings outside
+the declared workspace. Each source set must carry exact roots, only safely
+declared and materialized generated sources, Maven-scoped reactor/external
+visibility, Java release/platform identity, provider evidence, and typed
+availability. Missing test evidence does not make main unavailable.
+
+The Build Model remains non-executable metadata. Maven, wrappers, lifecycle
+goals, plugins, annotation processors, credential helpers/settings credentials,
+and project code do not run implicitly. Exact Java platform signatures and JDT
+provider identity remain separate attested inputs to diagnostic authority rather
+than being inferred from the host JDK or reduced packaged runtime. Named
+JPMS/module-path reactors remain typed unsupported until their dedicated model
+slice is complete.
+
 ## Remaining P2B work
 
 - retire compatibility `Module` projection after API-versioned migration of

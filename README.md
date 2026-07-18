@@ -24,6 +24,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
+- Active product-critical Java/Maven diagnostics authority: [`docs/requirements/java-maven-authoritative-diagnostics.md`](docs/requirements/java-maven-authoritative-diagnostics.md)
 - Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
 - Workspace index and semantic query plan: [`docs/releases/v0.7.0-intelligence-index-plan.md`](docs/releases/v0.7.0-intelligence-index-plan.md)
 - TypeScript workspace-index acceptance: [`docs/releases/v0.7.0-typescript-workspace-index-acceptance.md`](docs/releases/v0.7.0-typescript-workspace-index-acceptance.md)

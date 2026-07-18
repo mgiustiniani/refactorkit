@@ -38,14 +38,14 @@ RefactorKit is the system under documentation. It provides deterministic code-in
 |planned, needs-review for public API stability
 
 |Target Source Workspace
-|User-owned source tree containing Java/multi-language files, build metadata, recipes, test data, and `.refactorkit` transaction logs.
+|User-owned source tree containing Java/multi-language files, build metadata, recipes, test data, and `.refactorkit` transaction logs. For planned authoritative Maven diagnostics, its caller-declared full reactor root is the workspace boundary; module filters do not authorize upward or outward discovery.
 |Local filesystem.
-|implementation-informed
+|implementation-informed boundary; diagnostics authority planned
 
 |Build Toolchain
-|Provides Maven/Gradle/JDK/jlink/test execution context.
-|Build files, Gradle tasks, shell commands.
-|implementation-informed
+|Provides packaging, explicitly configured compiler-worker, and caller-selected build/test evidence. Maven compile/test may supplement acceptance but is outside RefactorKit's semantic authority and cannot excuse RefactorKit diagnostics.
+|Build descriptors, explicit tool inputs, Gradle/jlink packaging tasks, caller-selected shell commands.
+|implementation-informed integration; authority boundary confirmed by ADR 0012
 
 |External Code Sources
 |Provide Java source snippets/files/URLs/LLM responses for safe import preview.
@@ -95,9 +95,9 @@ RefactorKit is the system under documentation. It provides deterministic code-in
 |implementation-informed
 
 |Gradle / Maven metadata
-|Build descriptor files.
-|Project discovery and sample validation.
-|implementation-informed
+|Build descriptor files read without implicit build, plugin, processor, or credential execution.
+|Construct effective project/source-set evidence inside the declared workspace boundary.
+|implementation-informed baseline; full-reactor diagnostics authority planned
 
 |Structurizr DSL
 |`docs/c4/workspace.dsl`.
@@ -111,6 +111,7 @@ Inside RefactorKit:
 
 * core patch/model/transaction engine;
 * Java scanner, symbol model, diagnostics, and refactoring planners;
+* the planned immutable Java platform signature catalogue consumed as release-specific semantic evidence;
 * CLI application;
 * JSON-RPC daemon;
 * LSP server;
@@ -124,7 +125,7 @@ Outside RefactorKit:
 * user-owned target workspaces;
 * editors and IDEs;
 * local LLM agents/MCP clients;
-* Maven, Gradle, JDK, and `jlink` toolchains;
+* Maven, Gradle, JDK, and `jlink` execution toolchains, whose build results do not replace RefactorKit semantic authority;
 * external language servers;
 * UI frontends and cloud services.
 

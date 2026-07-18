@@ -16,9 +16,15 @@ Status: implementation-informed, needs human review for prioritization.
 
 |R-001A
 |Offline Maven effective-model analysis cannot resolve a parent, BOM, or dependency that is absent from both the reactor and configured local repository.
-|Semantic JDT analysis for that module would otherwise cascade into misleading unresolved-type errors.
-|Report one typed `buildModel.unavailable`, `classpath.unavailable`, or `sourceLevel.unavailable` root error per module and suppress derivative type-resolution noise. Network access remains explicit opt-in, anonymous, and credential-free.
-|qualified limitation
+|Semantic JDT analysis for the dependent source-set closure would otherwise cascade into misleading unresolved-type errors.
+|Implement source-set-scoped `buildModel.unavailable`, `classpath.unavailable`, `sourceLevel.unavailable`, or platform-unavailable roots and suppress only causally derivative binding noise. Network access remains explicit opt-in, anonymous, and credential-free.
+|qualified limitation; source-set authority planned
+
+|R-001B
+|A partial child/module model, module-wide availability handling, or an unqualified Java platform can produce false missing JDK, sibling-reactor, or external types—or silently accept APIs newer than Maven `--release`.
+|RefactorKit diagnostics cease to be trustworthy semantic product evidence; managed refactoring may be incorrectly blocked or, worse, granted authority from false-negative bindings. Maven success cannot repair this defect.
+|Deliver `RPK-JAVA-DIAG-001..007`: declared full-reactor modeling before module filtering, independent main/test environments, exact release signatures, typed affected-environment unavailability, exact delta authority, and permanent packaged acceptance.
+|planned, product-critical release blocker
 
 |R-002
 |`organize-imports` removes unused exact imports only when per-file JDT evidence is clean; wildcard imports are preserved and unresolved files retain lexical sorting, deduplication, and same-package removal.
@@ -117,10 +123,16 @@ Status: implementation-informed, needs human review for prioritization.
 |known risk
 
 |R-018
-|The current JDT baseline and fixed Java 21 compliance do not prove the advertised Java 8 through Java 25 source range.
-|Stable parsing, bindings, diagnostics, or refactorings may fail or misclassify newer or older constructs.
-|Upgrade JDT, configure compliance per project/source set, and pass representative Java 8, 11, 17, 21, and 25 acceptance suites.
-|planned release blocker
+|JDT grammar/compliance and compiler release flags do not by themselves provide the exact Java SE API/module surface for Maven `--release 8..25`; the reduced packaged jlink runtime can also omit standard modules needed by an analyzed project.
+|Diagnostics may falsely reject valid APIs such as `java.sql`/`java.net.http` or silently accept APIs introduced after the configured release, invalidating semantic authority.
+|Provide immutable licensed/SBOM-covered release signatures, bind their identity into every authoritative result, refuse absent evidence, and pass release-8/11/21 plus full 8-25 packaged qualification under `RPK-JAVA-DIAG-001/007`.
+|planned, product-critical release blocker
+
+|R-018A
+|Named JPMS/module-path Maven reactors are not in the first authoritative diagnostics slice.
+|Flattening them onto the classpath could hide module readability, exports, automatic-module, or split-package failures; refusing them limits supported projects.
+|Return typed unsupported/unavailable without mutation authority until a dedicated complete JPMS model and acceptance slice is approved.
+|accepted scope boundary; planned dedicated slice
 
 |R-019
 |Managed Java and TypeScript flows enforce before/staged/apply diagnostics gates, but diagnostic DTO fields and all-language API `1.0` semantics are not frozen.
@@ -198,6 +210,7 @@ The active stable plan defines the remaining release-hardening workstreams:
 * prove Eclipse JDT source compliance and semantic boundaries for Java 8 through Java 25;
 * preserve the closed TX-001 through TX-018 qualified transactionality evidence during API freeze;
 * retain precise qualification for WAL-backed managed transactions, the staged recipe-wide boundary, client-managed native LSP edits, and unsupported/destructive filesystem failure models;
+* complete the planned product-critical `RPK-JAVA-DIAG-001..007` authority epic before treating Java/Maven diagnostics as definitive, including full-reactor/source-set environments, exact release signatures, non-executable discovery, exact deltas, typed JPMS refusal, and native packaged fixtures;
 * complete diagnostic regression gates and representative project acceptance;
 * classify and test stable LSP/MCP boundaries;
 * establish bounded performance and resource behavior;
