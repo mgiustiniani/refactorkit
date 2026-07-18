@@ -487,6 +487,38 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun publicConstructorRequiresRiskAcceptanceAndThenUpdatesBoundCalls() {
+        val root = tempProject(
+            "src/main/java/com/example/Token.java" to "package com.example; public final class Token { public Token(String value) { value.toString(); } static Token create() { return new Token(\"x\"); } }\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val refused = planner.previewAddParameter(snap, "com.example.Token#<init>(java.lang.String)", "boolean", "trusted", "false")
+        assertEquals(PatchStatus.REFUSED, refused.status)
+        val plan = planner.previewAddParameter(
+            snap, "com.example.Token#<init>(java.lang.String)", "boolean", "trusted", "false",
+            acceptExternalConsumerRisk = true,
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        assertTrue(root.resolve("src/main/java/com/example/Token.java").readText().contains("new Token(\"x\", false)"))
+    }
+
+    @Test
+    fun recordCanonicalConstructorMutationRefusesOnStagedRecordInvariant() {
+        val root = tempProject(
+            "src/main/java/com/example/User.java" to "package com.example; public record User(String name) { public User(String name) { this.name = name; } }\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.previewAddParameter(
+            snap, "com.example.User#<init>(java.lang.String)", "boolean", "trusted", "false",
+            acceptExternalConsumerRisk = true,
+        )
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("introduced") || plan.summary.contains("Staged") || plan.summary.contains("not found"), plan.summary)
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """

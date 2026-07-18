@@ -31,6 +31,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         symbolFqnWithMethod: String,
         oldParameterName: String,
         newParameterName: String,
+        acceptExternalConsumerRisk: Boolean = false,
     ): PatchPlan {
         val operation = "changeSignature.renameParameter"
         if (!isValidJavaIdentifier(oldParameterName)) return refused(snapshot, operation, "Invalid old parameter name: $oldParameterName")
@@ -64,6 +65,11 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             ?: return refused(snapshot, operation, "Authoritative parameter source is missing: ${parameter.path}")
         JavaGeneratedSourcePolicy.reason(file)?.let { reason ->
             return refused(snapshot, operation, "Declaration file ${file.path} is generated code ($reason)")
+        }
+        val methodEvidence = before.methods.singleOrNull { it.qualifiedName == method.qualifiedName }
+            ?: return refused(snapshot, operation, "JDT method evidence is missing: ${method.qualifiedName}")
+        if (constructor && Modifier.isPublic(methodEvidence.modifiers) && !acceptExternalConsumerRisk) {
+            return refused(snapshot, operation, "Public constructor change signature requires acceptExternalConsumerRisk=true")
         }
         val uses = before.bindingUses.filter { it.bindingKey == parameter.parameterBindingKey }
         val ranges = listOf(parameter.sourceRange) + uses.map { it.sourceRange }
@@ -136,7 +142,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             if (!acceptExternalConsumerRisk) return refused(snapshot, operation, "Hierarchy change signature requires acceptExternalConsumerRisk=true")
             return previewChangeParameterTypeHierarchy(snapshot, selection, parameterName, newType.trim())
         }
-        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        boundedJdtSignatureRisk(snapshot, selection, operation, acceptExternalConsumerRisk)?.let { return refused(snapshot, operation, it) }
         val parameter = selection.parameters.singleOrNull { it.name == parameterName }
             ?: return refused(snapshot, operation, "JDT parameter '$parameterName' is missing or ambiguous in ${selection.method.qualifiedName}")
         val declarationText = sourceText(selection.file.content, parameter.declarationRange)
@@ -227,7 +233,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
                 snapshot, selection, parameterType.trim(), parameterName, defaultExpression.trim(),
             )
         }
-        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        boundedJdtSignatureRisk(snapshot, selection, operation, acceptExternalConsumerRisk)?.let { return refused(snapshot, operation, it) }
         if (selection.parameters.any { it.name == parameterName }) {
             return refused(snapshot, operation, "Parameter '$parameterName' already exists in ${selection.method.qualifiedName}")
         }
@@ -441,7 +447,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             if (!acceptExternalConsumerRisk) return refused(snapshot, operation, "Hierarchy change signature requires acceptExternalConsumerRisk=true")
             return previewReorderParameterHierarchy(snapshot, selection, newOrder)
         }
-        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        boundedJdtSignatureRisk(snapshot, selection, operation, acceptExternalConsumerRisk)?.let { return refused(snapshot, operation, it) }
         if (selection.parameters.size < 2) return refused(snapshot, operation, "Method must have at least two parameters to reorder")
         val requested = newOrder.map(String::trim).filter(String::isNotEmpty)
         val existing = selection.parameters.map { it.name }
@@ -526,7 +532,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             }
             return previewRemoveParameterHierarchy(snapshot, selection, parameterName)
         }
-        boundedJdtSignatureRisk(snapshot, selection, operation)?.let { return refused(snapshot, operation, it) }
+        boundedJdtSignatureRisk(snapshot, selection, operation, acceptExternalConsumerRisk)?.let { return refused(snapshot, operation, it) }
         val removeIndex = selection.parameters.indexOfFirst { it.name == parameterName }
         if (removeIndex < 0) return refused(snapshot, operation, "JDT parameter '$parameterName' not found in ${selection.method.qualifiedName}")
         val parameter = selection.parameters[removeIndex]
@@ -904,6 +910,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         snapshot: ProjectSnapshot,
         selection: JdtMethodSelection,
         operation: String,
+        acceptExternalConsumerRisk: Boolean = false,
     ): String? {
         val ownerName = selection.method.qualifiedName.substringBefore('#')
         val owner = selection.analysis.symbols.singleOrNull {
@@ -918,7 +925,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             return "$operation refuses interface methods until the complete implementer hierarchy is selected"
         }
         if (Modifier.isPublic(selection.method.modifiers) || Modifier.isProtected(selection.method.modifiers)) {
-            return "$operation refuses public method or protected method until external-consumer risk and hierarchy evidence are complete"
+            if (!(selection.method.constructor && acceptExternalConsumerRisk)) {
+                return "$operation refuses public method or protected method until external-consumer risk and hierarchy evidence are complete"
+            }
         }
         if (selection.analysis.overrideRelations.any {
                 it.overridingSymbolQualifiedName == selection.method.qualifiedName ||

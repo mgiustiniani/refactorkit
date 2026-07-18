@@ -1504,7 +1504,10 @@ class DaemonSession(
             "changeSignature.renameParameter", "renameParameter" -> {
                 val oldName = args["oldName"] ?: args["oldParameterName"] ?: missing("arguments.oldName")
                 val newName = args["newName"] ?: args["newParameterName"] ?: missing("arguments.newName")
-                JavaChangeSignaturePlanner(adapter).previewRenameParameter(snap, symbol ?: missing("symbol"), oldName, newName)
+                JavaChangeSignaturePlanner(adapter).previewRenameParameter(
+                    snap, symbol ?: missing("symbol"), oldName, newName,
+                    acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
             }
             "changeSignature.changeParameterType", "changeParameterType" -> {
                 val name = args["name"] ?: args["parameterName"] ?: missing("arguments.name")

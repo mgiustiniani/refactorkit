@@ -90,7 +90,10 @@ Class creation, `this(...)`, and `super(...)` arguments are published as bound
 constructor invocations. Rename, add, remove, reorder, and parameter-type change
 therefore use the same staged call-identity and diagnostics gates as methods.
 Constructor references (`Type::new`) refuse until functional-interface migration
-is independently implemented. Public constructors remain outside this bounded row.
+is independently implemented. Public constructors require explicit
+`acceptExternalConsumerRisk=true`; acceptance never authorizes external edits.
+Record canonical/compact mutation remains fail-closed because record-component
+invariants require a separate coordinated operation.
 
 ## Bounded generic, varargs, and annotation rows
 
@@ -105,7 +108,7 @@ reorder; annotated type replacement remains refused.
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- public constructors, compact/canonical records, arbitrary vararg expansion,
+- coordinated compact/canonical record changes, arbitrary vararg expansion,
   broader generic type changes and annotation mutation;
 - method and constructor references, lambdas and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

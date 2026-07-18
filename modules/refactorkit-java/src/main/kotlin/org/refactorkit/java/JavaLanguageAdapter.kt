@@ -777,7 +777,10 @@ class JavaLanguageAdapter(
         val newName = request.arguments["newName"]
             ?: request.arguments["newParameterName"]
             ?: return notImplemented(request, "renameParameter requires arguments.newName")
-        return JavaChangeSignaturePlanner(this).previewRenameParameter(request.snapshot, symbol, oldName, newName)
+        return JavaChangeSignaturePlanner(this).previewRenameParameter(
+            request.snapshot, symbol, oldName, newName,
+            acceptExternalConsumerRisk = request.arguments["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+        )
     }
 
     private fun applyChangeParameterType(request: RefactoringRequest): PatchPlan {

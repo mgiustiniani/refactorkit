@@ -334,7 +334,10 @@ class RefactorKitCli(
                     ?: parsed.options["new-param"]
                     ?: parsed.options["to"]
                     ?: run { System.err.println("change-signature rename-parameter requires --new-name <param>"); return 2 }
-                planner.previewRenameParameter(snap, symbol, oldName, newName)
+                planner.previewRenameParameter(
+                    snap, symbol, oldName, newName,
+                    acceptExternalConsumerRisk = "accept-external-consumer-risk" in parsed.flags,
+                )
             }
             "change-parameter-type", "changeParameterType", "changeSignature.changeParameterType" -> {
                 val name = parsed.options["name"]
