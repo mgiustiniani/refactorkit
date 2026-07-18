@@ -105,10 +105,19 @@ parameter remaining last. Arbitrary zero/many vararg expansion remains refused.
 Parameter annotations are preserved as part of exact declaration ranges during
 reorder; annotated type replacement remains refused.
 
+## Overloads, lambdas, and functional-reference boundary
+
+Exact signed selectors isolate one overload; staged JDT requires its original call
+locations to remain bound while sibling overload declarations and calls remain
+byte-identical. Ordinary invocations inside lambda bodies are updated through the
+same binding evidence. Method and constructor references refuse before planning
+because changing their functional-interface signature is a separate coordinated
+operation. Expanded varargs calls with zero or multiple trailing arguments also
+refuse without a partial edit.
+
 ## Remaining J1 signature catalogue
 
 Separate requirement-first rows are still required for:
-- coordinated compact/canonical record changes, arbitrary vararg expansion,
-  broader generic type changes and annotation mutation;
-- method and constructor references, lambdas and external/public consumer boundaries;
+- coordinated compact/canonical record changes and annotation mutation;
+- method/constructor-reference functional-interface migration and external/public consumer boundaries;
 - Java/Kotlin callers through shared JVM identity.

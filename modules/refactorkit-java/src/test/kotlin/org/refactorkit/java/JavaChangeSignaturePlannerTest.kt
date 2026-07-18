@@ -519,6 +519,70 @@ class JavaChangeSignaturePlannerTest {
     }
 
     @Test
+    fun exactOverloadSelectorAndLambdaCallerRemainBound() {
+        val root = tempProject(
+            "src/main/java/com/example/Overloads.java" to """
+                package com.example;
+                import java.util.function.Supplier;
+                final class Overloads {
+                    private static String find(String value) { return value; }
+                    private static String find(int value) { return Integer.toString(value); }
+                    static Supplier<String> supplier() { return () -> find("x"); }
+                    static String number() { return find(1); }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.previewAddParameter(
+            snap, "com.example.Overloads#find(java.lang.String)", "boolean", "trusted", "false",
+        )
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val applied = PatchEngine(root).apply(plan, snap)
+        assertIs<ApplyResult.Applied>(applied)
+        val content = root.resolve("src/main/java/com/example/Overloads.java").readText()
+        assertTrue(content.contains("find(String value, boolean trusted)"))
+        assertTrue(content.contains("find(\"x\", false)"))
+        assertTrue(content.contains("find(int value)"))
+        assertTrue(content.contains("find(1)"))
+    }
+
+    @Test
+    fun methodAndConstructorReferencesRefuseBeforeMutation() {
+        val root = tempProject(
+            "src/main/java/com/example/References.java" to """
+                package com.example;
+                import java.util.function.Function;
+                final class References {
+                    private References(String value) {}
+                    private static String find(String value) { return value; }
+                    Function<String, String> method() { return References::find; }
+                    Function<String, References> constructor() { return References::new; }
+                }
+            """.trimIndent() + "\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val method = planner.previewAddParameter(snap, "com.example.References#find(java.lang.String)", "int", "rank", "0")
+        val constructor = planner.previewAddParameter(snap, "com.example.References#<init>(java.lang.String)", "int", "rank", "0")
+        assertEquals(PatchStatus.REFUSED, method.status)
+        assertEquals(PatchStatus.REFUSED, constructor.status)
+        assertTrue(method.summary.contains("reference", ignoreCase = true), method.summary)
+        assertTrue(constructor.summary.contains("reference", ignoreCase = true), constructor.summary)
+    }
+
+    @Test
+    fun arbitraryExpandedVarargsCallRefusesWithoutPartialPlan() {
+        val root = tempProject(
+            "src/main/java/com/example/Varargs.java" to "package com.example; final class Varargs { private static String join(String prefix, String... parts) { return prefix; } static String run() { return join(\"x\", \"a\", \"b\"); } }\n",
+        )
+        val snap = JavaProjectScanner().scan(root)
+        val plan = planner.previewRemoveParameter(
+            snap, "com.example.Varargs#join(java.lang.String,java.lang.String[])", "parts",
+        )
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun hierarchyAddParameterRefusesExternalSuperDeclaration() {
         val root = tempProject(
             "src/main/java/com/example/Upper.java" to """
