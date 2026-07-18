@@ -203,6 +203,7 @@ jobs:
 
       - name: Summarize native test failures
         if: failure()
+        timeout-minutes: 2
         shell: python
         run: |
           import pathlib, xml.etree.ElementTree as ET
