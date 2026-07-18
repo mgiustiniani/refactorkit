@@ -117,11 +117,14 @@ def main() -> int:
             b"static Token create() { return new Token(\"x\"); } }\n"
         )
         shapes.write_bytes(
-            b"package com.acme; final class SignatureShapes { "
+            b"package com.acme; import java.util.function.Supplier; final class SignatureShapes { "
             b"private static <T> T select(T value, int unused) { return value; } "
             b"private static String join(String prefix, int count, String... parts) { return prefix; } "
             b"private static String annotated(@Deprecated String value, int rank) { return value; } "
-            b"static String run() { return select(\"x\", 1) + join(\"a\", 2, \"b\") + annotated(\"c\", 3); } }\n"
+            b"private static String find(String value) { return value; } "
+            b"private static String find(int value) { return Integer.toString(value); } "
+            b"static Supplier<String> supplier() { return () -> find(\"lambda\"); } "
+            b"static String run() { return select(\"x\", 1) + join(\"a\", 2, \"b\") + annotated(\"c\", 3) + find(1); } }\n"
         )
         before = source_hash(root)
         symbol = "com.acme.Service#find(java.lang.String,boolean)"
@@ -289,6 +292,7 @@ def main() -> int:
             for request_id, operation, shape_symbol, arguments, expected in [
                 (65, "changeSignature.removeParameter", "com.acme.SignatureShapes#select", {"name": "unused"}, "select(\"x\")"),
                 (68, "changeSignature.reorderParameters", "com.acme.SignatureShapes#annotated(java.lang.String,int)", {"order": "rank,value"}, "annotated(3, \"c\")"),
+                (79, "changeSignature.addParameter", "com.acme.SignatureShapes#find(java.lang.String)", {"type": "boolean", "name": "trusted", "default": "false"}, "find(\"lambda\", false)"),
             ]:
                 shape_preview = exchange(process, request_id, "tools/call", {
                     "name": "preview_refactoring", "arguments": {"operation": operation, "symbol": shape_symbol, "arguments": arguments},
@@ -421,10 +425,20 @@ def main() -> int:
             exchange(process, 78, "patch.rollback", {"transactionId": shape_apply["transactionId"]})
             if source_hash(root) != before:
                 raise AssertionError("daemon bounded varargs rollback did not restore exact bytes")
+            overload_preview = exchange(process, 79, "refactor.preview", {
+                "operation": "changeSignature.addParameter",
+                "symbol": "com.acme.SignatureShapes#find(java.lang.String)",
+                "arguments": {"type": "boolean", "name": "trusted", "default": "false"},
+            })
+            overload_apply = exchange(process, 80, "refactor.apply", {"planId": overload_preview["planId"]})
+            assert_contains(shapes, ["find(String value, boolean trusted)", "find(\"lambda\", false)", "find(int value)", "find(1)"])
+            exchange(process, 81, "patch.rollback", {"transactionId": overload_apply["transactionId"]})
+            if source_hash(root) != before:
+                raise AssertionError("daemon overload/lambda rollback did not restore exact bytes")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy, constructor, generic, varargs, and annotation rows restored exact bytes.")
+    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy, constructor, generic, varargs, annotation, overload, and lambda rows restored exact bytes.")
     return 0
 
 

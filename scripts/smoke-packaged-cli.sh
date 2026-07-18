@@ -70,11 +70,15 @@ public final class Token {
 JAVA
 cat >"$fixture/src/main/java/com/acme/SignatureShapes.java" <<'JAVA'
 package com.acme;
+import java.util.function.Supplier;
 final class SignatureShapes {
     private static <T> T select(T value, int unused) { return value; }
     private static String join(String prefix, int count, String... parts) { return prefix; }
     private static String annotated(@Deprecated String value, int rank) { return value; }
-    static String run() { return select("x", 1) + join("a", 2, "b") + annotated("c", 3); }
+    private static String find(String value) { return value; }
+    private static String find(int value) { return Integer.toString(value); }
+    static Supplier<String> supplier() { return () -> find("lambda"); }
+    static String run() { return select("x", 1) + join("a", 2, "b") + annotated("c", 3) + find(1); }
 }
 JAVA
 cat >"$fixture/structural.ts" <<'TS'
@@ -226,7 +230,8 @@ fi
 for shape in \
   "remove-parameter|com.acme.SignatureShapes#select|--name unused|select(\"x\")" \
   "reorder-parameters|com.acme.SignatureShapes#join(java.lang.String,int,java.lang.String[])|--order count,prefix,parts|join(2, \"a\", \"b\")" \
-  "reorder-parameters|com.acme.SignatureShapes#annotated(java.lang.String,int)|--order rank,value|annotated(3, \"c\")"; do
+  "reorder-parameters|com.acme.SignatureShapes#annotated(java.lang.String,int)|--order rank,value|annotated(3, \"c\")" \
+  "add-parameter|com.acme.SignatureShapes#find(java.lang.String)|--type boolean --name trusted --default false|find(\"lambda\", false)"; do
   IFS='|' read -r operation symbol arguments expected <<<"$shape"
   shape_output="$(env -u JAVA_HOME "$launcher" change-signature --operation "$operation" --symbol "$symbol" $arguments --apply "$fixture")"
   shape_transaction="$(grep -Eo 'transaction-[0-9a-f-]+' <<<"$shape_output" | tail -1)"
