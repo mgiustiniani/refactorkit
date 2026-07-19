@@ -6,6 +6,6 @@ import org.example.Zed;
 import static java.util.Collections.emptyList;
 
 public class App {
-    List<String> names;
+    List<String> names = emptyList();
     Map<String, Zed> zed;
 }

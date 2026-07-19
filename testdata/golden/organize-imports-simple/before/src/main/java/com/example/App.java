@@ -8,6 +8,6 @@ import static java.util.Collections.emptyList;
 import java.util.List;
 
 public class App {
-    List<String> names;
+    List<String> names = emptyList();
     Map<String, Zed> zed;
 }
