@@ -217,7 +217,7 @@ private object JavaModuleBuildModelProjector {
                     classpathEntries = module.mainClasspathEntries,
                     runtimeClasspathEntries = module.mainRuntimeClasspathEntries,
                     moduleDependencies = mainDependencies,
-                    attributes = jvmSourceSetAttributes(module, sourceLevel),
+                    attributes = jvmSourceSetAttributes(module, sourceLevel, test = false),
                 ),
                 BuildSourceSet(
                     id = "test",
@@ -228,15 +228,18 @@ private object JavaModuleBuildModelProjector {
                     classpathEntries = module.testClasspathEntries,
                     runtimeClasspathEntries = module.testClasspathEntries,
                     moduleDependencies = testDependencies,
-                    attributes = jvmSourceSetAttributes(module, sourceLevel),
+                    attributes = jvmSourceSetAttributes(module, sourceLevel, test = true),
                 ),
             ),
             attributes = module.languageSettings,
         )
     }
 
-    private fun jvmSourceSetAttributes(module: Module, sourceLevel: String): Map<String, String> = buildMap {
+    private fun jvmSourceSetAttributes(module: Module, sourceLevel: String, test: Boolean): Map<String, String> = buildMap {
         put("java.sourceLevel", sourceLevel)
+        val classpathPrefix = if (test) "java.testClasspath" else "java.mainClasspath"
+        module.languageSettings["$classpathPrefix.status"]?.let { put("java.classpath.status", it) }
+        module.languageSettings["$classpathPrefix.message"]?.let { put("java.classpath.message", it) }
         listOf(
             "java.sourceLevel.status",
             "java.sourceLevelEvidence",

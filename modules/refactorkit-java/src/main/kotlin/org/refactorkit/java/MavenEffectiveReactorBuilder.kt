@@ -46,6 +46,8 @@ internal data class MavenModuleModel(
     val modelInputs: Set<Path>,
     val importedBoms: Set<Path>,
     val missingArtifacts: List<String>,
+    val mainMissingArtifacts: List<String>,
+    val testMissingArtifacts: List<String>,
     val testGeneratedPathHints: Set<String>,
     val kotlinPluginConfigured: Boolean = false,
     val kotlinJvmTarget: String? = null,
@@ -110,6 +112,8 @@ internal class MavenEffectiveReactorBuilder(
                     modelInputs = result.inputs + setOf(pom),
                     importedBoms = result.importedBoms,
                     missingArtifacts = emptyList(),
+                    mainMissingArtifacts = emptyList(),
+                    testMissingArtifacts = emptyList(),
                     testGeneratedPathHints = emptySet(),
                     modelFailure = concise(result.failure ?: "effective Maven model unavailable"),
                 )
@@ -138,20 +142,23 @@ internal class MavenEffectiveReactorBuilder(
         val managedVersions = model.dependencyManagement?.dependencies.orEmpty().mapNotNull { dependency ->
             dependency.coordinate()?.let { it.ga() to it.version }
         }.toMap()
-        val missing = linkedSetOf<String>()
+        val mainMissing = linkedSetOf<String>()
+        val runtimeMissing = linkedSetOf<String>()
+        val testOnlyMissing = linkedSetOf<String>()
         val modelInputs = linkedSetOf<Path>().apply { addAll(effective.inputs); add(pom) }
         val importedBoms = linkedSetOf<Path>().apply { addAll(effective.importedBoms) }
         val sourceDirectories = sourceDirectories(workspaceRoot, model, pom)
-        val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, missing)
+        val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, mainMissing)
         val mainArtifacts = (systemPathArtifacts + resolveGraph(
-            mainRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
+            mainRepositoryDirect, resolver, reactorCoordinates, mainMissing, modelInputs, importedBoms, managedVersions,
         )).distinct()
         val runtimeArtifacts = resolveGraph(
-            runtimeRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
+            runtimeRepositoryDirect, resolver, reactorCoordinates, runtimeMissing, modelInputs, importedBoms, managedVersions,
         ).distinct()
         val testArtifacts = (mainArtifacts + runtimeArtifacts + resolveGraph(
-            testRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
+            testRepositoryDirect, resolver, reactorCoordinates, testOnlyMissing, modelInputs, importedBoms, managedVersions,
         )).distinct()
+        val testMissing = (mainMissing + runtimeMissing + testOnlyMissing).toList()
         return MavenModuleModel(
             root = pom.parent,
             coordinate = requireNotNull(model.coordinate()),
@@ -170,7 +177,9 @@ internal class MavenEffectiveReactorBuilder(
             systemPathArtifacts = systemPathArtifacts.toSet(),
             modelInputs = modelInputs,
             importedBoms = importedBoms,
-            missingArtifacts = missing.toList(),
+            missingArtifacts = testMissing,
+            mainMissingArtifacts = mainMissing.toList(),
+            testMissingArtifacts = testMissing,
             testGeneratedPathHints = model.build?.plugins.orEmpty()
                 .filter { plugin -> plugin.executions.any { it.phase?.contains("test", ignoreCase = true) == true } }
                 .map { it.artifactId.removeSuffix("-maven-plugin").removeSuffix("-plugin") }

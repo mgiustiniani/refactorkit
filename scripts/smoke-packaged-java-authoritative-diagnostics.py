@@ -67,6 +67,27 @@ def write_reactor(root: Path, release: int) -> None:
     )
 
 
+def write_availability_fixture(root: Path) -> None:
+    root.mkdir(parents=True)
+    (root / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId>"
+        "<artifactId>availability</artifactId><version>1</version>"
+        "<properties><maven.compiler.release>21</maven.compiler.release></properties>"
+        "<dependencies><dependency><groupId>fixture.missing</groupId><artifactId>test-api</artifactId>"
+        "<version>1</version><scope>test</scope></dependency></dependencies></project>\n",
+        encoding="utf-8",
+    )
+    main = root / "src/main/java/fixture/MainFailure.java"
+    main.parent.mkdir(parents=True)
+    main.write_text("package fixture; class MainFailure { MissingMain value; }\n", encoding="utf-8")
+    test = root / "src/test/java/fixture/TestUnavailable.java"
+    test.parent.mkdir(parents=True)
+    test.write_text(
+        "package fixture; import fixture.missing.TestApi; class TestUnavailable { TestApi value; }\n",
+        encoding="utf-8",
+    )
+
+
 def run_cli(cli: Path, root: Path, module: str | None = None) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment.pop("JAVA_HOME", None)
@@ -163,6 +184,25 @@ def main() -> int:
         if tree_hash(root) != clean_hash or (root / ".refactorkit").exists():
             raise AssertionError("read-only packaged diagnostics modified the reactor")
 
+        unavailable = Path(temporary) / "availability"
+        write_availability_fixture(unavailable)
+        unavailable_hash = tree_hash(unavailable)
+        unavailable_cli = run_cli(cli, unavailable)
+        unavailable_output = unavailable_cli.stdout + unavailable_cli.stderr
+        if (unavailable_cli.returncode == 0 or unavailable_output.count("classpath.unavailable") != 1 or
+                "MissingMain" not in unavailable_output or "TestApi" in unavailable_output):
+            raise AssertionError(f"packaged source-set availability CLI failed: {unavailable_output}")
+        unavailable_daemon = daemon_diagnostics(daemon, unavailable)
+        if ([row.get("code") for row in unavailable_daemon].count("classpath.unavailable") != 1 or
+                not any("MissingMain" in row.get("message", "") for row in unavailable_daemon) or
+                any("TestApi" in row.get("message", "") for row in unavailable_daemon)):
+            raise AssertionError(f"packaged source-set availability daemon failed: {unavailable_daemon}")
+        unavailable_mcp = mcp_diagnostics(mcp, unavailable)
+        if "MissingMain" not in unavailable_mcp or "TestApi" in unavailable_mcp:
+            raise AssertionError(f"packaged source-set availability MCP failed: {unavailable_mcp}")
+        if tree_hash(unavailable) != unavailable_hash or (unavailable / ".refactorkit").exists():
+            raise AssertionError("source-set availability diagnostics modified the workspace")
+
         shutil.rmtree(root)
         write_reactor(root, 8)
         historical_hash = tree_hash(root)
@@ -180,7 +220,7 @@ def main() -> int:
         if tree_hash(root) != historical_hash or (root / ".refactorkit").exists():
             raise AssertionError("historical packaged diagnostics modified the reactor")
 
-    print("Packaged authoritative Java diagnostics acceptance passed: release-21 platform/reactor closure and release-8 API boundary.")
+    print("Packaged authoritative Java diagnostics acceptance passed: release-21 platform/reactor closure, source-set availability, and release-8 API boundary.")
     return 0
 
 

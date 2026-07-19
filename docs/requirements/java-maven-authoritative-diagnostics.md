@@ -50,8 +50,11 @@ project code and performs no network access unless separately authorized.
 
 ## RPK-JAVA-DIAG-004 — Availability and cascade suppression
 
-Unavailable roots are typed and source-set scoped. Derivative unresolved-symbol
-cascades may be suppressed only when their complete causal input is unavailable;
+Unavailable roots are typed and source-set scoped. The first accepted row tracks
+main/test missing artifacts independently: a missing test-only artifact emits one
+test source-set root, suppresses only derivative test binding rows, and preserves
+genuine main errors. Derivative unresolved-symbol cascades may be suppressed only
+when their complete causal input is unavailable;
 genuine source diagnostics from complete environments remain visible.
 
 ## RPK-JAVA-DIAG-005 — Change-specific authority

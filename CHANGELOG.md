@@ -19,8 +19,10 @@ review safety boundaries before applying refactorings.
   hash-bound Maven runtime classpath now keeps runtime-only artifacts out of owner
   main compilation while exporting them through reactor edges to downstream test
   compilation, eliminating the remaining Magrathea SQLite/JDBC false rows. The
-  full Java 8–25, remaining Maven scope/mediation variants, source-set
-  availability, exact delta, JPMS, SBOM/license and native matrix remain gates.
+  missing test-only artifacts now produce one source-set root while preserving
+  genuine main errors and suppressing only derivative test bindings. The full
+  Java 8–25, remaining Maven scope/mediation and transitive-availability variants,
+  exact delta, JPMS, SBOM/license and native matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

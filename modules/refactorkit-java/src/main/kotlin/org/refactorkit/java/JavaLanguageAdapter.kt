@@ -601,16 +601,13 @@ class JavaLanguageAdapter(
         val diagnostics = additionalUnavailable.toMutableList()
         val unavailableModules = project.modules.filter { module ->
             module.languageSettings["java.buildModel.status"] == "unavailable" ||
-                module.languageSettings["java.classpath.status"] == "unavailable" ||
                 module.languageSettings["java.sourceLevel.status"] == "unavailable"
         }
         unavailableModules.forEach { module ->
             val (code, message) = when {
                 module.languageSettings["java.buildModel.status"] == "unavailable" ->
                     "buildModel.unavailable" to module.languageSettings["java.buildModel.message"].orEmpty()
-                module.languageSettings["java.sourceLevel.status"] == "unavailable" ->
-                    "sourceLevel.unavailable" to module.languageSettings["java.sourceLevel.message"].orEmpty()
-                else -> "classpath.unavailable" to module.languageSettings["java.classpath.message"].orEmpty()
+                else -> "sourceLevel.unavailable" to module.languageSettings["java.sourceLevel.message"].orEmpty()
             }
             diagnostics += Diagnostic(
                 message = "Java analysis unavailable for module '${module.name}': ${message.ifBlank { code }}",
@@ -620,12 +617,28 @@ class JavaLanguageAdapter(
                 category = DiagnosticCategory.PROJECT_STRUCTURE,
             )
         }
+        val unavailableModuleIds = unavailableModules.map { it.name }.toSet()
+        val unavailableSourceSets = project.buildModels.flatMap { model -> model.modules.flatMap { module ->
+            module.sourceSets.filter { sourceSet ->
+                module.id !in unavailableModuleIds && sourceSet.attributes["java.classpath.status"] == "unavailable"
+            }.map { sourceSet -> module to sourceSet }
+        } }
+        unavailableSourceSets.forEach { (module, sourceSet) ->
+            diagnostics += unavailableSourceSet(
+                module.id,
+                sourceSet.id,
+                "classpath.unavailable",
+                sourceSet.attributes["java.classpath.message"] ?: "Required offline classpath artifacts are unavailable",
+            )
+        }
         diagnostics += semanticAnalysis.warnings.filterNot { warning ->
             isResolvedModuleExportWarning(project, warning)
         }.filter { warning ->
             (!suppressTypeResolution && verbose) || warning.category == JdtJavaDiagnosticCategory.SYNTAX ||
                 (!suppressTypeResolution && unavailableModules.none { module ->
                     sourceRoots(project, module.name, module.root).any { warning.path.normalize().startsWith(it.normalize()) }
+                } && unavailableSourceSets.none { (_, sourceSet) ->
+                    sourceSet.sourceRoots.any { warning.path.normalize().startsWith(it.normalize()) }
                 })
         }.map { warning ->
             val syntax = warning.category == JdtJavaDiagnosticCategory.SYNTAX

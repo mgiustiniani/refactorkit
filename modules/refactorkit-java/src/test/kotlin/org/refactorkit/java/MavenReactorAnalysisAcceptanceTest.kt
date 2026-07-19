@@ -24,6 +24,37 @@ import kotlin.test.assertTrue
 
 class MavenReactorAnalysisAcceptanceTest {
     @Test
+    fun missingTestArtifactSuppressesOnlyTestDerivativesAndPreservesMainErrors() {
+        val root = Files.createTempDirectory("refactorkit-source-set-availability")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>availability</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <dependencies><dependency><groupId>fixture.missing</groupId><artifactId>test-api</artifactId><version>1</version><scope>test</scope></dependency></dependencies>
+            </project>
+        """.trimIndent())
+        val main = root.resolve("src/main/java/fixture/MainFailure.java")
+        Files.createDirectories(main.parent)
+        Files.writeString(main, "package fixture; class MainFailure { MissingMain value; }\n")
+        val test = root.resolve("src/test/java/fixture/TestUnavailable.java")
+        Files.createDirectories(test.parent)
+        Files.writeString(test, "package fixture; import fixture.missing.TestApi; class TestUnavailable { TestApi value; }\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(
+            snapshot,
+            Path.of(System.getProperty("java.home")),
+        )
+
+        assertEquals(1, diagnostics.count { it.code == "classpath.unavailable" }, diagnostics.toString())
+        assertTrue(
+            diagnostics.single { it.code == "classpath.unavailable" }.message.contains(":test'"),
+            diagnostics.toString(),
+        )
+        assertTrue(diagnostics.any { it.message.contains("MissingMain") }, diagnostics.toString())
+        assertTrue(diagnostics.none { it.message.contains("TestApi") }, diagnostics.toString())
+    }
+
+    @Test
     fun effectiveJava21ReactorHasCleanPerSourceSetDiagnosticsAndCrossModuleBindings() {
         val root = Files.createTempDirectory("refactorkit-reactor-21")
         val repository = Files.createTempDirectory("refactorkit-m2")

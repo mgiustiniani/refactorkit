@@ -139,10 +139,21 @@ class JavaProjectScanner(
                     maven.kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
                     maven.kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }
                     put("java.classpath.status", if (maven.missingArtifacts.isEmpty()) "available" else "unavailable")
-                    if (maven.missingArtifacts.isNotEmpty()) {
-                        val missing = maven.missingArtifacts.sorted()
+                    fun missingMessage(missingArtifacts: List<String>): String {
+                        val missing = missingArtifacts.sorted()
                         val suffix = if (missing.size > 8) " (+${missing.size - 8} more)" else ""
-                        put("java.classpath.message", "Offline artifacts unavailable: ${missing.take(8).joinToString(", ")}$suffix")
+                        return "Offline artifacts unavailable: ${missing.take(8).joinToString(", ")}$suffix"
+                    }
+                    put("java.mainClasspath.status", if (maven.mainMissingArtifacts.isEmpty()) "available" else "unavailable")
+                    put("java.testClasspath.status", if (maven.testMissingArtifacts.isEmpty()) "available" else "unavailable")
+                    if (maven.mainMissingArtifacts.isNotEmpty()) {
+                        put("java.mainClasspath.message", missingMessage(maven.mainMissingArtifacts))
+                    }
+                    if (maven.testMissingArtifacts.isNotEmpty()) {
+                        put("java.testClasspath.message", missingMessage(maven.testMissingArtifacts))
+                    }
+                    if (maven.missingArtifacts.isNotEmpty()) {
+                        put("java.classpath.message", missingMessage(maven.missingArtifacts))
                     }
                 } else if (gradle != null) {
                     putAll(gradle.attributes)
