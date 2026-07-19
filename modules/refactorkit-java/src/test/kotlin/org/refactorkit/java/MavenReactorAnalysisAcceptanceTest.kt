@@ -24,6 +24,68 @@ import kotlin.test.assertTrue
 
 class MavenReactorAnalysisAcceptanceTest {
     @Test
+    fun boundedVersionRangeSelectsHighestAvailableMatchingRelease() {
+        val root = Files.createTempDirectory("refactorkit-maven-range")
+        val repository = Files.createTempDirectory("refactorkit-maven-range-m2")
+        installArtifact(repository, "fixture.range", "range-api", "1.0", "fixture/range/RangeApi.java",
+            "package fixture.range; public class RangeApi { public void oldVersion() {} }\n")
+        installArtifact(repository, "fixture.range", "range-api", "1.5", "fixture/range/RangeApi.java",
+            "package fixture.range; public class RangeApi { public void selected() {} }\n")
+        installArtifact(repository, "fixture.range", "range-api", "2.0", "fixture/range/RangeApi.java",
+            "package fixture.range; public class RangeApi { public void tooNew() {} }\n")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>range</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <dependencies><dependency><groupId>fixture.range</groupId><artifactId>range-api</artifactId><version>[1.0,2.0)</version></dependency></dependencies>
+            </project>
+        """.trimIndent())
+        val source = root.resolve("src/main/java/fixture/RangeUse.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source,
+            "package fixture; import fixture.range.RangeApi; class RangeUse { void run() { new RangeApi().selected(); } }\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val names = snapshot.modules.single().mainClasspathEntries.map { it.fileName.toString() }
+        assertTrue("range-api-1.5.jar" in names, names.toString())
+        assertTrue("range-api-1.0.jar" !in names && "range-api-2.0.jar" !in names, names.toString())
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(snapshot, Path.of(System.getProperty("java.home")))
+        assertTrue(diagnostics.none { it.severity == Diagnostic.Severity.ERROR }, diagnostics.toString())
+    }
+
+    @Test
+    fun relocatedAndUnsupportedArtifactTypesRefuseInsteadOfGuessingClasspath() {
+        val root = Files.createTempDirectory("refactorkit-maven-relocation")
+        val repository = Files.createTempDirectory("refactorkit-maven-relocation-m2")
+        installArtifact(repository, "fixture.legacy", "legacy-api", "1", "fixture/legacy/LegacyApi.java",
+            "package fixture.legacy; public class LegacyApi {}\n")
+        val legacyPom = repository.resolve("fixture/legacy/legacy-api/1/legacy-api-1.pom")
+        Files.writeString(legacyPom, """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture.legacy</groupId><artifactId>legacy-api</artifactId><version>1</version>
+              <distributionManagement><relocation><groupId>fixture.modern</groupId><artifactId>modern-api</artifactId><version>2</version></relocation></distributionManagement>
+            </project>
+        """.trimIndent())
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>relocation</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <dependencies>
+                <dependency><groupId>fixture.legacy</groupId><artifactId>legacy-api</artifactId><version>1</version></dependency>
+                <dependency><groupId>fixture.legacy</groupId><artifactId>binary-distribution</artifactId><version>1</version><type>zip</type></dependency>
+              </dependencies>
+            </project>
+        """.trimIndent())
+        val source = root.resolve("src/main/java/fixture/RelocationUse.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package fixture; class RelocationUse {}\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(snapshot, Path.of(System.getProperty("java.home")))
+        val rootDiagnostic = diagnostics.single { it.code == "classpath.unavailable" }
+        assertTrue(rootDiagnostic.message.contains("relocation is unsupported"), rootDiagnostic.toString())
+        assertTrue(rootDiagnostic.message.contains("dependency type 'zip' is unsupported"), rootDiagnostic.toString())
+        assertTrue(diagnostics.none { it.code == "java.jdt.typeResolution" }, diagnostics.toString())
+    }
+
+    @Test
     fun nearestDependencyMediationAndNonTransitiveScopesMatchMavenCompileVisibility() {
         val root = Files.createTempDirectory("refactorkit-maven-mediation")
         val repository = Files.createTempDirectory("refactorkit-maven-mediation-m2")

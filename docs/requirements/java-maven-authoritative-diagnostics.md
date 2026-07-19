@@ -49,8 +49,11 @@ equal-depth ties. Effective root dependency management is applied before
 selection; optional transitive dependencies and explicit exclusions are omitted;
 direct `provided` artifacts remain compile-visible but do not export children.
 Compile projection follows compile edges only, while runtime/test projections may
-follow runtime edges. Missing required artifacts or ambiguous scope/ownership
-makes that source set unavailable. Discovery executes
+follow runtime edges. Bounded local version ranges inspect at most 1,024 candidate
+directories and select the highest matching version. Non-`jar`/`test-jar`
+artifact types and Maven relocation metadata produce typed source-set
+unavailability rather than guessed classpath entries. Missing required artifacts
+or ambiguous scope/ownership makes that source set unavailable. Discovery executes
 no wrapper, lifecycle, plugin, annotation processor, credential helper or
 project code and performs no network access unless separately authorized.
 

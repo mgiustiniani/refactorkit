@@ -361,6 +361,10 @@ internal class MavenEffectiveReactorBuilder(
             val group = coordinate.ga()
             val type = node.dependency.type.ifBlank { "jar" }
             val classifier = node.dependency.classifier?.takeIf(String::isNotBlank)
+            if (type !in SUPPORTED_DEPENDENCY_TYPES) {
+                missing += "dependency type '$type' is unsupported: $group"
+                continue
+            }
             val artifactIdentity = "$group:$type:${classifier.orEmpty()}"
             val visitIdentity = "${coordinate.key}:$type:${classifier.orEmpty()}"
             val representedByReactorSources = coordinate in reactorCoordinates && isReactorSourceDependency(node.dependency)
@@ -376,12 +380,20 @@ internal class MavenEffectiveReactorBuilder(
             selectedArtifacts += artifactIdentity
             unresolvedTransitive.remove(artifactIdentity)
             if (node.dependency.type != "pom") artifacts.add(artifact)
-            if (!node.mayTraverse) continue
-            val pom = resolver.pomPath(coordinate) ?: continue
-            modelInputs.add(pom)
-            val transitive = buildEffective(pom, resolver)
-            modelInputs.addAll(transitive.inputs)
-            importedBoms.addAll(transitive.importedBoms)
+            val pom = resolver.pomPath(coordinate)
+            val transitive = pom?.let { resolvedPom ->
+                modelInputs.add(resolvedPom)
+                buildEffective(resolvedPom, resolver).also { effective ->
+                    modelInputs.addAll(effective.inputs)
+                    importedBoms.addAll(effective.importedBoms)
+                }
+            }
+            if (transitive?.model?.distributionManagement?.relocation != null) {
+                artifacts.remove(artifact)
+                missing += "artifact relocation is unsupported: $group"
+                continue
+            }
+            if (!node.mayTraverse || transitive == null) continue
             val exclusions = node.inheritedExclusions +
                 node.dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }
             transitive.model?.dependencies.orEmpty()
@@ -506,6 +518,7 @@ internal class MavenEffectiveReactorBuilder(
         private val MAIN_SCOPES = setOf("compile", "provided", "system")
         private val TEST_SCOPES = setOf("compile", "provided", "system", "runtime", "test")
         private val TRANSITIVE_SCOPES = setOf("compile", "runtime")
+        private val SUPPORTED_DEPENDENCY_TYPES = setOf("jar", "test-jar")
         private const val MAX_DEPENDENCIES = 4096
         private const val MAX_DEPENDENCY_DEPTH = 128
     }
@@ -585,7 +598,11 @@ private class LocalOnlyModelResolver(
         val base = coordinate.groupId.split('.').fold(repository.toAbsolutePath().normalize(), Path::resolve).resolve(coordinate.artifactId)
         if (!base.exists() || !base.isDirectory()) return null
         val range = runCatching { VersionRange.createFromVersionSpec(coordinate.version) }.getOrNull() ?: return null
-        val versions = Files.list(base).use { stream -> stream.filter(Files::isDirectory).map { it.fileName.toString() }.toList() }
+        val versions = Files.list(base).use { stream ->
+            stream.filter(Files::isDirectory).limit(MAX_RANGE_VERSIONS + 1L)
+                .map { it.fileName.toString() }.toList()
+        }
+        if (versions.size > MAX_RANGE_VERSIONS) return null
         val selected = versions.map(::DefaultArtifactVersion).filter(range::containsVersion).maxOrNull() ?: return null
         return coordinate.copy(version = selected.toString())
     }
@@ -661,6 +678,7 @@ private class LocalOnlyModelResolver(
         private val SHA256 = Regex("[a-f0-9]{64}")
         private const val MAX_CHECKSUM_BYTES = 4L * 1024L
         private const val MAX_NETWORK_ARTIFACT_BYTES = 256L * 1024L * 1024L
+        private const val MAX_RANGE_VERSIONS = 1_024
     }
 }
 
