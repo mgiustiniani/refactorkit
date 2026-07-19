@@ -6,11 +6,14 @@ import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.ClasspathEvidenceKind
 import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.Diagnostic
+import org.refactorkit.core.TextEdit
+import org.refactorkit.core.TextEdits
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditSimulator
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.jar.JarEntry
@@ -23,6 +26,55 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MavenReactorAnalysisAcceptanceTest {
+    @Test
+    fun upstreamMainMutationDiagnosesTransitiveMainAndTestImpactBeforeWal() {
+        val root = Files.createTempDirectory("refactorkit-maven-impact")
+        val repository = Files.createTempDirectory("refactorkit-maven-impact-m2")
+        installTestApiAndBom(repository)
+        createReactor(root, missingDependency = false)
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val path = Path.of("domain/src/main/java/fixture/domain/DomainValue.java")
+        val source = snapshot.files.single { it.path == path }
+        val token = "String value"
+        val offset = source.content.indexOf(token)
+        assertTrue(offset >= 0)
+        val edit = WorkspaceEdit(listOf(FileEdit.Modify(
+            path,
+            listOf(TextEdit(TextEdits.rangeForOffset(source.content, offset, token.length), "int value")),
+        )))
+        val adapter = JavaLanguageAdapter()
+        val javaHome = Path.of(System.getProperty("java.home"))
+        val baseline = adapter.authoritativeDiagnostics(snapshot, javaHome)
+        assertTrue(baseline.none { it.severity == Diagnostic.Severity.ERROR }, baseline.toString())
+        val staged = WorkspaceEditSimulator.apply(snapshot, edit)
+        val stagedDiagnostics = adapter.authoritativeDiagnostics(staged, javaHome)
+        val impactedPaths = stagedDiagnostics.mapNotNull { it.location?.path?.toString()?.replace('\\', '/') }
+        assertTrue(impactedPaths.any { it.startsWith("application/src/main/java/") }, stagedDiagnostics.toString())
+        assertTrue(impactedPaths.any { it.startsWith("acceptance-tests/src/test/java/") }, stagedDiagnostics.toString())
+
+        val plan = PatchPlan(
+            operation = "impactClosure",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "prove transitive Maven source-set impact closure",
+            affectedFiles = setOf(path),
+            workspaceEdit = edit,
+        )
+        val result = PatchEngine(root).apply(
+            plan,
+            snapshot,
+            ApplyAuthorization.explicit("test"),
+            DiagnosticsGate.enabled("java-authoritative") { candidate ->
+                adapter.authoritativeDiagnostics(candidate, javaHome)
+            },
+        )
+
+        assertTrue(result is ApplyResult.Refused, result.toString())
+        assertEquals(source.content, Files.readString(root.resolve(path)))
+        assertTrue(Files.notExists(root.resolve(".refactorkit/transactions")) ||
+            Files.list(root.resolve(".refactorkit/transactions")).use { it.findAny().isEmpty })
+    }
+
     @Test
     fun boundedVersionRangeSelectsHighestAvailableMatchingRelease() {
         val root = Files.createTempDirectory("refactorkit-maven-range")

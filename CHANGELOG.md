@@ -32,8 +32,10 @@ review safety boundaries before applying refactorings.
   code/message alone. Managed apply now rehydrates committed bytes through the
   same provider and automatically performs journaled rollback on post-apply
   provider/identity drift; restored bytes must reproduce baseline identities.
-  The full Java 8–25, remaining Maven classifier/variant scopes, impact closure,
-  JPMS, SBOM/license and native matrix remain gates.
+  A transitive Maven impact fixture proves that an upstream-only mutation
+  diagnoses downstream main and test source sets and refuses before WAL. The full
+  Java 8–25, remaining Maven classifier/variant scopes, JPMS, SBOM/license and
+  native matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

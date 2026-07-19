@@ -74,6 +74,9 @@ genuine source diagnostics from complete environments remain visible.
 Baseline, exact staged post-image, post-apply and rollback diagnostics bind the
 same snapshot/overlay mode, source-set and dependent-impact closure, build and
 classpath evidence, Java platform identity, provider identity and configuration.
+The first accepted impact row changes one upstream Maven main source set and
+requires JDT errors from both a transitive downstream main source set and a
+downstream test source set; the gate refuses before WAL and preserves exact bytes.
 Normal mode rejects introduced errors; strict mode requires zero staged errors.
 Diagnostic delta identity includes severity, provider code, evidence, category,
 location precision, normalized source path, exact start/end range and message;
