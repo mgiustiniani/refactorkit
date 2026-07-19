@@ -229,20 +229,30 @@ class PatchEngine(
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(diagnostics)
         } else {
-            val gateDiagnostics = validateDiagnosticsGate(
+            val gateValidation = validateDiagnosticsGate(
                 currentSnapshot,
                 normalizedEdit,
                 normalizedPlan.diagnosticsAfterPreview,
                 diagnosticsGate,
             )
-            if (gateDiagnostics.isNotEmpty()) return@withWorkspaceLock ApplyResult.Refused(gateDiagnostics)
+            if (gateValidation.diagnostics.isNotEmpty()) {
+                return@withWorkspaceLock ApplyResult.Refused(gateValidation.diagnostics)
+            }
             val approval = ApprovalRecord(
                 kind = if (normalizedPlan.requiresUserApproval) ApprovalKind.EXPLICIT_APPLY else ApprovalKind.NOT_REQUIRED,
                 surface = authorization.surface,
                 actor = authorization.actor,
                 recordedAt = java.time.Instant.now(),
             )
-            applyPrepared(normalizedPlan, currentSnapshot, approval)
+            val applied = applyPrepared(normalizedPlan, currentSnapshot, approval)
+            if (applied is ApplyResult.Applied && gateValidation.provider != null) {
+                validatePostApplyDiagnostics(
+                    currentSnapshot,
+                    applied.transaction,
+                    gateValidation,
+                    diagnosticsGate.id,
+                )
+            } else applied
         }
     }
 
@@ -285,28 +295,35 @@ class PatchEngine(
             }
         }
 
-        try {
-            val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
-            val permissions = record.preImages.associate { it.path to it.posixPermissions }
-            transactionLog.update(record.copy(state = JournalState.ROLLING_BACK))
-            commitPostImages(currentImages, record.preImages, permissions)
-            removeCreatedDirectories(record.createdDirectories)
-            transactionLog.update(record.copy(
-                state = JournalState.ROLLED_BACK,
-                failure = if (mode == RollbackMode.FORCE) "Forced rollback explicitly requested" else null,
-            ))
-            ApplyResult.Applied(transaction)
-        } catch (error: Exception) {
-            markRecoveryRequired(record, "Rollback failed: ${error.message}")
-            ApplyResult.Refused(listOf(Diagnostic(
-                "Rollback failed; recovery is required: ${error.message}",
-                Diagnostic.Severity.ERROR,
-                code = "transaction.recoveryRequired",
-            )))
-        }
+        val rollbackDiagnostics = rollbackAppliedRecord(
+            record,
+            if (mode == RollbackMode.FORCE) "Forced rollback explicitly requested" else null,
+        )
+        if (rollbackDiagnostics.isEmpty()) ApplyResult.Applied(transaction)
+        else ApplyResult.Refused(rollbackDiagnostics)
     }
 
     // ── private ──────────────────────────────────────────────────────────────
+
+    private fun rollbackAppliedRecord(
+        record: TransactionJournalRecord,
+        reason: String?,
+    ): List<Diagnostic> = try {
+        val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
+        val permissions = record.preImages.associate { it.path to it.posixPermissions }
+        transactionLog.update(record.copy(state = JournalState.ROLLING_BACK, failure = reason))
+        commitPostImages(currentImages, record.preImages, permissions)
+        removeCreatedDirectories(record.createdDirectories)
+        transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
+        emptyList()
+    } catch (error: Exception) {
+        markRecoveryRequired(record, "Rollback failed: ${error.message}")
+        listOf(Diagnostic(
+            "Rollback failed; recovery is required: ${error.message}",
+            Diagnostic.Severity.ERROR,
+            code = "transaction.recoveryRequired",
+        ))
+    }
 
     private fun withWorkspaceLock(action: () -> ApplyResult): ApplyResult {
         val metadataDir = normalizedRoot.resolve(".refactorkit")
@@ -545,33 +562,107 @@ class PatchEngine(
         return diagnostics
     }
 
+    private data class DiagnosticsGateValidation(
+        val diagnostics: List<Diagnostic>,
+        val baseline: List<Diagnostic> = emptyList(),
+        val staged: List<Diagnostic> = emptyList(),
+        val stagedSnapshot: ProjectSnapshot? = null,
+        val provider: ((ProjectSnapshot) -> List<Diagnostic>)? = null,
+    )
+
     private fun validateDiagnosticsGate(
         snapshot: ProjectSnapshot,
         edit: WorkspaceEdit,
         approvedAfterDiagnostics: List<Diagnostic>,
         gate: DiagnosticsGate,
-    ): List<Diagnostic> {
-        val provider = gate.provider ?: return emptyList()
+    ): DiagnosticsGateValidation {
+        val provider = gate.provider ?: return DiagnosticsGateValidation(emptyList())
         return try {
             val before = provider(snapshot)
-            val staged = WorkspaceEditSimulator.apply(snapshot, edit)
-            val after = provider(staged)
+            val stagedSnapshot = WorkspaceEditSimulator.apply(snapshot, edit)
+            val after = provider(stagedSnapshot)
             val regressions = diagnosticsRegression(before, after)
             val unapprovedRegressions = diagnosticsRegression(approvedAfterDiagnostics, regressions)
-            if (unapprovedRegressions.isEmpty()) emptyList() else listOf(Diagnostic(
+            val diagnostics = if (unapprovedRegressions.isEmpty()) emptyList() else listOf(Diagnostic(
                 "Diagnostics gate '${gate.id}' found ${unapprovedRegressions.size} unapproved new error(s): " +
                     unapprovedRegressions.joinToString("; ") { it.message },
                 Diagnostic.Severity.ERROR,
                 code = "diagnostics.regression",
             ))
+            DiagnosticsGateValidation(diagnostics, before, after, stagedSnapshot, provider)
         } catch (error: Exception) {
-            listOf(Diagnostic(
+            DiagnosticsGateValidation(listOf(Diagnostic(
                 "Diagnostics gate '${gate.id}' failed: ${error.message}",
                 Diagnostic.Severity.ERROR,
                 code = "diagnostics.unavailable",
-            ))
+            )))
         }
     }
+
+    private fun validatePostApplyDiagnostics(
+        baselineSnapshot: ProjectSnapshot,
+        transaction: Transaction,
+        validation: DiagnosticsGateValidation,
+        gateId: String,
+    ): ApplyResult {
+        val provider = requireNotNull(validation.provider)
+        val record = transactionLog.loadRecord(transaction.id)
+            ?: return ApplyResult.Refused(listOf(Diagnostic(
+                "Post-apply diagnostics cannot load transaction ${transaction.id.value}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.journalMissing",
+            )))
+        val failure = try {
+            val expected = requireNotNull(validation.stagedSnapshot)
+            val actual = rehydrateSnapshot(expected)
+            val postApply = provider(actual)
+            val differences = diagnosticsRegression(validation.staged, postApply) +
+                diagnosticsRegression(postApply, validation.staged)
+            if (differences.isEmpty()) null else Diagnostic(
+                "Diagnostics gate '$gateId' observed ${differences.size} post-apply identity mismatch(es)",
+                Diagnostic.Severity.ERROR,
+                code = "diagnostics.postApplyMismatch",
+            )
+        } catch (error: Exception) {
+            Diagnostic(
+                "Diagnostics gate '$gateId' failed after apply: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "diagnostics.postApplyUnavailable",
+            )
+        }
+        if (failure == null) return ApplyResult.Applied(transaction)
+
+        val rollbackDiagnostics = rollbackAppliedRecord(record, "Automatic rollback after post-apply diagnostics failure")
+        if (rollbackDiagnostics.isNotEmpty()) return ApplyResult.Refused(listOf(failure) + rollbackDiagnostics)
+        val restoredFailure = try {
+            val restored = rehydrateSnapshot(baselineSnapshot)
+            val rollbackResult = provider(restored)
+            val differences = diagnosticsRegression(validation.baseline, rollbackResult) +
+                diagnosticsRegression(rollbackResult, validation.baseline)
+            if (differences.isEmpty()) null else Diagnostic(
+                "Diagnostics gate '$gateId' observed ${differences.size} rollback identity mismatch(es)",
+                Diagnostic.Severity.ERROR,
+                code = "diagnostics.rollbackMismatch",
+            )
+        } catch (error: Exception) {
+            Diagnostic(
+                "Diagnostics gate '$gateId' failed after automatic rollback: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "diagnostics.rollbackUnavailable",
+            )
+        }
+        return ApplyResult.Refused(listOfNotNull(failure, restoredFailure))
+    }
+
+    private fun rehydrateSnapshot(expected: ProjectSnapshot): ProjectSnapshot = expected.copy(
+        files = expected.files.map { file ->
+            val absolute = resolveInsideWorkspace(file.path)
+            require(Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) {
+                "Expected source file is unavailable after transaction: ${file.path}"
+            }
+            file.copy(content = Files.readString(absolute))
+        },
+    )
 
     private fun validateClasspathEvidence(snapshot: ProjectSnapshot): List<Diagnostic> {
         val evidenceByKey = snapshot.classpathEvidence.groupBy { it.path.normalize() to it.kind }

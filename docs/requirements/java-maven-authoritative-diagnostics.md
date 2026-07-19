@@ -77,8 +77,12 @@ classpath evidence, Java platform identity, provider identity and configuration.
 Normal mode rejects introduced errors; strict mode requires zero staged errors.
 Diagnostic delta identity includes severity, provider code, evidence, category,
 location precision, normalized source path, exact start/end range and message;
-code/message equality alone cannot hide a moved or replaced compiler error. Any
-unavailable affected environment blocks semantic mutation even when the same
+code/message equality alone cannot hide a moved or replaced compiler error. The
+managed apply gate diagnoses baseline and exact staged snapshots before WAL,
+then rehydrates committed bytes and requires the same staged error identities.
+A post-apply mismatch or provider failure triggers immediate journaled rollback;
+the restored bytes are diagnosed again and must reproduce baseline identities.
+Any unavailable affected environment blocks semantic mutation even when the same
 unavailability existed at baseline.
 
 ## RPK-JAVA-DIAG-006 — Secure reproducibility

@@ -913,6 +913,51 @@ class PatchEngineTest {
     }
 
     @Test
+    fun postApplyDiagnosticIdentityMismatchRollsBackBeforeReturning() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "postApplyDiagnostics",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "validate the committed post-image",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                source,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        var invocation = 0
+        val gate = DiagnosticsGate.enabled("test") {
+            invocation++
+            if (invocation == 3) listOf(Diagnostic(
+                "post-apply provider identity changed",
+                Diagnostic.Severity.ERROR,
+                location = SourceLocation(source, SourceRange(SourcePosition(0, 6), SourcePosition(0, 13))),
+                code = "compiler.postApply",
+                evidence = DiagnosticEvidence.COMPILER,
+                category = DiagnosticCategory.TYPE_RESOLUTION,
+            )) else emptyList()
+        }
+
+        val result = PatchEngine(root).apply(
+            plan,
+            snapshot,
+            ApplyAuthorization.explicit("test"),
+            gate,
+        )
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "diagnostics.postApplyMismatch" })
+        assertEquals(4, invocation, "baseline, staged, committed and restored images must be diagnosed")
+        assertEquals("class Example {}\n", Files.readString(root.resolve(source)))
+        val record = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single()
+        assertEquals(JournalState.ROLLED_BACK, record.state)
+    }
+
+    @Test
     fun diagnosticsGateAllowsPreExistingErrorsWithoutRegression() {
         val root = Files.createTempDirectory("refactorkit-test")
         val source = Path.of("Example.java")
