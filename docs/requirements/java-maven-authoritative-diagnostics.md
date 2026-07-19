@@ -43,8 +43,14 @@ Each source-set environment includes the complete offline effective reactor
 closure and exact available external artifacts. The first accepted scope-
 derivation row keeps a module's runtime-only artifacts out of its main compile
 classpath while exporting them to downstream test compilation through a reactor
-edge; the runtime projection is independently hash-bound. Missing required artifacts or
-ambiguous scope/ownership makes that source set unavailable. Discovery executes
+edge; the runtime projection is independently hash-bound. The first mediation
+row traverses breadth-first so nearest paths win and declaration order breaks
+equal-depth ties. Effective root dependency management is applied before
+selection; optional transitive dependencies and explicit exclusions are omitted;
+direct `provided` artifacts remain compile-visible but do not export children.
+Compile projection follows compile edges only, while runtime/test projections may
+follow runtime edges. Missing required artifacts or ambiguous scope/ownership
+makes that source set unavailable. Discovery executes
 no wrapper, lifecycle, plugin, annotation processor, credential helper or
 project code and performs no network access unless separately authorized.
 

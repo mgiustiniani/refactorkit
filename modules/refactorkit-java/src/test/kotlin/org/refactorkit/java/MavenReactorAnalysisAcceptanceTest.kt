@@ -24,6 +24,67 @@ import kotlin.test.assertTrue
 
 class MavenReactorAnalysisAcceptanceTest {
     @Test
+    fun nearestDependencyMediationAndNonTransitiveScopesMatchMavenCompileVisibility() {
+        val root = Files.createTempDirectory("refactorkit-maven-mediation")
+        val repository = Files.createTempDirectory("refactorkit-maven-mediation-m2")
+        installArtifact(repository, "fixture.dep", "common", "1", "fixture/dep/CommonApi.java",
+            "package fixture.dep; public class CommonApi { public void oldVersion() {} }\n")
+        installArtifact(repository, "fixture.dep", "common", "2", "fixture/dep/CommonApi.java",
+            "package fixture.dep; public class CommonApi { public void selected() {} }\n")
+        installArtifact(repository, "fixture.dep", "bridge", "1", "fixture/dep/Bridge.java",
+            "package fixture.dep; public class Bridge {}\n", """
+                <dependency><groupId>fixture.dep</groupId><artifactId>common</artifactId><version>1</version></dependency>
+            """.trimIndent())
+        installArtifact(repository, "fixture.dep", "optional-child", "1", "fixture/dep/OptionalChild.java",
+            "package fixture.dep; public class OptionalChild {}\n")
+        installArtifact(repository, "fixture.dep", "optional-parent", "1", "fixture/dep/OptionalParent.java",
+            "package fixture.dep; public class OptionalParent {}\n", """
+                <dependency><groupId>fixture.dep</groupId><artifactId>optional-child</artifactId><version>1</version><optional>true</optional></dependency>
+            """.trimIndent())
+        installArtifact(repository, "fixture.dep", "excluded-child", "1", "fixture/dep/ExcludedChild.java",
+            "package fixture.dep; public class ExcludedChild {}\n")
+        installArtifact(repository, "fixture.dep", "excluded-parent", "1", "fixture/dep/ExcludedParent.java",
+            "package fixture.dep; public class ExcludedParent {}\n", """
+                <dependency><groupId>fixture.dep</groupId><artifactId>excluded-child</artifactId><version>1</version></dependency>
+            """.trimIndent())
+        installArtifact(repository, "fixture.dep", "provided-child", "1", "fixture/dep/ProvidedChild.java",
+            "package fixture.dep; public class ProvidedChild {}\n")
+        installArtifact(repository, "fixture.dep", "provided-parent", "1", "fixture/dep/ProvidedParent.java",
+            "package fixture.dep; public class ProvidedParent {}\n", """
+                <dependency><groupId>fixture.dep</groupId><artifactId>provided-child</artifactId><version>1</version></dependency>
+            """.trimIndent())
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>mediation</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <dependencies>
+                <dependency><groupId>fixture.dep</groupId><artifactId>bridge</artifactId><version>1</version></dependency>
+                <dependency><groupId>fixture.dep</groupId><artifactId>common</artifactId><version>2</version></dependency>
+                <dependency><groupId>fixture.dep</groupId><artifactId>optional-parent</artifactId><version>1</version></dependency>
+                <dependency><groupId>fixture.dep</groupId><artifactId>excluded-parent</artifactId><version>1</version><exclusions><exclusion><groupId>fixture.dep</groupId><artifactId>excluded-child</artifactId></exclusion></exclusions></dependency>
+                <dependency><groupId>fixture.dep</groupId><artifactId>provided-parent</artifactId><version>1</version><scope>provided</scope></dependency>
+              </dependencies>
+            </project>
+        """.trimIndent())
+        val source = root.resolve("src/main/java/fixture/Mediation.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source,
+            "package fixture; import fixture.dep.CommonApi; class Mediation { void run() { new CommonApi().selected(); } }\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val classpathNames = snapshot.modules.single().mainClasspathEntries.map { it.fileName.toString() }
+        assertTrue("common-2.jar" in classpathNames, classpathNames.toString())
+        assertTrue("common-1.jar" !in classpathNames, classpathNames.toString())
+        assertTrue("optional-child-1.jar" !in classpathNames, classpathNames.toString())
+        assertTrue("excluded-child-1.jar" !in classpathNames, classpathNames.toString())
+        assertTrue("provided-child-1.jar" !in classpathNames, classpathNames.toString())
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(
+            snapshot,
+            Path.of(System.getProperty("java.home")),
+        )
+        assertTrue(diagnostics.none { it.severity == Diagnostic.Severity.ERROR }, diagnostics.toString())
+    }
+
+    @Test
     fun missingTestArtifactSuppressesOnlyTestDerivativesAndPreservesMainErrors() {
         val root = Files.createTempDirectory("refactorkit-source-set-availability")
         Files.writeString(root.resolve("pom.xml"), """
@@ -484,6 +545,24 @@ class MavenReactorAnalysisAcceptanceTest {
                 }
             }
         }
+    }
+
+    private fun installArtifact(
+        repository: Path,
+        group: String,
+        artifact: String,
+        version: String,
+        sourcePath: String,
+        source: String,
+        dependencies: String = "",
+    ) {
+        val directory = group.split('.').fold(repository, Path::resolve).resolve("$artifact/$version")
+        compileJar(directory.resolve("$artifact-$version.jar"), sourcePath, source)
+        Files.writeString(directory.resolve("$artifact-$version.pom"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>$group</groupId><artifactId>$artifact</artifactId><version>$version</version>
+              <dependencies>$dependencies</dependencies>
+            </project>
+        """.trimIndent())
     }
 
     private fun installTestApiAndBom(repository: Path) {

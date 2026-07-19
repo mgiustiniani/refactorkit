@@ -22,9 +22,12 @@ review safety boundaries before applying refactorings.
   missing test-only artifacts now produce one source-set root while preserving
   genuine main errors and suppressing only derivative test bindings. Main
   unavailability propagates through reactor compile closures; missing runtime
-  exports propagate only to downstream test environments. The full Java 8–25,
-  remaining Maven scope/mediation variants, exact delta, JPMS, SBOM/license and
-  native matrix remain gates.
+  exports propagate only to downstream test environments. External Maven
+  mediation now uses breadth-first nearest/declaration-order selection, applies
+  effective root dependency management, omits optional/excluded transitives, and
+  prevents `provided` dependencies from exporting children. The full Java 8–25,
+  remaining Maven variant/range/relocation scopes, exact delta, JPMS, SBOM/license
+  and native matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

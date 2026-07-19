@@ -152,13 +152,16 @@ internal class MavenEffectiveReactorBuilder(
         val sourceDirectories = sourceDirectories(workspaceRoot, model, pom)
         val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, mainMissing)
         val mainArtifacts = (systemPathArtifacts + resolveGraph(
-            mainRepositoryDirect, resolver, reactorCoordinates, mainMissing, modelInputs, importedBoms, managedVersions,
+            mainRepositoryDirect, setOf("compile"), resolver, reactorCoordinates,
+            mainMissing, modelInputs, importedBoms, managedVersions,
         )).distinct()
         val runtimeArtifacts = resolveGraph(
-            runtimeRepositoryDirect, resolver, reactorCoordinates, runtimeMissing, modelInputs, importedBoms, managedVersions,
+            runtimeRepositoryDirect, TRANSITIVE_SCOPES, resolver, reactorCoordinates,
+            runtimeMissing, modelInputs, importedBoms, managedVersions,
         ).distinct()
         val testArtifacts = (mainArtifacts + runtimeArtifacts + resolveGraph(
-            testRepositoryDirect, resolver, reactorCoordinates, testOnlyMissing, modelInputs, importedBoms, managedVersions,
+            testRepositoryDirect, TRANSITIVE_SCOPES, resolver, reactorCoordinates,
+            testOnlyMissing, modelInputs, importedBoms, managedVersions,
         )).distinct()
         val testMissing = (mainMissing + runtimeMissing + testOnlyMissing).toList()
         return MavenModuleModel(
@@ -311,6 +314,7 @@ internal class MavenEffectiveReactorBuilder(
 
     private fun resolveGraph(
         roots: List<Dependency>,
+        includedTransitiveScopes: Set<String>,
         resolver: LocalOnlyModelResolver,
         reactorCoordinates: Set<MavenCoordinate>,
         missing: MutableSet<String>,
@@ -318,53 +322,77 @@ internal class MavenEffectiveReactorBuilder(
         importedBoms: MutableSet<Path>,
         managedVersions: Map<String, String>,
     ): List<Path> {
+        data class Pending(
+            val dependency: Dependency,
+            val inheritedExclusions: Set<String>,
+            val direct: Boolean,
+            val depth: Int,
+            val mayTraverse: Boolean,
+        )
         val artifacts = linkedSetOf<Path>()
         val visitedArtifacts = mutableSetOf<String>()
         val selectedArtifacts = mutableSetOf<String>()
         val unresolvedTransitive = linkedMapOf<String, String>()
-        fun visit(dependency: Dependency, inheritedExclusions: Set<String>, direct: Boolean, depth: Int) {
-            if (depth > MAX_DEPENDENCY_DEPTH || visitedArtifacts.size >= MAX_DEPENDENCIES) {
+        val pending = ArrayDeque<Pending>()
+        roots.forEach { dependency ->
+            pending += Pending(
+                dependency, dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }.toSet(),
+                direct = true, depth = 0,
+                mayTraverse = dependency.scope.normalizedScope() in TRANSITIVE_SCOPES,
+            )
+        }
+        while (pending.isNotEmpty()) {
+            val node = pending.removeFirst()
+            if (node.depth > MAX_DEPENDENCY_DEPTH || visitedArtifacts.size >= MAX_DEPENDENCIES) {
                 missing += "dependency graph exceeds safe offline analysis limits"
-                return
+                continue
             }
-            val rawRequested = dependency.coordinate() ?: run {
-                if (direct) missing += "dependency with unresolved coordinates"
-                return
+            val rawRequested = node.dependency.coordinate()
+            if (rawRequested == null) {
+                if (node.direct) missing += "dependency with unresolved coordinates"
+                continue
             }
             val requested = managedVersions[rawRequested.ga()]?.let { rawRequested.copy(version = it) } ?: rawRequested
             if (requested.version.isBlank()) {
-                if (direct) missing += "dependency with unresolved coordinates"
-                return
+                if (node.direct) missing += "dependency with unresolved coordinates"
+                continue
             }
             val coordinate = resolver.resolveVersion(requested) ?: requested
             val group = coordinate.ga()
-            val type = dependency.type.ifBlank { "jar" }
-            val classifier = dependency.classifier?.takeIf(String::isNotBlank)
+            val type = node.dependency.type.ifBlank { "jar" }
+            val classifier = node.dependency.classifier?.takeIf(String::isNotBlank)
             val artifactIdentity = "$group:$type:${classifier.orEmpty()}"
             val visitIdentity = "${coordinate.key}:$type:${classifier.orEmpty()}"
-            val representedByReactorSources = coordinate in reactorCoordinates && isReactorSourceDependency(dependency)
+            val representedByReactorSources = coordinate in reactorCoordinates && isReactorSourceDependency(node.dependency)
             if (artifactIdentity in selectedArtifacts || !visitedArtifacts.add(visitIdentity) ||
-                representedByReactorSources || group in inheritedExclusions) return
+                representedByReactorSources || group in node.inheritedExclusions) continue
             val artifact = resolver.artifactPath(coordinate, type, classifier)
             if (artifact == null) {
                 val missingIdentity = "${requested.key}:$type:${classifier.orEmpty()}"
-                if (direct) missing += missingIdentity else unresolvedTransitive.putIfAbsent(artifactIdentity, missingIdentity)
-                return
+                if (node.direct) missing += missingIdentity
+                else unresolvedTransitive.putIfAbsent(artifactIdentity, missingIdentity)
+                continue
             }
             selectedArtifacts += artifactIdentity
             unresolvedTransitive.remove(artifactIdentity)
-            if (dependency.type != "pom") artifacts.add(artifact)
-            val pom = resolver.pomPath(coordinate) ?: return
+            if (node.dependency.type != "pom") artifacts.add(artifact)
+            if (!node.mayTraverse) continue
+            val pom = resolver.pomPath(coordinate) ?: continue
             modelInputs.add(pom)
             val transitive = buildEffective(pom, resolver)
             modelInputs.addAll(transitive.inputs)
             importedBoms.addAll(transitive.importedBoms)
-            val exclusions = inheritedExclusions + dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }
+            val exclusions = node.inheritedExclusions +
+                node.dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }
             transitive.model?.dependencies.orEmpty()
-                .filter { !it.isOptional && it.scope.normalizedScope() in TRANSITIVE_SCOPES }
-                .forEach { visit(it, exclusions, false, depth + 1) }
+                .filter { !it.isOptional && it.scope.normalizedScope() in includedTransitiveScopes }
+                .forEach { child ->
+                    pending += Pending(
+                        child, exclusions, direct = false, depth = node.depth + 1,
+                        mayTraverse = child.scope.normalizedScope() in TRANSITIVE_SCOPES,
+                    )
+                }
         }
-        roots.forEach { visit(it, emptySet(), true, 0) }
         missing.addAll(unresolvedTransitive.values)
         return artifacts.toList().sortedBy(Path::toString)
     }
