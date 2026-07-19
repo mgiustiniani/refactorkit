@@ -145,9 +145,13 @@ class JavaProjectScanner(
                         return "Offline artifacts unavailable: ${missing.take(8).joinToString(", ")}$suffix"
                     }
                     put("java.mainClasspath.status", if (maven.mainMissingArtifacts.isEmpty()) "available" else "unavailable")
+                    put("java.runtimeClasspath.status", if (maven.runtimeMissingArtifacts.isEmpty()) "available" else "unavailable")
                     put("java.testClasspath.status", if (maven.testMissingArtifacts.isEmpty()) "available" else "unavailable")
                     if (maven.mainMissingArtifacts.isNotEmpty()) {
                         put("java.mainClasspath.message", missingMessage(maven.mainMissingArtifacts))
+                    }
+                    if (maven.runtimeMissingArtifacts.isNotEmpty()) {
+                        put("java.runtimeClasspath.message", missingMessage(maven.runtimeMissingArtifacts))
                     }
                     if (maven.testMissingArtifacts.isNotEmpty()) {
                         put("java.testClasspath.message", missingMessage(maven.testMissingArtifacts))

@@ -53,7 +53,10 @@ project code and performs no network access unless separately authorized.
 Unavailable roots are typed and source-set scoped. The first accepted row tracks
 main/test missing artifacts independently: a missing test-only artifact emits one
 test source-set root, suppresses only derivative test binding rows, and preserves
-genuine main errors. Derivative unresolved-symbol cascades may be suppressed only
+genuine main errors. Main-classpath unavailability propagates through transitive
+reactor compile closures; runtime-export unavailability propagates only into
+downstream test environments that require it. Independent source sets remain
+available. Derivative unresolved-symbol cascades may be suppressed only
 when their complete causal input is unavailable;
 genuine source diagnostics from complete environments remain visible.
 

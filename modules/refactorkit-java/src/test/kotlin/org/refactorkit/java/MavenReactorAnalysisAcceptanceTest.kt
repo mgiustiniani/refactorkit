@@ -55,6 +55,49 @@ class MavenReactorAnalysisAcceptanceTest {
     }
 
     @Test
+    fun unavailableMainEnvironmentPropagatesOnlyThroughDependentSourceSets() {
+        val root = Files.createTempDirectory("refactorkit-transitive-availability")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>availability-reactor</artifactId><version>1</version><packaging>pom</packaging>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <modules><module>broken</module><module>downstream</module><module>independent</module></modules>
+            </project>
+        """.trimIndent())
+        fun modulePom(name: String, dependencies: String = "") = """
+            <project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>availability-reactor</artifactId><version>1</version></parent><artifactId>$name</artifactId>$dependencies</project>
+        """.trimIndent()
+        Files.createDirectories(root.resolve("broken/src/main/java/fixture/broken"))
+        Files.writeString(root.resolve("broken/src/main/java/fixture/broken/BrokenApi.java"),
+            "package fixture.broken; public class BrokenApi { MissingExternal value; }\n")
+        Files.writeString(root.resolve("broken/pom.xml"), modulePom("broken", """
+            <dependencies><dependency><groupId>fixture.missing</groupId><artifactId>compile-api</artifactId><version>1</version></dependency></dependencies>
+        """.trimIndent()))
+        Files.createDirectories(root.resolve("downstream/src/main/java/fixture/downstream"))
+        Files.writeString(root.resolve("downstream/src/main/java/fixture/downstream/Downstream.java"),
+            "package fixture.downstream; import fixture.broken.BrokenApi; class Downstream { BrokenApi api; }\n")
+        Files.writeString(root.resolve("downstream/pom.xml"), modulePom("downstream", """
+            <dependencies><dependency><groupId>fixture</groupId><artifactId>broken</artifactId><version>1</version></dependency></dependencies>
+        """.trimIndent()))
+        Files.createDirectories(root.resolve("independent/src/main/java/fixture/independent"))
+        Files.writeString(root.resolve("independent/src/main/java/fixture/independent/Independent.java"),
+            "package fixture.independent; class Independent { GenuineMainError value; }\n")
+        Files.writeString(root.resolve("independent/pom.xml"), modulePom("independent"))
+
+        val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(
+            snapshot,
+            Path.of(System.getProperty("java.home")),
+        )
+
+        val roots = diagnostics.filter { it.code == "classpath.unavailable" }
+        assertEquals(2, roots.size, diagnostics.toString())
+        assertTrue(roots.any { it.message.contains("'broken:main'") }, roots.toString())
+        assertTrue(roots.any { it.message.contains("'downstream:main'") }, roots.toString())
+        assertTrue(diagnostics.none { it.message.contains("MissingExternal") }, diagnostics.toString())
+        assertTrue(diagnostics.any { it.message.contains("GenuineMainError") }, diagnostics.toString())
+    }
+
+    @Test
     fun effectiveJava21ReactorHasCleanPerSourceSetDiagnosticsAndCrossModuleBindings() {
         val root = Files.createTempDirectory("refactorkit-reactor-21")
         val repository = Files.createTempDirectory("refactorkit-m2")

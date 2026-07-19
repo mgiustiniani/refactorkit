@@ -20,9 +20,11 @@ review safety boundaries before applying refactorings.
   main compilation while exporting them through reactor edges to downstream test
   compilation, eliminating the remaining Magrathea SQLite/JDBC false rows. The
   missing test-only artifacts now produce one source-set root while preserving
-  genuine main errors and suppressing only derivative test bindings. The full
-  Java 8–25, remaining Maven scope/mediation and transitive-availability variants,
-  exact delta, JPMS, SBOM/license and native matrix remain gates.
+  genuine main errors and suppressing only derivative test bindings. Main
+  unavailability propagates through reactor compile closures; missing runtime
+  exports propagate only to downstream test environments. The full Java 8–25,
+  remaining Maven scope/mediation variants, exact delta, JPMS, SBOM/license and
+  native matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

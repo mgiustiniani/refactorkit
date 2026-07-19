@@ -154,10 +154,13 @@ private object JavaModuleBuildModelProjector {
             diagnostics.isNotEmpty() -> BuildModelStatus.PARTIAL
             else -> BuildModelStatus.AVAILABLE
         }
+        val projectedModules = propagateUnavailableDependencies(
+            modules.map { module -> projectModule(module, moduleIds) },
+        )
         return BuildModel(
             providerId = providerId,
             status = forcedStatus ?: inferredStatus,
-            modules = modules.map { module -> projectModule(module, moduleIds) },
+            modules = projectedModules,
             diagnostics = diagnostics,
             attributes = attributes,
         )
@@ -191,6 +194,37 @@ private object JavaModuleBuildModelProjector {
             }
             add(BuildModelDiagnostic(code, message, module.name))
         }
+    }
+
+    private fun propagateUnavailableDependencies(initial: List<BuildModule>): List<BuildModule> {
+        var modules = initial
+        repeat(initial.size + 1) {
+            val byId = modules.associateBy(BuildModule::id)
+            var changed = false
+            val next = modules.map { module -> module.copy(sourceSets = module.sourceSets.map { sourceSet ->
+                if (sourceSet.attributes["java.classpath.status"] == "unavailable") return@map sourceSet
+                val unavailableDependency = sourceSet.moduleDependencies.firstNotNullOfOrNull { dependency ->
+                    val targetMain = byId[dependency.targetModuleId]?.sourceSets
+                        ?.firstOrNull { it.kind == SourceSetKind.MAIN } ?: return@firstNotNullOfOrNull null
+                    dependency.targetModuleId.takeIf {
+                        targetMain.attributes["java.classpath.status"] == "unavailable" ||
+                            (sourceSet.kind != SourceSetKind.MAIN &&
+                                targetMain.attributes["java.runtimeClasspath.status"] == "unavailable")
+                    }
+                }
+                if (unavailableDependency == null) sourceSet else {
+                    changed = true
+                    sourceSet.copy(attributes = sourceSet.attributes + mapOf(
+                        "java.classpath.status" to "unavailable",
+                        "java.classpath.message" to "Required dependency source set is unavailable: $unavailableDependency:main",
+                        "java.classpath.cause" to "dependency",
+                    ))
+                }
+            }) }
+            modules = next
+            if (!changed) return modules
+        }
+        return modules
     }
 
     private fun projectModule(module: Module, moduleIds: Set<String>): BuildModule {
@@ -240,6 +274,10 @@ private object JavaModuleBuildModelProjector {
         val classpathPrefix = if (test) "java.testClasspath" else "java.mainClasspath"
         module.languageSettings["$classpathPrefix.status"]?.let { put("java.classpath.status", it) }
         module.languageSettings["$classpathPrefix.message"]?.let { put("java.classpath.message", it) }
+        if (!test) {
+            module.languageSettings["java.runtimeClasspath.status"]?.let { put("java.runtimeClasspath.status", it) }
+            module.languageSettings["java.runtimeClasspath.message"]?.let { put("java.runtimeClasspath.message", it) }
+        }
         listOf(
             "java.sourceLevel.status",
             "java.sourceLevelEvidence",

@@ -620,7 +620,11 @@ class JavaLanguageAdapter(
         val unavailableModuleIds = unavailableModules.map { it.name }.toSet()
         val unavailableSourceSets = project.buildModels.flatMap { model -> model.modules.flatMap { module ->
             module.sourceSets.filter { sourceSet ->
-                module.id !in unavailableModuleIds && sourceSet.attributes["java.classpath.status"] == "unavailable"
+                module.id !in unavailableModuleIds &&
+                    sourceSet.attributes["java.classpath.status"] == "unavailable" &&
+                    sourceSet.sourceRoots.any { root ->
+                        project.files.any { it.languageId == "java" && it.path.normalize().startsWith(root.normalize()) }
+                    }
             }.map { sourceSet -> module to sourceSet }
         } }
         unavailableSourceSets.forEach { (module, sourceSet) ->

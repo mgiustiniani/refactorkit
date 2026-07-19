@@ -47,6 +47,7 @@ internal data class MavenModuleModel(
     val importedBoms: Set<Path>,
     val missingArtifacts: List<String>,
     val mainMissingArtifacts: List<String>,
+    val runtimeMissingArtifacts: List<String>,
     val testMissingArtifacts: List<String>,
     val testGeneratedPathHints: Set<String>,
     val kotlinPluginConfigured: Boolean = false,
@@ -113,6 +114,7 @@ internal class MavenEffectiveReactorBuilder(
                     importedBoms = result.importedBoms,
                     missingArtifacts = emptyList(),
                     mainMissingArtifacts = emptyList(),
+                    runtimeMissingArtifacts = emptyList(),
                     testMissingArtifacts = emptyList(),
                     testGeneratedPathHints = emptySet(),
                     modelFailure = concise(result.failure ?: "effective Maven model unavailable"),
@@ -179,6 +181,7 @@ internal class MavenEffectiveReactorBuilder(
             importedBoms = importedBoms,
             missingArtifacts = testMissing,
             mainMissingArtifacts = mainMissing.toList(),
+            runtimeMissingArtifacts = runtimeMissing.toList(),
             testMissingArtifacts = testMissing,
             testGeneratedPathHints = model.build?.plugins.orEmpty()
                 .filter { plugin -> plugin.executions.any { it.phase?.contains("test", ignoreCase = true) == true } }

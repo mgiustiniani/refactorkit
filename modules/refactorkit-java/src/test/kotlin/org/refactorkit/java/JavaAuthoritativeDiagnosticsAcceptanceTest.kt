@@ -85,6 +85,43 @@ class JavaAuthoritativeDiagnosticsAcceptanceTest {
     }
 
     @Test
+    fun `missing runtime export makes only downstream test environment unavailable`() {
+        val root = Files.createTempDirectory("refactorkit-missing-runtime-export")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>runtime-reactor</artifactId><version>1</version><packaging>pom</packaging>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <modules><module>runtime-owner</module><module>acceptance</module></modules>
+            </project>
+        """.trimIndent())
+        Files.createDirectories(root.resolve("runtime-owner/src/main/java/fixture/owner"))
+        Files.writeString(root.resolve("runtime-owner/src/main/java/fixture/owner/RuntimeOwner.java"),
+            "package fixture.owner; public final class RuntimeOwner {}\n")
+        Files.writeString(root.resolve("runtime-owner/pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>runtime-reactor</artifactId><version>1</version></parent><artifactId>runtime-owner</artifactId>
+              <dependencies><dependency><groupId>fixture.missing</groupId><artifactId>runtime-api</artifactId><version>1</version><scope>runtime</scope></dependency></dependencies>
+            </project>
+        """.trimIndent())
+        Files.createDirectories(root.resolve("acceptance/src/test/java/fixture/acceptance"))
+        Files.writeString(root.resolve("acceptance/src/test/java/fixture/acceptance/RuntimeAcceptance.java"),
+            "package fixture.acceptance; import fixture.missing.RuntimeApi; class RuntimeAcceptance { RuntimeApi api; }\n")
+        Files.writeString(root.resolve("acceptance/pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>runtime-reactor</artifactId><version>1</version></parent><artifactId>acceptance</artifactId>
+              <dependencies><dependency><groupId>fixture</groupId><artifactId>runtime-owner</artifactId><version>1</version><scope>test</scope></dependency></dependencies>
+            </project>
+        """.trimIndent())
+
+        val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(
+            snapshot,
+            Path.of(System.getProperty("java.home")),
+        )
+        val roots = diagnostics.filter { it.code == "classpath.unavailable" }
+        assertEquals(1, roots.size, diagnostics.toString())
+        assertTrue(roots.single().message.contains("'acceptance:test'"), roots.toString())
+        assertTrue(diagnostics.none { it.message.contains("RuntimeApi") }, diagnostics.toString())
+    }
+
+    @Test
     fun `module selector filters only after full reactor authoritative analysis`() {
         val root = reactor(8)
         val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
