@@ -40,6 +40,7 @@ internal data class MavenModuleModel(
     val mainDependencies: List<MavenCoordinate>,
     val testDependencies: List<MavenCoordinate>,
     val mainArtifacts: List<Path>,
+    val runtimeArtifacts: List<Path>,
     val testArtifacts: List<Path>,
     val systemPathArtifacts: Set<Path>,
     val modelInputs: Set<Path>,
@@ -103,6 +104,7 @@ internal class MavenEffectiveReactorBuilder(
                     mainDependencies = emptyList(),
                     testDependencies = emptyList(),
                     mainArtifacts = emptyList(),
+                    runtimeArtifacts = emptyList(),
                     testArtifacts = emptyList(),
                     systemPathArtifacts = emptySet(),
                     modelInputs = result.inputs + setOf(pom),
@@ -129,6 +131,9 @@ internal class MavenEffectiveReactorBuilder(
         val testDirect = model.dependencies.filter { it.scope.normalizedScope() in TEST_SCOPES && it.type != "pom" }
         val systemDirect = model.dependencies.filter { it.scope.normalizedScope() == "system" && it.type != "pom" }
         val mainRepositoryDirect = mainDirect.filterNot { it.scope.normalizedScope() == "system" }
+        val runtimeRepositoryDirect = model.dependencies.filter {
+            it.scope.normalizedScope() in TRANSITIVE_SCOPES && it.type != "pom"
+        }
         val testRepositoryDirect = testDirect.filterNot { it.scope.normalizedScope() == "system" }
         val managedVersions = model.dependencyManagement?.dependencies.orEmpty().mapNotNull { dependency ->
             dependency.coordinate()?.let { it.ga() to it.version }
@@ -141,7 +146,10 @@ internal class MavenEffectiveReactorBuilder(
         val mainArtifacts = (systemPathArtifacts + resolveGraph(
             mainRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
         )).distinct()
-        val testArtifacts = (mainArtifacts + resolveGraph(
+        val runtimeArtifacts = resolveGraph(
+            runtimeRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
+        ).distinct()
+        val testArtifacts = (mainArtifacts + runtimeArtifacts + resolveGraph(
             testRepositoryDirect, resolver, reactorCoordinates, missing, modelInputs, importedBoms, managedVersions,
         )).distinct()
         return MavenModuleModel(
@@ -157,6 +165,7 @@ internal class MavenEffectiveReactorBuilder(
             testDependencies = testRepositoryDirect.filter(::isReactorSourceDependency)
                 .mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
             mainArtifacts = mainArtifacts,
+            runtimeArtifacts = runtimeArtifacts,
             testArtifacts = testArtifacts,
             systemPathArtifacts = systemPathArtifacts.toSet(),
             modelInputs = modelInputs,

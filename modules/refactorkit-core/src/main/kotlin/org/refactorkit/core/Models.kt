@@ -49,6 +49,7 @@ data class Module(
     val generatedSourceRoots: List<Path> = emptyList(),
     val generatedTestSourceRoots: List<Path> = emptyList(),
     val mainClasspathEntries: List<Path> = classpathEntries,
+    val mainRuntimeClasspathEntries: List<Path> = mainClasspathEntries,
     val testClasspathEntries: List<Path> = classpathEntries,
     val mainDependencies: List<String> = dependencies,
     val testDependencies: List<String> = dependencies,
@@ -102,6 +103,9 @@ data class ProjectSnapshot(
                 digest.update("module\u0000${module.name}\u0000${module.root.toAbsolutePath().normalize()}\u0000".toByteArray(Charsets.UTF_8))
                 module.sourceRoots.sortedBy(Path::toString).forEach { digest.update("sourceRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
                 module.classpathEntries.sortedBy(Path::toString).forEach { digest.update("classpath\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                module.mainRuntimeClasspathEntries.sortedBy(Path::toString).forEach {
+                    digest.update("mainRuntimeClasspath\u0000$it\u0000".toByteArray(Charsets.UTF_8))
+                }
                 module.dependencies.sorted().forEach { digest.update("moduleDependency\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
                 module.languageSettings.toSortedMap().forEach { (key, value) ->
                     digest.update("languageSetting\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
@@ -141,6 +145,9 @@ data class ProjectSnapshot(
                         sourceSet.generatedSourceRoots.sortedBy(Path::toString).forEach { digest.update("sourceSetGeneratedRoot\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
                         sourceSet.outputDirectories.sortedBy(Path::toString).forEach { digest.update("sourceSetOutput\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
                         sourceSet.classpathEntries.sortedBy(Path::toString).forEach { digest.update("sourceSetClasspath\u0000$it\u0000".toByteArray(Charsets.UTF_8)) }
+                        sourceSet.runtimeClasspathEntries.sortedBy(Path::toString).forEach {
+                            digest.update("sourceSetRuntimeClasspath\u0000$it\u0000".toByteArray(Charsets.UTF_8))
+                        }
                         sourceSet.moduleDependencies.sortedWith(compareBy<BuildDependency> { it.targetModuleId }.thenBy { it.scope.name }).forEach { dependency ->
                             digest.update("sourceSetDependency\u0000${dependency.targetModuleId}\u0000${dependency.scope}\u0000".toByteArray(Charsets.UTF_8))
                         }

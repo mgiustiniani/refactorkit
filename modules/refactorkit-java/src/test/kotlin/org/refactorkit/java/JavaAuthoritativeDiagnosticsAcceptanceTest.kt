@@ -3,6 +3,9 @@ package org.refactorkit.java
 import org.refactorkit.core.Diagnostic
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.jar.JarEntry
+import java.util.jar.JarOutputStream
+import javax.tools.ToolProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -42,6 +45,46 @@ class JavaAuthoritativeDiagnosticsAcceptanceTest {
     }
 
     @Test
+    fun `test source sees runtime dependency exported through reactor module`() {
+        val root = Files.createTempDirectory("refactorkit-runtime-export-reactor")
+        val repository = Files.createTempDirectory("refactorkit-runtime-export-m2")
+        installRuntimeApi(repository)
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>runtime-reactor</artifactId><version>1</version><packaging>pom</packaging>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <modules><module>runtime-owner</module><module>acceptance</module></modules>
+            </project>
+        """.trimIndent())
+        Files.createDirectories(root.resolve("runtime-owner/src/main/java/fixture/owner"))
+        Files.writeString(root.resolve("runtime-owner/src/main/java/fixture/owner/RuntimeOwner.java"),
+            "package fixture.owner; public final class RuntimeOwner {}\n")
+        Files.writeString(root.resolve("runtime-owner/pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>runtime-reactor</artifactId><version>1</version></parent><artifactId>runtime-owner</artifactId>
+              <dependencies><dependency><groupId>fixture.external</groupId><artifactId>runtime-api</artifactId><version>1</version><scope>runtime</scope></dependency></dependencies>
+            </project>
+        """.trimIndent())
+        Files.createDirectories(root.resolve("acceptance/src/test/java/fixture/acceptance"))
+        Files.writeString(root.resolve("acceptance/src/test/java/fixture/acceptance/RuntimeAcceptance.java"),
+            "package fixture.acceptance; import fixture.runtime.RuntimeApi; class RuntimeAcceptance { RuntimeApi api; }\n")
+        Files.writeString(root.resolve("acceptance/pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>runtime-reactor</artifactId><version>1</version></parent><artifactId>acceptance</artifactId>
+              <dependencies><dependency><groupId>fixture</groupId><artifactId>runtime-owner</artifactId><version>1</version><scope>test</scope></dependency></dependencies>
+            </project>
+        """.trimIndent())
+
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val ownerMain = snapshot.buildModels.single().modules.single { it.id == "runtime-owner" }
+            .sourceSets.single { it.id == "main" }
+        assertTrue(ownerMain.classpathEntries.none { it.fileName.toString() == "runtime-api-1.jar" })
+        assertTrue(ownerMain.runtimeClasspathEntries.any { it.fileName.toString() == "runtime-api-1.jar" })
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(
+            snapshot,
+            Path.of(System.getProperty("java.home")),
+        )
+        assertTrue(diagnostics.none { it.severity == Diagnostic.Severity.ERROR }, diagnostics.toString())
+    }
+
+    @Test
     fun `module selector filters only after full reactor authoritative analysis`() {
         val root = reactor(8)
         val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
@@ -64,6 +107,27 @@ class JavaAuthoritativeDiagnosticsAcceptanceTest {
 
         assertEquals(2, diagnostics.count { it.code == "java.platform.authorityUnavailable" }, diagnostics.toString())
         assertTrue(diagnostics.none { it.code == "java.jdt.typeResolution" }, diagnostics.toString())
+    }
+
+    private fun installRuntimeApi(repository: Path) {
+        val directory = repository.resolve("fixture/external/runtime-api/1")
+        val sourceRoot = Files.createTempDirectory("refactorkit-runtime-api-source")
+        val source = sourceRoot.resolve("fixture/runtime/RuntimeApi.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package fixture.runtime; public interface RuntimeApi {}\n")
+        val classes = Files.createTempDirectory("refactorkit-runtime-api-classes")
+        val compiler = ToolProvider.getSystemJavaCompiler()
+        assertEquals(0, compiler.run(null, null, null, "-d", classes.toString(), source.toString()))
+        Files.createDirectories(directory)
+        JarOutputStream(Files.newOutputStream(directory.resolve("runtime-api-1.jar"))).use { jar ->
+            val compiled = classes.resolve("fixture/runtime/RuntimeApi.class")
+            jar.putNextEntry(JarEntry("fixture/runtime/RuntimeApi.class"))
+            jar.write(Files.readAllBytes(compiled))
+            jar.closeEntry()
+        }
+        Files.writeString(directory.resolve("runtime-api-1.pom"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture.external</groupId><artifactId>runtime-api</artifactId><version>1</version></project>
+        """.trimIndent())
     }
 
     private fun reactor(release: Int): Path {

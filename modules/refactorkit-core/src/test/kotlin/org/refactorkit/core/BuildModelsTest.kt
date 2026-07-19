@@ -95,5 +95,15 @@ class BuildModelsTest {
         val changed = ProjectSnapshot(Workspace(root), listOf(module), listOf(source), buildModels = listOf(changedModel))
 
         assertNotEquals(initial.hash, changed.hash)
+
+        val runtimeChangedModel = initialModel.copy(modules = initialModel.modules.map { buildModule ->
+            buildModule.copy(sourceSets = buildModule.sourceSets.map { sourceSet ->
+                sourceSet.copy(runtimeClasspathEntries = listOf(Path.of("repository/runtime-api.jar")))
+            })
+        })
+        val runtimeChanged = ProjectSnapshot(
+            Workspace(root), listOf(module), listOf(source), buildModels = listOf(runtimeChangedModel),
+        )
+        assertNotEquals(initial.hash, runtimeChanged.hash)
     }
 }

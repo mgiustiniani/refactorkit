@@ -15,9 +15,12 @@ review safety boundaries before applying refactorings.
   complete `java.se` image. Packaged CLI/daemon/MCP resolve Java 21 `java.sql`,
   `java.net.http`, and transitive reactor sources with `JAVA_HOME` unset, reject
   post-Java-8 APIs under release 8, support post-model module filtering, and emit
-  concise typed roots when platform evidence is unavailable. The full Java 8–25,
-  source-set availability, exact delta, JPMS, SBOM/license and native matrix
-  remain release gates.
+  concise typed roots when platform evidence is unavailable. A separately
+  hash-bound Maven runtime classpath now keeps runtime-only artifacts out of owner
+  main compilation while exporting them through reactor edges to downstream test
+  compilation, eliminating the remaining Magrathea SQLite/JDBC false rows. The
+  full Java 8–25, remaining Maven scope/mediation variants, source-set
+  availability, exact delta, JPMS, SBOM/license and native matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

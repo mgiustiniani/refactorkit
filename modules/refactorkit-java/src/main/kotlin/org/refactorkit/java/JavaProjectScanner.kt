@@ -105,8 +105,11 @@ class JavaProjectScanner(
             } else {
                 (conventionalMainOutputs + localEntries).map(normalizedRoot::relativize).distinct()
             }
+            val mainRuntimeClasspath = if (maven?.modelFailure == null && maven != null) {
+                (conventionalMainOutputs.map(normalizedRoot::relativize) + maven.runtimeArtifacts).distinct()
+            } else mainClasspath
             val testClasspath = if (maven?.modelFailure == null && maven != null) {
-                (mainClasspath + conventionalTestOutputs.map(normalizedRoot::relativize) + maven.testArtifacts).distinct()
+                (mainClasspath + mainRuntimeClasspath + conventionalTestOutputs.map(normalizedRoot::relativize) + maven.testArtifacts).distinct()
             } else {
                 (mainClasspath + conventionalTestOutputs.map(normalizedRoot::relativize)).distinct()
             }
@@ -161,6 +164,7 @@ class JavaProjectScanner(
                 generatedSourceRoots = generatedMain.map(normalizedRoot::relativize),
                 generatedTestSourceRoots = generatedTest.map(normalizedRoot::relativize),
                 mainClasspathEntries = mainClasspath,
+                mainRuntimeClasspathEntries = mainRuntimeClasspath,
                 testClasspathEntries = testClasspath,
                 mainDependencies = mainDependencies.distinct().sorted(),
                 testDependencies = (mainDependencies + testDependencies).distinct().sorted(),

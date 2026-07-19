@@ -96,6 +96,7 @@ data class BuildSourceSet(
     val generatedSourceRoots: List<Path> = emptyList(),
     val outputDirectories: List<Path> = emptyList(),
     val classpathEntries: List<Path> = emptyList(),
+    val runtimeClasspathEntries: List<Path> = emptyList(),
     val moduleDependencies: List<BuildDependency> = emptyList(),
     val attributes: Map<String, String> = emptyMap(),
 ) {

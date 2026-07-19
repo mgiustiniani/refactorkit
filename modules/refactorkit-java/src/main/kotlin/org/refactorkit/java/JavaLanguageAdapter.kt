@@ -759,6 +759,7 @@ class JavaLanguageAdapter(
                     root = overlayRoot.resolve(relativeRoot),
                     classpathEntries = originalClasspath(module.classpathEntries),
                     mainClasspathEntries = originalClasspath(module.mainClasspathEntries),
+                    mainRuntimeClasspathEntries = originalClasspath(module.mainRuntimeClasspathEntries),
                     testClasspathEntries = originalClasspath(module.testClasspathEntries),
                 )
             }
@@ -769,7 +770,10 @@ class JavaLanguageAdapter(
                 module.copy(
                     root = overlayRoot.resolve(relativeRoot),
                     sourceSets = module.sourceSets.map { sourceSet ->
-                        sourceSet.copy(classpathEntries = originalClasspath(sourceSet.classpathEntries))
+                        sourceSet.copy(
+                            classpathEntries = originalClasspath(sourceSet.classpathEntries),
+                            runtimeClasspathEntries = originalClasspath(sourceSet.runtimeClasspathEntries),
+                        )
                     },
                 )
             }) }

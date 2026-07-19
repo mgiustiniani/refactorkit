@@ -171,7 +171,9 @@ class JdtJavaSemanticAnalyzer {
                 }.ifEmpty { visibleModules.flatMap(Module::sourceRoots) }
                 val classpathPaths = ((buildEnvironment?.classpathEntries ?: buildList {
                     if (owner != null) addAll(if (isTestSource) owner.testClasspathEntries else owner.mainClasspathEntries)
-                    visibleModules.filter { it != owner }.forEach { addAll(it.mainClasspathEntries) }
+                    visibleModules.filter { it != owner }.forEach {
+                        addAll(if (isTestSource) it.mainRuntimeClasspathEntries else it.mainClasspathEntries)
+                    }
                 }.ifEmpty { visibleModules.flatMap(Module::classpathEntries) }) + additionalClasspathEntries).distinct()
                 val sourceRoots = sourceRootPaths
                     .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
@@ -305,8 +307,9 @@ class JdtJavaSemanticAnalyzer {
         val classpathEntries = buildList {
             selectedSet?.let { addAll(it.classpathEntries) }
             visible.values.filter { it != owner }.forEach { dependency ->
-                dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
-                    ?.let { addAll(it.classpathEntries) }
+                dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { main ->
+                    addAll(if (testSource) main.runtimeClasspathEntries else main.classpathEntries)
+                }
             }
         }.distinct()
         val sourceLevel = selectedSet?.attributes?.get("java.sourceLevel")?.toIntOrNull()?.coerceIn(8, 25) ?: 25

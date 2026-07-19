@@ -40,7 +40,10 @@ compiler settings and availability.
 ## RPK-JAVA-DIAG-003 — Maven visibility
 
 Each source-set environment includes the complete offline effective reactor
-closure and exact available external artifacts. Missing required artifacts or
+closure and exact available external artifacts. The first accepted scope-
+derivation row keeps a module's runtime-only artifacts out of its main compile
+classpath while exporting them to downstream test compilation through a reactor
+edge; the runtime projection is independently hash-bound. Missing required artifacts or
 ambiguous scope/ownership makes that source set unavailable. Discovery executes
 no wrapper, lifecycle, plugin, annotation processor, credential helper or
 project code and performs no network access unless separately authorized.

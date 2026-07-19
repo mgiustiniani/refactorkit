@@ -79,6 +79,7 @@ class MavenReactorAnalysisAcceptanceTest {
                 generatedSourceRoots = emptyList(),
                 generatedTestSourceRoots = emptyList(),
                 mainClasspathEntries = emptyList(),
+                mainRuntimeClasspathEntries = emptyList(),
                 testClasspathEntries = emptyList(),
                 mainDependencies = emptyList(),
                 testDependencies = emptyList(),

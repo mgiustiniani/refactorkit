@@ -98,7 +98,10 @@ results. A child path is not a license to discover ancestors or siblings outside
 the declared workspace. Each source set must carry exact roots, only safely
 declared and materialized generated sources, Maven-scoped reactor/external
 visibility, Java release/platform identity, provider evidence, and typed
-availability. Missing test evidence does not make main unavailable.
+availability. Missing test evidence does not make main unavailable. BuildSourceSet
+keeps compile and runtime classpaths separate: runtime-only artifacts do not leak
+into owner main compilation, but a downstream test source set may consume the
+runtime export through an authoritative reactor dependency closure.
 
 The Build Model remains non-executable metadata. Maven, wrappers, lifecycle
 goals, plugins, annotation processors, credential helpers/settings credentials,
