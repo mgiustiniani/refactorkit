@@ -376,7 +376,11 @@ class RecipeEngine(
     private fun diagnosticIdentity(diagnostic: Diagnostic): String {
         val location = diagnostic.location
         return listOf(
-            diagnostic.code.orEmpty(), diagnostic.category?.name.orEmpty(),
+            diagnostic.severity.name,
+            diagnostic.code.orEmpty(),
+            diagnostic.evidence?.name.orEmpty(),
+            diagnostic.category?.name.orEmpty(),
+            diagnostic.locationPrecision.name,
             location?.path?.normalize()?.toString()?.replace('\\', '/').orEmpty(),
             location?.range?.start?.line?.toString().orEmpty(),
             location?.range?.start?.character?.toString().orEmpty(),

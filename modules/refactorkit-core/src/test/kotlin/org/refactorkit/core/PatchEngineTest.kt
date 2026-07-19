@@ -868,6 +868,51 @@ class PatchEngineTest {
     }
 
     @Test
+    fun diagnosticsGateTreatsMovedErrorAsARegressionBecauseIdentityIncludesExactLocation() {
+        val root = Files.createTempDirectory("refactorkit-test")
+        val source = Path.of("Example.java")
+        Files.writeString(root.resolve(source), "class Example {}\n")
+        val snapshot = projectSnapshot(root)
+        val plan = PatchPlan(
+            operation = "diagnosticsGateIdentity",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "move a diagnostic without changing its message",
+            affectedFiles = setOf(source),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(
+                source,
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 13)), "Changed")),
+            ))),
+        )
+        val gate = DiagnosticsGate.enabled("test") { staged ->
+            val moved = staged.files.any { "Changed" in it.content }
+            listOf(Diagnostic(
+                "same compiler error",
+                Diagnostic.Severity.ERROR,
+                location = SourceLocation(source, SourceRange(
+                    SourcePosition(if (moved) 1 else 0, 2),
+                    SourcePosition(if (moved) 1 else 0, 5),
+                )),
+                code = "compiler.same",
+                evidence = DiagnosticEvidence.COMPILER,
+                category = DiagnosticCategory.TYPE_RESOLUTION,
+            ))
+        }
+
+        val result = PatchEngine(root).apply(
+            plan,
+            snapshot,
+            ApplyAuthorization.explicit("test"),
+            gate,
+        )
+
+        assertIs<ApplyResult.Refused>(result)
+        assertTrue(result.diagnostics.any { it.code == "diagnostics.regression" })
+        assertEquals("class Example {}\n", Files.readString(root.resolve(source)))
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
+    }
+
+    @Test
     fun diagnosticsGateAllowsPreExistingErrorsWithoutRegression() {
         val root = Files.createTempDirectory("refactorkit-test")
         val source = Path.of("Example.java")

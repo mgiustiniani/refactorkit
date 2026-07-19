@@ -230,7 +230,22 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
         }
     }
 
-    private fun diagnosticIdentity(diagnostic: Diagnostic): String = "${diagnostic.code}\u0000${diagnostic.message}"
+    private fun diagnosticIdentity(diagnostic: Diagnostic): String {
+        val location = diagnostic.location
+        return listOf(
+            diagnostic.severity.name,
+            diagnostic.code.orEmpty(),
+            diagnostic.evidence?.name.orEmpty(),
+            diagnostic.category?.name.orEmpty(),
+            diagnostic.locationPrecision.name,
+            location?.path?.normalize()?.toString()?.replace('\\', '/').orEmpty(),
+            location?.range?.start?.line?.toString().orEmpty(),
+            location?.range?.start?.character?.toString().orEmpty(),
+            location?.range?.end?.line?.toString().orEmpty(),
+            location?.range?.end?.character?.toString().orEmpty(),
+            diagnostic.message,
+        ).joinToString("\u0000")
+    }
 
     private fun refused(
         snapshot: ProjectSnapshot,

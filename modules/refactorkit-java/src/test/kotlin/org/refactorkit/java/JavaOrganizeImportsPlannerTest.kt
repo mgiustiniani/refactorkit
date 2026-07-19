@@ -25,13 +25,19 @@ class JavaOrganizeImportsPlannerTest {
             import java.util.List;
             import com.other.Bar;
             import org.slf4j.Logger;
-            public class Foo {}
+            public class Foo { Bar bar; Logger logger; List<String> values; }
         """.trimIndent()
 
         val root = Files.createTempDirectory("refactorkit-imports-test")
         val file = root.resolve("src/main/java/com/example/Foo.java")
         Files.createDirectories(file.parent)
         file.writeText(content)
+        val bar = root.resolve("src/main/java/com/other/Bar.java")
+        Files.createDirectories(bar.parent)
+        bar.writeText("package com.other; public class Bar {}\n")
+        val logger = root.resolve("src/main/java/org/slf4j/Logger.java")
+        Files.createDirectories(logger.parent)
+        logger.writeText("package org.slf4j; public interface Logger {}\n")
 
         val snap = JavaProjectScanner().scan(root)
         val plan = planner.preview(snap, listOf(Paths.get("src/main/java/com/example/Foo.java")))
@@ -50,7 +56,7 @@ class JavaOrganizeImportsPlannerTest {
         val javaIdx = importLines.indexOfFirst { it.contains("java.util.List") }
         val orgIdx = importLines.indexOfFirst { it.contains("org.slf4j") }
         assertTrue(javaIdx < orgIdx, "java.* should come before org.*")
-        assertTrue(plan.warnings.any { it.contains("JDT evidence was unclean") }, plan.warnings.toString())
+        assertTrue(plan.warnings.any { it.contains("JDT binding evidence checked") }, plan.warnings.toString())
     }
 
     @Test

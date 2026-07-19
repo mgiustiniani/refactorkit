@@ -75,8 +75,11 @@ Baseline, exact staged post-image, post-apply and rollback diagnostics bind the
 same snapshot/overlay mode, source-set and dependent-impact closure, build and
 classpath evidence, Java platform identity, provider identity and configuration.
 Normal mode rejects introduced errors; strict mode requires zero staged errors.
-Any unavailable affected environment blocks semantic mutation even when the
-same unavailability existed at baseline.
+Diagnostic delta identity includes severity, provider code, evidence, category,
+location precision, normalized source path, exact start/end range and message;
+code/message equality alone cannot hide a moved or replaced compiler error. Any
+unavailable affected environment blocks semantic mutation even when the same
+unavailability existed at baseline.
 
 ## RPK-JAVA-DIAG-006 — Secure reproducibility
 

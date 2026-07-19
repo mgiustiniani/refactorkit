@@ -1508,8 +1508,16 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         riskLevel = RiskLevel.HIGH,
     )
 
-    private fun jdtWarningIdentity(warning: JdtJavaSemanticWarning): String =
-        "${warning.path}|${warning.problemId}|${warning.message}"
+    private fun jdtWarningIdentity(warning: JdtJavaSemanticWarning): String = listOf(
+        warning.path.normalize().toString().replace('\\', '/'),
+        warning.problemId.toString(),
+        warning.category.name,
+        warning.sourceRange.start.line.toString(),
+        warning.sourceRange.start.character.toString(),
+        warning.sourceRange.end.line.toString(),
+        warning.sourceRange.end.character.toString(),
+        warning.message,
+    ).joinToString("\u0000")
 
     private fun dedupeAndSort(edits: List<TextEdit>): List<TextEdit> = edits
         .distinctBy { "${it.range.start.line}:${it.range.start.character}:${it.range.end.line}:${it.range.end.character}:${it.newText}" }

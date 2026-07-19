@@ -27,9 +27,11 @@ review safety boundaries before applying refactorings.
   effective root dependency management, omits optional/excluded transitives, and
   prevents `provided` dependencies from exporting children. Bounded local Maven
   ranges select the highest matching version; arbitrary artifact types and POM
-  relocation fail with typed source-set unavailability. The full Java 8–25,
-  remaining Maven classifier/variant scopes, exact delta, JPMS, SBOM/license and
-  native matrix remain gates.
+  relocation fail with typed source-set unavailability. Diagnostic deltas now
+  bind provider/category/evidence/path/exact-range identity instead of matching
+  code/message alone. The full Java 8–25, remaining Maven classifier/variant
+  scopes, impact and post-apply/rollback diagnostics, JPMS, SBOM/license and native
+  matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;
