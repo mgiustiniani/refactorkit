@@ -25,7 +25,11 @@ traversal, unavailable classpaths and ambiguous ownership fail closed.
 
 The first accepted row moves one complete non-generated Java source root between
 two existing reactor modules while preserving source bytes, package declarations,
-FQCNs, imports and public binary identity.
+FQCNs, imports and public binary identity. Materialized files are also checked by
+`JavaGeneratedSourcePolicy`; generated headers/annotations refuse even when the
+containing root was not declared generated. Spring, Jakarta/JPA and Jackson
+annotations across the complete moved root plus exact quoted moved FQCNs in other
+tracked files elevate the plan to high risk with deterministic locations/warnings.
 
 ## RPK-JAVA-OWN-002 — Explicit POM intent
 

@@ -137,6 +137,41 @@ class JavaMoveAcrossMavenModulesPlannerTest {
     }
 
     @Test
+    fun elevatesFrameworkAndQuotedConfigurationRiskAndRefusesGeneratedJava() {
+        val riskyRoot = reactorFixture()
+        Files.writeString(
+            riskyRoot.resolve(FROM).resolve("example/shared/SharedValue.java"),
+            "package example.shared; @interface Service {} " +
+                "@Service public record SharedValue(String value) {}\n",
+        )
+        val consumer = riskyRoot.resolve("consumer/src/main/java/example/consumer/Consumer.java")
+        Files.writeString(
+            consumer,
+            Files.readString(consumer).replace(
+                "public class Consumer {",
+                "public class Consumer { String reflected = \"example.shared.SharedValue\";",
+            ),
+        )
+
+        val risky = JavaMoveAcrossMavenModulesPlanner().preview(
+            JavaProjectScanner().scan(riskyRoot), FROM, TO, listOf(rewrite()),
+        )
+
+        assertEquals(PatchStatus.PREVIEW, risky.status, "${risky.refusalCode}: ${risky.summary}")
+        assertEquals(org.refactorkit.core.RiskLevel.HIGH, risky.riskLevel)
+        assertTrue(risky.warnings.any { "SPRING" in it && "module ownership" in it })
+        assertTrue(risky.warnings.any { "Quoted moved-type identities" in it })
+
+        val generatedRoot = reactorFixture()
+        val generatedSource = generatedRoot.resolve(FROM).resolve("example/shared/SharedValue.java")
+        Files.writeString(generatedSource, "// Generated - do not edit\n" + Files.readString(generatedSource))
+        val generated = JavaMoveAcrossMavenModulesPlanner().preview(
+            JavaProjectScanner().scan(generatedRoot), FROM, TO, listOf(rewrite()),
+        )
+        assertEquals("mavenOwnership.generated", generated.refusalCode)
+    }
+
+    @Test
     fun refusesAStillRequiredMovedTypeFromAnotherSourceRoot() {
         val root = reactorFixture(remainingSourceDependsOnMoved = true)
 

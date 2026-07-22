@@ -114,7 +114,9 @@ external-importer checks:
   Tests retain comments/unknown XML byte-for-byte and cover missing intent,
   identity mismatch, property-backed/duplicate origins, source-set mismatch,
   missing destination dependencies, remaining-source references and dependency-
-  cycle refusal. CLI preview plus daemon/MCP preview-apply-rollback tests exercise
+  cycle refusal. Framework-annotated and exact quoted-FQCN fixtures elevate risk,
+  while generated headers refuse before planning. CLI preview plus daemon/MCP
+  preview-apply-rollback tests exercise
   the operation-specific staged-reactor diagnostics gate. Packaged acceptance
   previews the same capability through all three transports without changing the
   workspace hash or creating transaction metadata.

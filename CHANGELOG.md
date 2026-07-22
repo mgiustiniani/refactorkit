@@ -17,7 +17,9 @@ review safety boundaries before applying refactorings.
   rebuilds the staged reactor offline for dependent JDT diagnostics. Java/POM
   changes preview, apply and roll back in one WAL transaction. Typed local
   refusals cover missing intent, identity/property/duplicate origin ambiguity,
-  source-set mismatch, cycles and diagnostics regression. CLI, daemon and MCP now
+  source-set mismatch, cycles, generated code and diagnostics regression. Moved
+  Spring/JPA/Jackson annotations and exact quoted FQCN candidates elevate risk
+  with deterministic warnings. CLI, daemon and MCP now
   route preview/apply through the same operation-specific diagnostics gate;
   packaged acceptance previews all three surfaces with exact workspace-hash
   preservation. Four-platform native qualification remains open.

@@ -49,8 +49,9 @@ data class JavaFrameworkAssessment(
         "renameClass" -> listOf(
             "$prefix Spring bean names may be derived from class names; check @Qualifier strings, SpEL, XML/config, and tests.",
         )
-        "moveClass" -> listOf(
-            "$prefix moving classes may affect component scanning, @Configuration imports, package-based conditions, and tests.",
+        "moveClass", "java.moveAcrossMavenModules" -> listOf(
+            "$prefix moving classes or their module ownership may affect component scanning, " +
+                "@Configuration imports, package-based conditions, and tests.",
         )
         "safeDelete" -> listOf(
             "$prefix framework-managed beans may be referenced by configuration, reflection, qualifiers, or dependency injection.",
@@ -62,8 +63,9 @@ data class JavaFrameworkAssessment(
         "renameClass" -> listOf(
             "$prefix default JPA entity names derive from class names; check JPQL strings, Criteria usage, repositories, and migrations.",
         )
-        "moveClass" -> listOf(
-            "$prefix moving entities may affect entity scanning, persistence-unit config, generated metamodels, and tests.",
+        "moveClass", "java.moveAcrossMavenModules" -> listOf(
+            "$prefix moving entities or their module ownership may affect entity scanning, " +
+                "persistence-unit config, generated metamodels, and tests.",
         )
         "safeDelete" -> listOf(
             "$prefix deleting entities may affect schema mappings, repositories, JPQL strings, migrations, and persisted data.",
@@ -75,8 +77,9 @@ data class JavaFrameworkAssessment(
         "renameClass" -> listOf(
             "$prefix serialized type names/properties may be external API contracts; check clients and stored payloads.",
         )
-        "moveClass" -> listOf(
-            "$prefix moving classes may affect polymorphic type ids, default typing, and serialization configuration.",
+        "moveClass", "java.moveAcrossMavenModules" -> listOf(
+            "$prefix moving classes or their module ownership may affect polymorphic type ids, " +
+                "default typing, and serialization configuration.",
         )
         "safeDelete" -> listOf(
             "$prefix deleting DTOs/types may break serialized API contracts and stored JSON payloads.",

@@ -91,6 +91,21 @@ class JavaMoveAcrossMavenModulesPlanner(
         if (sourceOwner.generated || destinationOwner.generated) {
             return refused(snapshot, "mavenOwnership.generated", "Generated source roots are read-only")
         }
+        val movedFiles = snapshot.files.filter { file ->
+            file.languageId == "java" && file.path.normalize().startsWith(source)
+        }
+        movedFiles.firstNotNullOfOrNull { file ->
+            JavaGeneratedSourcePolicy.reason(file)?.let { reason -> file to reason }
+        }?.let { (file, reason) ->
+            return refused(
+                snapshot, "mavenOwnership.generated",
+                "Generated Java cannot change Maven ownership: ${file.path} ($reason)",
+            )
+        }
+        val frameworkAssessment = JavaFrameworkAssessment(
+            movedFiles.flatMap { JavaFrameworkDetector.assess(it).findings },
+        )
+        val quotedIdentities = quotedIdentityCandidates(snapshot, movedFiles)
         val remainingSourceRoots = sourceOwner.module.sourceSets.flatMap { it.sourceRoots }
             .map(Path::normalize).filterNot { it == source }
         val sourceIdentity = moduleIdentity(sourceOwner.module.attributes)
@@ -198,11 +213,20 @@ class JavaMoveAcrossMavenModulesPlanner(
                 workspaceEdit = combined,
                 diagnosticsBefore = before,
                 diagnosticsAfterPreview = rootPlan.diagnosticsAfterPreview,
-                warnings = listOf(
-                    "Java source bytes, package declarations and public binary identities are unchanged; " +
-                        "only explicitly authorized POM coordinate text is replaced.",
-                ),
-                riskLevel = RiskLevel.MEDIUM,
+                warnings = buildList {
+                    add(
+                        "Java source bytes, package declarations and public binary identities are unchanged; " +
+                            "only explicitly authorized POM coordinate text is replaced.",
+                    )
+                    addAll(frameworkAssessment.warnings(OPERATION))
+                    if (quotedIdentities.isNotEmpty()) add(
+                        "Quoted moved-type identities require runtime/configuration review: " +
+                            quotedIdentities.joinToString(),
+                    )
+                },
+                riskLevel = if (frameworkAssessment.hasFindings || quotedIdentities.isNotEmpty()) {
+                    RiskLevel.HIGH
+                } else RiskLevel.MEDIUM,
                 evidence = RefactoringEvidence.JDT_BINDING,
             )
         }
@@ -212,6 +236,24 @@ class JavaMoveAcrossMavenModulesPlanner(
     fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> =
         if (snapshot.auxiliaryFiles.none { it.languageId == "maven-pom" }) adapter.diagnostics(snapshot)
         else withMaterializedSnapshot(snapshot, adapter::diagnostics)
+
+    private fun quotedIdentityCandidates(
+        snapshot: ProjectSnapshot,
+        movedFiles: List<org.refactorkit.core.SourceFile>,
+    ): List<String> {
+        val movedPaths = movedFiles.map { it.path.normalize() }.toSet()
+        val identities = movedFiles.mapNotNull { file ->
+            val simpleName = file.path.fileName.toString().removeSuffix(".java")
+            simpleName.takeUnless { it in setOf("module-info", "package-info") }?.let {
+                JavaPackageUtil.fqn(JavaPackageUtil.extractPackage(file.content), simpleName)
+            }
+        }.toSet()
+        return snapshot.trackedFiles.filterNot { it.path.normalize() in movedPaths }.flatMap { file ->
+            identities.filter { identity ->
+                file.content.contains("\"$identity\"") || file.content.contains("'$identity'")
+            }.map { identity -> "${file.path}:$identity" }
+        }.sorted()
+    }
 
     private fun moduleIdentity(attributes: Map<String, String>): MavenDependencyIdentity? {
         val group = attributes["java.maven.groupId"] ?: return null
