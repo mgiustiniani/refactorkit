@@ -102,6 +102,7 @@ refuse without fallback. |
 | `refactorkit rename-member --symbol <FQN#member> --to <name> [--apply] [path]` | `beta-contract` | Signed method selectors use JDT exact-overload and scanned-source override-family propagation; external family members, constructors, or ambiguous evidence are refused. Unsigned member rename remains lexical. |
 | `refactorkit move-class --symbol <fqcn> --to-package <pkg> [--apply] [path]` | `beta-contract` | Clean JDT evidence scopes package/import/FQN edits to binding-matched files; lexical scoping is explicit otherwise. Invalid packages and existing targets are refused; framework/string warnings remain. |
 | `refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]` | `beta-contract` | Whole-root rename-only transaction preserving bytes, packages, and FQCNs; typed `sourceRoot.*` refusal codes and post-image Maven/JDT diagnostics apply. |
+| `refactorkit java move-across-maven-modules ... [--apply]` | `experimental` | Complete-root ownership migration between existing effective Maven modules. Requires exact `--dependency-pom`, source/destination group/artifact/version intent; Java and lexical POM edits share one staged-reactor diagnostics gate, WAL transaction and rollback. |
 | `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; clean JDT evidence also removes binding-proven unused exact imports, while wildcard/unresolved imports and unclean files remain conservative. |
 | `refactorkit format-file <file> [--apply] [--root <path>]` | `beta-contract` | Formats one non-generated, syntactically valid Java compilation unit through Eclipse JDT using hash-bound project preferences or deterministic defaults; preview/apply/rollback remains mandatory. |
 | `refactorkit safe-delete --symbol <fqcn> [--force] [--apply] [path]` | `beta-contract` | Refuses referenced symbols by default; forced behavior requires explicit risk note. |
@@ -320,6 +321,7 @@ The changes retain API `0.2`; importer shape remains `experimental` while
 | `renameMember` | `beta-contract` | `symbol`, `arguments.newName` |
 | `moveClass` | `beta-contract` | `symbol`, `arguments.targetPackage` |
 | `moveSourceRoot` | `beta-contract` | `arguments.from`, `arguments.to`; workspace-relative `/` paths |
+| `java.moveAcrossMavenModules` | `experimental` | `arguments.from`, `to`, optional `dependencyPom`, exact `sourceGroupId`, `sourceArtifactId`, `sourceVersion`, exact `destinationGroupId`, `destinationArtifactId`, `destinationVersion`; optional literal type/classifier and `allIdenticalOccurrences` |
 | `organizeImports` | `beta-contract` | `arguments.file` or `symbol` as file path |
 | `formatFile` | `beta-contract` | `arguments.file`; whole-file Java formatting only in API `0.2` |
 | `safeDelete` | `beta-contract` | `symbol`, optional `arguments.force` |
@@ -471,8 +473,10 @@ closes the stale session. MCP EOF closes all owned semantic process trees.
 `preview_refactoring` beta operations are `renameClass`, `renameMember`,
 `moveClass`, `moveSourceRoot`, `organizeImports`, and `safeDelete`.
 `moveSourceRoot` uses `arguments.from`/`arguments.to` and reports typed refusals
-in the tool text. `extractMethod` and all
-`changeSignature.*` operations are experimental.
+in the tool text. Experimental `java.moveAcrossMavenModules` uses the same flat
+arguments as daemon `refactor.preview`; MCP apply selects its operation-specific
+staged-reactor diagnostics gate. `extractMethod` and all `changeSignature.*`
+operations are experimental.
 
 `import_external_java_class` requires `code` and `targetPackage`. It accepts
 optional `sourceUrl` and `licensePolicy` (`warn`, `block-unknown`, or `allow`),

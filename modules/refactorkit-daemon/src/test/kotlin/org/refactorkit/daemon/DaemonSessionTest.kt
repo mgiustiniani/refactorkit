@@ -1126,6 +1126,14 @@ class DaemonSessionTest {
             .map { it.jsonObject["name"]!!.jsonPrimitive.content }
         assertEquals(expected, actual)
         assertEquals(RefactorKitVersion.API_VERSION, contract["apiVersion"]!!.jsonPrimitive.content)
+        assertTrue(
+            contract["daemon"]!!.jsonObject["experimentalRefactorOperations"]!!.jsonArray
+                .any { it.jsonPrimitive.content == "java.moveAcrossMavenModules" },
+        )
+        assertTrue(
+            contract["cli"]!!.jsonObject["commands"]!!.jsonArray
+                .any { it.jsonPrimitive.content == "java move-across-maven-modules" },
+        )
     }
 
     @Test

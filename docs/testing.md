@@ -119,7 +119,9 @@ external-importer checks:
   preview-apply-rollback tests exercise
   the operation-specific staged-reactor diagnostics gate. Packaged acceptance
   previews the same capability through all three transports without changing the
-  workspace hash or creating transaction metadata.
+  workspace hash or creating transaction metadata. The machine-readable API
+  `0.2` inventory classifies Maven ownership as additive/experimental while the
+  existing beta daemon method list remains byte-for-byte ordered and tested.
 - Daemon JSON-RPC: `refactor.preview` → `refactor.apply` → `patch.rollback`,
   missing params, unknown plan, and stale plan/snapshot error code contracts.
 - MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack

@@ -9,12 +9,14 @@
       "version", "capabilities", "scan", "index", "intelligence search", "symbols", "diagnostics", "references",
       "definition", "rename", "rename-member", "extract-method",
       "change-signature", "move-class", "organize-imports", "format-file",
-      "safe-delete", "patch recover", "patch rollback", "java import-class", "java move-source-root", "recipe run",
+      "safe-delete", "patch recover", "patch rollback", "java import-class", "java move-source-root",
+      "java move-across-maven-modules", "recipe run",
       "outline", "search", "local-rename", "typescript", "kotlin", "test-golden"
     ],
     "booleanOptions": [
       "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
-      "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references", "json"
+      "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references",
+      "all-identical-occurrences", "json"
     ]
   },
   "daemon": {
@@ -87,6 +89,9 @@
       "changeSignature.renameParameter", "changeSignature.addParameter",
       "changeSignature.reorderParameters", "changeSignature.removeParameter",
       "moveClass", "moveSourceRoot", "organizeImports", "formatFile", "safeDelete", "renameSymbol"
+    ],
+    "experimentalRefactorOperations": [
+      "java.moveAcrossMavenModules"
     ]
   },
   "languageKernel": {

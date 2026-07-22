@@ -22,7 +22,9 @@ review safety boundaries before applying refactorings.
   with deterministic warnings. CLI, daemon and MCP now
   route preview/apply through the same operation-specific diagnostics gate;
   packaged acceptance previews all three surfaces with exact workspace-hash
-  preservation. Four-platform native qualification remains open.
+  preservation. The machine-readable API `0.2` inventory classifies the new
+  operation as additive/experimental without changing existing method/tool
+  envelopes. Four-platform native qualification remains open.
 - Add immutable auxiliary workspace files as the transaction prerequisite for
   `java.moveAcrossMavenModules`. Maven reactor POMs are now snapshot- and
   hash-bound separately from language sources, so XML never enters Java/Kotlin

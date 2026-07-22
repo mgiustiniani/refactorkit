@@ -124,3 +124,9 @@ Clients should detect compatibility through the most specific metadata available
 For beta-contract integrations, automation should treat `apiVersion=0.2` as the
 current compatibility baseline and fail safely when the API version or required
 surface is unknown.
+
+The `0.7.x` Java/Maven additions are additive: existing `moveSourceRoot`, daemon
+method names/envelopes and MCP tools retain their API `0.2` behavior. Experimental
+`java.moveAcrossMavenModules` is a new operation carried by existing preview/apply
+methods and tools; clients that do not recognize it can continue using the prior
+operation inventory unchanged.
