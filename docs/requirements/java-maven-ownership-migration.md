@@ -131,10 +131,12 @@ codes. Apply selects the staged-reactor diagnostics gate by plan operation. API
 `0.2` routes remain compatible; `moveSourceRoot` behavior and arguments do not
 change.
 
-Local packaged acceptance previews the same fixture through all three transports,
+Packaged acceptance previews the same fixture through all three transports,
 checks the POM diff plus Java rename and proves the exact workspace hash and
 metadata state are unchanged. Daemon and MCP module tests additionally apply and
-roll back the combined plan. Four-platform native completion remains open.
+roll back the combined plan. Linux x86-64, Windows x86-64, macOS x86-64 and macOS
+arm64 pass in run `29903077059`; the independently explicit module-directory and
+coordinate-migration rows remain open.
 
 ## Stable refusal codes
 

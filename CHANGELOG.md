@@ -27,7 +27,7 @@ review safety boundaries before applying refactorings.
   cleanup for a bounded 950 ms window. Cleanup still fails closed after the
   retry budget; no workspace path is retried or suppressed.
 - Add active `v0.7.x` support-matrix and migration documents. They distinguish
-  qualified Java 8–25/Maven rows from pending native ownership support, preserve
+  qualified Java 8–25/Maven rows from bounded ownership support, preserve
   API `0.2` compatibility guidance, and state JPMS, module-directory migration,
   build-script execution, dynamic framework strings and signing limitations.
   Release checksums, SPDX SBOMs and independent asset attestation remain open.
@@ -46,7 +46,8 @@ review safety boundaries before applying refactorings.
   packaged acceptance previews all three surfaces with exact workspace-hash
   preservation. The machine-readable API `0.2` inventory classifies the new
   operation as additive/experimental without changing existing method/tool
-  envelopes. Four-platform native qualification remains open.
+  envelopes. The existing-module row is qualified on Linux x86-64, Windows
+  x86-64, macOS x86-64 and macOS arm64 by run `29903077059`.
 - Add immutable auxiliary workspace files as the transaction prerequisite for
   `java.moveAcrossMavenModules`. Maven reactor POMs are now snapshot- and
   hash-bound separately from language sources, so XML never enters Java/Kotlin

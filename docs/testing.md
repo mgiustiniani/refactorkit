@@ -129,7 +129,8 @@ external-importer checks:
   existing beta daemon method list remains byte-for-byte ordered and tested.
   Packaged assertions normalize Windows separators, and temporary staged-reactor
   deletion retries only bounded transient handle-release failures before failing
-  closed.
+  closed. Run `29903077059` passes this row on Linux x86-64, Windows x86-64,
+  macOS x86-64 and macOS arm64.
 - Daemon JSON-RPC: `refactor.preview` → `refactor.apply` → `patch.rollback`,
   missing params, unknown plan, and stale plan/snapshot error code contracts.
 - MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack
