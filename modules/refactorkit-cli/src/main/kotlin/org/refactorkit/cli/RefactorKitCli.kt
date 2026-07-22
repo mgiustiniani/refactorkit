@@ -27,8 +27,11 @@ import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaMoveSourceRootPlanner
+import org.refactorkit.java.MavenDependencyIdentity
+import org.refactorkit.java.MavenDependencyRewrite
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
@@ -68,6 +71,7 @@ class RefactorKitCli(
     private val semanticJson = Json { prettyPrint = true }
     private val booleanOptions = setOf(
         "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
+        "all-identical-occurrences",
         "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references", "json",
         "include-hierarchy", "accept-external-consumer-risk",
     )
@@ -552,7 +556,12 @@ class RefactorKitCli(
             plan,
             snap,
             ApplyAuthorization.explicit("cli"),
-            DiagnosticsGate.enabled("java-jdt", JavaLanguageAdapter()::diagnostics),
+            if (plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION) {
+                DiagnosticsGate.enabled(
+                    "java-maven-ownership",
+                    JavaMoveAcrossMavenModulesPlanner(JavaLanguageAdapter())::diagnostics,
+                )
+            } else DiagnosticsGate.enabled("java-jdt", JavaLanguageAdapter()::diagnostics),
         )) {
             is ApplyResult.Applied -> {
                 println("Applied. Transaction: ${result.transaction.id.value}")
@@ -811,7 +820,7 @@ class RefactorKitCli(
 
     private fun cmdJava(args: List<String>): Int {
         if (args.isEmpty()) {
-            System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, or move-source-root")
+            System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, move-source-root, or move-across-maven-modules")
             return 2
         }
         return when (args.first()) {
@@ -823,6 +832,7 @@ class RefactorKitCli(
             "definition"  -> cmdDefinition(args.drop(1))
             "import-class" -> cmdJavaImportClass(args.drop(1))
             "move-source-root" -> cmdJavaMoveSourceRoot(args.drop(1))
+            "move-across-maven-modules" -> cmdJavaMoveAcrossMavenModules(args.drop(1))
             else -> { System.err.println("Unknown java subcommand: ${args.first()}"); 2 }
         }
     }
@@ -842,6 +852,46 @@ class RefactorKitCli(
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
         println("Use --apply to apply this change.")
         return 0
+    }
+
+    private fun cmdJavaMoveAcrossMavenModules(args: List<String>): Int {
+        val parsed = parseOptions(args)
+        fun required(option: String): String = parsed.options[option]
+            ?: throw IllegalArgumentException("move-across-maven-modules requires --$option")
+        return try {
+            val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
+            val snapshot = scanFrom(root, parsed.flags) ?: return 1
+            val planner = JavaMoveAcrossMavenModulesPlanner(javaAdapter)
+            val rewrite = parsed.options["dependency-pom"]?.let { pom ->
+                MavenDependencyRewrite(
+                    Paths.get(pom),
+                    MavenDependencyIdentity(
+                        required("source-group-id"), required("source-artifact-id"), required("source-version"),
+                        parsed.options["source-type"] ?: "jar", parsed.options["source-classifier"],
+                    ),
+                    MavenDependencyIdentity(
+                        required("destination-group-id"), required("destination-artifact-id"),
+                        required("destination-version"), parsed.options["destination-type"] ?: "jar",
+                        parsed.options["destination-classifier"],
+                    ),
+                    allIdenticalOccurrences = "all-identical-occurrences" in parsed.flags,
+                )
+            }
+            val plan = planner.preview(
+                snapshot, Paths.get(required("from")), Paths.get(required("to")), listOfNotNull(rewrite),
+            )
+            println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+            if (plan.status == PatchStatus.REFUSED) {
+                plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+                return 1
+            }
+            if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
+            println("Use --apply to apply this change.")
+            0
+        } catch (failure: IllegalArgumentException) {
+            System.err.println(failure.message)
+            2
+        }
     }
 
     private fun cmdJavaImportClass(args: List<String>): Int {
@@ -1057,6 +1107,7 @@ class RefactorKitCli(
           refactorkit java diagnostics  <path>                                  (alias for diagnostics)
           refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]
           refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
+          refactorkit java move-across-maven-modules --from <root> --to <root> --dependency-pom <pom> --source-group-id <id> --source-artifact-id <id> --source-version <v> --destination-group-id <id> --destination-artifact-id <id> --destination-version <v> [--root <path>] [--apply]
           refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
           refactorkit kotlin diagnostics <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--request-id <id>]
           refactorkit kotlin symbols <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--query <text>] [--file <workspace-relative.kt>]

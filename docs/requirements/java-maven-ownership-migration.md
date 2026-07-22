@@ -114,10 +114,17 @@ before WAL, writes atomically where possible, rehydrates committed bytes, and
 retains normal crash recovery and rollback metadata.
 
 The library operation is `java.moveAcrossMavenModules`; the typed planner and the
-flat single-rewrite `RefactoringRequest` route are implemented locally. CLI,
-daemon and MCP expose
-the same typed request and refusal codes. API `0.2` routes remain compatible;
-`moveSourceRoot` behavior and arguments do not change.
+flat single-rewrite `RefactoringRequest` route are implemented locally. CLI
+`java move-across-maven-modules`, daemon `refactor.preview/apply` and MCP
+`preview_refactoring/apply_refactoring` expose the same operation and refusal
+codes. Apply selects the staged-reactor diagnostics gate by plan operation. API
+`0.2` routes remain compatible; `moveSourceRoot` behavior and arguments do not
+change.
+
+Local packaged acceptance previews the same fixture through all three transports,
+checks the POM diff plus Java rename and proves the exact workspace hash and
+metadata state are unchanged. Daemon and MCP module tests additionally apply and
+roll back the combined plan. Four-platform native completion remains open.
 
 ## Stable refusal codes
 

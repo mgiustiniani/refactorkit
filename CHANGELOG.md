@@ -17,8 +17,10 @@ review safety boundaries before applying refactorings.
   rebuilds the staged reactor offline for dependent JDT diagnostics. Java/POM
   changes preview, apply and roll back in one WAL transaction. Typed local
   refusals cover missing intent, identity/property/duplicate origin ambiguity,
-  source-set mismatch, cycles and diagnostics regression. CLI/daemon/MCP and
-  four-platform packaged qualification remain open.
+  source-set mismatch, cycles and diagnostics regression. CLI, daemon and MCP now
+  route preview/apply through the same operation-specific diagnostics gate;
+  packaged acceptance previews all three surfaces with exact workspace-hash
+  preservation. Four-platform native qualification remains open.
 - Add immutable auxiliary workspace files as the transaction prerequisite for
   `java.moveAcrossMavenModules`. Maven reactor POMs are now snapshot- and
   hash-bound separately from language sources, so XML never enters Java/Kotlin
@@ -37,7 +39,8 @@ review safety boundaries before applying refactorings.
   edges preserve exact scopes and JDT follows the same table. Permanent library
   and packaged CLI/daemon/MCP fixtures cover normal/classified/test-jar/system
   artifacts, owner scope visibility, reactor non-export and read-only execution.
-  Four-platform native qualification remains required before closing the row.
+  The row passed Linux x86-64, Windows x86-64, macOS x86-64 and macOS ARM64 in
+  run `29891915918`.
 - Extend authoritative Java platform diagnostics from the first Java 8/21 row to
   a local packaged Java 8-through-25 matrix. Historical modular releases use the
   pinned ECJ JEP 247 view of the exact hash-attested `ct.sym` while ASTParser
@@ -46,8 +49,8 @@ review safety boundaries before applying refactorings.
   packaged CLI, daemon and MCP can read external or bundled signature archives.
   A permanent eighteen-module Maven fixture passes all releases with an explicit
   JDK 25 input, preserves workspace bytes, and retains the adjacent Java 8 and
-  Java 9/10/11 API-boundary tests. Four-platform native qualification remains
-  required before closing the roadmap row.
+  Java 9/10/11 API-boundary tests. The complete row passed Linux x86-64, Windows
+  x86-64, macOS x86-64 and macOS ARM64 in run `29891915918`.
 - Add the first authoritative Java/Maven diagnostics platform row. Effective
   Maven `--release` is distinct from grammar level; historical APIs come from a
   bounded hash-attested `ct.sym` projection, while the current release binds a
@@ -74,8 +77,8 @@ review safety boundaries before applying refactorings.
   provider/identity drift; restored bytes must reproduce baseline identities.
   A transitive Maven impact fixture proves that an upstream-only mutation
   diagnoses downstream main and test source sets and refuses before WAL. The full
-  Java 8–25 and Maven variant/scope native promotion, JPMS, SBOM/license and the
-  remaining native matrix remain gates.
+  Java 8–25 and Maven variant/scope rows are natively promoted; JPMS,
+  SBOM/license and the remaining Java ownership matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

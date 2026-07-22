@@ -141,6 +141,32 @@ class RefactorKitCliTest {
     }
 
     @Test
+    fun javaMavenOwnershipCommandPreviewsOneAtomicJavaAndPomPlan() {
+        val sample = repoRoot().resolve("samples/java-maven-ownership").toString()
+
+        val result = captureStdout { RefactorKitCli().run(listOf(
+            "java", "move-across-maven-modules",
+            "--from", "source/src/main/java",
+            "--to", "destination/src/main/java",
+            "--dependency-pom", "consumer/pom.xml",
+            "--source-group-id", "example.ownership",
+            "--source-artifact-id", "source",
+            "--source-version", "1",
+            "--destination-group-id", "example.ownership",
+            "--destination-artifact-id", "destination",
+            "--destination-version", "1",
+            "--root", sample,
+        )) }
+
+        assertEquals(0, result.code, result.stdout)
+        assertTrue(result.stdout.contains("java.moveAcrossMavenModules"), result.stdout)
+        assertTrue(result.stdout.contains("--- a/consumer/pom.xml"), result.stdout)
+        assertTrue(result.stdout.contains("rename source/src/main/java"), result.stdout)
+        assertTrue(result.stdout.contains("Use --apply"), result.stdout)
+        assertTrue(repoRoot().resolve("samples/java-maven-ownership/source/src/main/java/example/ownership/SharedValue.java").exists())
+    }
+
+    @Test
     fun javaSymbolsSubcommandDelegatesToTopLevelSymbols() {
         val sample = repoRoot().resolve("samples/java-maven-simple").toString()
 

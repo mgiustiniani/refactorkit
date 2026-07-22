@@ -220,8 +220,12 @@ proves release 21 JDK/reactor visibility and the release 8 API boundary with
 `JAVA_HOME` unset, then uses one explicitly configured JDK 25 input to validate
 all releases 8 through 25 through packaged CLI, daemon and MCP. The same smoke
 also uses an isolated temporary Maven home to prove exact managed variants,
-`test-jar`, `systemPath` and owner-only provided/test scope derivation. Releases
-absent from the configured platform remain typed unavailable.
+`test-jar`, `systemPath` and owner-only provided/test scope derivation. Its Maven
+ownership fixture previews one combined literal POM dependency rewrite and Java
+source-root move through packaged CLI, daemon and MCP, checks the expected diff
+and affected paths, and proves preview creates neither workspace changes nor
+transaction metadata. Releases absent from the configured platform remain typed
+unavailable.
 
 A promoted package must contain the full catalogue or securely resolve equivalent
 immutable evidence, attest its identity in diagnostics, and pass the fixture on

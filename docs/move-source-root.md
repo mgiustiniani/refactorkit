@@ -56,8 +56,20 @@ Refusal is final for that plan; do not replace it with raw filesystem moves.
 
 ## Experimental Maven ownership migration
 
-The separate library operation `java.moveAcrossMavenModules` now has its first
-local acceptance row. It moves one complete non-generated main/test Java root
+The separate operation `java.moveAcrossMavenModules` now has its first local
+library/CLI/daemon/MCP acceptance row. The CLI spelling is:
+
+```bash
+refactorkit java move-across-maven-modules \
+  --from source/src/main/java \
+  --to destination/src/main/java \
+  --dependency-pom consumer/pom.xml \
+  --source-group-id com.example --source-artifact-id source --source-version 1 \
+  --destination-group-id com.example --destination-artifact-id destination \
+  --destination-version 1 --root /workspace
+```
+
+It moves one complete non-generated main/test Java root
 between two existing effective-reactor modules and accepts one or more explicit
 `MavenDependencyRewrite` values. Each rewrite binds a snapshot POM plus exact
 literal source/destination `{groupId, artifactId, version, type, classifier}`.
@@ -75,6 +87,8 @@ Property-backed/profile-dependent or ambiguous coordinate origins, identity
 mismatches, cycles and diagnostics regressions fail with the stable
 `mavenOwnership.*` codes documented in
 [`requirements/java-maven-ownership-migration.md`](requirements/java-maven-ownership-migration.md).
-CLI/daemon/MCP exposure and four-platform packaged qualification remain pending;
-therefore this row is experimental and does not change the `moveSourceRoot` beta
-contract.
+The self-contained package is locally qualified through CLI, daemon and MCP
+preview while preserving the exact workspace hash. Daemon and MCP tests also
+apply and roll back through the staged-reactor diagnostics gate. Native
+four-platform qualification remains pending; therefore this row is experimental
+and does not change the `moveSourceRoot` beta contract.

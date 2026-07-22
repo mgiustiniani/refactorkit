@@ -28,6 +28,15 @@ class McpSessionTest {
         return root.toString()
     }
 
+    private fun ownershipProject(): String = createProject(
+        "pom.xml" to "<project><modelVersion>4.0.0</modelVersion><groupId>x</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging><properties><maven.compiler.release>21</maven.compiler.release></properties><modules><module>source</module><module>destination</module><module>consumer</module></modules></project>",
+        "source/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>source</artifactId></project>",
+        "destination/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>destination</artifactId></project>",
+        "consumer/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>consumer</artifactId><dependencies><dependency><groupId>x</groupId><artifactId>source</artifactId><version>1</version></dependency></dependencies></project>",
+        "source/src/main/java/x/Value.java" to "package x; public record Value(String text) {}\n",
+        "consumer/src/main/java/y/Consumer.java" to "package y; import x.Value; public class Consumer { Value value = new Value(\"ok\"); }\n",
+    )
+
     private fun contentText(result: JsonObject): String =
         result["content"]!!.jsonArray.first().jsonObject["text"]!!.jsonPrimitive.content
 
@@ -285,6 +294,52 @@ class McpSessionTest {
         assertTrue(contentText(rollback).contains("Rolled back"))
         assertTrue(Files.exists(rootPath.resolve("src/main/java/com/example/UserManager.java")))
         assertFalse(Files.exists(rootPath.resolve("src/main/java/com/example/AccountManager.java")))
+    }
+
+    @Test
+    fun mavenOwnershipToolsPreviewApplyAndRollbackOneManagedTransaction() {
+        val root = ownershipProject()
+        val rootPath = Paths.get(root)
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val preview = session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "java.moveAcrossMavenModules")
+                put("arguments", buildJsonObject {
+                    put("from", "source/src/main/java")
+                    put("to", "destination/src/main/java")
+                    put("dependencyPom", "consumer/pom.xml")
+                    put("sourceGroupId", "x")
+                    put("sourceArtifactId", "source")
+                    put("sourceVersion", "1")
+                    put("destinationGroupId", "x")
+                    put("destinationArtifactId", "destination")
+                    put("destinationVersion", "1")
+                })
+            })
+        }) as JsonObject
+        val planId = firstValueAfter("Plan ID  :", contentText(preview))
+
+        val apply = session.dispatch("tools/call", buildJsonObject {
+            put("name", "apply_refactoring")
+            put("arguments", buildJsonObject { put("planId", planId) })
+        }) as JsonObject
+        val transactionId = firstValueAfter("Transaction ID:", contentText(apply))
+        assertEquals(false, apply["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+        assertTrue(Files.exists(rootPath.resolve("destination/src/main/java/x/Value.java")))
+        assertTrue(Files.readString(rootPath.resolve("consumer/pom.xml")).contains("<artifactId>destination</artifactId>"))
+
+        val rollback = session.dispatch("tools/call", buildJsonObject {
+            put("name", "rollback_refactoring")
+            put("arguments", buildJsonObject { put("transactionId", transactionId) })
+        }) as JsonObject
+        assertEquals(false, rollback["isError"]!!.jsonPrimitive.content.toBooleanStrict())
+        assertTrue(Files.exists(rootPath.resolve("source/src/main/java/x/Value.java")))
+        assertTrue(Files.readString(rootPath.resolve("consumer/pom.xml")).contains("<artifactId>source</artifactId>"))
     }
 
     @Test

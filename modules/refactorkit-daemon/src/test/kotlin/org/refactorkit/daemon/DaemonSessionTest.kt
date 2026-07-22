@@ -48,6 +48,15 @@ class DaemonSessionTest {
     private fun params(vararg pairs: Pair<String, String>): JsonObject =
         buildJsonObject { pairs.forEach { (k, v) -> put(k, v) } }
 
+    private fun ownershipProject(): String = createProject(
+        "pom.xml" to "<project><modelVersion>4.0.0</modelVersion><groupId>x</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging><properties><maven.compiler.release>21</maven.compiler.release></properties><modules><module>source</module><module>destination</module><module>consumer</module></modules></project>",
+        "source/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>source</artifactId></project>",
+        "destination/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>destination</artifactId></project>",
+        "consumer/pom.xml" to "<project><modelVersion>4.0.0</modelVersion><parent><groupId>x</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent><artifactId>consumer</artifactId><dependencies><dependency><groupId>x</groupId><artifactId>source</artifactId><version>1</version></dependency></dependencies></project>",
+        "source/src/main/java/x/Value.java" to "package x; public record Value(String text) {}\n",
+        "consumer/src/main/java/y/Consumer.java" to "package y; import x.Value; public class Consumer { Value value = new Value(\"ok\"); }\n",
+    )
+
     @Test
     fun serverVersionReturnsPublicVersionAndApiVersion() {
         val session = DaemonSession()
@@ -1153,6 +1162,44 @@ class DaemonSessionTest {
         }
         assertEquals(JsonRpcErrorCodes.PLAN_REFUSED, refusal.code)
         assertEquals("sourceRoot.overlap", refusal.data!!.jsonObject["refusalCode"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun mavenOwnershipPreviewApplyAndRollbackUseTheStagedReactorGate() {
+        val root = ownershipProject()
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+
+        val preview = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "java.moveAcrossMavenModules")
+            put("arguments", buildJsonObject {
+                put("from", "source/src/main/java")
+                put("to", "destination/src/main/java")
+                put("dependencyPom", "consumer/pom.xml")
+                put("sourceGroupId", "x")
+                put("sourceArtifactId", "source")
+                put("sourceVersion", "1")
+                put("destinationGroupId", "x")
+                put("destinationArtifactId", "destination")
+                put("destinationVersion", "1")
+            })
+        }).jsonObject
+        assertEquals("PREVIEW", preview["status"]!!.jsonPrimitive.content)
+
+        val applied = session.dispatch(
+            "refactor.apply", params("planId" to preview["planId"]!!.jsonPrimitive.content),
+        ).jsonObject
+        assertEquals("applied", applied["status"]!!.jsonPrimitive.content)
+        assertTrue(rootPath.resolve("destination/src/main/java/x/Value.java").exists())
+        assertTrue(rootPath.resolve("consumer/pom.xml").readText().contains("<artifactId>destination</artifactId>"))
+
+        val rolledBack = session.dispatch(
+            "patch.rollback", params("transactionId" to applied["transactionId"]!!.jsonPrimitive.content),
+        ).jsonObject
+        assertEquals("rolledBack", rolledBack["status"]!!.jsonPrimitive.content)
+        assertTrue(rootPath.resolve("source/src/main/java/x/Value.java").exists())
+        assertTrue(rootPath.resolve("consumer/pom.xml").readText().contains("<artifactId>source</artifactId>"))
     }
 
     @Test

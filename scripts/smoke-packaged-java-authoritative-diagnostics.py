@@ -253,6 +253,62 @@ def write_availability_fixture(root: Path) -> None:
     )
 
 
+def write_ownership_fixture(root: Path) -> None:
+    root.mkdir(parents=True)
+    (root / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion><groupId>fixture.ownership</groupId>"
+        "<artifactId>root</artifactId><version>1</version><packaging>pom</packaging>"
+        "<properties><maven.compiler.release>21</maven.compiler.release></properties>"
+        "<modules><module>source</module><module>destination</module><module>consumer</module></modules>"
+        "</project>\n", encoding="utf-8",
+    )
+    parent = (
+        "<parent><groupId>fixture.ownership</groupId><artifactId>root</artifactId>"
+        "<version>1</version><relativePath>../pom.xml</relativePath></parent>"
+    )
+    for module in ("source", "destination"):
+        path = root / module / "pom.xml"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            f"<project><modelVersion>4.0.0</modelVersion>{parent}"
+            f"<artifactId>{module}</artifactId></project>\n", encoding="utf-8",
+        )
+    consumer_pom = root / "consumer/pom.xml"
+    consumer_pom.parent.mkdir(parents=True)
+    consumer_pom.write_text(
+        f"<project><modelVersion>4.0.0</modelVersion>{parent}<artifactId>consumer</artifactId>"
+        "<dependencies><!-- retained --><dependency><groupId>fixture.ownership</groupId>"
+        "<artifactId>source</artifactId><version>1</version><unknown>opaque</unknown>"
+        "</dependency></dependencies></project>\n", encoding="utf-8",
+    )
+    source = root / "source/src/main/java/fixture/ownership/SharedValue.java"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "package fixture.ownership; public record SharedValue(String value) {}\n", encoding="utf-8",
+    )
+    consumer = root / "consumer/src/main/java/fixture/consumer/Consumer.java"
+    consumer.parent.mkdir(parents=True)
+    consumer.write_text(
+        "package fixture.consumer; import fixture.ownership.SharedValue; "
+        "public class Consumer { SharedValue value = new SharedValue(\"ok\"); }\n",
+        encoding="utf-8",
+    )
+
+
+def ownership_arguments() -> dict[str, str]:
+    return {
+        "from": "source/src/main/java",
+        "to": "destination/src/main/java",
+        "dependencyPom": "consumer/pom.xml",
+        "sourceGroupId": "fixture.ownership",
+        "sourceArtifactId": "source",
+        "sourceVersion": "1",
+        "destinationGroupId": "fixture.ownership",
+        "destinationArtifactId": "destination",
+        "destinationVersion": "1",
+    }
+
+
 def runtime_environment(user_home: Path | None = None) -> dict[str, str]:
     environment = os.environ.copy()
     environment.pop("JAVA_HOME", None)
@@ -355,6 +411,64 @@ def mcp_diagnostics(
             process.kill(); process.wait(timeout=20)
 
 
+def daemon_ownership_preview(daemon: Path, root: Path) -> dict:
+    process = subprocess.Popen(
+        command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True, encoding="utf-8", env=runtime_environment(),
+    )
+    try:
+        def exchange(request_id: int, method: str, params: dict):
+            process.stdin.write(json.dumps({
+                "jsonrpc": "2.0", "id": request_id, "method": method, "params": params,
+            }, separators=(",", ":")) + "\n")
+            process.stdin.flush()
+            response = json.loads(process.stdout.readline())
+            if response.get("error") is not None:
+                raise AssertionError(f"daemon ownership {method} failed: {response}")
+            return response["result"]
+
+        exchange(1, "project.open", {"root": str(root)})
+        return exchange(2, "refactor.preview", {
+            "operation": "java.moveAcrossMavenModules",
+            "arguments": ownership_arguments(),
+        })
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            process.kill(); process.wait(timeout=20)
+
+
+def mcp_ownership_preview(mcp: Path, root: Path) -> str:
+    process = subprocess.Popen(
+        command_for(mcp, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True, encoding="utf-8", env=runtime_environment(),
+    )
+    try:
+        def tool(request_id: int, name: str, arguments: dict) -> str:
+            request = {"jsonrpc": "2.0", "id": request_id, "method": "tools/call",
+                       "params": {"name": name, "arguments": arguments}}
+            process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+            process.stdin.flush()
+            response = json.loads(process.stdout.readline())
+            if response.get("error") is not None:
+                raise AssertionError(f"MCP ownership {name} failed: {response}")
+            return response["result"]["content"][0]["text"]
+
+        tool(1, "project_scan", {"root": str(root)})
+        return tool(2, "preview_refactoring", {
+            "operation": "java.moveAcrossMavenModules",
+            "arguments": ownership_arguments(),
+        })
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            process.kill(); process.wait(timeout=20)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime", default="modules/refactorkit-cli/build/package/refactorkit")
@@ -422,6 +536,46 @@ def main() -> int:
         if tree_hash(variant_scope) != variant_scope_hash or (variant_scope / ".refactorkit").exists():
             raise AssertionError("packaged Maven variant/scope diagnostics modified the workspace")
 
+        ownership = Path(temporary) / "ownership"
+        write_ownership_fixture(ownership)
+        ownership_hash = tree_hash(ownership)
+        ownership_cli = subprocess.run(
+            command_for(cli, [
+                "java", "move-across-maven-modules",
+                "--from", "source/src/main/java",
+                "--to", "destination/src/main/java",
+                "--dependency-pom", "consumer/pom.xml",
+                "--source-group-id", "fixture.ownership",
+                "--source-artifact-id", "source",
+                "--source-version", "1",
+                "--destination-group-id", "fixture.ownership",
+                "--destination-artifact-id", "destination",
+                "--destination-version", "1",
+                "--root", str(ownership),
+            ]),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env=runtime_environment(), timeout=120,
+        )
+        if (ownership_cli.returncode != 0 or
+                "Operation: java.moveAcrossMavenModules" not in ownership_cli.stdout or
+                "--- a/consumer/pom.xml" not in ownership_cli.stdout or
+                "rename source/src/main/java" not in ownership_cli.stdout):
+            raise AssertionError(
+                f"packaged Maven ownership CLI preview failed: {ownership_cli.stdout}\n{ownership_cli.stderr}",
+            )
+        ownership_daemon = daemon_ownership_preview(daemon, ownership)
+        if (ownership_daemon.get("status") != "PREVIEW" or
+                ownership_daemon.get("operation") != "java.moveAcrossMavenModules" or
+                "consumer/pom.xml" not in ownership_daemon.get("affectedFiles", [])):
+            raise AssertionError(f"packaged Maven ownership daemon preview failed: {ownership_daemon}")
+        ownership_mcp = mcp_ownership_preview(mcp, ownership)
+        if ("Status   : PREVIEW" not in ownership_mcp or
+                "consumer/pom.xml" not in ownership_mcp or
+                "destination/src/main/java" not in ownership_mcp):
+            raise AssertionError(f"packaged Maven ownership MCP preview failed: {ownership_mcp}")
+        if tree_hash(ownership) != ownership_hash or (ownership / ".refactorkit").exists():
+            raise AssertionError("packaged Maven ownership previews modified the workspace")
+
         unavailable = Path(temporary) / "availability"
         write_availability_fixture(unavailable)
         unavailable_hash = tree_hash(unavailable)
@@ -458,7 +612,7 @@ def main() -> int:
         if tree_hash(root) != historical_hash or (root / ".refactorkit").exists():
             raise AssertionError("historical packaged diagnostics modified the reactor")
 
-    print("Packaged authoritative Java diagnostics acceptance passed: exact releases 8 through 25, Maven variant/scope derivation, release-21 reactor closure, source-set availability, and release-8 API boundary.")
+    print("Packaged authoritative Java acceptance passed: exact releases 8 through 25, Maven variant/scope derivation, ownership previews, release-21 reactor closure, source-set availability, and release-8 API boundary.")
     return 0
 
 

@@ -43,6 +43,7 @@ import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
 import org.refactorkit.webimporter.SourceKind
+import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -256,7 +257,7 @@ class McpSession(
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation", "symbol"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | organizeImports | formatFile | safeDelete",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
                     "languageId" to "string: java | kotlin | typescript | javascript (default java)",
                     "expectedSnapshotHash" to "string: required for Kotlin rename",
@@ -870,6 +871,9 @@ class McpSession(
             "moveSourceRoot" -> JavaMoveSourceRootPlanner(adapter).preview(
                 snap, Paths.get(opArgs["from"] ?: missing("arguments.from")), Paths.get(opArgs["to"] ?: missing("arguments.to")),
             )
+            JavaMoveAcrossMavenModulesPlanner.OPERATION -> adapter.applyRefactoring(
+                RefactoringRequest(operation = operation, arguments = opArgs, snapshot = snap),
+            )
             "organizeImports" -> {
                 val file = Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file"))
                 if (languageId == "kotlin") {
@@ -933,7 +937,12 @@ class McpSession(
             current,
             ApplyAuthorization.explicit("mcp-tool"),
             when (pending.languageId) {
-                "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
+                "java" -> if (plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION) {
+                    DiagnosticsGate.enabled(
+                        "java-maven-ownership",
+                        JavaMoveAcrossMavenModulesPlanner(adapter)::diagnostics,
+                    )
+                } else DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
                 "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
                         when {

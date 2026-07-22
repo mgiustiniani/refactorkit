@@ -114,7 +114,10 @@ external-importer checks:
   Tests retain comments/unknown XML byte-for-byte and cover missing intent,
   identity mismatch, property-backed/duplicate origins, source-set mismatch,
   missing destination dependencies, remaining-source references and dependency-
-  cycle refusal.
+  cycle refusal. CLI preview plus daemon/MCP preview-apply-rollback tests exercise
+  the operation-specific staged-reactor diagnostics gate. Packaged acceptance
+  previews the same capability through all three transports without changing the
+  workspace hash or creating transaction metadata.
 - Daemon JSON-RPC: `refactor.preview` → `refactor.apply` → `patch.rollback`,
   missing params, unknown plan, and stale plan/snapshot error code contracts.
 - MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack

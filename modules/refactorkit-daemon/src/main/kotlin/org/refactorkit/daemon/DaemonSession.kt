@@ -97,6 +97,7 @@ import org.refactorkit.typescript.TypeScriptToolchainDiscoverer
 import org.refactorkit.typescript.TypeScriptToolchainDiscovery
 import org.refactorkit.typescript.TypeScriptToolchainDiscoveryPolicy
 import org.refactorkit.typescript.TypeScriptToolchainRequest
+import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -1572,6 +1573,9 @@ class DaemonSession(
                 val to = args["to"] ?: missing("arguments.to")
                 JavaMoveSourceRootPlanner(adapter).preview(snap, Paths.get(from), Paths.get(to))
             }
+            JavaMoveAcrossMavenModulesPlanner.OPERATION -> adapter.applyRefactoring(
+                RefactoringRequest(operation = operation, arguments = args, snapshot = snap),
+            )
             "organizeImports" -> {
                 val file = args["file"] ?: symbol ?: missing("arguments.file")
                 if (requestedLanguage == "kotlin") {
@@ -1647,7 +1651,12 @@ class DaemonSession(
             currentSnap,
             ApplyAuthorization.explicit("daemon-json-rpc"),
             when (pending.languageId) {
-                "java" -> DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
+                "java" -> if (plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION) {
+                    DiagnosticsGate.enabled(
+                        "java-maven-ownership",
+                        JavaMoveAcrossMavenModulesPlanner(adapter)::diagnostics,
+                    )
+                } else DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
                 "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
                         when {
