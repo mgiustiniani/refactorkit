@@ -100,6 +100,89 @@ def source_hash(root: Path) -> str:
 # Match the bounded external-LSP document-symbol file ceiling so the commit has
 # enough durable per-file moves to remain externally observable on Windows.
 CONSUMER_COUNT = 255
+APPLY_ABSOLUTE_TIMEOUT_SECONDS = 300
+APPLY_STALL_TIMEOUT_SECONDS = 120
+APPLY_POLL_SECONDS = 0.001
+APPLY_PROGRESS_PROBE_SECONDS = 0.05
+
+
+def await_first_committed_image(
+    daemon: Daemon,
+    workspace: Path,
+    *,
+    absolute_timeout_seconds: float = APPLY_ABSOLUTE_TIMEOUT_SECONDS,
+    stall_timeout_seconds: float = APPLY_STALL_TIMEOUT_SECONDS,
+    poll_seconds: float = APPLY_POLL_SECONDS,
+    progress_probe_seconds: float = APPLY_PROGRESS_PROBE_SECONDS,
+) -> Path:
+    """Wait for a mixed-image APPLYING state while accepting slow, progressing staging."""
+    started = time.monotonic()
+    absolute_deadline = started + absolute_timeout_seconds
+    progress_deadline = started + stall_timeout_seconds
+    transaction_directory = workspace / ".refactorkit" / "transactions"
+    sentinel = workspace / "src" / "consumer-000.ts"
+    journal: Path | None = None
+    journal_state: str | None = None
+    max_staged_files = 0
+    next_progress_probe = started
+
+    while time.monotonic() < absolute_deadline:
+        now = time.monotonic()
+        if daemon.process.poll() is not None:
+            raise AssertionError(
+                "packaged daemon exited before a committed source image "
+                f"(state={journal_state}, maxStagedFiles={max_staged_files})"
+            )
+
+        try:
+            committed = "AccountService" in sentinel.read_text()
+        except OSError:
+            committed = False
+
+        if journal is None:
+            candidates = list(transaction_directory.glob("transaction-*.json"))
+            if len(candidates) == 1:
+                journal = candidates[0]
+                progress_deadline = now + stall_timeout_seconds
+        if journal is not None:
+            try:
+                observed_state = json.loads(journal.read_text()).get("state")
+                if observed_state != journal_state:
+                    journal_state = observed_state
+                    progress_deadline = now + stall_timeout_seconds
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        if now >= next_progress_probe:
+            try:
+                staged_files = sum(1 for _ in workspace.rglob(".refactorkit-stage-*.tmp"))
+            except OSError:
+                staged_files = max_staged_files
+            if staged_files > max_staged_files:
+                max_staged_files = staged_files
+                progress_deadline = now + stall_timeout_seconds
+            next_progress_probe = now + progress_probe_seconds
+
+        if committed:
+            if journal is None:
+                raise AssertionError(
+                    "committed source image appeared without a transaction journal "
+                    f"(state={journal_state}, maxStagedFiles={max_staged_files})"
+                )
+            return journal
+        if now >= progress_deadline:
+            raise AssertionError(
+                "packaged apply made no staging progress before exposing a committed source image "
+                f"(state={journal_state}, maxStagedFiles={max_staged_files}, "
+                f"stallSeconds={stall_timeout_seconds})"
+            )
+        time.sleep(poll_seconds)
+
+    raise AssertionError(
+        "packaged apply did not expose a committed source image within the absolute bound "
+        f"(state={journal_state}, maxStagedFiles={max_staged_files}, "
+        f"timeoutSeconds={absolute_timeout_seconds})"
+    )
 
 
 def create_workspace(root: Path, consumers: int = CONSUMER_COUNT) -> None:
@@ -164,26 +247,12 @@ def main() -> int:
             mark_stage("wait for first committed image after durable APPLYING intent")
             daemon.send("refactor.apply", {"planId": preview["planId"]})
 
-            # Windows antivirus/filesystem latency can consume the original 30-second
-            # observation window before a 256-file atomic commit exposes its first
-            # post-image. Keep the acceptance bounded by the daemon request budget.
-            deadline = time.monotonic() + 120
-            sentinel = workspace / "src" / "consumer-000.ts"
-            while time.monotonic() < deadline and daemon.process.poll() is None:
-                try:
-                    if "AccountService" in sentinel.read_text():
-                        break
-                except OSError:
-                    pass
-                time.sleep(0.001)
-            else:
-                raise AssertionError("packaged apply never exposed a committed source image")
+            # PatchEngine durably stages every post-image before committing the first
+            # one. Native Windows antivirus/filesystem latency is allowed while staged
+            # temp-file count advances, but both inactivity and total wait stay bounded.
+            applying_journal = await_first_committed_image(daemon, workspace)
             mark_stage("kill daemon after first committed image")
             daemon.kill_tree()
-            journals = list((workspace / ".refactorkit" / "transactions").glob("transaction-*.json"))
-            if len(journals) != 1:
-                raise AssertionError(f"expected one interrupted transaction journal, found {len(journals)}")
-            applying_journal = journals[0]
         finally:
             daemon.kill_tree()
 

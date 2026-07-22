@@ -9,6 +9,12 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Stabilize native Windows kill-during-write qualification without weakening its
+  mixed-image proof. The 256-file observer now has separate 300-second absolute
+  and 120-second inactivity bounds; only durable journal transitions or a rising
+  staged-temp high-water mark renew inactivity. Stalls fail with state/count
+  evidence, and the daemon is still killed only after an `APPLYING` journal and
+  first committed source image coexist.
 - Add a 128-case deterministic property suite for lossless Maven dependency
   editing across LF/CRLF, whitespace, namespace prefixes, comments, CDATA,
   processing instructions and quoted `>` attributes. Accepted cases change only

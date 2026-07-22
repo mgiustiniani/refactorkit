@@ -55,8 +55,10 @@ jobs:
       - name: Run golden tests
         run: ./refactorkit test-golden
 
-      - name: Test runtime archive verifier
-        run: python3 scripts/test-verify-runtime-archive.py
+      - name: Test packaging verification scripts
+        run: |
+          python3 scripts/test-verify-runtime-archive.py
+          python3 scripts/test-smoke-packaged-kill-recovery.py
 
       - name: Validate architecture documentation
         run: |
@@ -184,6 +186,12 @@ jobs:
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
+
+      - name: Test native kill-recovery observer
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/test-smoke-packaged-kill-recovery.py"], check=True)
 
       - name: Build and test
         run: ${{ matrix.gradle }} build --no-daemon

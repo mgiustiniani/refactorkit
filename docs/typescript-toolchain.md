@@ -104,7 +104,9 @@ Native qualification now proves stable reads, forced language-server termination
 provenance-preserving bounded restart, path-alias and re-export rename, exact
 before/after compiler diagnostics, explicit apply, WAL creation and exact rollback.
 `typescript-language-server` remains a proposal provider. Packaged native acceptance
-also kills the daemon at the durable `APPLYING` boundary of a 111-file semantic
-rename and verifies exact startup compensation to `ROLLED_BACK`. Stable mutation
+also kills the daemon at a mixed-image durable `APPLYING` boundary of a 256-file
+semantic rename and verifies exact explicit restart compensation to `ROLLED_BACK`.
+Slow native staging may extend an inactivity window only while its staged-file
+high-water mark advances; a separate absolute deadline remains mandatory. Stable mutation
 authority still requires an OS RSS policy and expansion of the supported
 server-version matrix.

@@ -320,9 +320,14 @@ exact `typescript-compiler-exact-v1` before/after diagnostics, forced terminatio
 of the owned real language-server process, provenance-preserving bounded daemon
 restart, three-file semantic rename through an alias and re-export, explicit apply,
 WAL creation and exact rollback. `scripts/smoke-packaged-kill-recovery.py` additionally
-builds a 111-file semantic rename, kills the packaged daemon only after the durable
-journal reaches `APPLYING`, and verifies that a fresh packaged daemon restores the
-exact pre-image and records `ROLLED_BACK`. CI installs packages with
+builds a 256-file semantic rename, waits for both durable `APPLYING` intent and a
+committed source image, kills the packaged daemon, and verifies that a fresh
+packaged daemon restores the exact pre-image and records `ROLLED_BACK`. Because
+`PatchEngine` stages every post-image before its first commit, the native observer
+uses a 300-second absolute bound plus a 120-second inactivity bound that advances
+only when the journal lifecycle or staged-temp high-water mark progresses. Unit
+checks prove progressing staging extends the inactivity window and stalled staging
+still fails with explicit state/count evidence. CI installs packages with
 `npm ci --ignore-scripts`; runtime code never
 invokes npm. Upstream unversioned LSP diagnostics are not trusted or relabelled.
 
