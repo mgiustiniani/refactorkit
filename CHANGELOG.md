@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Harden Maven ownership packaged qualification on Windows by comparing protocol
+  paths after separator normalization and retrying isolated staged-workspace
+  cleanup for a bounded 950 ms window. Cleanup still fails closed after the
+  retry budget; no workspace path is retried or suppressed.
 - Add active `v0.7.x` support-matrix and migration documents. They distinguish
   qualified Java 8–25/Maven rows from pending native ownership support, preserve
   API `0.2` compatibility guidance, and state JPMS, module-directory migration,

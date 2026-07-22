@@ -122,6 +122,9 @@ external-importer checks:
   workspace hash or creating transaction metadata. The machine-readable API
   `0.2` inventory classifies Maven ownership as additive/experimental while the
   existing beta daemon method list remains byte-for-byte ordered and tested.
+  Packaged assertions normalize Windows separators, and temporary staged-reactor
+  deletion retries only bounded transient handle-release failures before failing
+  closed.
 - Daemon JSON-RPC: `refactor.preview` → `refactor.apply` → `patch.rollback`,
   missing params, unknown plan, and stale plan/snapshot error code contracts.
 - MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack

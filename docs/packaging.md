@@ -224,7 +224,10 @@ also uses an isolated temporary Maven home to prove exact managed variants,
 ownership fixture previews one combined literal POM dependency rewrite and Java
 source-root move through packaged CLI, daemon and MCP, checks the expected diff
 and affected paths, and proves preview creates neither workspace changes nor
-transaction metadata. Releases absent from the configured platform remain typed
+transaction metadata. Protocol-path assertions normalize native separators; the
+planner gives transient Windows handle release a bounded 950 ms retry window when
+removing only its isolated temporary staged reactor, then fails closed. Releases
+absent from the configured platform remain typed
 unavailable.
 
 A promoted package must contain the full catalogue or securely resolve equivalent

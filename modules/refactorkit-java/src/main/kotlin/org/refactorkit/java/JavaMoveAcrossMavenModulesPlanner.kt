@@ -326,10 +326,25 @@ class JavaMoveAcrossMavenModulesPlanner(
             val rebuilt = JavaProjectScanner().scan(temporary)
             return action(rebuilt)
         } finally {
-            Files.walk(temporary).use { stream ->
-                stream.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+            deleteTemporaryWorkspace(temporary)
+        }
+    }
+
+    private fun deleteTemporaryWorkspace(root: Path) {
+        var failure: Exception? = null
+        repeat(TEMP_DELETE_ATTEMPTS) { attempt ->
+            if (!Files.exists(root)) return
+            try {
+                Files.walk(root).use { stream ->
+                    stream.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+                }
+                return
+            } catch (error: Exception) {
+                failure = error
+                if (attempt + 1 < TEMP_DELETE_ATTEMPTS) Thread.sleep(TEMP_DELETE_RETRY_MILLIS)
             }
         }
+        throw IllegalStateException("Cannot remove staged Maven workspace: $root", failure)
     }
 
     private fun safeRelative(path: Path): Path? = path.normalize().takeIf {
@@ -363,5 +378,7 @@ class JavaMoveAcrossMavenModulesPlanner(
         const val OPERATION = "java.moveAcrossMavenModules"
         private const val MAVEN_PROVIDER = "maven-effective-v1"
         private const val MAX_REWRITES = 64
+        private const val TEMP_DELETE_ATTEMPTS = 20
+        private const val TEMP_DELETE_RETRY_MILLIS = 50L
     }
 }

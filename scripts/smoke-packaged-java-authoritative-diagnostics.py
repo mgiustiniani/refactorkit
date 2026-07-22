@@ -556,22 +556,25 @@ def main() -> int:
             text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env=runtime_environment(), timeout=120,
         )
+        ownership_cli_output = ownership_cli.stdout.replace("\\", "/")
         if (ownership_cli.returncode != 0 or
-                "Operation: java.moveAcrossMavenModules" not in ownership_cli.stdout or
-                "--- a/consumer/pom.xml" not in ownership_cli.stdout or
-                "rename source/src/main/java" not in ownership_cli.stdout):
+                "Operation: java.moveAcrossMavenModules" not in ownership_cli_output or
+                "--- a/consumer/pom.xml" not in ownership_cli_output or
+                "rename source/src/main/java" not in ownership_cli_output):
             raise AssertionError(
                 f"packaged Maven ownership CLI preview failed: {ownership_cli.stdout}\n{ownership_cli.stderr}",
             )
         ownership_daemon = daemon_ownership_preview(daemon, ownership)
+        ownership_daemon_files = [path.replace("\\", "/") for path in ownership_daemon.get("affectedFiles", [])]
         if (ownership_daemon.get("status") != "PREVIEW" or
                 ownership_daemon.get("operation") != "java.moveAcrossMavenModules" or
-                "consumer/pom.xml" not in ownership_daemon.get("affectedFiles", [])):
+                "consumer/pom.xml" not in ownership_daemon_files):
             raise AssertionError(f"packaged Maven ownership daemon preview failed: {ownership_daemon}")
         ownership_mcp = mcp_ownership_preview(mcp, ownership)
-        if ("Status   : PREVIEW" not in ownership_mcp or
-                "consumer/pom.xml" not in ownership_mcp or
-                "destination/src/main/java" not in ownership_mcp):
+        ownership_mcp_normalized = ownership_mcp.replace("\\", "/")
+        if ("Status   : PREVIEW" not in ownership_mcp_normalized or
+                "consumer/pom.xml" not in ownership_mcp_normalized or
+                "destination/src/main/java" not in ownership_mcp_normalized):
             raise AssertionError(f"packaged Maven ownership MCP preview failed: {ownership_mcp}")
         if tree_hash(ownership) != ownership_hash or (ownership / ".refactorkit").exists():
             raise AssertionError("packaged Maven ownership previews modified the workspace")
