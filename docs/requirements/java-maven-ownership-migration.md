@@ -70,6 +70,13 @@ the same staged descriptor and source bytes. A descriptor change after preview,
 missing staged descriptor or post-apply identity mismatch refuses or triggers
 automatic journaled rollback under the existing diagnostics contract.
 
+Local prerequisite evidence: `ProjectSnapshot.auxiliaryFiles` now keeps bounded
+reactor POM bytes disjoint from language `files`/`sourceExtensions` while binding
+them into snapshot identity. `WorkspaceEditSimulator` and `PatchEngine` stage,
+precondition-check, rehydrate, apply and roll those bytes back with source edits.
+The first Maven ownership planner must still rebuild its effective model from the
+staged auxiliary bytes before this requirement is fully accepted.
+
 ## RPK-JAVA-OWN-005 — Staged reactor validity and cycles
 
 The complete staged Maven reactor is rebuilt offline with plugin processing,

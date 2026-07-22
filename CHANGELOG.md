@@ -9,6 +9,14 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add immutable auxiliary workspace files as the transaction prerequisite for
+  `java.moveAcrossMavenModules`. Maven reactor POMs are now snapshot- and
+  hash-bound separately from language sources, so XML never enters Java/Kotlin
+  source scope. Workspace simulation, affected-file preconditions, post-image
+  identity, post-apply rehydration and byte-exact rollback now cover source and
+  auxiliary edits in one plan. Core acceptance proves one range-only POM change
+  across baseline/staged/post-apply diagnostics and rollback; staged effective-
+  reactor rebuilding remains part of the first ownership mutation row.
 - Complete the local Maven classifier/variant and scope matrix for authoritative
   Java diagnostics. Dependency management now matches the full Maven
   `{groupId, artifactId, type, classifier}` identity, so managed sibling variants

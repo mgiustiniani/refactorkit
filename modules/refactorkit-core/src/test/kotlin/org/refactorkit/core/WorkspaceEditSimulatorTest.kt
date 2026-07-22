@@ -28,6 +28,60 @@ class WorkspaceEditSimulatorTest {
     }
 
     @Test
+    fun stagesAuxiliaryWorkspaceFilesWithoutAddingThemToLanguageSourceScope() {
+        val root = Files.createTempDirectory("refactorkit-simulator-auxiliary")
+        val javaPath = Path.of("src/main/java/Example.java")
+        val pomPath = Path.of("pom.xml")
+        val java = "class Example {}\n"
+        val pom = "<project><artifactId>old</artifactId><!-- keep --></project>\n"
+        val snapshot = ProjectSnapshot(
+            workspace = Workspace(root),
+            modules = emptyList(),
+            files = listOf(SourceFile(javaPath, java, "java")),
+            sourceExtensions = setOf("java"),
+            auxiliaryFiles = listOf(SourceFile(pomPath, pom, "maven-pom")),
+        )
+        val edit = WorkspaceEdit(listOf(
+            FileEdit.Rename(javaPath, Path.of("destination/src/main/java/Example.java")),
+            FileEdit.Modify(
+                pomPath,
+                listOf(TextEdit(TextEdits.rangeForOffset(pom, pom.indexOf("old"), 3), "new")),
+            ),
+        ))
+
+        val staged = WorkspaceEditSimulator.apply(snapshot, edit)
+
+        assertEquals(setOf("java"), staged.sourceExtensions)
+        assertEquals(1, staged.files.size)
+        assertEquals("<project><artifactId>new</artifactId><!-- keep --></project>\n", staged.auxiliaryFiles.single().content)
+        assertEquals("maven-pom", staged.auxiliaryFiles.single().languageId)
+        assertEquals(2, staged.trackedFiles.size)
+        kotlin.test.assertNotEquals(snapshot.hash, staged.hash)
+    }
+
+    @Test
+    fun rejectsUnsafeOrOverlappingAuxiliaryWorkspacePaths() {
+        val root = Files.createTempDirectory("refactorkit-simulator-auxiliary-invalid")
+        val source = SourceFile(Path.of("pom.xml"), "source", "xml")
+        assertFailsWith<IllegalArgumentException> {
+            ProjectSnapshot(
+                Workspace(root),
+                emptyList(),
+                listOf(source),
+                auxiliaryFiles = listOf(SourceFile(Path.of("pom.xml"), "auxiliary", "maven-pom")),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ProjectSnapshot(
+                Workspace(root),
+                emptyList(),
+                emptyList(),
+                auxiliaryFiles = listOf(SourceFile(Path.of("../pom.xml"), "escape", "maven-pom")),
+            )
+        }
+    }
+
+    @Test
     fun appliesStructuralStepsToAnEvolvingSnapshot() {
         val root = Files.createTempDirectory("refactorkit-simulator")
         val source = Path.of("Old.java")

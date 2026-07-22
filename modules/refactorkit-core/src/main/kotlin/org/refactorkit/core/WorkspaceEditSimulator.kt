@@ -11,7 +11,9 @@ import java.nio.file.Path
  */
 object WorkspaceEditSimulator {
     fun apply(snapshot: ProjectSnapshot, workspaceEdit: WorkspaceEdit): ProjectSnapshot {
-        val working = snapshot.files.associateBy { it.path.normalize() }.toMutableMap()
+        val working = snapshot.trackedFiles.associateBy { it.path.normalize() }.toMutableMap()
+        val sourcePaths = snapshot.files.mapTo(mutableSetOf()) { it.path.normalize() }
+        val auxiliaryPaths = snapshot.auxiliaryFiles.mapTo(mutableSetOf()) { it.path.normalize() }
         normalize(workspaceEdit).edits.forEach { edit ->
             val path = edit.path.normalize()
             when (edit) {
@@ -19,16 +21,25 @@ object WorkspaceEditSimulator {
                     require(edit.overwrite || path !in working) { "Create target already exists: $path" }
                     val previousLanguage = working[path]?.languageId
                     working[path] = SourceFile(path, edit.content, previousLanguage ?: languageId(snapshot, path))
+                    if (path !in sourcePaths && path !in auxiliaryPaths) {
+                        if (extensionOf(path) in snapshot.sourceExtensions) sourcePaths.add(path) else auxiliaryPaths.add(path)
+                    }
                 }
-                is FileEdit.Delete -> requireNotNull(working.remove(path)) { "Delete source is missing: $path" }
+                is FileEdit.Delete -> {
+                    requireNotNull(working.remove(path)) { "Delete tracked file is missing: $path" }
+                    sourcePaths.remove(path)
+                    auxiliaryPaths.remove(path)
+                }
                 is FileEdit.Rename -> {
                     val target = edit.newPath.normalize()
                     require(target !in working) { "Rename target already exists: $target" }
-                    val source = requireNotNull(working.remove(path)) { "Rename source is missing: $path" }
+                    val source = requireNotNull(working.remove(path)) { "Rename tracked file is missing: $path" }
                     working[target] = source.copy(path = target)
+                    if (sourcePaths.remove(path)) sourcePaths.add(target)
+                    if (auxiliaryPaths.remove(path)) auxiliaryPaths.add(target)
                 }
                 is FileEdit.Modify -> {
-                    val source = requireNotNull(working[path]) { "Modify source is missing: $path" }
+                    val source = requireNotNull(working[path]) { "Modify tracked file is missing: $path" }
                     val sorted = edit.textEdits.sortedWith(
                         compareBy<TextEdit> { it.range.start.line }.thenBy { it.range.start.character },
                     )
@@ -39,7 +50,10 @@ object WorkspaceEditSimulator {
                 }
             }
         }
-        return snapshot.copy(files = working.values.sortedBy { it.path.toString() })
+        return snapshot.copy(
+            files = sourcePaths.map(working::getValue).sortedBy { it.path.toString() },
+            auxiliaryFiles = auxiliaryPaths.map(working::getValue).sortedBy { it.path.toString() },
+        )
     }
 
     fun normalize(workspaceEdit: WorkspaceEdit): WorkspaceEdit {
@@ -63,9 +77,12 @@ object WorkspaceEditSimulator {
     }
 
     private fun languageId(snapshot: ProjectSnapshot, path: Path): String {
-        val extension = path.fileName?.toString()?.substringAfterLast('.', missingDelimiterValue = "").orEmpty()
-        return snapshot.files.firstOrNull {
+        val extension = extensionOf(path).orEmpty()
+        return snapshot.trackedFiles.firstOrNull {
             it.path.fileName?.toString()?.substringAfterLast('.', missingDelimiterValue = "") == extension
         }?.languageId ?: extension
     }
+
+    private fun extensionOf(path: Path): String? = path.fileName?.toString()
+        ?.substringAfterLast('.', missingDelimiterValue = "")?.takeIf(String::isNotEmpty)
 }

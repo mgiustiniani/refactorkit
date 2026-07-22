@@ -276,6 +276,9 @@ class JavaProjectScanner(
             compareBy<ClasspathEvidence> { it.path.toString() }.thenBy { it.kind.name },
         )
 
+        val auxiliaryFiles = pomFiles.filter { it.startsWith(normalizedRoot) }.map { pom ->
+            SourceFile(normalizedRoot.relativize(pom), pom.readText(), "maven-pom")
+        }.sortedBy { it.path.toString() }
         return ProjectSnapshot(
             workspace = Workspace(normalizedRoot),
             modules = modules,
@@ -284,6 +287,7 @@ class JavaProjectScanner(
             ignoredDirectories = ProjectSnapshot.DEFAULT_IGNORED_DIRECTORIES,
             classpathEvidence = classpathEvidence,
             buildModels = if (includeBuildModels) buildModels(modules, gradleBuildModel) else emptyList(),
+            auxiliaryFiles = auxiliaryFiles,
         )
     }
 

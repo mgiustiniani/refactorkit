@@ -503,6 +503,7 @@ class PatchEngine(
             extension to file.languageId
         }.toMap()
         val actualByPath = linkedMapOf<Path, SourceFile>()
+        val actualAuxiliaryFiles = mutableListOf<SourceFile>()
         try {
             roots.filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }.forEach { sourceRoot ->
                 Files.walk(sourceRoot).use { stream ->
@@ -522,6 +523,13 @@ class PatchEngine(
                         .forEach { actualByPath[it.path] = it }
                 }
             }
+            snapshot.auxiliaryFiles.forEach { file ->
+                val absolute = resolveInsideWorkspace(file.path)
+                require(Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) {
+                    "Auxiliary workspace file is unavailable: ${file.path}"
+                }
+                actualAuxiliaryFiles += file.copy(content = Files.readString(absolute))
+            }
         } catch (error: Exception) {
             return listOf(Diagnostic(
                 "Cannot rescan snapshot scope under workspace lock: ${error.message}",
@@ -537,6 +545,7 @@ class PatchEngine(
             snapshot.ignoredDirectories,
             snapshot.classpathEvidence,
             snapshot.buildModels,
+            actualAuxiliaryFiles,
         )
         if (actualHash != snapshot.hash) {
             val expectedByPath = snapshot.files.associateBy { it.path }
@@ -655,14 +664,17 @@ class PatchEngine(
     }
 
     private fun rehydrateSnapshot(expected: ProjectSnapshot): ProjectSnapshot = expected.copy(
-        files = expected.files.map { file ->
-            val absolute = resolveInsideWorkspace(file.path)
-            require(Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) {
-                "Expected source file is unavailable after transaction: ${file.path}"
-            }
-            file.copy(content = Files.readString(absolute))
-        },
+        files = expected.files.map { file -> rehydrateTrackedFile(file, "source") },
+        auxiliaryFiles = expected.auxiliaryFiles.map { file -> rehydrateTrackedFile(file, "auxiliary") },
     )
+
+    private fun rehydrateTrackedFile(file: SourceFile, kind: String): SourceFile {
+        val absolute = resolveInsideWorkspace(file.path)
+        require(Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS)) {
+            "Expected $kind file is unavailable after transaction: ${file.path}"
+        }
+        return file.copy(content = Files.readString(absolute))
+    }
 
     private fun validateClasspathEvidence(snapshot: ProjectSnapshot): List<Diagnostic> {
         val evidenceByKey = snapshot.classpathEvidence.groupBy { it.path.normalize() to it.kind }
@@ -725,7 +737,7 @@ class PatchEngine(
         edit: WorkspaceEdit,
         snapshot: ProjectSnapshot,
     ): List<Diagnostic> {
-        val expectedFiles = snapshot.files.associateBy { resolveInsideWorkspace(it.path) }
+        val expectedFiles = snapshot.trackedFiles.associateBy { resolveInsideWorkspace(it.path) }
         val initialRoles = linkedMapOf<Path, InitialPathRole>()
         edit.edits.forEach { fileEdit ->
             val source = resolveInsideWorkspace(fileEdit.path)
@@ -951,15 +963,22 @@ class PatchEngine(
 
     private fun postSnapshotHash(snapshot: ProjectSnapshot, postImages: List<FileImage>): String {
         val files = snapshot.files.associateByTo(linkedMapOf()) { it.path.normalize() }
+        val auxiliaryFiles = snapshot.auxiliaryFiles.associateByTo(linkedMapOf()) { it.path.normalize() }
         postImages.forEach { image ->
             val path = image.path.normalize()
             if (image.content == null) {
                 files.remove(path)
+                auxiliaryFiles.remove(path)
             } else {
                 val extension = extensionOf(path)
                 if (path in files || extension in snapshot.sourceExtensions) {
                     val languageId = files[path]?.languageId ?: requireNotNull(extension)
                     files[path] = SourceFile(path, image.content, languageId)
+                    auxiliaryFiles.remove(path)
+                } else {
+                    val languageId = auxiliaryFiles[path]?.languageId ?: extension ?: "document"
+                    auxiliaryFiles[path] = SourceFile(path, image.content, languageId)
+                    files.remove(path)
                 }
             }
         }
@@ -970,6 +989,7 @@ class PatchEngine(
             snapshot.ignoredDirectories,
             snapshot.classpathEvidence,
             snapshot.buildModels,
+            auxiliaryFiles.values.toList(),
         )
     }
 

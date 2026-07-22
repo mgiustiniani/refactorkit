@@ -280,6 +280,10 @@ class MavenReactorAnalysisAcceptanceTest {
         createReactor(root, missingDependency = false)
 
         val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        assertEquals(5, snapshot.auxiliaryFiles.size)
+        assertTrue(snapshot.auxiliaryFiles.all { it.path.fileName.toString() == "pom.xml" && it.languageId == "maven-pom" })
+        assertTrue(snapshot.files.none { it.path.fileName.toString() == "pom.xml" })
+        assertFalse("xml" in snapshot.sourceExtensions)
         val modules = snapshot.modules.associateBy { it.name }
         assertEquals(setOf("domain", "application", "infrastructure", "acceptance-tests"), modules.keys)
         assertTrue(modules.values.all { it.languageSettings["java.sourceLevel"] == "21" })

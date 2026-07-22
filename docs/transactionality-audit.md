@@ -146,8 +146,9 @@ quarantine or update journals, and reports incomplete state as
 `patch.recover`, which is classified `writesWorkspace=true`.
 
 The snapshot-aware `apply(plan, ProjectSnapshot)` overload revalidates every
-initially affected source or target after acquiring the lock. Changed, appeared,
-missing, unscanned, or workspace-mismatched state is refused before mutation.
+initially affected language source, auxiliary workspace document or target after
+acquiring the lock. Changed, appeared, missing, unscanned, or workspace-mismatched
+state is refused before mutation.
 CLI, daemon, managed LSP/MCP apply, recipes, and golden execution use this path.
 Tests cover same-process contention, symlink metadata refusal, and a file change
 between scan and lock acquisition.
@@ -350,7 +351,8 @@ narrowing rather than by advertising unsupported directory mutations.
 
 ### TX-014 — Apply snapshot scope ownership
 
-Status: **closed for declared source and Java classpath scope after the audited baseline**.
+Status: **closed for declared source, bounded auxiliary workspace files and Java
+classpath scope after the audited baseline**.
 
 The hash-only apply overload is removed and `ProjectSnapshot.hash` now binds
 module roots, declared source roots/classpath paths, source extensions, ignored
@@ -365,6 +367,16 @@ or metadata-altered sources refuse as `snapshot.scopeChanged` with structured
 added/missing/changed detail. Tests prove a library caller cannot reuse a stale
 snapshot that omits a newly appeared source, while declared ignored build output
 does not create false staleness.
+
+Bounded build descriptors that may participate in a managed edit are captured as
+`ProjectSnapshot.auxiliaryFiles`. They are hash-bound and re-read under the same
+workspace lock, but remain disjoint from language `files` and `sourceExtensions`,
+so tracking Maven POM bytes does not broaden source discovery to arbitrary XML.
+`WorkspaceEditSimulator` preserves source/auxiliary ownership across create,
+modify, rename and delete steps. PatchEngine affected-file preconditions,
+post-image hashes, post-apply rehydration and exact rollback cover both sets.
+Core tests prove one POM range edit passes all three diagnostic observations and
+rolls back byte-identically while the Java source remains unchanged.
 
 Java scans also capture hash-bound classpath evidence for every active classpath
 entry, prospective conventional compiled-output directory, local JAR directory,

@@ -71,14 +71,29 @@ data class ProjectSnapshot(
     val ignoredDirectories: Set<String> = DEFAULT_IGNORED_DIRECTORIES,
     val classpathEvidence: List<ClasspathEvidence> = emptyList(),
     val buildModels: List<BuildModel> = emptyList(),
+    val auxiliaryFiles: List<SourceFile> = emptyList(),
 ) {
     init {
         require(buildModels.map(BuildModel::providerId).distinct().size == buildModels.size) {
             "build-model provider IDs must be unique within a snapshot"
         }
+        val auxiliaryPaths = auxiliaryFiles.map { it.path.normalize() }
+        require(auxiliaryPaths.distinct().size == auxiliaryPaths.size) {
+            "auxiliary workspace file paths must be unique"
+        }
+        require(auxiliaryPaths.all { !it.isAbsolute && !it.startsWith("..") }) {
+            "auxiliary workspace files must use safe workspace-relative paths"
+        }
+        require(files.map { it.path.normalize() }.intersect(auxiliaryPaths.toSet()).isEmpty()) {
+            "language source files and auxiliary workspace files must have disjoint paths"
+        }
     }
 
-    val hash: String = hashSnapshot(modules, files, sourceExtensions, ignoredDirectories, classpathEvidence, buildModels)
+    val trackedFiles: List<SourceFile> get() = files + auxiliaryFiles
+
+    val hash: String = hashSnapshot(
+        modules, files, sourceExtensions, ignoredDirectories, classpathEvidence, buildModels, auxiliaryFiles,
+    )
 
     companion object {
         val DEFAULT_IGNORED_DIRECTORIES: Set<String> = setOf(
@@ -97,6 +112,7 @@ data class ProjectSnapshot(
             ignoredDirectories: Set<String>,
             classpathEvidence: List<ClasspathEvidence> = emptyList(),
             buildModels: List<BuildModel> = emptyList(),
+            auxiliaryFiles: List<SourceFile> = emptyList(),
         ): String {
             val digest = MessageDigest.getInstance("SHA-256")
             modules.sortedBy { it.name }.forEach { module ->
@@ -156,6 +172,15 @@ data class ProjectSnapshot(
                         }
                     }
                 }
+            }
+            auxiliaryFiles.sortedBy { it.path.toString() }.forEach { file ->
+                digest.update("auxiliaryFile\u0000".toByteArray(Charsets.UTF_8))
+                digest.update(file.path.toString().toByteArray(Charsets.UTF_8))
+                digest.update(0)
+                digest.update(file.languageId.toByteArray(Charsets.UTF_8))
+                digest.update(0)
+                digest.update(file.content.toByteArray(Charsets.UTF_8))
+                digest.update(0)
             }
             files.sortedBy { it.path.toString() }.forEach { file ->
                 digest.update(file.path.toString().toByteArray(Charsets.UTF_8))

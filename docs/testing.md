@@ -105,7 +105,9 @@ external-importer checks:
 
 - PatchEngine: stale snapshot refusal, outside-workspace path refusal,
   overlapping-edit rejection, and rollback restoration for modify, create,
-  rename, and delete edits.
+  rename, and delete edits. Auxiliary workspace-file acceptance keeps one Maven
+  POM outside language source scope while proving staged/post-apply diagnostic
+  visibility, exact apply and byte-identical rollback.
 - Daemon JSON-RPC: `refactor.preview` → `refactor.apply` → `patch.rollback`,
   missing params, unknown plan, and stale plan/snapshot error code contracts.
 - MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack

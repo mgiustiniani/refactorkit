@@ -40,6 +40,55 @@ class PatchEngineTest {
     }
 
     @Test
+    fun stagesAppliesRehydratesAndRollsBackAuxiliaryWorkspaceFile() {
+        val root = Files.createTempDirectory("refactorkit-auxiliary-transaction")
+        val sourcePath = Path.of("Example.java")
+        val pomPath = Path.of("pom.xml")
+        val source = "class Example {}\n"
+        val pom = "<project><artifactId>old</artifactId><!-- keep --></project>\n"
+        Files.writeString(root.resolve(sourcePath), source)
+        Files.writeString(root.resolve(pomPath), pom)
+        val snapshot = ProjectSnapshot(
+            workspace = Workspace(root),
+            modules = emptyList(),
+            files = listOf(SourceFile(sourcePath, source, "java")),
+            sourceExtensions = setOf("java"),
+            auxiliaryFiles = listOf(SourceFile(pomPath, pom, "maven-pom")),
+        )
+        val replacement = "new"
+        val edit = WorkspaceEdit(listOf(FileEdit.Modify(
+            pomPath,
+            listOf(TextEdit(TextEdits.rangeForOffset(pom, pom.indexOf("old"), 3), replacement)),
+        )))
+        val plan = PatchPlan(
+            operation = "auxiliaryFileMutation",
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            summary = "modify one tracked auxiliary workspace file",
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
+        )
+        val observed = mutableListOf<String>()
+        val gate = DiagnosticsGate.enabled("auxiliary-test") { staged ->
+            observed += staged.auxiliaryFiles.single().content
+            emptyList()
+        }
+
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(root).apply(
+            plan,
+            snapshot,
+            ApplyAuthorization.explicit("auxiliary-file-test"),
+            gate,
+        ))
+
+        assertEquals(listOf(pom, pom.replace("old", replacement), pom.replace("old", replacement)), observed)
+        assertEquals(pom.replace("old", replacement), Files.readString(root.resolve(pomPath)))
+        assertIs<ApplyResult.Applied>(PatchEngine(root).rollback(applied.transaction))
+        assertEquals(pom, Files.readString(root.resolve(pomPath)))
+        assertEquals(source, Files.readString(root.resolve(sourcePath)))
+    }
+
+    @Test
     fun refusesApplyWhenSnapshotChanged() {
         val root = Files.createTempDirectory("refactorkit-test")
         val file = root.resolve("Example.java")
