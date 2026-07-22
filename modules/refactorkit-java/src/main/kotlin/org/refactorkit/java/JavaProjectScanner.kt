@@ -129,6 +129,14 @@ class JavaProjectScanner(
                 put("java.sourceLevel", sourceLevel.toString())
                 if (maven != null) {
                     put("java.buildSystem", "maven")
+                    put("java.maven.groupId", maven.coordinate.groupId)
+                    put("java.maven.artifactId", maven.coordinate.artifactId)
+                    put("java.maven.version", maven.coordinate.version)
+                    put("java.maven.packaging", maven.packaging)
+                    put(
+                        "java.maven.pomPath",
+                        normalizedRoot.relativize(moduleRoot.resolve("pom.xml")).toString().replace('\\', '/'),
+                    )
                     put("java.buildModel.status", if (maven.modelFailure == null) "available" else "unavailable")
                     maven.modelFailure?.let { put("java.buildModel.message", it) }
                     put("java.sourceLevel.status", if (maven.sourceLevel == null) "unavailable" else "available")

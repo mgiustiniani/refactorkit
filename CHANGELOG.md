@@ -9,6 +9,16 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Implement the first local `java.moveAcrossMavenModules` library row. One
+  complete non-generated Java source root can move between existing effective
+  Maven modules together with an explicit exact-literal consumer dependency
+  rewrite. A bounded lexical POM editor replaces only coordinate text, retaining
+  comments, whitespace and unknown elements; an isolated temporary workspace
+  rebuilds the staged reactor offline for dependent JDT diagnostics. Java/POM
+  changes preview, apply and roll back in one WAL transaction. Typed local
+  refusals cover missing intent, identity/property/duplicate origin ambiguity,
+  source-set mismatch, cycles and diagnostics regression. CLI/daemon/MCP and
+  four-platform packaged qualification remain open.
 - Add immutable auxiliary workspace files as the transaction prerequisite for
   `java.moveAcrossMavenModules`. Maven reactor POMs are now snapshot- and
   hash-bound separately from language sources, so XML never enters Java/Kotlin

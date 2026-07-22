@@ -52,8 +52,29 @@ already has an effective POM in the worktree.
 - `sourceRoot.diagnosticsRegression`
 
 Refusal is final for that plan; do not replace it with raw filesystem moves.
-POM changes needed to define module ownership/dependencies must exist before the
-preview so they are included in snapshot and classpath evidence. A future explicit
-`java.moveAcrossMavenModules` capability is tracked in
-[`requirements/java-maven-ownership-migration.md`](requirements/java-maven-ownership-migration.md);
-`moveSourceRoot` must not infer or edit POMs.
+`moveSourceRoot` never infers or edits a POM.
+
+## Experimental Maven ownership migration
+
+The separate library operation `java.moveAcrossMavenModules` now has its first
+local acceptance row. It moves one complete non-generated main/test Java root
+between two existing effective-reactor modules and accepts one or more explicit
+`MavenDependencyRewrite` values. Each rewrite binds a snapshot POM plus exact
+literal source/destination `{groupId, artifactId, version, type, classifier}`.
+The planner changes only coordinate text ranges; it does not serialize XML, so
+comments, whitespace, processing instructions, unknown elements and unrelated
+configuration retain exact bytes.
+
+The operation materializes source and auxiliary snapshot bytes in an isolated
+temporary workspace to rebuild the staged reactor offline with plugins, network
+and credentials disabled. Preview diagnostics cover dependent modules. Apply
+must use `DiagnosticsGate.enabled(..., planner::diagnostics)` so baseline,
+staged and post-apply observations rebuild that same model. Java renames and POM
+text edits remain one approved PatchEngine/WAL transaction and one rollback.
+Property-backed/profile-dependent or ambiguous coordinate origins, identity
+mismatches, cycles and diagnostics regressions fail with the stable
+`mavenOwnership.*` codes documented in
+[`requirements/java-maven-ownership-migration.md`](requirements/java-maven-ownership-migration.md).
+CLI/daemon/MCP exposure and four-platform packaged qualification remain pending;
+therefore this row is experimental and does not change the `moveSourceRoot` beta
+contract.

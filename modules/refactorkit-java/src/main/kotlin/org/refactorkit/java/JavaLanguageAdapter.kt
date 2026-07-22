@@ -813,6 +813,7 @@ class JavaLanguageAdapter(
         RefactoringDescriptor("changeSignature.removeParameter", "Remove unused Java parameter and call-site argument", RiskLevel.MEDIUM),
         RefactoringDescriptor("moveClass", "Move Java class", RiskLevel.MEDIUM),
         RefactoringDescriptor("moveSourceRoot", "Move Java source root without changing FQCNs", RiskLevel.MEDIUM),
+        RefactoringDescriptor("java.moveAcrossMavenModules", "Move Java ownership across Maven modules", RiskLevel.MEDIUM),
         RefactoringDescriptor("organizeImports", "Organize imports", RiskLevel.LOW),
         RefactoringDescriptor("formatFile", "Format Java compilation unit", RiskLevel.LOW),
         RefactoringDescriptor("safeDelete", "Safe delete", RiskLevel.MEDIUM),
@@ -829,6 +830,7 @@ class JavaLanguageAdapter(
         "changeSignature.removeParameter", "removeParameter" -> applyRemoveParameter(request)
         "moveClass"    -> applyMoveClass(request)
         "moveSourceRoot" -> applyMoveSourceRoot(request)
+        "java.moveAcrossMavenModules" -> applyMoveAcrossMavenModules(request)
         "organizeImports" -> applyOrganizeImports(request)
         "formatFile" -> applyFormatFile(request)
         "safeDelete"   -> applySafeDelete(request)
@@ -842,6 +844,44 @@ class JavaLanguageAdapter(
             ?: return notImplemented(request, "moveSourceRoot requires arguments.to")
         return JavaMoveSourceRootPlanner(this).preview(request.snapshot, Path.of(from), Path.of(to))
     }
+
+    private fun applyMoveAcrossMavenModules(request: RefactoringRequest): PatchPlan {
+        fun required(name: String): String = request.arguments[name]
+            ?: throw MissingOwnershipArgument(
+                notImplemented(request, "java.moveAcrossMavenModules requires arguments.$name"),
+            )
+        return try {
+            val rewrite = request.arguments["dependencyPom"]?.let { pom ->
+                MavenDependencyRewrite(
+                    pomPath = Path.of(pom),
+                    source = MavenDependencyIdentity(
+                        required("sourceGroupId"), required("sourceArtifactId"), required("sourceVersion"),
+                        request.arguments["sourceType"] ?: "jar", request.arguments["sourceClassifier"],
+                    ),
+                    destination = MavenDependencyIdentity(
+                        required("destinationGroupId"), required("destinationArtifactId"), required("destinationVersion"),
+                        request.arguments["destinationType"] ?: "jar", request.arguments["destinationClassifier"],
+                    ),
+                    allIdenticalOccurrences = request.arguments["allIdenticalOccurrences"]?.let { value ->
+                        value.toBooleanStrictOrNull()
+                            ?: throw IllegalArgumentException("allIdenticalOccurrences must be true or false")
+                    } ?: false,
+                )
+            }
+            JavaMoveAcrossMavenModulesPlanner(this).preview(
+                request.snapshot,
+                Path.of(required("from")),
+                Path.of(required("to")),
+                listOfNotNull(rewrite),
+            )
+        } catch (missing: MissingOwnershipArgument) {
+            missing.plan
+        } catch (error: IllegalArgumentException) {
+            notImplemented(request, "Invalid java.moveAcrossMavenModules argument: ${error.message}")
+        }
+    }
+
+    private class MissingOwnershipArgument(val plan: PatchPlan) : RuntimeException()
 
     private fun applyRenameMember(request: RefactoringRequest): PatchPlan {
         val symbol = request.symbolId?.value

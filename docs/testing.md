@@ -108,6 +108,12 @@ external-importer checks:
   rename, and delete edits. Auxiliary workspace-file acceptance keeps one Maven
   POM outside language source scope while proving staged/post-apply diagnostic
   visibility, exact apply and byte-identical rollback.
+- Maven ownership migration: one complete-root Java move plus exact literal
+  consumer dependency rewrite is previewed, applied and rolled back as one plan;
+  dependent JDT diagnostics consume an isolated offline staged-reactor rebuild.
+  Tests retain comments/unknown XML byte-for-byte and cover missing intent,
+  identity mismatch, property-backed/duplicate origins, source-set mismatch,
+  missing destination dependencies and dependency-cycle refusal.
 - Daemon JSON-RPC: `refactor.preview` → `refactor.apply` → `patch.rollback`,
   missing params, unknown plan, and stale plan/snapshot error code contracts.
 - MCP: `renameClass` preview/apply/rollback, invalid tool errors without stack

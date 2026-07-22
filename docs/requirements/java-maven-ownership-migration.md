@@ -74,8 +74,11 @@ Local prerequisite evidence: `ProjectSnapshot.auxiliaryFiles` now keeps bounded
 reactor POM bytes disjoint from language `files`/`sourceExtensions` while binding
 them into snapshot identity. `WorkspaceEditSimulator` and `PatchEngine` stage,
 precondition-check, rehydrate, apply and roll those bytes back with source edits.
-The first Maven ownership planner must still rebuild its effective model from the
-staged auxiliary bytes before this requirement is fully accepted.
+The first Maven ownership planner now materializes only immutable tracked source
+and auxiliary bytes into an isolated temporary workspace, rebuilds the staged
+reactor offline with plugins/network/credentials disabled, and uses that model
+for preview plus `planner::diagnostics` apply/post-apply gates. Packaged and native
+qualification remains required before this requirement is fully accepted.
 
 ## RPK-JAVA-OWN-005 — Staged reactor validity and cycles
 
@@ -95,6 +98,12 @@ network access and credentials disabled. RefactorKit rejects:
 Maven build success may be supplementary acceptance evidence but never replaces
 RefactorKit's staged model and JDT authority.
 
+Local first-row evidence moves one complete root, rewrites one exact literal
+consumer edge and validates the dependent consumer through JDT. It rejects staged
+cycles before plan publication and reports a moved-file regression as
+`mavenOwnership.destinationDependencyMissing`. The remaining-source dependency
+row, wider mediation and native qualification remain open.
+
 ## RPK-JAVA-OWN-006 — Transaction and protocols
 
 A successful preview contains Java renames and POM `FileEdit.Modify` entries in
@@ -103,7 +112,9 @@ verifies snapshot and classpath/model evidence, runs exact staged diagnostics
 before WAL, writes atomically where possible, rehydrates committed bytes, and
 retains normal crash recovery and rollback metadata.
 
-The library operation is `java.moveAcrossMavenModules`. CLI, daemon and MCP expose
+The library operation is `java.moveAcrossMavenModules`; the typed planner and the
+flat single-rewrite `RefactoringRequest` route are implemented locally. CLI,
+daemon and MCP expose
 the same typed request and refusal codes. API `0.2` routes remain compatible;
 `moveSourceRoot` behavior and arguments do not change.
 
