@@ -138,7 +138,7 @@ class MavenReactorAnalysisAcceptanceTest {
     }
 
     @Test
-    fun nearestDependencyMediationAndNonTransitiveScopesMatchMavenCompileVisibility() {
+    fun nearestDependencyMediationAndOwnerScopeDerivationMatchMavenCompileVisibility() {
         val root = Files.createTempDirectory("refactorkit-maven-mediation")
         val repository = Files.createTempDirectory("refactorkit-maven-mediation-m2")
         installArtifact(repository, "fixture.dep", "common", "1", "fixture/dep/CommonApi.java",
@@ -190,7 +190,7 @@ class MavenReactorAnalysisAcceptanceTest {
         assertTrue("common-1.jar" !in classpathNames, classpathNames.toString())
         assertTrue("optional-child-1.jar" !in classpathNames, classpathNames.toString())
         assertTrue("excluded-child-1.jar" !in classpathNames, classpathNames.toString())
-        assertTrue("provided-child-1.jar" !in classpathNames, classpathNames.toString())
+        assertTrue("provided-child-1.jar" in classpathNames, classpathNames.toString())
         val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(
             snapshot,
             Path.of(System.getProperty("java.home")),
@@ -468,6 +468,188 @@ class MavenReactorAnalysisAcceptanceTest {
         val diagnostic = snapshot.buildModels.single().diagnostics.single { it.code == "buildModel.unavailable" }
         assertFalse(diagnostic.message.contains(parent.toString()), diagnostic.message)
         assertTrue(diagnostic.message.contains("source root declaration"), diagnostic.message)
+    }
+
+    @Test
+    fun reactorProvidedScopeIsOwnerVisibleButNotExportedToConsumers() {
+        val root = Files.createTempDirectory("refactorkit-maven-reactor-provided")
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version><packaging>pom</packaging>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <modules><module>provided-api</module><module>owner</module><module>consumer</module></modules>
+            </project>
+        """.trimIndent())
+        child(
+            root,
+            "provided-api",
+            "",
+            "src/main/java/fixture/api/ProvidedApi.java",
+            "package fixture.api; public final class ProvidedApi {}\n",
+        )
+        child(
+            root,
+            "owner",
+            """
+                <dependencies><dependency><groupId>fixture</groupId><artifactId>provided-api</artifactId><version>${'$'}{project.version}</version><scope>provided</scope></dependency></dependencies>
+            """.trimIndent(),
+            "src/main/java/fixture/owner/Owner.java",
+            "package fixture.owner; import fixture.api.ProvidedApi; public final class Owner { ProvidedApi api; }\n",
+        )
+        child(
+            root,
+            "consumer",
+            dependency("owner"),
+            "src/main/java/fixture/consumer/Consumer.java",
+            "package fixture.consumer; import fixture.api.ProvidedApi; public final class Consumer { ProvidedApi unavailable; }\n",
+        )
+
+        val snapshot = JavaProjectScanner(localMavenRepository = Files.createTempDirectory("empty-m2")).scan(root)
+        val buildModules = snapshot.buildModels.single().modules.associateBy { it.name }
+        val ownerDependency = buildModules.getValue("owner").sourceSets
+            .single { it.kind == org.refactorkit.core.SourceSetKind.MAIN }.moduleDependencies.single()
+        assertEquals(
+            org.refactorkit.core.DependencyScope.PROVIDED,
+            ownerDependency.scope,
+            snapshot.modules.single { it.name == "owner" }.languageSettings.toString(),
+        )
+        val diagnostics = JavaLanguageAdapter().authoritativeDiagnostics(
+            snapshot,
+            Path.of(System.getProperty("java.home")),
+        ).filter { it.severity == Diagnostic.Severity.ERROR }
+
+        assertTrue(diagnostics.none { it.location?.path?.toString()?.replace('\\', '/')?.contains("owner/") == true }, diagnostics.toString())
+        assertTrue(diagnostics.any {
+            it.location?.path?.toString()?.replace('\\', '/')?.contains("consumer/") == true && it.message.contains("ProvidedApi")
+        }, diagnostics.toString())
+    }
+
+    @Test
+    fun dependencyManagementMatchesTypeAndClassifierWithoutCrossVariantSelection() {
+        val root = Files.createTempDirectory("refactorkit-maven-managed-variants")
+        val repository = Files.createTempDirectory("refactorkit-maven-managed-variants-m2")
+        val normalJar = repository.resolve("fixture/external/variant-api/1/variant-api-1.jar")
+        val classifierJar = repository.resolve("fixture/external/variant-api/2/variant-api-2-linux.jar")
+        val managedRuntimeJar = repository.resolve("fixture/external/managed-runtime/1/managed-runtime-1.jar")
+        compileJar(normalJar, "fixture/external/NormalOnly.java", "package fixture.external; public @interface NormalOnly {}\n")
+        compileJar(classifierJar, "fixture/external/LinuxOnly.java", "package fixture.external; public @interface LinuxOnly {}\n")
+        compileJar(managedRuntimeJar, "fixture/external/ManagedRuntime.java", "package fixture.external; public final class ManagedRuntime {}\n")
+        Files.writeString(
+            managedRuntimeJar.resolveSibling("managed-runtime-1.pom"),
+            "<project><modelVersion>4.0.0</modelVersion><groupId>fixture.external</groupId><artifactId>managed-runtime</artifactId><version>1</version></project>",
+        )
+        val parentDirectory = repository.resolve("fixture/external/variant-parent/1")
+        compileJar(
+            parentDirectory.resolve("variant-parent-1.jar"),
+            "fixture/external/VariantParent.java",
+            "package fixture.external; public final class VariantParent {}\n",
+        )
+        Files.writeString(parentDirectory.resolve("variant-parent-1.pom"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture.external</groupId><artifactId>variant-parent</artifactId><version>1</version>
+              <dependencies>
+                <dependency><groupId>fixture.external</groupId><artifactId>variant-api</artifactId><version>99</version></dependency>
+                <dependency><groupId>fixture.external</groupId><artifactId>variant-api</artifactId><version>99</version><classifier>linux</classifier></dependency>
+                <dependency><groupId>fixture.external</groupId><artifactId>managed-runtime</artifactId><version>99</version></dependency>
+              </dependencies>
+            </project>
+        """.trimIndent())
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>managed-variants</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <dependencyManagement><dependencies>
+                <dependency><groupId>fixture.external</groupId><artifactId>variant-api</artifactId><version>1</version></dependency>
+                <dependency><groupId>fixture.external</groupId><artifactId>variant-api</artifactId><version>2</version><classifier>linux</classifier></dependency>
+                <dependency><groupId>fixture.external</groupId><artifactId>managed-runtime</artifactId><version>1</version><scope>runtime</scope></dependency>
+              </dependencies></dependencyManagement>
+              <dependencies><dependency><groupId>fixture.external</groupId><artifactId>variant-parent</artifactId><version>1</version></dependency></dependencies>
+            </project>
+        """.trimIndent())
+        val source = root.resolve("src/main/java/fixture/ManagedVariants.java")
+        Files.createDirectories(source.parent)
+        Files.writeString(source, "package fixture; import fixture.external.LinuxOnly; import fixture.external.NormalOnly; @NormalOnly @LinuxOnly final class ManagedVariants {}\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val module = snapshot.modules.single()
+
+        assertTrue(normalJar in module.mainClasspathEntries, module.mainClasspathEntries.toString())
+        assertTrue(classifierJar in module.mainClasspathEntries, module.mainClasspathEntries.toString())
+        assertFalse(managedRuntimeJar in module.mainClasspathEntries, module.mainClasspathEntries.toString())
+        assertTrue(managedRuntimeJar in module.mainRuntimeClasspathEntries, module.mainRuntimeClasspathEntries.toString())
+        assertTrue(managedRuntimeJar in module.testClasspathEntries, module.testClasspathEntries.toString())
+        assertEquals(BuildModelStatus.AVAILABLE, snapshot.buildModels.single().status)
+        val diagnostics = JavaLanguageAdapter().diagnostics(snapshot)
+            .filter { it.severity == Diagnostic.Severity.ERROR }
+        assertTrue(diagnostics.isEmpty(), diagnostics.toString())
+    }
+
+    @Test
+    fun providedAndTestScopesRetainOwnerVisibleCompileAndRuntimeChildren() {
+        val root = Files.createTempDirectory("refactorkit-maven-scope-table")
+        val repository = Files.createTempDirectory("refactorkit-maven-scope-table-m2")
+        fun install(name: String, type: String) = installArtifact(
+            repository,
+            "fixture.scope",
+            name,
+            "1",
+            "fixture/scope/$type.java",
+            "package fixture.scope; public final class $type {}\n",
+        )
+        install("provided-compile", "ProvidedCompile")
+        install("provided-runtime", "ProvidedRuntime")
+        install("test-compile", "TestCompile")
+        install("test-runtime", "TestRuntime")
+        installArtifact(
+            repository,
+            "fixture.scope",
+            "provided-parent",
+            "1",
+            "fixture/scope/ProvidedParent.java",
+            "package fixture.scope; public final class ProvidedParent {}\n",
+            """
+                <dependency><groupId>fixture.scope</groupId><artifactId>provided-compile</artifactId><version>1</version></dependency>
+                <dependency><groupId>fixture.scope</groupId><artifactId>provided-runtime</artifactId><version>1</version><scope>runtime</scope></dependency>
+            """.trimIndent(),
+        )
+        installArtifact(
+            repository,
+            "fixture.scope",
+            "test-parent",
+            "1",
+            "fixture/scope/TestParent.java",
+            "package fixture.scope; public final class TestParent {}\n",
+            """
+                <dependency><groupId>fixture.scope</groupId><artifactId>test-compile</artifactId><version>1</version></dependency>
+                <dependency><groupId>fixture.scope</groupId><artifactId>test-runtime</artifactId><version>1</version><scope>runtime</scope></dependency>
+            """.trimIndent(),
+        )
+        Files.writeString(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>scope-table</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <dependencies>
+                <dependency><groupId>fixture.scope</groupId><artifactId>provided-parent</artifactId><version>1</version><scope>provided</scope></dependency>
+                <dependency><groupId>fixture.scope</groupId><artifactId>test-parent</artifactId><version>1</version><scope>test</scope></dependency>
+              </dependencies>
+            </project>
+        """.trimIndent())
+        val main = root.resolve("src/main/java/fixture/ScopeMain.java")
+        Files.createDirectories(main.parent)
+        Files.writeString(main, "package fixture; import fixture.scope.*; final class ScopeMain { ProvidedParent parent; ProvidedCompile compile; ProvidedRuntime runtime; }\n")
+        val test = root.resolve("src/test/java/fixture/ScopeTest.java")
+        Files.createDirectories(test.parent)
+        Files.writeString(test, "package fixture; import fixture.scope.*; final class ScopeTest { TestParent parent; TestCompile compile; TestRuntime runtime; }\n")
+
+        val snapshot = JavaProjectScanner(localMavenRepository = repository).scan(root)
+        val module = snapshot.modules.single()
+        fun artifact(name: String) = repository.resolve("fixture/scope/$name/1/$name-1.jar")
+        val provided = listOf("provided-parent", "provided-compile", "provided-runtime").map(::artifact)
+        val testOnly = listOf("test-parent", "test-compile", "test-runtime").map(::artifact)
+
+        assertTrue(provided.all(module.mainClasspathEntries::contains), module.mainClasspathEntries.toString())
+        assertTrue(provided.none(module.mainRuntimeClasspathEntries::contains), module.mainRuntimeClasspathEntries.toString())
+        assertTrue(testOnly.none(module.mainClasspathEntries::contains), module.mainClasspathEntries.toString())
+        assertTrue((provided + testOnly).all(module.testClasspathEntries::contains), module.testClasspathEntries.toString())
+        val diagnostics = JavaLanguageAdapter().diagnostics(snapshot)
+            .filter { it.severity == Diagnostic.Severity.ERROR }
+        assertTrue(diagnostics.isEmpty(), diagnostics.toString())
     }
 
     @Test

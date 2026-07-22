@@ -218,8 +218,10 @@ attested `ct.sym`; the current release binds and double-hashes the complete
 `java.se` module image. `scripts/smoke-packaged-java-authoritative-diagnostics.py`
 proves release 21 JDK/reactor visibility and the release 8 API boundary with
 `JAVA_HOME` unset, then uses one explicitly configured JDK 25 input to validate
-all releases 8 through 25 through packaged CLI, daemon and MCP. Releases absent
-from the configured platform remain typed unavailable.
+all releases 8 through 25 through packaged CLI, daemon and MCP. The same smoke
+also uses an isolated temporary Maven home to prove exact managed variants,
+`test-jar`, `systemPath` and owner-only provided/test scope derivation. Releases
+absent from the configured platform remain typed unavailable.
 
 A promoted package must contain the full catalogue or securely resolve equivalent
 immutable evidence, attest its identity in diagnostics, and pass the fixture on

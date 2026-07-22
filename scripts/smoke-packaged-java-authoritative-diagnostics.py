@@ -11,6 +11,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import xml.sax.saxutils
 
 
 def command_for(executable: Path, args: list[str]) -> list[str]:
@@ -94,6 +95,143 @@ def write_release_matrix(root: Path) -> None:
         )
 
 
+def compile_jar(jdk_home: Path, jar_path: Path, source_path: str, content: str) -> None:
+    with tempfile.TemporaryDirectory(prefix="refactorkit-java-fixture-compile-") as temporary:
+        source = Path(temporary) / "src" / source_path
+        classes = Path(temporary) / "classes"
+        source.parent.mkdir(parents=True)
+        classes.mkdir()
+        source.write_text(content, encoding="utf-8")
+        executable_suffix = ".exe" if os.name == "nt" else ""
+        subprocess.run(
+            [str(jdk_home / "bin" / f"javac{executable_suffix}"), "--release", "8", "-d", str(classes), str(source)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        jar_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [str(jdk_home / "bin" / f"jar{executable_suffix}"), "--create", "--file", str(jar_path), "-C", str(classes), "."],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+
+
+def install_artifact(
+    repository: Path,
+    jdk_home: Path,
+    group: str,
+    artifact: str,
+    version: str,
+    source_path: str,
+    source: str,
+    dependencies: str = "",
+    classifier: str | None = None,
+) -> Path:
+    directory = repository.joinpath(*group.split("."), artifact, version)
+    suffix = f"-{classifier}" if classifier else ""
+    jar = directory / f"{artifact}-{version}{suffix}.jar"
+    compile_jar(jdk_home, jar, source_path, source)
+    pom = directory / f"{artifact}-{version}.pom"
+    if not pom.exists():
+        pom.write_text(
+            f"<project><modelVersion>4.0.0</modelVersion><groupId>{group}</groupId>"
+            f"<artifactId>{artifact}</artifactId><version>{version}</version>"
+            f"<dependencies>{dependencies}</dependencies></project>\n",
+            encoding="utf-8",
+        )
+    return jar
+
+
+def write_variant_scope_fixture(root: Path, user_home: Path, jdk_home: Path) -> None:
+    repository = user_home / ".m2/repository"
+    normal = install_artifact(
+        repository, jdk_home, "fixture.variant", "variant-api", "1",
+        "fixture/variant/NormalOnly.java", "package fixture.variant; public @interface NormalOnly {}\n",
+    )
+    linux = install_artifact(
+        repository, jdk_home, "fixture.variant", "variant-api", "2",
+        "fixture/variant/LinuxOnly.java", "package fixture.variant; public @interface LinuxOnly {}\n",
+        classifier="linux",
+    )
+    variant_parent = install_artifact(
+        repository, jdk_home, "fixture.variant", "variant-parent", "1",
+        "fixture/variant/VariantParent.java", "package fixture.variant; public final class VariantParent {}\n",
+        dependencies=(
+            "<dependency><groupId>fixture.variant</groupId><artifactId>variant-api</artifactId><version>99</version></dependency>"
+            "<dependency><groupId>fixture.variant</groupId><artifactId>variant-api</artifactId><version>99</version><classifier>linux</classifier></dependency>"
+        ),
+    )
+    for artifact, class_name in (
+        ("provided-compile", "ProvidedCompile"),
+        ("provided-runtime", "ProvidedRuntime"),
+        ("test-compile", "TestCompile"),
+        ("test-runtime", "TestRuntime"),
+    ):
+        install_artifact(
+            repository, jdk_home, "fixture.scope", artifact, "1",
+            f"fixture/scope/{class_name}.java", f"package fixture.scope; public final class {class_name} {{}}\n",
+        )
+    provided_parent = install_artifact(
+        repository, jdk_home, "fixture.scope", "provided-parent", "1",
+        "fixture/scope/ProvidedParent.java", "package fixture.scope; public final class ProvidedParent {}\n",
+        dependencies=(
+            "<dependency><groupId>fixture.scope</groupId><artifactId>provided-compile</artifactId><version>1</version></dependency>"
+            "<dependency><groupId>fixture.scope</groupId><artifactId>provided-runtime</artifactId><version>1</version><scope>runtime</scope></dependency>"
+        ),
+    )
+    test_parent = install_artifact(
+        repository, jdk_home, "fixture.scope", "test-parent", "1",
+        "fixture/scope/TestParent.java", "package fixture.scope; public final class TestParent {}\n",
+        dependencies=(
+            "<dependency><groupId>fixture.scope</groupId><artifactId>test-compile</artifactId><version>1</version></dependency>"
+            "<dependency><groupId>fixture.scope</groupId><artifactId>test-runtime</artifactId><version>1</version><scope>runtime</scope></dependency>"
+        ),
+    )
+    test_fixtures = install_artifact(
+        repository, jdk_home, "fixture.variant", "test-fixtures", "1",
+        "fixture/variant/FixtureOnly.java", "package fixture.variant; public @interface FixtureOnly {}\n",
+        classifier="tests",
+    )
+    root.mkdir(parents=True)
+    system_jar = root / "system-libs/system-api.jar"
+    compile_jar(
+        jdk_home, system_jar, "fixture/system/SystemOnly.java",
+        "package fixture.system; public @interface SystemOnly {}\n",
+    )
+    escaped_system = xml.sax.saxutils.escape(str(system_jar))
+    (root / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId>"
+        "<artifactId>variant-scope</artifactId><version>1</version>"
+        "<properties><maven.compiler.release>21</maven.compiler.release></properties>"
+        "<dependencyManagement><dependencies>"
+        "<dependency><groupId>fixture.variant</groupId><artifactId>variant-api</artifactId><version>1</version></dependency>"
+        "<dependency><groupId>fixture.variant</groupId><artifactId>variant-api</artifactId><version>2</version><classifier>linux</classifier></dependency>"
+        "</dependencies></dependencyManagement><dependencies>"
+        "<dependency><groupId>fixture.variant</groupId><artifactId>variant-parent</artifactId><version>1</version></dependency>"
+        "<dependency><groupId>fixture.scope</groupId><artifactId>provided-parent</artifactId><version>1</version><scope>provided</scope></dependency>"
+        "<dependency><groupId>fixture.scope</groupId><artifactId>test-parent</artifactId><version>1</version><scope>test</scope></dependency>"
+        "<dependency><groupId>fixture.variant</groupId><artifactId>test-fixtures</artifactId><version>1</version><type>test-jar</type><scope>test</scope></dependency>"
+        f"<dependency><groupId>fixture.system</groupId><artifactId>system-api</artifactId><version>1</version><scope>system</scope><systemPath>{escaped_system}</systemPath></dependency>"
+        "</dependencies></project>\n",
+        encoding="utf-8",
+    )
+    main = root / "src/main/java/fixture/VariantScopeMain.java"
+    main.parent.mkdir(parents=True)
+    main.write_text(
+        "package fixture; import fixture.scope.*; import fixture.system.SystemOnly; import fixture.variant.*; "
+        "@NormalOnly @LinuxOnly @SystemOnly final class VariantScopeMain { "
+        "VariantParent variant; ProvidedParent parent; ProvidedCompile compile; ProvidedRuntime runtime; }\n",
+        encoding="utf-8",
+    )
+    test = root / "src/test/java/fixture/VariantScopeTest.java"
+    test.parent.mkdir(parents=True)
+    test.write_text(
+        "package fixture; import fixture.scope.*; import fixture.variant.FixtureOnly; "
+        "@FixtureOnly final class VariantScopeTest { TestParent parent; TestCompile compile; TestRuntime runtime; }\n",
+        encoding="utf-8",
+    )
+    if not all(path.is_file() for path in (normal, linux, variant_parent, provided_parent, test_parent, test_fixtures)):
+        raise AssertionError("variant/scope fixture repository is incomplete")
+
+
 def write_availability_fixture(root: Path) -> None:
     root.mkdir(parents=True)
     (root / "pom.xml").write_text(
@@ -115,14 +253,24 @@ def write_availability_fixture(root: Path) -> None:
     )
 
 
+def runtime_environment(user_home: Path | None = None) -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.pop("JAVA_HOME", None)
+    if user_home:
+        existing = environment.get("JAVA_TOOL_OPTIONS", "").strip()
+        user_home_option = f'"-Duser.home={user_home}"'
+        environment["JAVA_TOOL_OPTIONS"] = f"{existing} {user_home_option}".strip()
+    return environment
+
+
 def run_cli(
     cli: Path,
     root: Path,
     module: str | None = None,
     jdk_home: Path | None = None,
+    user_home: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    environment = os.environ.copy()
-    environment.pop("JAVA_HOME", None)
+    environment = runtime_environment(user_home)
     return subprocess.run(
         command_for(cli, [
             "diagnostics", str(root),
@@ -139,9 +287,9 @@ def daemon_diagnostics(
     root: Path,
     module: str | None = None,
     jdk_home: Path | None = None,
+    user_home: Path | None = None,
 ) -> list[dict]:
-    environment = os.environ.copy()
-    environment.pop("JAVA_HOME", None)
+    environment = runtime_environment(user_home)
     process = subprocess.Popen(
         command_for(daemon, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True, encoding="utf-8", env=environment,
@@ -172,9 +320,13 @@ def daemon_diagnostics(
             process.kill(); process.wait(timeout=20)
 
 
-def mcp_diagnostics(mcp: Path, root: Path, jdk_home: Path | None = None) -> str:
-    environment = os.environ.copy()
-    environment.pop("JAVA_HOME", None)
+def mcp_diagnostics(
+    mcp: Path,
+    root: Path,
+    jdk_home: Path | None = None,
+    user_home: Path | None = None,
+) -> str:
+    environment = runtime_environment(user_home)
     process = subprocess.Popen(
         command_for(mcp, []), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True, encoding="utf-8", env=environment,
@@ -254,6 +406,22 @@ def main() -> int:
         if tree_hash(matrix) != matrix_hash or (matrix / ".refactorkit").exists():
             raise AssertionError("Java 8-through-25 packaged diagnostics modified the matrix workspace")
 
+        variant_scope = Path(temporary) / "variant-scope"
+        maven_home = Path(temporary) / "maven-home"
+        write_variant_scope_fixture(variant_scope, maven_home, jdk_home)
+        variant_scope_hash = tree_hash(variant_scope)
+        variant_cli = run_cli(cli, variant_scope, jdk_home=jdk_home, user_home=maven_home)
+        if variant_cli.returncode != 0 or variant_cli.stdout.strip() != "No diagnostics.":
+            raise AssertionError(f"packaged Maven variant/scope CLI row failed: {variant_cli.stdout}\n{variant_cli.stderr}")
+        variant_daemon = daemon_diagnostics(daemon, variant_scope, jdk_home=jdk_home, user_home=maven_home)
+        if variant_daemon:
+            raise AssertionError(f"packaged Maven variant/scope daemon row failed: {variant_daemon}")
+        variant_mcp = mcp_diagnostics(mcp, variant_scope, jdk_home=jdk_home, user_home=maven_home)
+        if variant_mcp.strip() != "No diagnostics.":
+            raise AssertionError(f"packaged Maven variant/scope MCP row failed: {variant_mcp}")
+        if tree_hash(variant_scope) != variant_scope_hash or (variant_scope / ".refactorkit").exists():
+            raise AssertionError("packaged Maven variant/scope diagnostics modified the workspace")
+
         unavailable = Path(temporary) / "availability"
         write_availability_fixture(unavailable)
         unavailable_hash = tree_hash(unavailable)
@@ -290,7 +458,7 @@ def main() -> int:
         if tree_hash(root) != historical_hash or (root / ".refactorkit").exists():
             raise AssertionError("historical packaged diagnostics modified the reactor")
 
-    print("Packaged authoritative Java diagnostics acceptance passed: exact releases 8 through 25, release-21 reactor closure, source-set availability, and release-8 API boundary.")
+    print("Packaged authoritative Java diagnostics acceptance passed: exact releases 8 through 25, Maven variant/scope derivation, release-21 reactor closure, source-set availability, and release-8 API boundary.")
     return 0
 
 

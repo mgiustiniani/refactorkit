@@ -212,7 +212,12 @@ workspace/symlink confinement, explicit profile activation and active-by-default
 deactivation, cross-module definitions and references, one-root missing-artifact
 diagnostics, and BOM/JAR/system-path drift
 refusal. Variant acceptance proves that normal and classified artifacts sharing
-GA coordinates are not collapsed and that test JARs never enter main classpaths.
+GA coordinates are not collapsed, managed version/scope matches type/classifier,
+and test JARs never enter main classpaths. Scope-table acceptance proves direct
+provided/test dependencies retain owner-visible compile/runtime children while
+reactor provided edges remain absent from downstream consumers. The combined
+packaged row repeats normal/classified/test-jar/system and scope evidence through
+CLI, daemon and MCP under an isolated temporary Maven home.
 `MavenNetworkResolutionTest` uses an injected transport to prove offline zero
 requests, mandatory SHA-256 verification, successful verified publication, and
 mismatch cleanup without relying on the network.

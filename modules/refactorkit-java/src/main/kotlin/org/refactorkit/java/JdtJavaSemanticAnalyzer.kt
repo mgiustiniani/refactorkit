@@ -33,6 +33,7 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModule
 import org.refactorkit.core.BuildSourceSet
+import org.refactorkit.core.DependencyScope
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SemanticCancellationToken
@@ -286,34 +287,72 @@ class JdtJavaSemanticAnalyzer {
         val testSource = selectedSet?.kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST) ||
             selectedSet?.attributes?.get("visibility") == "test"
         val mainSet = owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
+        data class PendingDependency(val targetModuleId: String, val effectiveScope: DependencyScope)
         val byId = model.modules.associateBy(BuildModule::id)
-        val visible = linkedMapOf(owner.id to owner)
-        val pending = ArrayDeque(selectedSet?.moduleDependencies.orEmpty().map { it.targetModuleId })
+        val visible = linkedMapOf<String, Pair<BuildModule, DependencyScope?>>()
+        visible[owner.id] = owner to null
+        val pending = ArrayDeque(selectedSet?.moduleDependencies.orEmpty().map {
+            PendingDependency(it.targetModuleId, it.scope)
+        })
         while (pending.isNotEmpty()) {
-            val dependencyId = pending.removeFirst()
-            if (dependencyId in visible) continue
-            val dependency = byId[dependencyId] ?: continue
-            visible[dependencyId] = dependency
+            val candidate = pending.removeFirst()
+            if (!isScopeVisible(candidate.effectiveScope, testSource) || candidate.targetModuleId in visible) continue
+            val dependency = byId[candidate.targetModuleId] ?: continue
+            visible[candidate.targetModuleId] = dependency to candidate.effectiveScope
             dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
-                ?.moduleDependencies.orEmpty().mapTo(pending) { it.targetModuleId }
+                ?.moduleDependencies.orEmpty().forEach { child ->
+                    deriveTransitiveScope(candidate.effectiveScope, child.scope)?.let { scope ->
+                        pending += PendingDependency(child.targetModuleId, scope)
+                    }
+                }
         }
         val sourceRoots = buildList {
             mainSet?.let { addAll(it.sourceRoots) }
             if (selectedSet != null && selectedSet != mainSet) addAll(selectedSet.sourceRoots)
-            visible.values.filter { it != owner }.forEach { dependency ->
+            visible.values.filter { it.first != owner }.forEach { (dependency, _) ->
                 dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { addAll(it.sourceRoots) }
             }
         }.distinct()
         val classpathEntries = buildList {
             selectedSet?.let { addAll(it.classpathEntries) }
-            visible.values.filter { it != owner }.forEach { dependency ->
+            visible.values.filter { it.first != owner }.forEach { (dependency, scope) ->
                 dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { main ->
-                    addAll(if (testSource) main.runtimeClasspathEntries else main.classpathEntries)
+                    val includeRuntime = testSource || scope in setOf(
+                        DependencyScope.PROVIDED,
+                        DependencyScope.RUNTIME,
+                        DependencyScope.TEST,
+                    )
+                    addAll(if (includeRuntime) main.runtimeClasspathEntries else main.classpathEntries)
                 }
             }
         }.distinct()
         val sourceLevel = selectedSet?.attributes?.get("java.sourceLevel")?.toIntOrNull()?.coerceIn(8, 25) ?: 25
         return BuildSemanticEnvironment(testSource, sourceRoots, classpathEntries, sourceLevel)
+    }
+
+    private fun isScopeVisible(scope: DependencyScope, testSource: Boolean): Boolean =
+        if (testSource) scope != DependencyScope.CUSTOM
+        else scope in setOf(DependencyScope.COMPILE, DependencyScope.PROVIDED, DependencyScope.SYSTEM)
+
+    private fun deriveTransitiveScope(parent: DependencyScope, child: DependencyScope): DependencyScope? = when (parent) {
+        DependencyScope.COMPILE -> when (child) {
+            DependencyScope.COMPILE -> DependencyScope.COMPILE
+            DependencyScope.RUNTIME -> DependencyScope.RUNTIME
+            else -> null
+        }
+        DependencyScope.PROVIDED -> when (child) {
+            DependencyScope.COMPILE, DependencyScope.RUNTIME -> DependencyScope.PROVIDED
+            else -> null
+        }
+        DependencyScope.RUNTIME -> when (child) {
+            DependencyScope.COMPILE, DependencyScope.RUNTIME -> DependencyScope.RUNTIME
+            else -> null
+        }
+        DependencyScope.TEST -> when (child) {
+            DependencyScope.COMPILE, DependencyScope.RUNTIME -> DependencyScope.TEST
+            else -> null
+        }
+        else -> null
     }
 
     private fun visibleModules(owner: Module, modules: List<Module>, testSource: Boolean): List<Module> {

@@ -138,6 +138,16 @@ class JavaProjectScanner(
                     put("kotlin.platform", if (maven.kotlinPluginConfigured) "jvm" else "unconfigured")
                     maven.kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
                     maven.kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }
+                    maven.mainDependencyScopes.forEach { (coordinate, scope) ->
+                        coordinateNames[coordinate]?.let { dependency ->
+                            put("java.moduleDependency.main.$dependency.scope", scope)
+                        }
+                    }
+                    maven.testDependencyScopes.forEach { (coordinate, scope) ->
+                        coordinateNames[coordinate]?.let { dependency ->
+                            put("java.moduleDependency.test.$dependency.scope", scope)
+                        }
+                    }
                     put("java.classpath.status", if (maven.missingArtifacts.isEmpty()) "available" else "unavailable")
                     fun missingMessage(missingArtifacts: List<String>): String {
                         val missing = missingArtifacts.sorted()

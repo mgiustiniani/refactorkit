@@ -39,6 +39,8 @@ internal data class MavenModuleModel(
     val testSourceDirectories: List<Path>,
     val mainDependencies: List<MavenCoordinate>,
     val testDependencies: List<MavenCoordinate>,
+    val mainDependencyScopes: Map<MavenCoordinate, String>,
+    val testDependencyScopes: Map<MavenCoordinate, String>,
     val mainArtifacts: List<Path>,
     val runtimeArtifacts: List<Path>,
     val testArtifacts: List<Path>,
@@ -55,6 +57,8 @@ internal data class MavenModuleModel(
     val kotlinTargetJdk: String? = null,
     val modelFailure: String? = null,
 )
+
+private data class MavenManagedDependency(val version: String, val scope: String)
 
 internal data class MavenReactorModel(
     val modules: Map<Path, MavenModuleModel>,
@@ -106,6 +110,8 @@ internal class MavenEffectiveReactorBuilder(
                     testSourceDirectories = emptyList(),
                     mainDependencies = emptyList(),
                     testDependencies = emptyList(),
+                    mainDependencyScopes = emptyMap(),
+                    testDependencyScopes = emptyMap(),
                     mainArtifacts = emptyList(),
                     runtimeArtifacts = emptyList(),
                     testArtifacts = emptyList(),
@@ -141,8 +147,12 @@ internal class MavenEffectiveReactorBuilder(
             it.scope.normalizedScope() in TRANSITIVE_SCOPES && it.type != "pom"
         }
         val testRepositoryDirect = testDirect.filterNot { it.scope.normalizedScope() == "system" }
-        val managedVersions = model.dependencyManagement?.dependencies.orEmpty().mapNotNull { dependency ->
-            dependency.coordinate()?.let { it.ga() to it.version }
+        val managedDependencies = model.dependencyManagement?.dependencies.orEmpty().mapNotNull { dependency ->
+            dependency.coordinate()?.let { coordinate ->
+                dependency.managementKey()?.let { key ->
+                    key to MavenManagedDependency(coordinate.version, dependency.scope.normalizedScope())
+                }
+            }
         }.toMap()
         val mainMissing = linkedSetOf<String>()
         val runtimeMissing = linkedSetOf<String>()
@@ -152,16 +162,16 @@ internal class MavenEffectiveReactorBuilder(
         val sourceDirectories = sourceDirectories(workspaceRoot, model, pom)
         val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, mainMissing)
         val mainArtifacts = (systemPathArtifacts + resolveGraph(
-            mainRepositoryDirect, setOf("compile"), resolver, reactorCoordinates,
-            mainMissing, modelInputs, importedBoms, managedVersions,
+            mainRepositoryDirect, MAIN_REPOSITORY_SCOPES, resolver, reactorCoordinates,
+            mainMissing, modelInputs, importedBoms, managedDependencies,
         )).distinct()
         val runtimeArtifacts = resolveGraph(
-            runtimeRepositoryDirect, TRANSITIVE_SCOPES, resolver, reactorCoordinates,
-            runtimeMissing, modelInputs, importedBoms, managedVersions,
+            runtimeRepositoryDirect, RUNTIME_SCOPES, resolver, reactorCoordinates,
+            runtimeMissing, modelInputs, importedBoms, managedDependencies,
         ).distinct()
         val testArtifacts = (mainArtifacts + runtimeArtifacts + resolveGraph(
-            testRepositoryDirect, TRANSITIVE_SCOPES, resolver, reactorCoordinates,
-            testOnlyMissing, modelInputs, importedBoms, managedVersions,
+            testRepositoryDirect, TEST_REPOSITORY_SCOPES, resolver, reactorCoordinates,
+            testOnlyMissing, modelInputs, importedBoms, managedDependencies,
         )).distinct()
         val testMissing = (mainMissing + runtimeMissing + testOnlyMissing).toList()
         return MavenModuleModel(
@@ -176,6 +186,8 @@ internal class MavenEffectiveReactorBuilder(
                 .mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
             testDependencies = testRepositoryDirect.filter(::isReactorSourceDependency)
                 .mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
+            mainDependencyScopes = reactorDependencyScopes(mainRepositoryDirect, reactorCoordinates),
+            testDependencyScopes = reactorDependencyScopes(testRepositoryDirect, reactorCoordinates),
             mainArtifacts = mainArtifacts,
             runtimeArtifacts = runtimeArtifacts,
             testArtifacts = testArtifacts,
@@ -312,22 +324,33 @@ internal class MavenEffectiveReactorBuilder(
     private fun isReactorSourceDependency(dependency: Dependency): Boolean =
         dependency.type.ifBlank { "jar" } == "jar" && dependency.classifier.isNullOrBlank()
 
+    private fun reactorDependencyScopes(
+        dependencies: List<Dependency>,
+        reactorCoordinates: Set<MavenCoordinate>,
+    ): Map<MavenCoordinate, String> = buildMap {
+        dependencies.filter(::isReactorSourceDependency).forEach { dependency ->
+            dependency.coordinate()?.takeIf(reactorCoordinates::contains)?.let { coordinate ->
+                putIfAbsent(coordinate, dependency.scope.normalizedScope())
+            }
+        }
+    }
+
     private fun resolveGraph(
         roots: List<Dependency>,
-        includedTransitiveScopes: Set<String>,
+        includedEffectiveScopes: Set<String>,
         resolver: LocalOnlyModelResolver,
         reactorCoordinates: Set<MavenCoordinate>,
         missing: MutableSet<String>,
         modelInputs: MutableSet<Path>,
         importedBoms: MutableSet<Path>,
-        managedVersions: Map<String, String>,
+        managedDependencies: Map<String, MavenManagedDependency>,
     ): List<Path> {
         data class Pending(
             val dependency: Dependency,
             val inheritedExclusions: Set<String>,
             val direct: Boolean,
             val depth: Int,
-            val mayTraverse: Boolean,
+            val effectiveScope: String,
         )
         val artifacts = linkedSetOf<Path>()
         val visitedArtifacts = mutableSetOf<String>()
@@ -338,7 +361,7 @@ internal class MavenEffectiveReactorBuilder(
             pending += Pending(
                 dependency, dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }.toSet(),
                 direct = true, depth = 0,
-                mayTraverse = dependency.scope.normalizedScope() in TRANSITIVE_SCOPES,
+                effectiveScope = dependency.scope.normalizedScope(),
             )
         }
         while (pending.isNotEmpty()) {
@@ -352,7 +375,8 @@ internal class MavenEffectiveReactorBuilder(
                 if (node.direct) missing += "dependency with unresolved coordinates"
                 continue
             }
-            val requested = managedVersions[rawRequested.ga()]?.let { rawRequested.copy(version = it) } ?: rawRequested
+            val requested = node.dependency.managementKey()?.let(managedDependencies::get)
+                ?.let { rawRequested.copy(version = it.version) } ?: rawRequested
             if (requested.version.isBlank()) {
                 if (node.direct) missing += "dependency with unresolved coordinates"
                 continue
@@ -393,15 +417,20 @@ internal class MavenEffectiveReactorBuilder(
                 missing += "artifact relocation is unsupported: $group"
                 continue
             }
-            if (!node.mayTraverse || transitive == null) continue
+            if (transitive == null) continue
             val exclusions = node.inheritedExclusions +
                 node.dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }
             transitive.model?.dependencies.orEmpty()
-                .filter { !it.isOptional && it.scope.normalizedScope() in includedTransitiveScopes }
+                .filterNot(Dependency::isOptional)
                 .forEach { child ->
+                    val childScope = child.managementKey()?.let(managedDependencies::get)?.scope
+                        ?: child.scope.normalizedScope()
+                    val effectiveScope = deriveTransitiveScope(node.effectiveScope, childScope)
+                        ?: return@forEach
+                    if (effectiveScope !in includedEffectiveScopes) return@forEach
                     pending += Pending(
                         child, exclusions, direct = false, depth = node.depth + 1,
-                        mayTraverse = child.scope.normalizedScope() in TRANSITIVE_SCOPES,
+                        effectiveScope = effectiveScope,
                     )
                 }
         }
@@ -516,7 +545,10 @@ internal class MavenEffectiveReactorBuilder(
     companion object {
         private val SAFE_PROFILE_ID = Regex("[A-Za-z0-9_.-]{1,128}")
         private val MAIN_SCOPES = setOf("compile", "provided", "system")
+        private val MAIN_REPOSITORY_SCOPES = setOf("compile", "provided")
+        private val RUNTIME_SCOPES = setOf("compile", "runtime")
         private val TEST_SCOPES = setOf("compile", "provided", "system", "runtime", "test")
+        private val TEST_REPOSITORY_SCOPES = setOf("compile", "provided", "runtime", "test")
         private val TRANSITIVE_SCOPES = setOf("compile", "runtime")
         private val SUPPORTED_DEPENDENCY_TYPES = setOf("jar", "test-jar")
         private const val MAX_DEPENDENCIES = 4096
@@ -703,4 +735,34 @@ private fun Dependency.coordinate(properties: Properties): MavenCoordinate? {
 }
 
 private fun MavenCoordinate.ga(): String = "$groupId:$artifactId"
+
+private fun Dependency.managementKey(): String? {
+    val group = groupId?.takeIf(String::isNotBlank) ?: return null
+    val artifact = artifactId?.takeIf(String::isNotBlank) ?: return null
+    val effectiveType = type.takeIf(String::isNotBlank) ?: "jar"
+    val effectiveClassifier = classifier?.takeIf(String::isNotBlank).orEmpty()
+    return "$group:$artifact:$effectiveType:$effectiveClassifier"
+}
+
+private fun deriveTransitiveScope(parentScope: String, childScope: String): String? = when (parentScope) {
+    "compile" -> when (childScope) {
+        "compile" -> "compile"
+        "runtime" -> "runtime"
+        else -> null
+    }
+    "provided" -> when (childScope) {
+        "compile", "runtime" -> "provided"
+        else -> null
+    }
+    "runtime" -> when (childScope) {
+        "compile", "runtime" -> "runtime"
+        else -> null
+    }
+    "test" -> when (childScope) {
+        "compile", "runtime" -> "test"
+        else -> null
+    }
+    else -> null
+}
+
 private fun String?.normalizedScope(): String = this?.takeIf(String::isNotBlank) ?: "compile"

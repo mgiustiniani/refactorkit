@@ -228,12 +228,21 @@ private object JavaModuleBuildModelProjector {
     }
 
     private fun projectModule(module: Module, moduleIds: Set<String>): BuildModule {
-        val mainDependencies = module.mainDependencies.filter(moduleIds::contains)
-            .map { BuildDependency(it, DependencyScope.COMPILE) }
+        val mainDependencies = module.mainDependencies.filter(moduleIds::contains).map { dependency ->
+            BuildDependency(
+                dependency,
+                moduleDependencyScope(module, "main", dependency, DependencyScope.COMPILE),
+            )
+        }
         val testDependencies = module.testDependencies.filter(moduleIds::contains).map { dependency ->
             BuildDependency(
                 dependency,
-                if (dependency in module.mainDependencies) DependencyScope.COMPILE else DependencyScope.TEST,
+                moduleDependencyScope(
+                    module,
+                    "test",
+                    dependency,
+                    if (dependency in module.mainDependencies) DependencyScope.COMPILE else DependencyScope.TEST,
+                ),
             )
         }
         val sourceLevel = module.languageSettings["java.sourceLevel"] ?: "8"
@@ -268,6 +277,14 @@ private object JavaModuleBuildModelProjector {
             attributes = module.languageSettings,
         )
     }
+
+    private fun moduleDependencyScope(
+        module: Module,
+        sourceSet: String,
+        dependency: String,
+        fallback: DependencyScope,
+    ): DependencyScope = module.languageSettings["java.moduleDependency.$sourceSet.$dependency.scope"]
+        ?.uppercase()?.let { runCatching { DependencyScope.valueOf(it) }.getOrNull() } ?: fallback
 
     private fun jvmSourceSetAttributes(module: Module, sourceLevel: String, test: Boolean): Map<String, String> = buildMap {
         put("java.sourceLevel", sourceLevel)

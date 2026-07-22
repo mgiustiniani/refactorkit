@@ -9,6 +9,17 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Complete the local Maven classifier/variant and scope matrix for authoritative
+  Java diagnostics. Dependency management now matches the full Maven
+  `{groupId, artifactId, type, classifier}` identity, so managed sibling variants
+  cannot select each other's versions or managed scopes. Recursive scope
+  derivation retains compile/runtime children of direct `provided` and `test`
+  dependencies for the declaring owner without exporting those edges to
+  consumers; reactor build-model
+  edges preserve exact scopes and JDT follows the same table. Permanent library
+  and packaged CLI/daemon/MCP fixtures cover normal/classified/test-jar/system
+  artifacts, owner scope visibility, reactor non-export and read-only execution.
+  Four-platform native qualification remains required before closing the row.
 - Extend authoritative Java platform diagnostics from the first Java 8/21 row to
   a local packaged Java 8-through-25 matrix. Historical modular releases use the
   pinned ECJ JEP 247 view of the exact hash-attested `ct.sym` while ASTParser
@@ -35,8 +46,9 @@ review safety boundaries before applying refactorings.
   exports propagate only to downstream test environments. External Maven
   mediation now uses breadth-first nearest/declaration-order selection, applies
   effective root dependency management, omits optional/excluded transitives, and
-  prevents `provided` dependencies from exporting children. Bounded local Maven
-  ranges select the highest matching version; arbitrary artifact types and POM
+  retains provided compile/runtime children for the owner without exporting the
+  provided edge to consumers. Bounded local Maven ranges select the highest
+  matching version; arbitrary artifact types and POM
   relocation fail with typed source-set unavailability. Diagnostic deltas now
   bind provider/category/evidence/path/exact-range identity instead of matching
   code/message alone. Managed apply now rehydrates committed bytes through the
@@ -44,8 +56,8 @@ review safety boundaries before applying refactorings.
   provider/identity drift; restored bytes must reproduce baseline identities.
   A transitive Maven impact fixture proves that an upstream-only mutation
   diagnoses downstream main and test source sets and refuses before WAL. The full
-  Java 8–25, remaining Maven classifier/variant scopes, JPMS, SBOM/license and
-  native matrix remain gates.
+  Java 8–25 and Maven variant/scope native promotion, JPMS, SBOM/license and the
+  remaining native matrix remain gates.
 - Replace lexical Java change-signature authority with exact JDT method,
   parameter and invocation bindings. Rename supports signed overload selection;
   bounded type change preserves exact call-site bindings and argument bytes;

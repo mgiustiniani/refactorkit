@@ -1,8 +1,8 @@
 # Authoritative release-aware Java/Maven diagnostics requirements
 
-Status: active, product-critical, release-blocking J1 prerequisite. The first
-release-8/current-release platform, full-reactor module-filter and concise missing-
-platform rows have local and packaged evidence; the complete epic is not qualified.
+Status: active, product-critical, release-blocking J1 prerequisite. Exact Java
+8-through-25 and complete Maven variant/scope rows have local packaged evidence;
+their four-platform promotion and the complete epic remain unqualified.
 
 ## Purpose
 
@@ -48,19 +48,26 @@ Each source-set environment includes the complete offline effective reactor
 closure and exact available external artifacts. The first accepted scope-
 derivation row keeps a module's runtime-only artifacts out of its main compile
 classpath while exporting them to downstream test compilation through a reactor
-edge; the runtime projection is independently hash-bound. The first mediation
-row traverses breadth-first so nearest paths win and declaration order breaks
-equal-depth ties. Effective root dependency management is applied before
-selection; optional transitive dependencies and explicit exclusions are omitted;
-direct `provided` artifacts remain compile-visible but do not export children.
-Compile projection follows compile edges only, while runtime/test projections may
-follow runtime edges. Bounded local version ranges inspect at most 1,024 candidate
-directories and select the highest matching version. Non-`jar`/`test-jar`
-artifact types and Maven relocation metadata produce typed source-set
-unavailability rather than guessed classpath entries. Missing required artifacts
-or ambiguous scope/ownership makes that source set unavailable. Discovery executes
-no wrapper, lifecycle, plugin, annotation processor, credential helper or
-project code and performs no network access unless separately authorized.
+edge; the runtime projection is independently hash-bound. The full Maven scope
+row derives transitive visibility from both the direct and child scopes: direct
+`provided` and `test` artifacts do not export to downstream projects, but their
+compile/runtime children remain visible to the declaring project's corresponding
+compile/test environment as derived `provided`/`test` dependencies. `system`
+artifacts are owner-local and non-transitive. The first mediation row traverses
+breadth-first so nearest paths win and declaration order breaks equal-depth ties.
+Effective root dependency management is applied before selection and matches the
+complete Maven `{groupId, artifactId, type, classifier}` identity; managed
+version and scope apply only to that exact identity, and management for one
+classifier or `test-jar` must never select a sibling variant. Optional
+transitive dependencies and explicit exclusions are omitted. Compile projection
+follows compile edges only, while runtime/test projections may follow runtime
+edges. Bounded local version ranges inspect at most 1,024 candidate directories
+and select the highest matching version. Non-`jar`/`test-jar` artifact types and
+Maven relocation metadata produce typed source-set unavailability rather than
+guessed classpath entries. Missing required artifacts or ambiguous scope/ownership
+makes that source set unavailable. Discovery executes no wrapper, lifecycle,
+plugin, annotation processor, credential helper or project code and performs no
+network access unless separately authorized.
 
 ## RPK-JAVA-DIAG-004 — Availability and cascade suppression
 
