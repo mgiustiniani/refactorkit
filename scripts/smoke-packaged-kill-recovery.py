@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 import hashlib
 import json
 import os
@@ -114,9 +115,11 @@ def await_first_committed_image(
     stall_timeout_seconds: float = APPLY_STALL_TIMEOUT_SECONDS,
     poll_seconds: float = APPLY_POLL_SECONDS,
     progress_probe_seconds: float = APPLY_PROGRESS_PROBE_SECONDS,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> Path:
     """Wait for a mixed-image APPLYING state while accepting slow, progressing staging."""
-    started = time.monotonic()
+    started = monotonic()
     absolute_deadline = started + absolute_timeout_seconds
     progress_deadline = started + stall_timeout_seconds
     transaction_directory = workspace / ".refactorkit" / "transactions"
@@ -126,8 +129,8 @@ def await_first_committed_image(
     max_staged_files = 0
     next_progress_probe = started
 
-    while time.monotonic() < absolute_deadline:
-        now = time.monotonic()
+    while monotonic() < absolute_deadline:
+        now = monotonic()
         if daemon.process.poll() is not None:
             raise AssertionError(
                 "packaged daemon exited before a committed source image "
@@ -176,7 +179,7 @@ def await_first_committed_image(
                 f"(state={journal_state}, maxStagedFiles={max_staged_files}, "
                 f"stallSeconds={stall_timeout_seconds})"
             )
-        time.sleep(poll_seconds)
+        sleep(poll_seconds)
 
     raise AssertionError(
         "packaged apply did not expose a committed source image within the absolute bound "
