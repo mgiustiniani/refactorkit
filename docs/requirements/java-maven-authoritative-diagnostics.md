@@ -29,6 +29,11 @@ source set is typed unavailable; a `<source>` level must never be mislabeled as
 Configuring or attesting a JDK `lib/ct.sym` alone does not grant JDT diagnostic
 or mutation authority. Release authority requires the complete, separately
 accepted JDT environment integration and qualification defined by this epic.
+For historical modular releases, ASTParser's public environment validates the
+attested JRT system library while the pinned JDT resolver consumes only ECJ's
+JEP 247 view of that same hash-attested `ct.sym`; project source and dependency
+classpath entries are not replaced. A reduced packaged runtime must include the
+ZIP filesystem provider required to read external or bundled `ct.sym` archives.
 
 ## RPK-JAVA-DIAG-002 — Full-reactor per-source-set model
 
@@ -98,7 +103,10 @@ limit exhaustion fails closed without partial semantic publication.
 
 Permanent fixtures cover at least main/test separation, reactor dependency and
 impact closure, external artifacts, generated-but-materialized sources, missing
-inputs, releases 8 through 25 and JPMS refusal. Promotion requires library,
-packaged CLI/daemon/MCP, all four native platforms, exact rollback and
-independent artifact acceptance. Named JPMS/module-path reactors remain typed
-unsupported until separately qualified.
+inputs, releases 8 through 25 and JPMS refusal. The release matrix uses one
+explicit immutable JDK 25 input, proves every effective Maven `--release` from 8
+through 25 through packaged CLI, daemon and MCP, and retains an adjacent API
+boundary proving Java 8 rejects newer APIs. Promotion requires library, packaged
+CLI/daemon/MCP, all four native platforms, exact rollback and independent
+artifact acceptance. Named JPMS/module-path reactors remain typed unsupported
+until separately qualified.

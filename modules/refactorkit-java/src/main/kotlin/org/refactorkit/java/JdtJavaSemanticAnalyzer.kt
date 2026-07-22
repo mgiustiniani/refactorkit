@@ -116,7 +116,7 @@ class JdtJavaSemanticAnalyzer {
             )
         }
         val result = try {
-            analyzeInternal(snapshot, cancellation, emptyList(), rebound, projections.mapValues { it.value.path })
+            analyzeInternal(snapshot, cancellation, emptyList(), rebound, projections)
         } finally {
             projections.values.forEach(JavaReleasePlatformClasspath::close)
         }
@@ -137,7 +137,7 @@ class JdtJavaSemanticAnalyzer {
         cancellation: SemanticCancellationToken,
         additionalClasspathEntries: List<Path>,
         platformAuthorities: Map<Int, JavaReleasePlatformAuthority>,
-        platformClasspaths: Map<Int, Path>,
+        platformClasspaths: Map<Int, JavaReleasePlatformClasspath>,
     ): JdtJavaSemanticAnalysisResult {
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
@@ -339,7 +339,7 @@ class JdtJavaSemanticAnalyzer {
         classpathEntries: Array<String>,
         sourceLevel: Int,
         platformAuthority: JavaReleasePlatformAuthority?,
-        platformClasspath: Path?,
+        platformClasspath: JavaReleasePlatformClasspath?,
     ): FileAnalysis {
         if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel, platformAuthority, platformClasspath)
@@ -911,7 +911,7 @@ class JdtJavaSemanticAnalyzer {
         classpathEntries: Array<String>,
         sourceLevel: Int,
         platformAuthority: JavaReleasePlatformAuthority?,
-        platformClasspath: Path?,
+        platformClasspath: JavaReleasePlatformClasspath?,
     ): CompilationUnit {
         val parser = ASTParser.newParser(AST.JLS25)
         parser.setKind(ASTParser.K_COMPILATION_UNIT)
@@ -928,7 +928,7 @@ class JdtJavaSemanticAnalyzer {
             if (platformAuthority != null) options[JavaCore.COMPILER_RELEASE] = JavaCore.ENABLED
         })
         val effectiveClasspath = if (platformAuthority == null) classpathEntries else {
-            arrayOf(requireNotNull(platformClasspath).toString()) + classpathEntries
+            requireNotNull(platformClasspath).environmentPaths.map(Path::toString).toTypedArray() + classpathEntries
         }
         if (sourceRoots.isNotEmpty() || effectiveClasspath.isNotEmpty()) {
             parser.setEnvironment(effectiveClasspath, sourceRoots, null, platformAuthority == null)
@@ -936,6 +936,7 @@ class JdtJavaSemanticAnalyzer {
         parser.setResolveBindings(true)
         parser.setBindingsRecovery(true)
         parser.setStatementsRecovery(true)
+        platformClasspath?.prepare(parser)
         return parser.createAST(null) as CompilationUnit
     }
 

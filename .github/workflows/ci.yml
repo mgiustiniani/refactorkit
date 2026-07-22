@@ -13,7 +13,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 25 qualification input
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Record JDK 25 qualification home
+        shell: bash
+        run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 21 build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -139,7 +149,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 25 qualification input
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Record JDK 25 qualification home
+        shell: bash
+        run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 21 build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin

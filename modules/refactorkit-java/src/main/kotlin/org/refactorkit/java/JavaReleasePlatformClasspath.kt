@@ -1,83 +1,84 @@
 package org.refactorkit.java
 
-import java.nio.file.Files
+import org.eclipse.jdt.core.dom.ASTParser
+import org.eclipse.jdt.internal.compiler.batch.FileSystem
+import org.eclipse.jdt.internal.core.dom.ICompilationUnitResolver
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Proxy
 import java.nio.file.Path
-import java.util.zip.ZipFile
 
-/** Disposable classpath projection of one attested `ct.sym` release. */
+/**
+ * JDT environment bridge for one hash-attested Java release platform.
+ *
+ * ASTParser's public environment API recognizes a current JRT image as the
+ * system library, but it does not expose ECJ's JEP 247 release classpath. For a
+ * historical release we therefore let ASTParser validate the attested JRT and
+ * replace only that JRT entry at the resolver boundary with ECJ's ct.sym-backed
+ * older-system-release view. Project source and dependency classpaths remain
+ * untouched.
+ */
 internal class JavaReleasePlatformClasspath private constructor(
-    val path: Path,
-    private val disposable: Boolean,
+    val environmentPaths: List<Path>,
+    private val platformHome: Path,
+    private val release: Int,
+    private val historical: Boolean,
 ) : AutoCloseable {
-    override fun close() {
-        if (disposable && Files.exists(path)) Files.walk(path).use { stream ->
-            stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+    fun prepare(parser: ASTParser) {
+        if (!historical) return
+        val olderSystemRelease = FileSystem.getOlderSystemRelease(
+            platformHome.toString(),
+            release.toString(),
+            null,
+        ) ?: error("JDT could not construct the Java $release ct.sym classpath")
+        val field = ASTParser::class.java.getDeclaredField("unitResolver").apply { isAccessible = true }
+        val delegate = field.get(parser) as ICompilationUnitResolver
+        val proxy = Proxy.newProxyInstance(
+            ICompilationUnitResolver::class.java.classLoader,
+            arrayOf(ICompilationUnitResolver::class.java),
+        ) { _, method, arguments ->
+            val prepared = arguments?.clone()
+            if (prepared != null) {
+                prepared.indices.forEach { index ->
+                    val values = prepared[index] as? List<*> ?: return@forEach
+                    if (values.none { it is FileSystem.Classpath }) return@forEach
+                    var replaced = false
+                    prepared[index] = values.map { entry ->
+                        if (entry is FileSystem.Classpath && entry.javaClass.simpleName.startsWith("ClasspathJrt")) {
+                            check(!replaced) { "Multiple JRT system libraries were supplied to JDT" }
+                            replaced = true
+                            olderSystemRelease
+                        } else entry
+                    }.also {
+                        check(replaced) { "JDT did not expose the attested JRT system library for Java $release" }
+                    }
+                }
+            }
+            try {
+                method.invoke(delegate, *(prepared ?: emptyArray()))
+            } catch (failure: InvocationTargetException) {
+                throw failure.cause ?: failure
+            }
         }
+        field.set(parser, proxy)
     }
 
-    companion object {
-        private const val MAXIMUM_ENTRIES = 100_000
-        private const val MAXIMUM_UNCOMPRESSED_BYTES = 512L * 1024L * 1024L
+    override fun close() = Unit
 
+    companion object {
         fun materialize(authority: JavaReleasePlatformAuthority): JavaReleasePlatformClasspath {
+            val jrt = authority.platformHome.resolve("lib/jrt-fs.jar")
+            check(java.nio.file.Files.isRegularFile(jrt)) { "Attested Java platform JRT filesystem is unavailable" }
             if (authority.release == authority.platformRelease) {
                 check(authority.currentSystemModules != null && authority.currentSystemModulesSha256 != null) {
                     "Current-release system module evidence is unavailable"
                 }
-                return JavaReleasePlatformClasspath(authority.platformHome.resolve("lib/jrt-fs.jar"), false)
             }
-            val target = Files.createTempDirectory("refactorkit-java-platform-${authority.release}-")
-            try {
-                val token = releaseToken(authority.release)
-                val names = hashSetOf<String>()
-                var count = 0
-                var totalBytes = 0L
-                ZipFile(authority.signatureArchive.toFile()).use { source ->
-                    val entries = source.entries()
-                    while (entries.hasMoreElements()) {
-                        val entry = entries.nextElement()
-                        val parts = entry.name.split('/')
-                        if (entry.isDirectory || parts.size < 3 || token !in parts[0] || !entry.name.endsWith(".sig")) continue
-                        val relative = parts.drop(2).joinToString("/").removeSuffix(".sig") + ".class"
-                        if (relative == "module-info.class") continue
-                        check(names.add(relative)) { "Duplicate Java platform signature: $relative" }
-                        check(++count <= MAXIMUM_ENTRIES) { "Java platform signature entry limit exceeded" }
-                        check(entry.size >= 0) { "Java platform signature has unknown size: ${entry.name}" }
-                        check(totalBytes + entry.size <= MAXIMUM_UNCOMPRESSED_BYTES) {
-                            "Java platform signature byte limit exceeded"
-                        }
-                        val destination = target.resolve(relative).normalize()
-                        check(destination.startsWith(target)) { "Java platform signature path escapes projection" }
-                        Files.createDirectories(requireNotNull(destination.parent))
-                        Files.newOutputStream(destination).use { output ->
-                            source.getInputStream(entry).use { input ->
-                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                                while (true) {
-                                    val read = input.read(buffer)
-                                    if (read < 0) break
-                                    totalBytes += read
-                                    check(totalBytes <= MAXIMUM_UNCOMPRESSED_BYTES) {
-                                        "Java platform signature byte limit exceeded"
-                                    }
-                                    output.write(buffer, 0, read)
-                                }
-                            }
-                        }
-                    }
-                }
-                check(count > 0) { "Java platform signatures are empty" }
-                return JavaReleasePlatformClasspath(target, true)
-            } catch (failure: Exception) {
-                Files.walk(target).use { stream ->
-                    stream.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
-                }
-                throw failure
-            }
-        }
-
-        private fun releaseToken(release: Int): Char = when (release) {
-            8, 9 -> ('0'.code + release).toChar()
-            else -> ('A'.code + release - 10).toChar()
+            return JavaReleasePlatformClasspath(
+                environmentPaths = listOf(jrt),
+                platformHome = authority.platformHome,
+                release = authority.release,
+                historical = authority.release != authority.platformRelease,
+            )
         }
     }
 }

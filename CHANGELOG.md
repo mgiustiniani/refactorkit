@@ -9,6 +9,16 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Extend authoritative Java platform diagnostics from the first Java 8/21 row to
+  a local packaged Java 8-through-25 matrix. Historical modular releases use the
+  pinned ECJ JEP 247 view of the exact hash-attested `ct.sym` while ASTParser
+  validates the configured JRT system library; project source and dependency
+  classpaths remain unchanged. The reduced runtime now includes `jdk.zipfs` so
+  packaged CLI, daemon and MCP can read external or bundled signature archives.
+  A permanent eighteen-module Maven fixture passes all releases with an explicit
+  JDK 25 input, preserves workspace bytes, and retains the adjacent Java 8 and
+  Java 9/10/11 API-boundary tests. Four-platform native qualification remains
+  required before closing the roadmap row.
 - Add the first authoritative Java/Maven diagnostics platform row. Effective
   Maven `--release` is distinct from grammar level; historical APIs come from a
   bounded hash-attested `ct.sym` projection, while the current release binds a

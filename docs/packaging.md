@@ -183,24 +183,26 @@ apply and rollback through this launcher.
 Default `jlink` module set:
 
 ```text
-java.se,jdk.httpserver,jdk.unsupported
+java.se,jdk.httpserver,jdk.unsupported,jdk.zipfs
 ```
 
 `java.compiler` is required by JDT-backed signed member lookups through
-`javax.lang.model.SourceVersion`; omitting it causes the packaged CLI to fail even
-when the host has a full JDK.
+`javax.lang.model.SourceVersion`. `jdk.zipfs` is required by ECJ's JEP 247 reader
+for historical `ct.sym` releases. Omitting either causes the packaged CLI to fail
+even when the host has a full JDK.
 
 Override if needed:
 
 ```bash
 ./gradlew :modules:refactorkit-cli:jlinkRuntime \
-  -Prefactorkit.runtime.modules=java.se,jdk.httpserver,jdk.unsupported
+  -Prefactorkit.runtime.modules=java.se,jdk.httpserver,jdk.unsupported,jdk.zipfs
 ```
 
 ## Java platform signature evidence
 
-Status: first Java 8/21 local packaged row implemented; full Java 8–25,
-license/SBOM and four-platform promotion remain product-critical release gates.
+Status: Java 8/21 is natively qualified; the full Java 8–25 packaged matrix
+passes locally while its four-platform promotion, license and SBOM evidence
+remain product-critical release gates.
 
 The jlink image is RefactorKit's execution runtime, not the Java SE platform of an
 analyzed Maven project. Authoritative `--release 8..25` diagnostics require a
@@ -211,11 +213,13 @@ release API/member/module signatures.
 
 The current package stages the packaging JDK's `ct.sym` into `runtime/lib`, uses
 a complete `java.se` current-release image, and configures that runtime explicitly
-for CLI, daemon and MCP. Historical releases use a bounded disposable classpath
-projection from attested `ct.sym`; the current release binds and double-hashes the
-complete `java.se` module image. `scripts/smoke-packaged-java-authoritative-diagnostics.py`
+for CLI, daemon and MCP. Historical releases use ECJ's exact JEP 247 view of the
+attested `ct.sym`; the current release binds and double-hashes the complete
+`java.se` module image. `scripts/smoke-packaged-java-authoritative-diagnostics.py`
 proves release 21 JDK/reactor visibility and the release 8 API boundary with
-`JAVA_HOME` unset. Releases absent from the packaging JDK remain typed unavailable.
+`JAVA_HOME` unset, then uses one explicitly configured JDK 25 input to validate
+all releases 8 through 25 through packaged CLI, daemon and MCP. Releases absent
+from the configured platform remain typed unavailable.
 
 A promoted package must contain the full catalogue or securely resolve equivalent
 immutable evidence, attest its identity in diagnostics, and pass the fixture on

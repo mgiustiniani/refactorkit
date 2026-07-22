@@ -19,7 +19,7 @@ MAX_ENTRIES = 20_000
 MAX_EXPANDED_BYTES = 1_073_741_824
 MAX_COMPRESSION_RATIO = 1_000
 FIXED_TIMESTAMP = (1980, 2, 1, 0, 0, 0)
-REQUIRED_MODULES = {"java.base", "java.compiler", "java.logging", "java.xml", "jdk.unsupported"}
+REQUIRED_MODULES = {"java.base", "java.compiler", "java.logging", "java.xml", "jdk.unsupported", "jdk.zipfs"}
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 
 

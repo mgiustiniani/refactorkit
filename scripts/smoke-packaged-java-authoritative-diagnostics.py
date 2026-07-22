@@ -67,6 +67,33 @@ def write_reactor(root: Path, release: int) -> None:
     )
 
 
+def write_release_matrix(root: Path) -> None:
+    root.mkdir(parents=True)
+    modules = "".join(f"<module>release-{release}</module>" for release in range(8, 26))
+    (root / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId>"
+        "<artifactId>release-matrix</artifactId><version>1</version><packaging>pom</packaging>"
+        f"<modules>{modules}</modules></project>\n",
+        encoding="utf-8",
+    )
+    for release in range(8, 26):
+        module = root / f"release-{release}"
+        source = module / f"src/main/java/fixture/release{release}/ReleaseApi.java"
+        source.parent.mkdir(parents=True)
+        source.write_text(
+            f"package fixture.release{release}; final class ReleaseApi {{ Object value; String release() {{ return \"{release}\"; }} }}\n",
+            encoding="utf-8",
+        )
+        (module / "pom.xml").write_text(
+            "<project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId>"
+            "<artifactId>release-matrix</artifactId><version>1</version></parent>"
+            f"<artifactId>release-{release}</artifactId><properties>"
+            f"<maven.compiler.release>{release}</maven.compiler.release>"
+            "</properties></project>\n",
+            encoding="utf-8",
+        )
+
+
 def write_availability_fixture(root: Path) -> None:
     root.mkdir(parents=True)
     (root / "pom.xml").write_text(
@@ -88,17 +115,31 @@ def write_availability_fixture(root: Path) -> None:
     )
 
 
-def run_cli(cli: Path, root: Path, module: str | None = None) -> subprocess.CompletedProcess[str]:
+def run_cli(
+    cli: Path,
+    root: Path,
+    module: str | None = None,
+    jdk_home: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment.pop("JAVA_HOME", None)
     return subprocess.run(
-        command_for(cli, ["diagnostics", str(root), *(["--module", module] if module else [])]),
+        command_for(cli, [
+            "diagnostics", str(root),
+            *(["--module", module] if module else []),
+            *(["--jdk-home", str(jdk_home)] if jdk_home else []),
+        ]),
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         env=environment, timeout=120,
     )
 
 
-def daemon_diagnostics(daemon: Path, root: Path, module: str | None = None) -> list[dict]:
+def daemon_diagnostics(
+    daemon: Path,
+    root: Path,
+    module: str | None = None,
+    jdk_home: Path | None = None,
+) -> list[dict]:
     environment = os.environ.copy()
     environment.pop("JAVA_HOME", None)
     process = subprocess.Popen(
@@ -118,7 +159,11 @@ def daemon_diagnostics(daemon: Path, root: Path, module: str | None = None) -> l
             return response["result"]
 
         exchange(1, "project.open", {"root": str(root)})
-        return exchange(2, "diagnostics", {"languageId": "java", **({"module": module} if module else {})})
+        return exchange(2, "diagnostics", {
+            "languageId": "java",
+            **({"module": module} if module else {}),
+            **({"jdkHome": str(jdk_home)} if jdk_home else {}),
+        })
     finally:
         process.terminate()
         try:
@@ -127,7 +172,7 @@ def daemon_diagnostics(daemon: Path, root: Path, module: str | None = None) -> l
             process.kill(); process.wait(timeout=20)
 
 
-def mcp_diagnostics(mcp: Path, root: Path) -> str:
+def mcp_diagnostics(mcp: Path, root: Path, jdk_home: Path | None = None) -> str:
     environment = os.environ.copy()
     environment.pop("JAVA_HOME", None)
     process = subprocess.Popen(
@@ -146,7 +191,10 @@ def mcp_diagnostics(mcp: Path, root: Path) -> str:
             return response["result"]["content"][0]["text"]
 
         tool(1, "project_scan", {"root": str(root)})
-        return tool(2, "diagnostics", {"languageId": "java"})
+        return tool(2, "diagnostics", {
+            "languageId": "java",
+            **({"jdkHome": str(jdk_home)} if jdk_home else {}),
+        })
     finally:
         process.terminate()
         try:
@@ -158,6 +206,7 @@ def mcp_diagnostics(mcp: Path, root: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime", default="modules/refactorkit-cli/build/package/refactorkit")
+    parser.add_argument("--jdk-home", default=os.environ.get("REFACTORKIT_JAVA_25_HOME"))
     options = parser.parse_args()
     runtime = (Path.cwd() / options.runtime).resolve()
     suffix = ".bat" if os.name == "nt" else ""
@@ -167,6 +216,12 @@ def main() -> int:
     platform = runtime / "runtime/lib/ct.sym"
     if not platform.is_file():
         raise AssertionError(f"packaged Java platform signatures are missing: {platform}")
+    if not options.jdk_home:
+        raise AssertionError("--jdk-home or REFACTORKIT_JAVA_25_HOME is required for the Java 8-through-25 matrix")
+    jdk_home = Path(options.jdk_home).resolve()
+    release_metadata = jdk_home / "release"
+    if not release_metadata.is_file() or 'JAVA_VERSION="25' not in release_metadata.read_text(encoding="utf-8"):
+        raise AssertionError(f"the release-matrix input is not an explicit JDK 25 home: {jdk_home}")
 
     with tempfile.TemporaryDirectory(prefix="refactorkit-java-diagnostics-") as temporary:
         root = Path(temporary) / "reactor"
@@ -183,6 +238,21 @@ def main() -> int:
             raise AssertionError(f"packaged release-21 MCP diagnostics failed: {mcp_clean}")
         if tree_hash(root) != clean_hash or (root / ".refactorkit").exists():
             raise AssertionError("read-only packaged diagnostics modified the reactor")
+
+        matrix = Path(temporary) / "release-matrix"
+        write_release_matrix(matrix)
+        matrix_hash = tree_hash(matrix)
+        matrix_cli = run_cli(cli, matrix, jdk_home=jdk_home)
+        if matrix_cli.returncode != 0 or matrix_cli.stdout.strip() != "No diagnostics.":
+            raise AssertionError(f"packaged Java 8-through-25 CLI matrix failed: {matrix_cli.stdout}\n{matrix_cli.stderr}")
+        matrix_daemon = daemon_diagnostics(daemon, matrix, jdk_home=jdk_home)
+        if matrix_daemon:
+            raise AssertionError(f"packaged Java 8-through-25 daemon matrix failed: {matrix_daemon}")
+        matrix_mcp = mcp_diagnostics(mcp, matrix, jdk_home=jdk_home)
+        if matrix_mcp.strip() != "No diagnostics.":
+            raise AssertionError(f"packaged Java 8-through-25 MCP matrix failed: {matrix_mcp}")
+        if tree_hash(matrix) != matrix_hash or (matrix / ".refactorkit").exists():
+            raise AssertionError("Java 8-through-25 packaged diagnostics modified the matrix workspace")
 
         unavailable = Path(temporary) / "availability"
         write_availability_fixture(unavailable)
@@ -220,7 +290,7 @@ def main() -> int:
         if tree_hash(root) != historical_hash or (root / ".refactorkit").exists():
             raise AssertionError("historical packaged diagnostics modified the reactor")
 
-    print("Packaged authoritative Java diagnostics acceptance passed: release-21 platform/reactor closure, source-set availability, and release-8 API boundary.")
+    print("Packaged authoritative Java diagnostics acceptance passed: exact releases 8 through 25, release-21 reactor closure, source-set availability, and release-8 API boundary.")
     return 0
 
 

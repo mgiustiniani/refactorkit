@@ -34,7 +34,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 25 qualification input
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Record JDK 25 qualification home
+        shell: bash
+        run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 21 build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -65,6 +75,12 @@ jobs:
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+
+      - name: Native packaged authoritative Java diagnostics qualification
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-java-authoritative-diagnostics.py"], check=True)
 
       - name: Native packaged real TypeScript qualification
         shell: python

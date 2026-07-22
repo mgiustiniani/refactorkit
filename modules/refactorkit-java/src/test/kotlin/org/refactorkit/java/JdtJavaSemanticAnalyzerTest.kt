@@ -46,6 +46,44 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun authoritativeHistoricalModularReleasesUseExactCtSymApis() {
+        val platformHome = Paths.get(System.getProperty("java.home"))
+        val releases = listOf(9, 10, 11)
+        releases.forEach { release ->
+            val root = Files.createTempDirectory("refactorkit-jdt-release-$release")
+            val source = root.resolve("src/main/java/example/ReleaseApi.java")
+            Files.createDirectories(source.parent)
+            Files.writeString(
+                source,
+                "package example; class ReleaseApi { boolean blank(String value) { return value.isBlank(); } }\n",
+            )
+            Files.writeString(
+                root.resolve("pom.xml"),
+                "<project><modelVersion>4.0.0</modelVersion><groupId>example</groupId>" +
+                    "<artifactId>release-api</artifactId><version>1</version><properties>" +
+                    "<maven.compiler.release>$release</maven.compiler.release></properties></project>",
+            )
+            val snapshot = JavaProjectScanner().scan(root)
+            val authority = assertIs<JavaReleasePlatformResolution.Available>(
+                JavaReleasePlatformAuthorityResolver().resolve(platformHome, release),
+            ).authority
+
+            val resolved = assertIs<JdtAuthoritativeJavaAnalysisResolution.Available>(
+                JdtJavaSemanticAnalyzer().analyzeAuthoritatively(snapshot, mapOf(release to authority)),
+            )
+
+            val rejectsIsBlank = resolved.analysis.warnings.any {
+                it.message.contains("isBlank") && it.message.contains("undefined")
+            }
+            assertEquals(release < 11, rejectsIsBlank, "Unexpected Java $release API result: ${resolved.analysis.warnings}")
+            assertTrue(
+                resolved.analysis.warnings.none { it.message.contains("java.lang.Object") },
+                "Java $release lost its system library: ${resolved.analysis.warnings}",
+            )
+        }
+    }
+
+    @Test
     fun authoritativeAnalysisRefusesSourceLevelWithoutReleasePlatformSelection() {
         val root = Files.createTempDirectory("refactorkit-jdt-source-only")
         val source = root.resolve("src/main/java/example/SourceOnly.java")
