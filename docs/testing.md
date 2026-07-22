@@ -114,7 +114,9 @@ external-importer checks:
   Tests retain comments/unknown XML byte-for-byte and cover missing intent,
   identity mismatch, property-backed/duplicate origins, source-set mismatch,
   missing destination dependencies, remaining-source references and dependency-
-  cycle refusal. Framework-annotated and exact quoted-FQCN fixtures elevate risk,
+  cycle refusal. A compatibility-stripped snapshot proves shared core Build Model
+  ownership remains authoritative without legacy `Module` source-root projections.
+  Framework-annotated and exact quoted-FQCN fixtures elevate risk,
   while generated headers refuse before planning. CLI preview plus daemon/MCP
   preview-apply-rollback tests exercise
   the operation-specific staged-reactor diagnostics gate. Packaged acceptance

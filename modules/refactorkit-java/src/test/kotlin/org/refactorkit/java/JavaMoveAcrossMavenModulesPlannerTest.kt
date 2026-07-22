@@ -64,6 +64,27 @@ class JavaMoveAcrossMavenModulesPlannerTest {
     }
 
     @Test
+    fun sharedBuildModelOwnershipRemainsAuthoritativeWithoutLegacyModuleRoots() {
+        val root = reactorFixture()
+        val snapshot = JavaProjectScanner().scan(root)
+        val compatibilityStripped = snapshot.copy(modules = snapshot.modules.map { module ->
+            module.copy(
+                sourceRoots = emptyList(),
+                mainSourceRoots = emptyList(),
+                testSourceRoots = emptyList(),
+                generatedSourceRoots = emptyList(),
+                generatedTestSourceRoots = emptyList(),
+            )
+        })
+
+        val plan = JavaMoveAcrossMavenModulesPlanner().preview(
+            compatibilityStripped, FROM, TO, listOf(rewrite()),
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, "${plan.refusalCode}: ${plan.summary}")
+    }
+
+    @Test
     fun languageAdapterExposesTheFirstOwnershipMigrationRow() {
         val root = reactorFixture()
         val adapter = JavaLanguageAdapter()

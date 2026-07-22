@@ -9,6 +9,9 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Prove Maven ownership planning consumes the shared core Build Model SPI rather
+  than legacy Java `Module` source-root projections; removing all compatibility
+  roots from the snapshot retains the same accepted Java/POM plan.
 - Harden Maven ownership packaged qualification on Windows by comparing protocol
   paths after separator normalization and retrying isolated staged-workspace
   cleanup for a bounded 950 ms window. Cleanup still fails closed after the
