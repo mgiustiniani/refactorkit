@@ -9,6 +9,11 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add active `v0.7.x` support-matrix and migration documents. They distinguish
+  qualified Java 8–25/Maven rows from pending native ownership support, preserve
+  API `0.2` compatibility guidance, and state JPMS, module-directory migration,
+  build-script execution, dynamic framework strings and signing limitations.
+  Release checksums, SPDX SBOMs and independent asset attestation remain open.
 - Implement the first local `java.moveAcrossMavenModules` library row. One
   complete non-generated Java source root can move between existing effective
   Maven modules together with an explicit exact-literal consumer dependency
