@@ -9,6 +9,10 @@ review safety boundaries before applying refactorings.
 
 ### Next development (`0.7.0-SNAPSHOT`)
 
+- Add a 128-case deterministic property suite for lossless Maven dependency
+  editing across LF/CRLF, whitespace, namespace prefixes, comments, CDATA,
+  processing instructions and quoted `>` attributes. Accepted cases change only
+  the artifact text; malformed/property-backed inputs produce typed refusal.
 - Prove Maven ownership planning consumes the shared core Build Model SPI rather
   than legacy Java `Module` source-root projections; removing all compatibility
   roots from the snapshot retains the same accepted Java/POM plan.

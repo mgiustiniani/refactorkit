@@ -62,6 +62,12 @@ matching dependency blocks, profile-dependent ownership or an effective value
 whose originating text cannot be identified uniquely produce typed refusal.
 RefactorKit does not serialize an effective Maven model back into a POM.
 
+Property evidence runs 128 deterministic lexical variants across LF/CRLF,
+whitespace, namespace prefixes, comments, CDATA, processing instructions and
+quoted `>` attributes. Every accepted variant emits one artifact text edit and
+reproduces every other byte exactly; malformed and property-backed inputs return
+typed refusal without edits.
+
 ## RPK-JAVA-OWN-004 — Immutable descriptor staging
 
 Build descriptors participating in a managed edit are immutable snapshot inputs,

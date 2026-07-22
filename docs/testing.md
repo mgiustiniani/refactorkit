@@ -117,7 +117,10 @@ external-importer checks:
   cycle refusal. A compatibility-stripped snapshot proves shared core Build Model
   ownership remains authoritative without legacy `Module` source-root projections.
   Framework-annotated and exact quoted-FQCN fixtures elevate risk,
-  while generated headers refuse before planning. CLI preview plus daemon/MCP
+  while generated headers refuse before planning. A deterministic 128-case POM
+  property row varies line endings, whitespace, namespace prefixes, comments,
+  CDATA, processing instructions and quoted `>` attributes and proves every byte
+  outside the authorized artifact text is unchanged. CLI preview plus daemon/MCP
   preview-apply-rollback tests exercise
   the operation-specific staged-reactor diagnostics gate. Packaged acceptance
   previews the same capability through all three transports without changing the
