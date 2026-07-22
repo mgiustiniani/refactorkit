@@ -100,9 +100,10 @@ RefactorKit's staged model and JDT authority.
 
 Local first-row evidence moves one complete root, rewrites one exact literal
 consumer edge and validates the dependent consumer through JDT. It rejects staged
-cycles before plan publication and reports a moved-file regression as
-`mavenOwnership.destinationDependencyMissing`. The remaining-source dependency
-row, wider mediation and native qualification remain open.
+cycles before plan publication, reports a moved-file regression as
+`mavenOwnership.destinationDependencyMissing`, and reports a custom remaining
+source-root reference as `mavenOwnership.remainingSourceDependency`. Wider
+classifier/scope mediation and native qualification remain open.
 
 ## RPK-JAVA-OWN-006 — Transaction and protocols
 

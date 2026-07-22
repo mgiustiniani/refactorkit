@@ -91,6 +91,8 @@ class JavaMoveAcrossMavenModulesPlanner(
         if (sourceOwner.generated || destinationOwner.generated) {
             return refused(snapshot, "mavenOwnership.generated", "Generated source roots are read-only")
         }
+        val remainingSourceRoots = sourceOwner.module.sourceSets.flatMap { it.sourceRoots }
+            .map(Path::normalize).filterNot { it == source }
         val sourceIdentity = moduleIdentity(sourceOwner.module.attributes)
             ?: return refused(snapshot, "mavenOwnership.sourceUnrecognized", "Source Maven module identity is unavailable")
         val destinationIdentity = moduleIdentity(destinationOwner.module.attributes)
@@ -151,7 +153,7 @@ class JavaMoveAcrossMavenModulesPlanner(
                     "sourceRoot.destinationUnrecognized" -> "mavenOwnership.destinationUnrecognized"
                     "sourceRoot.diagnosticsRegression" -> ownershipRegressionCode(
                         diagnosticRegressions(before, rootPlan.diagnosticsAfterPreview),
-                        source, destination, dependencyRewrites.isEmpty(),
+                        remainingSourceRoots, destination, dependencyRewrites.isEmpty(),
                     )
                     else -> rootPlan.refusalCode?.replace("sourceRoot", "mavenOwnership")
                         ?: "mavenOwnership.diagnosticsRegression"
@@ -171,7 +173,7 @@ class JavaMoveAcrossMavenModulesPlanner(
             val regressions = diagnosticRegressions(before, rootPlan.diagnosticsAfterPreview)
             if (regressions.isNotEmpty()) {
                 val code = ownershipRegressionCode(
-                    regressions, source, destination, dependencyRewrites.isEmpty(),
+                    regressions, remainingSourceRoots, destination, dependencyRewrites.isEmpty(),
                 )
                 return@withMaterializedSnapshot refused(
                     snapshot, code, "Ownership migration introduces ${regressions.size} Java diagnostic(s)",
@@ -239,15 +241,18 @@ class JavaMoveAcrossMavenModulesPlanner(
 
     private fun ownershipRegressionCode(
         diagnostics: List<Diagnostic>,
-        source: Path,
+        remainingSourceRoots: List<Path>,
         destination: Path,
         dependencyIntentMissing: Boolean,
     ): String = when {
         dependencyIntentMissing -> "mavenOwnership.dependencyRewriteRequired"
         diagnostics.any { it.severity == Diagnostic.Severity.ERROR && it.location?.path?.normalize()?.startsWith(destination) == true } ->
             "mavenOwnership.destinationDependencyMissing"
-        diagnostics.any { it.severity == Diagnostic.Severity.ERROR && it.location?.path?.normalize()?.startsWith(source) == true } ->
-            "mavenOwnership.remainingSourceDependency"
+        diagnostics.any { diagnostic ->
+            diagnostic.severity == Diagnostic.Severity.ERROR && diagnostic.location?.path?.normalize()?.let { path ->
+                remainingSourceRoots.any(path::startsWith)
+            } == true
+        } -> "mavenOwnership.remainingSourceDependency"
         else -> "mavenOwnership.diagnosticsRegression"
     }
 

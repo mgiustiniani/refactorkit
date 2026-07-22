@@ -137,6 +137,17 @@ class JavaMoveAcrossMavenModulesPlannerTest {
     }
 
     @Test
+    fun refusesAStillRequiredMovedTypeFromAnotherSourceRoot() {
+        val root = reactorFixture(remainingSourceDependsOnMoved = true)
+
+        val plan = JavaMoveAcrossMavenModulesPlanner().preview(
+            JavaProjectScanner().scan(root), FROM, TO, listOf(rewrite()),
+        )
+
+        assertEquals("mavenOwnership.remainingSourceDependency", plan.refusalCode)
+    }
+
+    @Test
     fun refusesMissingDestinationDependencyWithItsStableCode() {
         val root = reactorFixture(sourceDependsOnHelper = true)
 
@@ -168,6 +179,7 @@ class JavaMoveAcrossMavenModulesPlannerTest {
     private fun reactorFixture(
         destinationDependsOnConsumer: Boolean = false,
         sourceDependsOnHelper: Boolean = false,
+        remainingSourceDependsOnMoved: Boolean = false,
     ): Path {
         val root = Files.createTempDirectory("refactorkit-maven-ownership")
         val helperModule = if (sourceDependsOnHelper) "<module>helper</module>" else ""
@@ -179,6 +191,28 @@ class JavaMoveAcrossMavenModulesPlannerTest {
             </project>
         """.trimIndent())
         childPom(root, "source", if (sourceDependsOnHelper) "helper" else null)
+        if (remainingSourceDependsOnMoved) {
+            val sourcePom = root.resolve("source/pom.xml")
+            Files.writeString(sourcePom, Files.readString(sourcePom).replace(
+                "</project>",
+                """
+                    <build><plugins><plugin>
+                      <groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId>
+                      <executions><execution><goals><goal>add-source</goal></goals>
+                        <configuration><sources><source>src/remaining/java</source></sources></configuration>
+                      </execution></executions>
+                    </plugin></plugins></build>
+                    </project>
+                """.trimIndent(),
+            ))
+            val remaining = root.resolve("source/src/remaining/java/example/remaining/Remaining.java")
+            Files.createDirectories(remaining.parent)
+            Files.writeString(
+                remaining,
+                "package example.remaining; import example.shared.SharedValue; " +
+                    "public class Remaining { SharedValue value; }\n",
+            )
+        }
         childPom(root, "destination", if (destinationDependsOnConsumer) "consumer" else null)
         childPom(root, "consumer", "source", preserveMarkup = true)
         if (sourceDependsOnHelper) {
