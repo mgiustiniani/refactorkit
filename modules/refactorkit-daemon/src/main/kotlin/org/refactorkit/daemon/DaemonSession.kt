@@ -54,7 +54,9 @@ import org.refactorkit.core.SymbolId
 import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaChangeSignaturePlanner
+import org.refactorkit.java.JavaCreateMavenModulePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaImportTargetResolution
 import org.refactorkit.java.JavaImportTargetResolver
@@ -1604,6 +1606,17 @@ class DaemonSession(
                 val force = args["force"]?.toBoolean() ?: false
                 JavaSafeDeletePlanner(adapter).preview(snap, symbol ?: missing("symbol"), force)
             }
+            "createMavenModule" -> {
+                val moduleName = args["moduleName"] ?: missing("arguments.moduleName")
+                val parentPom = args["parentPom"] ?: missing("arguments.parentPom")
+                JavaCreateMavenModulePlanner().preview(snap, moduleName, Paths.get(parentPom))
+            }
+            "renameMavenModule" -> {
+                val oldModuleDir = args["oldModuleDir"] ?: missing("arguments.oldModuleDir")
+                val newModuleDir = args["newModuleDir"] ?: missing("arguments.newModuleDir")
+                val newArtifactId = args["newArtifactId"]
+                JavaRenameMavenModulePlanner().preview(snap, oldModuleDir, newModuleDir, newArtifactId)
+            }
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
@@ -2838,6 +2851,30 @@ class DaemonSession(
                     "previewDiagnostics" to true,
                     "apply" to true,
                     "discard" to true,
+                    "rollback" to true,
+                ),
+            ),
+            DaemonMethodCapability(
+                "java.createMavenModule",
+                "experimental",
+                true,
+                false,
+                mapOf(
+                    "preview" to true,
+                    "renderedDiff" to true,
+                    "apply" to true,
+                    "rollback" to true,
+                ),
+            ),
+            DaemonMethodCapability(
+                "java.renameMavenModule",
+                "experimental",
+                true,
+                false,
+                mapOf(
+                    "preview" to true,
+                    "renderedDiff" to true,
+                    "apply" to true,
                     "rollback" to true,
                 ),
             ),

@@ -54,9 +54,18 @@ class KotlinOrganizeImportsPlanner(
             "Kotlin organize imports requires one uncommented contiguous explicit type-import block",
         )
         val declarationsByIdentity = before.declarations.entries.associateBy { it.value.jvmIdentity }
+        // Build a set of callable identities from externalCallableUsages
+        val callableIdentities = before.externalCallableUsages.mapTo(mutableSetOf()) {
+            it.jvmOwner + "." + it.callableName
+        }
         val unused = mutableSetOf<ImportLine>()
         for (importLine in block.imports) {
             if (importLine.star) continue
+            // Check if this import is a callable import (function/property)
+            val isCallable = callableIdentities.any { identity ->
+                importLine.identity == identity || importLine.identity.startsWith(identity)
+            }
+            if (isCallable) continue // callable imports are always used by the compiler evidence
             val internal = declarationsByIdentity[importLine.identity]
             val locations = if (internal != null) {
                 before.usages.filter { it.targetId == internal.key }.map { it.location }

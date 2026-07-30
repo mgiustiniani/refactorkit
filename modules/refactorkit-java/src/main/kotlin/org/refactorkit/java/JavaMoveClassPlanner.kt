@@ -1,6 +1,5 @@
 package org.refactorkit.java
 
-import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -27,34 +26,115 @@ import java.nio.file.Paths
  * - All FQN references in source files.
  * - Adds a new import in same-package files that previously used the simple name.
  */
+data class JavaMoveClassPreview(
+    val plan: PatchPlan,
+    val targetAuthorityLease: JavaMoveClassTargetAuthorityLease?,
+)
+
 class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
 
-    fun preview(snapshot: ProjectSnapshot, symbolFqn: String, targetPackage: String): PatchPlan {
+    fun preview(snapshot: ProjectSnapshot, symbolFqn: String, targetPackage: String): PatchPlan =
+        previewWithAuthority(snapshot, symbolFqn, targetPackage).plan
+
+    fun previewWithAuthority(
+        snapshot: ProjectSnapshot,
+        symbolFqn: String,
+        targetPackage: String,
+    ): JavaMoveClassPreview = previewResult(snapshot, symbolFqn, targetPackage)
+
+    private fun previewResult(
+        snapshot: ProjectSnapshot,
+        symbolFqn: String,
+        targetPackage: String,
+    ): JavaMoveClassPreview {
+        fun withoutAuthority(plan: PatchPlan) = JavaMoveClassPreview(plan, null)
         val oldPkg = JavaPackageUtil.packageOf(symbolFqn)
         val simpleName = JavaPackageUtil.simpleName(symbolFqn)
         val newFqn = JavaPackageUtil.fqn(targetPackage, simpleName)
 
         if (oldPkg == targetPackage) {
-            return refused(snapshot, "moveClass", "Source and target packages are the same: $targetPackage")
+            return withoutAuthority(refused(snapshot, "moveClass", "Source and target packages are the same: $targetPackage"))
         }
         if (!isValidPackageName(targetPackage)) {
-            return refused(snapshot, "moveClass", "Invalid target package: $targetPackage")
+            return withoutAuthority(refused(snapshot, "moveClass", "Invalid target package: $targetPackage"))
+        }
+
+        // Structural Maven descriptor closure is a prerequisite, not a semantic-edit diagnostic.
+        // Refuse before symbol analysis so selected descriptor loss cannot produce a plan or lease.
+        val dependencyGraphFailures = snapshot.modules.asSequence()
+            .filter { module ->
+                module.languageSettings["java.buildSystem"] == "maven" &&
+                    module.languageSettings["java.dependencyGraph.status"] != "complete"
+            }
+            .mapNotNull { it.languageSettings["java.dependencyGraph.message"] }
+            .flatMap { it.split("; ").asSequence() }
+            .filter(String::isNotBlank)
+            .distinct()
+            .toList()
+        if (dependencyGraphFailures.isNotEmpty()) {
+            val selectedDescriptorFailures = dependencyGraphFailures.filter {
+                it.startsWith("MAVEN_SELECTED_DESCRIPTOR_")
+            }.sorted()
+            val missingDescriptor = dependencyGraphFailures.firstOrNull {
+                it.startsWith("MAVEN_DEPENDENCY_DESCRIPTOR_MISSING ")
+            }
+            val blockers = when {
+                selectedDescriptorFailures.isNotEmpty() -> selectedDescriptorFailures
+                missingDescriptor != null -> listOf(missingDescriptor)
+                else -> listOf(dependencyGraphFailures.first())
+            }
+            val code = when {
+                selectedDescriptorFailures.any { it.startsWith("MAVEN_SELECTED_DESCRIPTOR_MISSING ") } ->
+                    "java.maven.selectedDescriptor.missing"
+                selectedDescriptorFailures.any { it.startsWith("MAVEN_SELECTED_DESCRIPTOR_MALFORMED ") } ->
+                    "java.maven.selectedDescriptor.malformed"
+                selectedDescriptorFailures.any { it.startsWith("MAVEN_SELECTED_DESCRIPTOR_DRIFTED ") } ->
+                    "java.maven.selectedDescriptor.drifted"
+                missingDescriptor != null -> "java.maven.dependencyDescriptor.missing"
+                else -> "java.maven.dependencyGraph.incomplete"
+            }
+            return withoutAuthority(refused(
+                snapshot,
+                "moveClass",
+                "Maven dependency traversal is structurally incomplete: ${blockers.joinToString(" | ")}",
+                code,
+            ))
         }
 
         val index = adapter.buildSymbols(snapshot)
         val symbol = index.symbols.find { it.id.value == symbolFqn && it.kind in MOVEABLE_KINDS }
-            ?: return refused(snapshot, "moveClass", "Symbol not found or not a moveable type: $symbolFqn")
+            ?: return withoutAuthority(refused(snapshot, "moveClass", "Symbol not found or not a moveable type: $symbolFqn"))
 
         val declarationFile = snapshot.files.find { it.path == symbol.location.path }
-            ?: return refused(snapshot, "moveClass", "Declaration file not found: ${symbol.location.path}")
+            ?: return withoutAuthority(refused(snapshot, "moveClass", "Declaration file not found: ${symbol.location.path}"))
         JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
-            return refused(snapshot, "moveClass", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)")
+            return withoutAuthority(
+                refused(snapshot, "moveClass", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)"),
+            )
         }
         val newRelativePath = computeNewPath(declarationFile.path, oldPkg, targetPackage, simpleName)
         if (index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newRelativePath }) {
-            return refused(snapshot, "moveClass", "Move target already exists: $newFqn ($newRelativePath)")
+            return withoutAuthority(refused(snapshot, "moveClass", "Move target already exists: $newFqn ($newRelativePath)"))
         }
-        val jdtReferencePaths = findJdtReferencePaths(snapshot, symbolFqn, declarationFile.path)
+        val availableSelection = JavaMoveClassTargetAuthorityEvaluator.availableSelection(
+            snapshot,
+            symbolFqn,
+            declarationFile.path,
+        )
+        val offlinePreparation = if (availableSelection == null) {
+            JavaMoveClassTargetAuthorityEvaluator.prepare(snapshot, symbolFqn, declarationFile.path)
+        } else null
+        val offlinePrepared = (offlinePreparation as? JavaMoveClassOfflineAuthorityPreparation.Eligible)?.prepared
+        val authorityBlockers = (offlinePreparation as? JavaMoveClassOfflineAuthorityPreparation.Ineligible)
+            ?.blockers.orEmpty()
+        val semanticSelection = availableSelection ?: offlinePrepared?.selection
+        val jdtSelection = semanticSelection?.let { selection ->
+            JdtReferenceSelection(
+                referencePaths = selection.references.mapTo(linkedSetOf()) { it.path },
+                semanticSelection = selection,
+            )
+        }
+        val jdtReferencePaths = jdtSelection?.referencePaths
         if (jdtReferencePaths == null) {
             val unsafeSamePackage = snapshot.files.firstOrNull { file ->
                 file.path != declarationFile.path && file.languageId == "java" &&
@@ -65,12 +145,12 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
                     JavaLexer.findOccurrences(file.content, simpleName).isNotEmpty()
             }
             if (unsafeSamePackage != null) {
-                return refused(
+                return withoutAuthority(refused(
                     snapshot,
                     "moveClass",
                     "Lexical fallback cannot prove simple-name ownership in ${unsafeSamePackage.path}; JDT binding evidence is required.",
                     "java.moveClass.lexicalScopeUnsafe",
-                )
+                ))
             }
         }
 
@@ -88,105 +168,190 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         affectedPaths.add(declarationFile.path)
         affectedPaths.add(newRelativePath)
 
-        // 3. Update all other files
+        // 3. Update all other files. Semantic selection uses exact binding ranges;
+        // lexical scanning is retained only for review-only fallback plans.
         for (file in snapshot.files) {
             if (file.path == declarationFile.path || file.languageId != "java" ||
-                JavaGeneratedSourcePolicy.reason(file) != null) continue
-
-            val filePkg = JavaPackageUtil.extractPackage(file.content)
-            val hasOldImport = file.content.contains("import $symbolFqn;")
-            val hasFqn = file.content.contains(symbolFqn)
-            val wasInSamePkg = filePkg == oldPkg && oldPkg.isNotEmpty()
-            val nowInSamePkg = filePkg == targetPackage
-
-            if (jdtReferencePaths != null) {
-                if (file.path !in jdtReferencePaths) continue
-            } else if (!hasOldImport && !hasFqn) {
-                continue
+                JavaGeneratedSourcePolicy.reason(file) != null
+            ) continue
+            val fileEdits = if (jdtSelection != null) {
+                bindingDerivedReferenceEdits(
+                    file,
+                    jdtSelection.semanticSelection.references,
+                    symbolFqn,
+                    newFqn,
+                    oldPkg,
+                    targetPackage,
+                )
+            } else {
+                lexicalReferenceEdits(file, symbolFqn, newFqn, oldPkg, targetPackage)
             }
-
-            val fileEdits = mutableListOf<TextEdit>()
-            val fileContent = file.content
-
-            val coveredOffsets = mutableSetOf<Int>()
-
-            // Replace old import with new import (or remove if now in same package).
-            // Mark the entire import so the nested FQN occurrence is not edited twice.
-            if (hasOldImport) {
-                val importText = "import $symbolFqn;"
-                val newImportText = if (nowInSamePkg) "" else "import $newFqn;"
-                for (range in JavaLexer.findOccurrences(fileContent, importText)) {
-                    fileEdits += makeEdit(fileContent, range, newImportText)
-                    range.forEach(coveredOffsets::add)
-                }
-            }
-
-            // Replace old FQN references outside direct imports.
-            if (hasFqn) {
-                for (range in JavaLexer.findOccurrences(fileContent, symbolFqn)) {
-                    if (range.first !in coveredOffsets) {
-                        fileEdits += makeEdit(fileContent, range, newFqn)
-                    }
-                }
-            }
-
-            // Files that were in the same package now need an explicit import
-            if (wasInSamePkg && !nowInSamePkg && !hasOldImport) {
-                val insertOffset = insertImportOffset(fileContent)
-                val pos = TextEdits.positionForOffset(fileContent, insertOffset)
-                fileEdits += TextEdit(SourceRange(pos, pos), "import $newFqn;\n")
-            }
-
             if (fileEdits.isNotEmpty()) {
-                val sorted = fileEdits.sortedWith(compareBy({ it.range.start.line }, { it.range.start.character }))
-                edits += FileEdit.Modify(file.path, sorted)
+                edits += FileEdit.Modify(file.path, fileEdits)
                 affectedPaths.add(file.path)
             }
         }
 
+        val workspaceEdit = WorkspaceEdit(edits)
+        val targetAuthorityLease = offlinePrepared?.let { prepared ->
+            JavaMoveClassTargetAuthorityEvaluator.complete(
+                prepared,
+                targetPackage,
+                newRelativePath,
+                workspaceEdit,
+            )
+        }
+        val semanticEligible = jdtSelection != null && (offlinePrepared == null || targetAuthorityLease != null)
         val frameworkAssessment = JavaFrameworkDetector.assess(declarationFile)
-        warnings += if (jdtReferencePaths != null) {
-            "JDT type binding selected ${jdtReferencePaths.size} referencing file(s); package/import/FQN edits are scoped to those files."
+        warnings += if (semanticEligible) {
+            "JDT type binding selected ${jdtSelection?.referencePaths?.size} referencing file(s); " +
+                "every package/import/FQN edit is binding-derived or structurally consequent."
         } else {
             "JDT type-binding evidence was unavailable or not clean; move uses lexical file scoping. Review carefully."
+        }
+        if (semanticEligible) {
+            val closure = checkNotNull(jdtSelection).semanticSelection.closure
+            val observers = (closure.sourceSets - closure.owner).map(MoveAuthoritySourceSet::displayName).sorted()
+            warnings += "Authoritative dependency-bounded reverse-observer closure: target owner " +
+                "${closure.owner.displayName()}; observers " +
+                observers.ifEmpty { listOf("none") }.joinToString(", ") + "."
+            if (jdtSelection.semanticSelection.excludedWarningSourceSets.isNotEmpty()) {
+                warnings += jdtSelection.semanticSelection.excludedWarningSourceSets
+                    .map(MoveAuthoritySourceSet::displayName)
+                    .sorted()
+                    .joinToString(", ") +
+                    " excluded from the dependency-bounded reverse-observer closure; " +
+                    "those JDT warnings did not demote semantic authority."
+            }
+        }
+        if (targetAuthorityLease != null) {
+            warnings += "Target-scoped Maven moveClass authority lease: reactorStructureStatus=COMPLETE, " +
+                "observerClosureStatus=COMPLETE, externalClasspathStatus=OFFLINE_MISSING; " +
+                "${targetAuthorityLease.offlineMissingEntries.size + targetAuthorityLease.selectedMissingBinaryRecords.size} " +
+                "enumerated leaf absence(s), " +
+                "${targetAuthorityLease.candidatesBefore.size} candidate record(s), " +
+                "${targetAuthorityLease.retainedDiagnosticsBefore.size} exactly retained diagnostic(s)."
+            warnings += "The lexical candidate inventory is completeness-and-veto evidence only; no lexical range selected an edit."
+        } else if (authorityBlockers.isNotEmpty()) {
+            warnings += "Target-scoped Maven moveClass authority was not leased: ${authorityBlockers.joinToString("; ")}"
+        } else if (offlinePrepared != null) {
+            warnings += "Target-scoped Maven moveClass authority was not leased because staged binding or diagnostic evidence changed."
         }
         warnings += "String literals and comments are NOT scanned. Reflection and annotation processor output require manual review."
         warnings += frameworkAssessment.warnings("moveClass")
 
-        return PatchPlan(
+        val plan = PatchPlan(
             operation = "moveClass",
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = if (jdtReferencePaths != null) 0.94 else 0.90,
+            confidence = if (semanticEligible) 0.94 else 0.90,
             requiresUserApproval = true,
             summary = "Move $simpleName from $oldPkg → $targetPackage. ${affectedPaths.size} file(s) affected.",
             affectedFiles = affectedPaths,
-            workspaceEdit = WorkspaceEdit(edits),
+            workspaceEdit = workspaceEdit,
+            diagnosticsBefore = targetAuthorityLease?.retainedDiagnosticsBefore
+                ?.map(JavaMoveClassRetainedDiagnosticIdentity::toDiagnostic).orEmpty(),
+            diagnosticsAfterPreview = targetAuthorityLease?.retainedDiagnosticsStaged
+                ?.map(JavaMoveClassRetainedDiagnosticIdentity::toDiagnostic).orEmpty(),
             warnings = warnings,
             riskLevel = if (frameworkAssessment.hasFindings) RiskLevel.HIGH else RiskLevel.MEDIUM,
-            evidence = if (jdtReferencePaths != null) RefactoringEvidence.JDT_BINDING else RefactoringEvidence.LEXICAL_FALLBACK,
+            evidence = if (semanticEligible) RefactoringEvidence.JDT_BINDING else RefactoringEvidence.LEXICAL_FALLBACK,
+            authorityLease = targetAuthorityLease?.coreLease,
         )
+        return JavaMoveClassPreview(plan, targetAuthorityLease)
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private fun findJdtReferencePaths(
-        snapshot: ProjectSnapshot,
-        symbolFqn: String,
-        declarationPath: Path,
-    ): Set<Path>? {
-        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
-        if (analysis.warnings.isNotEmpty()) return null
-        val target = analysis.symbols.singleOrNull { symbol ->
-            symbol.qualifiedName == symbolFqn && symbol.kind in JDT_MOVEABLE_KINDS
-        } ?: return null
-        val bindingKey = target.bindingKey ?: return null
-        return analysis.references
-            .asSequence()
-            .filter { it.bindingKey == bindingKey && it.path != declarationPath }
-            .map { it.path }
-            .toSet()
+    private fun bindingDerivedReferenceEdits(
+        file: SourceFile,
+        references: List<JdtJavaSemanticReference>,
+        oldFqn: String,
+        newFqn: String,
+        oldPackage: String,
+        targetPackage: String,
+    ): List<TextEdit> {
+        val exactReferences = references.filter { it.path == file.path && !it.recovered }
+        if (exactReferences.isEmpty()) return emptyList()
+        val content = file.content
+        val filePackage = JavaPackageUtil.extractPackage(content)
+        val oldImports = JavaLexer.extractImports(content).filter { !it.isStatic && it.name == oldFqn }
+        val fqnRanges = JavaLexer.findOccurrences(content, oldFqn)
+        val edits = linkedMapOf<Pair<SourceRange, String>, TextEdit>()
+        exactReferences.forEach { reference ->
+            val referenceStart = TextEdits.offsetOf(content, reference.sourceRange.start)
+            val referenceEnd = TextEdits.offsetOf(content, reference.sourceRange.end)
+            val boundImport = oldImports.singleOrNull { import ->
+                referenceStart >= import.startOffset && referenceEnd <= import.endOffset
+            }
+            if (boundImport != null) {
+                val range = if (filePackage == targetPackage) {
+                    TextEdits.rangeForOffset(content, boundImport.startOffset, boundImport.endOffset - boundImport.startOffset)
+                } else {
+                    val nameStart = content.indexOf(boundImport.name, boundImport.startOffset)
+                    TextEdits.rangeForOffset(content, nameStart, boundImport.name.length)
+                }
+                val replacement = if (filePackage == targetPackage) "" else newFqn
+                edits.putIfAbsent(range to replacement, TextEdit(range, replacement))
+                return@forEach
+            }
+            val boundFqn = fqnRanges.singleOrNull { range ->
+                referenceStart >= range.first && referenceEnd <= range.last + 1
+            }
+            if (boundFqn != null) {
+                val range = TextEdits.rangeForOffset(content, boundFqn.first, boundFqn.last - boundFqn.first + 1)
+                edits.putIfAbsent(range to newFqn, TextEdit(range, newFqn))
+            }
+        }
+        if (filePackage == oldPackage && oldPackage.isNotEmpty() && oldImports.isEmpty()) {
+            val insertOffset = insertImportOffset(content)
+            val position = TextEdits.positionForOffset(content, insertOffset)
+            val range = SourceRange(position, position)
+            edits.putIfAbsent(range to "import $newFqn;\n", TextEdit(range, "import $newFqn;\n"))
+        }
+        return edits.values.sortedWith(compareBy({ it.range.start.line }, { it.range.start.character }))
     }
+
+    private fun lexicalReferenceEdits(
+        file: SourceFile,
+        oldFqn: String,
+        newFqn: String,
+        oldPackage: String,
+        targetPackage: String,
+    ): List<TextEdit> {
+        val content = file.content
+        val filePackage = JavaPackageUtil.extractPackage(content)
+        val hasOldImport = content.contains("import $oldFqn;")
+        val hasFqn = content.contains(oldFqn)
+        if (!hasOldImport && !hasFqn) return emptyList()
+        val nowInSamePackage = filePackage == targetPackage
+        val edits = mutableListOf<TextEdit>()
+        val coveredOffsets = mutableSetOf<Int>()
+        if (hasOldImport) {
+            val importText = "import $oldFqn;"
+            val replacement = if (nowInSamePackage) "" else "import $newFqn;"
+            JavaLexer.findOccurrences(content, importText).forEach { range ->
+                edits += makeEdit(content, range, replacement)
+                range.forEach(coveredOffsets::add)
+            }
+        }
+        if (hasFqn) {
+            JavaLexer.findOccurrences(content, oldFqn).forEach { range ->
+                if (range.first !in coveredOffsets) edits += makeEdit(content, range, newFqn)
+            }
+        }
+        if (filePackage == oldPackage && oldPackage.isNotEmpty() && !nowInSamePackage && !hasOldImport) {
+            val insertOffset = insertImportOffset(content)
+            val position = TextEdits.positionForOffset(content, insertOffset)
+            edits += TextEdit(SourceRange(position, position), "import $newFqn;\n")
+        }
+        return edits.distinct().sortedWith(compareBy({ it.range.start.line }, { it.range.start.character }))
+    }
+
+    private data class JdtReferenceSelection(
+        val referencePaths: Set<Path>,
+        val semanticSelection: JavaMoveClassSemanticSelection,
+    )
 
     private fun rewritePackageDeclaration(file: SourceFile, oldPkg: String, newPkg: String): FileEdit.Modify {
         val content = file.content
@@ -261,13 +426,6 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             Symbol.Kind.ENUM,
             Symbol.Kind.RECORD,
             Symbol.Kind.ANNOTATION,
-        )
-        private val JDT_MOVEABLE_KINDS = setOf(
-            JdtJavaSemanticSymbolKind.CLASS,
-            JdtJavaSemanticSymbolKind.INTERFACE,
-            JdtJavaSemanticSymbolKind.ENUM,
-            JdtJavaSemanticSymbolKind.RECORD,
-            JdtJavaSemanticSymbolKind.ANNOTATION,
         )
     }
 }

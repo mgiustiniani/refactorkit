@@ -231,6 +231,15 @@ class AgentSimulationTest {
     @Test
     fun scenarioMoveClassToNewPackage() {
         val root = project(
+            "pom.xml" to """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>com.example</groupId>
+                  <artifactId>agent-move-test</artifactId>
+                  <version>1.0.0</version>
+                  <properties><maven.compiler.release>8</maven.compiler.release></properties>
+                </project>
+            """.trimIndent(),
             "src/main/java/com/example/UserService.java" to
                 "package com.example;\npublic class UserService {}\n",
             "src/main/java/com/example/Client.java" to

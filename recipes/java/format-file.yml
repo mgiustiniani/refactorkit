@@ -1,0 +1,13 @@
+id: java.format-file
+name: Format Java source file
+language: java
+parameters:
+  file:
+    type: string
+    description: Source file path (workspace-relative)
+steps:
+  - type: formatFile
+    file: "{{ file }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

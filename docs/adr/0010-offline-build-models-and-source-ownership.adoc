@@ -48,7 +48,19 @@ also prerequisites for Kotlin, Scala, Groovy, and Clojure interoperability.
 . An unavailable build model, classpath, or source level produces one typed root
   diagnostic per affected module. Derivative JDT type-resolution noise is
   suppressed by default and remains available only through explicit verbose
-  diagnostics. Genuine syntax errors remain visible.
+  diagnostics. Genuine syntax errors remain visible. The operation-specific
+  authority refinement in
+  link:0012-authoritative-release-aware-java-maven-diagnostics.adoc[ADR 0012]
+  may admit managed eligibility for a qualified Maven `moveClass`. ADR 0012
+  keeps full-reactor structure, descriptor closure over selected
+  nodes/projections, ownership, platform and provider facts, and candidate
+  exclusion global while scoping
+  per-missing-binary and retained-diagnostic proof to the complete before/staged
+  operation authority closure, including its bounded sidecar-free
+  lookup-protection row.
+  That refinement does not remove the typed root or global unavailable state and
+  does not change this decision's offline default or plugin-free discovery
+  boundary.
 . Package/FQCN identity and module/source-root ownership are independent.
   `moveSourceRoot` preserves bytes, package declarations, imports, and FQCNs and
   emits only whole-transaction file renames through `PatchEngine`.

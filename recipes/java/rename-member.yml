@@ -1,0 +1,17 @@
+id: java.rename-member
+name: Rename Java member (method or field)
+language: java
+parameters:
+  symbol:
+    type: string
+    description: Fully qualified member symbol (e.g. com.example.MyClass#myMethod)
+  newName:
+    type: string
+    description: New member name
+steps:
+  - type: renameMember
+    symbol: "{{ symbol }}"
+    newName: "{{ newName }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

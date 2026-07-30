@@ -16,12 +16,20 @@ import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.java.JavaChangeSignaturePlanner
+import org.refactorkit.java.JavaCreateMavenModulePlanner
+import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaGeneratedSourcePolicy
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
+import org.refactorkit.java.JavaRenameMavenModulePlanner
+import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -165,6 +173,13 @@ class RecipeEngine(
                 StepResult("renameClass", plan)
             }
 
+            "renameMember" -> {
+                val symbol = step.params["symbol"] ?: error("renameMember step requires 'symbol'")
+                val newName = step.params["newName"] ?: error("renameMember step requires 'newName'")
+                val plan = JavaRenameMemberPlanner(adapter).preview(snap, symbol, newName)
+                StepResult("renameMember", plan)
+            }
+
             "moveClass" -> {
                 val symbol = step.params["symbol"] ?: error("moveClass step requires 'symbol'")
                 val targetPkg = step.params["to"] ?: error("moveClass step requires 'to'")
@@ -202,6 +217,81 @@ class RecipeEngine(
                 val force = step.params["force"]?.toBoolean() ?: false
                 val plan = JavaSafeDeletePlanner(adapter).preview(snap, symbol, force)
                 StepResult("safeDelete", plan)
+            }
+
+            "extractMethod" -> {
+                val file = step.params["file"]?.let(Paths::get) ?: error("extractMethod step requires 'file'")
+                val startLine = step.params["startLine"]?.toInt() ?: error("extractMethod step requires 'startLine'")
+                val endLine = step.params["endLine"]?.toInt() ?: error("extractMethod step requires 'endLine'")
+                val methodName = step.params["methodName"] ?: error("extractMethod step requires 'methodName'")
+                val plan = JavaExtractMethodPlanner().preview(snap, file, startLine, endLine, methodName)
+                StepResult("extractMethod", plan)
+            }
+
+            "changeSignature" -> {
+                val operation = step.params["operation"] ?: error("changeSignature step requires 'operation'")
+                val symbol = step.params["symbol"] ?: error("changeSignature step requires 'symbol'")
+                val name = step.params["name"]
+                val newName = step.params["newName"]
+                val type = step.params["type"]
+                val default = step.params["default"]
+                val order = step.params["order"]
+                val planner = JavaChangeSignaturePlanner(adapter)
+                val plan = when (operation) {
+                    "rename-parameter" -> planner.previewRenameParameter(snap, symbol, name!!, newName!!)
+                    "add-parameter" -> planner.previewAddParameter(snap, symbol, type!!, name!!, default!!)
+                    "remove-parameter" -> planner.previewRemoveParameter(snap, symbol, name!!)
+                    "reorder-parameters" -> planner.previewReorderParameters(snap, symbol, order!!.split(',').map(String::trim))
+                    else -> error("Unknown changeSignature operation: '$operation'")
+                }
+                StepResult("changeSignature", plan)
+            }
+
+            "formatFile" -> {
+                val file = step.params["file"]?.let(Paths::get) ?: error("formatFile step requires 'file'")
+                val plan = JavaFormatFilePlanner().preview(snap, file)
+                StepResult("formatFile", plan)
+            }
+
+            "moveSourceRoot" -> {
+                val from = step.params["from"]?.let(Paths::get) ?: error("moveSourceRoot step requires 'from'")
+                val to = step.params["to"]?.let(Paths::get) ?: error("moveSourceRoot step requires 'to'")
+                val plan = JavaMoveSourceRootPlanner(adapter).preview(snap, from, to)
+                StepResult("moveSourceRoot", plan)
+            }
+
+            "moveAcrossMavenModules" -> {
+                val from = step.params["from"]?.let(Paths::get) ?: error("moveAcrossMavenModules step requires 'from'")
+                val to = step.params["to"]?.let(Paths::get) ?: error("moveAcrossMavenModules step requires 'to'")
+                val plan = JavaMoveAcrossMavenModulesPlanner(adapter).preview(snap, from, to, emptyList())
+                StepResult("moveAcrossMavenModules", plan)
+            }
+
+            "importExternalClass" -> error(
+                "importExternalClass step requires CLI integration (refactorkit-web-importer). " +
+                "Use: refactorkit java import-class --target-package <pkg> (--stdin|--file <path>)"
+            )
+
+            "changeParameterType" -> {
+                val symbol = step.params["symbol"] ?: error("changeParameterType step requires 'symbol'")
+                val name = step.params["name"] ?: error("changeParameterType step requires 'name'")
+                val type = step.params["type"] ?: error("changeParameterType step requires 'type'")
+                val planner = JavaChangeSignaturePlanner(adapter)
+                val plan = planner.previewChangeParameterType(snap, symbol, name, type)
+                StepResult("changeParameterType", plan)
+            }
+            "createMavenModule" -> {
+                val moduleName = step.params["moduleName"] ?: error("createMavenModule step requires 'moduleName'")
+                val parentPom = step.params["parentPom"]?.let(Paths::get) ?: error("createMavenModule step requires 'parentPom'")
+                val plan = JavaCreateMavenModulePlanner().preview(snap, moduleName, parentPom)
+                StepResult("createMavenModule", plan)
+            }
+            "renameMavenModule" -> {
+                val oldModuleDir = step.params["oldModuleDir"] ?: error("renameMavenModule step requires 'oldModuleDir'")
+                val newModuleDir = step.params["newModuleDir"] ?: error("renameMavenModule step requires 'newModuleDir'")
+                val newArtifactId = step.params["newArtifactId"]
+                val plan = JavaRenameMavenModulePlanner().preview(snap, oldModuleDir, newModuleDir, newArtifactId)
+                StepResult("renameMavenModule", plan)
             }
 
             "runDiagnostics" -> {

@@ -66,11 +66,17 @@ class KotlinJvmMoveDeclarationPlanner(
             ?: return refused(snapshot, "kotlin.moveTargetMissing", "Kotlin move target is absent from the compiler catalogue")
         val declaration = catalogue.declarations[target.id]
             ?: return refused(snapshot, "kotlin.moveIdentityUnavailable", "Kotlin move target lacks JVM identity evidence")
-        if (target.kind !in TYPE_KINDS || declaration.visibility != KotlinDeclarationVisibility.PUBLIC ||
+        // Companion objects are OBJECT kind with '$Companion' in JVM identity
+        val isCompanion = target.kind == Symbol.Kind.OBJECT && '\$' in declaration.jvmIdentity
+        if (!isCompanion && (target.kind !in TYPE_KINDS || declaration.visibility != KotlinDeclarationVisibility.PUBLIC ||
             declaration.jvmIdentity != declaration.jvmOwner || declaration.jvmDescriptor.isNotEmpty() ||
-            '$' in declaration.jvmIdentity) return refused(
+            '\$' in declaration.jvmIdentity)) return refused(
             snapshot, "kotlin.moveDeclarationUnsupported",
-            "Initial Kotlin move supports one public top-level JVM type",
+            "Initial Kotlin move supports one public top-level JVM type or companion object",
+        )
+        if (isCompanion && declaration.visibility == KotlinDeclarationVisibility.PRIVATE) return refused(
+            snapshot, "kotlin.moveCompanionPrivate",
+            "Companion object move requires non-private visibility",
         )
         val oldPackage = declaration.jvmIdentity.substringBeforeLast('.', "")
         if (oldPackage.isEmpty()) return refused(

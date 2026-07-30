@@ -1,0 +1,18 @@
+id: java.rename-class
+name: Rename Java class
+language: java
+parameters:
+  symbol:
+    type: string
+    description: Fully qualified class name to rename
+  newName:
+    type: string
+    description: New simple class name (not fully qualified)
+steps:
+  - type: renameClass
+    symbol: "{{ symbol }}"
+    newName: "{{ newName }}"
+  - type: organizeImports
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

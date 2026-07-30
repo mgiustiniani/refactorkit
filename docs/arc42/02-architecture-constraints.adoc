@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, needs-review for priority and completeness.
+Status: implementation-informed, with a confirmed P0 target-scoped Maven move-class authority priority; needs-review for remaining priority and completeness. Seven bounded Maven move-class requirement definitions expanding to twelve cases are implemented and validated: CLI lexical-fallback refusal without residue (`005`), the complete `AVAILABLE` reverse-observer warning boundary (`006`), one synthetic closure-missing `OFFLINE_MISSING` apply/rollback row (`007`), explicit transitive-test-scope preservation (`009`), descriptor-closed selector pruning plus alternate selected-path missing-POM refusal (`010`), RefactorKit-owned sidecar-free ordinary selected-JAR absence with under-lock drift refusal (`011`), and six independent selected-descriptor `MISSING`/`MALFORMED`/`DRIFTED` refusals (`012`). The `012` cases require engine-captured hash-bound descriptor context and parsed relocation/model identity, refuse before semantic selection, lock, and WAL, and preserve recorded state without binary-absence downgrade or managed residue. REQ-JAVA-MAVEN-MOVE-AUTH-008 remains executable and absent. Separately, the exact Magrathea request at commit `a48e3c06` is CLI-qualified on Linux/JDK 21 after `010`; this dated field result does not qualify an integration/native matrix or general support and did not depend on `011` or `012`.
 
 == Technical Constraints
 
@@ -81,9 +81,9 @@ Status: implementation-informed, needs-review for priority and completeness.
 |planned release constraint; needs-review
 
 |C-TECH-015
-|RefactorKit is the definitive semantic diagnostics and refactoring authority for managed Java operations. Maven compile/test is supplementary evidence only and must never excuse a false RefactorKit diagnostic; an incomplete required environment yields typed source-set unavailability rather than guessed diagnostics or mutation authority.
-|ADR 0012; `RPK-JAVA-DIAG-001..007`.
-|confirmed architecture; planned, product-critical
+|RefactorKit is the definitive semantic diagnostics and refactoring authority for managed Java operations. Maven compile/test is supplementary evidence only and must never excuse a false RefactorKit diagnostic. Global source-set authority still requires every affected environment to be available and reports incomplete inputs as typed unavailability. Only the qualified target-scoped Maven `moveClass` mode in ADR 0012 may admit enumerated leaf external `OFFLINE_MISSING` inputs, without hiding the global unavailable state and only after its stronger operation-specific proof passes.
+|ADR 0012; `RPK-JAVA-DIAG-001..007`; `RPK-JAVA-MOVE-002..004`; bounded REQ-JAVA-MAVEN-MOVE-AUTH-007/011/012 evidence.
+|confirmed architecture; bounded target-scoped rows implementation-informed, global authority planned and product-critical
 
 |C-TECH-016
 |The caller-declared full Maven reactor root remains workspace and effective-model authority. Module targeting filters results only after full-reactor model, dependency-closure, and impact-closure construction. No implicit ancestor, sibling, upward, or outward discovery may widen that workspace.
@@ -99,6 +99,31 @@ Status: implementation-informed, needs-review for priority and completeness.
 |Only safely declared, already materialized generated sources may enter analysis. Discovery must not implicitly execute Maven or wrappers, lifecycle goals, plugins, annotation processors, credential helpers, Maven settings credentials, or other build code. Unnamed/classpath Maven reactors are qualified first; named JPMS/module-path reactors remain typed unsupported until a complete dedicated slice is accepted.
 |ADRs 0010-0012; `RPK-JAVA-DIAG-006..007`.
 |confirmed architecture; planned
+
+|C-TECH-019
+|Managed same-module Maven `moveClass` may use target-scoped authority only when full-reactor structural evidence remains complete, current, unambiguous, and hash-bound. Every active reactor POM is mandatory. For every active module's main/test projection, external traversal is descriptor-closed over selected nodes: each selected external node has complete effective POM/parent/BOM/management/mediation/relocation inputs, and every outgoing declaration has a hash-bound `SELECTED` or exact scope/optional/exclusion-pruned classification. A deterministically pruned external edge contributes no child node or subtree and requires no child POM/JAR on that path; an alternate selected path restores those requirements. Missing descriptor facts on an included edge or any ambiguity that can change observer inclusion/exclusion blocks. Module/source-set ownership, source/materialized-generated-root inventory, full-reactor candidate audit/exclusion, Java platform, and provider facts also remain global. Per-missing-binary negative-presence evidence is required only for the before/staged operation authority closure; outside-closure `OFFLINE_MISSING` remains visible but needs no operation inventory after exclusion is proved.
+|ADRs 0010 and 0012; `RPK-JAVA-MOVE-002`; bounded REQ-JAVA-MAVEN-MOVE-AUTH-007/009/010/011/012 evidence; dated Magrathea field evidence at `a48e3c06`.
+|confirmed P0 architecture; bounded `007`/`009`/`010`/`011` plus six-case `012` implementation-informed; the exact Magrathea CLI field request is qualified on Linux/JDK 21, while general, integration-surface, and native-matrix acceptance remain absent/planned
+
+|C-TECH-020
+|For target-scoped Maven `moveClass`, an independent bounded lexical Java inventory is a completeness veto only. Every old-FQN or matching simple-name candidate in a type-capable Java position must be hash-bound and classified exactly once by JDT as `BOUND_TARGET`, `BOUND_OTHER`, or `UNRESOLVED`; every target-relevant or relevance-uncertain `UNRESOLVED` candidate blocks. Only exact `BOUND_TARGET` ranges may select edits. In implemented-and-validated ordinary missing-binary row `011`, the exact selected source declaration plus Java target-name lookup protection covers every target occurrence: either an exact non-static single-type import of the target FQN protects a simple type use, or the use is the exact target FQN. Unprotected simple names, relevant type/static wildcard or unresolved-static ambiguity, recovered/problem evidence, candidate/diagnostic/edit overlap, changed retained-diagnostic identity, new or changed errors, or evidence drift block. Retained baseline diagnostics require exact unchanged mapped before/staged identity and positive non-concealment proof; staged analysis preserves `BOUND_OTHER` and resolves the moved target and its uses to the new identity.
+|ADRs 0008 and 0012; `RPK-JAVA-MOVE-003..004`; Java target-name lookup protection reviewed 2026-07-29; bounded REQ-JAVA-MAVEN-MOVE-AUTH-007/009/011 evidence.
+|confirmed P0 architecture; bounded candidate-total synthetic, explicit-scope, and ordinary sidecar-free selected-leaf rows implementation-informed; the broader uncertainty matrix under `008` remains absent
+
+|C-TECH-021
+|`LEXICAL_FALLBACK` is review-only and always ineligible for managed write. Lexical discovery never supplies positive binding or mutation evidence. `PatchEngine` must reject lexical fallback before write-ahead-log creation regardless of approval, force flags, recipes, or protocol translation. When semantic authority is unavailable, guided fallback is a distinct non-managed result: it is not a `PatchPlan`, has no applyable plan ID, WAL record, transaction, or RefactorKit rollback claim, and no surface may expose it as applyable.
+|ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-004..005` and `007`; `PatchEngineTest.refusesReviewOnlyLexicalFallbackBeforeJournalCreation`.
+|confirmed architecture; lexical pre-WAL refusal implementation-informed, guided result planned
+
+|C-TECH-022
+|Effective Maven dependency-scope derivation must preserve declaration provenance. An explicitly declared transitive `test` scope is retained; a dependency-management scope default may supply scope only when that dependency declaration omits it and must not overwrite the explicit value.
+|ADR 0012; `RPK-JAVA-DIAG-002..003`; Maven source-set authority.
+|confirmed architecture; implemented and validated for bounded REQ-JAVA-MAVEN-MOVE-AUTH-009, while general diagnostics-authority acceptance remains planned
+
+|C-TECH-023
+|When derived transitive scope, transitive optionality, or an exact inherited path exclusion can decide an external edge without child facts, RefactorKit must classify and hash-bind that decision before child version/range, repository, POM/effective-model, or JAR lookup. Type/classifier are normalized management and variant identity, never standalone prune reasons. Ambiguous selection fails closed, and a selected edge with a missing POM, parent, BOM, management, mediation, or relocation input remains structurally unavailable. No caller-attested classpath, plugin execution, Maven settings credential, implicit network lookup, or lexical evidence may fill the gap.
+|Accepted ADR 0012 descriptor-closed graph clarification; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-010/012.
+|confirmed architecture; bounded selector-pruning/alternate-selected-path behavior and six selected-descriptor loss/drift cases implementation-informed; generalization remains open
 |===
 
 == Architectural Boundary Constraints
@@ -178,4 +203,9 @@ Status: implementation-informed, needs-review for priority and completeness.
 |The `RPK-JAVA-DIAG-001..007` epic is a product-critical release prerequisite. Acceptance must prove exact release platforms, full-reactor main/test visibility, source-set availability roots, exact before/staged/after/rollback evidence, non-executable discovery, and the permanent native packaged fixture before architecture or product docs claim definitive Java/Maven diagnostics implemented.
 |`docs/requirements/java-maven-authoritative-diagnostics.md`; ADR 0012.
 |confirmed architecture; planned release blocker
+
+|C-PROC-009
+|The P0 `RPK-JAVA-MOVE-001..007` acceptance must include a permanent offline, plugin-free reactor with one aggregator and 20 active non-aggregator modules, at least three dependency levels, direct/transitive main observers, a test-only Java Cucumber step-definition observer, unrelated and same-name decoys, a local external dependency, and a materialized generated root. Its positive `OFFLINE_MISSING` variants must prove full-reactor active-POM completeness and descriptor closure over selected external nodes, hash-bound selected/pruned outgoing-edge classifications, candidate-exclusion completeness, closure-scoped missing-binary evidence, candidate-total `BOUND_TARGET`/`BOUND_OTHER`/`UNRESOLVED` classification, exact unchanged non-concealing baseline diagnostics, zero introduced errors, one managed transaction, and byte-exact rollback. Independent rows must prove that deterministically scope/optional/exclusion-pruned child descriptors are not looked up on that path, that an alternate selected path restores descriptor/binary requirements, that a fixed-release Maven-2-layout selected graph leaf with a present complete POM closure and absent JAR can use RefactorKit-owned negative presence without an invented content hash, and that loss of an included POM/parent/BOM still refuses. Independent negative variants must also fail closed for target-relevant uncertainty, lookup ambiguity, diagnostic-identity mismatch, structural incompleteness, or evidence drift. The private field project is qualification input, not a permanent test dependency.
+|`RPK-JAVA-MOVE-006`; accepted ADR 0012; field report `SRC-2026-07-29-004` plus dated 2026-07-30 Magrathea qualification at `a48e3c06`; bounded implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-007/009/010/011/012; executable absent `008`.
+|confirmed P0 requirement; bounded synthetic, explicit-scope, descriptor-pruning/alternate-selected-POM, ordinary sidecar-free, and six-case selected-descriptor rows implementation-informed; the exact Magrathea CLI request is field-qualified on Linux/JDK 21, while remaining negatives, full positive apply, integration-surface coverage, and native-matrix qualification remain release-blocking
 |===

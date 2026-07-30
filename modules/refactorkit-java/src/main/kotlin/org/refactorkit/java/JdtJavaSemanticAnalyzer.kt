@@ -215,6 +215,7 @@ class JdtJavaSemanticAnalyzer {
                     sourceRange = raw.sourceRange,
                     bindingKey = canonicalBindingKey,
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                    recovered = raw.recovered,
                 )
             }
         }
@@ -230,6 +231,7 @@ class JdtJavaSemanticAnalyzer {
                     symbolQualifiedName = raw.symbolQualifiedName,
                     isImport = raw.isImport,
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                    recovered = raw.recovered,
                 )
             }
         }
@@ -406,6 +408,7 @@ class JdtJavaSemanticAnalyzer {
                     startPosition = node.name.startPosition,
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
+                    bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
                     documentation = node.javadoc?.toString(),
                 )
@@ -431,6 +434,7 @@ class JdtJavaSemanticAnalyzer {
                     startPosition = node.name.startPosition,
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
+                    bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
                     documentation = node.javadoc?.toString(),
                 )
@@ -455,6 +459,7 @@ class JdtJavaSemanticAnalyzer {
                     startPosition = node.name.startPosition,
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
+                    bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
                     documentation = node.javadoc?.toString(),
                 )
@@ -479,6 +484,7 @@ class JdtJavaSemanticAnalyzer {
                     startPosition = node.name.startPosition,
                     bindingQualifiedName = binding?.qualifiedName,
                     bindingKey = binding?.key,
+                    bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
                     documentation = node.javadoc?.toString(),
                 )
@@ -507,6 +513,7 @@ class JdtJavaSemanticAnalyzer {
                     startPosition = node.name.startPosition,
                     bindingQualifiedName = null,
                     bindingKey = binding?.key,
+                    bindingRecovered = binding?.isRecovered == true,
                     memberSignature = signature,
                     hoverSignature = "${node.type} ${node.name.identifier}()",
                     documentation = node.javadoc?.toString(),
@@ -530,6 +537,7 @@ class JdtJavaSemanticAnalyzer {
                     startPosition = node.name.startPosition,
                     bindingQualifiedName = null,
                     bindingKey = binding?.key,
+                    bindingRecovered = binding?.isRecovered == true,
                     memberSignature = signature,
                     hoverSignature = methodHoverSignature(node, binding),
                     documentation = node.javadoc?.toString(),
@@ -642,6 +650,7 @@ class JdtJavaSemanticAnalyzer {
                         startPosition = fragment.name.startPosition,
                         bindingQualifiedName = null,
                         bindingKey = binding?.key,
+                        bindingRecovered = binding?.isRecovered == true,
                         memberSignature = null,
                         hoverSignature = "${node.type} ${fragment.name.identifier}",
                         documentation = node.javadoc?.toString(),
@@ -663,6 +672,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = declarationBindingKey(binding),
                     symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = true,
+                    recovered = binding?.isRecovered == true,
                 )
                 return false
             }
@@ -682,6 +692,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = declarationBindingKey(binding),
                     symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = false,
+                    recovered = binding.isRecovered,
                 )
                 return true
             }
@@ -717,6 +728,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = declarationBindingKey(binding),
                     symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = false,
+                    recovered = binding?.isRecovered == true,
                 )
                 return true
             }
@@ -989,6 +1001,7 @@ class JdtJavaSemanticAnalyzer {
         startPosition: Int,
         bindingQualifiedName: String?,
         bindingKey: String?,
+        bindingRecovered: Boolean = false,
         memberSignature: String?,
         hoverSignature: String? = null,
         documentation: String? = null,
@@ -1019,6 +1032,7 @@ class JdtJavaSemanticAnalyzer {
             } else {
                 JdtJavaSemanticEvidence.JDT_BINDING
             },
+            recovered = bindingRecovered,
         )
     }
 
@@ -1135,6 +1149,7 @@ class JdtJavaSemanticAnalyzer {
         val bindingKey: String?,
         val symbolQualifiedName: String?,
         val isImport: Boolean,
+        val recovered: Boolean,
     )
 }
 
@@ -1218,6 +1233,7 @@ data class JdtJavaSemanticSymbol(
     val sourceRange: SourceRange,
     val bindingKey: String?,
     val evidence: JdtJavaSemanticEvidence,
+    val recovered: Boolean = false,
 )
 
 data class JdtJavaSemanticReference(
@@ -1230,6 +1246,7 @@ data class JdtJavaSemanticReference(
     val sourceRange: SourceRange,
     val bindingKey: String?,
     val evidence: JdtJavaSemanticEvidence,
+    val recovered: Boolean = false,
 )
 
 data class JdtJavaSemanticBindingUse(
@@ -1241,6 +1258,7 @@ data class JdtJavaSemanticBindingUse(
     val symbolQualifiedName: String?,
     val isImport: Boolean,
     val evidence: JdtJavaSemanticEvidence,
+    val recovered: Boolean = false,
 ) {
     /** API 0.2 compatibility constructor retained while qualified binary identity is additive. */
     constructor(
@@ -1251,7 +1269,7 @@ data class JdtJavaSemanticBindingUse(
         bindingKey: String,
         isImport: Boolean,
         evidence: JdtJavaSemanticEvidence,
-    ) : this(simpleName, path, line, sourceRange, bindingKey, null, isImport, evidence)
+    ) : this(simpleName, path, line, sourceRange, bindingKey, null, isImport, evidence, false)
 }
 
 enum class JdtJavaDiagnosticCategory {

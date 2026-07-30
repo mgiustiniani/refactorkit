@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, needs-review. The `RPK-JAVA-DIAG-001..007` Java/Maven diagnostics-authority epic is active and product-critical; first platform/module-filter rows are implemented, but the epic is not claimed complete. No Gherkin `.feature` files were found in the repository during this baseline. This appendix therefore records requirements/use cases from repository documentation, module evidence, samples, recipes, golden tests, and CI. It does not claim Gherkin coverage where none exists.
+Status: implementation-informed, needs-review. The `RPK-JAVA-DIAG-001..007` Java/Maven diagnostics-authority epic remains active and product-critical. The `RPK-JAVA-MOVE-001..007` Maven move-class managed-apply epic is a confirmed P0 architecture priority. Current repository Gherkin contains twelve requirement-bearing definitions and 22 executable cases after expansion of two six-row Scenario Outlines: REQ-JAVA-MAVEN-MOVE-AUTH-001 through `004` and `008` are explicitly `@absent`; `005` through `007` and `009` through `012` are `@implemented-and-validated`. That reconciles to seven validated definitions expanding to 12 validated cases and five absent definitions expanding to ten absent cases. Bounded `010` validates descriptor-closed selector pruning and alternate selected-path missing-POM refusal. Bounded `011` validates one fixed-release, non-snapshot, unclassified ordinary selected local-repository `jar` leaf with complete present hash-bound descriptor/leaf proof and an absent binary; RefactorKit-owned sidecar-free no-follow negative evidence; no invented JAR hash or provided-type inventory; candidate-total JDT/target-name lookup gates with zero unresolved/unattributed diagnostics; repeat eligible `JDT_BINDING` previews; exactly one transaction and exact rollback; and three under-lock pre-WAL drift refusals without mutation. Implemented-and-validated outline `012` independently covers six selected-descriptor conditions: missing selected leaf POM, malformed selected-POM model, missing required parent, drifted imported BOM, drifted dependency-management/mediation declaration, and missing parsed descriptor identity that proves relocation/model parsing. Each engine-captured context hash-binds the selected coordinate, descriptor paths/layers/content, and parsed identity before the independent mutation; each case returns stable structural `REFUSED`/`INELIGIBLE` guidance before semantic edit selection, applyable plan ID, lock, or WAL, without a missing-binary/graph-leaf downgrade, `.refactorkit` residue, or change to the recorded workspace, descriptor facts, evidence records, or hashes. Separately, the exact Magrathea request at commit `a48e3c06` is CLI-qualified on Linux/JDK 21 after `010`, with `JDT_BINDING`, four affected files, one transaction, and exact source-tree hash restoration; this field result did not depend on `011` or `012` and does not qualify an integration/native matrix or general authority. Full positive/general apply remains open.
 
 == Requirement Sources
 
@@ -26,6 +26,14 @@ Status: implementation-informed, needs-review. The `RPK-JAVA-DIAG-001..007` Java
 |Normative repository contract for exact release platforms, full-reactor source-set visibility, typed availability, change-specific authority, secure discovery, and permanent qualification.
 |planned, product-critical, release-blocking
 
+|LLM Wiki requirement `refactorkit-java-maven-move-class-apply-authority` and concepts `target-scoped-java-semantic-authority`, `java-target-name-lookup-protection`, `maven-descriptor-closed-dependency-graph`, and `ordinary-maven-repository-missing-binary-evidence` (`RPK-JAVA-MOVE-001..007`)
+|Reviewed domain contract for full-reactor active-POM authority, descriptor closure over selected external nodes, hash-bound outgoing-edge classification, closure-scoped missing-binary enumeration, candidate-total JDT binding, target-name lookup protection, exact retained-diagnostic identity/non-concealment, staged/lease gates, managed eligibility, and permanent acceptance. The initial contract was reviewed 2026-07-29; the descriptor-closed and ordinary-absence update plus primary Maven/Resolver sources `SRC-2026-07-30-001..007` were reviewed 2026-07-30 against base commit `c1d70fc51ef84fa25baaab5678dece69f8ce739a`. This is confirmed architecture/research input, not implementation evidence.
+|confirmed P0 architecture priority; bounded `007`/`009`/`010`/`011` plus six-case `012` implementation-informed; executable `008` absent
+
+|LLM Wiki source packet `SRC-2026-07-29-004` and dated observation `Descriptor-closed Maven traversal qualifies reported Magrathea move`
+|Field evidence chronology: the initial report was reviewed 2026-07-29. A 2026-07-30 follow-up used the current source-built CLI on Linux/JDK 21 against clean Magrathea consumer commit `a48e3c06629acf7032d0f28a0f8bdc5426442c7c` after `010`; the four-file `InMemoryRevocationRepository` move preview had `JDT_BINDING`, applied in one transaction, and rollback restored the exact source-tree hash. This is commit/request/surface/platform-bounded field evidence, not a requirement, permanent fixture, integration/native matrix, or general implementation claim; it did not require `011` or `012`.
+|implementation-informed field evidence for one CLI/Linux/JDK-21 request; broader qualification needs review
+
 |`modules/*`
 |Implementation and test evidence.
 |implementation-informed
@@ -46,10 +54,12 @@ Status: implementation-informed, needs-review. The `RPK-JAVA-DIAG-001..007` Java
 |Build/test/package/smoke validation pipeline.
 |implementation-informed
 
-|Gherkin `.feature` files
-|Executable BDD requirements.
-|not found
+|`features/java-maven-move-class-apply-authority.feature`
+|Executable Story BDD backlog for Maven move-class semantic preview, managed apply and rollback, observer discrimination, closure-scoped JDT warning authority, authority-loss guidance, cross-surface lexical-fallback refusal, zero-residue CLI refusal, candidate-total `OFFLINE_MISSING` authority, fail-closed uncertainty/drift handling, explicit transitive-test-scope preservation, descriptor-closed selector pruning before child lookup, alternate-path selected-POM refusal, RefactorKit-owned ordinary selected-JAR negative-presence authority with under-lock drift refusal, and six selected-descriptor loss/drift cases requiring structural pre-lock/pre-WAL refusal without a binary-absence downgrade.
+|12 requirement-bearing definitions and 22 example-expanded executable cases; 5 IDs effectively `@absent`, 7 `@implemented-and-validated`; separate tagged runs validate REQ-JAVA-MAVEN-MOVE-AUTH-005 through `007` and `009` through `012`, with `012` expanding to six validated cases
 |===
+
+The external research and target-scoped concepts above were reviewed against RefactorKit base commit `c1d70fc51ef84fa25baaab5678dece69f8ce739a`; bounded implementation claims rely separately on dated mutable working-tree evidence. The 2026-07-30 clarification defines full-reactor graph completeness as descriptor-closed over selected nodes: every active reactor POM remains mandatory, every selected external node needs complete effective descriptor closure, and every outgoing declaration/classification is hash-bound. Bounded `010` validates the prune/alternate-selected-path boundary; bounded `011` independently validates the ordinary sidecar-free selected-`jar` row and its three under-lock drift gates; and six-case dual-classified outline `012` validates fail-closed `MISSING`, `MALFORMED`, and `DRIFTED` selected-descriptor outcomes with parsed relocation/model identity proof and stable recorded evidence. The follow-up Magrathea field observation is separately implementation-informed for consumer commit `a48e3c06` through the source-built CLI on Linux/JDK 21 after `010`; it is not architecture research promoted into a requirement, did not require `011` or `012`, and does not establish integration/native-matrix or general qualification.
 
 == Use-case Overview Diagram
 
@@ -170,9 +180,9 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-JAVA-MOVE-CLASS
 |Move Java class
 |Developer, Agent
-|Move class file, update package declaration/imports/FQN references where supported.
-|Golden test, planner tests.
-|implementation-informed
+|For the first accepted same-module/source-set Maven `moveClass` shape, keep every active reactor POM plus descriptor closure over selected external nodes, hash-bound selected/pruned outgoing-edge classifications, ownership, platform/provider, and candidate-exclusion authority global while limiting selected-missing-binary and retained-diagnostic evidence to the before/staged operation closure. A deterministic derived-scope/optional/exclusion prune removes the child/subtree and precedes child lookup when child facts cannot change selection; alternate selected paths restore descriptor/binary requirements, and included missing descriptors block. Implemented-and-validated `011` covers one RefactorKit-enumerated fixed-release, unclassified ordinary `jar` leaf in one explicit local Maven-2-layout repository: complete present selected-POM/effective-input and graph-leaf evidence, sidecar-free no-follow negative JAR presence, no invented hash/provided types, candidate-total exact JDT, target-name lookup, zero unattributed diagnostics, one-transaction/exact rollback, and three under-lock pre-WAL drift gates. Implemented-and-validated `012` independently covers missing or malformed selected leaf POM evidence, required parent loss, imported-BOM and management/mediation drift, and parsed relocation/model-identity proof loss; each is a structural pre-semantic/pre-lock/pre-WAL refusal and cannot become ordinary missing-binary authority. Caller classpath attestation, plugin execution, settings credentials, implicit network, and lexical promotion remain forbidden.
+|Current Gherkin has five `@absent` and seven validated IDs across 22 cases. Accepted ADR 0012 and the 20-module fixture govern existing bounded evidence. Executable `010` covers descriptor-closed selector pruning and alternate-path selected-POM refusal; executable `011` covers ordinary selected-leaf absence; executable `012` contributes six validated selected-descriptor loss/drift refusals with stable context and evidence hashes. A separate dated Linux/JDK-21 CLI field run qualifies only the exact Magrathea `a48e3c06` request after `010` and did not require `011` or `012`.
+|confirmed P0 target-scoped architecture; bounded `007`/`009`/`010`/`011` plus six-case `012` and one exact CLI field request implementation-informed; executable `008`, general, integration-surface, and native-matrix acceptance remain open
 
 |UC-JAVA-ORGANIZE-IMPORTS
 |Organize Java imports
@@ -280,6 +290,10 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |RPK-JAVA-DIAG-001 through RPK-JAVA-DIAG-007; antecedents RPK-PKG-007/009, REQ-TX-007, RPK-JVM-DIAG-002/003/005/006
 |`docs/requirements/java-maven-authoritative-diagnostics.md`; ADR 0012; chapters 6, 8, and 10. Epic status is active/product-critical; linked executable acceptance, not this mapping, is implementation evidence.
 
+|UC-JAVA-MOVE-CLASS
+|RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007; executable Gherkin REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012`
+|`features/java-maven-move-class-apply-authority.feature`; reviewed domain requirement/concepts and sources through 2026-07-30; ADRs 0002, 0008, and 0010-0012; chapters 2, 4, 8, 10, 11, and 12. The twelve repository Gherkin definitions (22 cases) map to this use case; seven definitions expanding to twelve cases have tagged evidence. Accepted ADR 0012 clarifies descriptor closure over selected nodes and hash-bound prune decisions while preserving closure-scoped ordinary missing-binary evidence, explicit dependency-declaration scope, and all JDT/lookup/diagnostic/lease gates. Executable implemented-and-validated `010` maps selector-pruned child descriptor independence and alternate-path selected-POM refusal to RPK-JAVA-MOVE-002/004/006/007. Executable implemented-and-validated `011` maps RefactorKit-owned ordinary selected-leaf absence to 002/003/004/006/007 and has a feature path, functional/non-functional tags, one case, and bounded tagged implementation evidence. Executable implemented-and-validated `012` maps six selected-descriptor POM/model/parent/BOM/management/mediation/relocation-proof failures to 002/004/006/007; its six inherited cases validate typed structural refusal, stable recorded context/hashes, and no binary-absence downgrade or residue. The dated Magrathea `a48e3c06` CLI/Linux/JDK-21 result is separate field evidence after `010`, not a Gherkin case or evidence that `011` or `012` was required.
+
 |UC-PREVIEW-REFACTOR
 |REQ-SAFE-001
 |`PatchPlan`, Java planners, MCP/LSP/daemon preview contracts.
@@ -359,6 +373,97 @@ The detailed normative requirements remain in `docs/requirements/java-maven-auth
 
 No row in this epic is marked implemented by this architecture phase. Existing precursor code, tests, or Maven successes must be evaluated separately and cannot satisfy the epic without the listed end-to-end authority evidence.
 
+== Java/Maven Move-Class Apply Authority Epic
+
+This architecture integration summarizes the reviewed requirement `refactorkit-java-maven-move-class-apply-authority` and related concepts; it does not copy the research into a competing normative body. Accepted ADR 0012 distinguishes globally complete source-set authority from narrower candidate-total Maven `moveClass` authority. Full-reactor graph completeness is descriptor-closed over selected nodes in every main/test projection: every active reactor POM is mandatory, every selected external node needs complete effective descriptor closure, and every outgoing declaration has a hash-bound selected or exact scope/optional/exclusion-pruned result. A deterministic prune removes the child/subtree on that path and should precede child lookup when child facts cannot alter selection; another selected path restores requirements, and missing included descriptors block. Per-selected-missing-binary evidence remains operation-closure scoped. Repository Gherkin contains exactly twelve definitions and 22 cases (`005`/`006`/`007`/`009`/`010`/`011`/`012` validated; `001`-`004`/`008` absent), reconciling to seven validated definitions/12 cases and five absent definitions/ten cases. Bounded `010` establishes selector-pruned child independence and alternate-path selected-POM refusal; bounded `011` establishes the ordinary fixed-release local Maven-2-layout selected-`jar` absent-binary row and three specific under-lock drift refusals; six-case outline `012` establishes stable `MISSING`/`MALFORMED`/`DRIFTED` selected-descriptor refusals, including required parsed relocation/model identity proof. Each `012` case refuses before semantic selection, applyable plan ID, lock, and WAL without binary-absence downgrade or managed residue while the recorded workspace and evidence hashes remain stable. No general authority is inferred. Separately, the exact Magrathea `a48e3c06` request is CLI-qualified on Linux/JDK 21 after `010`; `011` and `012` were not needed and no integration/native matrix is inferred.
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Slice |Acceptance owner/evidence |Status
+
+|RPK-JAVA-MOVE-001
+|First supported result boundary: one uniquely bound top-level class in a writable materialized Maven main/test source set moves within the same module/source set and returns `SEMANTIC_PREVIEW`, `REVIEW_ONLY_GUIDANCE`, or `REFUSED` without silently editing non-Java/string contracts.
+|Java adapter contract and operation-shape acceptance.
+|planned, P0 product-critical
+
+|RPK-JAVA-MOVE-002
+|Every active reactor POM and, per main/test projection, every selected external node's effective POM/parent/BOM/management/mediation/relocation closure must be complete, current, unambiguous, and hash-bound. Every outgoing declaration has a selected or exact derived-scope/optional/exclusion-pruned record with path/projection provenance. A pruned edge contributes no child/subtree and needs no child POM/JAR on that path; alternate selected paths restore requirements. Selection precedes child lookup when downstream facts cannot affect it; type/classifier are identity, not prune reasons. Ownership, source/materialized-generated-root inventory, Java platform/provider, full-reactor candidate audit/exclusion, and reverse-observer facts remain global. Selected-missing-binary evidence is operation-closure scoped; missing included descriptors block.
+|Build Model and JDT reactor acceptance. Bounded `006`/`007`/`009` evidence remains unchanged; implemented-and-validated `010` owns selector-pruned descriptor independence and alternate-path selected-POM refusal; implemented-and-validated `011` owns ordinary selected-leaf absence; and implemented-and-validated `012` owns six selected-descriptor loss/drift refusals without binary-absence downgrade.
+|bounded rows including `010`/`011` and six-case `012` implementation-informed; executable `008`, general, integration-surface, and native-matrix acceptance absent
+
+|RPK-JAVA-MOVE-003
+|One exact non-recovered target declaration plus an independent bounded lexical Java inventory of every old-FQN and type-capable matching simple-name range. JDT classifies each candidate exactly once as `BOUND_TARGET`, `BOUND_OTHER`, or `UNRESOLVED`; every target-relevant or relevance-uncertain unresolved candidate blocks. Only `BOUND_TARGET` selects edits. In the ordinary missing-binary row, every target simple-name use is protected by an exact resolved non-static single-type target import, or the use is the exact target FQN; relevant wildcard/static ambiguity, unprotected lookup, recovered/problem evidence, and candidate/diagnostic/edit overlap block. Every retained diagnostic needs exact unchanged mapped before/staged identity and positive non-concealment proof; staged analysis preserves other-symbol classifications, resolves the moved target identity, and introduces no new/changed error.
+|JDT analyzer/planner and diagnostic-isolation acceptance. Existing bounded `006`/`007`/`009` evidence remains scoped to those fixtures. Executable absent `008` owns broad uncertainty cases; implemented-and-validated `011` owns the ordinary fixed-release selected-leaf row with candidate-total lookup protection and zero unresolved/unattributed diagnostics.
+|bounded candidate-total and ordinary sidecar-free evidence implemented; broad negative and general acceptance planned P0
+
+|RPK-JAVA-MOVE-004
+|Explicit managed-write eligibility revalidates under lock, before WAL, the full descriptor/edge-prune proof, global candidate exclusion, before/staged authority closure, selected-missing-entry repository identity/paths and negative presence, source/candidate inventory, exact bindings/lookup protection, platform/provider, staged post-image, retained diagnostics/non-concealment, delta, conflicts, and freshness. Any selector ambiguity, missing included descriptor, target uncertainty, new/changed error, artifact appearance/disappearance, or drift refuses without mutation. Caller classpath attestation, Maven/plugin execution, settings credentials, implicit network, and lexical evidence supply no authority.
+|Core `PatchEngine` and integration acceptance. Existing bounded `005`/`006`/`007`/`009`/`010`/`011` evidence remains scoped. Implemented-and-validated `012` owns six selected-descriptor structural failures before semantic selection, lock, and WAL; absent Gherkin `004`/`008` still owns broader cross-surface and uncertainty behavior, while `011` independently validates three ordinary-evidence drifts under lock before WAL.
+|seven validated definitions expanding to twelve bounded cases implementation-informed; remaining broad acceptance absent
+
+|RPK-JAVA-MOVE-005
+|Typed `REVIEW_ONLY_GUIDANCE` with blockers, evidence-grouped candidates, authority-restoration actions, omissions, and a human/VCS checklist; not a `PatchPlan`, no applyable plan ID, WAL, transaction, or RefactorKit rollback claim.
+|CLI/library/daemon/LSP/MCP/recipe contract acceptance.
+|planned, P0 product-critical
+
+|RPK-JAVA-MOVE-006
+|Permanent offline fixture with one aggregator and 20 active non-aggregator modules, dependency-depth/main/test observers, Java Cucumber references, unrelated/same-name decoys, local external dependencies, materialized generated source, and independent authority-loss variants. Bounded `010` proves deterministic selector pruning before child lookup and alternate selected-path restoration. Implemented-and-validated `011` proves one fixed-release unclassified `jar` selected graph leaf in a simple local Maven-2-layout repository with complete present descriptor closure but absent JAR, RefactorKit-owned sidecar-free negative presence, graph-leaf proof, no invented content hash or provided-type inventory, candidate-total lookup/diagnostic gates, one transaction, exact rollback, and three under-lock pre-WAL drift refusals. Implemented-and-validated `012` adds six independent fixture variants for selected leaf POM absence/malformed XML, required parent loss, imported-BOM drift, management/mediation drift, and parsed relocation/model identity evidence loss.
+|The fixture and twelve current Gherkin definitions exist; bounded `007`/`009`/`010`/`011` evidence remains fixture-specific, while the six `012` cases independently prove stable context/hash preservation and structural refusal without missing-binary downgrade or residue. Separately, one Magrathea CLI/Linux/JDK-21 request at `a48e3c06` is field-qualified after `010`; it did not depend on `011` or `012`.
+|fixture and seven validated definitions expanding to twelve bounded cases implemented; broad executable negatives, general, integration-surface, and native-matrix qualification remain absent/blocked
+
+|RPK-JAVA-MOVE-007
+|Stable operation ID plus separate reactor-structure/external-classpath states, exact operation authority closure, active-POM/selected-descriptor identities, selected/pruned edge records with path/projection/reason, closure-enumerated selected-missing entries including explicit absent-content-hash none, outside-closure globally visible missing state, target/observer identities, environment/candidate hashes, binding/lookup records, isolated diagnostics/non-concealment, delta, eligibility, blockers, and residual guidance. Audit distinguishes pruned non-nodes, selected missing binaries, selected missing descriptors, target-scoped apply, global authority, and manual completion.
+|Versioned protocol/audit acceptance. Existing `006`/`007`/`009`/`010`/`011` reporting evidence remains bounded; implemented-and-validated `012` adds stable descriptor-layer/condition blockers and recorded evidence hashes. Absent Gherkin `004`/`008` owns remaining broader cross-surface and negative contracts.
+|bounded reporting evidence implemented for seven definitions expanding to twelve cases; full contract planned, P0 product-critical
+|===
+
+Seven bounded Gherkin definitions expanding to twelve cases are implementation-informed: REQ-JAVA-MAVEN-MOVE-AUTH-005/006/007/009/010/011/012. Bounded `010` proves selector-pruned descriptor independence and alternate-path selected-POM refusal; bounded `011` independently proves the ordinary fixed-release selected-JAR row and its three specific under-lock drift gates; six-case `012` proves selected-descriptor structural refusal and stable-state preservation for its named `MISSING`/`MALFORMED`/`DRIFTED` conditions. These rows do not prove full scenario `001` or the six broad uncertainty cases under absent `008`. Separately, the exact Magrathea `a48e3c06` request is CLI-qualified on Linux/JDK 21 after `010`, not because of `011` or `012`; integration/native-matrix and general authority remain open.
+
+=== Bounded Positive and Absent Target-Authority Acceptance
+
+[cols="2,3,2,2,2",options="header"]
+|===
+|Requirement ID |Title / acceptance boundary |Classification |Architecture mapping |Declared status
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-007
+|Bounded candidate-total offline-missing apply: `reactorStructureStatus=COMPLETE`, `externalClasspathStatus=OFFLINE_MISSING`, exactly one synthetic enumerated leaf artifact with hash-bound expected identity/provided types and negative-presence evidence, one exact non-recovered declaration, 13 Java candidate records classified exactly once as 12 `BOUND_TARGET`, one `BOUND_OTHER`, and zero `UNRESOLVED`, two exactly unchanged/non-concealing retained diagnostics, no lexical-selected edit, no new or changed error, one transaction, after attestation, deterministic repeat preview, and byte/path/source-inventory/snapshot-hash-exact rollback while global classpath incompleteness remains visible.
+|Functional and non-functional
+|`RPK-JAVA-MOVE-002`, `003`, `004`, `006`, and `007`; accepted ADR 0012 target-scoped Maven `moveClass` authority
+|Explicit scenario-level `@implemented-and-validated`; bounded synthetic fixture evidence only, not ordinary-artifact, Magrathea, or full positive-apply qualification
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-008
+|Target-relevant uncertainty and drift fail closed: six independent example rows vary unresolved candidate totality, unresolved lookup prerequisites, an explicit old-FQN candidate outside the closure, retained-diagnostic identity, structural closure, and evidence freshness. Each case yields typed non-managed guidance/ineligibility or structural refusal, never upgrades a scanner-listed lexical range to `JDT_BINDING`, produces zero managed edits or plan promotion, refuses before lock and WAL, leaves no `.refactorkit` residue, and preserves bytes, paths, inventory, snapshot hash, and evidence hash.
+|Non-functional. The explicit source tags classify the outline as a safety, integrity, and evidence-freshness constraint.
+|`RPK-JAVA-MOVE-002`, `003`, `004`, `006`, and `007`; accepted ADR 0012 fail-closed candidate, diagnostic, structural, and freshness guardrails
+|Explicit outline-level `@absent`; six inherited example cases, with no implementation or validation evidence
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-009
+|Explicit transitive test scope preserves target-closure move authority: every POM/parent/BOM, mediation input, and transitive edge in the fixture's full effective reactor graph is complete, current, and hash-bound. A compile-visible fixture dependency explicitly declares six fixture-owned transitive children with `test` scope while matching dependency-management entries repeat the same `groupId`, `artifactId`, type, and classifier with omitted/default-`compile` or explicit `compile` scope. Effective traversal retains the declaration's `test` scope, so none of those children enters the downstream consumer's compile or test analysis classpath or missing-binary report. The before/staged target closure remains `AVAILABLE`; global `OFFLINE_MISSING` remains visible solely for structurally excluded outside-closure modules and creates no outside-closure per-binary, provided-type, or retained-diagnostic inventory obligation after structural and candidate exclusion is proved. One exact target declaration, candidate-total `BOUND_TARGET`/`BOUND_OTHER` classification with zero `UNRESOLVED`, exact-import-or-FQN lookup protection, no relevant wildcard/static ambiguity, `JDT_BINDING` eligibility, no new or changed staged error, one managed transaction, after attestation, and exact rollback are all required; `LEXICAL_FALLBACK` remains review-only.
+|Functional and non-functional. Deriving the correct consumer classpaths and producing eligible preview/apply/rollback are functional outcomes; Maven scope correctness, complete target-closure evidence, lookup protection, non-promotion of outside-closure absence, staged diagnostic integrity, and exact rollback are quality and safety constraints.
+|`RPK-JAVA-MOVE-002`, `003`, `004`, `006`, and `007`; accepted ADR 0012 declaration-provenance Maven scope semantics and target-scoped closure authority
+|Explicit scenario-level `@implemented-and-validated`; one bounded executable fixture case. Tagged evidence preserves all six explicit transitive `test` scopes, keeps target-closure environments `AVAILABLE` while global `OFFLINE_MISSING` is exclusively outside the closure, produces eligible lookup-protected previews, commits one transaction, attests the post-image, and restores bytes, paths, source inventory, and snapshot hash exactly. It does not by itself qualify independently validated `010`/`011`/`012`; the exact Magrathea field result is separately qualified after `010`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-010
+|Descriptor-pruned children need no artifacts until another path selects them: an inactive fixture profile preserves the root aggregator and 20 active non-aggregator modules while a compile-visible selected external parent has complete, current, hash-bound descriptor and management inputs. Six fixed-release child declarations are deterministically pruned by transitive `test`/`provided` scope, transitive optionality, or exact inherited path exclusion before child version/range, repository/path, POM/effective-model, JAR, or network lookup; their deliberately absent POMs/JARs therefore create no selected node, subtree, missing input, or graph failure on those paths. Type/classifier remain identity rather than prune reasons. The scenario also requires deterministic candidate-total `JDT_BINDING` preview, managed apply, attestation, and exact rollback. If any child is also selected through an authority-relevant effective `compile` or `runtime` path without a prune, complete effective-POM/parent/BOM/management/mediation/relocation closure becomes mandatory; the absent selected child POM yields stable typed `REFUSED`/`INELIGIBLE` before lock and WAL with no plan, edit, residue, transaction, or mutation.
+|Functional and non-functional. Correct classpath derivation and the positive preview/apply/rollback result are functional; descriptor-closed pruning order, hash-bound path/projection/reason evidence, alternate-path restoration, stable pre-mutation refusal, reproducibility, and exact rollback are correctness and safety constraints.
+|`RPK-JAVA-MOVE-002`, `004`, `006`, and `007`; accepted ADR 0012 descriptor-closed enumeration
+|Explicit scenario-level `@implemented-and-validated`; one bounded executable fixture case. Tagged evidence emits 18 deterministic `PRUNED` records for six children across `COMPILE`, `RUNTIME`, and `TEST`, binds each path/projection/reason and pre-lookup boundary, performs no child POM/JAR/network lookup on those paths, produces repeat eligible candidate-total `JDT_BINDING` previews, commits exactly one transaction, attests the post-image, and restores bytes, paths, source inventory, and snapshot hash exactly. The alternate selected path yields stable structural `REFUSED`/`INELIGIBLE` for the absent child POM before lock/WAL with no plan, edit, residue, transaction, or mutation. It does not itself implement independently validated ordinary row `011` or six-case selected-descriptor outline `012`. The exact Magrathea CLI field result was separately qualified after this `010` traversal behavior and did not require `011` or `012`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-011
+|RefactorKit-owned ordinary JAR absence preserves target-scoped move authority: one fixed non-snapshot `com.acme.fixture.missing:ordinary-missing-leaf:1.0.0` selected graph leaf uses an unclassified `jar` variant, has no relocation, and comes from one explicit local-only Maven-2-layout repository. Its POM/effective parent/BOM/management/mediation closure is present, complete, current, and hash-bound; outgoing-edge records prove it is a selected leaf. Its deterministic JAR path is absent before and staged under no-follow checks, with no evidence sidecar, expected JAR hash, or provided-type inventory. One RefactorKit-enumerated selected-missing record binds repository identity, POM/JAR paths, selecting paths/projections, affected operation-closure source sets, descriptor hashes, leaf proof, and negative-presence fact hashes. Candidate-total exact JDT classifications, exact target-name lookup protection, no relevant overlap, and zero unresolved diagnostics attributable to unknown provided types gate repeat eligible `JDT_BINDING` previews while global status stays `OFFLINE_MISSING`. Apply revalidates evidence under lock before WAL, commits exactly one transaction, attests after diagnostics, and rolls back bytes, paths, source inventory, and snapshot hash exactly. Independent JAR/path-component appearance or replacement, selected-POM/effective-input replacement, or repository/path identity drift refuses under lock before WAL without mutation.
+|Functional and non-functional. Eligible preview/apply/rollback for the bounded ordinary absence is functional; repository and descriptor provenance, sidecar-free non-following negative presence, no invented binary facts, graph/candidate/lookup/diagnostic totality, deterministic evidence, one transaction, exact rollback, and fail-closed drift handling are correctness and safety constraints.
+|`RPK-JAVA-MOVE-002`, `003`, `004`, `006`, and `007`; accepted ADR 0012 ordinary missing-binary path
+|Explicit scenario-level `@implemented-and-validated`; one bounded executable fixture case. Tagged evidence fixes the ordinary local-repository selected `jar` leaf, verifies complete present descriptor/leaf proof and sidecar-free absent-binary evidence without an invented hash/provided types, classifies 13 candidates with target-name lookup protection and zero unresolved/unattributed diagnostics, produces repeat eligible `JDT_BINDING` previews, commits one transaction, attests apply, restores bytes/paths/inventory/snapshot hash exactly, and refuses three under-lock evidence drifts before WAL without RefactorKit mutation. It is independent of the earlier Magrathea field qualification.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-012
+|Missing or drifted selected descriptors refuse ordinary missing-leaf authority: starting independently from every eligible `011` precondition, six fixture variants remove the selected leaf POM, make its XML malformed, remove its required parent, drift an imported BOM, drift the dependency-management/mediation declaration that supplies the selected version, or remove parsed-model proof that the leaf has no relocation. Every other selected descriptor input remains present, well-formed, current, and hash-bound. Descriptor-closed traversal must return structural `REFUSED` guidance with `INELIGIBLE` managed-write status and a stable blocker naming the selected coordinate, direct dependency path, affected source-set projections, descriptor layer, and condition. No selected descriptor failure may be reclassified as an admissible missing binary or proven graph leaf. Refusal precedes semantic edit selection, applyable plan ID, workspace lock, and WAL and leaves no `.refactorkit` residue or mutation.
+|Functional and non-functional. Typed structural refusal and layer-specific blocker guidance are functional outcomes; complete selected-descriptor evidence, hash freshness, no binary-absence downgrade, pre-lock/pre-WAL non-mutation, reproducibility, and offline/plugin-free behavior are correctness and safety constraints.
+|`RPK-JAVA-MOVE-002`, `004`, `006`, and `007`; accepted ADR 0012 selected-descriptor closure and fail-closed blocker.
+|Explicit outline-level `@implemented-and-validated`; six inherited example cases. Tagged evidence proves stable `MISSING`/`MALFORMED`/`DRIFTED` structural refusal, parsed relocation/model identity requirements, context/hash preservation, and no semantic selection, binary-absence downgrade, lock/WAL, residue, or mutation.
+|===
+
+REQ-JAVA-MAVEN-MOVE-AUTH-007 through `012` occur in the feature without weakening earlier implemented `005`/`006`. REQ-JAVA-MAVEN-MOVE-AUTH-007 and `009` through `011` have explicit scenario-level `@implemented-and-validated`; `012` has explicit outline-level `@implemented-and-validated`; `008` has explicit outline-level `@absent`; and `009` through `012` retain functional and non-functional classification except non-functional-only `008`. The six `Examples` rows under each outline inherit that outline's single requirement ID, classifications, and status. The two outlines bring the current feature to twelve definitions and 22 cases.
+
 == Transactionality Requirement Clarifications
 
 These requirements capture the audit's required contract decisions and acceptance gaps. They are not implementation claims.
@@ -418,7 +523,303 @@ These requirements capture the audit's required contract decisions and acceptanc
 
 == Gherkin Scenario Listing
 
-No `.feature` files were found. Therefore there are no Gherkin scenarios to list or map in this baseline.
+The project feature root `features/` contains one discovered feature source:
+
+* `features/java-maven-move-class-apply-authority.feature`
+
+Its `Business Need` addresses `UC-JAVA-MOVE-CLASS` for a maintainer of a multi-module Maven workspace. The `Background` supplies shared fixture and safety preconditions but is not counted as a production scenario. There are no feature-level implementation-status tags to inherit. Each of the twelve requirement-bearing definitions (ten `Scenario` declarations and two `Scenario Outline` declarations) has one repository-unique stable `@REQ-*` ID, at least one required classification, and exactly one effective definition-level status. REQ-JAVA-MAVEN-MOVE-AUTH-001 through `004` and `008` are `@absent`; `005` through `007` and `009` through `012` are `@implemented-and-validated`. The six `Examples` rows under each of `008` and `012` inherit the applicable outline's ID, classifications, and status, producing 22 executable cases without creating additional requirement IDs. This reconciles to seven validated definitions/12 cases and five absent definitions/ten cases. Current Gherkin 28 source validation found one feature document, twelve definitions, 22 expanded cases, twelve unique IDs, and zero parse or tag-contract errors. Dated mutable working-tree verification on OpenJDK 21 includes a full local `./gradlew --no-daemon --rerun-tasks check goldenTest` pass after REQ-JAVA-MAVEN-MOVE-AUTH-012 with zero failures/errors. Separate tagged runs validate `005` through `007` and `009` through `012`; the focused post-promotion `012` run discovered all 22 cases, passed its six selected cases, skipped 16 by tag filter, and reported zero failures/errors. Separately, a source-built CLI field run on Linux/JDK 21 against clean Magrathea commit `a48e3c06629acf7032d0f28a0f8bdc5426442c7c` after `010` produced a four-file `JDT_BINDING` preview, one managed transaction, and exact source-tree hash restoration. That field result did not require `011` or `012` and does not establish an integration/native matrix, general authority, or full positive scenario `001`.
+
+[cols="2,4,3,4,4,4,3,2,4",options="header"]
+|===
+|Requirement ID |Scenario |Actor / capability |Classification and rationale |Source tags |Architecture mapping |Feature path |Effective declared status |Validation mode / observed implementation
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-001
+|A binding-clean move is committed once and rolled back byte for byte
+|Maven workspace maintainer; managed semantic move, apply, and rollback.
+|Functional and non-functional. The move/apply/rollback outcome is functional; deterministic offline analysis, one managed transaction, authoritative diagnostics, and byte-exact rollback are quality and safety constraints.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-001 @functional-requirement @non-functional-requirement @absent`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-001`, `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@absent` (scenario-level; no inherited status)
+|Gherkin source reconciliation only. No scenario-level execution evidence is recorded; precursor evidence does not upgrade `@absent`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-002
+|Only binding-proven Java observers are updated
+|Maven workspace maintainer; binding-proven observer and reference discrimination.
+|Functional. The scenario specifies which legal Java observers are changed and which decoy, unrelated, and non-Java candidates remain unchanged.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-002 @functional-requirement @absent`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@absent` (scenario-level; no inherited status)
+|Gherkin source reconciliation only. No scenario-level execution evidence is recorded; precursor evidence does not upgrade `@absent`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-003
+|Incomplete or stale semantic authority produces non-managed guidance before journaling
+|Maven workspace maintainer; typed authority-loss guidance and managed-apply refusal.
+|Functional and non-functional. Typed guidance/refusal is an observable result; evidence completeness, pre-WAL refusal, and unchanged workspace state are quality and safety constraints.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-003 @functional-requirement @non-functional-requirement @absent`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-005`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@absent` (scenario-level; no inherited status)
+|Gherkin source reconciliation only. No scenario-level execution evidence is recorded; precursor evidence does not upgrade `@absent`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-004
+|No force flag, recipe, or integration surface promotes lexical fallback
+|Maven workspace maintainer; cross-surface lexical-fallback safety invariant.
+|Non-functional. The scenario constrains safety, consistency, evidence visibility, and pre-WAL non-mutation across every entry path.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-004 @non-functional-requirement @absent`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-005`, and `RPK-JAVA-MOVE-007`.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@absent` (scenario-level; no inherited status)
+|Gherkin source reconciliation only. No scenario-level execution evidence is recorded; precursor evidence does not upgrade `@absent`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-005
+|Refused lexical-fallback CLI apply leaves no managed-write residue
+|Maven workspace maintainer; CLI refusal and no-managed-write-residue safety.
+|Non-functional. The scenario constrains read-only scan/preview behavior, pre-WAL refusal, metadata non-creation, transaction absence, and preservation of workspace bytes, paths, inventory, and snapshot hash.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-005 @non-functional-requirement @implemented-and-validated`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-004` and `RPK-JAVA-MOVE-007`.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@implemented-and-validated` (scenario-level; no inherited status)
+|`JavaMavenMoveClassApplyAuthorityCucumberTest`, filtered to `@REQ-JAVA-MAVEN-MOVE-AUTH-005 or @REQ-JAVA-MAVEN-MOVE-AUTH-006`, passed both selected scenarios. The `005` path uses a disclosed isolated copy of the permanent fixture with one relevant parse failure, verifies CLI preview evidence `LEXICAL_FALLBACK` and `INELIGIBLE`, and verifies `evidence.insufficient` refusal through the immutable `PatchEngine` evidence gate before workspace-lock acquisition. No `.refactorkit`, `workspace.lock`, WAL, managed transaction, source-byte/path/inventory, or snapshot mutation remains. This evidence is CLI-specific and does not accept positive semantic apply or scenario 004's other entry surfaces.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-006
+|Unrelated JDT warnings do not demote a clean move authority closure
+|Maven workspace maintainer; dependency-bounded observer selection and closure-scoped JDT warning authority.
+|Functional and non-functional. Retaining a `SEMANTIC_PREVIEW` with exactly the binding-proven observers is observable behavior; limiting the current `AVAILABLE`-fixture warning gate to the proven closure is a correctness and safety constraint. This scenario does not define the separate retained-baseline diagnostic rule for target-scoped `OFFLINE_MISSING` authority.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-006 @functional-requirement @non-functional-requirement @implemented-and-validated`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@implemented-and-validated` (scenario-level; no inherited status)
+|The tagged `JavaMavenMoveClassApplyAuthorityCucumberTest` passed this scenario. With one unambiguous target owner, an `AVAILABLE` effective Maven model, and complete `AVAILABLE` source-set ownership, the planner derived the dependency-bounded reverse-observer closure containing `catalog-pricing:main`, `catalog-storefront:main`, and `catalog-acceptance:test`. A type-resolution warning in excluded `reporting-unrelated:main` left the result `SEMANTIC_PREVIEW` with `JDT_BINDING`; a warning introduced in selected observer `catalog-pricing:main` demoted that plan to `LEXICAL_FALLBACK`, and the managed-write gate reported `evidence.insufficient`/`INELIGIBLE`. This validates the implemented `AVAILABLE` warning-scoping slice only; candidate-total `OFFLINE_MISSING` evidence belongs to separately bounded `007`, while uncertainty/drift remains absent under `008`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-007
+|Candidate-total authority applies and reverses a move with an offline leaf artifact
+|Maven workspace maintainer; candidate-total target-scoped semantic preview, managed apply, and rollback.
+|Functional and non-functional. Eligible target-scoped move/apply/rollback is observable behavior; complete layered authority, deterministic evidence, exact diagnostic isolation, one transaction, after/rollback attestation, and byte-exact restoration are correctness and safety constraints.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-007 @functional-requirement @non-functional-requirement @implemented-and-validated`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`; accepted ADR 0012 target-scoped Maven `moveClass` authority.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@implemented-and-validated` (scenario-level; no inherited status)
+|The tagged `JavaMavenMoveClassApplyAuthorityCucumberTest` passed the bounded isolated-fixture row. It hash-checks then removes exactly one synthetic leaf JAR while retaining expected coordinate/path/SHA-256, a provided-type manifest, and `missing` negative-presence evidence. The lease reports `COMPLETE` structure/closure and global `OFFLINE_MISSING`; 13 Java candidate records are classified exactly once as 12 `BOUND_TARGET`, one `BOUND_OTHER`, and zero `UNRESOLVED`; two retained `PriceAuthority` diagnostics have exact before/staged identity and positive non-concealment proof. Repeat previews are identical and eligible with `JDT_BINDING`; apply creates exactly one `APPLIED` transaction; after attestation succeeds; rollback restores all non-engine bytes, paths, source inventory, and snapshot hash exactly and passes restored diagnostics attestation. This does not qualify full scenario `001`, absent executable outline `008`, or independently validated `010`/`011`/`012`; the exact Magrathea field result is separately bounded after `010`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-008
+|Target-relevant uncertainty and evidence drift fail closed without mutation
+|Maven workspace maintainer; fail-closed target-authority and evidence-freshness guardrails.
+|Non-functional. The explicit classification constrains safety, evidence integrity, pre-lock/pre-WAL refusal, metadata non-creation, and exact non-mutation across six independent authority defects; no functional tag is declared.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-008 @non-functional-requirement @absent`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`; accepted ADR 0012 fail-closed candidate, diagnostic, structural, and freshness guardrails.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@absent` (Scenario Outline level; inherited by six example rows; no feature-level status)
+|Gherkin source reconciliation only. Six examples independently cover candidate totality, lookup prerequisites, closure consistency, diagnostic identity, structural closure, and evidence freshness. The focused runner parses all six but skips them by tag filter; no implementation or example-level validation evidence is recorded.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-009
+|Explicit transitive test scope preserves target-closure move authority
+|Maven workspace maintainer; effective Maven dependency-scope derivation and target-closure semantic move authority.
+|Functional and non-functional. Correct consumer main/test classpaths plus eligible preview/apply/rollback are observable behavior; preserving explicit declaration scope, proving a complete `AVAILABLE` target closure, keeping outside-closure absence visible but non-promoting, candidate-total lookup protection, staged diagnostic integrity, and exact rollback are correctness and safety constraints.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-009 @functional-requirement @non-functional-requirement @implemented-and-validated`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`; accepted ADR 0012 declaration-provenance Maven scope semantics and target-scoped closure authority.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@implemented-and-validated` (scenario-level; no inherited status)
+|The tagged `JavaMavenMoveClassExplicitTransitiveScopeAuthorityCucumberTest` passed the bounded isolated-fixture row. Six fixture-owned transitive children explicitly declared `test` retain that scope despite matching omitted/default-`compile` or explicit-`compile` dependency-management entries; they enter neither `catalog-pricing` main/test analysis classpaths nor target-closure missing reports. Every target-closure environment is `AVAILABLE`; the model and lease preserve global `OFFLINE_MISSING` solely for `reporting-unrelated`, structurally outside the closure; the operation lease therefore has no outside-closure per-binary or retained-diagnostic inventory. Repeat candidate-total lookup-protected previews are eligible with `JDT_BINDING`; apply creates exactly one `APPLIED` transaction; after attestation succeeds; rollback restores all non-engine bytes, paths, source inventory, and snapshot hash exactly and passes restored diagnostics attestation. This fixture row does not by itself qualify independently validated `010`/`011`/`012`; the exact Magrathea field result is separately bounded after `010`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-010
+|Descriptor-pruned children need no artifacts until another path selects them
+|Maven workspace maintainer; descriptor-closed Maven selector pruning and alternate-path structural refusal.
+|Functional and non-functional. Correctly deriving selected main/test analysis classpaths and preserving eligible preview/apply/rollback on pruned paths are functional outcomes; pruning before child lookup, hash-bound path/projection/reason evidence, alternate-path descriptor restoration, pre-lock/pre-WAL refusal, and exact non-mutation are correctness, reproducibility, and safety constraints.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-010 @functional-requirement @non-functional-requirement @implemented-and-validated`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`; accepted ADR 0012 descriptor-closed selected-graph enumeration.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@implemented-and-validated` (scenario-level; no inherited status)
+|The tagged `JavaMavenMoveClassDescriptorPruningAuthorityCucumberTest` passed the bounded isolated-fixture row. Six child declarations pruned by exact derived scope, optionality, or inherited exclusion emit 18 deterministic `PRUNED` records across `COMPILE`, `RUNTIME`, and `TEST`, with hash-bound declaring POM, consumer/source set, path, projection, variant, exact reason, and a boundary before child version/range, repository/path, POM/effective-model, JAR, or network lookup. No pruned child becomes a node, subtree, classpath entry, missing input, or graph failure; target-closure environments remain `AVAILABLE`. Repeat candidate-total lookup-protected previews are eligible with `JDT_BINDING`; apply creates exactly one `APPLIED` transaction; after attestation succeeds; rollback restores all non-engine bytes, paths, source inventory, and snapshot hash exactly. An alternate selected compile/runtime path makes the absent child POM mandatory and returns stable structural `REFUSED`/`INELIGIBLE` before lock/WAL with no plan, edit, residue, transaction, or mutation. This does not itself implement independently validated ordinary row `011` or selected-descriptor outline `012`. A separate source-built CLI field run qualified the exact Magrathea `a48e3c06` request after this `010` behavior; it did not require `011` or `012`.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-011
+|RefactorKit-owned ordinary JAR absence preserves target-scoped move authority
+|Maven workspace maintainer; ordinary selected-missing-binary semantic preview, managed apply/rollback, and drift refusal.
+|Functional and non-functional. Eligible target-scoped preview/apply/rollback is functional; deterministic local-repository provenance, sidecar-free no-follow negative presence, complete selected-POM graph evidence, candidate and target-lookup totality, diagnostics, one transaction, exact rollback, and under-lock pre-WAL drift refusal are correctness and safety constraints.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-011 @functional-requirement @non-functional-requirement @implemented-and-validated`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`; accepted ADR 0012 ordinary missing-binary path.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@implemented-and-validated` (scenario-level; no inherited status)
+|The tagged `JavaMavenMoveClassOrdinaryMissingLeafAuthorityCucumberTest` passed the bounded isolated-fixture row. One fixed non-snapshot unclassified `com.acme.fixture.missing:ordinary-missing-leaf:1.0.0` `jar` is selected across `COMPILE`, `RUNTIME`, and `TEST` from one explicit local-only Maven-2-layout repository. Its POM/effective-input descriptor closure and graph-leaf proof are present and hash-bound while its JAR is absent under sidecar-free no-follow observations; no expected JAR hash or provided-type inventory is invented. Thirteen before/staged candidate records have exact JDT classifications and target-name lookup protection with zero `UNRESOLVED` candidates and zero unresolved/unattributed diagnostics. Repeat previews are eligible with `JDT_BINDING`; apply creates exactly one `APPLIED` transaction; after attestation succeeds; rollback restores all non-engine bytes, paths, source inventory, and snapshot hash exactly. Three fresh previews independently introduce JAR/path appearance or replacement, selected-POM/effective-input replacement, or repository/deterministic-path identity drift while the workspace lock is held; each returns `authorityLease.evidenceDrift` before WAL with no managed mutation. This fixture evidence is independent of the earlier Magrathea CLI field qualification.
+
+|REQ-JAVA-MAVEN-MOVE-AUTH-012
+|Missing or drifted selected descriptors refuse ordinary missing-leaf authority
+|Maven workspace maintainer; fail-closed selected-descriptor authority and structural refusal guidance.
+|Functional and non-functional. Typed structural refusal and a descriptor-specific blocker are observable behavior; complete selected-descriptor closure, hash freshness, offline determinism, pre-lock/pre-WAL non-mutation, and prohibition of binary-absence downgrade are correctness and safety constraints.
+|`@REQ-JAVA-MAVEN-MOVE-AUTH-012 @functional-requirement @non-functional-requirement @implemented-and-validated`
+|`UC-JAVA-MOVE-CLASS`; `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`; accepted ADR 0012 selected-descriptor closure and fail-closed blocker.
+|`features/java-maven-move-class-apply-authority.feature`
+|`@implemented-and-validated` (Scenario Outline level; inherited by six example rows; no feature-level status)
+|The tagged `JavaMavenMoveClassSelectedDescriptorAuthorityCucumberTest` passed all six isolated fixture cases. Each case starts from an eligible ordinary `011` baseline and an engine-captured `MavenSelectedDescriptorAuthorityContext` with safe descriptor path/layer/SHA-256 expectations plus a SHA-256 parsed descriptor identity proving model/relocation interpretation. The independent mutations yield `MISSING` for selected POM, parent, or parsed identity; `MALFORMED` for selected-POM XML/model; and `DRIFTED` for imported BOM or dependency-management/mediation declaration. Each result is structural `REFUSED`/`INELIGIBLE` with `java.maven.selectedDescriptor.missing`, `.malformed`, or `.drifted`, no authority lease, and a repeat-stable blocker naming coordinate, direct path from `catalog-pricing:main`, `COMPILE`/`RUNTIME`/`TEST`, descriptor layer, and condition. Refusal precedes semantic edit selection, applyable plan ID, lock, and WAL; the failed descriptor is never reported as an admissible missing binary or proven leaf, `.refactorkit` is never created, and recorded bytes, paths, inventories, snapshot hash, descriptor facts, evidence records, and evidence hashes remain equal after evaluation.
+|===
+
+=== REQ-JAVA-MAVEN-MOVE-AUTH-008 Example Matrix
+
+All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-008, `@non-functional-requirement`, and `@absent` from the Scenario Outline. They are six executable cases under one repository-unique requirement ID.
+
+[cols="1,2,5,2",options="header"]
+|===
+|Example |Authority layer |Independent defect boundary |Expected result type
+
+|1
+|Candidate totality
+|A target-relevant candidate has an absent, recovered, problem, ambiguous, or truncated binding and is `UNRESOLVED`.
+|`REVIEW_ONLY_GUIDANCE`
+
+|2
+|Candidate totality
+|An unresolved on-demand import, enclosing type, or supertype can change target-name lookup.
+|`REVIEW_ONLY_GUIDANCE`
+
+|3
+|Closure consistency
+|An explicit old-FQN candidate appears outside the computed reverse-observer closure.
+|`REVIEW_ONLY_GUIDANCE`
+
+|4
+|Diagnostic identity
+|A retained diagnostic changes a full-identity field, or the same message moves to a different range.
+|`REVIEW_ONLY_GUIDANCE`
+
+|5
+|Structural closure
+|A required POM, parent, BOM, mediation, variant, reactor edge, ownership, source root, generated source, platform, provider, or inventory input is lost.
+|`REFUSED`
+
+|6
+|Evidence freshness
+|A hash-bound input drifts, or an enumerated offline artifact appears, disappears, is replaced, or changes metadata after preview.
+|`REFUSED`
+|===
+
+=== REQ-JAVA-MAVEN-MOVE-AUTH-012 Example Matrix
+
+All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-functional-requirement`, and `@implemented-and-validated` from the Scenario Outline. They are six executable cases under one repository-unique requirement ID. Tagged evidence validates structural `REFUSED`/`INELIGIBLE` guidance before semantic edit selection, applyable plan ID, lock, or WAL; no row is downgraded to ordinary missing-binary authority or leaves managed residue, and every recorded context/evidence hash remains stable.
+
+[cols="1,2,5,2,2",options="header"]
+|===
+|Example |Descriptor layer |Independent mutation |Descriptor condition |Expected result
+
+|1
+|Selected leaf POM
+|Remove the deterministic selected leaf POM regular file.
+|`MISSING`
+|`REFUSED` / `INELIGIBLE`
+
+|2
+|Selected leaf POM model
+|Replace the selected leaf POM with malformed XML that cannot produce a complete raw or effective model.
+|`MALFORMED`
+|`REFUSED` / `INELIGIBLE`
+
+|3
+|Required parent POM
+|Remove the one fixture-owned parent POM referenced by the selected leaf.
+|`MISSING`
+|`REFUSED` / `INELIGIBLE`
+
+|4
+|Required imported BOM
+|Change the one fixture-owned imported BOM after its content hash is bound.
+|`DRIFTED`
+|`REFUSED` / `INELIGIBLE`
+
+|5
+|Dependency-management/mediation declaration
+|Change the required declaration that supplies the mediated selected version after hash binding.
+|`DRIFTED`
+|`REFUSED` / `INELIGIBLE`
+
+|6
+|Relocation/model parse evidence
+|Remove parsed-model proof that the selected leaf has no relocation while descriptor bytes remain present.
+|`MISSING`
+|`REFUSED` / `INELIGIBLE`
+|===
+
+=== Reconciled Gherkin Totals
+
+[cols="3,1,5",options="header"]
+|===
+|Metric |Total |Reconciliation
+
+|Project feature roots
+|1
+|`features/`.
+
+|Discovered `.feature` paths
+|1
+|`features/java-maven-move-class-apply-authority.feature`.
+
+|Requirement-bearing definitions
+|12
+|Ten `Scenario` declarations (REQ-JAVA-MAVEN-MOVE-AUTH-001 through `007`, `009`, `010`, and `011`) plus two `Scenario Outline` declarations (`008` and `012`); the `Background` is excluded.
+
+|Scenario Outline definitions
+|2
+|REQ-JAVA-MAVEN-MOVE-AUTH-008 and REQ-JAVA-MAVEN-MOVE-AUTH-012.
+
+|Scenario Outline example rows
+|12
+|Six uncertainty/drift rows under `008` plus six selected-descriptor loss/drift rows under `012`.
+
+|Example-expanded executable cases
+|22
+|Ten ordinary scenarios plus six cases inherited from each of the `008` and `012` outlines.
+
+|Repository-unique stable requirement IDs in current Gherkin
+|12
+|Exactly one `@REQ-*` ID occurs on each requirement-bearing definition; the six cases under each outline intentionally inherit that outline's one ID, and no ID labels another definition.
+
+|Functional-only requirement definitions
+|1
+|REQ-JAVA-MAVEN-MOVE-AUTH-002.
+
+|Non-functional-only requirement definitions
+|3
+|REQ-JAVA-MAVEN-MOVE-AUTH-004, REQ-JAVA-MAVEN-MOVE-AUTH-005, and REQ-JAVA-MAVEN-MOVE-AUTH-008.
+
+|Dual-classified requirement definitions
+|8
+|REQ-JAVA-MAVEN-MOVE-AUTH-001, REQ-JAVA-MAVEN-MOVE-AUTH-003, REQ-JAVA-MAVEN-MOVE-AUTH-006, REQ-JAVA-MAVEN-MOVE-AUTH-007, REQ-JAVA-MAVEN-MOVE-AUTH-009, REQ-JAVA-MAVEN-MOVE-AUTH-010, REQ-JAVA-MAVEN-MOVE-AUTH-011, and REQ-JAVA-MAVEN-MOVE-AUTH-012.
+
+|Definitions carrying `@functional-requirement`
+|9
+|REQ-JAVA-MAVEN-MOVE-AUTH-001, REQ-JAVA-MAVEN-MOVE-AUTH-002, REQ-JAVA-MAVEN-MOVE-AUTH-003, REQ-JAVA-MAVEN-MOVE-AUTH-006, REQ-JAVA-MAVEN-MOVE-AUTH-007, REQ-JAVA-MAVEN-MOVE-AUTH-009, REQ-JAVA-MAVEN-MOVE-AUTH-010, REQ-JAVA-MAVEN-MOVE-AUTH-011, and REQ-JAVA-MAVEN-MOVE-AUTH-012.
+
+|Definitions carrying `@non-functional-requirement`
+|11
+|All requirement IDs except REQ-JAVA-MAVEN-MOVE-AUTH-002. Classification totals overlap for the eight dual-classified definitions.
+
+|Definitions with effective `@absent`
+|5
+|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `004` and REQ-JAVA-MAVEN-MOVE-AUTH-008; all statuses are explicit at scenario or outline level.
+
+|Example-expanded cases with effective `@absent`
+|10
+|Four ordinary absent scenarios plus six absent cases inherited from outline `008`.
+
+|Definitions with effective `@implemented-and-validated`
+|7
+|REQ-JAVA-MAVEN-MOVE-AUTH-005 through REQ-JAVA-MAVEN-MOVE-AUTH-007 and REQ-JAVA-MAVEN-MOVE-AUTH-009 through REQ-JAVA-MAVEN-MOVE-AUTH-012; all statuses are explicit at scenario or outline level and supported by bounded tagged Cucumber evidence.
+
+|Example-expanded cases with effective `@implemented-and-validated`
+|12
+|Six ordinary scenarios for REQ-JAVA-MAVEN-MOVE-AUTH-005 through `007` and `009` through `011`, plus six cases inherited from outline `012`.
+
+|Mappings to `UC-JAVA-MOVE-CLASS`
+|12
+|Every requirement-bearing definition, and therefore all 22 executable cases, maps to the same use case.
+
+|Distinct `RPK-JAVA-MOVE-*` slices covered
+|7
+|The union of all twelve Gherkin requirement mappings is RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007 and conforms to accepted ADR 0012's target-scoped authority, declaration-scope, descriptor-closed selected-graph, ordinary selected-missing-binary, and fail-closed selected-descriptor refinements.
+
+|Observed implemented-and-validated requirement definitions
+|7
+|REQ-JAVA-MAVEN-MOVE-AUTH-005/006/007/009/010/011/012 passed only their bounded tagged rows, with `012` expanding to six cases. Requirements 001 through 004 and `008` remain executable `@absent`. The `011` row upgrades only the bounded ordinary sidecar-free selected-leaf and three specified under-lock drift cases; `012` separately validates six structural pre-semantic/pre-lock/pre-WAL selected-descriptor failures. The exact Magrathea `a48e3c06` CLI/Linux/JDK-21 result is separate field evidence after `010`, not an additional Gherkin definition/case and not dependent on `011` or `012`.
+|===
 
 == Validation Modes
 
@@ -441,8 +842,17 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |CI evidence
 |Behavior is exercised by `.github/workflows/ci.yml`.
 
-|Needs executable requirement
-|No Gherkin or equivalent executable requirement was found.
+|Domain research
+|A reviewed requirement or concept informs planned architecture but is not repository implementation or executable evidence.
+
+|Field report
+|A dated external observation motivates priority and qualification; it does not replace a permanent fixture or prove general support.
+
+|Gherkin source reconciliation
+|Feature discovery, stable IDs, classifications, effective statuses, paths, totals, and architecture/use-case mappings agree with the `.feature` source. This validates documentation consistency only, not behavior or implementation.
+
+|Tagged Cucumber evidence
+|A runner filtered by a stable requirement tag executes the selected production scenario. Passing steps support only that scenario and exercised surface; scenarios reported skipped because of the filter remain unvalidated.
 |===
 
 == Open Requirements Gaps
@@ -451,20 +861,24 @@ No `.feature` files were found. Therefore there are no Gherkin scenarios to list
 |===
 |Gap |Impact |Status
 
-|No Gherkin feature files
-|Requirements are not currently expressed as BDD scenarios.
+|Executable Story BDD coverage is limited to Maven move-class authority
+|The repository currently has one feature source with five `@absent` and seven tagged, implemented-and-validated Maven move-class requirement definitions, expanding to ten absent and twelve validated executable cases. Bounded `007`, `009`, `010`, and `011` are validated as ordinary scenarios; six-row outline `012` is validated; six-row outline `008` remains absent. The broader use-case catalogue has no mapped Gherkin scenarios.
 |needs-review
 
 |No explicit use-case metadata files
 |Use-case IDs in this appendix are derived from documentation and module evidence.
 |needs-review
 
-|No confirmed stakeholder/business priorities
-|Functional catalogue may not reflect product priorities.
+|No complete confirmed stakeholder/business priority set
+|Maven move-class apply authority is now explicitly P0, but the rest of the functional catalogue may not reflect complete product priorities.
 |needs-review
 
+|General target-scoped Maven move-class managed apply and guided fallback are not accepted
+|The permanent 20-active-module fixture and seven bounded validated Gherkin definitions expanding to twelve cases exist. Full scenario `001` and the six absent `008` examples remain unaccepted. REQ-JAVA-MAVEN-MOVE-AUTH-010 validates deterministic selector-pruned child descriptor independence and alternate-path selected-POM refusal; `011` validates RefactorKit-owned fixed ordinary local-repository selected-`jar` absence with complete present descriptor closure, sidecar-free evidence, no invented hash/provided types, candidate-total lookup/diagnostic gates, one transaction, exact rollback, and three specific under-lock pre-WAL drift refusals; `012` validates six independently varied selected-POM/model/parent/BOM/management/mediation/parsed-relocation-proof failures with stable typed refusal, context/hash preservation, and no binary-absence downgrade or residue. Typed guidance, cross-surface refusal, and general authority remain open. The exact Magrathea `a48e3c06` request is separately CLI-qualified on Linux/JDK 21 after `010`, but no integration/native matrix or general field population is qualified and `011`/`012` were not required for it.
+|planned, P0 product-critical release blocker (`RPK-JAVA-MOVE-001..007`); seven bounded definitions/twelve cases and one exact CLI field request closed only for their evidence
+
 |Authoritative Java/Maven diagnostic evidence is incomplete
-|Managed Java mutation cannot claim definitive semantic authority until every affected source set has exact full-reactor/classpath/platform/provider evidence and `RPK-JAVA-DIAG-001..007` packaged acceptance. Maven success is not a substitute.
+|Global Java mutation cannot claim definitive source-set authority until every affected environment has exact full-reactor/classpath/platform/provider evidence and `RPK-JAVA-DIAG-001..007` packaged acceptance. The narrower Maven `moveClass` mode has bounded `007`/`009`/`010`/`011`/`012` evidence and one exact Magrathea CLI/Linux/JDK-21 field result, but cannot claim general, integration-surface, or native-matrix authority until executable uncertainty/drift `008` and remaining full/cross-surface acceptance close. Maven success, caller classpath attestation, executable Maven, implicit network, or fixture-only results are not substitutes.
 |planned, product-critical release blocker
 
 |Transaction semantics exceed implementation evidence

@@ -1,0 +1,11 @@
+<project><modelVersion>4.0.0</modelVersion>
+  <parent><groupId>example.multi</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent>
+  <artifactId>client</artifactId>
+  <dependencies>
+    <dependency>
+      <groupId>example.multi</groupId>
+      <artifactId>api</artifactId>
+      <version>1</version>
+    </dependency>
+  </dependencies>
+</project>

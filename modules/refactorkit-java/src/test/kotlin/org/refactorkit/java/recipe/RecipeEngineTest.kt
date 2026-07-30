@@ -239,6 +239,15 @@ class RecipeEngineTest {
     @Test
     fun dependentStepsAreStagedAndCommittedAsOneTransaction() {
         val root = createProject(
+            "pom.xml" to """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>com.example</groupId>
+                  <artifactId>recipe-move-test</artifactId>
+                  <version>1.0.0</version>
+                  <properties><maven.compiler.release>8</maven.compiler.release></properties>
+                </project>
+            """.trimIndent(),
             "src/main/java/com/example/UserManager.java" to "package com.example;\npublic class UserManager {}\n",
         )
         val yaml = """

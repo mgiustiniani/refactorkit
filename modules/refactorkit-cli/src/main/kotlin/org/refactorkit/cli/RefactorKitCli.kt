@@ -27,9 +27,11 @@ import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaCreateMavenModulePlanner
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaMoveSourceRootPlanner
+import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.java.MavenDependencyIdentity
 import org.refactorkit.java.MavenDependencyRewrite
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -820,7 +822,7 @@ class RefactorKitCli(
 
     private fun cmdJava(args: List<String>): Int {
         if (args.isEmpty()) {
-            System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, move-source-root, or move-across-maven-modules")
+            System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, move-source-root, move-across-maven-modules, create-module, or rename-module")
             return 2
         }
         return when (args.first()) {
@@ -833,6 +835,8 @@ class RefactorKitCli(
             "import-class" -> cmdJavaImportClass(args.drop(1))
             "move-source-root" -> cmdJavaMoveSourceRoot(args.drop(1))
             "move-across-maven-modules" -> cmdJavaMoveAcrossMavenModules(args.drop(1))
+            "create-module" -> cmdJavaCreateModule(args.drop(1))
+            "rename-module" -> cmdJavaRenameModule(args.drop(1))
             else -> { System.err.println("Unknown java subcommand: ${args.first()}"); 2 }
         }
     }
@@ -892,6 +896,41 @@ class RefactorKitCli(
             System.err.println(failure.message)
             2
         }
+    }
+
+    private fun cmdJavaCreateModule(args: List<String>): Int {
+        val parsed = parseOptions(args)
+        val moduleName = parsed.options["module-name"] ?: run { System.err.println("create-module requires --module-name"); return 2 }
+        val parentPom = parsed.options["parent-pom"] ?: run { System.err.println("create-module requires --parent-pom"); return 2 }
+        val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
+        val snapshot = scanFrom(root, parsed.flags) ?: return 1
+        val plan = JavaCreateMavenModulePlanner().preview(snapshot, moduleName, Paths.get(parentPom))
+        println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+        if (plan.status == PatchStatus.REFUSED) {
+            plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+            return 1
+        }
+        if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
+        println("Use --apply to apply this change.")
+        return 0
+    }
+
+    private fun cmdJavaRenameModule(args: List<String>): Int {
+        val parsed = parseOptions(args)
+        val oldModuleDir = parsed.options["old-module-dir"] ?: run { System.err.println("rename-module requires --old-module-dir"); return 2 }
+        val newModuleDir = parsed.options["new-module-dir"] ?: run { System.err.println("rename-module requires --new-module-dir"); return 2 }
+        val newArtifactId = parsed.options["new-artifact-id"]
+        val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
+        val snapshot = scanFrom(root, parsed.flags) ?: return 1
+        val plan = JavaRenameMavenModulePlanner().preview(snapshot, oldModuleDir, newModuleDir, newArtifactId)
+        println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+        if (plan.status == PatchStatus.REFUSED) {
+            plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+            return 1
+        }
+        if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
+        println("Use --apply to apply this change.")
+        return 0
     }
 
     private fun cmdJavaImportClass(args: List<String>): Int {

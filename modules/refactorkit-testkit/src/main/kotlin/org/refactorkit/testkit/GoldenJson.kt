@@ -33,6 +33,26 @@ internal object GoldenJson {
         )
     }
 
+    /**
+     * Parse a JSON array of flat string-objects.
+     * Each array element must be `{ "key": "value", ... }` (string values only).
+     * Returns a list of maps, one per array element.
+     */
+    fun parseList(json: String): List<Map<String, String>> {
+        val arr = extractArray(json) ?: return emptyList()
+        val objects = mutableListOf<Map<String, String>>()
+        var cursor = 0
+        while (cursor < arr.length) {
+            val open = arr.indexOf('{', cursor)
+            if (open < 0) break
+            val close = findMatchingBrace(arr, open) ?: break
+            val obj = arr.substring(open, close + 1)
+            objects += stringFields(obj)
+            cursor = close + 1
+        }
+        return objects
+    }
+
     // ── internals ─────────────────────────────────────────────────────────────
 
     /** Extract all top-level `"key": "value"` pairs (string values only). */
@@ -62,6 +82,36 @@ internal object GoldenJson {
             }
         }
         return if (sb.isEmpty()) null else sb.toString()
+    }
+
+    /** Extract the first top-level JSON array. */
+    private fun extractArray(json: String): String? {
+        val start = json.indexOf('[')
+        if (start < 0) return null
+        val sb = StringBuilder()
+        var depth = 0
+        var i = start
+        while (i < json.length) {
+            val c = json[i++]
+            when {
+                c == '[' -> { depth++; sb.append(c) }
+                c == ']' -> { depth--; sb.append(c); if (depth == 0) break }
+                else     -> sb.append(c)
+            }
+        }
+        return if (sb.isEmpty()) null else sb.toString()
+    }
+
+    /** Find the matching '}' for a '{' at position [open]. */
+    private fun findMatchingBrace(s: String, open: Int): Int? {
+        var depth = 0
+        for (i in open until s.length) {
+            when (s[i]) {
+                '{' -> depth++
+                '}' -> { depth--; if (depth == 0) return i }
+            }
+        }
+        return null
     }
 
     private fun unescape(s: String): String = s

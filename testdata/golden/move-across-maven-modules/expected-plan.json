@@ -1,0 +1,6 @@
+{
+  "operation": "java.moveAcrossMavenModules",
+  "status": "preview",
+  "summary": "1 Java compilation unit",
+  "minAffectedFiles": 3
+}

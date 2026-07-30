@@ -180,7 +180,8 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
 
     private fun packageMatches(path: Path, content: String, sourceRoot: Path): Boolean {
         val relative = sourceRoot.relativize(path)
-        if (relative.fileName.toString() == "module-info.java") {
+        val fileName = relative.fileName?.toString() ?: return false
+        if (fileName == "module-info.java") {
             return relative.parent == null && JavaPackageUtil.extractPackage(content).isEmpty()
         }
         val expected = relative.parent?.joinToString(".") ?: ""

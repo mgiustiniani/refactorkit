@@ -1,0 +1,18 @@
+id: java.move-class
+name: Move Java class to another package
+language: java
+parameters:
+  symbol:
+    type: string
+    description: Fully qualified class name to move
+  to:
+    type: string
+    description: Target package (e.g. com.example.account)
+steps:
+  - type: moveClass
+    symbol: "{{ symbol }}"
+    to: "{{ to }}"
+  - type: organizeImports
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

@@ -1,0 +1,17 @@
+id: java.create-module
+name: Create Maven module
+language: java
+parameters:
+  moduleName:
+    type: string
+    description: Name of the new Maven module
+  parentPom:
+    type: string
+    description: Path to the parent POM (workspace-relative)
+steps:
+  - type: createMavenModule
+    moduleName: "{{ moduleName }}"
+    parentPom: "{{ parentPom }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

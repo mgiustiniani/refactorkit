@@ -1,0 +1,21 @@
+id: typescript.change-signature
+name: Change TypeScript method signature
+language: typescript
+parameters:
+  file:
+    type: string
+    description: Source file path (workspace-relative)
+  symbolName:
+    type: string
+    description: Name of the symbol to change
+  newSignature:
+    type: string
+    description: New signature definition
+steps:
+  - type: changeSignature
+    file: "{{ file }}"
+    symbolName: "{{ symbolName }}"
+    newSignature: "{{ newSignature }}"
+  - type: runDiagnostics
+    strict: true
+  - type: summarizePatch

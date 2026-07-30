@@ -47,6 +47,10 @@ import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaPackageUtil
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
+import org.refactorkit.java.JavaCreateMavenModulePlanner
+import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
+import org.refactorkit.java.JavaMoveSourceRootPlanner
+import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
 import org.refactorkit.kotlin.KotlinAdapterRegistration
@@ -181,6 +185,10 @@ class LspSession {
                         add(JsonPrimitive("refactorkit.organizeImports"))
                         add(JsonPrimitive("refactorkit.formatFile"))
                         add(JsonPrimitive("refactorkit.safeDelete"))
+                        add(JsonPrimitive("refactorkit.moveSourceRoot"))
+                        add(JsonPrimitive("refactorkit.moveAcrossMavenModules"))
+                        add(JsonPrimitive("refactorkit.createMavenModule"))
+                        add(JsonPrimitive("refactorkit.renameMavenModule"))
                         add(JsonPrimitive("refactorkit.applyPlan"))
                         add(JsonPrimitive("refactorkit.rollback"))
                     })
@@ -610,6 +618,35 @@ class LspSession {
             "refactorkit.safeDelete" -> {
                 val symbol = args?.string("symbol") ?: missing("symbol")
                 val plan = JavaSafeDeletePlanner(adapter).preview(snap, symbol)
+                if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+                planToLspWorkspaceEdit(plan, snap)
+            }
+            "refactorkit.moveSourceRoot" -> {
+                val from = args?.string("from") ?: missing("from")
+                val to = args?.string("to") ?: missing("to")
+                val plan = JavaMoveSourceRootPlanner(adapter).preview(snap, Paths.get(from), Paths.get(to))
+                if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+                planToLspWorkspaceEdit(plan, snap)
+            }
+            "refactorkit.moveAcrossMavenModules" -> {
+                val from = args?.string("from") ?: missing("from")
+                val to = args?.string("to") ?: missing("to")
+                val plan = JavaMoveAcrossMavenModulesPlanner(adapter).preview(snap, Paths.get(from), Paths.get(to), emptyList())
+                if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+                planToLspWorkspaceEdit(plan, snap)
+            }
+            "refactorkit.createMavenModule" -> {
+                val moduleName = args?.string("moduleName") ?: missing("moduleName")
+                val parentPom = args?.string("parentPom") ?: missing("parentPom")
+                val plan = JavaCreateMavenModulePlanner().preview(snap, moduleName, Paths.get(parentPom))
+                if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+                planToLspWorkspaceEdit(plan, snap)
+            }
+            "refactorkit.renameMavenModule" -> {
+                val oldModuleDir = args?.string("oldModuleDir") ?: missing("oldModuleDir")
+                val newModuleDir = args?.string("newModuleDir") ?: missing("newModuleDir")
+                val newArtifactId = args?.string("newArtifactId")
+                val plan = JavaRenameMavenModulePlanner().preview(snap, oldModuleDir, newModuleDir, newArtifactId)
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
                 planToLspWorkspaceEdit(plan, snap)
             }

@@ -1,0 +1,7 @@
+{
+  "operation": "moveSourceRoot",
+  "arguments": {
+    "from": "source/src/main/java",
+    "to": "destination/src/main/java"
+  }
+}

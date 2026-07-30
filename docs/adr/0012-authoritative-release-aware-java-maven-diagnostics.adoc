@@ -4,12 +4,15 @@
 
 == Status
 
-This architecture decision is *Accepted*. Implementation of the
-`RPK-JAVA-DIAG-001` through `RPK-JAVA-DIAG-007` epic is *active and
+This architecture decision is *Accepted*. The target-scoped Maven `moveClass`
+refinement in this record is accepted as an operation-specific authority mode.
+Decision status does not assert implementation or qualification. Implementation
+of the `RPK-JAVA-DIAG-001` through `RPK-JAVA-DIAG-007` epic is *active and
 product-critical*. The first release-8/current-release platform and full-reactor
 module-filter rows have local packaged evidence, but the epic is not complete or
 qualified. Accepting this decision does not by itself qualify Java/Maven
-diagnostics or any semantic refactoring that depends on them.
+diagnostics or any semantic refactoring that depends on them, including the
+target-scoped Maven `moveClass` mode.
 
 == Context
 
@@ -25,6 +28,15 @@ RefactorKit. It is deliberately reduced and is not evidence of the Java SE API
 available to an analyzed project. Likewise, Maven compile or test execution is
 useful external acceptance evidence but cannot validate that RefactorKit used
 the correct semantic environment.
+
+Complete source-set diagnostic authority remains the preferred, stronger basis
+for managed refactoring. A structurally complete reactor can nevertheless lack
+an ordinary leaf external binary while offline, leaving global classpath
+authority unavailable without necessarily making one exact refactoring target
+unprovable. For a qualified Maven `moveClass`, this decision therefore
+distinguishes global source-set authority from candidate-total, target-scoped
+semantic authority. The latter is a conjunctive, fail-closed operation proof; it
+never hides or upgrades the global `OFFLINE_MISSING` state.
 
 ADRs 0001, 0002, 0008, 0010, and 0011 already separate runtime compatibility,
 managed writes, compiler-backed Java analysis, offline effective build models,
@@ -49,6 +61,36 @@ boundaries combine into authoritative Java/Maven diagnostics.
   model. RefactorKit performs no implicit ancestor, sibling, upward, or outward
   discovery beyond the declared workspace; reactor siblings are visible only
   when the declared reactor model contains them.
+
+. *Descriptor-closed Maven graph enumeration.* RefactorKit's offline Maven
+  provider owns dependency-graph enumeration from Maven descriptors; a
+  caller-attested classpath is never graph authority. Full-reactor graph
+  completeness is descriptor-closed over selected nodes and dependency paths in
+  every active module's main/test projection. Every active reactor POM remains
+  mandatory. Every selected external node requires a complete effective
+  descriptor closure: its POM, parents, imported BOMs, active-profile and
+  interpolation inputs, dependency-management and mediation inputs, and any
+  relocation input. From every active reactor POM and selected external
+  effective POM, each outgoing declaration, its classification inputs, and the
+  exact `SELECTED` or pruned outcome and reason with path/projection provenance
+  are current and hash-bound.
++
+An external edge deterministically pruned because its derived transitive scope
+is null or outside the current projection, because `optional=true` applies
+beyond the declaring owner, or because an exact inherited path exclusion matches
+contributes no node or subtree on that path. Its child POM, descriptor closure,
+and JAR are not authority inputs there. Another selected path or projection
+restores the normal child descriptor and binary requirements. Whenever
+downstream child facts cannot alter the selector outcome, selection precedes
+child version or range resolution, repository and path selection, POM lookup and
+effective-model construction, and JAR lookup.
++
+Type and classifier are normalized variant-identity and exact
+dependency-management dimensions, not independent prune reasons. Ambiguous or
+unsupported normalization, management matching, selection provenance,
+mediation, relocation, or traversal fails closed. A missing POM, parent,
+imported BOM, management, mediation, or relocation input for any selected node
+or included edge remains a structural blocker.
 
 . *Release-aware Java platform authority.* For an effective Maven `--release R`,
   where `R` is any release from Java 8 through Java 25, RefactorKit requires the
@@ -75,20 +117,146 @@ boundaries combine into authoritative Java/Maven diagnostics.
   source roots, generated roots, reactor closure, outputs, dependency scopes,
   external artifacts, compiler settings, and Java platform. Main never gains
   test-only visibility; test receives only its effective Maven test visibility.
+  Effective Maven dependency-scope derivation retains declaration provenance:
+  when a transitive dependency has an explicitly declared `test` scope, a
+  dependency-management scope default must not replace it; a managed scope
+  supplies a value only when that dependency declaration omits scope.
   Availability and derivative-diagnostic cascade suppression are source-set
   scoped. A missing test input does not make main unavailable, and suppression
   never hides genuine source diagnostics from an otherwise complete environment.
 
-. *Change-specific diagnostic authority.* Managed diagnostic delta defaults to
-  no introduced errors. A strict mode additionally requires zero staged errors.
-  Any unavailable affected source-set or dependent-impact environment always
-  blocks authoritative preview and apply, even when the same unavailability was
-  present at baseline. Every baseline, exact staged post-image, post-apply, and
+. *Change-specific diagnostic authority and stronger global modes.* Managed
+  diagnostic delta defaults to no introduced or changed errors. Global
+  source-set authority continues to require every affected source-set and
+  dependent-impact environment to be available: any unavailable environment
+  blocks a globally authoritative preview and managed apply, even when the same
+  unavailability existed at baseline. Strict mode remains stronger and requires
+  zero staged errors. Every baseline, exact staged post-image, post-apply, and
   rollback result used for authority is bound to the exact workspace snapshot,
   overlay or disk mode, effective-model/classpath evidence, affected source-set
   closure, Java release and platform-signature identity, and diagnostic
   provider identity and configuration. Provider failure, evidence drift, or
   incomplete/truncated blocker evidence fails closed.
+
+. *Target-scoped Maven `moveClass` authority.* Only a qualified Maven
+  `moveClass` operation may use a narrow operation-specific exception to the
+  global availability blocker; no other operation inherits it. A semantic
+  preview may be managed-write eligible while external classpath status remains
+  `OFFLINE_MISSING`, but the proof that determines the operation authority
+  closure remains global. The complete active reactor structure and
+  descriptor-closed graph defined above; variants and reactor edges; source and
+  materialized-generated-root inventories and module/source-set ownership;
+  full-reactor target-candidate audit, classification, and exclusion; Java
+  release and platform facts; and diagnostic-provider identity and configuration
+  must all remain complete, current, unambiguous, and hash-bound over the full
+  declared reactor. Missing required descriptor closure on any selected node or
+  included edge, and missing variant, reactor-edge, ownership, source-root,
+  generated-source, platform, or provider facts, remain blockers.
++
+The proven before/staged operation authority closure is the union of the target
+owner in both images, every source set that can reverse-observe the target in
+either image, and every source set whose JDT result contributes target-binding
+or retained-diagnostic evidence. Per-missing-binary operation evidence is
+required only in that closure: every external binary absent from a closure
+source set's environment must be an admissible graph-complete leaf and have
+enumeration of its effective
+`groupId:artifactId:version:type:classifier`, configured local-repository
+identity, deterministic repository-relative expected path, affected closure
+source sets, and exact before/staged negative-presence identity. Those facts and
+the present POM/graph inputs are hash-bound; because the binary bytes are absent,
+the proof must not invent an absent-content hash. Exact retained-diagnostic
+identity and positive non-concealment evidence are likewise required only for
+diagnostics admitted from that closure.
++
+An `OFFLINE_MISSING` source set outside the proven closure remains visible in
+global status. It needs no provided-type manifest, per-binary operation
+inventory, or retained-diagnostic non-concealment record only after full-reactor
+structural and descriptor-closed selected-graph completeness, source ownership,
+candidate classification and exclusion, and before/staged closure completeness
+are proved. A candidate outside the closure must be exactly `BOUND_OTHER` under
+the complete graph and Java name-lookup proof; `BOUND_TARGET` contradicts the
+closure, and `UNRESOLVED` blocks. Missing descriptor facts on selected nodes or
+graph facts that could change inclusion or exclusion remain structural blockers,
+never admissible binary absence.
++
+The selected declaration must have one exact, non-recovered target binding at
+its expected source path and range. A bounded lexical Java inventory independent
+of binding success must hash-bind every old-FQN and matching simple-name
+candidate across the full declared reactor in the before and staged images.
+Every candidate is classified exactly once by JDT as `BOUND_TARGET`,
+`BOUND_OTHER`, or `UNRESOLVED`; `BOUND_TARGET` and `BOUND_OTHER` require exact,
+non-recovered bindings, while absent, recovered, problem, ambiguous, or
+truncated evidence is `UNRESOLVED`. Every target-relevant `UNRESOLVED` candidate
+blocks, and uncertainty about relevance is target-relevant. Every semantic edit
+is selected solely from an exact `BOUND_TARGET` binding equal to the selected
+declaration's binding; `BOUND_OTHER` and lexical similarity never select edits.
++
+The first planned sidecar-free ordinary-repository row is deliberately narrow:
+one included, non-reactor selected graph leaf with a fixed non-snapshot release
+version, a supported `jar` or deterministically mapped `test-jar` type, and no
+relocation, in one explicitly configured simple local-only Maven-2-layout
+repository that does not consult Maven settings. Its effective POM, all parents
+and imported BOMs, and every management and mediation input are present,
+complete, and hash-bound while its selected JAR is absent. RefactorKit, not a
+caller, owns enumeration of the exact
+effective `groupId:artifactId:version:type:classifier`, repository
+provider/layout/root identity, deterministic relative and safely resolved POM
+and JAR paths, affected closure source sets, selected-leaf proof, and exact
+before/staged and under-lock negative-presence observations. The evidence records
+absence and its evidence-fact hash but invents no absent-JAR content hash.
++
+This planned possibility remains subject to the candidate-total exact JDT
+binding proof above, Java target-name lookup protection, exact unchanged and
+positively non-concealing retained diagnostics, a staged delta with no new or
+changed error, and the under-lock lease and freshness gates below. Without a
+sidecar or provided-type inventory, the selected source declaration's exact
+target binding plus Java target-name lookup protection may prove
+non-concealment. Apart from that declaration, each `BOUND_TARGET` occurrence
+must use either the exact applicable before/staged target FQN or a simple type
+name protected by exactly one resolved, non-static single-type import of that
+FQN; JDT must bind the import and occurrence to the selected source declaration.
+An unprotected simple name; a relevant type or static import-on-demand; a
+target-named or unresolved static import; same-package, inherited, or
+enclosing-type lookup; recovered, problem, ambiguous, or unresolved target
+evidence; retained diagnostic overlap with a declaration, candidate, or edit;
+or conflicting candidate/edit ranges blocks this bounded row.
++
+A retained baseline diagnostic must have exact, unchanged before/staged full
+multiset identity after deterministic path/range mapping, including provider
+configuration, code or problem ID, category, severity, normalized path, exact
+range, and message. It must carry positive proof that neither it nor its missing
+input intersects or can introduce, shadow, ambiguate, or conceal target candidate
+or Java name resolution. In the lookup-protected row, an unresolved non-static
+single-type import is retainable only when its terminal simple name differs from
+the target, its exact diagnostic range is disjoint from every
+target declaration, candidate, and edit, and every target occurrence in that
+compilation unit is protected. Exact staged analysis must preserve retained
+identities and `BOUND_OTHER` classifications, bind the moved declaration and
+every former `BOUND_TARGET` occurrence to the new identity, leave no resolvable
+old-target occurrence, and introduce no new or changed errors.
++
+Under the workspace lock and before WAL creation, RefactorKit revalidates the
+full reactor and descriptor/prune proof, before/staged closure,
+missing-coordinate/path and negative-presence evidence, source/candidate
+inventory, bindings, normalized edits, retained diagnostics, platform/provider
+identities, staged post-image, and diagnostic delta. Any drift, truncation,
+provider failure, or artifact appearance, disappearance, or replacement makes
+the preview ineligible. This result remains target-scoped and cannot be reported
+as global or strict authority; global and strict modes remain stronger.
++
+This accepted boundary reserves a planned qualification row only; it makes no
+implementation, qualification, or field-workspace claim. Caller-attested
+classpaths cannot supply authority, and a missing descriptor on any selected or
+included edge remains blocking. Nothing here authorizes Maven, wrapper,
+lifecycle, or plugin execution, Maven settings or credentials, implicit network
+access or resolution, lexical-evidence promotion, or any other operation.
+
+. *Lexical evidence boundary.* The lexical inventory is a completeness veto,
+  never positive binding or mutation evidence. `LEXICAL_FALLBACK` remains
+  review-only and structurally non-applyable. Approval, force metadata, recipe
+  composition, or protocol translation cannot promote it; the managed-write
+  boundary, including `PatchEngine`, rejects it before WAL creation and before
+  workspace mutation.
 
 . *Qualification order and JPMS boundary.* RefactorKit qualifies unnamed-module,
   classpath-based Maven reactors first. Named JPMS or module-path reactors return
@@ -104,20 +272,27 @@ boundaries combine into authoritative Java/Maven diagnostics.
   retrospectively justified by a different compiler invocation.
 * Java 8 through Java 25 API availability can be reproduced independently of the
   host JDK and the packaged runtime's reduced module image.
-* Full-reactor modeling preserves Maven dependency visibility while retaining an
-  explicit workspace security boundary.
+* Descriptor-closed full-reactor modeling preserves Maven dependency visibility,
+  avoids manufacturing POM or JAR requirements below a deterministic prune, and
+  retains an explicit workspace security boundary.
 * Main failures, test failures, and missing environment inputs can be reported
   and suppressed at the correct source-set scope.
 * Preview, apply, post-apply, and rollback validation can refer to the same exact
   evidence rather than similarly configured but unbound analyses.
+* The architecture preserves a future qualification path for the narrow Maven
+  `moveClass` row when an otherwise descriptor-complete selected graph leaf has
+  an absent JAR and the closure-scoped enumeration and non-concealment proof
+  passes, without asserting globally complete diagnostics or allowing lexical
+  matches to drive edits.
 
 === Costs and limitations
 
 * The distribution or its approved platform source must supply and maintain
   licensed, integrity-attested, SBOM-covered signatures for every advertised
   Java release.
-* Full-reactor and dependent-impact analysis costs more memory and time than
-  analyzing an isolated requested module.
+* Full-reactor, per-projection edge classification, hash-bound prune evidence,
+  and dependent-impact analysis cost more memory and time than analyzing an
+  isolated requested module.
 * More projects will receive typed unavailability until their exact Maven and
   platform shapes are qualified. Maven build success does not relax that
   limitation.
@@ -126,6 +301,10 @@ boundaries combine into authoritative Java/Maven diagnostics.
   the dedicated slice is complete.
 * The epic requires the full permanent fixture and packaged-runtime matrix;
   the first platform/module-filter fixture does not qualify the remaining rows.
+* Target-scoped eligibility adds a full-reactor candidate inventory, exact
+  binding classifications, mapped diagnostic identity, positive non-concealment
+  proofs, and under-lock evidence revalidation. Any uncertainty must refuse
+  managed apply.
 
 == Alternatives Considered
 
@@ -162,6 +341,31 @@ review required by ADR 0011 and still cannot replace RefactorKit authority.
 Rejected. It leaks test-only types into production analysis, broadens failures,
 and makes diagnostic-cascade suppression imprecise.
 
+=== Require descriptors for every coordinate declared by a selected POM
+
+Rejected. It conflates declarations with nodes Maven selects for a source-set
+projection. Once hash-bound parent, management, and path facts deterministically
+prune an external edge by transitive scope, optionality, or exclusion, resolving
+the child POM or JAR cannot alter that outcome and would manufacture an offline
+blocker. Active reactor POMs and every alternate selected path remain mandatory.
+
+=== Require globally complete affected source sets for every Maven move-class apply
+
+Retained as the stronger global authority mode, but not selected as the only
+eligibility mode. A model-complete missing leaf binary can be irrelevant to an
+exact move target even though it keeps the containing source set globally
+classpath-incomplete. The target-scoped mode admits that case only through the
+complete global structural/candidate proof and closure-scoped missing-binary,
+diagnostic-isolation, staged-delta, and freshness proof above; it does not claim
+global completeness.
+
+=== Use lexical candidates to complete missing bindings
+
+Rejected. A lexical scan can reveal a candidate that binding analysis failed to
+classify, but spelling cannot prove symbol identity. Such a candidate vetoes
+managed authority when it is unresolved and target-relevant; it never supplies
+an edit, and `LEXICAL_FALLBACK` remains review-only.
+
 === Approximate named JPMS reactors on the classpath
 
 Rejected. Flattening module-path semantics can hide readability, export, and
@@ -175,11 +379,18 @@ split-package failures and therefore cannot support authoritative refactoring.
   when exact platform signatures are unavailable.
 * Never let a module filter narrow model construction or widen the declared
   workspace boundary.
+* Never use type or classifier as a prune reason, guess an ambiguous selector,
+  or treat a missing descriptor on a selected edge as admissible binary absence.
+* Whenever child facts cannot affect scope, optionality, or exclusion selection,
+  classify the edge before child version, repository, POM, or JAR lookup.
 * Never execute build or credential-bearing machinery implicitly; ADRs 0010 and
   0011 remain in force.
-* Never grant semantic mutation authority from a partial source-set environment,
-  guessed classpath, stale output, provider failure, or unavailable affected
-  closure.
+* Never grant semantic mutation authority from a guessed classpath, stale
+  output, provider failure, incomplete structural reactor/observer closure, or
+  unavailable affected environment outside the qualified target-scoped Maven
+  `moveClass` exception defined above.
+* Never treat lexical inventory as binding or mutation evidence. Refuse
+  `LEXICAL_FALLBACK` before WAL creation and workspace mutation.
 * Keep generated sources analysis-only unless a separate capability proves safe
   ownership and mutation semantics.
 * Do not claim Java/Maven diagnostics authority implemented until
@@ -202,6 +413,22 @@ split-package failures and therefore cannot support authoritative refactoring.
 * `RPK-PKG-009` -- offline Maven reactor source/classpath visibility.
 * `REQ-TX-007` -- authoritative diagnostics and regression gates across preview,
   simulation, apply, and rollback.
+* `RPK-JAVA-MOVE-002` through `RPK-JAVA-MOVE-004`, and `RPK-JAVA-MOVE-007` --
+  complete Maven operation closure, candidate-total binding authority,
+  target-scoped managed apply, and audit visibility for `moveClass`.
+* Wiki-reserved planned/absent `REQ-JAVA-MAVEN-MOVE-AUTH-010` --
+  selector-pruned child descriptor independence; maps to `RPK-JAVA-MOVE-002`,
+  `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
+* Wiki-reserved planned/absent `REQ-JAVA-MAVEN-MOVE-AUTH-011` --
+  RefactorKit-owned ordinary fixed-release simple Maven-2-layout selected-leaf
+  absent-JAR evidence; maps to `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`,
+  `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
+* Wiki-reserved planned/absent `REQ-JAVA-MAVEN-MOVE-AUTH-012` -- included
+  POM/parent/BOM loss blocks; maps to `RPK-JAVA-MOVE-002`,
+  `RPK-JAVA-MOVE-004`, and `RPK-JAVA-MOVE-007`.
+
+These three identifiers are architecture reservations only. They have no current
+Gherkin, implementation, or qualification evidence.
 
 == Related ADRs
 

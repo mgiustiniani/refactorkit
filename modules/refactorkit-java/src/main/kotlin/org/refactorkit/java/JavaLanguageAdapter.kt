@@ -700,7 +700,8 @@ class JavaLanguageAdapter(
             }
             for (symbol in publicTypes) {
                 val expected = "${symbol.name}.java"
-                if (file.path.fileName.toString() != expected) {
+                val actualName = file.path.fileName?.toString() ?: continue
+                if (actualName != expected) {
                     diagnostics += Diagnostic(
                         message = "Public Java type '${symbol.name}' should be declared in $expected",
                         severity = Diagnostic.Severity.ERROR,
@@ -745,7 +746,7 @@ class JavaLanguageAdapter(
             ?.sourceRoots.orEmpty()
     }
 
-    private fun analyzeDiagnosticsOverlay(project: ProjectSnapshot): JdtJavaSemanticAnalysisResult =
+    internal fun analyzeDiagnosticsOverlay(project: ProjectSnapshot): JdtJavaSemanticAnalysisResult =
         withDiagnosticsOverlay(project, JdtJavaSemanticAnalyzer()::analyze)
 
     internal fun analyzeAuthoritativeDiagnosticsOverlay(
@@ -831,6 +832,7 @@ class JavaLanguageAdapter(
         "moveClass"    -> applyMoveClass(request)
         "moveSourceRoot" -> applyMoveSourceRoot(request)
         "java.moveAcrossMavenModules" -> applyMoveAcrossMavenModules(request)
+        "java.createMavenModule" -> applyCreateMavenModule(request)
         "organizeImports" -> applyOrganizeImports(request)
         "formatFile" -> applyFormatFile(request)
         "safeDelete"   -> applySafeDelete(request)
@@ -843,6 +845,14 @@ class JavaLanguageAdapter(
         val to = request.arguments["to"]
             ?: return notImplemented(request, "moveSourceRoot requires arguments.to")
         return JavaMoveSourceRootPlanner(this).preview(request.snapshot, Path.of(from), Path.of(to))
+    }
+
+    private fun applyCreateMavenModule(request: RefactoringRequest): PatchPlan {
+        val moduleName = request.arguments["moduleName"]
+            ?: return notImplemented(request, "java.createMavenModule requires arguments.moduleName")
+        val parentPom = request.arguments["parentPom"]
+            ?: return notImplemented(request, "java.createMavenModule requires arguments.parentPom")
+        return JavaCreateMavenModulePlanner().preview(request.snapshot, moduleName, Path.of(parentPom))
     }
 
     private fun applyMoveAcrossMavenModules(request: RefactoringRequest): PatchPlan {

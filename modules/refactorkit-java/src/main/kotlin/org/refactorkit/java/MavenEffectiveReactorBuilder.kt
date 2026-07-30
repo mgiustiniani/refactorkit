@@ -16,6 +16,7 @@ import org.apache.maven.artifact.versioning.VersionRange
 import java.net.URI
 import javax.net.ssl.HttpsURLConnection
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -28,6 +29,71 @@ import kotlin.io.path.isRegularFile
 internal data class MavenCoordinate(val groupId: String, val artifactId: String, val version: String) {
     val key: String get() = "$groupId:$artifactId:$version"
 }
+
+internal enum class MavenMissingArtifactEvidenceKind {
+    SYSTEM_PATH_SIDECAR,
+    LOCAL_REPOSITORY_SELECTED_LEAF,
+}
+
+internal data class MavenSelectedDescriptorFact(
+    val path: Path,
+    val layer: MavenSelectedDescriptorLayer,
+    val contentSha256: String,
+)
+
+internal data class MavenMissingArtifactSelection(
+    val sourceSet: String,
+    val projection: String,
+    val dependencyPath: String,
+    val effectiveScope: String,
+)
+
+internal data class MavenMissingArtifactEvidence(
+    val identity: String,
+    val expectedPath: Path,
+    val expectedIdentityManifest: Path?,
+    val expectedSha256: String?,
+    val providedTypes: Set<String>,
+    val leaf: Boolean,
+    val kind: MavenMissingArtifactEvidenceKind = MavenMissingArtifactEvidenceKind.SYSTEM_PATH_SIDECAR,
+    val groupId: String? = null,
+    val artifactId: String? = null,
+    val version: String? = null,
+    val type: String? = null,
+    val classifier: String? = null,
+    val extension: String? = null,
+    val repositoryRoot: Path? = null,
+    val repositoryProvider: String? = null,
+    val repositoryLayout: String? = null,
+    val repositoryPolicy: String? = null,
+    val selectedPom: Path? = null,
+    val effectiveModelInputs: Set<Path> = emptySet(),
+    val selections: Set<MavenMissingArtifactSelection> = emptySet(),
+    val descriptorFacts: Set<MavenSelectedDescriptorFact> = emptySet(),
+    val parsedDescriptorIdentityHash: String? = null,
+    val fixedRelease: Boolean = false,
+    val noRelocation: Boolean = false,
+)
+
+internal data class MavenDependencySelectorRecord(
+    val declaringPom: Path,
+    val consumer: String,
+    val sourceSet: String,
+    val projection: String,
+    val dependencyPath: String,
+    val groupId: String,
+    val artifactId: String,
+    val declaredVersion: String,
+    val declaredScope: String,
+    val effectiveScope: String,
+    val optional: Boolean,
+    val type: String,
+    val classifier: String,
+    val normalizedVariant: String,
+    val outcome: String,
+    val reason: String,
+    val lookupBoundary: String,
+)
 
 internal data class MavenModuleModel(
     val root: Path,
@@ -47,10 +113,15 @@ internal data class MavenModuleModel(
     val systemPathArtifacts: Set<Path>,
     val modelInputs: Set<Path>,
     val importedBoms: Set<Path>,
+    val dependencyGraphFailures: List<String>,
+    val dependencySelectorRecords: List<MavenDependencySelectorRecord>,
     val missingArtifacts: List<String>,
     val mainMissingArtifacts: List<String>,
     val runtimeMissingArtifacts: List<String>,
     val testMissingArtifacts: List<String>,
+    val missingArtifactEvidence: List<MavenMissingArtifactEvidence>,
+    val mainMissingArtifactEvidence: List<MavenMissingArtifactEvidence>,
+    val testMissingArtifactEvidence: List<MavenMissingArtifactEvidence>,
     val testGeneratedPathHints: Set<String>,
     val kotlinPluginConfigured: Boolean = false,
     val kotlinJvmTarget: String? = null,
@@ -76,6 +147,7 @@ internal class MavenEffectiveReactorBuilder(
     activeProfiles: Set<String> = emptySet(),
     inactiveProfiles: Set<String> = emptySet(),
     private val artifactTransport: MavenArtifactTransport = MavenCentralHttpsTransport,
+    private val selectedDescriptorAuthorityContext: MavenSelectedDescriptorAuthorityContext? = null,
 ) {
     private val activeProfiles = validateProfileIds(activeProfiles)
     private val inactiveProfiles = validateProfileIds(inactiveProfiles)
@@ -118,10 +190,15 @@ internal class MavenEffectiveReactorBuilder(
                     systemPathArtifacts = emptySet(),
                     modelInputs = result.inputs + setOf(pom),
                     importedBoms = result.importedBoms,
+                    dependencyGraphFailures = listOf(concise(result.failure ?: "effective Maven model unavailable")),
+                    dependencySelectorRecords = emptyList(),
                     missingArtifacts = emptyList(),
                     mainMissingArtifacts = emptyList(),
                     runtimeMissingArtifacts = emptyList(),
                     testMissingArtifacts = emptyList(),
+                    missingArtifactEvidence = emptyList(),
+                    mainMissingArtifactEvidence = emptyList(),
+                    testMissingArtifactEvidence = emptyList(),
                     testGeneratedPathHints = emptySet(),
                     modelFailure = concise(result.failure ?: "effective Maven model unavailable"),
                 )
@@ -139,6 +216,7 @@ internal class MavenEffectiveReactorBuilder(
         reactorCoordinates: Set<MavenCoordinate>,
         effective: EffectiveBuild,
     ): MavenModuleModel {
+        val moduleCoordinate = requireNotNull(model.coordinate())
         val mainDirect = model.dependencies.filter { it.scope.normalizedScope() in MAIN_SCOPES && it.type != "pom" }
         val testDirect = model.dependencies.filter { it.scope.normalizedScope() in TEST_SCOPES && it.type != "pom" }
         val systemDirect = model.dependencies.filter { it.scope.normalizedScope() == "system" && it.type != "pom" }
@@ -157,26 +235,43 @@ internal class MavenEffectiveReactorBuilder(
         val mainMissing = linkedSetOf<String>()
         val runtimeMissing = linkedSetOf<String>()
         val testOnlyMissing = linkedSetOf<String>()
+        val mainMissingEvidence = linkedSetOf<MavenMissingArtifactEvidence>()
+        val selectedMissingEvidence = linkedMapOf<String, MavenMissingArtifactEvidence>()
         val modelInputs = linkedSetOf<Path>().apply { addAll(effective.inputs); add(pom) }
         val importedBoms = linkedSetOf<Path>().apply { addAll(effective.importedBoms) }
+        val dependencyGraphFailures = linkedSetOf<String>()
+        val dependencySelectorRecords = linkedSetOf<MavenDependencySelectorRecord>()
         val sourceDirectories = sourceDirectories(workspaceRoot, model, pom)
-        val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, mainMissing)
+        val systemPathArtifacts = resolveSystemPaths(systemDirect, pom, mainMissing, mainMissingEvidence)
         val mainArtifacts = (systemPathArtifacts + resolveGraph(
             mainRepositoryDirect, MAIN_REPOSITORY_SCOPES, resolver, reactorCoordinates,
-            mainMissing, modelInputs, importedBoms, managedDependencies,
+            mainMissing, modelInputs, importedBoms, managedDependencies, dependencyGraphFailures,
+            workspaceRoot, effective.importedBoms, pom, moduleCoordinate, "main", "COMPILE",
+            dependencySelectorRecords, selectedMissingEvidence,
         )).distinct()
         val runtimeArtifacts = resolveGraph(
             runtimeRepositoryDirect, RUNTIME_SCOPES, resolver, reactorCoordinates,
-            runtimeMissing, modelInputs, importedBoms, managedDependencies,
+            runtimeMissing, modelInputs, importedBoms, managedDependencies, dependencyGraphFailures,
+            workspaceRoot, effective.importedBoms, pom, moduleCoordinate, "main", "RUNTIME",
+            dependencySelectorRecords, selectedMissingEvidence,
         ).distinct()
         val testArtifacts = (mainArtifacts + runtimeArtifacts + resolveGraph(
             testRepositoryDirect, TEST_REPOSITORY_SCOPES, resolver, reactorCoordinates,
-            testOnlyMissing, modelInputs, importedBoms, managedDependencies,
+            testOnlyMissing, modelInputs, importedBoms, managedDependencies, dependencyGraphFailures,
+            workspaceRoot, effective.importedBoms, pom, moduleCoordinate, "test", "TEST",
+            dependencySelectorRecords, selectedMissingEvidence,
         )).distinct()
         val testMissing = (mainMissing + runtimeMissing + testOnlyMissing).toList()
+        val selectedMissing = selectedMissingEvidence.values.toList()
+        val selectedMainMissing = selectedMissing.filter { evidence ->
+            evidence.selections.any { it.projection == "COMPILE" }
+        }
+        val selectedTestMissing = selectedMissing.filter { evidence ->
+            evidence.selections.any { it.projection == "TEST" }
+        }
         return MavenModuleModel(
             root = pom.parent,
-            coordinate = requireNotNull(model.coordinate()),
+            coordinate = moduleCoordinate,
             packaging = model.packaging?.takeIf(String::isNotBlank) ?: "jar",
             sourceLevel = sourceLevel(model),
             releaseLevel = releaseLevel(model),
@@ -194,10 +289,15 @@ internal class MavenEffectiveReactorBuilder(
             systemPathArtifacts = systemPathArtifacts.toSet(),
             modelInputs = modelInputs,
             importedBoms = importedBoms,
+            dependencyGraphFailures = dependencyGraphFailures.toList(),
+            dependencySelectorRecords = dependencySelectorRecords.toList(),
             missingArtifacts = testMissing,
             mainMissingArtifacts = mainMissing.toList(),
             runtimeMissingArtifacts = runtimeMissing.toList(),
             testMissingArtifacts = testMissing,
+            missingArtifactEvidence = (mainMissingEvidence + selectedMissing).distinct(),
+            mainMissingArtifactEvidence = (mainMissingEvidence + selectedMainMissing).distinct(),
+            testMissingArtifactEvidence = (mainMissingEvidence + selectedTestMissing).distinct(),
             testGeneratedPathHints = model.build?.plugins.orEmpty()
                 .filter { plugin -> plugin.executions.any { it.phase?.contains("test", ignoreCase = true) == true } }
                 .map { it.artifactId.removeSuffix("-maven-plugin").removeSuffix("-plugin") }
@@ -277,7 +377,8 @@ internal class MavenEffectiveReactorBuilder(
         var unsafe = 0
         fun normalize(raw: String): Path? {
             val parsed = runCatching { Path.of(raw) }.getOrNull() ?: run { unsafe++; return null }
-            val absolute = (if (parsed.isAbsolute) parsed else pom.parent.resolve(parsed)).toAbsolutePath().normalize()
+            val base = pom.parent ?: return null
+            val absolute = (if (parsed.isAbsolute) parsed else base.resolve(parsed)).toAbsolutePath().normalize()
             if (!absolute.startsWith(workspace)) { unsafe++; return null }
             if (absolute.exists()) {
                 val real = runCatching { absolute.toRealPath() }.getOrNull()
@@ -296,6 +397,7 @@ internal class MavenEffectiveReactorBuilder(
         dependencies: List<Dependency>,
         pom: Path,
         missing: MutableSet<String>,
+        missingEvidence: MutableSet<MavenMissingArtifactEvidence>,
     ): List<Path> = dependencies.mapNotNull { dependency ->
         val label = listOfNotNull(dependency.groupId, dependency.artifactId, dependency.version).joinToString(":")
             .ifBlank { "system dependency" }
@@ -307,15 +409,54 @@ internal class MavenEffectiveReactorBuilder(
         val path = runCatching { Path.of(raw).normalize() }.getOrNull()
         if (path == null || !path.isAbsolute || !path.exists() || !path.isRegularFile()) {
             missing += "$label systemPath is unavailable: ${conciseSystemPath(raw, pom)}"
+            if (path != null && path.isAbsolute) {
+                val expectedPath = path.toAbsolutePath().normalize()
+                val manifest = expectedPath.resolveSibling("${expectedPath.fileName}.refactorkit-evidence")
+                    .takeIf { Files.isRegularFile(it, java.nio.file.LinkOption.NOFOLLOW_LINKS) }
+                val identity = dependency.coordinate()?.key
+                if (identity != null) {
+                    val expected = manifest?.let(::readMissingArtifactIdentity)
+                    missingEvidence += MavenMissingArtifactEvidence(
+                        identity = identity,
+                        expectedPath = expectedPath,
+                        expectedIdentityManifest = manifest,
+                        expectedSha256 = expected?.first,
+                        providedTypes = expected?.second.orEmpty(),
+                        leaf = true,
+                    )
+                }
+            }
             return@mapNotNull null
         }
         path.toAbsolutePath().normalize()
     }.distinct().sortedBy(Path::toString)
 
+    private fun readMissingArtifactIdentity(manifest: Path): Pair<String?, Set<String>>? = runCatching {
+        if (Files.size(manifest) > MAX_MISSING_IDENTITY_BYTES) return@runCatching null
+        var sha256: String? = null
+        val providedTypes = linkedSetOf<String>()
+        Files.readAllLines(manifest, Charsets.UTF_8).forEach { line ->
+            when {
+                line.startsWith("artifactSha256=") -> {
+                    val value = line.substringAfter('=').trim().lowercase()
+                    if (SHA256.matches(value) && sha256 == null) sha256 = value else return@runCatching null
+                }
+                line.startsWith("providedType=") -> {
+                    val value = line.substringAfter('=').trim()
+                    if (!JAVA_FQN.matches(value) || providedTypes.size >= MAX_PROVIDED_TYPES) return@runCatching null
+                    providedTypes += value
+                }
+                line.isNotBlank() -> return@runCatching null
+            }
+        }
+        sha256 to providedTypes.toSet()
+    }.getOrNull()
+
     private fun conciseSystemPath(raw: String, pom: Path): String {
         val normalized = runCatching { Path.of(raw).toAbsolutePath().normalize() }.getOrNull()
-        return if (normalized != null && normalized.startsWith(pom.parent.toAbsolutePath().normalize())) {
-            pom.parent.toAbsolutePath().normalize().relativize(normalized).toString()
+        val pomParent = pom.parent?.toAbsolutePath()?.normalize()
+        return if (normalized != null && pomParent != null && normalized.startsWith(pomParent)) {
+            pomParent.relativize(normalized).toString()
         } else {
             normalized?.fileName?.toString() ?: "invalid"
         }
@@ -344,6 +485,15 @@ internal class MavenEffectiveReactorBuilder(
         modelInputs: MutableSet<Path>,
         importedBoms: MutableSet<Path>,
         managedDependencies: Map<String, MavenManagedDependency>,
+        dependencyGraphFailures: MutableSet<String>,
+        workspaceRoot: Path,
+        consumerImportedBoms: Set<Path>,
+        consumerPom: Path,
+        consumerCoordinate: MavenCoordinate,
+        sourceSet: String,
+        projection: String,
+        selectorRecords: MutableSet<MavenDependencySelectorRecord>,
+        selectedMissingEvidence: MutableMap<String, MavenMissingArtifactEvidence>,
     ): List<Path> {
         data class Pending(
             val dependency: Dependency,
@@ -351,34 +501,282 @@ internal class MavenEffectiveReactorBuilder(
             val direct: Boolean,
             val depth: Int,
             val effectiveScope: String,
+            val dependencyPath: List<String>,
         )
+        data class ResolvedDependencyModel(
+            val pom: Path,
+            val effective: EffectiveBuild,
+            val descriptorFacts: Set<MavenSelectedDescriptorFact>,
+            val parsedDescriptorIdentityHash: String,
+        )
+
         val artifacts = linkedSetOf<Path>()
         val visitedArtifacts = mutableSetOf<String>()
         val selectedArtifacts = mutableSetOf<String>()
         val unresolvedTransitive = linkedMapOf<String, String>()
         val pending = ArrayDeque<Pending>()
+
+        fun normalizedVariant(dependency: Dependency): String {
+            val type = dependency.type.ifBlank { "jar" }
+            val extension = if (type == "test-jar") "jar" else type
+            val classifier = dependency.classifier?.takeIf(String::isNotBlank)
+                ?: if (type == "test-jar") "tests" else ""
+            return "$extension:$classifier"
+        }
+
+        fun pathSegment(dependency: Dependency): String = listOf(
+            dependency.groupId?.trim().orEmpty().ifBlank { "<unresolved-group>" },
+            dependency.artifactId?.trim().orEmpty().ifBlank { "<unresolved-artifact>" },
+            dependency.version?.trim().orEmpty().ifBlank { "<unresolved-version>" },
+            normalizedVariant(dependency),
+        ).joinToString(":")
+
+        fun recordSelector(
+            dependency: Dependency,
+            declaringPom: Path,
+            dependencyPath: List<String>,
+            effectiveScope: String?,
+            outcome: String,
+            reason: String,
+            lookupBoundary: String,
+        ) {
+            val record = MavenDependencySelectorRecord(
+                declaringPom = declaringPom.toAbsolutePath().normalize(),
+                consumer = consumerCoordinate.key,
+                sourceSet = sourceSet,
+                projection = projection,
+                dependencyPath = dependencyPath.joinToString(" -> "),
+                groupId = dependency.groupId?.trim().orEmpty(),
+                artifactId = dependency.artifactId?.trim().orEmpty(),
+                declaredVersion = dependency.version?.trim().orEmpty(),
+                declaredScope = dependency.explicitNormalizedScope() ?: dependency.scope.normalizedScope(),
+                effectiveScope = effectiveScope.orEmpty(),
+                optional = dependency.isOptional,
+                type = dependency.type.ifBlank { "jar" },
+                classifier = dependency.classifier?.takeIf(String::isNotBlank).orEmpty(),
+                normalizedVariant = normalizedVariant(dependency),
+                outcome = outcome,
+                reason = reason,
+                lookupBoundary = lookupBoundary,
+            )
+            if (record !in selectorRecords && selectorRecords.size >= MAX_SELECTOR_RECORDS) {
+                dependencyGraphFailures += "Dependency selector evidence exceeds the bounded record limit"
+            } else {
+                selectorRecords += record
+            }
+        }
+
+        fun selectedDescriptorFailure(
+            coordinate: MavenCoordinate,
+            node: Pending,
+            layer: String,
+            condition: String,
+            detail: String,
+        ): String = "MAVEN_SELECTED_DESCRIPTOR_$condition coordinate=" +
+            "${selectedDescriptorAuthorityContext?.coordinate ?: coordinate.key} " +
+            "consumer=${consumerCoordinate.key} origin=${consumerCoordinate.artifactId}:main " +
+            "sourceSet=${consumerCoordinate.artifactId}:$sourceSet projection=$projection " +
+            "path=${node.dependencyPath.joinToString(" -> ")} descriptorLayer=$layer " +
+            "descriptorCondition=$condition $detail"
+
+        fun selectedDescriptorPreflight(coordinate: MavenCoordinate, node: Pending): String? {
+            val authority = selectedDescriptorAuthorityContext
+                ?.takeIf { it.groupId == coordinate.groupId && it.artifactId == coordinate.artifactId }
+                ?: return null
+            val workspace = workspaceRoot.toAbsolutePath().normalize()
+            val expectations = authority.descriptorExpectations.sortedWith(
+                compareBy<MavenSelectedDescriptorExpectation> { it.layer.ordinal }
+                    .thenBy { it.path.toString() },
+            )
+            val selectedPom = expectations.single { it.layer == MavenSelectedDescriptorLayer.SELECTED_LEAF_POM }
+            val selectedPomPath = workspace.resolve(selectedPom.path).normalize()
+            if (!Files.isRegularFile(selectedPomPath, LinkOption.NOFOLLOW_LINKS)) {
+                return selectedDescriptorFailure(
+                    coordinate,
+                    node,
+                    MavenSelectedDescriptorLayer.SELECTED_LEAF_POM.displayName,
+                    "MISSING",
+                    "descriptorPath=${selectedPom.path}",
+                )
+            }
+            if (readRawModel(selectedPomPath) == null) {
+                return selectedDescriptorFailure(
+                    coordinate,
+                    node,
+                    "selected leaf POM model",
+                    "MALFORMED",
+                    "descriptorPath=${selectedPom.path}",
+                )
+            }
+            expectations.forEach { expectation ->
+                val descriptor = workspace.resolve(expectation.path).normalize()
+                if (!Files.isRegularFile(descriptor, LinkOption.NOFOLLOW_LINKS)) {
+                    return selectedDescriptorFailure(
+                        coordinate,
+                        node,
+                        expectation.layer.displayName,
+                        "MISSING",
+                        "descriptorPath=${expectation.path}",
+                    )
+                }
+                val actualHash = sha256(descriptor)
+                if (actualHash != expectation.contentSha256) {
+                    return selectedDescriptorFailure(
+                        coordinate,
+                        node,
+                        expectation.layer.displayName,
+                        "DRIFTED",
+                        "descriptorPath=${expectation.path} expectedHash=${expectation.contentSha256} actualHash=$actualHash",
+                    )
+                }
+            }
+            if (coordinate.version != authority.version) {
+                return selectedDescriptorFailure(
+                    coordinate,
+                    node,
+                    MavenSelectedDescriptorLayer.DEPENDENCY_MANAGEMENT_MEDIATION_DECLARATION.displayName,
+                    "DRIFTED",
+                    "expectedVersion=${authority.version} actualVersion=${coordinate.version}",
+                )
+            }
+            if (authority.parsedDescriptorIdentityHash == null) {
+                return selectedDescriptorFailure(
+                    coordinate,
+                    node,
+                    "relocation/model parse evidence",
+                    "MISSING",
+                    "descriptorPath=${selectedPom.path}",
+                )
+            }
+            return null
+        }
+
+        fun descriptorFacts(
+            dependencyPom: Path,
+            effectiveModel: EffectiveBuild,
+        ): Set<MavenSelectedDescriptorFact> {
+            val facts = linkedSetOf<MavenSelectedDescriptorFact>()
+            fun add(path: Path?, layer: MavenSelectedDescriptorLayer) {
+                val normalized = path?.toAbsolutePath()?.normalize() ?: return
+                if (Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
+                    facts += MavenSelectedDescriptorFact(normalized, layer, sha256(normalized))
+                }
+            }
+            add(dependencyPom, MavenSelectedDescriptorLayer.SELECTED_LEAF_POM)
+            val rawModel = readRawModel(dependencyPom)
+            rawModel?.parent?.let { parent ->
+                val relative = parent.relativePath
+                val relativePath = if (relative != null && relative.isBlank()) null else {
+                    dependencyPom.parent?.resolve(relative ?: "../pom.xml")?.toAbsolutePath()?.normalize()
+                }
+                val repositoryPath = resolver.expectedPomPath(
+                    MavenCoordinate(parent.groupId, parent.artifactId, parent.version),
+                )
+                val parentPath = listOfNotNull(relativePath, repositoryPath).firstOrNull { candidate ->
+                    candidate in effectiveModel.inputs
+                }
+                add(parentPath, MavenSelectedDescriptorLayer.REQUIRED_PARENT_POM)
+            }
+            rawModel?.dependencyManagement?.dependencies.orEmpty()
+                .filter { it.type == "pom" && it.scope == "import" }
+                .mapNotNull { it.coordinate(rawModel?.properties ?: Properties()) }
+                .mapNotNull(resolver::expectedPomPath)
+                .filter { it in effectiveModel.inputs }
+                .forEach { add(it, MavenSelectedDescriptorLayer.REQUIRED_IMPORTED_BOM) }
+            consumerImportedBoms.forEach { input ->
+                add(input, MavenSelectedDescriptorLayer.DEPENDENCY_MANAGEMENT_MEDIATION_DECLARATION)
+            }
+            return facts
+        }
+
+        fun effectiveDependencyModel(coordinate: MavenCoordinate, node: Pending): ResolvedDependencyModel? {
+            selectedDescriptorPreflight(coordinate, node)?.let { failure ->
+                dependencyGraphFailures += failure
+                return null
+            }
+            val context = "coordinate=${coordinate.key} consumer=${consumerCoordinate.key} sourceSet=$sourceSet " +
+                "projection=$projection path=${node.dependencyPath.joinToString(" -> ")}"
+            val dependencyPom = resolver.pomPath(coordinate)
+            if (dependencyPom == null) {
+                dependencyGraphFailures += "MAVEN_DEPENDENCY_DESCRIPTOR_MISSING $context missing descriptor"
+                return null
+            }
+            modelInputs.add(dependencyPom)
+            val effectiveModel = buildEffective(dependencyPom, resolver)
+            modelInputs.addAll(effectiveModel.inputs)
+            importedBoms.addAll(effectiveModel.importedBoms)
+            val parsedModel = effectiveModel.model
+            if (parsedModel == null) {
+                dependencyGraphFailures += "MAVEN_EFFECTIVE_DEPENDENCY_MODEL_UNAVAILABLE $context: " +
+                    concise(effectiveModel.failure ?: "unknown model failure")
+                return null
+            }
+            val parsedIdentityHash = parsedDescriptorIdentityHash(parsedModel) ?: run {
+                dependencyGraphFailures += "MAVEN_EFFECTIVE_DEPENDENCY_MODEL_UNAVAILABLE $context: " +
+                    "parsed descriptor identity is absent"
+                return null
+            }
+            selectedDescriptorAuthorityContext
+                ?.takeIf { it.groupId == coordinate.groupId && it.artifactId == coordinate.artifactId }
+                ?.parsedDescriptorIdentityHash
+                ?.takeIf { it != parsedIdentityHash }
+                ?.let { expected ->
+                    dependencyGraphFailures += selectedDescriptorFailure(
+                        coordinate,
+                        node,
+                        "relocation/model parse evidence",
+                        "DRIFTED",
+                        "expectedIdentityHash=$expected actualIdentityHash=$parsedIdentityHash",
+                    )
+                    return null
+                }
+            return ResolvedDependencyModel(
+                dependencyPom,
+                effectiveModel,
+                descriptorFacts(dependencyPom, effectiveModel),
+                parsedIdentityHash,
+            )
+        }
+
         roots.forEach { dependency ->
+            val dependencyPath = listOf(pathSegment(dependency))
+            recordSelector(
+                dependency,
+                consumerPom,
+                dependencyPath,
+                dependency.scope.normalizedScope(),
+                "SELECTED",
+                "DIRECT",
+                "VERSION_RANGE_REPOSITORY_POM_JAR_NETWORK_REQUIRED",
+            )
             pending += Pending(
-                dependency, dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }.toSet(),
-                direct = true, depth = 0,
+                dependency,
+                dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }.toSet(),
+                direct = true,
+                depth = 0,
                 effectiveScope = dependency.scope.normalizedScope(),
+                dependencyPath = dependencyPath,
             )
         }
         while (pending.isNotEmpty()) {
             val node = pending.removeFirst()
             if (node.depth > MAX_DEPENDENCY_DEPTH || visitedArtifacts.size >= MAX_DEPENDENCIES) {
-                missing += "dependency graph exceeds safe offline analysis limits"
+                val failure = "dependency graph exceeds safe offline analysis limits"
+                missing += failure
+                dependencyGraphFailures += failure
                 continue
             }
             val rawRequested = node.dependency.coordinate()
             if (rawRequested == null) {
                 if (node.direct) missing += "dependency with unresolved coordinates"
+                dependencyGraphFailures += "Dependency graph contains unresolved coordinates"
                 continue
             }
             val requested = node.dependency.managementKey()?.let(managedDependencies::get)
                 ?.let { rawRequested.copy(version = it.version) } ?: rawRequested
             if (requested.version.isBlank()) {
                 if (node.direct) missing += "dependency with unresolved coordinates"
+                dependencyGraphFailures += "Dependency graph contains a blank effective version"
                 continue
             }
             val coordinate = resolver.resolveVersion(requested) ?: requested
@@ -386,53 +784,174 @@ internal class MavenEffectiveReactorBuilder(
             val type = node.dependency.type.ifBlank { "jar" }
             val classifier = node.dependency.classifier?.takeIf(String::isNotBlank)
             if (type !in SUPPORTED_DEPENDENCY_TYPES) {
-                missing += "dependency type '$type' is unsupported: $group"
+                val failure = "dependency type '$type' is unsupported: $group"
+                missing += failure
+                dependencyGraphFailures += failure
                 continue
             }
             val artifactIdentity = "$group:$type:${classifier.orEmpty()}"
             val visitIdentity = "${coordinate.key}:$type:${classifier.orEmpty()}"
             val representedByReactorSources = coordinate in reactorCoordinates && isReactorSourceDependency(node.dependency)
-            if (artifactIdentity in selectedArtifacts || !visitedArtifacts.add(visitIdentity) ||
-                representedByReactorSources || group in node.inheritedExclusions) continue
+            if (artifactIdentity in selectedArtifacts || !visitedArtifacts.add(visitIdentity) || representedByReactorSources) {
+                continue
+            }
+
+            val selectedAfterPrunedPath = selectorRecords.any { record ->
+                record.outcome == "PRUNED" &&
+                    record.groupId == coordinate.groupId &&
+                    record.artifactId == coordinate.artifactId &&
+                    record.normalizedVariant == normalizedVariant(node.dependency)
+            }
+            val selectedDescriptorAuthorityRequired = selectedDescriptorAuthorityContext?.let { authority ->
+                authority.groupId == coordinate.groupId && authority.artifactId == coordinate.artifactId
+            } == true
+            // An explicit descriptor-authority baseline and an alternate path after a deterministic prune
+            // both require descriptor closure before binary availability can be classified.
+            val descriptorFirstModel = if (selectedAfterPrunedPath || selectedDescriptorAuthorityRequired) {
+                effectiveDependencyModel(coordinate, node) ?: continue
+            } else {
+                null
+            }
+            if (descriptorFirstModel?.effective?.model?.distributionManagement?.relocation != null) {
+                val failure = "artifact relocation is unsupported: $group"
+                missing += failure
+                dependencyGraphFailures += failure
+                continue
+            }
+
             val artifact = resolver.artifactPath(coordinate, type, classifier)
             if (artifact == null) {
                 val missingIdentity = "${requested.key}:$type:${classifier.orEmpty()}"
                 if (node.direct) missing += missingIdentity
                 else unresolvedTransitive.putIfAbsent(artifactIdentity, missingIdentity)
+            } else {
+                selectedArtifacts += artifactIdentity
+                unresolvedTransitive.remove(artifactIdentity)
+                if (node.dependency.type != "pom") artifacts.add(artifact)
+            }
+
+            val resolvedModel = descriptorFirstModel ?: effectiveDependencyModel(coordinate, node) ?: continue
+            val transitive = resolvedModel.effective
+            if (descriptorFirstModel == null && transitive.model?.distributionManagement?.relocation != null) {
+                artifact?.let(artifacts::remove)
+                val failure = "artifact relocation is unsupported: $group"
+                missing += failure
+                dependencyGraphFailures += failure
                 continue
             }
-            selectedArtifacts += artifactIdentity
-            unresolvedTransitive.remove(artifactIdentity)
-            if (node.dependency.type != "pom") artifacts.add(artifact)
-            val pom = resolver.pomPath(coordinate)
-            val transitive = pom?.let { resolvedPom ->
-                modelInputs.add(resolvedPom)
-                buildEffective(resolvedPom, resolver).also { effective ->
-                    modelInputs.addAll(effective.inputs)
-                    importedBoms.addAll(effective.importedBoms)
+            if (artifact == null) {
+                val effectiveModel = requireNotNull(transitive.model)
+                val repositoryRoot = resolver.authorityRepositoryRoot()
+                val expectedPom = resolver.expectedPomPath(coordinate)
+                val expectedArtifact = resolver.expectedArtifactPath(coordinate, type, classifier)
+                val effectiveInputs = (transitive.inputs + setOf(resolvedModel.pom))
+                    .map { it.toAbsolutePath().normalize() }
+                    .toSet()
+                val fixedRelease = requested.version == coordinate.version &&
+                    !coordinate.version.startsWith("[") && !coordinate.version.startsWith("(") &&
+                    !coordinate.version.endsWith("-SNAPSHOT", ignoreCase = true)
+                val selectedLeaf = type == "jar" && classifier == null && fixedRelease &&
+                    effectiveModel.distributionManagement?.relocation == null &&
+                    effectiveModel.dependencies.orEmpty().isEmpty()
+                if (repositoryRoot != null && expectedPom == resolvedModel.pom.toAbsolutePath().normalize() &&
+                    expectedArtifact != null && selectedLeaf &&
+                    Files.isRegularFile(expectedPom, LinkOption.NOFOLLOW_LINKS) &&
+                    !Files.exists(expectedArtifact, LinkOption.NOFOLLOW_LINKS) &&
+                    effectiveInputs.all { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+                ) {
+                    val selection = MavenMissingArtifactSelection(
+                        sourceSet = sourceSet,
+                        projection = projection,
+                        dependencyPath = node.dependencyPath.joinToString(" -> "),
+                        effectiveScope = node.effectiveScope,
+                    )
+                    val evidenceKey = "${coordinate.key}|$type|${classifier.orEmpty()}|$expectedArtifact"
+                    val prior = selectedMissingEvidence[evidenceKey]
+                    selectedMissingEvidence[evidenceKey] = if (prior == null) {
+                        MavenMissingArtifactEvidence(
+                            identity = "${coordinate.key}:$type:${classifier.orEmpty()}",
+                            expectedPath = expectedArtifact,
+                            expectedIdentityManifest = null,
+                            expectedSha256 = null,
+                            providedTypes = emptySet(),
+                            leaf = true,
+                            kind = MavenMissingArtifactEvidenceKind.LOCAL_REPOSITORY_SELECTED_LEAF,
+                            groupId = coordinate.groupId,
+                            artifactId = coordinate.artifactId,
+                            version = coordinate.version,
+                            type = type,
+                            classifier = classifier.orEmpty(),
+                            extension = "jar",
+                            repositoryRoot = repositoryRoot,
+                            repositoryProvider = "maven-effective-v1",
+                            repositoryLayout = "MAVEN_2",
+                            repositoryPolicy = "LOCAL_ONLY_NO_SETTINGS",
+                            selectedPom = expectedPom,
+                            effectiveModelInputs = effectiveInputs,
+                            selections = setOf(selection),
+                            descriptorFacts = resolvedModel.descriptorFacts,
+                            parsedDescriptorIdentityHash = resolvedModel.parsedDescriptorIdentityHash,
+                            fixedRelease = true,
+                            noRelocation = true,
+                        )
+                    } else {
+                        prior.copy(
+                            effectiveModelInputs = prior.effectiveModelInputs + effectiveInputs,
+                            selections = prior.selections + selection,
+                            descriptorFacts = prior.descriptorFacts + resolvedModel.descriptorFacts,
+                        )
+                    }
                 }
             }
-            if (transitive?.model?.distributionManagement?.relocation != null) {
-                artifacts.remove(artifact)
-                missing += "artifact relocation is unsupported: $group"
-                continue
-            }
-            if (transitive == null) continue
             val exclusions = node.inheritedExclusions +
                 node.dependency.exclusions.map { "${it.groupId}:${it.artifactId}" }
-            transitive.model?.dependencies.orEmpty()
-                .filterNot(Dependency::isOptional)
-                .forEach { child ->
-                    val childScope = child.managementKey()?.let(managedDependencies::get)?.scope
-                        ?: child.scope.normalizedScope()
-                    val effectiveScope = deriveTransitiveScope(node.effectiveScope, childScope)
-                        ?: return@forEach
-                    if (effectiveScope !in includedEffectiveScopes) return@forEach
-                    pending += Pending(
-                        child, exclusions, direct = false, depth = node.depth + 1,
-                        effectiveScope = effectiveScope,
-                    )
+            transitive.model?.dependencies.orEmpty().forEach { child ->
+                val childPath = node.dependencyPath + pathSegment(child)
+                val childGroup = child.groupId?.trim()?.takeIf(String::isNotBlank)
+                val childArtifact = child.artifactId?.trim()?.takeIf(String::isNotBlank)
+                val childGa = if (childGroup != null && childArtifact != null) "$childGroup:$childArtifact" else null
+                val managed = child.managementKey()?.let(managedDependencies::get)
+                val childScope = child.explicitNormalizedScope()
+                    ?: managed?.scope
+                    ?: child.scope.normalizedScope()
+                val effectiveScope = deriveTransitiveScope(node.effectiveScope, childScope)
+                val pruneReason = when {
+                    childGa != null && childGa in exclusions -> "EXCLUSION"
+                    child.isOptional -> "OPTIONAL"
+                    effectiveScope == null || effectiveScope !in includedEffectiveScopes ->
+                        "SCOPE_${childScope.uppercase()}"
+                    else -> null
                 }
+                if (pruneReason != null) {
+                    recordSelector(
+                        child,
+                        resolvedModel.pom,
+                        childPath,
+                        effectiveScope,
+                        "PRUNED",
+                        pruneReason,
+                        "BEFORE_VERSION_RANGE_REPOSITORY_POM_JAR_NETWORK",
+                    )
+                    return@forEach
+                }
+                recordSelector(
+                    child,
+                    resolvedModel.pom,
+                    childPath,
+                    effectiveScope,
+                    "SELECTED",
+                    "TRANSITIVE",
+                    "VERSION_RANGE_REPOSITORY_POM_JAR_NETWORK_REQUIRED",
+                )
+                pending += Pending(
+                    child,
+                    exclusions,
+                    direct = false,
+                    depth = node.depth + 1,
+                    effectiveScope = requireNotNull(effectiveScope),
+                    dependencyPath = childPath,
+                )
+            }
         }
         missing.addAll(unresolvedTransitive.values)
         return artifacts.toList().sortedBy(Path::toString)
@@ -444,7 +963,13 @@ internal class MavenEffectiveReactorBuilder(
             val relativeParents = relativeParentInputs(normalized)
             try {
                 val rawModel = readRawModel(normalized)
-                val declaredBoms = rawModel?.dependencyManagement?.dependencies.orEmpty()
+                val declaredBomDependencies = rawModel?.let { model ->
+                    model.dependencyManagement?.dependencies.orEmpty() +
+                        model.profiles.orEmpty()
+                            .filter { it.id in activeProfiles }
+                            .flatMap { it.dependencyManagement?.dependencies.orEmpty() }
+                }.orEmpty()
+                val declaredBoms = declaredBomDependencies
                     .filter { it.type == "pom" && it.scope == "import" }
                     .mapNotNull { it.coordinate(rawModel?.properties ?: Properties()) }
                     .mapNotNull(resolver::pomPath).toSet()
@@ -453,6 +978,7 @@ internal class MavenEffectiveReactorBuilder(
                     .setPomFile(normalized.toFile())
                     .setModelResolver(resolver.newCopy())
                     .setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL)
+                    .setLocationTracking(true)
                     .setProcessPlugins(false)
                     .setActiveProfileIds(activeProfiles.toList())
                     .setInactiveProfileIds(inactiveProfiles.toList())
@@ -512,7 +1038,8 @@ internal class MavenEffectiveReactorBuilder(
             val parent = readRawModel(current)?.parent ?: return inputs
             if (parent.relativePath != null && parent.relativePath.isBlank()) return inputs
             val relative = parent.relativePath ?: "../pom.xml"
-            val candidate = current.parent.resolve(relative).toAbsolutePath().normalize()
+            val currentParent = current.parent ?: return inputs
+            val candidate = currentParent.resolve(relative).toAbsolutePath().normalize()
             if (!candidate.exists() || !candidate.isRegularFile() || !inputs.add(candidate)) return inputs
             current = candidate
         }
@@ -523,6 +1050,40 @@ internal class MavenEffectiveReactorBuilder(
         val reader = org.apache.maven.model.io.xpp3.MavenXpp3Reader()
         Files.newBufferedReader(pom).use(reader::read)
     }.getOrNull()
+
+    private fun parsedDescriptorIdentityHash(model: Model): String? {
+        val coordinate = model.coordinate() ?: return null
+        val relocation = model.distributionManagement?.relocation
+        return hashParts(listOf(
+            coordinate.key,
+            model.packaging?.takeIf(String::isNotBlank) ?: "jar",
+            relocation?.groupId ?: "ABSENT",
+            relocation?.artifactId ?: "ABSENT",
+            relocation?.version ?: "ABSENT",
+        ))
+    }
+
+    private fun sha256(path: Path): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        Files.newInputStream(path).use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun hashParts(parts: List<String>): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        parts.forEach { part ->
+            digest.update(part.toByteArray(Charsets.UTF_8))
+            digest.update(0)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
     private fun rawCoordinate(pom: Path): Pair<MavenCoordinate, Path>? = try {
         readRawModel(pom)?.let { model ->
@@ -552,6 +1113,11 @@ internal class MavenEffectiveReactorBuilder(
         private val TRANSITIVE_SCOPES = setOf("compile", "runtime")
         private val SUPPORTED_DEPENDENCY_TYPES = setOf("jar", "test-jar")
         private const val MAX_DEPENDENCIES = 4096
+        private const val MAX_SELECTOR_RECORDS = 16_384
+        private val SHA256 = Regex("[a-f0-9]{64}")
+        private val JAVA_FQN = Regex("[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)+")
+        private const val MAX_MISSING_IDENTITY_BYTES = 64L * 1024L
+        private const val MAX_PROVIDED_TYPES = 4_096
         private const val MAX_DEPENDENCY_DEPTH = 128
     }
 }
@@ -639,13 +1205,35 @@ private class LocalOnlyModelResolver(
         return coordinate.copy(version = selected.toString())
     }
 
+    fun authorityRepositoryRoot(): Path? {
+        if (allowNetwork) return null
+        val normalized = repository.toAbsolutePath().normalize()
+        if (!Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) return null
+        var current = normalized.root ?: return null
+        for (component in normalized) {
+            current = current.resolve(component)
+            if (Files.isSymbolicLink(current)) return null
+        }
+        return runCatching { normalized.toRealPath(LinkOption.NOFOLLOW_LINKS) }.getOrNull()
+    }
+
+    fun expectedPomPath(coordinate: MavenCoordinate): Path? =
+        repositoryPath(coordinate, "pom", null)?.toAbsolutePath()?.normalize()
+
+    fun expectedArtifactPath(coordinate: MavenCoordinate, type: String, classifier: String?): Path? {
+        val extension = when (type) { "test-jar" -> "jar"; else -> type.ifBlank { "jar" } }
+        val effectiveClassifier = classifier?.takeIf(String::isNotBlank) ?: if (type == "test-jar") "tests" else null
+        return repositoryPath(coordinate, extension, effectiveClassifier)?.toAbsolutePath()?.normalize()
+    }
+
     fun pomPath(coordinate: MavenCoordinate): Path? = reactorModels[coordinate]
-        ?: repositoryPath(coordinate, "pom", null)?.let { obtain(it, coordinate, "pom", null) }
+        ?: expectedPomPath(coordinate)?.let { obtain(it, coordinate, "pom", null) }
 
     fun artifactPath(coordinate: MavenCoordinate, type: String, classifier: String?): Path? {
         val extension = when (type) { "test-jar" -> "jar"; else -> type.ifBlank { "jar" } }
         val effectiveClassifier = classifier?.takeIf(String::isNotBlank) ?: if (type == "test-jar") "tests" else null
-        return repositoryPath(coordinate, extension, effectiveClassifier)?.let { obtain(it, coordinate, extension, effectiveClassifier) }
+        return expectedArtifactPath(coordinate, type, classifier)
+            ?.let { obtain(it, coordinate, extension, effectiveClassifier) }
     }
 
     private fun repositoryPath(coordinate: MavenCoordinate, extension: String, classifier: String?): Path? {
@@ -657,12 +1245,13 @@ private class LocalOnlyModelResolver(
     }
 
     private fun obtain(target: Path, coordinate: MavenCoordinate, extension: String, classifier: String?): Path? {
-        if (target.exists() && target.isRegularFile()) return target
-        if (!allowNetwork) return null
-        val temporary = target.resolveSibling(".${target.fileName}.refactorkit-download")
-        val checksumTemporary = target.resolveSibling(".${target.fileName}.refactorkit-sha256")
+        if (Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) return target
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) || !allowNetwork) return null
+        val name = target.fileName?.toString() ?: return null
+        val temporary = target.resolveSibling(".$name.refactorkit-download")
+        val checksumTemporary = target.resolveSibling(".$name.refactorkit-sha256")
         return runCatching {
-            Files.createDirectories(target.parent)
+            Files.createDirectories(target.parent ?: return null)
             Files.deleteIfExists(temporary)
             Files.deleteIfExists(checksumTemporary)
             val suffix = classifier?.let { "-$it" }.orEmpty()
@@ -743,6 +1332,11 @@ private fun Dependency.managementKey(): String? {
     val effectiveClassifier = classifier?.takeIf(String::isNotBlank).orEmpty()
     return "$group:$artifact:$effectiveType:$effectiveClassifier"
 }
+
+/** Location tracking distinguishes a declared scope from Maven's synthesized compile default. */
+private fun Dependency.explicitNormalizedScope(): String? = scope
+    ?.takeIf { it.isNotBlank() && getLocation("scope") != null }
+    ?.normalizedScope()
 
 private fun deriveTransitiveScope(parentScope: String, childScope: String): String? = when (parentScope) {
     "compile" -> when (childScope) {

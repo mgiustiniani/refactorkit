@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, needs human review for prioritization.
+Status: implementation-informed. Tagged acceptance closes seven bounded Maven move-class definitions expanding to twelve cases: CLI lexical-fallback refusal without residue, the unrelated-warning boundary for a complete `AVAILABLE` dependency-bounded reverse-observer closure, one synthetic candidate-total closure-missing `OFFLINE_MISSING` apply/rollback row, explicit transitive-test-scope preservation with an `AVAILABLE` target closure while global `OFFLINE_MISSING` remains exclusively outside it, descriptor-pruned child independence plus alternate selected-path missing-POM refusal, one RefactorKit-owned sidecar-free ordinary selected-JAR row with three under-lock pre-WAL drift refusals, and six selected-descriptor `MISSING`/`MALFORMED`/`DRIFTED` refusals with parsed relocation/model identity, stable context/hashes, and no downgrade or residue. Executable REQ-JAVA-MAVEN-MOVE-AUTH-008 remains absent. The exact Magrathea `a48e3c06` request is CLI-qualified on Linux/JDK 21 after `010`, but integration/native-matrix and general authority remain open; `011`/`012` were not needed for that field result. Full positive apply and broad fail-closed uncertainty handling remain P0 product risks. Remaining prioritization needs human review.
 
 [cols="1,3,2,2,1",options="header"]
 |===
@@ -10,21 +10,33 @@ Status: implementation-informed, needs human review for prioritization.
 
 |R-001
 |Compiler-backed Java analysis is implemented only for selected JDT-backed slices; other operations and explicit fallback paths still rely on lexical or structural evidence.
-|Refactorings outside the supported signed-method and unambiguous-field `renameMember` slices (including exact annotation-element rename), type-level rename (including annotation types), move-class file-scoping, safe-delete type-reference, annotation-type/element indexing and reference, and exact-import use slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Arbitrary unsigned methods retain lexical behavior. Type-level rename, move class, and safe delete can regain lexical false positives when JDT analysis is not clean or the exact target binding is unavailable; unresolved organize-imports files retain lexical cleanup only.
-|Follow ADR 0008; classify every stable path as JDT-backed, narrowly proven lexical behavior, or refusal. Do not promote prototype lexical fallbacks that can perform an incorrect semantic edit; retain external-family and collision refusals.
+|Refactorings outside the supported signed-method and unambiguous-field `renameMember` slices (including exact annotation-element rename), type-level rename (including annotation types), move-class file-scoping, safe-delete type-reference, annotation-type/element indexing and reference, and exact-import use slices may miss reflection, generated code, annotation processors, external callers, and some framework/string references. Arbitrary unsigned methods retain lexical behavior. Type-level rename, move class, and safe delete can produce review candidates with lexical false positives when JDT analysis is not clean or the exact target binding is unavailable; `LEXICAL_FALLBACK` is review-only and the validated immutable-evidence refusal before workspace-lock acquisition must not regress. Unresolved organize-imports files retain only their separately classified structural cleanup.
+|Follow ADR 0008; classify every stable path as JDT-backed, narrowly proven non-semantic behavior, or refusal. Do not promote prototype lexical fallbacks that can perform an incorrect semantic edit; preserve the independent pre-lock `PatchEngine` evidence gate, external-family and collision refusals, and operation-specific acceptance. REQ-JAVA-MAVEN-MOVE-AUTH-005 covers CLI only; retain scenario 004 for cross-surface proof.
 |known risk
 
 |R-001A
-|Offline Maven effective-model analysis cannot resolve a parent, BOM, or dependency that is absent from both the reactor and configured local repository.
-|Semantic JDT analysis for the dependent source-set closure would otherwise cascade into misleading unresolved-type errors.
-|Implement source-set-scoped `buildModel.unavailable`, `classpath.unavailable`, `sourceLevel.unavailable`, or platform-unavailable roots and suppress only causally derivative binding noise. Network access remains explicit opt-in, anonymous, and credential-free.
-|qualified limitation; source-set authority planned
+|Offline Maven effective-model analysis cannot resolve a selected node's parent, BOM, artifact POM, management/mediation/relocation input, or binary when it is absent from both the reactor and configured local repository.
+|A missing descriptor input on an included edge makes graph, closure inclusion/exclusion, and source-set authority unavailable. This differs from a child below an already deterministic scope/optional/exclusion-pruned edge, which is not a graph node on that path. A missing selected binary with complete descriptor closure keeps global classpath authority unavailable and may conceal a target candidate unless the narrow operation proof passes.
+|Keep source-set-scoped typed roots and suppress only causally derivative binding noise. Require every active reactor POM, descriptor closure for every selected external node, and hash-bound selected/pruned edge classifications. Stop below only deterministic pruned external edges; alternate selected paths restore requirements. Retain implemented ordinary selected-leaf acceptance `011`: RefactorKit-owned fixed-release Maven-2-layout no-follow negative presence, complete present POM closure, candidate/JDT/lookup/diagnostic/lease gates, and no invented absent-content hash or provided-type inventory. Retain implemented six-case `012`: engine-captured descriptor context and parsed relocation/model identity, stable typed refusal before semantic selection/lock/WAL, and no missing-binary downgrade or residue. Network remains explicit opt-in, anonymous, and credential-free.
+|qualified limitation; bounded `007`/`009`/`010`/`011`/`012` rows implemented and the exact Magrathea CLI request field-qualified; general, integration-surface, and native-matrix authority remain open
 
 |R-001B
 |A partial child/module model, module-wide availability handling, or an unqualified Java platform can produce false missing JDK, sibling-reactor, or external types—or silently accept APIs newer than Maven `--release`.
 |RefactorKit diagnostics cease to be trustworthy semantic product evidence; managed refactoring may be incorrectly blocked or, worse, granted authority from false-negative bindings. Maven success cannot repair this defect.
 |Deliver `RPK-JAVA-DIAG-001..007`: declared full-reactor modeling before module filtering, independent main/test environments, exact release signatures, typed affected-environment unavailability, exact delta authority, and permanent packaged acceptance.
 |planned, product-critical release blocker
+
+|R-001C
+|Effective dependency mediation could regress to overwriting an explicitly declared transitive `test` scope with a dependency-management default.
+|The model could leak test-only visibility into main, omit a legal test observer, or derive the wrong reverse-observer/impact closure and then make an invalid authority decision.
+|Retain declaration provenance: preserve an explicit transitive `test` scope and use dependency-management scope only when the dependency declaration omits it. Keep REQ-JAVA-MAVEN-MOVE-AUTH-009 as the bounded source-set, closure-isolation, preview/apply/rollback regression.
+|bounded implementation and acceptance closed by REQ-JAVA-MAVEN-MOVE-AUTH-009; broader authoritative-diagnostics acceptance remains planned
+
+|R-001D
+|Maven traversal can over-constrain graph completeness by looking up a child version, repository path, POM, or JAR after effective scope, transitive optionality, or an exact path exclusion has already deterministically pruned that edge. The opposite error—pruning on ambiguous facts or type/classifier alone—can hide an included subtree.
+|Over-enumeration creates false offline blockers and may trigger unintended lookup; under-enumeration can conceal an observer or required descriptor and grant false authority.
+|Retain the independent REQ-JAVA-MAVEN-MOVE-AUTH-010 regression: six omitted-scope/optional/exclusion children produce 18 deterministic `PRUNED` projection records before child POM/JAR/network lookup; an alternate selected path restores descriptor requirements and an absent POM refuses before lock/WAL. Retain independent `012` regressions for selected leaf POM/model, parent, imported BOM, management/mediation, and parsed relocation/model identity loss or drift, including stable hashes and no binary-absence downgrade. Extend selector acceptance beyond the bounded fixture without weakening path/projection provenance, type/classifier identity, ambiguity refusal, or plugin/settings-credential/implicit-network and lexical-promotion prohibitions.
+|bounded P0 risk closed by implemented-and-validated `010`/`012`; generalization remains open
 
 |R-002
 |`organize-imports` removes unused exact imports only when per-file JDT evidence is clean; wildcard imports are preserved and unresolved files retain lexical sorting, deduplication, and same-package removal.
@@ -99,10 +111,16 @@ Status: implementation-informed, needs human review for prioritization.
 |known risk
 
 |R-014
-|Move class uses exact JDT bindings only to select referencing files when source analysis is clean; edits inside selected files remain lexical, and reflection, generated code, framework strings/configuration, annotation-processor output, and unknown external callers remain outside this evidence.
-|A move may require manual follow-up outside analyzed source. Parse/classpath warnings or unavailable target binding trigger broader lexical file scoping, which can reintroduce unrelated old-package edits or same-simple-name confusion.
-|Retain non-source warnings, target conflict/invalid-package refusals, overlap prevention, and binding-scoping tests; stable classification must prove lexical file scoping safe for its exact contract or refuse without clean evidence.
-|known risk
+|The 2026-07-29 field work first exposed a complex Maven shape whose detached Magrathea preview remained `LEXICAL_FALLBACK`. After descriptor-closed pruning under REQ-JAVA-MAVEN-MOVE-AUTH-010, a clean detached checkout at consumer commit `a48e3c06629acf7032d0f28a0f8bdc5426442c7c` was rerun on Linux/JDK 21 through the current source-built CLI: the `InMemoryRevocationRepository` move preview used `JDT_BINDING`, affected four files, applied in exactly one managed transaction, and rollback restored the source-tree hash exactly. Separately, permanent-fixture REQ-JAVA-MAVEN-MOVE-AUTH-011 validates one ordinary local-repository selected `jar` leaf with present descriptor closure and absent binary, RefactorKit-owned sidecar-free no-follow evidence, no invented hash/provided types, candidate-total lookup and zero unattributed diagnostics, one transaction, exact rollback, and three under-lock pre-WAL drift refusals.
+|The exact Magrathea request is no longer an unqualified field gap, but the evidence is commit-, request-, CLI-, Linux-, and JDK-21-specific. It does not qualify library/daemon/LSP/MCP/recipe paths, packaged native/platform matrices, other field projects, or general target-scoped move authority. REQ-JAVA-MAVEN-MOVE-AUTH-011 and six-case `012` are independent fixture acceptance and were not required for the Magrathea result. Broad uncertainty cases under `008`, reflection, configuration, generated output, non-Java strings, and external consumers remain residual risks.
+|Retain the seven tagged regressions, including all six inherited `012` cases, and implement executable absent REQ-JAVA-MAVEN-MOVE-AUTH-008 as independent negative fixture variants. Preserve global/strict authority as stronger modes and refuse ambiguous selection, missing included descriptors, unresolved target relevance, lookup ambiguity, range overlap, diagnostic mismatch, artifact drift, or lexical promotion. Expand field qualification only through explicit integration-surface and native-platform matrices; retain full REQ-JAVA-MAVEN-MOVE-AUTH-001 positive apply and cross-surface acceptance as separate work.
+|P0 generalization release blocker; REQ-JAVA-MAVEN-MOVE-AUTH-005 through `007` and `009` through `012` implemented and validated only for bounded rows/cases; Gherkin 001-004/008 absent; exact Magrathea `a48e3c06` CLI/Linux/JDK-21 request field-qualified after `010`
+
+|R-014A
+|A guided manual fallback could be represented or translated as an ordinary preview plan, accidentally acquiring a plan ID or apply path through CLI, library, daemon, LSP, MCP, force flags, or recipes.
+|Users and agents could mistake incomplete lexical candidates for references or assume RefactorKit mutation, WAL, transaction, and rollback guarantees that do not exist.
+|Implement `REVIEW_ONLY_GUIDANCE` as a structurally distinct non-managed result with typed authority blockers, evidence-grouped candidates, omissions, remediation, and a human/VCS checklist. It must expose no applyable plan ID and every protocol/recipe path must preserve non-applicability.
+|P0 safety boundary; planned (`RPK-JAVA-MOVE-005/007`)
 
 |R-015
 |Daemon capability metadata is maintained alongside the request dispatcher and can drift from implemented method behavior.
@@ -201,6 +219,10 @@ Status: implementation-informed, needs human review for prioritization.
 |accepted technical debt; non-blocking for current unsigned experimental assets, required before claiming warning-free trusted desktop installation
 |===
 
+== Evidence Note for R-014
+
+Status: mixed but implementation-informed evidence; bounded fixture acceptance and one exact field qualification recorded. The P0 update was reviewed on 2026-07-29 from LLM Wiki requirement `refactorkit-java-maven-move-class-apply-authority`, concepts `target-scoped-java-semantic-authority` and `java-target-name-lookup-protection`, and source packet `SRC-2026-07-29-004`, against RefactorKit base commit `c1d70fc51ef84fa25baaab5678dece69f8ce739a`. The 2026-07-30 descriptor-closed/ordinary-evidence clarification was reviewed against the same base as architecture/research input. Repository-owned fixture evidence now covers bounded REQ-JAVA-MAVEN-MOVE-AUTH-005/006/007/009/010/011/012; Gherkin reconciles to twelve definitions/22 cases, seven validated definitions/12 cases, and five absent definitions/ten cases. A dated 2026-07-30 field rerun separately used the current source-built CLI on Linux/JDK 21 against clean Magrathea commit `a48e3c06629acf7032d0f28a0f8bdc5426442c7c`; it produced a four-file `JDT_BINDING` preview, exactly one managed transaction, and exact source-tree hash restoration after rollback. That consumer-specific result followed `010`, did not require `011` or `012`, and is not integration/native-matrix or general qualification. The dated full OpenJDK-21 `check goldenTest` pass with zero failures/errors after `012` is mutable local working-tree evidence only.
+
 == Technical Debt from Release Plan
 
 The active stable plan defines the remaining release-hardening workstreams:
@@ -211,6 +233,7 @@ The active stable plan defines the remaining release-hardening workstreams:
 * preserve the closed TX-001 through TX-018 qualified transactionality evidence during API freeze;
 * retain precise qualification for WAL-backed managed transactions, the staged recipe-wide boundary, client-managed native LSP edits, and unsupported/destructive filesystem failure models;
 * complete the planned product-critical `RPK-JAVA-DIAG-001..007` authority epic before treating Java/Maven diagnostics as definitive, including full-reactor/source-set environments, exact release signatures, non-executable discovery, exact deltas, typed JPMS refusal, and native packaged fixtures;
+* preserve implemented REQ-JAVA-MAVEN-MOVE-AUTH-005 through `007` and `009` through `012`, including all six inherited selected-descriptor cases; close the remaining P0 `RPK-JAVA-MOVE-001..007` gap with executable `008` uncertainty/drift acceptance, full positive apply, non-managed guidance, and cross-surface refusal; retain the Magrathea `a48e3c06` CLI/Linux/JDK-21 result as bounded field evidence and require explicit integration/native matrices before broader qualification;
 * complete diagnostic regression gates and representative project acceptance;
 * classify and test stable LSP/MCP boundaries;
 * establish bounded performance and resource behavior;

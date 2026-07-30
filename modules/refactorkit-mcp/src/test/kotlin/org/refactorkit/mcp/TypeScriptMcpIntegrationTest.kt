@@ -147,6 +147,13 @@ class TypeScriptMcpIntegrationTest {
         override fun findReferences(symbolId: SymbolId) = listOf(Reference(symbolId, location()))
         override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = emptyList()
         override fun synchronizedDiagnostics(snapshot: ProjectSnapshot) = ExternalSemanticDiagnostics.Available(emptyList())
+        override fun requestWorkspaceEdit(
+            paramsJson: String,
+            snapshot: ProjectSnapshot,
+            normalizer: ExternalWorkspaceEditNormalizer,
+        ): ExternalWorkspaceEditNormalization = ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+            "test stub", Diagnostic.Severity.ERROR, code = "externalEdit.testStub",
+        )))
         override fun requestRename(snapshot: ProjectSnapshot, location: SourceLocation, newName: String): ExternalWorkspaceEditNormalization =
             ExternalWorkspaceEditNormalizer().normalize(snapshot, ExternalWorkspaceEditProposal(
                 "lsp-typescript", "test", listOf(ExternalFileEditProposal.Modify(

@@ -1,0 +1,21 @@
+id: typescript.move-symbol
+name: Move TypeScript symbol to another file
+language: typescript
+parameters:
+  file:
+    type: string
+    description: Source file path (workspace-relative)
+  symbolName:
+    type: string
+    description: Name of the symbol to move
+  targetFile:
+    type: string
+    description: Target file path (workspace-relative)
+steps:
+  - type: moveSymbol
+    file: "{{ file }}"
+    symbolName: "{{ symbolName }}"
+    targetFile: "{{ targetFile }}"
+  - type: runDiagnostics
+    strict: true
+  - type: summarizePatch

@@ -1,0 +1,22 @@
+id: java.rename-module
+name: Rename Maven module
+language: java
+parameters:
+  oldModuleDir:
+    type: string
+    description: Old module directory (workspace-relative, e.g. old-api)
+  newModuleDir:
+    type: string
+    description: New module directory (workspace-relative, e.g. new-api)
+  newArtifactId:
+    type: string
+    description: New artifactId (optional, defaults to newModuleDir name)
+    default: ""
+steps:
+  - type: renameMavenModule
+    oldModuleDir: "{{ oldModuleDir }}"
+    newModuleDir: "{{ newModuleDir }}"
+    newArtifactId: "{{ newArtifactId }}"
+  - type: runDiagnostics
+    strict: true
+  - type: summarizePatch

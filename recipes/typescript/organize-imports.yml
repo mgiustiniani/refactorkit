@@ -1,0 +1,13 @@
+id: typescript.organize-imports
+name: Organize TypeScript imports
+language: typescript
+parameters:
+  file:
+    type: string
+    description: Source file path (workspace-relative)
+steps:
+  - type: organizeImports
+    file: "{{ file }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

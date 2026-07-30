@@ -43,8 +43,12 @@ class KotlinLanguageAdapterTest {
                 it.evidence == SemanticEvidenceKind.COMPILER &&
                 it.backend == KotlinCompilerDiagnostics.SYMBOL_BACKEND
         })
+        val knownOperations = setOf(
+            "diagnostics", "workspaceSymbols", "documentSymbols", "definition",
+            "renameSymbol", "organizeImports", "companionObject", "dataClass",
+        )
         assertTrue(descriptor.capabilities.filter {
-            it.operation !in setOf("diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol", "organizeImports")
+            it.operation !in knownOperations
         }.all { it.stability == CapabilityStability.REFUSED && it.evidence == SemanticEvidenceKind.NONE })
         val mutations = descriptor.capabilities.filter { it.operation in setOf("renameSymbol", "organizeImports") }
         assertTrue(mutations.all {
@@ -52,7 +56,8 @@ class KotlinLanguageAdapterTest {
                 it.evidence == SemanticEvidenceKind.COMPILER &&
                 it.mutationAuthority == MutationAuthority.PROPOSAL_ONLY
         })
-        assertTrue(descriptor.capabilities.filter { it.operation !in setOf("renameSymbol", "organizeImports") }
+        val mutationOperations = setOf("renameSymbol", "organizeImports", "companionObject", "dataClass")
+        assertTrue(descriptor.capabilities.filter { it.operation !in mutationOperations }
             .all { it.mutationAuthority == MutationAuthority.NONE })
         assertEquals(setOf("kts"), descriptor.capabilities.single { it.operation == "scriptSemantics" }.extensions)
         assertTrue(descriptor.capabilities.filter { it.operation != "scriptSemantics" }.all {
@@ -78,7 +83,8 @@ class KotlinLanguageAdapterTest {
             listOf("kotlin.toolchainNotConfigured"),
             adapter.diagnostics(snapshot).map { it.code },
         )
-        assertTrue(adapter.availableRefactorings(CodeSelection(location)).isEmpty())
+        val refactorings = adapter.availableRefactorings(CodeSelection(location))
+        assertTrue(refactorings.any { it.id == "changeSignature" }, "Expected changeSignature in available refactorings")
 
         val plan = adapter.applyRefactoring(RefactoringRequest(
             operation = "renameSymbol",

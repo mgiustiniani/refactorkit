@@ -1,0 +1,37 @@
+id: java.import-external-class
+name: Import external Java class
+language: java
+parameters:
+  code:
+    type: string
+    description: Java source code (inline) or path to file (with file: prefix)
+  targetPackage:
+    type: string
+    description: Target package for the imported class
+  targetModule:
+    type: string
+    description: Target Maven module name (optional)
+    default: ""
+  sourceUrl:
+    type: string
+    description: Original source URL for provenance tracking (optional)
+    default: ""
+  licensePolicy:
+    type: string
+    description: License policy (warn | block-unknown | allow)
+    default: warn
+  allowRename:
+    type: boolean
+    description: Allow renaming the class if naming conflict exists
+    default: true
+steps:
+  - type: importExternalClass
+    code: "{{ code }}"
+    targetPackage: "{{ targetPackage }}"
+    targetModule: "{{ targetModule }}"
+    sourceUrl: "{{ sourceUrl }}"
+    licensePolicy: "{{ licensePolicy }}"
+    allowRename: "{{ allowRename }}"
+  - type: runDiagnostics
+    strict: true
+  - type: summarizePatch

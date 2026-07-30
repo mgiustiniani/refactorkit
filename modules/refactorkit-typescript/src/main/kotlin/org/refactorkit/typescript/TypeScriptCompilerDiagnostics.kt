@@ -51,8 +51,10 @@ internal class TypeScriptCompilerDiagnostics(
         val bridgeDirectory = Files.createTempDirectory("refactorkit-ts-diagnostics-")
         val bridge = bridgeDirectory.resolve("typescript-diagnostics-bridge.cjs")
         return try {
-            val bytes = javaClass.getResourceAsStream(BRIDGE_RESOURCE)?.use { it.readNBytes(MAX_BRIDGE_BYTES + 1) }
-                ?: return unavailable("typescript.compilerDiagnosticsBridgeMissing", "Compiler diagnostics bridge resource is missing")
+            val resourceStream = javaClass.getResourceAsStream(BRIDGE_RESOURCE) ?: return unavailable(
+                "typescript.compilerDiagnosticsBridgeMissing", "Compiler diagnostics bridge resource is missing",
+            )
+            val bytes = try { resourceStream.readNBytes(MAX_BRIDGE_BYTES + 1) } finally { resourceStream.close() }
             if (bytes.size > MAX_BRIDGE_BYTES) return unavailable(
                 "typescript.compilerDiagnosticsBridgeInvalid", "Compiler diagnostics bridge exceeds its size limit",
             )

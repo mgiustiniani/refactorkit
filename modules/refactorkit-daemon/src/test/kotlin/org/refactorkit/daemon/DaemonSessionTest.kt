@@ -175,10 +175,12 @@ class DaemonSessionTest {
                 it["evidence"]!!.jsonPrimitive.content == "compiler" &&
                 it["backend"]!!.jsonPrimitive.content == "kotlin-compiler-jvm-declarations-k2-v1"
         })
+        val knownKotlinOps = setOf(
+            "diagnostics", "workspaceSymbols", "documentSymbols", "definition",
+            "renameSymbol", "organizeImports", "companionObject", "dataClass",
+        )
         assertTrue(kotlinCapabilities.filter {
-            it["operation"]!!.jsonPrimitive.content !in setOf(
-                "diagnostics", "workspaceSymbols", "documentSymbols", "definition", "renameSymbol", "organizeImports",
-            )
+            it["operation"]!!.jsonPrimitive.content !in knownKotlinOps
         }.all { it["stability"]!!.jsonPrimitive.content == "refused" && it["evidence"]!!.jsonPrimitive.content == "none" })
         val kotlinRename = kotlinCapabilities.single { it["operation"]!!.jsonPrimitive.content == "renameSymbol" }
         assertEquals("experimental", kotlinRename["stability"]!!.jsonPrimitive.content)

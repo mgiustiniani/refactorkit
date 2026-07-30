@@ -21,6 +21,7 @@ class JavaMoveClassPlannerTest {
     @Test
     fun jdtMoveScopesImportsToBindingMatchedFiles() {
         val root = createProject(
+            "pom.xml" to AUTHORITATIVE_MAVEN_POM,
             "src/main/java/com/old/Service.java" to """
                 package com.old;
                 public class Service {}
@@ -137,5 +138,20 @@ class JavaMoveClassPlannerTest {
             }
         }
         return root
+    }
+
+    private companion object {
+        val AUTHORITATIVE_MAVEN_POM = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.example</groupId>
+              <artifactId>move-class-test</artifactId>
+              <version>1.0.0</version>
+              <properties>
+                <maven.compiler.release>8</maven.compiler.release>
+              </properties>
+            </project>
+        """.trimIndent()
     }
 }

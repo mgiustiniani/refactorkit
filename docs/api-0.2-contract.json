@@ -6,99 +6,400 @@
   "status": "beta-contract",
   "cli": {
     "commands": [
-      "version", "capabilities", "scan", "index", "intelligence search", "symbols", "diagnostics", "references",
-      "definition", "rename", "rename-member", "extract-method",
-      "change-signature", "move-class", "organize-imports", "format-file",
-      "safe-delete", "patch recover", "patch rollback", "java import-class", "java move-source-root",
-      "java move-across-maven-modules", "recipe run",
-      "outline", "search", "local-rename", "typescript", "kotlin", "test-golden"
+      "version",
+      "capabilities",
+      "scan",
+      "index",
+      "intelligence search",
+      "symbols",
+      "diagnostics",
+      "references",
+      "definition",
+      "rename",
+      "rename-member",
+      "extract-method",
+      "change-signature",
+      "move-class",
+      "organize-imports",
+      "format-file",
+      "safe-delete",
+      "patch recover",
+      "patch rollback",
+      "java import-class",
+      "java move-source-root",
+      "java move-across-maven-modules",
+      "recipe run",
+      "outline",
+      "search",
+      "local-rename",
+      "typescript",
+      "kotlin",
+      "test-golden",
+      "java create-module",
+      "java rename-module",
+      "java create-module"
     ],
     "booleanOptions": [
-      "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
-      "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references",
-      "all-identical-occurrences", "json"
+      "apply",
+      "force",
+      "stdin",
+      "whole-word",
+      "case-insensitive",
+      "resolve-dependencies",
+      "verbose",
+      "allow-workspace-local-toolchain",
+      "allow-external-consumers",
+      "allow-dynamic-references",
+      "all-identical-occurrences",
+      "json"
     ]
   },
   "daemon": {
     "transport": "json-rpc-2.0-ndjson-stdio",
     "methods": [
-      {"name": "server.version", "stability": "beta-contract", "requiresProject": false, "writesWorkspace": false},
-      {"name": "server.capabilities", "stability": "beta-contract", "requiresProject": false, "writesWorkspace": false},
-      {"name": "project.open", "stability": "beta-contract", "requiresProject": false, "writesWorkspace": false},
-      {"name": "project.summary", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false,
-       "features": {"buildModelSummary": true, "sourceSets": true, "credentialRedaction": true,
-                    "boundedBuildModelSummary": true, "typedBuildModelSchema": true,
-                    "offlineMissingStatus": true, "executionRefusedStatus": true}},
-      {"name": "index.status", "stability": "additive-api-0.2", "requiresProject": true, "writesWorkspace": false,
-       "features": {"wholeWorkspaceSourceInventory": true, "providerContributions": true,
-                    "snapshotBound": true, "bounded": true}},
-      {"name": "workspace.watch.status", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"recursiveSavedFiles": true, "boundedDirectories": true, "readOnly": true}},
-      {"name": "workspace.refresh", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"reconcile": true, "providerInvalidation": true, "semanticLeaseInvalidation": true, "typedSchema": true}},
-      {"name": "intelligence.query", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"workspaceSymbols": true, "documentSymbols": true,
-                    "immutableEditorOverlayDocumentSymbols": true, "semanticLease": true,
-                    "completion": true, "immutableEditorOverlayCompletion": true,
-                    "hover": true, "immutableEditorOverlayHover": true, "javaSavedSnapshotHover": true,
-                    "signatureHelp": true, "immutableEditorOverlaySignatureHelp": true, "definitionAtPosition": true,
-                    "javaSavedSnapshotDefinition": true, "snapshotKeyedJdtCache": true,
-                    "referencesAtPosition": true, "javaSavedSnapshotReferences": true, "snapshotBound": true, "typedRefusal": true,
-                    "cooperativeCancellation": true, "barrierAwarePriorityScheduling": true,
-                    "bounded": true}},
-      {"name": "intelligence.cancel", "stability": "experimental", "requiresProject": false, "writesWorkspace": false,
-       "features": {"requestIdCancellation": true, "jsonRpcCancellationError": true}},
-      {"name": "typescript.semantic.start", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"explicitToolchain": true, "hashBoundProvenance": true, "noPackageScripts": true,
-                    "workspaceIndexContribution": true, "aggregateSymbolDeadline": true,
-                    "explicitSymbolTruncation": true}},
-      {"name": "typescript.semantic.restart", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"workspaceIndexRefresh": true, "semanticLeaseRotation": true}},
-      {"name": "typescript.semantic.stop", "stability": "experimental", "requiresProject": true, "writesWorkspace": false},
-      {"name": "symbol.search", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
-      {"name": "symbol.definition", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
-      {"name": "symbol.references", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
-      {"name": "diagnostics", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
-      {"name": "diagnostics.v2", "stability": "additive-api-0.2", "requiresProject": true, "writesWorkspace": false,
-       "features": {"requestCorrelation": true, "semanticLease": true, "savedDiskAuthority": true,
-                    "immutableEditorOverlay": true, "exactUtf16Ranges": true, "structuredReadiness": true,
-                    "compilerAttestation": true, "boundedResponse": true}},
-      {"name": "kotlin.semantic.start", "stability": "experimental", "requiresProject": true, "writesWorkspace": false},
-      {"name": "kotlin.semantic.stop", "stability": "experimental", "requiresProject": true, "writesWorkspace": false},
-      {"name": "kotlin.diagnostics", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"semanticLease": true, "snapshotAttestation": true, "compilerAttestation": true,
-                    "boundedProcess": true, "lineOnlyPrecision": true}},
-      {"name": "kotlin.symbols", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"semanticLease": true, "snapshotAttestation": true, "compilerBacked": true,
-                    "durableJvmTypeIds": true, "exactUtf16Ranges": true, "documentFilter": true,
-                    "boundedResponse": true}},
-      {"name": "kotlin.definition", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"semanticLease": true, "snapshotAttestation": true, "compilerBacked": true,
-                    "opaqueSymbolId": true, "exactUtf16Ranges": true}},
-      {"name": "refactor.preview", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": false},
-      {"name": "refactor.apply", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": true},
-      {"name": "refactor.discard", "stability": "beta-contract", "requiresProject": false, "writesWorkspace": false},
-      {"name": "patch.recover", "stability": "experimental", "requiresProject": false, "writesWorkspace": true},
-      {"name": "patch.rollback", "stability": "beta-contract", "requiresProject": true, "writesWorkspace": true},
-      {"name": "java.importExternalClass", "stability": "experimental", "requiresProject": true, "writesWorkspace": false,
-       "features": {"targetDirectory": true, "preview": true, "renderedDiff": true, "structuredDiff": true,
-                    "previewDiagnostics": true, "apply": true, "discard": true, "rollback": true}}
+      {
+        "name": "server.version",
+        "stability": "beta-contract",
+        "requiresProject": false,
+        "writesWorkspace": false
+      },
+      {
+        "name": "server.capabilities",
+        "stability": "beta-contract",
+        "requiresProject": false,
+        "writesWorkspace": false
+      },
+      {
+        "name": "project.open",
+        "stability": "beta-contract",
+        "requiresProject": false,
+        "writesWorkspace": false
+      },
+      {
+        "name": "project.summary",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "buildModelSummary": true,
+          "sourceSets": true,
+          "credentialRedaction": true,
+          "boundedBuildModelSummary": true,
+          "typedBuildModelSchema": true,
+          "offlineMissingStatus": true,
+          "executionRefusedStatus": true
+        }
+      },
+      {
+        "name": "index.status",
+        "stability": "additive-api-0.2",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "wholeWorkspaceSourceInventory": true,
+          "providerContributions": true,
+          "snapshotBound": true,
+          "bounded": true
+        }
+      },
+      {
+        "name": "workspace.watch.status",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "recursiveSavedFiles": true,
+          "boundedDirectories": true,
+          "readOnly": true
+        }
+      },
+      {
+        "name": "workspace.refresh",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "reconcile": true,
+          "providerInvalidation": true,
+          "semanticLeaseInvalidation": true,
+          "typedSchema": true
+        }
+      },
+      {
+        "name": "intelligence.query",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "workspaceSymbols": true,
+          "documentSymbols": true,
+          "immutableEditorOverlayDocumentSymbols": true,
+          "semanticLease": true,
+          "completion": true,
+          "immutableEditorOverlayCompletion": true,
+          "hover": true,
+          "immutableEditorOverlayHover": true,
+          "javaSavedSnapshotHover": true,
+          "signatureHelp": true,
+          "immutableEditorOverlaySignatureHelp": true,
+          "definitionAtPosition": true,
+          "javaSavedSnapshotDefinition": true,
+          "snapshotKeyedJdtCache": true,
+          "referencesAtPosition": true,
+          "javaSavedSnapshotReferences": true,
+          "snapshotBound": true,
+          "typedRefusal": true,
+          "cooperativeCancellation": true,
+          "barrierAwarePriorityScheduling": true,
+          "bounded": true
+        }
+      },
+      {
+        "name": "intelligence.cancel",
+        "stability": "experimental",
+        "requiresProject": false,
+        "writesWorkspace": false,
+        "features": {
+          "requestIdCancellation": true,
+          "jsonRpcCancellationError": true
+        }
+      },
+      {
+        "name": "typescript.semantic.start",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "explicitToolchain": true,
+          "hashBoundProvenance": true,
+          "noPackageScripts": true,
+          "workspaceIndexContribution": true,
+          "aggregateSymbolDeadline": true,
+          "explicitSymbolTruncation": true
+        }
+      },
+      {
+        "name": "typescript.semantic.restart",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "workspaceIndexRefresh": true,
+          "semanticLeaseRotation": true
+        }
+      },
+      {
+        "name": "typescript.semantic.stop",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "symbol.search",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "symbol.definition",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "symbol.references",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "diagnostics",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "diagnostics.v2",
+        "stability": "additive-api-0.2",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "requestCorrelation": true,
+          "semanticLease": true,
+          "savedDiskAuthority": true,
+          "immutableEditorOverlay": true,
+          "exactUtf16Ranges": true,
+          "structuredReadiness": true,
+          "compilerAttestation": true,
+          "boundedResponse": true
+        }
+      },
+      {
+        "name": "kotlin.semantic.start",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "kotlin.semantic.stop",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "kotlin.diagnostics",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "semanticLease": true,
+          "snapshotAttestation": true,
+          "compilerAttestation": true,
+          "boundedProcess": true,
+          "lineOnlyPrecision": true
+        }
+      },
+      {
+        "name": "kotlin.symbols",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "semanticLease": true,
+          "snapshotAttestation": true,
+          "compilerBacked": true,
+          "durableJvmTypeIds": true,
+          "exactUtf16Ranges": true,
+          "documentFilter": true,
+          "boundedResponse": true
+        }
+      },
+      {
+        "name": "kotlin.definition",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "semanticLease": true,
+          "snapshotAttestation": true,
+          "compilerBacked": true,
+          "opaqueSymbolId": true,
+          "exactUtf16Ranges": true
+        }
+      },
+      {
+        "name": "refactor.preview",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
+        "name": "refactor.apply",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": true
+      },
+      {
+        "name": "refactor.discard",
+        "stability": "beta-contract",
+        "requiresProject": false,
+        "writesWorkspace": false
+      },
+      {
+        "name": "patch.recover",
+        "stability": "experimental",
+        "requiresProject": false,
+        "writesWorkspace": true
+      },
+      {
+        "name": "patch.rollback",
+        "stability": "beta-contract",
+        "requiresProject": true,
+        "writesWorkspace": true
+      },
+      {
+        "name": "java.importExternalClass",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": false,
+        "features": {
+          "targetDirectory": true,
+          "preview": true,
+          "renderedDiff": true,
+          "structuredDiff": true,
+          "previewDiagnostics": true,
+          "apply": true,
+          "discard": true,
+          "rollback": true
+        }
+      },
+      {
+        "name": "java.createMavenModule",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": true,
+        "features": {
+          "preview": true,
+          "renderedDiff": true,
+          "apply": true,
+          "rollback": true
+        }
+      },
+      {
+        "name": "java.renameMavenModule",
+        "stability": "experimental",
+        "requiresProject": true,
+        "writesWorkspace": true,
+        "features": {
+          "preview": true,
+          "renderedDiff": true,
+          "apply": true,
+          "rollback": true
+        }
+      }
     ],
     "refactorOperations": [
-      "renameClass", "renameMember", "extractMethod",
-      "changeSignature.renameParameter", "changeSignature.addParameter",
-      "changeSignature.reorderParameters", "changeSignature.removeParameter",
-      "moveClass", "moveSourceRoot", "organizeImports", "formatFile", "safeDelete", "renameSymbol"
+      "renameClass",
+      "renameMember",
+      "extractMethod",
+      "changeSignature.renameParameter",
+      "changeSignature.addParameter",
+      "changeSignature.reorderParameters",
+      "changeSignature.removeParameter",
+      "moveClass",
+      "moveSourceRoot",
+      "organizeImports",
+      "formatFile",
+      "safeDelete",
+      "renameSymbol"
     ],
     "experimentalRefactorOperations": [
-      "java.moveAcrossMavenModules"
+      "java.moveAcrossMavenModules",
+      "java.createMavenModule",
+      "java.renameMavenModule"
     ]
   },
   "languageKernel": {
     "schemaVersion": 1,
-    "surfaces": ["cli", "daemon", "lsp-experimental", "mcp-extension"],
-    "packagedAdapters": ["java", "javascript", "kotlin", "typescript"],
-    "capabilityLayerFields": ["backend", "runtime", "extensions", "diagnosticSnapshotModes", "diagnosticRangeCapability"]
+    "surfaces": [
+      "cli",
+      "daemon",
+      "lsp-experimental",
+      "mcp-extension"
+    ],
+    "packagedAdapters": [
+      "java",
+      "javascript",
+      "kotlin",
+      "typescript"
+    ],
+    "capabilityLayerFields": [
+      "backend",
+      "runtime",
+      "extensions",
+      "diagnosticSnapshotModes",
+      "diagnosticRangeCapability"
+    ]
   },
   "limits": {
     "maxRequestBytes": 1048576,

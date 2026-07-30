@@ -1,0 +1,14 @@
+id: java.organize-imports
+name: Organize Java imports
+language: java
+parameters:
+  file:
+    type: string
+    description: Java source file path (optional; all touched files if omitted)
+    default: ""
+steps:
+  - type: organizeImports
+    file: "{{ file }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

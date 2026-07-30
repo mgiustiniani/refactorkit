@@ -1,0 +1,8 @@
+{
+  "operation": "moveAcrossMavenModules",
+  "arguments": {
+    "from": "source/src/main/java",
+    "to": "destination/src/main/java",
+    "dependencyRewrites": "[{\"pomPath\":\"consumer/pom.xml\",\"sourceGroupId\":\"example.ownership\",\"sourceArtifactId\":\"source\",\"sourceVersion\":\"1\",\"sourceType\":\"jar\",\"destGroupId\":\"example.ownership\",\"destArtifactId\":\"destination\",\"destVersion\":\"1\",\"destType\":\"jar\",\"allIdentical\":\"false\"}]"
+  }
+}

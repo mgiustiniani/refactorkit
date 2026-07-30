@@ -1,0 +1,4 @@
+<project><modelVersion>4.0.0</modelVersion>
+  <parent><groupId>example.ownership</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent>
+  <artifactId>source</artifactId>
+</project>

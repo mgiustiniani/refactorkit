@@ -13,14 +13,15 @@ internal sealed interface PomRewriteResult {
 /** Conservative lexical editor: it never serializes XML and accepts only direct project dependencies. */
 internal object MavenPomDependencyEditor {
     fun rewrite(pom: SourceFile, request: MavenDependencyRewrite): PomRewriteResult {
-        val parsed = runCatching { XmlLexicalTree.parse(pom.content) }.getOrElse {
+        val content = pom.content
+        val parsed = runCatching { XmlLexicalTree.parse(content) }.getOrElse {
             return PomRewriteResult.Refused(
                 "mavenOwnership.ambiguousPomOrigin",
                 "POM XML cannot be located losslessly: ${it.message}",
             )
         }
         val located = parsed.descendants().filter { it.localName == "dependency" }.mapNotNull { dependency ->
-            dependencyCoordinate(dependency, pom.content)?.let { dependency to it }
+            dependencyCoordinate(dependency, content)?.let { dependency to it }
         }.toList()
         val dependencies = located.filter { (node, _) ->
             node.parent?.localName == "dependencies" && node.parent?.parent?.localName == "project"
@@ -63,8 +64,8 @@ internal object MavenPomDependencyEditor {
                 val value = occurrence.values.getValue(name)
                 if (value.text != destination) edits += TextEdit(
                     SourceRange(
-                        TextEdits.positionForOffset(pom.content, value.start),
-                        TextEdits.positionForOffset(pom.content, value.end),
+                        TextEdits.positionForOffset(content, value.start),
+                        TextEdits.positionForOffset(content, value.end),
                     ),
                     destination,
                 )
@@ -72,15 +73,112 @@ internal object MavenPomDependencyEditor {
             replace("groupId", request.destination.groupId)
             replace("artifactId", request.destination.artifactId)
             replace("version", request.destination.version)
+
             val sourceType = occurrence.values["type"]?.text ?: "jar"
             val destinationType = request.destination.type
-            if (
-                sourceType != destinationType || request.destination.classifier != null ||
-                occurrence.values["classifier"] != null
-            ) {
-                return PomRewriteResult.Refused(
-                    "mavenOwnership.dependencyRewriteMismatch",
-                    "The first ownership row cannot add/remove type or classifier elements",
+            val sourceClassifier = occurrence.values["classifier"]?.text
+            val destinationClassifier = request.destination.classifier
+
+            // Handle type element changes
+            if (sourceType != destinationType || sourceClassifier != destinationClassifier ||
+                (sourceClassifier == null && destinationClassifier != null) ||
+                (sourceClassifier != null && destinationClassifier == null)) {
+                // Update or insert type element if packaging differs from jar
+                if (sourceType != destinationType) {
+                    if (sourceType == "jar") {
+                        // Insert type element after version
+                        val versionEnd = occurrence.values["version"]?.end ?:
+                            return PomRewriteResult.Refused(
+                                "mavenOwnership.dependencyRewriteMismatch",
+                                "Cannot locate version element to insert type",
+                            )
+                        val afterVersion = content.indexOf('>', versionEnd) + 1
+                        val indent = "\n${content.substring(versionEnd - 1, versionEnd).takeWhile { it.isWhitespace() }}"
+                        val insertion = "${indent}    <type>$destinationType</type>"
+                        edits += TextEdit(
+                            SourceRange(
+                                TextEdits.positionForOffset(content, afterVersion),
+                                TextEdits.positionForOffset(content, afterVersion),
+                            ),
+                            insertion,
+                        )
+                    } else {
+                        // Update existing type element text
+                        val typeValue = occurrence.values.getValue("type")
+                        edits += TextEdit(
+                            SourceRange(
+                                TextEdits.positionForOffset(content, typeValue.start),
+                                TextEdits.positionForOffset(content, typeValue.end),
+                            ),
+                            destinationType,
+                        )
+                    }
+                } else if (sourceType != "jar" && destinationType == "jar") {
+                    // Remove type element when destination is jar
+                    val typeValue = occurrence.values.getValue("type")
+                    val typeNode = selected.firstOrNull()?.let { it.values["type"] }
+                    // Find the opening tag position
+                    val openTag = content.lastIndexOf('<', typeValue.start - 1)
+                    val closeTag = content.indexOf('>', typeValue.end) + 1
+                    val removeStart = content.substring(0, openTag).takeLastWhile { it.isWhitespace() }.let { ws ->
+                        openTag - ws.length
+                    }
+                    edits += TextEdit(
+                        SourceRange(
+                            TextEdits.positionForOffset(content, removeStart),
+                            TextEdits.positionForOffset(content, closeTag),
+                        ),
+                        "",
+                    )
+                }
+            }
+
+            // Handle classifier element
+            if (destinationClassifier != null) {
+                if (sourceClassifier != null) {
+                    // Update existing classifier
+                    val clsValue = occurrence.values.getValue("classifier")
+                    if (clsValue.text != destinationClassifier) {
+                        edits += TextEdit(
+                            SourceRange(
+                                TextEdits.positionForOffset(content, clsValue.start),
+                                TextEdits.positionForOffset(content, clsValue.end),
+                            ),
+                            destinationClassifier,
+                        )
+                    }
+                } else {
+                    // Insert classifier after type or version
+                    val afterElement = occurrence.values["type"] ?: occurrence.values["version"] ?:
+                        return PomRewriteResult.Refused(
+                            "mavenOwnership.dependencyRewriteMismatch",
+                            "Cannot locate element to insert classifier",
+                        )
+                    val afterPos = content.indexOf('>', afterElement.end) + 1
+                    val indent = "\n${content.substring(afterElement.end - 1, afterElement.end).takeWhile { it.isWhitespace() }}"
+                    val insertion = "${indent}    <classifier>$destinationClassifier</classifier>"
+                    edits += TextEdit(
+                        SourceRange(
+                            TextEdits.positionForOffset(content, afterPos),
+                            TextEdits.positionForOffset(content, afterPos),
+                        ),
+                        insertion,
+                    )
+                }
+            } else if (sourceClassifier != null && destinationClassifier == null) {
+                // Remove classifier element
+                val clsValue = occurrence.values.getValue("classifier")
+                val openTag = content.lastIndexOf('<', clsValue.start - 1)
+                val closeTag = content.indexOf('>', clsValue.end) + 1
+                val removeStart = content.substring(0, openTag).takeLastWhile { it.isWhitespace() }.let { ws ->
+                    openTag - ws.length
+                }
+                edits += TextEdit(
+                    SourceRange(
+                        TextEdits.positionForOffset(content, removeStart),
+                        TextEdits.positionForOffset(content, closeTag),
+                    ),
+                    "",
                 )
             }
         }

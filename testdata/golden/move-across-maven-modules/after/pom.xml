@@ -1,0 +1,5 @@
+<project><modelVersion>4.0.0</modelVersion>
+  <groupId>example.ownership</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging>
+  <properties><maven.compiler.release>21</maven.compiler.release></properties>
+  <modules><module>source</module><module>destination</module><module>consumer</module></modules>
+</project>

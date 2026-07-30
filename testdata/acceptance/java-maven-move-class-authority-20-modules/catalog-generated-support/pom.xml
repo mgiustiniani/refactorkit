@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.acme.refactorkit.fixture</groupId>
+    <artifactId>java-maven-move-class-authority-reactor</artifactId>
+    <version>1.0.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+  <artifactId>catalog-generated-support</artifactId>
+  <dependencies>
+    <dependency>
+      <groupId>com.acme.refactorkit.fixture</groupId>
+      <artifactId>catalog-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+</project>

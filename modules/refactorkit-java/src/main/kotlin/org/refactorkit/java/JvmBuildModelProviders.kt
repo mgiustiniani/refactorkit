@@ -291,6 +291,11 @@ private object JavaModuleBuildModelProjector {
         val classpathPrefix = if (test) "java.testClasspath" else "java.mainClasspath"
         module.languageSettings["$classpathPrefix.status"]?.let { put("java.classpath.status", it) }
         module.languageSettings["$classpathPrefix.message"]?.let { put("java.classpath.message", it) }
+        module.languageSettings.toSortedMap().forEach { (key, value) ->
+            if (key.startsWith("$classpathPrefix.missing.")) {
+                put("java.classpath${key.removePrefix(classpathPrefix)}", value)
+            }
+        }
         if (!test) {
             module.languageSettings["java.runtimeClasspath.status"]?.let { put("java.runtimeClasspath.status", it) }
             module.languageSettings["java.runtimeClasspath.message"]?.let { put("java.runtimeClasspath.message", it) }

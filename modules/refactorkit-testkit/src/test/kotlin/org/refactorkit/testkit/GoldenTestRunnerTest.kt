@@ -39,6 +39,9 @@ class GoldenTestRunnerTest {
         assertTrue("organize-imports-already-clean" in names, "Expected organize-imports-already-clean in $names")
         assertTrue("safe-delete-forced-with-references" in names, "Expected safe-delete-forced-with-references in $names")
         assertTrue("external-class-import-license-block-unknown" in names, "Expected external-class-import-license-block-unknown in $names")
+        assertTrue("move-source-root" in names, "Expected move-source-root in $names")
+        assertTrue("move-across-maven-modules" in names, "Expected move-across-maven-modules in $names")
+        assertTrue("change-signature-rename-parameter-multi-module" in names, "Expected change-signature-rename-parameter-multi-module in $names")
     }
 
     @Test
@@ -157,6 +160,37 @@ class GoldenTestRunnerTest {
     @Test
     fun externalClassImportLicenseBlockUnknownPasses() =
         assertRefusedCasePlanValid("external-class-import-license-block-unknown")
+
+    // ── move-source-root ─────────────────────────────────────────────────────
+
+    @Test
+    fun moveSourceRootPasses() {
+        val tc = GoldenTestLoader.loadNamed("move-source-root", goldenDir)
+        val result = runner.run(tc)
+        assertTrue(result.planValid, "Plan validation for 'move-source-root' failed:\n${result.planErrors.joinToString("\n")}")
+        assertEquals(PatchStatus.REFUSED, result.plan?.status)
+        assertTrue(result.plan?.warnings?.isNotEmpty() == true)
+    }
+
+    // ── move-across-maven-modules ─────────────────────────────────────────────
+
+    @Test
+    fun moveAcrossMavenModulesPasses() {
+        val tc = GoldenTestLoader.loadNamed("move-across-maven-modules", goldenDir)
+        val result = runner.run(tc)
+        assertTrue(result.passed, "Golden test 'move-across-maven-modules' failed:\n${result.errors.joinToString("\n")}")
+        assertEquals(PatchStatus.PREVIEW, result.plan?.status)
+    }
+
+    // ── change-signature-rename-parameter-multi-module ────────────────────────
+
+    @Test
+    fun changeSignatureRenameParameterMultiModulePasses() {
+        val tc = GoldenTestLoader.loadNamed("change-signature-rename-parameter-multi-module", goldenDir)
+        val result = runner.run(tc)
+        assertTrue(result.passed, "Golden test 'change-signature-rename-parameter-multi-module' failed:\n${result.errors.joinToString("\n")}")
+        assertEquals(PatchStatus.PREVIEW, result.plan?.status)
+    }
 
     // ── rename-class-with-references ──────────────────────────────────────────
 

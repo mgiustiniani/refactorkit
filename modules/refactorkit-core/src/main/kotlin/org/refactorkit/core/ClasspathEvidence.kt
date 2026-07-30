@@ -4,6 +4,7 @@ import java.nio.file.FileVisitOption
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.stream.Collectors
 
@@ -30,26 +31,72 @@ data class ClasspathEvidence(
         }
 
         fun fingerprint(path: Path, kind: ClasspathEvidenceKind): String {
-            if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return "missing"
+            if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+                return if (kind == ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT) {
+                    "absent-nofollow:${hashNoFollowPath(path)}"
+                } else {
+                    "missing"
+                }
+            }
             return when (kind) {
                 ClasspathEvidenceKind.ENTRY -> when {
-                    Files.isRegularFile(path) -> hashFile(path, "file")
-                    Files.isDirectory(path) -> hashDirectory(path) { true }
+                    Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) -> hashFile(path, "file")
+                    Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) -> hashDirectory(path) { true }
                     else -> error("Classpath entry is neither a regular file nor directory: $path")
                 }
+                ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT -> when {
+                    Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) -> hashFile(path, kind.name.lowercase())
+                    else -> "present-nonregular-nofollow:${hashNoFollowPath(path)}"
+                }
                 ClasspathEvidenceKind.DECLARATION_FILE,
-                ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT,
                 ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT,
                 ClasspathEvidenceKind.EFFECTIVE_MODEL_INPUT,
                 ClasspathEvidenceKind.IMPORTED_BOM -> {
-                    if (!Files.isRegularFile(path)) error("Classpath/model evidence is not a regular file: $path")
+                    if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                        error("Classpath/model evidence is not a no-follow regular file: $path")
+                    }
                     hashFile(path, kind.name.lowercase())
                 }
                 ClasspathEvidenceKind.JAR_DIRECTORY -> {
-                    if (!Files.isDirectory(path)) error("Classpath JAR location is not a directory: $path")
+                    if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                        error("Classpath JAR location is not a no-follow directory: $path")
+                    }
                     hashDirectory(path) { it.fileName.toString().endsWith(".jar", ignoreCase = true) }
                 }
             }
+        }
+
+        private fun hashNoFollowPath(path: Path): String {
+            val absolute = path.toAbsolutePath().normalize()
+            val digest = MessageDigest.getInstance("SHA-256")
+            digest.update("no-follow-path\u0000$absolute\u0000".toByteArray(Charsets.UTF_8))
+            var current = requireNotNull(absolute.root) { "No filesystem root for $absolute" }
+            fun record(component: String, candidate: Path) {
+                digest.update(component.toByteArray(Charsets.UTF_8))
+                digest.update(0)
+                val attributes = runCatching {
+                    Files.readAttributes(
+                        candidate,
+                        BasicFileAttributes::class.java,
+                        LinkOption.NOFOLLOW_LINKS,
+                    )
+                }.getOrNull()
+                val state = when {
+                    attributes == null -> "ABSENT"
+                    attributes.isSymbolicLink -> "SYMLINK:${runCatching { Files.readSymbolicLink(candidate) }.getOrNull()}"
+                    attributes.isDirectory -> "DIRECTORY:${attributes.fileKey()}"
+                    attributes.isRegularFile -> "FILE:${attributes.fileKey()}"
+                    else -> "OTHER:${attributes.fileKey()}"
+                }
+                digest.update(state.toByteArray(Charsets.UTF_8))
+                digest.update(0)
+            }
+            record("<root>", current)
+            absolute.forEach { component ->
+                current = current.resolve(component)
+                record(component.toString(), current)
+            }
+            return digest.hexDigest()
         }
 
         private fun hashDirectory(root: Path, include: (Path) -> Boolean): String {

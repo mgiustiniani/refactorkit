@@ -691,6 +691,15 @@ class TypeScriptDaemonIntegrationTest {
                 )),
             ),
         )
+        override fun requestWorkspaceEdit(
+            paramsJson: String,
+            snapshot: ProjectSnapshot,
+            normalizer: ExternalWorkspaceEditNormalizer,
+        ): ExternalWorkspaceEditNormalization {
+            return ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+                "test stub", Diagnostic.Severity.ERROR, code = "externalEdit.testStub",
+            )))
+        }
         override fun close() { isRunning = false }
         private fun symbol() = Symbol(SymbolId("src/service.ts::Service@0:13"), "Service", Symbol.Kind.CLASS, location(), "typescript")
         private fun location() = SourceLocation(

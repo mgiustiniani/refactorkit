@@ -714,6 +714,16 @@ class TypeScriptSemanticAdapterTest {
             synchronizedSnapshots += snapshot
             return exactDiagnosticsProvider?.invoke(snapshot) ?: exactDiagnostics
         }
+        override fun requestWorkspaceEdit(
+            paramsJson: String,
+            snapshot: ProjectSnapshot,
+            normalizer: ExternalWorkspaceEditNormalizer,
+        ): ExternalWorkspaceEditNormalization {
+            return ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+                "test stub", Diagnostic.Severity.ERROR, code = "externalEdit.testStub",
+            )))
+        }
+
         override fun requestRename(
             snapshot: ProjectSnapshot,
             location: SourceLocation,

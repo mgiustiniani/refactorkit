@@ -1,0 +1,25 @@
+id: java.extract-method
+name: Extract Java method
+language: java
+parameters:
+  file:
+    type: string
+    description: Source file path (workspace-relative)
+  startLine:
+    type: int
+    description: Start line (1-based, inclusive)
+  endLine:
+    type: int
+    description: End line (1-based, inclusive)
+  methodName:
+    type: string
+    description: New method name
+steps:
+  - type: extractMethod
+    file: "{{ file }}"
+    startLine: "{{ startLine }}"
+    endLine: "{{ endLine }}"
+    methodName: "{{ methodName }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

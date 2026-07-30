@@ -42,10 +42,10 @@ class KotlinJvmBuildModelProjector {
         )
 
         val kotlinFiles = snapshot.files.filter { file ->
-            file.languageId == "kotlin" && file.path.fileName.toString().endsWith(".kt")
+            file.languageId == "kotlin" && file.path.fileName?.toString()?.endsWith(".kt") == true
         }
         val scripts = snapshot.files.filter { file ->
-            file.languageId == "kotlin" && file.path.fileName.toString().endsWith(".kts")
+            file.languageId == "kotlin" && file.path.fileName?.toString()?.endsWith(".kts") == true
         }
         val diagnostics = mutableListOf<BuildModelDiagnostic>()
         val modules = mutableListOf<BuildModule>()

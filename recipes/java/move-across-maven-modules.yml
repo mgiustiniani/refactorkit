@@ -1,0 +1,17 @@
+id: java.move-across-maven-modules
+name: Move Java source root across Maven modules
+language: java
+parameters:
+  from:
+    type: string
+    description: Source root path (workspace-relative)
+  to:
+    type: string
+    description: Destination root path (workspace-relative)
+steps:
+  - type: moveAcrossMavenModules
+    from: "{{ from }}"
+    to: "{{ to }}"
+  - type: runDiagnostics
+    strict: true
+  - type: summarizePatch

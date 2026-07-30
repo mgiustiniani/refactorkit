@@ -1,0 +1,18 @@
+id: java.move-source-root
+name: Move Java source root
+language: java
+parameters:
+  from:
+    type: string
+    description: Source root path (workspace-relative)
+  to:
+    type: string
+    description: Destination root path (workspace-relative)
+steps:
+  - type: movePackage
+    from: "{{ from }}"
+    to: "{{ to }}"
+  - type: organizeImports
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

@@ -2,21 +2,27 @@ package org.refactorkit.testkit
 
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolPath
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.java.MavenDependencyIdentity
+import org.refactorkit.java.MavenDependencyRewrite
 import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
@@ -80,11 +86,17 @@ class GoldenTestRunner(
         // 6. Apply if PREVIEW
         val afterErrors = mutableListOf<String>()
         if (plan.status == PatchStatus.PREVIEW) {
+            val diagnosticsProvider: (ProjectSnapshot) -> List<Diagnostic> = when (request.operation) {
+                "moveAcrossMavenModules" -> { s ->
+                    JavaMoveAcrossMavenModulesPlanner(adapter).diagnostics(s)
+                }
+                else -> adapter::diagnostics
+            }
             when (val result = PatchEngine(workDir).apply(
                 plan,
                 snap,
                 ApplyAuthorization.explicit("golden-testkit"),
-                DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+                DiagnosticsGate.enabled("java-jdt", diagnosticsProvider),
             )) {
                 is ApplyResult.Applied -> Unit
                 is ApplyResult.Refused -> {
@@ -183,6 +195,41 @@ class GoldenTestRunner(
                 licensePolicy = request.arguments["licensePolicy"]?.let { LicensePolicy.valueOf(it.uppercase().replace('-', '_')) } ?: LicensePolicy.WARN,
                 snapshot = snap,
             ))
+            "moveSourceRoot" -> JavaMoveSourceRootPlanner(adapter).preview(
+                snap,
+                Paths.get(requireArgument(request, "from")),
+                Paths.get(requireArgument(request, "to")),
+            )
+            "moveAcrossMavenModules" -> {
+                val dependencyRewrites = request.arguments["dependencyRewrites"]?.let { raw ->
+                    val parsed = GoldenJson.parseList(raw)
+                    parsed.map { entry ->
+                        val pomPath = Paths.get(entry["pomPath"] ?: error("dependencyRewrites entry needs 'pomPath'"))
+                        MavenDependencyRewrite(
+                            pomPath = if (pomPath.isAbsolute) root.relativize(pomPath) else pomPath,
+                            source = MavenDependencyIdentity(
+                                groupId = entry["sourceGroupId"] ?: error("dependencyRewrites entry needs 'sourceGroupId'"),
+                                artifactId = entry["sourceArtifactId"] ?: error("dependencyRewrites entry needs 'sourceArtifactId'"),
+                                version = entry["sourceVersion"] ?: error("dependencyRewrites entry needs 'sourceVersion'"),
+                                type = entry["sourceType"] ?: "jar",
+                                classifier = entry["sourceClassifier"],
+                            ),
+                            destination = MavenDependencyIdentity(
+                                groupId = entry["destGroupId"] ?: error("dependencyRewrites entry needs 'destGroupId'"),
+                                artifactId = entry["destArtifactId"] ?: error("dependencyRewrites entry needs 'destArtifactId'"),
+                                version = entry["destVersion"] ?: error("dependencyRewrites entry needs 'destVersion'"),
+                                type = entry["destType"] ?: "jar",
+                                classifier = entry["destClassifier"],
+                            ),
+                            allIdenticalOccurrences = entry["allIdentical"]?.toBoolean() ?: false,
+                        )
+                    }
+                } ?: emptyList()
+                JavaMoveAcrossMavenModulesPlanner(adapter).preview(
+                    snap, Paths.get(requireArgument(request, "from")),
+                    Paths.get(requireArgument(request, "to")), dependencyRewrites,
+                )
+            }
             else -> error("Unknown operation: '${request.operation}'")
         }
 

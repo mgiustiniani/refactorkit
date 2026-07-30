@@ -1,0 +1,42 @@
+id: java.change-signature
+name: Change Java method signature
+language: java
+parameters:
+  operation:
+    type: string
+    description: Operation type (rename-parameter | add-parameter | remove-parameter | reorder-parameters | change-parameter-type)
+  symbol:
+    type: string
+    description: Fully qualified method symbol
+  name:
+    type: string
+    description: Parameter name (for rename/remove/change-type)
+    default: ""
+  newName:
+    type: string
+    description: New parameter name (for rename)
+    default: ""
+  type:
+    type: string
+    description: Parameter type (for add/change-type)
+    default: ""
+  default:
+    type: string
+    description: Default expression (for add)
+    default: ""
+  order:
+    type: string
+    description: Comma-separated parameter order (for reorder)
+    default: ""
+steps:
+  - type: changeSignature
+    operation: "{{ operation }}"
+    symbol: "{{ symbol }}"
+    name: "{{ name }}"
+    newName: "{{ newName }}"
+    type: "{{ type }}"
+    default: "{{ default }}"
+    order: "{{ order }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

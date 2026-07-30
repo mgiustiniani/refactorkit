@@ -295,6 +295,39 @@ enum class RefactoringEvidence {
     LEXICAL_FALLBACK,
 }
 
+/**
+ * Immutable, operation-specific evidence that must still match the supplied
+ * snapshot when a managed preview reaches the under-lock write boundary.
+ *
+ * The language planner owns the semantic meaning of [kind], [evidenceHash],
+ * and [attributes]. Core only enforces that the lease belongs to this exact
+ * operation/snapshot and that every required classpath presence or absence
+ * record is part of the engine-owned snapshot evidence.
+ */
+data class OperationAuthorityLease(
+    val kind: String,
+    val operation: String,
+    val snapshotHash: String,
+    val evidenceHash: String,
+    val requiredClasspathEvidence: List<ClasspathEvidence> = emptyList(),
+    val attributes: Map<String, String> = emptyMap(),
+) {
+    init {
+        require(kind.isNotBlank()) { "operation-authority lease kind must not be blank" }
+        require(operation.isNotBlank()) { "operation-authority lease operation must not be blank" }
+        require(SHA256.matches(snapshotHash)) { "operation-authority snapshot hash must be SHA-256" }
+        require(SHA256.matches(evidenceHash)) { "operation-authority evidence hash must be SHA-256" }
+        require(requiredClasspathEvidence.distinctBy { it.path.normalize() to it.kind }.size == requiredClasspathEvidence.size) {
+            "operation-authority classpath evidence keys must be unique"
+        }
+        require(attributes.keys.all(String::isNotBlank)) { "operation-authority attribute keys must not be blank" }
+    }
+
+    private companion object {
+        val SHA256 = Regex("[a-f0-9]{64}")
+    }
+}
+
 enum class DiagnosticEvidence {
     COMPILER,
     STRUCTURAL,
@@ -352,6 +385,7 @@ data class PatchPlan(
     val riskLevel: RiskLevel = RiskLevel.LOW,
     val evidence: RefactoringEvidence = RefactoringEvidence.STRUCTURAL,
     val refusalCode: String? = null,
+    val authorityLease: OperationAuthorityLease? = null,
 )
 
 enum class ApprovalKind {

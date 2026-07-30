@@ -24,11 +24,11 @@ internal class GradleDeclarativeModelBuilder {
                 .sorted().toList()
         }
         if (buildFiles.isEmpty()) return notApplicable()
-        val moduleRoots = buildFiles.map { it.parent.toAbsolutePath().normalize() }.distinct()
+        val moduleRoots = buildFiles.mapNotNull { it.parent?.toAbsolutePath()?.normalize() }.distinct()
         val moduleIds = moduleRoots.associateWith { moduleId(root, it) }
         val diagnostics = mutableListOf<BuildModelDiagnostic>()
         val modules = buildFiles.mapNotNull { buildFile ->
-            val moduleRoot = buildFile.parent.toAbsolutePath().normalize()
+            val moduleRoot = buildFile.parent?.toAbsolutePath()?.normalize() ?: return@mapNotNull null
             val id = moduleIds.getValue(moduleRoot)
             val text = runCatching {
                 require(Files.size(buildFile) <= MAX_BUILD_FILE_BYTES) { "descriptor exceeds bounded size" }

@@ -1,0 +1,5 @@
+<project><modelVersion>4.0.0</modelVersion>
+  <groupId>example.multi</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging>
+  <properties><maven.compiler.release>21</maven.compiler.release></properties>
+  <modules><module>api</module><module>client</module></modules>
+</project>

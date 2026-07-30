@@ -1,0 +1,18 @@
+id: java.safe-delete
+name: Safe delete Java class
+language: java
+parameters:
+  symbol:
+    type: string
+    description: Fully qualified class name to delete
+  force:
+    type: boolean
+    description: Force deletion even if references exist
+    default: "false"
+steps:
+  - type: safeDelete
+    symbol: "{{ symbol }}"
+    force: "{{ force }}"
+  - type: runDiagnostics
+    strict: false
+  - type: summarizePatch

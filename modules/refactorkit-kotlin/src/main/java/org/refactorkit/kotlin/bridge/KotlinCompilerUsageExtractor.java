@@ -283,6 +283,7 @@ final class KotlinCompilerUsageExtractor {
     ) {
         if (!(parameter.getSource() instanceof KtPsiSourceElement)) return;
         PsiElement psi = ((KtPsiSourceElement) parameter.getSource()).getPsi();
+        if (psi == null) return;
         KtTypeParameter declaration = psi instanceof KtTypeParameter ?
             (KtTypeParameter) psi : parent(psi, KtTypeParameter.class);
         if (declaration == null || declaration.getNameIdentifier() == null) return;
@@ -313,7 +314,9 @@ final class KotlinCompilerUsageExtractor {
             target = typeParameters.get(((ConeTypeParameterType) typeRef.getType()).getLookupTag()
                 .getTypeParameterSymbol());
         } else return;
-        PsiElement identifier = typeIdentifier(((KtPsiSourceElement) typeRef.getSource()).getPsi());
+        PsiElement typePsi = ((KtPsiSourceElement) typeRef.getSource()).getPsi();
+        if (typePsi == null) return;
+        PsiElement identifier = typeIdentifier(typePsi);
         if (identifier == null) return;
         if (target != null) {
             if (!matchesTargetName(identifier, target, importAliases)) return;
@@ -335,7 +338,9 @@ final class KotlinCompilerUsageExtractor {
     ) {
         if (!(qualifier.getSource() instanceof KtPsiSourceElement) || qualifier.getClassId() == null ||
             qualifier.getClassId().isLocal()) return;
-        PsiElement identifier = typeIdentifier(((KtPsiSourceElement) qualifier.getSource()).getPsi());
+        PsiElement psi = ((KtPsiSourceElement) qualifier.getSource()).getPsi();
+        if (psi == null) return;
+        PsiElement identifier = typeIdentifier(psi);
         if (identifier == null) return;
         if (qualifier.getSymbol().getSource() instanceof KtPsiSourceElement) {
             KtClassOrObject type = targetType(((KtPsiSourceElement) qualifier.getSymbol().getSource()).getPsi());
@@ -376,6 +381,7 @@ final class KotlinCompilerUsageExtractor {
         KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryIdentity);
         String targetIdentity = target == null ? externalTypeIdentity(binaryIdentity) : target.identity();
         PsiElement source = ((KtPsiSourceElement) resolvedImport.getSource()).getPsi();
+        if (source == null) throw failure("kotlin.usageSourceUnavailable");
         KtImportDirective directive = source instanceof KtImportDirective ?
             (KtImportDirective) source : parent(source, KtImportDirective.class);
         if (directive == null || !alias.asString().equals(directive.getAliasName())) {
@@ -400,7 +406,9 @@ final class KotlinCompilerUsageExtractor {
             parent.createNestedClassId(importedName);
         String binaryIdentity = binaryName(classId);
         KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryIdentity);
-        PsiElement identifier = typeIdentifier(((KtPsiSourceElement) resolvedImport.getSource()).getPsi());
+        PsiElement importPsi = ((KtPsiSourceElement) resolvedImport.getSource()).getPsi();
+        if (importPsi == null) return;
+        PsiElement identifier = typeIdentifier(importPsi);
         if (identifier == null) return;
         if (target != null) {
             if (!identifier.getText().equals(target.name())) return;

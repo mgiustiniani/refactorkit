@@ -10,6 +10,7 @@ import org.refactorkit.core.Workspace
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.util.stream.Collectors
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
@@ -20,6 +21,7 @@ class JavaProjectScanner(
     private val localMavenRepository: Path = Path.of(System.getProperty("user.home"), ".m2", "repository"),
     private val activeMavenProfiles: Set<String> = emptySet(),
     private val inactiveMavenProfiles: Set<String> = emptySet(),
+    private val selectedMavenDescriptorAuthority: MavenSelectedDescriptorAuthorityContext? = null,
 ) {
     fun scan(root: Path): ProjectSnapshot = scanInternal(root, includeBuildModels = true)
 
@@ -40,6 +42,7 @@ class JavaProjectScanner(
                 allowNetworkDependencyResolution,
                 activeMavenProfiles,
                 inactiveMavenProfiles,
+                selectedDescriptorAuthorityContext = selectedMavenDescriptorAuthority,
             ).build(normalizedRoot, pomFiles)
         } else null
         val mavenByRoot = mavenReactor?.modules.orEmpty()
@@ -134,6 +137,48 @@ class JavaProjectScanner(
                     put("java.maven.version", maven.coordinate.version)
                     put("java.maven.packaging", maven.packaging)
                     put(
+                        "java.dependencyGraph.status",
+                        if (maven.dependencyGraphFailures.isEmpty()) "complete" else "incomplete",
+                    )
+                    if (maven.dependencyGraphFailures.isNotEmpty()) {
+                        put(
+                            "java.dependencyGraph.message",
+                            maven.dependencyGraphFailures.take(8).joinToString("; "),
+                        )
+                    }
+                    val selectorRecords = maven.dependencySelectorRecords.sortedWith(
+                        compareBy<MavenDependencySelectorRecord> { it.consumer }
+                            .thenBy { it.sourceSet }
+                            .thenBy { it.projection }
+                            .thenBy { it.dependencyPath }
+                            .thenBy { it.outcome }
+                            .thenBy { it.reason },
+                    )
+                    put("java.maven.selector.count", selectorRecords.size.toString())
+                    selectorRecords.forEachIndexed { index, record ->
+                        val key = "java.maven.selector.$index"
+                        put(
+                            "$key.declaringPom",
+                            evidencePath(normalizedRoot, record.declaringPom).toString().replace('\\', '/'),
+                        )
+                        put("$key.consumer", record.consumer)
+                        put("$key.sourceSet", record.sourceSet)
+                        put("$key.projection", record.projection)
+                        put("$key.dependencyPath", record.dependencyPath)
+                        put("$key.groupId", record.groupId)
+                        put("$key.artifactId", record.artifactId)
+                        put("$key.declaredVersion", record.declaredVersion)
+                        put("$key.declaredScope", record.declaredScope)
+                        put("$key.effectiveScope", record.effectiveScope)
+                        put("$key.optional", record.optional.toString())
+                        put("$key.type", record.type)
+                        put("$key.classifier", record.classifier)
+                        put("$key.variant", record.normalizedVariant)
+                        put("$key.outcome", record.outcome)
+                        put("$key.reason", record.reason)
+                        put("$key.lookupBoundary", record.lookupBoundary)
+                    }
+                    put(
                         "java.maven.pomPath",
                         normalizedRoot.relativize(moduleRoot.resolve("pom.xml")).toString().replace('\\', '/'),
                     )
@@ -157,6 +202,113 @@ class JavaProjectScanner(
                         }
                     }
                     put("java.classpath.status", if (maven.missingArtifacts.isEmpty()) "available" else "unavailable")
+                    fun recordMissingArtifactEvidence(
+                        prefix: String,
+                        missingArtifacts: List<String>,
+                        evidence: List<MavenMissingArtifactEvidence>,
+                    ) {
+                        put("$prefix.missing.count", missingArtifacts.size.toString())
+                        put("$prefix.missing.evidence.count", evidence.size.toString())
+                        evidence.sortedWith(compareBy<MavenMissingArtifactEvidence> { it.identity }.thenBy { it.kind.name })
+                            .forEachIndexed { index, entry ->
+                                val key = "$prefix.missing.evidence.$index"
+                                put("$key.kind", entry.kind.name)
+                                put("$key.identity", entry.identity)
+                                put("$key.path", evidencePath(normalizedRoot, entry.expectedPath).toString().replace('\\', '/'))
+                                entry.expectedIdentityManifest?.let { manifest ->
+                                    put("$key.manifest", evidencePath(normalizedRoot, manifest).toString().replace('\\', '/'))
+                                }
+                                entry.expectedSha256?.let { put("$key.sha256", it) }
+                                put("$key.providedTypes", entry.providedTypes.sorted().joinToString(","))
+                                put("$key.leaf", entry.leaf.toString())
+                                if (entry.kind == MavenMissingArtifactEvidenceKind.LOCAL_REPOSITORY_SELECTED_LEAF) {
+                                    val groupId = requireNotNull(entry.groupId)
+                                    val artifactId = requireNotNull(entry.artifactId)
+                                    val version = requireNotNull(entry.version)
+                                    val repositoryRoot = requireNotNull(entry.repositoryRoot)
+                                    val selectedPom = requireNotNull(entry.selectedPom)
+                                    put("$key.groupId", groupId)
+                                    put("$key.artifactId", artifactId)
+                                    put("$key.version", version)
+                                    put("$key.type", requireNotNull(entry.type))
+                                    put("$key.classifier", entry.classifier.orEmpty())
+                                    put("$key.extension", requireNotNull(entry.extension))
+                                    put("$key.fixedRelease", entry.fixedRelease.toString())
+                                    put("$key.noRelocation", entry.noRelocation.toString())
+                                    put("$key.repository.provider", requireNotNull(entry.repositoryProvider))
+                                    put("$key.repository.layout", requireNotNull(entry.repositoryLayout))
+                                    put("$key.repository.policy", requireNotNull(entry.repositoryPolicy))
+                                    put(
+                                        "$key.repository.root",
+                                        evidencePath(normalizedRoot, repositoryRoot).toString().replace('\\', '/'),
+                                    )
+                                    put(
+                                        "$key.repository.identityHash",
+                                        sha256(
+                                            listOf(
+                                                entry.repositoryProvider,
+                                                entry.repositoryLayout,
+                                                repositoryRoot.toAbsolutePath().normalize(),
+                                                entry.repositoryPolicy,
+                                            ).joinToString("\u0000").toByteArray(Charsets.UTF_8),
+                                        ),
+                                    )
+                                    put(
+                                        "$key.pomPath",
+                                        evidencePath(normalizedRoot, selectedPom).toString().replace('\\', '/'),
+                                    )
+                                    put("$key.pomSha256", sha256(Files.readAllBytes(selectedPom)))
+                                    val effectiveInputs = entry.effectiveModelInputs.sortedBy(Path::toString)
+                                    put("$key.effectiveInput.count", effectiveInputs.size.toString())
+                                    effectiveInputs.forEachIndexed { inputIndex, input ->
+                                        val inputKey = "$key.effectiveInput.$inputIndex"
+                                        put("$inputKey.path", evidencePath(normalizedRoot, input).toString().replace('\\', '/'))
+                                        put("$inputKey.sha256", sha256(Files.readAllBytes(input)))
+                                    }
+                                    val descriptorFacts = entry.descriptorFacts.sortedWith(
+                                        compareBy<MavenSelectedDescriptorFact> { it.layer.ordinal }
+                                            .thenBy { it.path.toString() },
+                                    )
+                                    put("$key.descriptorFact.count", descriptorFacts.size.toString())
+                                    descriptorFacts.forEachIndexed { factIndex, fact ->
+                                        val factKey = "$key.descriptorFact.$factIndex"
+                                        put(
+                                            "$factKey.path",
+                                            evidencePath(normalizedRoot, fact.path).toString().replace('\\', '/'),
+                                        )
+                                        put("$factKey.layer", fact.layer.name)
+                                        put("$factKey.sha256", fact.contentSha256)
+                                    }
+                                    entry.parsedDescriptorIdentityHash?.let {
+                                        put("$key.parsedDescriptorIdentityHash", it)
+                                    }
+                                    val selections = entry.selections.sortedWith(
+                                        compareBy<MavenMissingArtifactSelection> { it.sourceSet }
+                                            .thenBy { it.projection }
+                                            .thenBy { it.dependencyPath },
+                                    )
+                                    put("$key.selection.count", selections.size.toString())
+                                    selections.forEachIndexed { selectionIndex, selection ->
+                                        val selectionKey = "$key.selection.$selectionIndex"
+                                        put("$selectionKey.sourceSet", selection.sourceSet)
+                                        put("$selectionKey.projection", selection.projection)
+                                        put("$selectionKey.dependencyPath", selection.dependencyPath)
+                                        put("$selectionKey.effectiveScope", selection.effectiveScope)
+                                    }
+                                    put("$key.leafProof", "SELECTED_SUBTREE_SIZE_1_OUTGOING_SELECTED_0")
+                                }
+                            }
+                    }
+                    recordMissingArtifactEvidence(
+                        "java.mainClasspath",
+                        maven.mainMissingArtifacts,
+                        maven.mainMissingArtifactEvidence,
+                    )
+                    recordMissingArtifactEvidence(
+                        "java.testClasspath",
+                        maven.testMissingArtifacts,
+                        maven.testMissingArtifactEvidence,
+                    )
                     fun missingMessage(missingArtifacts: List<String>): String {
                         val missing = missingArtifacts.sorted()
                         val suffix = if (missing.size > 8) " (+${missing.size - 8} more)" else ""
@@ -271,14 +423,29 @@ class JavaProjectScanner(
                     add(ClasspathEvidence.capture(normalizedRoot, normalizedRoot.relativize(path), ClasspathEvidenceKind.DECLARATION_FILE))
                 }
             }
+            val reactorPoms = mavenReactor?.reactorPomFiles.orEmpty()
             mavenReactor?.modules?.values.orEmpty().flatMap { it.modelInputs }
-                .filterNot { it.startsWith(normalizedRoot) }.forEach { input ->
+                .filterNot { it.toAbsolutePath().normalize() in reactorPoms }.forEach { input ->
                     val path = evidencePath(normalizedRoot, input)
                     add(ClasspathEvidence.capture(normalizedRoot, path, ClasspathEvidenceKind.EFFECTIVE_MODEL_INPUT))
                 }
             mavenReactor?.modules?.values.orEmpty().flatMap { it.importedBoms }.forEach { bom ->
                 val path = evidencePath(normalizedRoot, bom)
                 add(ClasspathEvidence.capture(normalizedRoot, path, ClasspathEvidenceKind.IMPORTED_BOM))
+            }
+            mavenReactor?.modules?.values.orEmpty().flatMap { it.missingArtifactEvidence }.forEach { missing ->
+                val path = evidencePath(normalizedRoot, missing.expectedPath)
+                val kind = when (missing.kind) {
+                    MavenMissingArtifactEvidenceKind.SYSTEM_PATH_SIDECAR ->
+                        ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT
+                    MavenMissingArtifactEvidenceKind.LOCAL_REPOSITORY_SELECTED_LEAF ->
+                        ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT
+                }
+                add(ClasspathEvidence.capture(normalizedRoot, path, kind))
+                missing.expectedIdentityManifest?.let { manifest ->
+                    val manifestPath = evidencePath(normalizedRoot, manifest)
+                    add(ClasspathEvidence.capture(normalizedRoot, manifestPath, ClasspathEvidenceKind.DECLARATION_FILE))
+                }
             }
         }.distinctBy { it.path.normalize() to it.kind }.sortedWith(
             compareBy<ClasspathEvidence> { it.path.toString() }.thenBy { it.kind.name },
@@ -486,6 +653,10 @@ class JavaProjectScanner(
                     .filter { it.exists() && (it.isDirectory() || it.fileName.toString().endsWith(".jar")) }.toList()
             }.getOrDefault(emptyList())
         }
+
+    private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(bytes)
+        .joinToString("") { byte -> "%02x".format(byte) }
 
     private fun moduleName(workspaceRoot: Path, moduleRoot: Path): String {
         val relative = workspaceRoot.relativize(moduleRoot)

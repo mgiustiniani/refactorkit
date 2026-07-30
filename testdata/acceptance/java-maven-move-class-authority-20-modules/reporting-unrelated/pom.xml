@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.acme.refactorkit.fixture</groupId>
+    <artifactId>java-maven-move-class-authority-reactor</artifactId>
+    <version>1.0.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+  <artifactId>reporting-unrelated</artifactId>
+  <dependencies>
+    <dependency>
+      <groupId>com.acme.refactorkit.fixture</groupId>
+      <artifactId>reporting-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+
+  <profiles>
+    <profile>
+      <id>req-java-maven-move-auth-009</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.acme.fixture.missing</groupId>
+          <artifactId>outside-product-closure</artifactId>
+          <version>1.0.0</version>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
+</project>

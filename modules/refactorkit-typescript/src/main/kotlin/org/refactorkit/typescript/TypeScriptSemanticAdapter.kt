@@ -12,6 +12,7 @@ import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
+import org.refactorkit.core.ExternalWorkspaceEditNormalizer
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.ImmutableEditorOverlay
 import org.refactorkit.core.LanguageAdapter
@@ -178,6 +179,11 @@ interface TypeScriptSemanticClient : AutoCloseable {
     fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic>
     fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics
     fun requestRename(snapshot: ProjectSnapshot, location: SourceLocation, newName: String): ExternalWorkspaceEditNormalization
+    fun requestWorkspaceEdit(
+        paramsJson: String,
+        snapshot: ProjectSnapshot,
+        normalizer: ExternalWorkspaceEditNormalizer = ExternalWorkspaceEditNormalizer(),
+    ): ExternalWorkspaceEditNormalization
 }
 
 class ExternalTypeScriptSemanticClient(
@@ -298,6 +304,14 @@ class ExternalTypeScriptSemanticClient(
         location: SourceLocation,
         newName: String,
     ): ExternalWorkspaceEditNormalization = adapter.requestRename(snapshot, location, newName)
+
+    override fun requestWorkspaceEdit(
+        paramsJson: String,
+        snapshot: ProjectSnapshot,
+        normalizer: ExternalWorkspaceEditNormalizer,
+    ): ExternalWorkspaceEditNormalization = adapter.requestWorkspaceEdit(
+        "textDocument/organizeImports", paramsJson, snapshot, normalizer,
+    )
     override fun close() {
         auxiliaryFiles = emptyList()
         adapter.close()
@@ -733,12 +747,59 @@ class TypeScriptSemanticAdapter(
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = listOf(
         RefactoringDescriptor("renameSymbol", "Rename TypeScript/JavaScript symbol", RiskLevel.MEDIUM),
+        RefactoringDescriptor("organizeImports", "Organize TypeScript/JavaScript imports", RiskLevel.LOW),
+        RefactoringDescriptor("moveSymbol", "Move TypeScript/JavaScript symbol to another file", RiskLevel.MEDIUM),
+        RefactoringDescriptor("changeSignature", "Change TypeScript/JavaScript method signature", RiskLevel.MEDIUM),
+        RefactoringDescriptor("extractMethod", "Extract TypeScript/JavaScript method/function", RiskLevel.MEDIUM),
+        RefactoringDescriptor("inlineMethod", "Inline TypeScript/JavaScript method/function call", RiskLevel.MEDIUM),
     )
 
     override fun applyRefactoring(request: RefactoringRequest): PatchPlan {
         if (!active(request.snapshot)) return refusedPlan(
             request, "typescript.semanticNotStarted", "TypeScript semantic adapter is not started for this snapshot",
         )
+        if (request.operation == "organizeImports") {
+            val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
+                ?: return refusedPlan(request, "typescript.organizeImportsFileMissing", "organizeImports requires arguments.file")
+            return TypeScriptOrganizeImportsPlanner(client).preview(request.snapshot, Path.of(file))
+        }
+        if (request.operation == "moveSymbol") {
+            val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
+                ?: return refusedPlan(request, "typescript.moveFileMissing", "moveSymbol requires arguments.file")
+            val symbolName = request.arguments["symbolName"] ?: request.symbolId?.value?.substringAfter('#')
+                ?: return refusedPlan(request, "typescript.moveSymbolMissing", "moveSymbol requires arguments.symbolName")
+            val targetFile = request.arguments["targetFile"]
+                ?: return refusedPlan(request, "typescript.moveTargetMissing", "moveSymbol requires arguments.targetFile")
+            return TypeScriptMoveSymbolPlanner(client).preview(request.snapshot, Path.of(file), symbolName, Path.of(targetFile))
+        }
+        if (request.operation == "changeSignature") {
+            val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
+                ?: return refusedPlan(request, "typescript.changeSignatureFileMissing", "changeSignature requires arguments.file")
+            val symbolName = request.arguments["symbolName"] ?: request.symbolId?.value?.substringAfter('#')
+                ?: return refusedPlan(request, "typescript.changeSignatureSymbolMissing", "changeSignature requires arguments.symbolName")
+            val newSignature = request.arguments["newSignature"]
+                ?: return refusedPlan(request, "typescript.changeSignatureMissing", "changeSignature requires arguments.newSignature")
+            return TypeScriptChangeSignaturePlanner(client).preview(request.snapshot, Path.of(file), symbolName, newSignature)
+        }
+        if (request.operation == "extractMethod") {
+            val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
+                ?: return refusedPlan(request, "typescript.extractFileMissing", "extractMethod requires arguments.file")
+            val startLine = request.arguments["startLine"]?.toIntOrNull() ?: request.selection?.location?.range?.start?.line
+                ?: return refusedPlan(request, "typescript.extractStartMissing", "extractMethod requires arguments.startLine")
+            val endLine = request.arguments["endLine"]?.toIntOrNull() ?: request.selection?.location?.range?.end?.line
+                ?: return refusedPlan(request, "typescript.extractEndMissing", "extractMethod requires arguments.endLine")
+            val methodName = request.arguments["methodName"] ?: "extracted"
+            return TypeScriptExtractMethodPlanner(client).preview(request.snapshot, Path.of(file), startLine, endLine, methodName)
+        }
+        if (request.operation == "inlineMethod") {
+            val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
+                ?: return refusedPlan(request, "typescript.inlineFileMissing", "inlineMethod requires arguments.file")
+            val startLine = request.arguments["startLine"]?.toIntOrNull() ?: request.selection?.location?.range?.start?.line
+                ?: return refusedPlan(request, "typescript.inlineStartMissing", "inlineMethod requires arguments.startLine")
+            val endLine = request.arguments["endLine"]?.toIntOrNull() ?: request.selection?.location?.range?.end?.line
+                ?: return refusedPlan(request, "typescript.inlineEndMissing", "inlineMethod requires arguments.endLine")
+            return TypeScriptExtractMethodPlanner(client).preview(request.snapshot, Path.of(file), startLine, endLine, "inline:" + request.arguments["methodName"] ?: "inline")
+        }
         if (request.operation != "renameSymbol") return refusedPlan(
             request, "language.operationUnsupported", "Unsupported TypeScript operation '${request.operation}'",
         )

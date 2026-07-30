@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     kotlin("jvm") version "2.0.21" apply false
     kotlin("plugin.serialization") version "2.0.21" apply false
+    id("com.github.spotbugs") version "6.5.9" apply false
 }
 
 val buildJdkFeature = Runtime.version().feature()
@@ -27,7 +28,6 @@ subprojects {
             listOf("tree-sitter", "tree-sitter-typescript", "tree-sitter-javascript").forEach { artifact ->
                 withModule("io.github.bonede:$artifact") {
                     allVariants {
-                        // Loaded reflectively only by the bundled Java 21 runtime; keeps RefactorKit API bytecode at 8.
                         attributes.attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 8)
                     }
                 }
@@ -54,6 +54,50 @@ subprojects {
         systemProperty("java.io.tmpdir", boundedTemp.get().asFile.absolutePath)
         environment("TMPDIR", boundedTemp.get().asFile.absolutePath)
     }
+
+    // ── Static analysis plugins ──
+    pluginManager.apply("pmd")
+    pluginManager.apply("com.github.spotbugs")
+
+    // PMD configuration (via reflection)
+    val pmdExt = project.extensions.findByName("pmd")
+    if (pmdExt != null) {
+        pmdExt::class.java.methods.forEach { m ->
+            when (m.name) {
+                "setConsoleOutput" -> m.invoke(pmdExt, true)
+                "setRulesMinimumConfidence" -> m.invoke(pmdExt, 2)
+                "setRuleSetsConfigFiles" -> m.invoke(pmdExt, listOf("category/java/bestpractices.xml", "category/java/errorprone.xml"))
+                "setIgnoreFailures" -> m.invoke(pmdExt, true)
+            }
+        }
+    }
+
+    // SpotBugs extension configuration (via reflection)
+    val sbExt = project.extensions.findByName("spotbugs")
+    if (sbExt != null) {
+        sbExt::class.java.methods.forEach { m ->
+            when (m.name) {
+                "setIgnoreFailures" -> m.invoke(sbExt, true)
+                "setShowStackTraces" -> m.invoke(sbExt, true)
+                "setShowProgress" -> m.invoke(sbExt, true)
+                "setReportFormat" -> m.invoke(sbExt, "html")
+                "setReportsDir" -> m.invoke(sbExt, layout.buildDirectory.dir("reports/spotbugsMain").get().asFile)
+            }
+        }
+    }
+}
+
+val leafModules = subprojects.flatMap { p -> if (p.subprojects.isEmpty()) listOf(p) else p.subprojects }
+tasks.register("pmdAll") {
+    group = "verification"
+    description = "Run PMD on all subprojects"
+    dependsOn(leafModules.map { "${it.path}:pmdMain" })
+}
+
+tasks.register("spotbugsAll") {
+    group = "verification"
+    description = "Run SpotBugs on all subprojects"
+    dependsOn(leafModules.map { "${it.path}:spotbugsMain" })
 }
 
 tasks.register("goldenTest") {
@@ -71,5 +115,5 @@ tasks.register("packageCliRuntime") {
 tasks.register("distCliRuntimeZip") {
     group = "distribution"
     description = "Build the zipped self-contained RefactorKit CLI package."
-    dependsOn(":modules:refactorkit-cli:refactorkitRuntimeZip")
+    dependsOn(":modules:refactorkit-cli:refactorkitRuntimeDist")
 }

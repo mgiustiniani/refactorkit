@@ -77,7 +77,8 @@ class JavaMoveAcrossMavenModulesPlanner(
         val destinationOwner = snapshot.exactBuildSourceRootOwnerships(destination).singleOrNull()
             ?: return refused(
                 snapshot, "mavenOwnership.destinationUnrecognized",
-                "Destination is not owned by exactly one effective Maven source set: $destination",
+                "Destination is not owned by exactly one effective Maven source set: $destination. " +
+                "Create the destination module first with 'refactorkit java create-module'.",
             )
         if (sourceOwner.providerId != MAVEN_PROVIDER || destinationOwner.providerId != MAVEN_PROVIDER) {
             return refused(snapshot, "mavenOwnership.sourceUnrecognized", "Source and destination must belong to the authoritative Maven reactor")
@@ -102,9 +103,9 @@ class JavaMoveAcrossMavenModulesPlanner(
                 "Generated Java cannot change Maven ownership: ${file.path} ($reason)",
             )
         }
-        val frameworkAssessment = JavaFrameworkAssessment(
-            movedFiles.flatMap { JavaFrameworkDetector.assess(it).findings },
-        )
+        val movedFindings = movedFiles.flatMap { JavaFrameworkDetector.assess(it).findings }
+        val frameworkAssessment = JavaFrameworkAssessment(movedFindings)
+        val frameworkStringRefs = frameworkStringReferences(snapshot, movedFiles, movedFindings)
         val quotedIdentities = quotedIdentityCandidates(snapshot, movedFiles)
         val remainingSourceRoots = sourceOwner.module.sourceSets.flatMap { it.sourceRoots }
             .map(Path::normalize).filterNot { it == source }
@@ -112,9 +113,11 @@ class JavaMoveAcrossMavenModulesPlanner(
             ?: return refused(snapshot, "mavenOwnership.sourceUnrecognized", "Source Maven module identity is unavailable")
         val destinationIdentity = moduleIdentity(destinationOwner.module.attributes)
             ?: return refused(snapshot, "mavenOwnership.destinationUnrecognized", "Destination Maven module identity is unavailable")
-        if (sourceIdentity.type != "jar" || sourceIdentity.classifier != null ||
-            destinationIdentity.type != "jar" || destinationIdentity.classifier != null) {
-            return refused(snapshot, "mavenOwnership.dependencyRewriteMismatch", "The first ownership row supports jar modules without classifiers")
+        if (dependencyRewrites.isNotEmpty() && !isSupportedPackaging(sourceIdentity.type)) {
+            return refused(snapshot, "mavenOwnership.dependencyRewriteMismatch", "Source module packaging '${{sourceIdentity.type}}' is not supported for dependency rewrites")
+        }
+        if (dependencyRewrites.isNotEmpty() && !isSupportedPackaging(destinationIdentity.type)) {
+            return refused(snapshot, "mavenOwnership.dependencyRewriteMismatch", "Destination module packaging '${{destinationIdentity.type}}' is not supported for dependency rewrites")
         }
         if (dependencyRewrites.size > MAX_REWRITES) {
             return refused(snapshot, "mavenOwnership.dependencyRewriteMismatch", "Dependency rewrite count exceeds the bounded limit")
@@ -219,12 +222,16 @@ class JavaMoveAcrossMavenModulesPlanner(
                             "only explicitly authorized POM coordinate text is replaced.",
                     )
                     addAll(frameworkAssessment.warnings(OPERATION))
+                    if (frameworkStringRefs.isNotEmpty()) add(
+                        "Framework-specific string references detected in ${frameworkStringRefs.size} location(s): " +
+                            frameworkStringRefs.joinToString("; "),
+                    )
                     if (quotedIdentities.isNotEmpty()) add(
                         "Quoted moved-type identities require runtime/configuration review: " +
                             quotedIdentities.joinToString(),
                     )
                 },
-                riskLevel = if (frameworkAssessment.hasFindings || quotedIdentities.isNotEmpty()) {
+                riskLevel = if (frameworkAssessment.hasFindings || quotedIdentities.isNotEmpty() || frameworkStringRefs.isNotEmpty()) {
                     RiskLevel.HIGH
                 } else RiskLevel.MEDIUM,
                 evidence = RefactoringEvidence.JDT_BINDING,
@@ -254,6 +261,80 @@ class JavaMoveAcrossMavenModulesPlanner(
             }.map { identity -> "${file.path}:$identity" }
         }.sorted()
     }
+
+    /**
+     * Scan the project for framework-specific string references to moved classes.
+     * Finds @Qualifier, @JsonTypeName, JPQL entity references, @ConfigurationProperties prefixes.
+     */
+    private fun frameworkStringReferences(
+        snapshot: ProjectSnapshot,
+        movedFiles: List<org.refactorkit.core.SourceFile>,
+        findings: List<JavaFrameworkFinding>,
+    ): List<String> {
+        if (findings.isEmpty()) return emptyList()
+        val movedPaths = movedFiles.map { it.path.normalize() }.toSet()
+        val movedClasses = movedFiles.mapNotNull { file ->
+            val name = file.path.fileName.toString().removeSuffix(".java")
+            name.takeUnless { it in setOf("module-info", "package-info") }?.let {
+                JavaPackageUtil.fqn(JavaPackageUtil.extractPackage(file.content), name)
+            }
+        }.toSet()
+        val simpleNames = movedClasses.mapTo(mutableSetOf()) { it.substringAfterLast('.') }
+        val frameworks = findings.map { it.framework }.toSet()
+        val refs = mutableListOf<String>()
+        snapshot.trackedFiles.filterNot { it.path.normalize() in movedPaths }.forEach { file ->
+            val content = file.content
+            frameworks.forEach { framework ->
+                when (framework) {
+                    JavaFramework.SPRING -> {
+                        // Find @Qualifier("simpleName") references
+                        simpleNames.forEach { name ->
+                            val qualifierPattern = """@Qualifier\(\s*"$name"\s*\)"""
+                            if (Regex(qualifierPattern).find(content) != null) {
+                                refs += "${file.path}:@Qualifier(\"$name\") references moved class"
+                            }
+                        }
+                        // Find @ConfigurationProperties(prefix = "prefix") references
+                        movedClasses.forEach { fqcn ->
+                            val parts = fqcn.split('.')
+                            val prefix = parts.dropLast(1).joinToString(".") + "." + parts.last().let {
+                                it[0].lowercase() + it.substring(1)
+                            }
+                            val prefixPattern = """@ConfigurationProperties\(\s*(?:prefix\s*=\s*)?"$prefix"\s*\)"""
+                            if (Regex(prefixPattern).find(content) != null) {
+                                refs += "${file.path}:@ConfigurationProperties(prefix=\"$prefix\") references moved class"
+                            }
+                        }
+                    }
+                    JavaFramework.JPA -> {
+                        // Find JPQL/HQL queries with entity name matching simple class name
+                        simpleNames.forEach { name ->
+                            val jpqlPattern = """(?i)(?:from|join|update|delete)\s+(?:\w+\.)*$name\s"""
+                            if (Regex(jpqlPattern).find(content) != null) {
+                                refs += "${file.path}:JPQL entity reference to '$name' may need updating"
+                            }
+                            val criteriaPattern = """criteria\.|Criteria|\.from\(\s*$name"""
+                            if (Regex(criteriaPattern).find(content) != null) {
+                                refs += "${file.path}:Criteria API reference to '$name' may need updating"
+                            }
+                        }
+                    }
+                    JavaFramework.JACKSON -> {
+                        // Find @JsonTypeName("simpleName") references
+                        simpleNames.forEach { name ->
+                            val typeNamePattern = """@JsonTypeName\(\s*"$name"\s*\)"""
+                            if (Regex(typeNamePattern).find(content) != null) {
+                                refs += "${file.path}:@JsonTypeName(\"$name\") references moved class"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return refs.sorted()
+    }
+
+    private fun isSupportedPackaging(packaging: String): Boolean = packaging in setOf("jar", "war", "pom")
 
     private fun moduleIdentity(attributes: Map<String, String>): MavenDependencyIdentity? {
         val group = attributes["java.maven.groupId"] ?: return null

@@ -23,6 +23,7 @@ import java.util.UUID
 import java.util.stream.Collectors
 
 enum class PatchFaultPoint {
+    BEFORE_AUTHORITY_LEASE_VALIDATION,
     AFTER_STAGED_FILE_FORCE,
     AFTER_COMMITTED_IMAGE,
 }
@@ -153,13 +154,7 @@ class PatchEngine(
         if (plan.snapshotHash != currentSnapshotHash) {
             add(Diagnostic("Project changed since preview; regenerate the plan", Diagnostic.Severity.ERROR, code = "snapshot.changed"))
         }
-        if (plan.evidence == RefactoringEvidence.LEXICAL_FALLBACK) {
-            add(Diagnostic(
-                "Lexical fallback previews are review-only and cannot be applied through the stable managed-write contract",
-                Diagnostic.Severity.ERROR,
-                code = "evidence.insufficient",
-            ))
-        }
+        validateImmutableManagedWriteEvidence(plan)?.let(::add)
         addAll(validateEdits(normalizedEdit))
         addAll(validateRuntimeState(normalizedEdit))
         if (none { it.severity == Diagnostic.Severity.ERROR }) {
@@ -193,12 +188,17 @@ class PatchEngine(
         currentSnapshot: ProjectSnapshot,
         authorization: ApplyAuthorization,
         diagnosticsGate: DiagnosticsGate,
-    ): ApplyResult = withWorkspaceLock {
+    ): ApplyResult = validateImmutableManagedWriteEvidence(plan)
+        ?.let { ApplyResult.Refused(listOf(it)) }
+        ?: withWorkspaceLock {
         val normalizedEdit = WorkspaceEditSimulator.normalize(plan.workspaceEdit)
         val normalizedPlan = plan.copy(
             workspaceEdit = normalizedEdit,
             affectedFiles = normalizedEdit.affectedFiles(),
         )
+        if (normalizedPlan.authorityLease != null) {
+            faultInjector.inject(PatchFaultPoint.BEFORE_AUTHORITY_LEASE_VALIDATION, Path.of("."), 0)
+        }
         val diagnostics = buildList {
             val capabilities = filesystemCapabilities()
             if (!capabilities.supportsDurableAtomicReplacement) {
@@ -223,6 +223,7 @@ class PatchEngine(
                     code = "approval.required",
                 ))
             }
+            addAll(validateOperationAuthorityLease(normalizedPlan, currentSnapshot))
             addAll(validateEngineOwnedSnapshot(currentSnapshot))
             addAll(validateAffectedFilePreconditions(normalizedEdit, currentSnapshot))
         }
@@ -254,6 +255,65 @@ class PatchEngine(
                 )
             } else applied
         }
+    }
+
+    private fun validateImmutableManagedWriteEvidence(plan: PatchPlan): Diagnostic? = when {
+        plan.evidence == RefactoringEvidence.LEXICAL_FALLBACK -> Diagnostic(
+            "Lexical fallback previews are review-only and cannot be applied through the stable managed-write contract",
+            Diagnostic.Severity.ERROR,
+            code = "evidence.insufficient",
+        )
+        plan.authorityLease?.operation?.let { it != plan.operation } == true -> Diagnostic(
+            "Operation-authority lease does not belong to ${plan.operation}",
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.operationMismatch",
+        )
+        plan.authorityLease?.snapshotHash?.let { it != plan.snapshotHash } == true -> Diagnostic(
+            "Operation-authority lease does not belong to the preview snapshot",
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.snapshotMismatch",
+        )
+        else -> null
+    }
+
+    /** Revalidate language-planner lease inputs under the workspace lock and before WAL creation. */
+    private fun validateOperationAuthorityLease(
+        plan: PatchPlan,
+        snapshot: ProjectSnapshot,
+    ): List<Diagnostic> {
+        val lease = plan.authorityLease ?: return emptyList()
+        if (lease.snapshotHash != snapshot.hash) return listOf(Diagnostic(
+            "Operation-authority lease changed since preview; regenerate the plan",
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.snapshotMismatch",
+        ))
+        val available = snapshot.classpathEvidence.toSet()
+        val missing = lease.requiredClasspathEvidence.filterNot(available::contains)
+        if (missing.isNotEmpty()) return listOf(Diagnostic(
+            "Operation-authority lease is missing ${missing.size} required classpath presence/absence evidence record(s)",
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.evidenceMissing",
+        ))
+        val drifted = try {
+            lease.requiredClasspathEvidence.filter { expected ->
+                ClasspathEvidence.capture(normalizedRoot, expected.path, expected.kind) != expected
+            }
+        } catch (error: Exception) {
+            return listOf(Diagnostic(
+                "Operation-authority lease evidence cannot be revalidated under lock: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "authorityLease.evidenceUnreadable",
+            ))
+        }
+        if (drifted.isEmpty()) return emptyList()
+        val identities = lease.attributes.filterKeys { it.endsWith(".coordinate") }.values.distinct().sorted()
+        val identityDetail = identities.takeIf(List<String>::isNotEmpty)?.joinToString(", ") ?: lease.kind
+        return listOf(Diagnostic(
+            "Operation-authority lease evidence drift for $identityDetail at " +
+                drifted.joinToString(", ") { "${it.path} (${it.kind})" },
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.evidenceDrift",
+        ))
     }
 
     /**
