@@ -15,7 +15,7 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
     And the request moves the writable sole top-level class "com.acme.catalog.legacy.Product" from "catalog-model/src/main/java/com/acme/catalog/legacy/Product.java" to the unused path "catalog-model/src/main/java/com/acme/catalog/api/Product.java" within the same main source set
 
   # RPK-JAVA-MOVE-001..004 and RPK-JAVA-MOVE-006..007
-  @REQ-JAVA-MAVEN-MOVE-AUTH-001 @functional-requirement @non-functional-requirement @absent
+  @REQ-JAVA-MAVEN-MOVE-AUTH-001 @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: A binding-clean move is committed once and rolled back byte for byte
     Given the full effective reactor graph and complete reverse-observer closure are available and hash-bound
     And every observer has current dependency-bounded source paths, classpaths, source inventories, Java platform signatures, and provider evidence

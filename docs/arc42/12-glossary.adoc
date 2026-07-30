@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from domain research reviewed on 2026-07-29 and descriptor-closed graph/ordinary missing-binary concepts reviewed on 2026-07-30. REQ-JAVA-MAVEN-MOVE-AUTH-007, `009`, `010`, `011`, and six-case `012` validate their bounded synthetic, explicit-scope, descriptor-pruning/alternate-selected-POM, ordinary sidecar-free selected-JAR, and selected-descriptor refusal rows. Executable `008` remains absent. Separately, the exact Magrathea request at commit `a48e3c06` is CLI-qualified on Linux/JDK 21 after `010`; this dated field result did not require `011` or `012` and does not qualify an integration/native matrix or general support.
+Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from domain research reviewed on 2026-07-29 and descriptor-closed graph/ordinary missing-binary concepts reviewed on 2026-07-30. REQ-JAVA-MAVEN-MOVE-AUTH-001 now validates the bounded complete-`AVAILABLE` binding-clean preview/apply/rollback vocabulary; `007`, `009`, `010`, `011`, and six-case `012` retain their independently bounded missing-binary, scope, pruning, ordinary-absence, and selected-descriptor meanings. Requirements `002`-`004` and `008` remain absent. Separately, the exact Magrathea request at commit `a48e3c06` remains CLI-qualified only on Linux/JDK 21 after `010`; no integration/native matrix or general support is inferred.
 
 [cols="1,3,2,2",options="header"]
 |===
@@ -94,19 +94,19 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |`Models.kt`
 
 |Diagnostics Authority
-|The right to use a diagnostic result as semantic evidence for a managed operation. Global Java/Maven authority binds a complete available source-set environment, exact workspace/overlay, Build Model/classpath, Java platform signatures, and provider. The qualified target-scoped Maven `moveClass` mode still requires complete structural, candidate-total, staged-delta, and freshness proof. Bounded `007` admits one synthetic closure-missing leaf with diagnostic isolation; `009` keeps every target-closure environment `AVAILABLE` while retaining globally visible `OFFLINE_MISSING` solely outside the closure; `010` keeps the closure `AVAILABLE` by pruning omitted children before lookup; `011` admits one ordinary selected missing JAR only with complete descriptor/leaf proof, candidate-total lookup protection, and zero unresolved/unattributed diagnostics; and `012` proves that six selected-descriptor failures refuse before semantic authority selection. Maven build success is supplementary only.
+|The right to use a diagnostic result as semantic evidence for a managed operation. Global Java/Maven authority binds a complete available source-set environment, exact workspace/overlay, Build Model/classpath, Java platform signatures, and provider. Bounded `001` validates one complete-`AVAILABLE` row with zero authoritative before, staged, after, and rollback diagnostics. The qualified target-scoped Maven `moveClass` mode still requires complete structural, candidate-total, staged-delta, and freshness proof; `007`, `009`, `010`, `011`, and `012` cover independently bounded missing-binary, scope, pruning, ordinary-absence, and selected-descriptor shapes. Maven build success is supplementary only.
 |Core / Java / safety
-|ADR 0012; `RPK-JAVA-DIAG-005`; `RPK-JAVA-MOVE-003..004`; REQ-JAVA-MAVEN-MOVE-AUTH-007, `009`, `010`, `011`, and `012`
+|ADR 0012; `RPK-JAVA-DIAG-005`; `RPK-JAVA-MOVE-003..004`; REQ-JAVA-MAVEN-MOVE-AUTH-001, `007`, `009`, `010`, `011`, and `012`
 
 |Binding-clean Semantic Authority
 |Operation- and snapshot-scoped proof that one exact non-recovered JDT target binding and every in-scope Java edit site refer to the same symbol, that the complete authority scope is inventoried without concealment by parse/binding failure or truncation, and that staged re-analysis establishes the new identity. It authorizes semantic plan construction, not mutation by itself.
 |Java semantic refactoring
-|ADRs 0008 and 0012; `RPK-JAVA-MOVE-003`
+|ADRs 0008 and 0012; `RPK-JAVA-MOVE-003`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001
 
 |Target-scoped Java Semantic Authority
 |Fail-closed proof for one Java semantic operation. Full-reactor active-POM authority, descriptor closure over every selected external node, hash-bound selected/pruned edge classifications, ownership, source inventory, platform/provider, and candidate audit/exclusion remain global. Per-missing-binary negative-presence and retained-diagnostic evidence is required only for the before/staged operation authority closure. The exact target is known, every Java candidate that could denote it is classified, retained closure diagnostics are exactly unchanged and positively non-concealing, and staged evidence has no new or changed error or drift. It is narrower than globally complete source-set diagnostics and does not hide `OFFLINE_MISSING`.
 |Java semantic refactoring / Maven move class
-|Accepted ADR 0012; `RPK-JAVA-MOVE-002..004`; concepts reviewed 2026-07-29 and 2026-07-30; bounded implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-007, `009`, `010`, `011`, and `012`; dated Magrathea CLI field evidence after `010`
+|Accepted ADR 0012; `RPK-JAVA-MOVE-001..004`; concepts reviewed 2026-07-29 and 2026-07-30; bounded implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001, `007`, `009`, `010`, `011`, and `012`; dated Magrathea CLI field evidence after `010`
 
 |Candidate-total Java Inventory
 |Independent, bounded, hash-bound lexical inventory of every old-FQN token and matching simple-name token in a type-capable Java position. Each exact range is classified once as `BOUND_TARGET`, `BOUND_OTHER`, or `UNRESOLVED`; target-relevant or relevance-uncertain unresolved candidates veto authority. The inventory finds evidence that binding analysis might omit, but never selects an edit.
@@ -126,7 +126,7 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |Maven Reactor Classpath and Source-path Completeness
 |Layered proof derived from the declared full effective reactor. Every active reactor POM is mandatory, while external dependency closure is descriptor-closed over selected nodes in every main/test projection. Structural completeness also requires graph/variant and reactor edges, source-set ownership, source/materialized-generated-root inventory, platform/provider facts, full-reactor candidate exclusion, and dependency-bounded reverse-observer facts. External classpath availability is separate. Missing-binary evidence covers only the operation authority closure; full graph discovery never grants unrelated siblings visibility.
 |Build Model / Java
-|ADRs 0010-0012; `RPK-JAVA-MOVE-002`; bounded REQ-JAVA-MAVEN-MOVE-AUTH-007, `009`, `010`, `011`, and `012`
+|ADRs 0010-0012; `RPK-JAVA-MOVE-002`; bounded REQ-JAVA-MAVEN-MOVE-AUTH-001, `007`, `009`, `010`, `011`, and `012`
 
 |Maven Descriptor-closed Dependency Graph
 |Per-consumer-source-set/projection graph whose active reactor POMs all remain mandatory and whose selected external nodes each have complete effective POM, parent, imported-BOM, management, mediation, and relocation inputs. Every outgoing declaration from an active reactor or selected external effective POM is hash-bound and classified as selected or deterministically pruned with exact path/projection provenance. Closure stops below a pruned external edge, not below a selected node.
@@ -154,19 +154,19 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |Accepted ADR 0012; ordinary missing-binary concept reviewed 2026-07-30; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-011
 
 |Reverse-observer Closure
-|The target's owning source set plus every active Maven main/test source set whose effective dependency closure can legally resolve the target in the relevant image. The full reactor is needed to prove excluded siblings are unrelated; this closure is a structural input to the broader operation authority closure.
+|The target's owning source set plus every active Maven main/test source set whose effective dependency closure can legally resolve the target in the relevant image. The full reactor is needed to prove excluded siblings are unrelated; this closure is a structural input to the broader operation authority closure. Bounded `001` reports the owner separately and proves exactly three reverse observers: `catalog-pricing:main`, `catalog-storefront:main`, and `catalog-acceptance:test`.
 |Build Model / Java move class
-|`RPK-JAVA-MOVE-002`; `RPK-JAVA-DIAG-002..003`
+|`RPK-JAVA-MOVE-002`; `RPK-JAVA-DIAG-002..003`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001
 
 |Operation Authority Closure
 |The union, across before and staged images, of the target owner, every reverse observer, and every source set whose JDT result contributes target-binding or retained-diagnostic evidence. Missing-binary coordinate/path and diagnostic non-concealment evidence is quantified over this closure, while structural graph and candidate-exclusion proof remains full-reactor.
 |Java Maven move-class authority
-|ADR 0012; `RPK-JAVA-MOVE-002..004`; bounded implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-009/010/011
+|ADR 0012; `RPK-JAVA-MOVE-002..004`; bounded implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001/009/010/011
 
 |Managed-write Eligibility
-|Explicit operation-scoped `ELIGIBLE` or `INELIGIBLE` decision evaluated under the workspace lock before WAL creation for otherwise eligible plans. For target-scoped Java move class it combines descriptor-closed selected-graph/prune evidence, global candidate exclusion, operation-closure missing-binary evidence where present, candidate-total exact bindings, retained-diagnostic non-concealment, exact staged no-new-error proof, freshness/conflict checks, and normal PatchEngine gates. In implemented ordinary row `011`, exact Java target-name lookup protection substitutes for a provided-type manifest, not for binding, descriptors, diagnostics, or freshness; three evidence drifts refuse under lock before WAL. Missing included descriptors and selection ambiguity block: bounded `010` validates one alternate selected-path missing-POM refusal, while implemented six-case `012` validates selected POM/model/parent/BOM/management/mediation/parsed-relocation failures as `INELIGIBLE` structural refusals before semantic selection and lock. Preview, `OFFLINE_MISSING`, confidence, approval, caller classpath attestation, or Maven success is not eligibility.
+|Explicit operation-scoped `ELIGIBLE` or `INELIGIBLE` decision evaluated under the workspace lock before WAL creation for otherwise eligible plans. For target-scoped Java move class it combines descriptor-closed selected-graph/prune evidence, global candidate exclusion, operation-closure missing-binary evidence where present, candidate-total exact bindings, retained-diagnostic non-concealment, exact staged no-new-error proof, freshness/conflict checks, and normal PatchEngine gates. Bounded `001` validates `ELIGIBLE` for two deterministic complete-`AVAILABLE` previews and revalidation through one exact staged-image transaction. Ordinary row `011` and negative rows `010`/`012` retain their separately bounded eligibility/refusal evidence. Preview, `OFFLINE_MISSING`, confidence, approval, caller classpath attestation, or Maven success is not eligibility.
 |Core / Java / safety
-|Accepted ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-004`; bounded `007`/`009`/`010`/`011`/`012`
+|Accepted ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-004`; bounded `001`/`007`/`009`/`010`/`011`/`012`
 
 |Guided Manual Refactoring Fallback
 |Distinct `REVIEW_ONLY_GUIDANCE` handoff for an intelligible request whose semantic authority is unavailable. It separates facts and candidate evidence, explains blockers and remediation, and gives a human/VCS-owned checklist. It is non-managed: no `PatchPlan`, applyable plan ID, WAL, transaction, or RefactorKit rollback claim.
@@ -209,9 +209,9 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |`docs/releases/v1.0.0-plan.md`, ADRs 0002 and 0004
 
 |Evidence Classification
-|Per-operation outcome classified as JDT binding-backed, separately proven structural behavior, review-only lexical evidence, or refusal. In target-scoped move authority, lexical inventory is completeness/veto evidence only; it never upgrades a range to `JDT_BINDING` or mutation evidence. `LEXICAL_FALLBACK` must not be presented as semantic authority and is rejected before WAL; type-move authority loss yields non-managed guidance or refusal rather than an applyable fallback. The initial detached Magrathea source-only result illustrated the lexical/unqualified state; after descriptor-closed pruning under `010`, a separate CLI/Linux/JDK-21 run at consumer commit `a48e3c06` achieved `JDT_BINDING`, one transaction, and exact rollback. That bounded field qualification did not require `011` or `012` and does not generalize to other surfaces or native matrices.
+|Per-operation outcome classified as JDT binding-backed, separately proven structural behavior, review-only lexical evidence, or refusal. In target-scoped move authority, lexical inventory is completeness/veto evidence only; it never upgrades a range to `JDT_BINDING` or mutation evidence. `LEXICAL_FALLBACK` must not be presented as semantic authority and is rejected before WAL; type-move authority loss yields non-managed guidance or refusal rather than an applyable fallback. Bounded `001` proves deterministic `JDT_BINDING` classification for one complete-`AVAILABLE` fixture request. A separate CLI/Linux/JDK-21 run at Magrathea commit `a48e3c06` remains a request-specific field qualification; neither result generalizes to other surfaces or native matrices.
 |Java / safety
-|ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-003..005`; dated Magrathea field evidence
+|ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-003..005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001; dated Magrathea field evidence
 
 |Release Candidate (RC)
 |Immutable `v1.0.0-rc.N` tag used only after the deep language roadmap, Clojure integration, alpha/beta validation, and API freeze to validate proposed stable contracts and artifacts; a failed tagged candidate is replaced by a new commit and RC number.
