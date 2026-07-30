@@ -7,6 +7,12 @@ import io.cucumber.java.Scenario
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.refactorkit.cli.RefactorKitCli
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
@@ -21,6 +27,9 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
+import org.refactorkit.core.SourceFile
+import org.refactorkit.core.SourceRange
+import org.refactorkit.core.TextEdits
 import org.refactorkit.core.Transaction
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceEditSimulator
@@ -28,7 +37,18 @@ import org.refactorkit.core.owningBuildSourceRoots
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaMoveClassCandidateClassification
+import org.refactorkit.java.JavaMoveClassGuidanceBlocker
+import org.refactorkit.java.JavaMoveClassGuidanceCandidateCompleteness
+import org.refactorkit.java.JavaMoveClassGuidanceJavaCandidate
+import org.refactorkit.java.JavaMoveClassGuidanceOccurrence
+import org.refactorkit.java.JavaMoveClassGuidanceOmissionKind
+import org.refactorkit.java.JavaMoveClassGuidanceResidual
+import org.refactorkit.java.JavaMoveClassGuidanceResidualKind
+import org.refactorkit.java.JavaMoveClassGuidanceRestorationKind
+import org.refactorkit.java.JavaMoveClassOperationDispatcher
+import org.refactorkit.java.JavaMoveClassOperationOutcome
 import org.refactorkit.java.JavaMoveClassPreview
+import org.refactorkit.java.JavaMoveClassReviewOnlyGuidance
 import org.refactorkit.java.JavaMoveClassSelectedMissingBinaryRecord
 import org.refactorkit.java.JavaMoveClassTargetAuthorityLease
 import org.refactorkit.java.JavaMoveClassPlanner
@@ -44,10 +64,19 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 import java.util.jar.JarFile
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.transform.OutputKeys
+import javax.xml.transform.TransformerFactory
+import javax.xml.transform.dom.DOMSource
+import javax.xml.transform.stream.StreamResult
+import org.w3c.dom.Document
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -102,6 +131,27 @@ class JavaMavenMoveClassApplyAuthoritySteps {
     private var selectedDescriptorCondition: String? = null
     private var selectedDescriptorMutation: String? = null
     private var selectedDescriptorPermanentHashes: Map<Path, String> = emptyMap()
+    private var guidanceRows: List<Map<String, String>> = emptyList()
+    private var guidanceCases: List<GuidanceCase> = emptyList()
+    private val artifactEvidenceOutput: Req003ArtifactEvidenceVariantOutputPort =
+        NioReq003ArtifactEvidenceVariantOutputAdapter
+
+    @Before("@REQ-JAVA-MAVEN-MOVE-AUTH-003")
+    fun prepareReviewOnlyGuidanceScenario(scenario: Scenario) {
+        prepareIsolatedFixture("refactorkit-move-auth-003-")
+        val generatedInventory = workspaceRoot.resolve(GENERATED_INVENTORY_EVIDENCE_PATH)
+        val sourceInventory = workspaceRoot.resolve(SOURCE_INVENTORY_EVIDENCE_PATH)
+        assertTrue(Files.isRegularFile(generatedInventory, LinkOption.NOFOLLOW_LINKS))
+        assertTrue(Files.isRegularFile(sourceInventory, LinkOption.NOFOLLOW_LINKS))
+        assertFalse(Files.exists(workspaceRoot.resolve(".refactorkit"), LinkOption.NOFOLLOW_LINKS))
+        scenario.attach(
+            "REQ-JAVA-MAVEN-MOVE-AUTH-003 evaluates four independent, safely readable authority-loss " +
+                "variants in isolated copies. The permanent fixture and its checked-in expected source and " +
+                "generated-root inventories remain unchanged.",
+            "text/plain",
+            "review-only-guidance-isolation",
+        )
+    }
 
     @Before("@REQ-JAVA-MAVEN-MOVE-AUTH-005")
     fun prepareLexicalFallbackScenario(scenario: Scenario) {
@@ -249,7 +299,7 @@ class JavaMavenMoveClassApplyAuthoritySteps {
         )
     }
 
-    @After("@REQ-JAVA-MAVEN-MOVE-AUTH-005 or @REQ-JAVA-MAVEN-MOVE-AUTH-006 or @REQ-JAVA-MAVEN-MOVE-AUTH-007 or @REQ-JAVA-MAVEN-MOVE-AUTH-009 or @REQ-JAVA-MAVEN-MOVE-AUTH-010 or @REQ-JAVA-MAVEN-MOVE-AUTH-011 or @REQ-JAVA-MAVEN-MOVE-AUTH-012")
+    @After("@REQ-JAVA-MAVEN-MOVE-AUTH-003 or @REQ-JAVA-MAVEN-MOVE-AUTH-005 or @REQ-JAVA-MAVEN-MOVE-AUTH-006 or @REQ-JAVA-MAVEN-MOVE-AUTH-007 or @REQ-JAVA-MAVEN-MOVE-AUTH-009 or @REQ-JAVA-MAVEN-MOVE-AUTH-010 or @REQ-JAVA-MAVEN-MOVE-AUTH-011 or @REQ-JAVA-MAVEN-MOVE-AUTH-012")
     fun removeScenarioWorkspace() {
         if (!this::temporaryRoot.isInitialized || !Files.exists(temporaryRoot)) return
         Files.walk(temporaryRoot).use { paths ->
@@ -345,6 +395,443 @@ class JavaMavenMoveClassApplyAuthoritySteps {
         assertFalse(Files.exists(target, LinkOption.NOFOLLOW_LINKS), "The move target must be unused")
         val content = Files.readString(source)
         assertEquals(1, PRODUCT_DECLARATION_PATTERN.findAll(content).count())
+    }
+
+    @Given("each preview-time authority defect is evaluated independently for the otherwise supported canonical move request")
+    fun eachGuidanceDefectIsEvaluatedIndependently() {
+        assertTrue(guidanceCases.isEmpty())
+        assertTrue(Files.isRegularFile(workspaceRoot.resolve(PRODUCT_SOURCE_PATH), LinkOption.NOFOLLOW_LINKS))
+        assertFalse(Files.exists(workspaceRoot.resolve(PRODUCT_TARGET_PATH), LinkOption.NOFOLLOW_LINKS))
+        assertDefaultScannerMavenSourceRootSemantics()
+    }
+
+    @Given("every listed input and its affected scope remains readable, safely contained, and enumerable enough for complete bounded guidance:")
+    fun guidanceInputsRemainReadableAndSafelyEnumerable(table: DataTable) {
+        guidanceRows = table.asMaps()
+        assertEquals(EXPECTED_GUIDANCE_BLOCKERS, guidanceRows.map { row ->
+            GuidanceBlockerRow(
+                row.getValue("Maven module"),
+                row.getValue("source set"),
+                row.getValue("stable blocker code"),
+            )
+        })
+        guidanceCases = guidanceRows.mapIndexed { index, row ->
+            val root = temporaryRoot.resolve("guidance-$index")
+            copyRecursively(fixtureTemplate, root)
+            val blockerCode = row.getValue("stable blocker code")
+            when (blockerCode) {
+                SOURCE_INVENTORY_BLOCKER -> {
+                    val source = root.resolve(PRODUCT_STEPS_PATH)
+                    assertTrue(Files.isReadable(source) && Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS))
+                    changeCatalogAcceptanceTestSourceRoot(root)
+                    assertTrue(Files.isRegularFile(root.resolve(SOURCE_INVENTORY_EVIDENCE_PATH), LinkOption.NOFOLLOW_LINKS))
+                }
+                CLASSPATH_FINGERPRINT_BLOCKER -> {
+                    val artifact = root.resolve(EXTERNAL_ARTIFACT_PATH)
+                    val manifest = root.resolve(EXTERNAL_ARTIFACT_EVIDENCE_PATH)
+                    assertTrue(PROVIDED_TYPE_PATTERN.matches(SECOND_UNRELATED_PROVIDED_TYPE))
+                    artifactEvidenceOutput.appendProvidedType(manifest, SECOND_UNRELATED_PROVIDED_TYPE)
+                    addUnrelatedStaleSystemPathEvidence(root)
+                    val original = Files.readAllBytes(artifact)
+                    Files.write(artifact, original + byteArrayOf(0))
+                    assertTrue(JarFile(artifact.toFile(), false).use { it.entries().hasMoreElements() })
+                    assertFalse(sha256(Files.readAllBytes(artifact)) == EXTERNAL_ARTIFACT_SHA256)
+                    assertEquals(
+                        listOf("com.acme.fixture.external.PriceAuthority", SECOND_UNRELATED_PROVIDED_TYPE),
+                        Files.readAllLines(manifest).filter { it.startsWith("providedType=") }
+                            .map { it.substringAfter('=') },
+                    )
+                }
+                RECOVERED_BINDING_BLOCKER -> {
+                    val source = root.resolve(STOREFRONT_SOURCE_PATH)
+                    val content = Files.readString(source)
+                    assertTrue(content.contains("import $PRODUCT_FQN;"))
+                    Files.writeString(
+                        source,
+                        content.replace("import $PRODUCT_FQN;\n", ""),
+                    )
+                }
+                GENERATED_INVENTORY_BLOCKER -> {
+                    val generated = root.resolve(GENERATED_SOURCE_PATH)
+                    Files.writeString(generated, Files.readString(generated) + "// isolated inventory drift\n")
+                }
+                else -> error("Unexpected REQ-003 blocker: $blockerCode")
+            }
+            val snapshot = JavaProjectScanner().scan(root)
+            if (blockerCode == SOURCE_INVENTORY_BLOCKER) {
+                assertTrue(Files.isRegularFile(root.resolve(PRODUCT_STEPS_PATH), LinkOption.NOFOLLOW_LINKS))
+                val acceptance = snapshot.modules.single { it.name == "catalog-acceptance" }
+                assertTrue(Path.of(CUSTOM_ACCEPTANCE_TEST_SOURCE_ROOT) in acceptance.testSourceRoots)
+                assertTrue(Path.of(DEFAULT_ACCEPTANCE_TEST_SOURCE_ROOT) !in acceptance.testSourceRoots)
+                assertTrue(snapshot.files.none { it.path == Path.of(PRODUCT_STEPS_PATH) })
+            }
+            if (blockerCode == CLASSPATH_FINGERPRINT_BLOCKER) {
+                val unrelatedArtifact = root.resolve(UNRELATED_SYSTEM_ARTIFACT_PATH).toAbsolutePath().normalize()
+                assertTrue(snapshot.classpathEvidence.any { evidence ->
+                    val evidencePath = if (evidence.path.isAbsolute) evidence.path else root.resolve(evidence.path)
+                    evidence.kind == ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT &&
+                        evidencePath.toAbsolutePath().normalize() == unrelatedArtifact
+                }, snapshot.classpathEvidence.toString())
+            }
+            GuidanceCase(
+                row = row,
+                root = root,
+                snapshot = snapshot,
+                recordedState = captureGuidanceWorkspaceState(root),
+            )
+        }
+        assertEquals(4, guidanceCases.size)
+        assertTrue(guidanceCases.map(GuidanceCase::root).distinct().size == guidanceCases.size)
+        assertUnsupportedMoveRequestsAreRefusedBeforeGuidance()
+        assertDuplicateRelevantClasspathSingletonIsRefused()
+    }
+
+    @Given("the materialized generated source root is owned by {string}")
+    fun materializedGeneratedSourceRootHasExactOwner(owner: String) {
+        assertEquals("catalog-generated-support:main", owner)
+        guidanceCases.forEach { case ->
+            val model = case.snapshot.buildModels.single { it.providerId == MAVEN_BUILD_MODEL_PROVIDER }
+            val generatedSupport = model.modules.single { it.id == "catalog-generated-support" }
+            val main = generatedSupport.sourceSets.single { it.id == "main" }
+            assertTrue(Path.of(GENERATED_ROOT_PATH) in main.generatedSourceRoots)
+        }
+    }
+
+    @Given("each defect is present in the freshly observed evidence used to construct its preview, and no listed input changes after the request, snapshot, and evidence identities are bound")
+    fun eachGuidanceDefectIsFreshAndStable() {
+        guidanceCases.forEach { case ->
+            assertEquals(case.snapshot, JavaProjectScanner().scan(case.root))
+            assertEquals(case.recordedState, captureGuidanceWorkspaceState(case.root))
+            listOf(SOURCE_INVENTORY_EVIDENCE_PATH, GENERATED_INVENTORY_EVIDENCE_PATH).forEach { relative ->
+                val path = Path.of(relative)
+                val auxiliary = case.snapshot.auxiliaryFiles.single { it.path == path }
+                assertEquals(Files.readString(case.root.resolve(path)), auxiliary.content)
+                val changedEvidence = case.snapshot.copy(auxiliaryFiles = case.snapshot.auxiliaryFiles.map { file ->
+                    if (file.path == path) file.copy(content = file.content + "# snapshot identity proof\n") else file
+                })
+                assertFalse(case.snapshot.hash == changedEvidence.hash)
+            }
+        }
+    }
+
+    @Given("no {string} directory exists and the workspace bytes, paths, inventories, and snapshot hash are recorded before each evaluation")
+    fun noManagedMetadataExistsBeforeEachGuidanceEvaluation(directory: String) {
+        assertEquals(".refactorkit", directory)
+        guidanceCases.forEach { case ->
+            assertFalse(Files.exists(case.root.resolve(directory), LinkOption.NOFOLLOW_LINKS))
+            assertEquals(case.recordedState, captureGuidanceWorkspaceState(case.root))
+        }
+    }
+
+    @Given("lost, unreadable, unsafe, or unbounded required structural input and every change after snapshot or evidence binding are refused under {string} as structural loss or post-preview evidence drift, not represented by this guidance")
+    fun structuralLossAndPostBindingDriftRemainOutsideThisSlice(requirementId: String) {
+        assertEquals("REQ-JAVA-MAVEN-MOVE-AUTH-008", requirementId)
+        assertTrue(guidanceCases.all { case ->
+            case.root.startsWith(temporaryRoot) && Files.isReadable(case.root)
+        })
+        assertUnsafeExpectedEvidenceIsNotLoadedAndFailsClosed()
+    }
+
+    @When("the unchanged move is previewed twice for each authority defect")
+    fun unchangedMoveIsPreviewedTwiceForEachGuidanceDefect() {
+        guidanceCases.forEach { case ->
+            val dispatcher = JavaMoveClassOperationDispatcher()
+            case.guidanceResults = listOf(
+                dispatcher.preview(case.snapshot, PRODUCT_FQN, PRODUCT_TARGET_PACKAGE),
+                dispatcher.preview(case.snapshot, PRODUCT_FQN, PRODUCT_TARGET_PACKAGE),
+            ).map { outcome ->
+                assertIs<JavaMoveClassOperationOutcome.Guidance>(outcome).guidance
+            }
+            case.cliPreview = runCli(moveClassArguments(case.root, apply = false))
+        }
+    }
+
+    @Then("each pair returns the same immutable {string} result")
+    fun eachGuidancePairIsEqualAndImmutable(resultType: String) {
+        assertEquals("REVIEW_ONLY_GUIDANCE", resultType)
+        guidanceCases.forEach { case ->
+            val first = case.guidanceResults[0]
+            val second = case.guidanceResults[1]
+            assertEquals(first, second)
+            assertEquals(resultType, first.resultType.name)
+            listOf(
+                first.blockers,
+                first.candidateGroups.boundTarget,
+                first.restorationActions,
+                first.vcsChecklist,
+            ).forEach { values ->
+                assertFailsWith<UnsupportedOperationException> {
+                    @Suppress("UNCHECKED_CAST")
+                    (values as MutableList<Any?>).clear()
+                }
+            }
+            if (first.omissions.isNotEmpty()) {
+                assertFailsWith<UnsupportedOperationException> {
+                    @Suppress("UNCHECKED_CAST")
+                    (first.omissions as MutableList<Any?>).clear()
+                }
+            }
+            val cliPreview = assertNotNull(case.cliPreview)
+            assertEquals(0, cliPreview.exitCode, cliPreview.failureMessage("guidance preview"))
+            assertTrue(cliPreview.stdout.contains("\"resultType\": \"$resultType\""), cliPreview.stdout)
+            assertFalse(cliPreview.stdout.contains("planId", ignoreCase = true), cliPreview.stdout)
+        }
+    }
+
+    @Then("each result binds the same canonical request identity, exact workspace snapshot SHA-256, and deterministic canonical evidence SHA-256")
+    fun eachGuidanceBindsDeterministicRequestSnapshotAndEvidence() {
+        guidanceCases.forEach { case ->
+            case.guidanceResults.forEach { guidance ->
+                assertEquals("moveClass", guidance.request.operation)
+                assertEquals(PRODUCT_FQN, guidance.request.symbolFqn)
+                assertEquals(PRODUCT_TARGET_PACKAGE, guidance.request.targetPackage)
+                assertTrue(SHA256_PATTERN.matches(guidance.requestIdentitySha256))
+                assertEquals(case.snapshot.hash, guidance.snapshotSha256)
+                assertEquals(1, guidance.schemaVersion)
+                assertEquals(JavaMoveClassReviewOnlyGuidance.SCHEMA_VERSION, guidance.schemaVersion)
+                assertEquals(1, guidance.checklistVersion)
+                assertEquals(JavaMoveClassReviewOnlyGuidance.CHECKLIST_VERSION, guidance.checklistVersion)
+                assertTrue(SHA256_PATTERN.matches(guidance.canonicalEvidenceSha256))
+            }
+            assertEquals(
+                case.guidanceResults[0].canonicalEvidenceSha256,
+                case.guidanceResults[1].canonicalEvidenceSha256,
+            )
+        }
+    }
+
+    @Then("each result carries the row's stable blocker code and reports the affected Maven module and source set as separate structured fields")
+    fun eachGuidanceHasTheExpectedTypedBlocker() {
+        guidanceCases.forEach { case ->
+            val guidance = case.guidanceResults.singleDistinct()
+            val blocker = guidance.blockers.single()
+            assertEquals(case.row.getValue("stable blocker code"), blocker.code)
+            assertEquals(case.row.getValue("Maven module"), blocker.mavenModule)
+            assertEquals(case.row.getValue("source set"), blocker.sourceSet)
+            when (blocker.code) {
+                SOURCE_INVENTORY_BLOCKER -> {
+                    val source = assertIs<JavaMoveClassGuidanceBlocker.MissingReadableSourceInventoryEntry>(blocker)
+                    assertEquals(Path.of(SOURCE_INVENTORY_EVIDENCE_PATH), source.manifestPath)
+                    assertEquals(
+                        sha256(Files.readAllBytes(case.root.resolve(source.manifestPath))),
+                        source.manifestContentSha256,
+                    )
+                    assertEquals(EXPECTED_PRODUCT_STEPS_SHA256, source.expectedContentSha256)
+                    assertEquals(EXPECTED_PRODUCT_STEPS_SHA256, source.observedContentSha256)
+                    assertEquals("MISSING", source.observedInventoryStatus.name)
+                }
+                CLASSPATH_FINGERPRINT_BLOCKER -> {
+                    val classpath = assertIs<JavaMoveClassGuidanceBlocker.SystemPathArtifactFingerprintMismatch>(blocker)
+                    assertEquals(Path.of(EXTERNAL_ARTIFACT_EVIDENCE_PATH), classpath.manifestPath)
+                    assertEquals(
+                        sha256(Files.readAllBytes(case.root.resolve(classpath.manifestPath))),
+                        classpath.manifestContentSha256,
+                    )
+                }
+                RECOVERED_BINDING_BLOCKER -> assertIs<JavaMoveClassGuidanceBlocker.RecoveredTargetUse>(blocker)
+                GENERATED_INVENTORY_BLOCKER -> {
+                    val generated = assertIs<JavaMoveClassGuidanceBlocker.MaterializedGeneratedRootInventoryFingerprintMismatch>(blocker)
+                    assertEquals(Path.of(GENERATED_INVENTORY_EVIDENCE_PATH), generated.manifestPath)
+                    assertEquals(
+                        sha256(Files.readAllBytes(case.root.resolve(generated.manifestPath))),
+                        generated.manifestContentSha256,
+                    )
+                }
+            }
+            val cliPreview = assertNotNull(case.cliPreview)
+            if (blocker.code != RECOVERED_BINDING_BLOCKER) {
+                assertTrue(cliPreview.stdout.contains("\"manifestPath\""), cliPreview.stdout)
+                assertTrue(cliPreview.stdout.contains("\"manifestContentSha256\""), cliPreview.stdout)
+            }
+        }
+    }
+
+    @Then("each result keeps exact non-recovered {string} facts, exact non-recovered {string} facts, {string} Java candidates, {string} occurrences, and {string} paths in separate typed groups")
+    fun eachGuidanceKeepsTypedCandidateAndResidualGroups(
+        boundTarget: String,
+        boundOther: String,
+        unresolved: String,
+        javaResidual: String,
+        nonJavaResidual: String,
+    ) {
+        assertEquals("BOUND_TARGET", boundTarget)
+        assertEquals("BOUND_OTHER", boundOther)
+        assertEquals("UNRESOLVED", unresolved)
+        assertEquals(JavaMoveClassGuidanceResidualKind.JAVA_NON_CODE_RESIDUAL.name, javaResidual)
+        assertEquals(JavaMoveClassGuidanceResidualKind.NON_JAVA_RESIDUAL.name, nonJavaResidual)
+        guidanceCases.forEach { case ->
+            val groups = case.guidanceResults.singleDistinct().candidateGroups
+            assertTrue(groups.boundTarget.isNotEmpty())
+            assertTrue(groups.boundOther.isNotEmpty())
+            assertTrue(groups.boundTarget.all {
+                it.classification.name == boundTarget && !it.recovered && it.recoveredRange == null &&
+                    !it.bindingKey.isNullOrBlank()
+            })
+            assertTrue(groups.boundOther.all {
+                it.classification.name == boundOther && !it.recovered && it.recoveredRange == null &&
+                    !it.bindingKey.isNullOrBlank()
+            })
+            assertTrue(groups.unresolved.all {
+                it.classification.name == unresolved && it.bindingKey == null
+            })
+            assertTrue(groups.javaNonCodeResiduals.isNotEmpty())
+            assertTrue(groups.javaNonCodeResiduals.all { it.kind.name == javaResidual })
+            assertTrue(groups.nonJavaResiduals.isNotEmpty())
+            assertTrue(groups.nonJavaResiduals.all { it.kind.name == nonJavaResidual })
+        }
+    }
+
+    @Then("a recovered binding appears only as an {string} Java candidate")
+    fun recoveredBindingsAppearOnlyAsUnresolvedCandidates(classification: String) {
+        assertEquals("UNRESOLVED", classification)
+        guidanceCases.forEach { case ->
+            val guidance = case.guidanceResults.singleDistinct()
+            val groups = guidance.candidateGroups
+            val recovered = groups.unresolved.filter { it.recoveredRange != null }
+            assertTrue(groups.boundTarget.none { it.recovered || it.recoveredRange != null })
+            assertTrue(groups.boundOther.none { it.recovered || it.recoveredRange != null })
+            assertTrue(groups.unresolved.filter { it.recovered }.all { it.recoveredRange != null })
+            if (case.row.getValue("stable blocker code") == RECOVERED_BINDING_BLOCKER) {
+                val blocker = assertIs<JavaMoveClassGuidanceBlocker.RecoveredTargetUse>(guidance.blockers.single())
+                assertEquals(Path.of(STOREFRONT_SOURCE_PATH), blocker.path)
+                assertTrue(recovered.isNotEmpty(), groups.unresolved.toString())
+                assertTrue(recovered.all { it.path == blocker.path })
+                assertTrue(recovered.any { it.recoveredRange == blocker.sourceRange })
+                assertTrue(groups.boundTarget.none { target ->
+                    recovered.any { it.path == target.path && it.sourceRange == target.sourceRange }
+                })
+            }
+        }
+    }
+
+    @Then("every candidate or residual is bound to its snapshot, normalized path, exact range, and content hash without being described as an edit")
+    fun everyGuidanceOccurrenceIsHashAndRangeBoundButNotAnEdit() {
+        guidanceCases.forEach { case ->
+            case.guidanceResults.singleDistinct().candidateGroups.allOccurrences.forEach { occurrence ->
+                assertGuidanceOccurrence(case, occurrence)
+            }
+            assertGuidanceJsonContract(case)
+        }
+    }
+
+    @Then("candidate-list completeness has an explicit typed status and every known omission is a typed record with bounded identity")
+    fun guidanceCompletenessAndOmissionsAreTyped() {
+        guidanceCases.forEach { case ->
+            val guidance = case.guidanceResults.singleDistinct()
+            if (case.row.getValue("stable blocker code") == SOURCE_INVENTORY_BLOCKER) {
+                assertEquals(JavaMoveClassGuidanceCandidateCompleteness.COMPLETE_WITH_TYPED_OMISSIONS, guidance.candidateCompleteness)
+                val omission = guidance.omissions.single()
+                assertEquals(JavaMoveClassGuidanceOmissionKind.SOURCE_INVENTORY_ENTRY, omission.kind)
+                assertEquals(Path.of(PRODUCT_STEPS_PATH), omission.path)
+                assertEquals("catalog-acceptance", omission.mavenModule)
+                assertEquals("test", omission.sourceSet)
+                assertTrue(SHA256_PATTERN.matches(omission.contentSha256))
+            } else {
+                assertEquals(JavaMoveClassGuidanceCandidateCompleteness.COMPLETE, guidance.candidateCompleteness)
+                assertTrue(guidance.omissions.isEmpty())
+            }
+        }
+    }
+
+    @Then("its ordered typed restoration actions respectively restore the source inventory, refresh classpath evidence, re-establish exact bindings, or externally restore the generated root, then require a full reactor rescan and a new preview")
+    fun restorationActionsAreTypedAndOrdered() {
+        val expectedFirst = mapOf(
+            SOURCE_INVENTORY_BLOCKER to JavaMoveClassGuidanceRestorationKind.RESTORE_SOURCE_INVENTORY,
+            CLASSPATH_FINGERPRINT_BLOCKER to JavaMoveClassGuidanceRestorationKind.REFRESH_CLASSPATH_EVIDENCE,
+            RECOVERED_BINDING_BLOCKER to JavaMoveClassGuidanceRestorationKind.REESTABLISH_EXACT_BINDINGS,
+            GENERATED_INVENTORY_BLOCKER to JavaMoveClassGuidanceRestorationKind.EXTERNALLY_RESTORE_GENERATED_ROOT,
+        )
+        guidanceCases.forEach { case ->
+            val actions = case.guidanceResults.singleDistinct().restorationActions
+            assertEquals(
+                listOf(
+                    expectedFirst.getValue(case.row.getValue("stable blocker code")),
+                    JavaMoveClassGuidanceRestorationKind.FULL_REACTOR_RESCAN,
+                    JavaMoveClassGuidanceRestorationKind.NEW_PREVIEW,
+                ),
+                actions.map { it.kind },
+            )
+            assertEquals(listOf(1, 2, 3), actions.map { it.order })
+        }
+    }
+
+    @Then("every result presents this fixed human and VCS-owned checklist in order:")
+    fun everyGuidancePresentsTheFixedVcsChecklist(table: DataTable) {
+        val expected = table.asMaps().map { row ->
+            row.getValue("order").toInt() to row.getValue("verification")
+        }
+        assertEquals(EXPECTED_VCS_CHECKLIST, expected)
+        guidanceCases.forEach { case ->
+            assertEquals(expected, case.guidanceResults.singleDistinct().vcsChecklist.map { it.order to it.verification })
+        }
+    }
+
+    @Then("no result contains a {string}, {string}, managed edit or replacement text, applyable plan ID, pending-plan entry, managed transaction or transaction identity, or RefactorKit rollback capability")
+    fun guidanceIsStructurallyNonApplyable(firstForbiddenType: String, secondForbiddenType: String) {
+        assertEquals("PatchPlan", firstForbiddenType)
+        assertEquals("WorkspaceEdit", secondForbiddenType)
+        val forbidden = listOf(
+            firstForbiddenType,
+            secondForbiddenType,
+            "PlanId",
+            "TextEdit",
+            "replacement",
+            "pendingPlan",
+            "Transaction",
+            "Rollback",
+        )
+        guidanceCases.forEach { case ->
+            val guidance = case.guidanceResults.singleDistinct()
+            val structuralSurface = guidance.javaClass.declaredFields.map { it.genericType.typeName } +
+                guidance.javaClass.methods.map { "${it.name}:${it.genericReturnType.typeName}" }
+            forbidden.forEach { token ->
+                assertTrue(structuralSurface.none { it.contains(token, ignoreCase = true) }, structuralSurface.toString())
+            }
+            assertFalse(PatchPlan::class.java.isInstance(guidance))
+            assertTrue(guidance.candidateGroups.allOccurrences.all { !it.managedEdit })
+        }
+    }
+
+    @Then("no result can be converted into or promoted to a semantic plan")
+    fun guidanceHasNoPlanConversionSurface() {
+        guidanceCases.forEach { case ->
+            val methodNames = case.guidanceResults.singleDistinct().javaClass.methods.map { it.name.lowercase() }
+            assertTrue(methodNames.none { it.contains("plan") || it.contains("promote") || it.contains("apply") })
+        }
+    }
+
+    @When("the same `refactorkit move-class --symbol com.acme.catalog.legacy.Product --to-package com.acme.catalog.api --apply` command is invoked for each unchanged guidance condition")
+    fun sameMoveClassApplyCommandIsInvokedForEachGuidanceCondition() {
+        guidanceCases.forEach { case ->
+            case.cliApply = runCli(moveClassArguments(case.root, apply = true))
+        }
+    }
+
+    @Then("the CLI refuses with {string} before workspace-lock acquisition and before write-ahead-log creation")
+    fun cliRefusesGuidanceBeforeLockAndWal(code: String) {
+        assertEquals("guidance.nonManaged", code)
+        guidanceCases.forEach { case ->
+            val result = assertNotNull(case.cliApply)
+            assertEquals(1, result.exitCode, result.failureMessage("guidance apply refusal"))
+            assertTrue(result.stderr.contains(code), result.failureMessage("typed guidance refusal"))
+            assertFalse(Files.exists(case.root.resolve(".refactorkit/workspace.lock"), LinkOption.NOFOLLOW_LINKS))
+            assertFalse(Files.exists(case.root.resolve(".refactorkit/transactions"), LinkOption.NOFOLLOW_LINKS))
+        }
+    }
+
+    @Then("no {string} directory, lock file, pending-plan record, write-ahead log, or managed transaction is created")
+    fun guidanceApplyCreatesNoManagedResidue(directory: String) {
+        assertEquals(".refactorkit", directory)
+        guidanceCases.forEach { case ->
+            assertFalse(Files.exists(case.root.resolve(directory), LinkOption.NOFOLLOW_LINKS))
+        }
+    }
+
+    @Then("every workspace byte, path, inventory entry, and snapshot hash equals the state recorded before its evaluation")
+    fun guidanceEvaluationPreservesEveryWorkspaceIdentityDimension() {
+        guidanceCases.forEach { case ->
+            assertEquals(case.recordedState, captureGuidanceWorkspaceState(case.root))
+        }
     }
 
     @Given("a fresh isolated fixture starts from every eligible precondition of {string} for the fixed selected ordinary JAR leaf {string}")
@@ -2465,6 +2952,347 @@ class JavaMavenMoveClassApplyAuthoritySteps {
         if (testOnly) assertTrue(pom.contains("<scope>test</scope>"), "$module dependency must be test-only")
     }
 
+    private fun assertDefaultScannerMavenSourceRootSemantics() {
+        val root = temporaryRoot.resolve("guidance-maven-source-root-semantics")
+        copyRecursively(fixtureTemplate, root)
+        listOf(
+            DEFAULT_ACCEPTANCE_MAIN_SOURCE_ROOT,
+            CONVENTIONAL_ACCEPTANCE_MAIN_KOTLIN_ROOT,
+            CONVENTIONAL_ACCEPTANCE_TEST_KOTLIN_ROOT,
+            ADDITIVE_ACCEPTANCE_MAIN_SOURCE_ROOT,
+            ADDITIVE_ACCEPTANCE_TEST_SOURCE_ROOT,
+            CUSTOM_ACCEPTANCE_MAIN_SOURCE_ROOT,
+            CUSTOM_ACCEPTANCE_TEST_SOURCE_ROOT,
+        ).forEach { relative -> Files.createDirectories(root.resolve(relative)) }
+        addCatalogAcceptanceAdditiveSourceRoots(root)
+
+        val additiveSnapshot = JavaProjectScanner().scan(root)
+        val additiveModule = additiveSnapshot.modules.single { it.name == "catalog-acceptance" }
+        listOf(
+            DEFAULT_ACCEPTANCE_MAIN_SOURCE_ROOT,
+            CONVENTIONAL_ACCEPTANCE_MAIN_KOTLIN_ROOT,
+            ADDITIVE_ACCEPTANCE_MAIN_SOURCE_ROOT,
+        ).forEach { relative -> assertTrue(Path.of(relative) in additiveModule.mainSourceRoots, relative) }
+        listOf(
+            DEFAULT_ACCEPTANCE_TEST_SOURCE_ROOT,
+            CONVENTIONAL_ACCEPTANCE_TEST_KOTLIN_ROOT,
+            ADDITIVE_ACCEPTANCE_TEST_SOURCE_ROOT,
+        ).forEach { relative -> assertTrue(Path.of(relative) in additiveModule.testSourceRoots, relative) }
+        assertTrue(additiveSnapshot.files.any { it.path == Path.of(PRODUCT_STEPS_PATH) })
+
+        addInheritedPrimarySourceRootOverrides(root)
+        val replacementSnapshot = JavaProjectScanner().scan(root)
+        val replacementModule = replacementSnapshot.modules.single { it.name == "catalog-acceptance" }
+        assertTrue(Path.of(DEFAULT_ACCEPTANCE_MAIN_SOURCE_ROOT) !in replacementModule.mainSourceRoots)
+        assertTrue(Path.of(CUSTOM_ACCEPTANCE_MAIN_SOURCE_ROOT) in replacementModule.mainSourceRoots)
+        assertTrue(Path.of(CONVENTIONAL_ACCEPTANCE_MAIN_KOTLIN_ROOT) in replacementModule.mainSourceRoots)
+        assertTrue(Path.of(ADDITIVE_ACCEPTANCE_MAIN_SOURCE_ROOT) in replacementModule.mainSourceRoots)
+        assertTrue(Path.of(DEFAULT_ACCEPTANCE_TEST_SOURCE_ROOT) !in replacementModule.testSourceRoots)
+        assertTrue(Path.of(CUSTOM_ACCEPTANCE_TEST_SOURCE_ROOT) in replacementModule.testSourceRoots)
+        assertTrue(Path.of(CONVENTIONAL_ACCEPTANCE_TEST_KOTLIN_ROOT) in replacementModule.testSourceRoots)
+        assertTrue(Path.of(ADDITIVE_ACCEPTANCE_TEST_SOURCE_ROOT) in replacementModule.testSourceRoots)
+        assertTrue(replacementSnapshot.files.none { it.path == Path.of(PRODUCT_STEPS_PATH) })
+    }
+
+    private fun assertUnsafeExpectedEvidenceIsNotLoadedAndFailsClosed() {
+        listOf("oversized", "symbolic-link").forEachIndexed { index, variant ->
+            val root = temporaryRoot.resolve("guidance-unsafe-expected-evidence-$index")
+            copyRecursively(fixtureTemplate, root)
+            val manifest = root.resolve(SOURCE_INVENTORY_EVIDENCE_PATH)
+            when (variant) {
+                "oversized" -> Files.write(
+                    manifest,
+                    ByteArray(MAX_EXPECTED_EVIDENCE_MANIFEST_BYTES + 1) { 'x'.code.toByte() },
+                )
+                "symbolic-link" -> {
+                    val target = manifest.resolveSibling("unsafe-expected-source-inventory.properties")
+                    Files.move(manifest, target)
+                    Files.createSymbolicLink(manifest, target.fileName)
+                }
+            }
+            val snapshot = JavaProjectScanner().scan(root)
+            assertTrue(snapshot.auxiliaryFiles.none { it.path == Path.of(SOURCE_INVENTORY_EVIDENCE_PATH) })
+            val outcome = JavaMoveClassOperationDispatcher().preview(snapshot, PRODUCT_FQN, PRODUCT_TARGET_PACKAGE)
+            val plan = assertIs<JavaMoveClassOperationOutcome.Plan>(outcome).preview.plan
+            assertEquals(PatchStatus.REFUSED, plan.status, "$variant expected-evidence input")
+            assertEquals("java.maven.moveClass.expectedEvidence.snapshot.unbound", plan.refusalCode)
+        }
+    }
+
+    private fun addCatalogAcceptanceAdditiveSourceRoots(root: Path) {
+        transformMavenPom(root.resolve(CATALOG_ACCEPTANCE_POM_PATH)) { document ->
+            val project = document.documentElement
+            val namespace = project.namespaceURI
+            assertEquals(0, project.getElementsByTagNameNS(namespace, "build").length)
+            fun element(name: String, value: String? = null) =
+                document.createElementNS(namespace, name).apply { value?.let { textContent = it } }
+            val build = element("build")
+            val plugins = element("plugins")
+            val plugin = element("plugin")
+            plugin.appendChild(element("groupId", "org.codehaus.mojo"))
+            plugin.appendChild(element("artifactId", "build-helper-maven-plugin"))
+            val executions = element("executions")
+            fun appendExecution(goal: String, sourceRoot: String) {
+                val execution = element("execution")
+                val goals = element("goals")
+                goals.appendChild(element("goal", goal))
+                execution.appendChild(goals)
+                val configuration = element("configuration")
+                val sources = element("sources")
+                sources.appendChild(element("source", sourceRoot.removePrefix("catalog-acceptance/")))
+                configuration.appendChild(sources)
+                execution.appendChild(configuration)
+                executions.appendChild(execution)
+            }
+            appendExecution("add-source", ADDITIVE_ACCEPTANCE_MAIN_SOURCE_ROOT)
+            appendExecution("add-test-source", ADDITIVE_ACCEPTANCE_TEST_SOURCE_ROOT)
+            plugin.appendChild(executions)
+            plugins.appendChild(plugin)
+            build.appendChild(plugins)
+            project.appendChild(build)
+        }
+    }
+
+    private fun addInheritedPrimarySourceRootOverrides(root: Path) {
+        transformMavenPom(root.resolve("pom.xml")) { document ->
+            val project = document.documentElement
+            val namespace = project.namespaceURI
+            assertEquals(0, project.getElementsByTagNameNS(namespace, "build").length)
+            val build = document.createElementNS(namespace, "build")
+            build.appendChild(document.createElementNS(namespace, "sourceDirectory").apply {
+                textContent = CUSTOM_ACCEPTANCE_MAIN_SOURCE_ROOT.removePrefix("catalog-acceptance/")
+            })
+            build.appendChild(document.createElementNS(namespace, "testSourceDirectory").apply {
+                textContent = CUSTOM_ACCEPTANCE_TEST_SOURCE_ROOT.removePrefix("catalog-acceptance/")
+            })
+            project.appendChild(build)
+        }
+    }
+
+    private fun changeCatalogAcceptanceTestSourceRoot(root: Path) {
+        val pom = root.resolve(CATALOG_ACCEPTANCE_POM_PATH)
+        transformMavenPom(pom) { document ->
+            val project = document.documentElement
+            assertEquals(0, project.getElementsByTagNameNS(project.namespaceURI, "build").length)
+            val build = document.createElementNS(project.namespaceURI, "build")
+            val testSourceDirectory = document.createElementNS(project.namespaceURI, "testSourceDirectory")
+            testSourceDirectory.textContent = CUSTOM_ACCEPTANCE_TEST_SOURCE_ROOT.removePrefix("catalog-acceptance/")
+            build.appendChild(testSourceDirectory)
+            project.appendChild(build)
+        }
+    }
+
+    private fun addUnrelatedStaleSystemPathEvidence(root: Path) {
+        val artifact = root.resolve(UNRELATED_SYSTEM_ARTIFACT_PATH)
+        val manifest = root.resolve(UNRELATED_SYSTEM_ARTIFACT_EVIDENCE_PATH)
+        Files.copy(root.resolve(EXTERNAL_ARTIFACT_PATH), artifact, StandardCopyOption.REPLACE_EXISTING)
+        Files.write(artifact, byteArrayOf(0), StandardOpenOption.APPEND)
+        Files.copy(root.resolve(EXTERNAL_ARTIFACT_EVIDENCE_PATH), manifest, StandardCopyOption.REPLACE_EXISTING)
+        assertTrue(JarFile(artifact.toFile(), false).use { it.entries().hasMoreElements() })
+        assertFalse(EXTERNAL_ARTIFACT_SHA256 == sha256(Files.readAllBytes(artifact)))
+
+        transformMavenPom(root.resolve(REPORTING_UNRELATED_POM_PATH)) { document ->
+            val project = document.documentElement
+            val namespace = project.namespaceURI
+            val dependencies = project.getElementsByTagNameNS(namespace, "dependencies").item(0)
+            val dependency = document.createElementNS(namespace, "dependency")
+            fun append(name: String, value: String) {
+                dependency.appendChild(document.createElementNS(namespace, name).apply { textContent = value })
+            }
+            append("groupId", "com.acme.fixture.unrelated")
+            append("artifactId", "unrelated-system-contract")
+            append("version", "1.0.0")
+            append("scope", "system")
+            append("systemPath", "\${project.basedir}/../$UNRELATED_SYSTEM_ARTIFACT_PATH")
+            dependencies.appendChild(dependency)
+        }
+    }
+
+    private fun transformMavenPom(pom: Path, mutation: (Document) -> Unit) {
+        val factory = DocumentBuilderFactory.newInstance().apply {
+            isNamespaceAware = true
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            setFeature("http://xml.org/sax/features/external-general-entities", false)
+            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+        }
+        val document = Files.newInputStream(pom).use(factory.newDocumentBuilder()::parse)
+        mutation(document)
+        val transformerFactory = TransformerFactory.newInstance().apply {
+            setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "")
+        }
+        transformerFactory.newTransformer().apply {
+            setOutputProperty(OutputKeys.ENCODING, Charsets.UTF_8.name())
+            setOutputProperty(OutputKeys.INDENT, "yes")
+        }.transform(DOMSource(document), StreamResult(pom.toFile()))
+    }
+
+    private fun assertUnsupportedMoveRequestsAreRefusedBeforeGuidance() {
+        val sourceDefect = guidanceCases.single { it.row.getValue("stable blocker code") == SOURCE_INVENTORY_BLOCKER }
+        val generatedDefect = guidanceCases.single {
+            it.row.getValue("stable blocker code") == GENERATED_INVENTORY_BLOCKER
+        }
+        assertPreflightRefused(sourceDefect.snapshot, PRODUCT_FQN, "com.acme.catalog.legacy", "same")
+        assertPreflightRefused(sourceDefect.snapshot, PRODUCT_FQN, "bad-package", "Invalid target package")
+        assertPreflightRefused(
+            sourceDefect.snapshot,
+            "com.acme.catalog.legacy.MissingProduct",
+            PRODUCT_TARGET_PACKAGE,
+            "not found or not a moveable type",
+        )
+        assertPreflightRefused(
+            sourceDefect.snapshot,
+            "$PRODUCT_FQN#<init>",
+            PRODUCT_TARGET_PACKAGE,
+            "not found or not a moveable type",
+        )
+        assertPreflightRefused(
+            generatedDefect.snapshot,
+            GENERATED_DECLARATION_FQN,
+            "com.acme.catalog.generated.api",
+            "Generated source cannot be rewritten",
+        )
+        assertPreflightRefused(sourceDefect.snapshot, PRODUCT_FQN, "com.acme.decoy", "already exists")
+        val pathCollision = sourceDefect.snapshot.copy(
+            files = sourceDefect.snapshot.files + SourceFile(
+                Path.of(PRODUCT_TARGET_PATH),
+                "package com.acme.catalog.api; final class Occupied {}\n",
+                "java",
+            ),
+        )
+        assertPreflightRefused(pathCollision, PRODUCT_FQN, PRODUCT_TARGET_PACKAGE, "already exists")
+    }
+
+    private fun assertPreflightRefused(
+        snapshot: ProjectSnapshot,
+        symbolFqn: String,
+        targetPackage: String,
+        summaryFragment: String,
+    ) {
+        val outcome = JavaMoveClassOperationDispatcher().preview(snapshot, symbolFqn, targetPackage)
+        val plan = assertIs<JavaMoveClassOperationOutcome.Plan>(outcome).preview.plan
+        assertEquals(PatchStatus.REFUSED, plan.status, plan.summary)
+        assertTrue(plan.summary.contains(summaryFragment, ignoreCase = true), plan.summary)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    private fun assertDuplicateRelevantClasspathSingletonIsRefused() {
+        val root = temporaryRoot.resolve("guidance-relevant-duplicate-singleton")
+        copyRecursively(fixtureTemplate, root)
+        val manifest = root.resolve(EXTERNAL_ARTIFACT_EVIDENCE_PATH)
+        artifactEvidenceOutput.appendDuplicatePacket(manifest)
+        val snapshot = JavaProjectScanner().scan(root)
+        val outcome = JavaMoveClassOperationDispatcher().preview(snapshot, PRODUCT_FQN, PRODUCT_TARGET_PACKAGE)
+        val plan = assertIs<JavaMoveClassOperationOutcome.Plan>(outcome).preview.plan
+        assertEquals(PatchStatus.REFUSED, plan.status, plan.summary)
+        assertEquals("java.maven.moveClass.classpathEvidence.manifest.invalid", plan.refusalCode)
+    }
+
+    private fun captureGuidanceWorkspaceState(root: Path): WorkspaceState {
+        val savedRoot = workspaceRoot
+        return try {
+            workspaceRoot = root
+            captureWorkspaceState(snapshot = JavaProjectScanner().scan(root))
+        } finally {
+            workspaceRoot = savedRoot
+        }
+    }
+
+    private fun moveClassArguments(root: Path, apply: Boolean): List<String> = buildList {
+        add("move-class")
+        add("--symbol")
+        add(PRODUCT_FQN)
+        add("--to-package")
+        add(PRODUCT_TARGET_PACKAGE)
+        add(root.toString())
+        add(if (apply) "--apply" else "--preview")
+    }
+
+    private fun List<JavaMoveClassReviewOnlyGuidance>.singleDistinct(): JavaMoveClassReviewOnlyGuidance {
+        assertEquals(2, size)
+        assertEquals(first(), last())
+        return first()
+    }
+
+    private fun assertGuidanceOccurrence(case: GuidanceCase, occurrence: JavaMoveClassGuidanceOccurrence) {
+        assertEquals(case.snapshot.hash, occurrence.snapshotSha256)
+        assertFalse(occurrence.path.isAbsolute)
+        assertFalse(occurrence.path.normalize().startsWith(".."))
+        assertEquals(occurrence.path.normalize(), occurrence.path)
+        assertFalse(occurrence.managedEdit)
+        val absolute = case.root.resolve(occurrence.path)
+        assertTrue(Files.isRegularFile(absolute, LinkOption.NOFOLLOW_LINKS), occurrence.path.toString())
+        val bytes = Files.readAllBytes(absolute)
+        assertEquals(sha256(bytes), occurrence.contentSha256)
+        val content = String(bytes, Charsets.UTF_8)
+        val start = TextEdits.offsetOf(content, occurrence.sourceRange.start)
+        val end = TextEdits.offsetOf(content, occurrence.sourceRange.end)
+        assertTrue(start in 0..content.length)
+        assertTrue(end in start..content.length)
+        assertTrue(end > start)
+        assertEquals(content.substring(start, end), occurrence.lexicalText)
+    }
+
+    private fun assertGuidanceJsonContract(case: GuidanceCase) {
+        val guidance = case.guidanceResults.singleDistinct()
+        val output = assertNotNull(case.cliPreview).stdout
+        val root = Json.parseToJsonElement(output).jsonObject
+        assertEquals(guidance.schemaVersion, root.getValue("schemaVersion").jsonPrimitive.int)
+        assertEquals(guidance.checklistVersion, root.getValue("checklistVersion").jsonPrimitive.int)
+        val actualGroups = root.getValue("candidateGroups").jsonObject
+        val expectedGroups = linkedMapOf<String, List<JavaMoveClassGuidanceOccurrence>>(
+            "BOUND_TARGET" to guidance.candidateGroups.boundTarget,
+            "BOUND_OTHER" to guidance.candidateGroups.boundOther,
+            "UNRESOLVED" to guidance.candidateGroups.unresolved,
+            "JAVA_NON_CODE_RESIDUAL" to guidance.candidateGroups.javaNonCodeResiduals,
+            "NON_JAVA_RESIDUAL" to guidance.candidateGroups.nonJavaResiduals,
+        )
+        expectedGroups.forEach { (groupName, expectedOccurrences) ->
+            val actualOccurrences = actualGroups.getValue(groupName).jsonArray
+            assertEquals(expectedOccurrences.size, actualOccurrences.size, groupName)
+            expectedOccurrences.zip(actualOccurrences).forEach { (expected, actualElement) ->
+                val actual = actualElement.jsonObject
+                assertEquals(expected.lexicalText, actual.getValue("lexicalText").jsonPrimitive.content)
+                when (expected) {
+                    is JavaMoveClassGuidanceJavaCandidate -> {
+                        assertEquals(
+                            expected.classification.name,
+                            actual.getValue("classification").jsonPrimitive.content,
+                        )
+                        if (expected.classification == JavaMoveClassCandidateClassification.UNRESOLVED) {
+                            assertFalse("bindingKey" in actual)
+                        } else {
+                            assertEquals(
+                                expected.bindingKey,
+                                actual.getValue("bindingKey").jsonPrimitive.content,
+                            )
+                        }
+                        expected.recoveredRange?.let { recoveredRange ->
+                            assertJsonRange(recoveredRange, actual.getValue("recoveredRange"))
+                        } ?: assertFalse("recoveredRange" in actual)
+                    }
+                    is JavaMoveClassGuidanceResidual -> {
+                        assertFalse("bindingKey" in actual)
+                        assertFalse("recoveredRange" in actual)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun assertJsonRange(expected: SourceRange, actualElement: JsonElement) {
+        val actual = actualElement.jsonObject
+        val start = actual.getValue("start").jsonObject
+        val end = actual.getValue("end").jsonObject
+        assertEquals(expected.start.line, start.getValue("line").jsonPrimitive.int)
+        assertEquals(expected.start.character, start.getValue("character").jsonPrimitive.int)
+        assertEquals(expected.end.line, end.getValue("line").jsonPrimitive.int)
+        assertEquals(expected.end.character, end.getValue("character").jsonPrimitive.int)
+    }
+
     private fun captureFilesystemState(): FilesystemState {
         val pathKinds = linkedMapOf<String, String>()
         val fileHashes = linkedMapOf<String, String>()
@@ -2531,7 +3359,10 @@ class JavaMavenMoveClassApplyAuthoritySteps {
         assertEquals(expected.snapshotHash, actual.snapshotHash, "Workspace snapshot hash changed")
     }
 
-    private fun runCli(arguments: List<String>): CliResult = synchronized(CLI_OUTPUT_MONITOR) {
+    private fun runCli(
+        arguments: List<String>,
+        cli: RefactorKitCli = RefactorKitCli(),
+    ): CliResult = synchronized(CLI_OUTPUT_MONITOR) {
         val stdout = ByteArrayOutputStream()
         val stderr = ByteArrayOutputStream()
         val originalOut = System.out
@@ -2539,7 +3370,7 @@ class JavaMavenMoveClassApplyAuthoritySteps {
         try {
             System.setOut(PrintStream(stdout, true, Charsets.UTF_8))
             System.setErr(PrintStream(stderr, true, Charsets.UTF_8))
-            val exitCode = RefactorKitCli().run(arguments)
+            val exitCode = cli.run(arguments)
             CliResult(exitCode, stdout.toString(Charsets.UTF_8), stderr.toString(Charsets.UTF_8))
         } finally {
             System.setOut(originalOut)
@@ -2585,6 +3416,22 @@ class JavaMavenMoveClassApplyAuthoritySteps {
     private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
         .digest(bytes)
         .joinToString("") { byte -> "%02x".format(byte) }
+
+    private data class GuidanceCase(
+        val row: Map<String, String>,
+        val root: Path,
+        val snapshot: ProjectSnapshot,
+        val recordedState: WorkspaceState,
+        var guidanceResults: List<JavaMoveClassReviewOnlyGuidance> = emptyList(),
+        var cliPreview: CliResult? = null,
+        var cliApply: CliResult? = null,
+    )
+
+    private data class GuidanceBlockerRow(
+        val mavenModule: String,
+        val sourceSet: String,
+        val blockerCode: String,
+    )
 
     private data class CliResult(
         val exitCode: Int,
@@ -2694,6 +3541,46 @@ class JavaMavenMoveClassApplyAuthoritySteps {
             "catalog-storefront/src/main/java/com/acme/catalog/storefront/ProductTile.java"
         const val REPORTING_SOURCE_PATH =
             "reporting-unrelated/src/main/java/com/acme/reporting/ProductReport.java"
+        const val REPORTING_UNRELATED_POM_PATH = "reporting-unrelated/pom.xml"
+        const val GENERATED_DECLARATION_FQN = "com.acme.catalog.generated.GeneratedCatalogMarker"
+        const val GENERATED_ROOT_PATH =
+            "catalog-generated-support/target/generated-sources/catalog-metadata"
+        const val GENERATED_SOURCE_PATH =
+            "$GENERATED_ROOT_PATH/com/acme/catalog/generated/GeneratedCatalogMarker.java"
+        const val GENERATED_INVENTORY_EVIDENCE_PATH =
+            "catalog-generated-support/.refactorkit-generated-root-inventory.properties"
+        const val SOURCE_INVENTORY_EVIDENCE_PATH =
+            "catalog-acceptance/.refactorkit-expected-source-inventory.properties"
+        const val CATALOG_ACCEPTANCE_POM_PATH = "catalog-acceptance/pom.xml"
+        const val DEFAULT_ACCEPTANCE_MAIN_SOURCE_ROOT = "catalog-acceptance/src/main/java"
+        const val DEFAULT_ACCEPTANCE_TEST_SOURCE_ROOT = "catalog-acceptance/src/test/java"
+        const val CONVENTIONAL_ACCEPTANCE_MAIN_KOTLIN_ROOT = "catalog-acceptance/src/main/kotlin"
+        const val CONVENTIONAL_ACCEPTANCE_TEST_KOTLIN_ROOT = "catalog-acceptance/src/test/kotlin"
+        const val ADDITIVE_ACCEPTANCE_MAIN_SOURCE_ROOT = "catalog-acceptance/src/additional-main/java"
+        const val ADDITIVE_ACCEPTANCE_TEST_SOURCE_ROOT = "catalog-acceptance/src/additional-test/java"
+        const val CUSTOM_ACCEPTANCE_MAIN_SOURCE_ROOT = "catalog-acceptance/src/authority-main/java"
+        const val CUSTOM_ACCEPTANCE_TEST_SOURCE_ROOT = "catalog-acceptance/src/authority-test/java"
+        const val MAX_EXPECTED_EVIDENCE_MANIFEST_BYTES = 16 * 1024
+        const val SOURCE_INVENTORY_BLOCKER = "java.maven.moveClass.sourceInventory.missingEntry"
+        const val CLASSPATH_FINGERPRINT_BLOCKER = "java.maven.moveClass.classpathFingerprint.mismatch"
+        const val RECOVERED_BINDING_BLOCKER = "java.maven.moveClass.targetUse.recoveredBinding"
+        const val GENERATED_INVENTORY_BLOCKER =
+            "java.maven.moveClass.materializedGeneratedRootInventory.fingerprintMismatch"
+        val EXPECTED_GUIDANCE_BLOCKERS = listOf(
+            GuidanceBlockerRow("catalog-acceptance", "test", SOURCE_INVENTORY_BLOCKER),
+            GuidanceBlockerRow("catalog-pricing", "main", CLASSPATH_FINGERPRINT_BLOCKER),
+            GuidanceBlockerRow("catalog-storefront", "main", RECOVERED_BINDING_BLOCKER),
+            GuidanceBlockerRow("catalog-generated-support", "main", GENERATED_INVENTORY_BLOCKER),
+        )
+        val EXPECTED_VCS_CHECKLIST = listOf(
+            1 to "create a VCS checkpoint",
+            2 to "inspect every candidate and omission",
+            3 to "restore authority or make only confirmed manual changes",
+            4 to "review Java non-code and non-Java residual risks",
+            5 to "run appropriate supplemental builds and tests",
+            6 to "inspect the final diff",
+            7 to "use VCS for recovery",
+        )
         const val MAVEN_BUILD_MODEL_PROVIDER = "maven-effective-v1"
         const val TARGET_OWNER_SOURCE_SET = "catalog-model:main"
         const val PRICING_SOURCE_SET = "catalog-pricing:main"
@@ -2852,10 +3739,39 @@ class JavaMavenMoveClassApplyAuthoritySteps {
             "com.acme.fixture.external:catalog-price-contract:1.0.0"
         const val EXTERNAL_ARTIFACT_PATH = "fixture-libs/catalog-price-contract-1.0.0.jar"
         const val EXTERNAL_ARTIFACT_EVIDENCE_PATH = "$EXTERNAL_ARTIFACT_PATH.refactorkit-evidence"
+        const val UNRELATED_SYSTEM_ARTIFACT_PATH = "fixture-libs/unrelated-system-contract-1.0.0.jar"
+        const val UNRELATED_SYSTEM_ARTIFACT_EVIDENCE_PATH =
+            "$UNRELATED_SYSTEM_ARTIFACT_PATH.refactorkit-evidence"
+        const val SECOND_UNRELATED_PROVIDED_TYPE = "com.acme.fixture.external.UnrelatedPriceMetadata"
         const val EXTERNAL_ARTIFACT_SHA256 =
             "7f2e71601326da5129cb90435fb5442b958137f05fd28e4fec5192227268a3a2"
+        const val EXPECTED_PRODUCT_STEPS_SHA256 =
+            "46f0575b61cf83bc2cf6802f5170c9e49897545688e4a52a63e6eaf5370b849d"
         val MODULE_PATTERN = Regex("""<module>\s*([^<]+)\s*</module>""")
         val PRODUCT_DECLARATION_PATTERN = Regex("""\b(?:class|interface|enum|record)\s+Product\b""")
+        val PROVIDED_TYPE_PATTERN = Regex("[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)+")
         val CLI_OUTPUT_MONITOR = Any()
+    }
+}
+
+private interface Req003ArtifactEvidenceVariantOutputPort {
+    fun appendProvidedType(manifest: Path, providedType: String)
+    fun appendDuplicatePacket(manifest: Path)
+}
+
+/** Test infrastructure adapter for bounded REQ-003 evidence variants. */
+private object NioReq003ArtifactEvidenceVariantOutputAdapter : Req003ArtifactEvidenceVariantOutputPort {
+    // @TODO: replace with proper .refactorkit-evidence parser/encoder
+    override fun appendProvidedType(manifest: Path, providedType: String) {
+        Files.write(
+            manifest,
+            listOf("providedType=$providedType"),
+            Charsets.UTF_8,
+            StandardOpenOption.APPEND,
+        )
+    }
+
+    override fun appendDuplicatePacket(manifest: Path) {
+        Files.write(manifest, Files.readAllBytes(manifest), StandardOpenOption.APPEND)
     }
 }

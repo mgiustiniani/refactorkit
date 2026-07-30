@@ -54,22 +54,43 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
     And the preview reports the same-name and unrelated Java candidates as excluded and the non-Java match as a residual review risk
 
   # RPK-JAVA-MOVE-002 and RPK-JAVA-MOVE-004..007
-  @REQ-JAVA-MAVEN-MOVE-AUTH-003 @functional-requirement @non-functional-requirement @absent
-  Scenario: Incomplete or stale semantic authority produces non-managed guidance before journaling
-    Given each authority defect is evaluated independently for the otherwise supported request:
-      | affected source set       | authority defect                                                        | blocker dimension       |
-      | catalog-acceptance:test   | the required step-definition source is absent from the source inventory | source-path incomplete  |
-      | catalog-pricing:main      | the local external artifact hash is older than the classpath evidence    | classpath stale         |
-      | catalog-storefront:main   | a target use resolves only to a recovered binding                        | binding incomplete      |
-      | catalog-model:main        | the materialized generated-source inventory is older than its directory | source-path stale       |
-    When a move preview is requested for each authority defect
-    Then each result is typed "REVIEW_ONLY_GUIDANCE" with a stable blocker code naming the affected module and source set
-    And each result separates bound facts from lexical, non-Java, and unknown candidates and discloses omissions or truncation
-    And each result recommends authority-restoration actions and an ordered human and VCS-owned verification checklist
-    But no result is a "PatchPlan" or exposes an applyable plan ID, managed transaction, or RefactorKit rollback claim
-    When a caller attempts to submit any guidance result for managed apply
-    Then RefactorKit refuses with the typed non-managed blocker before creating a write-ahead log or ".refactorkit/transactions"
-    And the workspace bytes, paths, inventory, and snapshot hash remain unchanged
+  @REQ-JAVA-MAVEN-MOVE-AUTH-003 @functional-requirement @non-functional-requirement @implemented-and-validated
+  Scenario: Safely enumerable preview defects produce immutable non-managed guidance
+    Given each preview-time authority defect is evaluated independently for the otherwise supported canonical move request
+    And every listed input and its affected scope remains readable, safely contained, and enumerable enough for complete bounded guidance:
+      | Maven module              | source set | readable and safely enumerable input                                                                                                                | preview-time authority defect                                                                                         | stable blocker code                                                                       |
+      | catalog-acceptance        | test       | catalog-acceptance/src/test/java/com/acme/catalog/acceptance/ProductLifecycleSteps.java                                                             | the required readable step-definition source is omitted from its source inventory                                    | java.maven.moveClass.sourceInventory.missingEntry                                          |
+      | catalog-pricing           | main       | fixture-libs/catalog-price-contract-1.0.0.jar and its classpath evidence                                                                             | the expected local-artifact fingerprint differs from the freshly observed fingerprint for the same readable artifact | java.maven.moveClass.classpathFingerprint.mismatch                                         |
+      | catalog-storefront        | main       | catalog-storefront/src/main/java/com/acme/catalog/storefront/ProductTile.java and its target-use range                                               | the readable target use resolves only to a recovered binding                                                          | java.maven.moveClass.targetUse.recoveredBinding                                            |
+      | catalog-generated-support | main       | catalog-generated-support/target/generated-sources/catalog-metadata and its materialized generated-root inventory                                   | the expected inventory fingerprint differs from the freshly observed fingerprint for the same readable directory     | java.maven.moveClass.materializedGeneratedRootInventory.fingerprintMismatch                |
+    And the materialized generated source root is owned by "catalog-generated-support:main"
+    And each defect is present in the freshly observed evidence used to construct its preview, and no listed input changes after the request, snapshot, and evidence identities are bound
+    And no ".refactorkit" directory exists and the workspace bytes, paths, inventories, and snapshot hash are recorded before each evaluation
+    And lost, unreadable, unsafe, or unbounded required structural input and every change after snapshot or evidence binding are refused under "REQ-JAVA-MAVEN-MOVE-AUTH-008" as structural loss or post-preview evidence drift, not represented by this guidance
+    When the unchanged move is previewed twice for each authority defect
+    Then each pair returns the same immutable "REVIEW_ONLY_GUIDANCE" result
+    And each result binds the same canonical request identity, exact workspace snapshot SHA-256, and deterministic canonical evidence SHA-256
+    And each result carries the row's stable blocker code and reports the affected Maven module and source set as separate structured fields
+    And each result keeps exact non-recovered "BOUND_TARGET" facts, exact non-recovered "BOUND_OTHER" facts, "UNRESOLVED" Java candidates, "JAVA_NON_CODE_RESIDUAL" occurrences, and "NON_JAVA_RESIDUAL" paths in separate typed groups
+    And a recovered binding appears only as an "UNRESOLVED" Java candidate
+    And every candidate or residual is bound to its snapshot, normalized path, exact range, and content hash without being described as an edit
+    And candidate-list completeness has an explicit typed status and every known omission is a typed record with bounded identity
+    And its ordered typed restoration actions respectively restore the source inventory, refresh classpath evidence, re-establish exact bindings, or externally restore the generated root, then require a full reactor rescan and a new preview
+    And every result presents this fixed human and VCS-owned checklist in order:
+      | order | verification                                                     |
+      | 1     | create a VCS checkpoint                                          |
+      | 2     | inspect every candidate and omission                              |
+      | 3     | restore authority or make only confirmed manual changes           |
+      | 4     | review Java non-code and non-Java residual risks                  |
+      | 5     | run appropriate supplemental builds and tests                     |
+      | 6     | inspect the final diff                                             |
+      | 7     | use VCS for recovery                                               |
+    But no result contains a "PatchPlan", "WorkspaceEdit", managed edit or replacement text, applyable plan ID, pending-plan entry, managed transaction or transaction identity, or RefactorKit rollback capability
+    And no result can be converted into or promoted to a semantic plan
+    When the same `refactorkit move-class --symbol com.acme.catalog.legacy.Product --to-package com.acme.catalog.api --apply` command is invoked for each unchanged guidance condition
+    Then the CLI refuses with "guidance.nonManaged" before workspace-lock acquisition and before write-ahead-log creation
+    And no ".refactorkit" directory, lock file, pending-plan record, write-ahead log, or managed transaction is created
+    And every workspace byte, path, inventory entry, and snapshot hash equals the state recorded before its evaluation
 
   # RPK-JAVA-MOVE-004..005 and RPK-JAVA-MOVE-007
   @REQ-JAVA-MAVEN-MOVE-AUTH-004 @non-functional-requirement @absent

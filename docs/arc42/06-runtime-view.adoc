@@ -20,7 +20,7 @@ Status: implementation-informed for documented flows; no C4 dynamic diagrams yet
 |CLI delegates Java-specific analysis to `JavaLanguageAdapter` / planner classes.
 
 |4
-|Planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, risk level, and an explicit JDT-backed, lexical, or refusal evidence classification.
+|For a managed or refused result, the planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, risk level, and an explicit JDT-backed, lexical, or refusal classification. The bounded Java/Maven CLI `moveClass` path first uses `JavaMoveClassOperationDispatcher`: its `Plan` arm wraps the existing `JavaMoveClassPreview`, while its disjoint `Guidance` arm carries only `JavaMoveClassReviewOnlyGuidance`.
 
 |5
 |User reviews the preview. If applying, `PatchEngine` acquires the workspace writer lock, checks the derived current snapshot hash, revalidates affected paths, probes durability capability, renders complete post-images, durably journals intent, stages same-directory files, and commits per-path atomic replacements/deletes with directory flushes.
@@ -193,6 +193,36 @@ Status: confirmed architecture; active, product-critical. The first release-8/cu
 |Managed preview/apply compares baseline and exact staged post-image diagnostics across the affected and dependent-impact closure. Default policy rejects introduced errors; strict mode requires zero staged errors. Any affected-environment unavailability blocks regardless of baseline, and post-apply/rollback results bind the committed/restored snapshots.
 |===
 
+== Runtime Scenario: Review-only Java/Maven Move Guidance
+
+Status: implementation-informed for the four bounded REQ-JAVA-MAVEN-MOVE-AUTH-003 defects through the Java dispatcher and source-built CLI. This is not a generic cross-surface result algebra. Force/recipe/daemon/managed-LSP/MCP parity remains acceptance scope of absent REQ-JAVA-MAVEN-MOVE-AUTH-004; structural-loss and post-preview drift refusals remain scope of absent REQ-JAVA-MAVEN-MOVE-AUTH-008.
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|The CLI scans with the ordinary `JavaProjectScanner`, then submits an otherwise supported same-module/source-set Maven `moveClass` request. `JavaMoveClassOperationDispatcher` and `JavaMoveClassPlanner` share the same side-effect-free, plan-free `JavaMoveClassRequestValidator` preflight for package, symbol, generated-source, and destination checks.
+
+|2
+|After supported preflight, bounded evidence collection detects one safely enumerable authority defect: a readable source omitted from the scanner inventory, an expected/observed system-path artifact fingerprint mismatch, a recovered target-use binding, or an expected/observed materialized-generated-root inventory fingerprint mismatch. The source omission comes from an effective primary Maven `testSourceDirectory` replacement, modeled separately from additive build-helper/Kotlin roots; additive declarations retain the default Java root, and the scanner interprets configuration without executing a plugin. Strict format-version-1 expected-source and generated-root manifests are already bound into the snapshot as auxiliary files; the classpath case binds its strict manifest content hash and expected/observed artifact fingerprints. The generated root belongs to `catalog-generated-support:main`.
+
+|3
+|The Java adapter constructs a fresh immutable `JavaMoveClassReviewOnlyGuidance` (`resultType=REVIEW_ONLY_GUIDANCE`) bound to request identity, snapshot SHA-256, and canonical evidence SHA-256. Schema version 1 emits typed module/source-set blockers, separately typed candidate/residual groups, explicit completeness and the bounded source-inventory omission, and ordered authority-restoration actions. Checklist version 1 emits the fixed seven human/VCS-owned steps. The value has no `PatchPlan`, `PlanId`, `WorkspaceEdit`, replacement text, transaction identity, rollback capability, or plan conversion and enters no pending-plan store. The CLI renders the same data as JSON.
+
+|4
+|The user may inspect the guidance or restore inputs outside RefactorKit. Generated sources are restored or rematerialized by the owner outside RefactorKit; no generator execution is implied. Manual edits use VCS checkpoint/revert rather than RefactorKit rollback.
+
+|5
+|If the same CLI command includes `--apply`, `RefactorKitCli.cmdMoveClass` recognizes the guidance arm, writes `guidance.nonManaged`, and returns failure before `applyPlanAndLog`. `PatchEngine.apply` is therefore not invoked; no `.refactorkit`, workspace lock, WAL, pending plan, or transaction is created, and bytes, paths, inventories, and snapshot hash remain unchanged.
+
+|6
+|After restoration, a full reactor rescan and a new preview may independently produce a new `SEMANTIC_PREVIEW`. The guidance object itself is never promoted or converted into a plan, and later Maven/manual success does not retroactively change its evidence classification.
+
+|7
+|The validated four cases keep every required input readable, safely contained, and bounded. Lost/unreadable/unsafe/unbounded structural inputs and changes after request/snapshot/evidence binding are deliberately excluded; their fail-closed behavior remains unvalidated REQ-JAVA-MAVEN-MOVE-AUTH-008 scope rather than an inference from this guidance flow.
+|===
+
 == Runtime Diagrams
 
-No runtime/dynamic C4 diagrams were added in this baseline. This remains an actionable documentation gap if scenario visualization becomes necessary; the new diagnostics flow is documented textually until a dynamic view adds enduring value.
+No runtime/dynamic C4 diagrams were added in this baseline. This remains an actionable documentation gap if scenario visualization becomes necessary; the diagnostics and bounded implemented guidance flow are documented textually until a dynamic view adds enduring value.

@@ -9,12 +9,10 @@ import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
-import org.refactorkit.core.Symbol
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
  * Generates a [PatchPlan] that moves a Java class to a new package.
@@ -40,24 +38,39 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         snapshot: ProjectSnapshot,
         symbolFqn: String,
         targetPackage: String,
-    ): JavaMoveClassPreview = previewResult(snapshot, symbolFqn, targetPackage)
+    ): JavaMoveClassPreview = previewValidated(
+        snapshot,
+        JavaMoveClassRequestValidator.validate(snapshot, adapter, symbolFqn, targetPackage),
+    )
 
-    private fun previewResult(
+    internal fun previewWithAuthority(
         snapshot: ProjectSnapshot,
-        symbolFqn: String,
-        targetPackage: String,
+        validation: JavaMoveClassRequestValidation,
+    ): JavaMoveClassPreview = previewValidated(snapshot, validation)
+
+    private fun previewValidated(
+        snapshot: ProjectSnapshot,
+        validation: JavaMoveClassRequestValidation,
+    ): JavaMoveClassPreview = when (validation) {
+        is JavaMoveClassRequestValidation.Refused -> JavaMoveClassPreview(
+            refused(snapshot, "moveClass", validation.summary, validation.code),
+            null,
+        )
+        is JavaMoveClassRequestValidation.Supported -> previewSupported(snapshot, validation)
+    }
+
+    private fun previewSupported(
+        snapshot: ProjectSnapshot,
+        request: JavaMoveClassRequestValidation.Supported,
     ): JavaMoveClassPreview {
         fun withoutAuthority(plan: PatchPlan) = JavaMoveClassPreview(plan, null)
-        val oldPkg = JavaPackageUtil.packageOf(symbolFqn)
-        val simpleName = JavaPackageUtil.simpleName(symbolFqn)
-        val newFqn = JavaPackageUtil.fqn(targetPackage, simpleName)
-
-        if (oldPkg == targetPackage) {
-            return withoutAuthority(refused(snapshot, "moveClass", "Source and target packages are the same: $targetPackage"))
-        }
-        if (!isValidPackageName(targetPackage)) {
-            return withoutAuthority(refused(snapshot, "moveClass", "Invalid target package: $targetPackage"))
-        }
+        val symbolFqn = request.symbolFqn
+        val targetPackage = request.targetPackage
+        val oldPkg = request.oldPackage
+        val simpleName = request.simpleName
+        val newFqn = request.newFqn
+        val declarationFile = request.declarationFile
+        val newRelativePath = request.newRelativePath
 
         // Structural Maven descriptor closure is a prerequisite, not a semantic-edit diagnostic.
         // Refuse before symbol analysis so selected descriptor loss cannot produce a plan or lease.
@@ -101,21 +114,6 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             ))
         }
 
-        val index = adapter.buildSymbols(snapshot)
-        val symbol = index.symbols.find { it.id.value == symbolFqn && it.kind in MOVEABLE_KINDS }
-            ?: return withoutAuthority(refused(snapshot, "moveClass", "Symbol not found or not a moveable type: $symbolFqn"))
-
-        val declarationFile = snapshot.files.find { it.path == symbol.location.path }
-            ?: return withoutAuthority(refused(snapshot, "moveClass", "Declaration file not found: ${symbol.location.path}"))
-        JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
-            return withoutAuthority(
-                refused(snapshot, "moveClass", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)"),
-            )
-        }
-        val newRelativePath = computeNewPath(declarationFile.path, oldPkg, targetPackage, simpleName)
-        if (index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newRelativePath }) {
-            return withoutAuthority(refused(snapshot, "moveClass", "Move target already exists: $newFqn ($newRelativePath)"))
-        }
         val availableSelection = JavaMoveClassTargetAuthorityEvaluator.availableSelection(
             snapshot,
             symbolFqn,
@@ -371,16 +369,6 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         }
     }
 
-    private fun computeNewPath(oldPath: Path, oldPkg: String, newPkg: String, simpleName: String): Path {
-        // Heuristic: walk up from the file to find the source root, then rebuild.
-        val oldPkgParts = if (oldPkg.isEmpty()) 0 else oldPkg.split('.').size
-        var current: Path? = oldPath.parent
-        repeat(oldPkgParts) { current = current?.parent }
-        val sourceRoot = current ?: Paths.get(".")
-        val newPkgPath = JavaPackageUtil.packageToPath(newPkg)
-        return sourceRoot.resolve(newPkgPath).resolve("$simpleName.java")
-    }
-
     private fun makeEdit(content: String, range: IntRange, replacement: String): TextEdit {
         val start = TextEdits.positionForOffset(content, range.first)
         val end = TextEdits.positionForOffset(content, range.last + 1)
@@ -394,13 +382,6 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         else if (content.startsWith("\n", offset)) offset += 1
         return offset
     }
-
-    private fun isValidPackageName(packageName: String): Boolean =
-        packageName.isNotBlank() && packageName.split('.').all { segment ->
-            segment.isNotEmpty() &&
-                (segment.first().isLetter() || segment.first() == '_' || segment.first() == '$') &&
-                segment.all(JavaLexer::isIdentChar)
-        }
 
     private fun refused(
         snapshot: ProjectSnapshot,
@@ -421,13 +402,4 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         refusalCode = code,
     )
 
-    companion object {
-        private val MOVEABLE_KINDS = setOf(
-            Symbol.Kind.CLASS,
-            Symbol.Kind.INTERFACE,
-            Symbol.Kind.ENUM,
-            Symbol.Kind.RECORD,
-            Symbol.Kind.ANNOTATION,
-        )
-    }
 }

@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from domain research reviewed on 2026-07-29 and descriptor-closed graph/ordinary missing-binary concepts reviewed on 2026-07-30. REQ-JAVA-MAVEN-MOVE-AUTH-001 validates the bounded complete-`AVAILABLE` binding-clean preview/apply/rollback vocabulary. REQ-JAVA-MAVEN-MOVE-AUTH-002 now validates exact dependency-bounded observer, JDT candidate, Java non-code residual, non-Java residual, managed-edit exclusion, apply, and rollback meanings; `007`, `009`, `010`, `011`, and six-case `012` retain their independently bounded missing-binary, scope, pruning, ordinary-absence, and selected-descriptor meanings. Requirements `003`, `004`, and `008` remain absent. Separately, the exact Magrathea request at commit `a48e3c06` remains CLI-qualified only on Linux/JDK 21 after `010`; no integration/native matrix or general support is inferred.
+Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from reviewed domain research. REQ-JAVA-MAVEN-MOVE-AUTH-001/002 retain the bounded semantic preview/apply/rollback, observer, candidate, and residual vocabulary. REQ-JAVA-MAVEN-MOVE-AUTH-003 now validates the bounded meanings of immutable Java move-class review guidance, schema/checklist version 1, expected-evidence manifests, typed guidance groups/omissions/actions, JSON rendering, and pre-`PatchEngine` CLI refusal. Requirements `005` through `007` and `009` through `012` retain their independently bounded meanings. Cross-surface `004` and structural-loss/post-preview-drift `008` remain absent. Separately, the exact Magrathea request at commit `a48e3c06` remains CLI-qualified only on Linux/JDK 21 after `010`; no integration/native matrix or general support is inferred.
 
 [cols="1,3,2,2",options="header"]
 |===
@@ -14,9 +14,9 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |README, AGENTS
 
 |PatchPlan
-|Structured preview/apply plan for a code modification, including operation, snapshot hash, affected files, workspace edit, diagnostics, warnings, risk, confidence, and evidence. Review-only guided manual fallback is deliberately not a `PatchPlan`.
+|Structured preview/apply or refusal plan for a code modification, including operation, snapshot hash, affected files, workspace edit, diagnostics, warnings, risk, confidence, and evidence. In the bounded Java `moveClass` dispatcher, the existing `Plan(JavaMoveClassPreview)` arm remains separate from `Guidance(JavaMoveClassReviewOnlyGuidance)`; the guidance value is not a `PatchPlan` and has no plan conversion.
 |Core
-|`Models.kt`; ADR 0002; `RPK-JAVA-MOVE-005`
+|`Models.kt`; ADR 0002; `JavaMoveClassOperationDispatcher`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003
 
 |WorkspaceEdit
 |Collection of file edits to modify, create, delete, or rename files in a workspace.
@@ -54,9 +54,9 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |ADR 0004, transactionality audit `TX-008`
 
 |ProjectSnapshot
-|Immutable snapshot of workspace modules and source files with a content hash.
+|Immutable snapshot of workspace modules, source files, classpath/build evidence, and auxiliary evidence files with a content hash. In bounded move guidance, strict expected-source and generated-root manifests are captured as auxiliary files so their exact text affects snapshot identity.
 |Core
-|`Models.kt`
+|`Models.kt`; `JavaProjectScanner`; REQ-JAVA-MAVEN-MOVE-AUTH-003
 
 |LanguageAdapter
 |Contract implemented by language-specific adapters for parse, symbols, references, diagnostics, and refactoring application.
@@ -178,10 +178,30 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |Core / Java / safety
 |Accepted ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-004`; bounded `001`/`002`/`007`/`009`/`010`/`011`/`012`
 
-|Guided Manual Refactoring Fallback
-|Distinct `REVIEW_ONLY_GUIDANCE` handoff for an intelligible request whose semantic authority is unavailable. It separates facts and candidate evidence, explains blockers and remediation, and gives a human/VCS-owned checklist. It is non-managed: no `PatchPlan`, applyable plan ID, WAL, transaction, or RefactorKit rollback claim.
-|Java / integrations / user guidance
-|`RPK-JAVA-MOVE-005/007`; field report `SRC-2026-07-29-004`
+|Java Move-class Operation Outcome
+|Implemented Java-specific dispatcher result with `Plan(JavaMoveClassPreview)` and `Guidance(JavaMoveClassReviewOnlyGuidance)` arms. The plan arm preserves existing semantic-preview and refused `PatchPlan` behavior. The guidance arm cannot contain or become a plan; a restored environment requires a full rescan and a new dispatcher result. This type is not a generic core or cross-surface result algebra.
+|Java adapter / Maven move class
+|`JavaMoveClassOperationDispatcher`; `RPK-JAVA-MOVE-001/005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003
+
+|Guided Manual Refactoring Fallback / Review-only Move Guidance
+|`JavaMoveClassReviewOnlyGuidance`, an immutable `REVIEW_ONLY_GUIDANCE` handoff for an intelligible Java/Maven `moveClass` request whose authority defect remains safely enumerable. Schema version 1 binds request identity, snapshot SHA-256, and deterministic canonical evidence SHA-256; it carries typed blockers with separate Maven module/source-set identity, exact-bound/unresolved-Java/Java-noncode/non-Java groups, explicit completeness and the bounded source-inventory omission, ordered restoration actions, and checklist version 1's seven human/VCS-owned steps. It is non-managed: no `PatchPlan`, `PlanId`, `WorkspaceEdit`, replacement text, pending-plan entry, WAL, transaction, RefactorKit rollback claim, or plan conversion. The source-built CLI renders JSON and returns `guidance.nonManaged` before `PatchEngine`, lock, and WAL.
+|Java adapter / CLI user guidance
+|`JavaMoveClassGuidance.kt`; `JavaMoveClassGuidanceJsonRenderer`; `RPK-JAVA-MOVE-005/007`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003
+
+|Move-class Expected-evidence Manifest
+|A strict format-version-1 properties file for one expected readable source entry or one materialized generated-root inventory. `JavaProjectScanner` captures the two recognized module-root filenames as `refactorkit-expected-evidence` auxiliary files; guidance validates owner/source set/path, exact snapshot content, and manifest content SHA-256. These manifests detect bounded mismatch or omission but do not grant semantic authority. The separate system-path classpath `.refactorkit-evidence` manifest remains classpath evidence and contributes its content hash plus expected/observed artifact fingerprints.
+|Java scanner / Maven move guidance
+|`.refactorkit-expected-source-inventory.properties`; `.refactorkit-generated-root-inventory.properties`; `JavaMoveClassGuidanceEvidence`; REQ-JAVA-MAVEN-MOVE-AUTH-003
+
+|Evidence Fingerprint Mismatch
+|A deterministic inequality between an expected fingerprint already bound into authority evidence and a freshly observed fingerprint for the same readable, identified input. It is not hash age. During construction of one of the bounded REQ-JAVA-MAVEN-MOVE-AUTH-003 previews it yields review-only guidance; a change after snapshot/evidence binding remains separate refusal scope under absent REQ-JAVA-MAVEN-MOVE-AUTH-008.
+|Java/Maven authority and freshness
+|`JavaMoveClassGuidanceEvidence`; ADRs 0010 and 0012; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003; absent REQ-JAVA-MAVEN-MOVE-AUTH-008
+
+|Structural Authority Loss
+|Loss, unreadability, unsafe containment, or unbounded incompleteness of a required reactor POM, selected descriptor, source root/inventory, ownership, platform, provider, or equivalent structural fact. Because the affected population cannot be safely bounded, this is `REFUSED`, not `REVIEW_ONLY_GUIDANCE`. The permanent fixture's materialized generated root belongs to `catalog-generated-support:main`.
+|Build Model / Java Maven move authority
+|ADRs 0010 and 0012; REQ-JAVA-MAVEN-MOVE-AUTH-008 planned/absent; fixture README
 
 |Java Platform Signature Catalog
 |Immutable, licensed, integrity-verified, hash-attested and SBOM-covered Java SE types, members, and release-appropriate module metadata used for exact `--release` diagnostics. It is distinct from source grammar, the host JDK, and RefactorKit's reduced jlink runtime.
@@ -219,9 +239,9 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |`docs/releases/v1.0.0-plan.md`, ADRs 0002 and 0004
 
 |Evidence Classification
-|Per-operation outcome classified as JDT binding-backed, separately proven structural behavior, review-only lexical evidence, or refusal. In target-scoped move authority, lexical inventory is completeness/veto evidence only; it never upgrades a range to `JDT_BINDING` or mutation evidence. Exact JDT candidate counts stay separate from Java non-code and non-Java residual counts, both of which remain `managedEdit=false`. `LEXICAL_FALLBACK` must not be presented as semantic authority and is rejected before WAL; type-move authority loss yields non-managed guidance or refusal rather than an applyable fallback. Bounded `001` proves deterministic `JDT_BINDING` classification for one complete-`AVAILABLE` fixture request; bounded `002` proves exact binding versus residual discrimination for one observer-authority fixture request. A separate CLI/Linux/JDK-21 run at Magrathea commit `a48e3c06` remains a request-specific field qualification; none generalizes to other surfaces or native matrices.
+|Per-operation outcome classified as JDT binding-backed, separately proven structural behavior, review-only lexical evidence, or refusal. In target-scoped move authority, lexical inventory is completeness/veto evidence only; it never upgrades a range to `JDT_BINDING` or mutation evidence. Exact JDT candidates stay separate from Java non-code and non-Java residuals, all guidance occurrences report `managedEdit=false`. `LEXICAL_FALLBACK` remains a review-only plan evidence kind rejected by `PatchEngine`; bounded REQ-003 authority loss instead returns plan-free Java guidance and the CLI refuses before entering `PatchEngine`. Bounded `001`/`002` prove semantic and discrimination rows; bounded `003` proves only four guidance defects and preserves REQ-005 broad syntax-failure lexical behavior. A separate CLI/Linux/JDK-21 run at Magrathea commit `a48e3c06` remains request-specific; none generalizes to other surfaces or native matrices.
 |Java / safety
-|ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-003..005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001/002; dated Magrathea field evidence
+|ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-003..005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001/002/003/005; dated Magrathea field evidence
 
 |Release Candidate (RC)
 |Immutable `v1.0.0-rc.N` tag used only after the deep language roadmap, Clojure integration, alpha/beta validation, and API freeze to validate proposed stable contracts and artifacts; a failed tagged candidate is replaced by a new commit and RC number.

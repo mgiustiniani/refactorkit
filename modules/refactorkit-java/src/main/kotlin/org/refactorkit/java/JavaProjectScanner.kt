@@ -8,8 +8,13 @@ import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.Workspace
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.stream.Collectors
 import kotlin.io.path.exists
@@ -66,12 +71,18 @@ class JavaProjectScanner(
         val initialModules = moduleRoots.map { moduleRoot ->
             val maven = mavenByRoot[moduleRoot]
             val gradle = gradleBuildModel?.modules?.firstOrNull { it.root == moduleRoot }
-            val mainRoots = if (maven != null) (
-                conventionalMainSourceRoots(moduleRoot) + maven.mainSourceDirectories + listOf(moduleRoot.resolve("src/main/java"))
-            ).distinct() else conventionalMainSourceRoots(moduleRoot)
-            val testRoots = if (maven != null) (
-                conventionalTestSourceRoots(moduleRoot) + maven.testSourceDirectories + listOf(moduleRoot.resolve("src/test/java"))
-            ).distinct() else conventionalTestSourceRoots(moduleRoot)
+            val mainRoots = if (maven != null) effectiveMavenSourceRoots(
+                conventionalSourceDirectories = conventionalMainSourceRoots(moduleRoot),
+                defaultJavaSourceDirectory = moduleRoot.resolve("src/main/java"),
+                primarySourceDirectory = maven.primaryMainSourceDirectory,
+                additionalSourceDirectories = maven.additionalMainSourceDirectories,
+            ) else conventionalMainSourceRoots(moduleRoot)
+            val testRoots = if (maven != null) effectiveMavenSourceRoots(
+                conventionalSourceDirectories = conventionalTestSourceRoots(moduleRoot),
+                defaultJavaSourceDirectory = moduleRoot.resolve("src/test/java"),
+                primarySourceDirectory = maven.primaryTestSourceDirectory,
+                additionalSourceDirectories = maven.additionalTestSourceDirectories,
+            ) else conventionalTestSourceRoots(moduleRoot)
             val gradleMainRoots = gradle?.sourceSets.orEmpty()
                 .filter { it.kind == SourceSetKind.MAIN }.flatMap { it.sourceRoots }.map(normalizedRoot::resolve)
             val gradleTestRoots = gradle?.sourceSets.orEmpty()
@@ -390,7 +401,8 @@ class JavaProjectScanner(
             if (!sourceRoot.exists()) emptyList() else Files.walk(sourceRoot).use { stream ->
                 stream
                     .filter { path ->
-                        Files.isRegularFile(path) && path.fileName.toString().substringAfterLast('.', "") in JVM_SOURCE_EXTENSIONS
+                        Files.isRegularFile(path) &&
+                            path.fileName.toString().substringAfterLast('.', "") in JVM_SOURCE_EXTENSIONS
                     }
                     .map { path ->
                         val extension = path.fileName.toString().substringAfterLast('.', "")
@@ -451,9 +463,18 @@ class JavaProjectScanner(
             compareBy<ClasspathEvidence> { it.path.toString() }.thenBy { it.kind.name },
         )
 
-        val auxiliaryFiles = pomFiles.filter { it.startsWith(normalizedRoot) }.map { pom ->
-            SourceFile(normalizedRoot.relativize(pom), pom.readText(), "maven-pom")
-        }.sortedBy { it.path.toString() }
+        val expectedEvidenceFiles = moduleRoots.flatMap { moduleRoot ->
+            EXPECTED_EVIDENCE_MANIFEST_NAMES.map(moduleRoot::resolve).mapNotNull { evidence ->
+                readExpectedEvidence(evidence)?.let { content -> evidence to content }
+            }
+        }.distinctBy { it.first }.sortedBy { it.first.toString() }
+        val auxiliaryFiles = (
+            pomFiles.filter { it.startsWith(normalizedRoot) }.map { pom ->
+                SourceFile(normalizedRoot.relativize(pom), pom.readText(), "maven-pom")
+            } + expectedEvidenceFiles.map { (evidence, content) ->
+                SourceFile(normalizedRoot.relativize(evidence), content, "refactorkit-expected-evidence")
+            }
+        ).sortedBy { it.path.toString() }
         return ProjectSnapshot(
             workspace = Workspace(normalizedRoot),
             modules = modules,
@@ -537,6 +558,25 @@ class JavaProjectScanner(
         .filter { it.exists() && it.isDirectory() }
     private fun conventionalSourceRoots(root: Path): List<Path> = conventionalMainSourceRoots(root) + conventionalTestSourceRoots(root)
 
+    private fun effectiveMavenSourceRoots(
+        conventionalSourceDirectories: List<Path>,
+        defaultJavaSourceDirectory: Path,
+        primarySourceDirectory: Path?,
+        additionalSourceDirectories: List<Path>,
+    ): List<Path> {
+        val defaultJava = defaultJavaSourceDirectory.toAbsolutePath().normalize()
+        val primary = primarySourceDirectory?.toAbsolutePath()?.normalize()
+        val primaryReplacesDefaultJava = primary != null && primary != defaultJava
+        return buildList {
+            addAll(conventionalSourceDirectories.filterNot { sourceDirectory ->
+                primaryReplacesDefaultJava && sourceDirectory.toAbsolutePath().normalize() == defaultJava
+            })
+            if (!primaryReplacesDefaultJava) add(defaultJava)
+            primary?.let(::add)
+            addAll(additionalSourceDirectories)
+        }.map { it.toAbsolutePath().normalize() }.distinct()
+    }
+
     private fun generatedSourceRoots(root: Path, test: Boolean): List<Path> {
         val bases = if (test) listOf(
             root.resolve("target/generated-test-sources"),
@@ -587,6 +627,35 @@ class JavaProjectScanner(
 
     private fun evidencePath(workspaceRoot: Path, path: Path): Path =
         if (path.startsWith(workspaceRoot)) workspaceRoot.relativize(path) else path.toAbsolutePath().normalize()
+
+    private fun readExpectedEvidence(path: Path): String? {
+        val before = runCatching {
+            Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        }.getOrNull() ?: return null
+        if (!before.isRegularFile || Files.isSymbolicLink(path) || before.size() > MAX_EXPECTED_EVIDENCE_BYTES) {
+            return null
+        }
+        val bytes = runCatching {
+            Files.newInputStream(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS).use { input ->
+                input.readNBytes(MAX_EXPECTED_EVIDENCE_BYTES + 1)
+            }
+        }.getOrNull() ?: return null
+        if (bytes.size > MAX_EXPECTED_EVIDENCE_BYTES) return null
+        val after = runCatching {
+            Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        }.getOrNull() ?: return null
+        if (!after.isRegularFile || Files.isSymbolicLink(path) ||
+            before.size() != after.size() || before.lastModifiedTime() != after.lastModifiedTime() ||
+            before.fileKey() != after.fileKey() || bytes.size.toLong() != after.size()
+        ) return null
+        return runCatching {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes))
+                .toString()
+        }.getOrNull()
+    }
 
     private fun mavenArtifactId(root: Path): String? {
         val pom = root.resolve("pom.xml").takeIf { it.exists() && Files.isRegularFile(it) } ?: return null
@@ -675,5 +744,10 @@ class JavaProjectScanner(
     companion object {
         private val JVM_LANGUAGE_IDS = mapOf("java" to "java", "kt" to "kotlin", "kts" to "kotlin")
         private val JVM_SOURCE_EXTENSIONS = JVM_LANGUAGE_IDS.keys
+        private val EXPECTED_EVIDENCE_MANIFEST_NAMES = listOf(
+            ".refactorkit-expected-source-inventory.properties",
+            ".refactorkit-generated-root-inventory.properties",
+        )
+        private const val MAX_EXPECTED_EVIDENCE_BYTES = 16 * 1024
     }
 }

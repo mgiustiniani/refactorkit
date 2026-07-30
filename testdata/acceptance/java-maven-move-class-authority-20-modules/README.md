@@ -41,6 +41,28 @@ SHA-256  7f2e71601326da5129cb90435fb5442b958137f05fd28e4fec5192227268a3a2
 
 The adjacent `catalog-price-contract-1.0.0.jar.refactorkit-evidence` manifest records that expected identity and the artifact's provided type. Isolated `OFFLINE_MISSING` acceptance variants remove only the JAR, leaving the hash-bound manifest so absence, expected content identity, and target-name non-concealment can be proven without executing Maven or accessing a network.
 
+## REQ-JAVA-MAVEN-MOVE-AUTH-003 review-only guidance variants
+
+The permanent baseline checks in two operation-specific expected-evidence manifests:
+
+| Manifest | Snapshot-bound expectation |
+| --- | --- |
+| `catalog-acceptance/.refactorkit-expected-source-inventory.properties` | `catalog-acceptance:test` must inventory the readable `ProductLifecycleSteps.java` at its recorded content SHA-256. |
+| `catalog-generated-support/.refactorkit-generated-root-inventory.properties` | `catalog-generated-support:main` owns the materialized `target/generated-sources/catalog-metadata` root at its recorded deterministic inventory SHA-256. |
+
+`JavaProjectScanner` captures both manifests as auxiliary files in the `ProjectSnapshot`, so their exact bytes participate in the snapshot identity. They are snapshot-bound negative evidence: they may only demote an otherwise supported move to immutable, non-managed `REVIEW_ONLY_GUIDANCE` or cause fail-closed refusal when the evidence cannot be validated. They never grant, recover, or promote semantic authority.
+
+REQ-JAVA-MAVEN-MOVE-AUTH-003 copies the fixture into four independent workspaces and introduces exactly one readable, safely contained, bounded, and enumerable preview-time defect per copy:
+
+| Affected source set | Isolated variant | Stable blocker code |
+| --- | --- | --- |
+| `catalog-acceptance:test` | Its Maven test source root is redirected so `ProductLifecycleSteps.java` remains a readable regular file but is omitted from the freshly scanned source inventory. | `java.maven.moveClass.sourceInventory.missingEntry` |
+| `catalog-pricing:main` | The readable system-path JAR differs from the fingerprint recorded by its adjacent classpath-evidence manifest. | `java.maven.moveClass.classpathFingerprint.mismatch` |
+| `catalog-storefront:main` | The import is removed from readable `ProductTile.java`, so the target use has only a recovered binding. | `java.maven.moveClass.targetUse.recoveredBinding` |
+| `catalog-generated-support:main` | The readable materialized generated source changes while its checked-in generated-root inventory remains unchanged. | `java.maven.moveClass.materializedGeneratedRootInventory.fingerprintMismatch` |
+
+Each unchanged copy is freshly scanned and previewed twice; guidance is snapshot/evidence-bound and CLI apply is refused before managed writes. The harness mutates only the isolated static inputs: it does not run Maven lifecycle goals, plugins, annotation processors, generators, wrappers, or network requests.
+
 ## REQ-JAVA-MAVEN-MOVE-AUTH-009 opt-in variant
 
 The profile `req-java-maven-move-auth-009` has no activation and is therefore inactive by default. When the acceptance harness activates it and explicitly supplies `fixture-repository` as RefactorKit's local Maven repository, `catalog-pricing` gains the compile dependency `com.acme.fixture.external:field-scope-parent:1.0.0`. That artifact's POM explicitly declares all six field-shaped children as `test`, while the reactor's dependency management repeats the same JAR coordinates at `1.0.0-refactorkit-fixture`: reload4j, Log4j Core Test, and Lombok omit managed scope and default to `compile`; Log4j API Test, Log4j Core, and Spring Context Support declare managed scope `compile`. No coordinate has a classifier.
@@ -118,4 +140,4 @@ The templates are deliberately named `.pom`, never `pom.xml`, so they cannot bec
 
 Discovery and semantic analysis must not execute Maven lifecycle goals, Maven plugins, annotation processors, credential helpers, generators, wrappers, or network requests. The fixture contains no Gradle build and no Cucumber runner or runtime dependency; executable acceptance glue belongs to the RefactorKit Story BDD harness.
 
-With no profile activation, this directory remains the deterministic positive baseline. The REQ-JAVA-MAVEN-MOVE-AUTH-012 files are static scaffolding and do not by themselves change the requirement's declared status. Independently derived authority-loss variants are still pending for generated roots, source inventories, local artifacts beyond the explicit variants above, Java platform/provider inputs, child-root discovery, recovered-binding failures, analysis truncation, destination collisions, and other evidence drift after preview. Cross-module moves, source-root changes, nested or multiple top-level declarations, and JPMS/module-path moves remain outside this fixture's supported move shape.
+With no profile activation, this directory remains the deterministic positive baseline. The REQ-JAVA-MAVEN-MOVE-AUTH-012 files are static scaffolding and do not by themselves change the requirement's declared status. The four bounded, readable/enumerable REQ-JAVA-MAVEN-MOVE-AUTH-003 variants above are implemented; additional source-inventory, generated-root, classpath, and recovered-binding shapes are not implied. Analysis or residual-enumeration truncation; lost, unreadable, unsafe, or unbounded required structural input; and post-preview snapshot/evidence drift remain open under REQ-JAVA-MAVEN-MOVE-AUTH-008. Force, recipe, daemon, LSP, and MCP parity remains open under REQ-JAVA-MAVEN-MOVE-AUTH-004. Local-artifact shapes beyond the explicit variants, Java platform/provider inputs, child-root discovery, destination collisions, cross-module moves, source-root changes, nested or multiple top-level declarations, and JPMS/module-path moves also remain outside this fixture's supported move shape.

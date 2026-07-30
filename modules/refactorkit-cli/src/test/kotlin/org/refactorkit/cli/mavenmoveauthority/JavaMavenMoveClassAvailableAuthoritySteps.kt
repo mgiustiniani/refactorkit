@@ -353,7 +353,14 @@ class JavaMavenMoveClassAvailableAuthoritySteps {
         assertEquals(20, counts.reactorModules)
         assertEquals(40, counts.reactorSourceSets)
         assertEquals(7, counts.sourceFiles)
-        assertEquals(21, counts.auxiliaryFiles)
+        assertEquals(23, counts.auxiliaryFiles)
+        assertEquals(
+            setOf(
+                Path.of("catalog-acceptance/.refactorkit-expected-source-inventory.properties"),
+                Path.of("catalog-generated-support/.refactorkit-generated-root-inventory.properties"),
+            ),
+            first.snapshot.auxiliaryFiles.filterNot { it.languageId == "maven-pom" }.mapTo(linkedSetOf()) { it.path },
+        )
         assertTrue(counts.classpathEvidence > 0)
         assertTrue(counts.jdtSymbols > 0)
         assertTrue(counts.targetReferences > counts.observerSourceSets)
@@ -365,7 +372,7 @@ class JavaMavenMoveClassAvailableAuthoritySteps {
         scenario.attach(
             "Both previews used snapshot ${first.snapshot.hash}. The evidence counts are " +
                 "${counts.reactorModules} reactor modules, ${counts.reactorSourceSets} source sets, " +
-                "${counts.sourceFiles} Java sources, ${counts.auxiliaryFiles} effective POM inputs, " +
+                "${counts.sourceFiles} Java sources, ${counts.auxiliaryFiles} snapshot-bound auxiliary inputs, " +
                 "${counts.classpathEvidence} classpath evidence records, ${counts.targetReferences} exact target " +
                 "references, ${counts.normalizedFileEdits} normalized file edits, and " +
                 "${counts.normalizedTextEdits} normalized text edits.",

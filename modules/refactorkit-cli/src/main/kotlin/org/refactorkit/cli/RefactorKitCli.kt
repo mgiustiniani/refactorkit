@@ -29,7 +29,8 @@ import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaCreateMavenModulePlanner
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
-import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveClassOperationDispatcher
+import org.refactorkit.java.JavaMoveClassOperationOutcome
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.java.MavenDependencyIdentity
@@ -69,6 +70,7 @@ class RefactorKitCli(
     private val scanner: JavaProjectScanner = JavaProjectScanner(),
     private val javaAdapter: JavaLanguageAdapter = JavaLanguageAdapter(),
     private val semanticSessionFactory: () -> DaemonSession = ::DaemonSession,
+    private val moveClassGuidanceOutput: JavaMoveClassGuidanceOutputPort = JavaMoveClassGuidanceJsonRenderer(),
 ) {
     private val semanticJson = Json { prettyPrint = true }
     private val booleanOptions = setOf(
@@ -431,12 +433,27 @@ class RefactorKitCli(
         val toPkg = parsed.options["to-package"] ?: run { System.err.println("move-class requires --to-package"); return 2 }
         val root = parsed.positionals.firstOrNull() ?: "."
         val snap = scanFrom(root) ?: return 1
-        val plan = JavaMoveClassPlanner(javaAdapter).preview(snap, symbol, toPkg)
-        println(PatchPreviewRenderer(snap.workspace.root).render(plan))
-        if (plan.status == PatchStatus.REFUSED) return 1
-        if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
-        return 0
+        return when (val outcome = JavaMoveClassOperationDispatcher(javaAdapter).preview(snap, symbol, toPkg)) {
+            is JavaMoveClassOperationOutcome.Guidance -> {
+                println(moveClassGuidanceOutput.render(outcome.guidance))
+                if ("apply" in parsed.flags) {
+                    System.err.println(
+                        "Apply refused [guidance.nonManaged]: REVIEW_ONLY_GUIDANCE has no managed-write path.",
+                    )
+                    1
+                } else {
+                    0
+                }
+            }
+            is JavaMoveClassOperationOutcome.Plan -> {
+                val plan = outcome.preview.plan
+                println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+                if (plan.status == PatchStatus.REFUSED) return 1
+                if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
+                println("Use --apply to apply this change.")
+                0
+            }
+        }
     }
 
     // ── organize-imports ──────────────────────────────────────────────────────

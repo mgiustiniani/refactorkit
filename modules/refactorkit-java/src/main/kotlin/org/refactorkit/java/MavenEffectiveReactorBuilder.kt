@@ -101,8 +101,10 @@ internal data class MavenModuleModel(
     val packaging: String,
     val sourceLevel: Int?,
     val releaseLevel: Int?,
-    val mainSourceDirectories: List<Path>,
-    val testSourceDirectories: List<Path>,
+    val primaryMainSourceDirectory: Path?,
+    val primaryTestSourceDirectory: Path?,
+    val additionalMainSourceDirectories: List<Path>,
+    val additionalTestSourceDirectories: List<Path>,
     val mainDependencies: List<MavenCoordinate>,
     val testDependencies: List<MavenCoordinate>,
     val mainDependencyScopes: Map<MavenCoordinate, String>,
@@ -178,8 +180,10 @@ internal class MavenEffectiveReactorBuilder(
                     packaging = "jar",
                     sourceLevel = null,
                     releaseLevel = null,
-                    mainSourceDirectories = emptyList(),
-                    testSourceDirectories = emptyList(),
+                    primaryMainSourceDirectory = null,
+                    primaryTestSourceDirectory = null,
+                    additionalMainSourceDirectories = emptyList(),
+                    additionalTestSourceDirectories = emptyList(),
                     mainDependencies = emptyList(),
                     testDependencies = emptyList(),
                     mainDependencyScopes = emptyMap(),
@@ -275,8 +279,10 @@ internal class MavenEffectiveReactorBuilder(
             packaging = model.packaging?.takeIf(String::isNotBlank) ?: "jar",
             sourceLevel = sourceLevel(model),
             releaseLevel = releaseLevel(model),
-            mainSourceDirectories = sourceDirectories.main,
-            testSourceDirectories = sourceDirectories.test,
+            primaryMainSourceDirectory = sourceDirectories.primaryMain,
+            primaryTestSourceDirectory = sourceDirectories.primaryTest,
+            additionalMainSourceDirectories = sourceDirectories.additionalMain,
+            additionalTestSourceDirectories = sourceDirectories.additionalTest,
             mainDependencies = mainRepositoryDirect.filter(::isReactorSourceDependency)
                 .mapNotNull(Dependency::coordinate).filter { it in reactorCoordinates }.distinct(),
             testDependencies = testRepositoryDirect.filter(::isReactorSourceDependency)
@@ -310,8 +316,10 @@ internal class MavenEffectiveReactorBuilder(
     }
 
     private data class SourceDirectories(
-        val main: List<Path>,
-        val test: List<Path>,
+        val primaryMain: Path?,
+        val primaryTest: Path?,
+        val additionalMain: List<Path>,
+        val additionalTest: List<Path>,
         val failure: String?,
     )
 
@@ -338,17 +346,17 @@ internal class MavenEffectiveReactorBuilder(
         ?.takeIf { it in 8..25 }?.toString()
 
     private fun sourceDirectories(workspaceRoot: Path, model: Model, pom: Path): SourceDirectories {
-        val main = mutableListOf<String>()
-        val test = mutableListOf<String>()
-        model.build?.sourceDirectory?.takeIf(String::isNotBlank)?.let(main::add)
-        model.build?.testSourceDirectory?.takeIf(String::isNotBlank)?.let(test::add)
+        val primaryMain = model.build?.sourceDirectory?.takeIf(String::isNotBlank)
+        val primaryTest = model.build?.testSourceDirectory?.takeIf(String::isNotBlank)
+        val additionalMain = mutableListOf<String>()
+        val additionalTest = mutableListOf<String>()
         model.build?.plugins.orEmpty()
             .filter { it.groupId in setOf(null, "org.codehaus.mojo") && it.artifactId == "build-helper-maven-plugin" }
             .flatMap { it.executions }
             .forEach { execution ->
                 val target = when {
-                    "add-source" in execution.goals -> main
-                    "add-test-source" in execution.goals -> test
+                    "add-source" in execution.goals -> additionalMain
+                    "add-test-source" in execution.goals -> additionalTest
                     else -> return@forEach
                 }
                 val configuration = execution.configuration as? org.codehaus.plexus.util.xml.Xpp3Dom
@@ -366,9 +374,13 @@ internal class MavenEffectiveReactorBuilder(
                     .mapNotNull { it.value?.trim()?.takeIf(String::isNotBlank) }
                     .forEach(target::add)
             }
-            addConfiguredRoots(plugin.configuration, main)
+            addConfiguredRoots(plugin.configuration, additionalMain)
             plugin.executions.forEach { execution ->
-                val target = if (execution.goals.any { it.contains("test", ignoreCase = true) }) test else main
+                val target = if (execution.goals.any { it.contains("test", ignoreCase = true) }) {
+                    additionalTest
+                } else {
+                    additionalMain
+                }
                 addConfiguredRoots(execution.configuration, target)
             }
         }
@@ -387,8 +399,10 @@ internal class MavenEffectiveReactorBuilder(
             return absolute
         }
         return SourceDirectories(
-            main = main.mapNotNull(::normalize).distinct().sortedBy(Path::toString),
-            test = test.mapNotNull(::normalize).distinct().sortedBy(Path::toString),
+            primaryMain = primaryMain?.let(::normalize),
+            primaryTest = primaryTest?.let(::normalize),
+            additionalMain = additionalMain.mapNotNull(::normalize).distinct().sortedBy(Path::toString),
+            additionalTest = additionalTest.mapNotNull(::normalize).distinct().sortedBy(Path::toString),
             failure = if (unsafe == 0) null else "$unsafe Maven source root declaration(s) escape or cannot be validated inside the workspace",
         )
     }
