@@ -33,7 +33,7 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
     And authoritative rollback diagnostics attest the restored snapshot
 
   # RPK-JAVA-MOVE-002..003 and RPK-JAVA-MOVE-006..007
-  @REQ-JAVA-MAVEN-MOVE-AUTH-002 @functional-requirement @absent
+  @REQ-JAVA-MAVEN-MOVE-AUTH-002 @functional-requirement @implemented-and-validated
   Scenario: Only binding-proven Java observers are updated
     Given the complete reverse-observer closure contains these binding-proven uses:
       | source set               | dependency relation | Java use forms                              |

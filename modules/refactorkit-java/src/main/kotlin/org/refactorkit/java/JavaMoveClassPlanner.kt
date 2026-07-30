@@ -210,19 +210,21 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             "JDT type-binding evidence was unavailable or not clean; move uses lexical file scoping. Review carefully."
         }
         if (semanticEligible) {
-            val closure = checkNotNull(jdtSelection).semanticSelection.closure
+            val selection = checkNotNull(jdtSelection).semanticSelection
+            val closure = selection.closure
             val observers = (closure.sourceSets - closure.owner).map(MoveAuthoritySourceSet::displayName).sorted()
             warnings += "Authoritative dependency-bounded reverse-observer closure: target owner " +
                 "${closure.owner.displayName()}; observers " +
                 observers.ifEmpty { listOf("none") }.joinToString(", ") + "."
-            if (jdtSelection.semanticSelection.excludedWarningSourceSets.isNotEmpty()) {
-                warnings += jdtSelection.semanticSelection.excludedWarningSourceSets
+            if (selection.excludedWarningSourceSets.isNotEmpty()) {
+                warnings += selection.excludedWarningSourceSets
                     .map(MoveAuthoritySourceSet::displayName)
                     .sorted()
                     .joinToString(", ") +
                     " excluded from the dependency-bounded reverse-observer closure; " +
                     "those JDT warnings did not demote semantic authority."
             }
+            warnings += JavaMoveClassCandidateReporter.warnings(snapshot, selection, symbolFqn)
         }
         if (targetAuthorityLease != null) {
             warnings += "Target-scoped Maven moveClass authority lease: reactorStructureStatus=COMPLETE, " +
@@ -231,13 +233,13 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
                 "enumerated leaf absence(s), " +
                 "${targetAuthorityLease.candidatesBefore.size} candidate record(s), " +
                 "${targetAuthorityLease.retainedDiagnosticsBefore.size} exactly retained diagnostic(s)."
-            warnings += "The lexical candidate inventory is completeness-and-veto evidence only; no lexical range selected an edit."
         } else if (authorityBlockers.isNotEmpty()) {
             warnings += "Target-scoped Maven moveClass authority was not leased: ${authorityBlockers.joinToString("; ")}"
         } else if (offlinePrepared != null) {
             warnings += "Target-scoped Maven moveClass authority was not leased because staged binding or diagnostic evidence changed."
         }
-        warnings += "String literals and comments are NOT scanned. Reflection and annotation processor output require manual review."
+        warnings += "String literals, comments, and non-Java text are never edited; reported matches and other " +
+            "reflection or annotation-processor output require manual review."
         warnings += frameworkAssessment.warnings("moveClass")
 
         val plan = PatchPlan(

@@ -868,7 +868,7 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
         )
     }
 
-    private fun candidateInventory(
+    internal fun candidateInventory(
         snapshot: ProjectSnapshot,
         model: BuildModel,
         analysis: JdtJavaSemanticAnalysisResult,
