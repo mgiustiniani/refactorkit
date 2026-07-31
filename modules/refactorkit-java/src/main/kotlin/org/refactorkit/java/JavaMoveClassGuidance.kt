@@ -1,5 +1,6 @@
 package org.refactorkit.java
 
+import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.SourceRange
 import java.nio.file.Path
 
@@ -38,9 +39,41 @@ enum class JavaMoveClassGuidanceRestorationKind {
     RESTORE_SOURCE_INVENTORY,
     REFRESH_CLASSPATH_EVIDENCE,
     REESTABLISH_EXACT_BINDINGS,
+    RESTORE_TARGET_NAME_LOOKUP,
+    RESTORE_OBSERVER_CLOSURE,
+    RESTORE_DIAGNOSTIC_IDENTITY,
     EXTERNALLY_RESTORE_GENERATED_ROOT,
     FULL_REACTOR_RESCAN,
     NEW_PREVIEW,
+}
+
+enum class JavaMoveClassGuidanceAuthorityLayer {
+    CANDIDATE_TOTALITY,
+    TARGET_NAME_LOOKUP,
+    CLOSURE_CONSISTENCY,
+    DIAGNOSTIC_IDENTITY,
+}
+
+enum class JavaMoveClassGuidanceCandidateBindingState {
+    AMBIGUOUS,
+    PROBLEM,
+}
+
+enum class JavaMoveClassGuidanceLookupPrerequisiteKind {
+    STATIC_IMPORT_ON_DEMAND,
+}
+
+enum class JavaMoveClassGuidanceClosureMembership {
+    OUTSIDE,
+}
+
+enum class JavaMoveClassGuidanceDiagnosticPhase {
+    BEFORE_VS_STAGED,
+}
+
+enum class JavaMoveClassGuidanceDiagnosticChangedField(val wireName: String) {
+    PROBLEM_ID("problemId"),
+    MESSAGE("message"),
 }
 
 enum class JavaMoveClassSourceInventoryObservation {
@@ -52,6 +85,7 @@ sealed interface JavaMoveClassGuidanceBlocker {
     val mavenModule: String
     val sourceSet: String
     val path: Path
+    val authorityLayer: JavaMoveClassGuidanceAuthorityLayer? get() = null
 
     data class MissingReadableSourceInventoryEntry(
         override val mavenModule: String,
@@ -145,12 +179,217 @@ sealed interface JavaMoveClassGuidanceBlocker {
         }
     }
 
+    class UnresolvedCandidate(
+        override val mavenModule: String,
+        override val sourceSet: String,
+        override val path: Path,
+        val contentSha256: String,
+        candidateRanges: Collection<SourceRange>,
+        val bindingState: JavaMoveClassGuidanceCandidateBindingState,
+        competingFqns: Collection<String>,
+    ) : JavaMoveClassGuidanceBlocker {
+        override val code: String = CANDIDATE_UNRESOLVED
+        override val authorityLayer: JavaMoveClassGuidanceAuthorityLayer =
+            JavaMoveClassGuidanceAuthorityLayer.CANDIDATE_TOTALITY
+        private val candidateRangeValues = javaMoveGuidanceImmutableList(
+            ArrayList(candidateRanges).also { copiedRanges ->
+                require(copiedRanges.distinct().size == copiedRanges.size) {
+                    "unresolved-candidate ranges must have unique path/range identities"
+                }
+            }.sortedWith(
+                compareBy<SourceRange> { it.start.line }
+                    .thenBy { it.start.character }
+                    .thenBy { it.end.line }
+                    .thenBy { it.end.character },
+            ),
+        )
+        private val competingFqnValues = javaMoveGuidanceImmutableList(competingFqns.distinct().sorted())
+        val candidateRanges: List<SourceRange> get() = javaMoveGuidanceImmutableList(candidateRangeValues)
+        val competingFqns: List<String> get() = javaMoveGuidanceImmutableList(competingFqnValues)
+        val classification: JavaMoveClassCandidateClassification = JavaMoveClassCandidateClassification.UNRESOLVED
+        val recovered: Boolean = false
+        val truncated: Boolean = false
+
+        init {
+            javaMoveGuidanceValidateBlockerIdentity(mavenModule, sourceSet, path)
+            javaMoveGuidanceRequireSha256(contentSha256, "unresolved-candidate content hash")
+            require(candidateRangeValues.isNotEmpty() && candidateRangeValues.all { it.start < it.end }) {
+                "unresolved-candidate ranges must be complete and non-empty"
+            }
+            require(competingFqnValues.all(String::isNotBlank)) {
+                "unresolved-candidate competing FQNs must not be blank"
+            }
+            if (bindingState == JavaMoveClassGuidanceCandidateBindingState.AMBIGUOUS) {
+                require(competingFqnValues.size >= 2) {
+                    "ambiguous unresolved candidates require at least two competing FQNs"
+                }
+            }
+        }
+
+        override fun equals(other: Any?): Boolean = other is UnresolvedCandidate &&
+            mavenModule == other.mavenModule && sourceSet == other.sourceSet && path == other.path &&
+            contentSha256 == other.contentSha256 && candidateRangeValues == other.candidateRangeValues &&
+            bindingState == other.bindingState && competingFqnValues == other.competingFqnValues
+
+        override fun hashCode(): Int {
+            var result = mavenModule.hashCode()
+            result = 31 * result + sourceSet.hashCode()
+            result = 31 * result + path.hashCode()
+            result = 31 * result + contentSha256.hashCode()
+            result = 31 * result + candidateRangeValues.hashCode()
+            result = 31 * result + bindingState.hashCode()
+            result = 31 * result + competingFqnValues.hashCode()
+            return result
+        }
+    }
+
+    data class UnresolvedTargetLookupPrerequisite(
+        override val mavenModule: String,
+        override val sourceSet: String,
+        override val path: Path,
+        val prerequisiteKind: JavaMoveClassGuidanceLookupPrerequisiteKind,
+        val importRange: SourceRange,
+        val contentSha256: String,
+        val unresolvedOwner: String,
+        val targetSimpleName: String,
+        val affectedCandidateRangeHash: String,
+    ) : JavaMoveClassGuidanceBlocker {
+        override val code: String = TARGET_LOOKUP_UNRESOLVED_PREREQUISITE
+        override val authorityLayer: JavaMoveClassGuidanceAuthorityLayer =
+            JavaMoveClassGuidanceAuthorityLayer.TARGET_NAME_LOOKUP
+
+        init {
+            javaMoveGuidanceValidateBlockerIdentity(mavenModule, sourceSet, path)
+            require(importRange.start < importRange.end) { "target-lookup import range must not be empty" }
+            javaMoveGuidanceRequireSha256(contentSha256, "target-lookup content hash")
+            javaMoveGuidanceRequireSha256(affectedCandidateRangeHash, "affected candidate-range hash")
+            require(unresolvedOwner.isNotBlank() && targetSimpleName.isNotBlank()) {
+                "target-lookup owner and target simple name must not be blank"
+            }
+        }
+    }
+
+    data class ExplicitOldFqnOutsideClosure(
+        override val mavenModule: String,
+        override val sourceSet: String,
+        override val path: Path,
+        val sourceRange: SourceRange,
+        val contentSha256: String,
+        val fqn: String,
+        val closureMembership: JavaMoveClassGuidanceClosureMembership,
+        val dependencyPath: String,
+        val closureEvidenceHash: String,
+        val observedClassification: JavaMoveClassCandidateClassification,
+    ) : JavaMoveClassGuidanceBlocker {
+        override val code: String = EXPLICIT_OLD_FQN_OUTSIDE_CLOSURE
+        override val authorityLayer: JavaMoveClassGuidanceAuthorityLayer =
+            JavaMoveClassGuidanceAuthorityLayer.CLOSURE_CONSISTENCY
+
+        init {
+            javaMoveGuidanceValidateBlockerIdentity(mavenModule, sourceSet, path)
+            require(sourceRange.start < sourceRange.end) { "outside-closure FQN range must not be empty" }
+            javaMoveGuidanceRequireSha256(contentSha256, "outside-closure content hash")
+            javaMoveGuidanceRequireSha256(closureEvidenceHash, "reverse-observer-closure evidence hash")
+            require(fqn.isNotBlank() && dependencyPath == "NONE") {
+                "outside-closure blocker requires an explicit FQN and no dependency path"
+            }
+            require(closureMembership == JavaMoveClassGuidanceClosureMembership.OUTSIDE &&
+                observedClassification == JavaMoveClassCandidateClassification.UNRESOLVED
+            ) { "outside-closure blocker requires OUTSIDE/UNRESOLVED evidence" }
+        }
+    }
+
+    data class DiagnosticIdentity(
+        val providerConfigurationHash: String,
+        val problemId: Int,
+        val category: JdtJavaDiagnosticCategory,
+        val severity: Diagnostic.Severity,
+        val path: Path,
+        val sourceRange: SourceRange,
+        val message: String,
+    ) {
+        init {
+            javaMoveGuidanceRequireSha256(providerConfigurationHash, "diagnostic provider identity")
+            require(problemId >= 0) { "diagnostic problem ID must be non-negative" }
+            require(javaMoveGuidanceIsSafeRelative(path)) { "diagnostic path must be workspace-relative" }
+            require(sourceRange.start < sourceRange.end) { "diagnostic range must not be empty" }
+            require(message.isNotBlank()) { "diagnostic message must not be blank" }
+        }
+    }
+
+    class RetainedDiagnosticIdentityDrift(
+        override val mavenModule: String,
+        override val sourceSet: String,
+        override val path: Path,
+        val phase: JavaMoveClassGuidanceDiagnosticPhase,
+        val before: DiagnosticIdentity,
+        val staged: DiagnosticIdentity,
+        val beforeDiagnosticMultisetSha256: String,
+        val stagedDiagnosticMultisetSha256: String,
+        changedFields: Collection<JavaMoveClassGuidanceDiagnosticChangedField>,
+        val stagedOverlaySha256: String,
+        val diskDrift: Boolean,
+    ) : JavaMoveClassGuidanceBlocker {
+        override val code: String = RETAINED_DIAGNOSTIC_IDENTITY_DRIFT
+        override val authorityLayer: JavaMoveClassGuidanceAuthorityLayer =
+            JavaMoveClassGuidanceAuthorityLayer.DIAGNOSTIC_IDENTITY
+        private val changedFieldValues = javaMoveGuidanceImmutableList(changedFields.distinct().sortedBy { it.ordinal })
+        val changedFields: List<JavaMoveClassGuidanceDiagnosticChangedField>
+            get() = javaMoveGuidanceImmutableList(changedFieldValues)
+
+        init {
+            javaMoveGuidanceValidateBlockerIdentity(mavenModule, sourceSet, path)
+            javaMoveGuidanceRequireSha256(beforeDiagnosticMultisetSha256, "before diagnostic multiset hash")
+            javaMoveGuidanceRequireSha256(stagedDiagnosticMultisetSha256, "staged diagnostic multiset hash")
+            javaMoveGuidanceRequireSha256(stagedOverlaySha256, "staged overlay identity")
+            require(beforeDiagnosticMultisetSha256 != stagedDiagnosticMultisetSha256) {
+                "diagnostic identity drift requires different multiset identities"
+            }
+            require(before.path == path && staged.path == path && before.sourceRange == staged.sourceRange &&
+                before.category == staged.category && before.severity == staged.severity
+            ) { "diagnostic drift identities must preserve mapped path, range, category, and severity" }
+            require(changedFieldValues.isNotEmpty() && !diskDrift) {
+                "same-snapshot diagnostic drift requires changed identity fields and no disk drift"
+            }
+        }
+
+        override fun equals(other: Any?): Boolean = other is RetainedDiagnosticIdentityDrift &&
+            mavenModule == other.mavenModule && sourceSet == other.sourceSet && path == other.path &&
+            phase == other.phase && before == other.before && staged == other.staged &&
+            beforeDiagnosticMultisetSha256 == other.beforeDiagnosticMultisetSha256 &&
+            stagedDiagnosticMultisetSha256 == other.stagedDiagnosticMultisetSha256 &&
+            changedFieldValues == other.changedFieldValues && stagedOverlaySha256 == other.stagedOverlaySha256 &&
+            diskDrift == other.diskDrift
+
+        override fun hashCode(): Int {
+            var result = mavenModule.hashCode()
+            result = 31 * result + sourceSet.hashCode()
+            result = 31 * result + path.hashCode()
+            result = 31 * result + phase.hashCode()
+            result = 31 * result + before.hashCode()
+            result = 31 * result + staged.hashCode()
+            result = 31 * result + beforeDiagnosticMultisetSha256.hashCode()
+            result = 31 * result + stagedDiagnosticMultisetSha256.hashCode()
+            result = 31 * result + changedFieldValues.hashCode()
+            result = 31 * result + stagedOverlaySha256.hashCode()
+            result = 31 * result + diskDrift.hashCode()
+            return result
+        }
+    }
+
     companion object {
         const val SOURCE_INVENTORY_MISSING_ENTRY = "java.maven.moveClass.sourceInventory.missingEntry"
         const val CLASSPATH_FINGERPRINT_MISMATCH = "java.maven.moveClass.classpathFingerprint.mismatch"
         const val TARGET_USE_RECOVERED_BINDING = "java.maven.moveClass.targetUse.recoveredBinding"
         const val GENERATED_ROOT_INVENTORY_FINGERPRINT_MISMATCH =
             "java.maven.moveClass.materializedGeneratedRootInventory.fingerprintMismatch"
+        const val CANDIDATE_UNRESOLVED = "java.maven.moveClass.candidate.unresolved"
+        const val TARGET_LOOKUP_UNRESOLVED_PREREQUISITE =
+            "java.maven.moveClass.targetLookup.unresolvedPrerequisite"
+        const val EXPLICIT_OLD_FQN_OUTSIDE_CLOSURE =
+            "java.maven.moveClass.reverseObserverClosure.explicitOldFqnOutside"
+        const val RETAINED_DIAGNOSTIC_IDENTITY_DRIFT =
+            "java.maven.moveClass.retainedDiagnostic.identityDrift"
     }
 }
 
@@ -332,6 +571,7 @@ class JavaMoveClassReviewOnlyGuidance internal constructor(
     val request: JavaMoveClassGuidanceRequest,
     val requestIdentitySha256: String,
     val snapshotSha256: String,
+    val stagedOverlaySha256: String? = null,
     val canonicalEvidenceSha256: String,
     blockers: Collection<JavaMoveClassGuidanceBlocker>,
     val candidateGroups: JavaMoveClassGuidanceCandidateGroups,
@@ -359,6 +599,7 @@ class JavaMoveClassReviewOnlyGuidance internal constructor(
     init {
         javaMoveGuidanceRequireSha256(requestIdentitySha256, "guidance request identity")
         javaMoveGuidanceRequireSha256(snapshotSha256, "guidance snapshot identity")
+        stagedOverlaySha256?.let { javaMoveGuidanceRequireSha256(it, "guidance staged-overlay identity") }
         javaMoveGuidanceRequireSha256(canonicalEvidenceSha256, "guidance evidence identity")
         require(blockerValues.isNotEmpty()) { "review-only guidance requires at least one blocker" }
         require(
@@ -375,7 +616,8 @@ class JavaMoveClassReviewOnlyGuidance internal constructor(
     override fun equals(other: Any?): Boolean = other is JavaMoveClassReviewOnlyGuidance &&
         schemaVersion == other.schemaVersion && checklistVersion == other.checklistVersion &&
         request == other.request && requestIdentitySha256 == other.requestIdentitySha256 &&
-        snapshotSha256 == other.snapshotSha256 && canonicalEvidenceSha256 == other.canonicalEvidenceSha256 &&
+        snapshotSha256 == other.snapshotSha256 && stagedOverlaySha256 == other.stagedOverlaySha256 &&
+        canonicalEvidenceSha256 == other.canonicalEvidenceSha256 &&
         blockerValues == other.blockerValues && candidateGroups == other.candidateGroups &&
         candidateCompleteness == other.candidateCompleteness && omissionValues == other.omissionValues &&
         restorationActionValues == other.restorationActionValues && vcsChecklistValues == other.vcsChecklistValues
@@ -386,6 +628,7 @@ class JavaMoveClassReviewOnlyGuidance internal constructor(
         result = 31 * result + request.hashCode()
         result = 31 * result + requestIdentitySha256.hashCode()
         result = 31 * result + snapshotSha256.hashCode()
+        result = 31 * result + (stagedOverlaySha256?.hashCode() ?: 0)
         result = 31 * result + canonicalEvidenceSha256.hashCode()
         result = 31 * result + blockerValues.hashCode()
         result = 31 * result + candidateGroups.hashCode()

@@ -47,7 +47,9 @@ The planner refuses when:
 - the symbol is missing or is not a moveable Java type;
 - the declaration file cannot be found in the current snapshot;
 - the target package is invalid;
-- the target FQN or computed target source file already exists.
+- the target FQN or computed target source file already exists;
+- a root-declared active Maven module POM is missing; or
+- selected reactor/descriptor structure is incomplete.
 
 A refused move is a safety result. Do not emulate it with filesystem moves plus
 text replacement; request a corrected preview or perform a manually reviewed
@@ -64,6 +66,12 @@ annotations are found. Review these areas:
   reported as `semanticCompleteness=NOT_SEMANTICALLY_PROVEN` with bounded
   path/hash/risk residual guidance and fixed restoration actions, but no exposed
   diff, source range, replacement, plan ID, or apply token;
+- bounded ambiguous candidates, unresolved target-name lookup prerequisites,
+  explicit old-FQN uses outside the observer closure, and same-snapshot retained-
+  diagnostic identity changes return typed `REVIEW_ONLY_GUIDANCE`;
+- non-managed candidate-source evidence used by a target-scoped plan is
+  hash-bound and revalidated under the workspace lock; drift refuses before WAL
+  and preserves the external change;
 - comments and string literals are not rewritten;
 - reflection, generated code, annotation-processor output, `ServiceLoader`,
   native-image config, and resource files may still contain the old FQN;

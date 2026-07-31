@@ -42,6 +42,15 @@ rendering, pending-plan registration, LSP edit conversion, or recipe aggregation
 This prevents a visible fallback warning from becoming accidental semantic write
 authority.
 
+Target-scoped Maven move authority also binds non-managed candidate-source files
+through language-neutral `OperationAuthorityFileEvidence`. `PatchEngine` captures
+the engine-owned source/auxiliary scope once under the workspace lock and compares
+expected/observed file evidence before WAL. Drift returns immutable structured
+`DiagnosticDetails` with the observed snapshot identity. Separately, a missing
+root-declared active module POM produces result-owned
+`JavaMoveClassStructuralRefusal`; symlink or non-regular descriptor paths are not
+misclassified as ordinary missing files.
+
 ## Generated-source boundary
 
 Generated Java remains analyzable for symbols/references but is never rewritten

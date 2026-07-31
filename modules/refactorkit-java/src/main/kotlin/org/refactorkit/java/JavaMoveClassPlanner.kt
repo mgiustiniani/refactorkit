@@ -14,6 +14,87 @@ import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import java.nio.file.Path
 
+/** Typed Java move-class structural-refusal classifications. */
+enum class JavaMoveClassStructuralRefusalAuthorityLayer {
+    STRUCTURAL_CLOSURE,
+}
+
+enum class JavaMoveClassStructuralRefusalInputKind {
+    ACTIVE_REACTOR_POM,
+}
+
+enum class JavaMoveClassStructuralRefusalCondition {
+    MISSING,
+}
+
+/** Java-adapter-owned structural refusal evidence returned with a move-class result. */
+data class JavaMoveClassStructuralRefusal(
+    val authorityLayer: JavaMoveClassStructuralRefusalAuthorityLayer,
+    val inputKind: JavaMoveClassStructuralRefusalInputKind,
+    val module: String,
+    val declaringPom: Path,
+    val declaringPomContentSha256: String,
+    val moduleDeclarationRange: SourceRange,
+    val expectedPath: Path,
+    val condition: JavaMoveClassStructuralRefusalCondition,
+    val noFollowAbsenceFactSha256: String,
+) {
+    val code: String = REACTOR_DESCRIPTOR_MISSING
+
+    init {
+        require(authorityLayer == JavaMoveClassStructuralRefusalAuthorityLayer.STRUCTURAL_CLOSURE)
+        require(inputKind == JavaMoveClassStructuralRefusalInputKind.ACTIVE_REACTOR_POM)
+        require(module.isNotBlank()) { "structural-refusal Maven module must not be blank" }
+        require(isSafeRelative(declaringPom)) {
+            "structural-refusal declaring POM must be normalized and workspace-relative"
+        }
+        require(SHA256.matches(declaringPomContentSha256)) {
+            "structural-refusal declaring POM content identity must be SHA-256"
+        }
+        require(moduleDeclarationRange.start < moduleDeclarationRange.end) {
+            "structural-refusal module-declaration range must not be empty"
+        }
+        require(isSafeRelative(expectedPath)) {
+            "structural-refusal expected path must be normalized and workspace-relative"
+        }
+        require(condition == JavaMoveClassStructuralRefusalCondition.MISSING)
+        require(SHA256.matches(noFollowAbsenceFactSha256)) {
+            "structural-refusal no-follow absence identity must be SHA-256"
+        }
+    }
+
+    companion object {
+        const val REACTOR_DESCRIPTOR_MISSING = "java.maven.reactorDescriptor.missing"
+        private val SHA256 = Regex("[a-f0-9]{64}")
+
+        private fun isSafeRelative(path: Path): Boolean =
+            !path.isAbsolute && path == path.normalize() && !path.startsWith("..")
+    }
+}
+
+data class JavaMoveClassPreview @JvmOverloads constructor(
+    val plan: PatchPlan,
+    val targetAuthorityLease: JavaMoveClassTargetAuthorityLease?,
+    val structuralRefusal: JavaMoveClassStructuralRefusal? = null,
+) {
+    init {
+        structuralRefusal?.let { refusal ->
+            require(plan.status == PatchStatus.REFUSED) {
+                "structural refusal data requires a refused plan"
+            }
+            require(plan.evidence == RefactoringEvidence.STRUCTURAL) {
+                "structural refusal data requires structural evidence"
+            }
+            require(plan.refusalCode == refusal.code) {
+                "structural refusal data and plan refusal code must agree"
+            }
+            require(!plan.requiresUserApproval && plan.affectedFiles.isEmpty() &&
+                plan.workspaceEdit.edits.isEmpty() && plan.authorityLease == null && targetAuthorityLease == null
+            ) { "structural refusal data cannot carry approval, edits, or an authority lease" }
+        }
+    }
+}
+
 /**
  * Generates a [PatchPlan] that moves a Java class to a new package.
  *
@@ -24,11 +105,6 @@ import java.nio.file.Path
  * - All FQN references in source files.
  * - Adds a new import in same-package files that previously used the simple name.
  */
-data class JavaMoveClassPreview(
-    val plan: PatchPlan,
-    val targetAuthorityLease: JavaMoveClassTargetAuthorityLease?,
-)
-
 class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
 
     fun preview(snapshot: ProjectSnapshot, symbolFqn: String, targetPackage: String): PatchPlan =
@@ -84,7 +160,25 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             .filter(String::isNotBlank)
             .distinct()
             .toList()
+        activeReactorPomStructuralRefusal(snapshot)?.let { structuralRefusal ->
+            val blocker = dependencyGraphFailures.firstOrNull {
+                it.startsWith("MAVEN_REACTOR_DESCRIPTOR_MISSING ")
+            } ?: "active reactor descriptor ${structuralRefusal.expectedPath} is missing"
+            return JavaMoveClassPreview(
+                refused(
+                    snapshot,
+                    "moveClass",
+                    "Maven dependency traversal is structurally incomplete: $blocker",
+                    structuralRefusal.code,
+                ),
+                targetAuthorityLease = null,
+                structuralRefusal = structuralRefusal,
+            )
+        }
         if (dependencyGraphFailures.isNotEmpty()) {
+            val reactorDescriptorFailure = dependencyGraphFailures.firstOrNull {
+                it.startsWith("MAVEN_REACTOR_DESCRIPTOR_MISSING ")
+            }
             val selectedDescriptorFailures = dependencyGraphFailures.filter {
                 it.startsWith("MAVEN_SELECTED_DESCRIPTOR_")
             }.sorted()
@@ -92,11 +186,13 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
                 it.startsWith("MAVEN_DEPENDENCY_DESCRIPTOR_MISSING ")
             }
             val blockers = when {
+                reactorDescriptorFailure != null -> listOf(reactorDescriptorFailure)
                 selectedDescriptorFailures.isNotEmpty() -> selectedDescriptorFailures
                 missingDescriptor != null -> listOf(missingDescriptor)
                 else -> listOf(dependencyGraphFailures.first())
             }
             val code = when {
+                reactorDescriptorFailure != null -> "java.maven.reactorDescriptor.missing"
                 selectedDescriptorFailures.any { it.startsWith("MAVEN_SELECTED_DESCRIPTOR_MISSING ") } ->
                     "java.maven.selectedDescriptor.missing"
                 selectedDescriptorFailures.any { it.startsWith("MAVEN_SELECTED_DESCRIPTOR_MALFORMED ") } ->
@@ -263,6 +359,41 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
+    private fun activeReactorPomStructuralRefusal(snapshot: ProjectSnapshot): JavaMoveClassStructuralRefusal? =
+        snapshot.modules.mapNotNull { module ->
+            val fields = module.languageSettings
+            if (fields["java.maven.reactorDescriptor.code"] !=
+                JavaMoveClassStructuralRefusal.REACTOR_DESCRIPTOR_MISSING
+            ) return@mapNotNull null
+            val rangeValue = requireNotNull(fields["java.maven.reactorDescriptor.moduleDeclarationRange"])
+            val range = requireNotNull(MODULE_DECLARATION_RANGE.matchEntire(rangeValue)) {
+                "Scanner-owned active-reactor module declaration range is malformed: $rangeValue"
+            }
+            JavaMoveClassStructuralRefusal(
+                authorityLayer = JavaMoveClassStructuralRefusalAuthorityLayer.STRUCTURAL_CLOSURE,
+                inputKind = JavaMoveClassStructuralRefusalInputKind.valueOf(
+                    requireNotNull(fields["java.maven.reactorDescriptor.inputKind"]),
+                ),
+                module = requireNotNull(fields["java.maven.reactorDescriptor.module"]),
+                declaringPom = Path.of(requireNotNull(fields["java.maven.reactorDescriptor.declaringPom"])).normalize(),
+                declaringPomContentSha256 =
+                    requireNotNull(fields["java.maven.reactorDescriptor.declaringPomSha256"]),
+                moduleDeclarationRange = SourceRange(
+                    SourcePosition(range.groupValues[1].toInt(), range.groupValues[2].toInt()),
+                    SourcePosition(range.groupValues[3].toInt(), range.groupValues[4].toInt()),
+                ),
+                expectedPath = Path.of(requireNotNull(fields["java.maven.reactorDescriptor.expectedPath"])).normalize(),
+                condition = JavaMoveClassStructuralRefusalCondition.valueOf(
+                    requireNotNull(fields["java.maven.reactorDescriptor.condition"]),
+                ),
+                noFollowAbsenceFactSha256 =
+                    requireNotNull(fields["java.maven.reactorDescriptor.noFollowAbsenceFactHash"]),
+            )
+        }.distinct().sortedWith(
+            compareBy<JavaMoveClassStructuralRefusal> { it.module }
+                .thenBy { it.expectedPath.toString() },
+        ).firstOrNull()
+
     private fun bindingDerivedReferenceEdits(
         file: SourceFile,
         references: List<JdtJavaSemanticReference>,
@@ -402,4 +533,7 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         refusalCode = code,
     )
 
+    private companion object {
+        val MODULE_DECLARATION_RANGE = Regex("(\\d+):(\\d+)-(\\d+):(\\d+)")
+    }
 }

@@ -77,12 +77,44 @@ class JavaMoveClassOperationDispatcher(
                     symbolFqn,
                     targetPackage,
                 )
-                JavaMoveClassGuidanceCollectionResult.NotApplicable -> planOutcome(
-                    planner.previewWithAuthority(snapshot, preflight),
-                    snapshot,
-                    symbolFqn,
-                    targetPackage,
-                )
+                JavaMoveClassGuidanceCollectionResult.NotApplicable -> {
+                    val preview = planner.previewWithAuthority(snapshot, preflight)
+                    when (val secondStage = JavaMoveClassGuidanceCollector.collectAfterPreview(
+                        snapshot,
+                        symbolFqn,
+                        targetPackage,
+                        preview,
+                    )) {
+                        is JavaMoveClassGuidanceCollectionResult.Guidance ->
+                            JavaMoveClassOperationOutcome.Guidance(secondStage.value)
+                        is JavaMoveClassGuidanceCollectionResult.Refused -> planOutcome(
+                            JavaMoveClassPreview(
+                                PatchPlan(
+                                    operation = "moveClass",
+                                    status = PatchStatus.REFUSED,
+                                    snapshotHash = snapshot.hash,
+                                    confidence = 0.0,
+                                    requiresUserApproval = false,
+                                    summary = secondStage.summary,
+                                    affectedFiles = emptySet(),
+                                    workspaceEdit = WorkspaceEdit(),
+                                    evidence = RefactoringEvidence.STRUCTURAL,
+                                    refusalCode = secondStage.code,
+                                ),
+                                targetAuthorityLease = null,
+                            ),
+                            snapshot,
+                            symbolFqn,
+                            targetPackage,
+                        )
+                        JavaMoveClassGuidanceCollectionResult.NotApplicable -> planOutcome(
+                            preview,
+                            snapshot,
+                            symbolFqn,
+                            targetPackage,
+                        )
+                    }
+                }
             }
         }
     }

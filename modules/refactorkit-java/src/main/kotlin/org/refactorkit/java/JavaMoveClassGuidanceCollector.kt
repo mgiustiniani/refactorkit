@@ -1,5 +1,8 @@
 package org.refactorkit.java
 
+import org.refactorkit.core.BuildModelStatus
+import org.refactorkit.core.FileEdit
+import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
@@ -20,6 +23,8 @@ internal object JavaMoveClassGuidanceCollector {
         snapshot: ProjectSnapshot,
         symbolFqn: String,
         targetPackage: String,
+        supplementalBlockers: Collection<JavaMoveClassGuidanceBlocker> = emptyList(),
+        stagedOverlaySha256: String? = null,
     ): JavaMoveClassGuidanceCollectionResult {
         if (!JAVA_MOVE_GUIDANCE_SHA256_PATTERN.matches(snapshot.hash)) {
             return JavaMoveClassGuidanceCollectionResult.Refused(
@@ -69,7 +74,7 @@ internal object JavaMoveClassGuidanceCollector {
         val readableSources = (
             enumeratedSources + missingExpectedTargetSources.map(JavaMoveClassGuidanceExpectedSource::asEnumeratedSource)
         ).distinctBy(JavaMoveClassGuidanceEnumeratedSource::path)
-        val candidateFacts = (candidates.mapNotNull { candidate ->
+        val rawCandidateFacts = (candidates.mapNotNull { candidate ->
             val source = sourceByPath[candidate.path.normalize()] ?: return@mapNotNull null
             val recoveredRange = recoveredRangeAt(candidate, source.content, targetSimpleName, analysis)
             CandidateFact(
@@ -94,9 +99,37 @@ internal object JavaMoveClassGuidanceCollector {
                 )
             }
         }).sortedWith(CANDIDATE_FACT_ORDER)
+        val candidateFacts = rawCandidateFacts.map { fact ->
+            val imports = JavaLexer.extractImports(fact.source.content)
+            val competingFqns = imports.filter { importStatement ->
+                !importStatement.isStatic && !importStatement.name.endsWith(".*") &&
+                    importStatement.name.substringAfterLast('.') == targetSimpleName
+            }.map(ImportStatement::name).distinct()
+            val start = TextEdits.offsetOf(fact.source.content, fact.candidate.sourceRange.start)
+            val end = TextEdits.offsetOf(fact.source.content, fact.candidate.sourceRange.end)
+            val insideImport = imports.any { importStatement ->
+                start >= importStatement.startOffset && end <= importStatement.endOffset
+            }
+            if (competingFqns.size >= 2 && !insideImport && fact.candidate.lexicalText == targetSimpleName) {
+                fact.copy(
+                    candidate = fact.candidate.copy(
+                        classification = JavaMoveClassCandidateClassification.UNRESOLVED,
+                        bindingKey = null,
+                    ),
+                    recoveredRange = null,
+                )
+            } else {
+                fact
+            }
+        }.sortedWith(CANDIDATE_FACT_ORDER)
         if (candidateFacts.isEmpty()) return JavaMoveClassGuidanceCollectionResult.NotApplicable
+        val closure = JavaMoveClassTargetAuthorityEvaluator.observerClosure(
+            snapshot,
+            target.path,
+            setOf(BuildModelStatus.AVAILABLE, BuildModelStatus.OFFLINE_MISSING),
+        )
 
-        val blockers = mutableListOf<JavaMoveClassGuidanceBlocker>()
+        val blockers = supplementalBlockers.toMutableList()
         missingExpectedTargetSources.forEach { source ->
             blockers += JavaMoveClassGuidanceBlocker.MissingReadableSourceInventoryEntry(
                 source.mavenModule,
@@ -120,12 +153,97 @@ internal object JavaMoveClassGuidanceCollector {
             is JavaMoveClassGuidanceEvidenceResult.Valid -> blockers += result.value
             is JavaMoveClassGuidanceEvidenceResult.Invalid -> return result.toCollectionRefusal()
         }
+        val closureEvidenceHash = closure?.let { authorityClosure ->
+            javaMoveGuidanceHashParts(buildList {
+                add(snapshot.hash)
+                add(authorityClosure.model.providerId)
+                add(authorityClosure.model.status.name)
+                add(authorityClosure.owner.displayName())
+                addAll(authorityClosure.sourceSets.map(MoveAuthoritySourceSet::displayName).sorted())
+            })
+        }
+        if (closure != null && closureEvidenceHash != null) {
+            candidateFacts.filter { fact ->
+                fact.candidate.classification == JavaMoveClassCandidateClassification.UNRESOLVED &&
+                    fact.candidate.lexicalText == symbolFqn &&
+                    fact.candidate.path.normalize() in sourceByPath &&
+                    MoveAuthoritySourceSet(fact.source.mavenModule, fact.source.sourceSet) !in closure.sourceSets
+            }.forEach { fact ->
+                blockers += JavaMoveClassGuidanceBlocker.ExplicitOldFqnOutsideClosure(
+                    mavenModule = fact.source.mavenModule,
+                    sourceSet = fact.source.sourceSet,
+                    path = fact.candidate.path,
+                    sourceRange = fact.candidate.sourceRange,
+                    contentSha256 = fact.source.contentSha256,
+                    fqn = symbolFqn,
+                    closureMembership = JavaMoveClassGuidanceClosureMembership.OUTSIDE,
+                    dependencyPath = "NONE",
+                    closureEvidenceHash = closureEvidenceHash,
+                    observedClassification = JavaMoveClassCandidateClassification.UNRESOLVED,
+                )
+            }
+        }
+        val factsByPath = candidateFacts.groupBy { it.candidate.path.normalize() }
+        factsByPath.forEach { (path, facts) ->
+            val source = facts.first().source
+            val imports = JavaLexer.extractImports(source.content)
+            val targetCandidates = facts.filter {
+                it.candidate.classification == JavaMoveClassCandidateClassification.BOUND_TARGET
+            }
+            imports.filter { it.isStatic && it.name.endsWith(".*") }.forEach { importStatement ->
+                val importRange = TextEdits.rangeForOffset(
+                    source.content,
+                    importStatement.startOffset,
+                    importStatement.endOffset - importStatement.startOffset,
+                )
+                val unresolved = analysis.warnings.any { warning ->
+                    warning.path.normalize() == path && warning.sourceRange.overlaps(importRange)
+                }
+                if (unresolved && targetCandidates.isNotEmpty()) {
+                    blockers += JavaMoveClassGuidanceBlocker.UnresolvedTargetLookupPrerequisite(
+                        mavenModule = source.mavenModule,
+                        sourceSet = source.sourceSet,
+                        path = path,
+                        prerequisiteKind = JavaMoveClassGuidanceLookupPrerequisiteKind.STATIC_IMPORT_ON_DEMAND,
+                        importRange = importRange,
+                        contentSha256 = source.contentSha256,
+                        unresolvedOwner = importStatement.name.removeSuffix(".*"),
+                        targetSimpleName = targetSimpleName,
+                        affectedCandidateRangeHash = candidateRangeHash(targetCandidates.map(CandidateFact::candidate)),
+                    )
+                }
+            }
+            val unresolved = facts.filter { fact ->
+                fact.candidate.classification == JavaMoveClassCandidateClassification.UNRESOLVED &&
+                    fact.recoveredRange == null && closure != null &&
+                    MoveAuthoritySourceSet(source.mavenModule, source.sourceSet) in closure.sourceSets
+            }
+            val competingFqns = imports.filter { importStatement ->
+                !importStatement.isStatic && !importStatement.name.endsWith(".*") &&
+                    importStatement.name.substringAfterLast('.') == targetSimpleName
+            }.map { it.name }.distinct().sorted()
+            if (unresolved.isNotEmpty() && symbolFqn in competingFqns && competingFqns.size >= 2) {
+                blockers += JavaMoveClassGuidanceBlocker.UnresolvedCandidate(
+                    mavenModule = source.mavenModule,
+                    sourceSet = source.sourceSet,
+                    path = path,
+                    contentSha256 = source.contentSha256,
+                    candidateRanges = facts.map { it.candidate.sourceRange },
+                    bindingState = JavaMoveClassGuidanceCandidateBindingState.AMBIGUOUS,
+                    competingFqns = competingFqns,
+                )
+            }
+        }
         // Broad parse failure remains the legacy lexical-fallback case (REQ-005).
-        // This slice recognizes only recovered target-use evidence without a syntax failure.
+        // Recovered target uses remain REQ-003 and are never conflated with problem bindings.
         if (analysis.warnings.none { it.category == JdtJavaDiagnosticCategory.SYNTAX }) {
             candidateFacts.filter { fact ->
                 fact.candidate.classification == JavaMoveClassCandidateClassification.UNRESOLVED &&
-                    fact.recoveredRange != null
+                    fact.recoveredRange != null &&
+                    (closure == null || MoveAuthoritySourceSet(
+                        fact.source.mavenModule,
+                        fact.source.sourceSet,
+                    ) in closure.sourceSets)
             }.groupBy { fact -> fact.source.mavenModule to fact.source.sourceSet }
                 .values.mapNotNull { facts -> facts.minWithOrNull(CANDIDATE_FACT_ORDER) }
                 .forEach { fact ->
@@ -226,6 +344,7 @@ internal object JavaMoveClassGuidanceCollector {
         val evidenceHash = canonicalEvidenceHash(
             requestIdentity,
             snapshot.hash,
+            stagedOverlaySha256,
             canonicalBlockers,
             groups,
             completeness,
@@ -237,6 +356,7 @@ internal object JavaMoveClassGuidanceCollector {
                 request = request,
                 requestIdentitySha256 = requestIdentity,
                 snapshotSha256 = snapshot.hash,
+                stagedOverlaySha256 = stagedOverlaySha256,
                 canonicalEvidenceSha256 = evidenceHash,
                 blockers = canonicalBlockers,
                 candidateGroups = groups,
@@ -245,6 +365,71 @@ internal object JavaMoveClassGuidanceCollector {
                 restorationActions = actions,
                 vcsChecklist = JAVA_MOVE_GUIDANCE_FIXED_VCS_CHECKLIST,
             ),
+        )
+    }
+
+    fun collectAfterPreview(
+        snapshot: ProjectSnapshot,
+        symbolFqn: String,
+        targetPackage: String,
+        preview: JavaMoveClassPreview,
+    ): JavaMoveClassGuidanceCollectionResult {
+        if (preview.plan.status != PatchStatus.PREVIEW || preview.plan.workspaceEdit.edits.isEmpty()) {
+            return JavaMoveClassGuidanceCollectionResult.NotApplicable
+        }
+        val analysis = runCatching { JdtJavaSemanticAnalyzer().analyze(snapshot) }.getOrNull()
+            ?: return JavaMoveClassGuidanceCollectionResult.NotApplicable
+        val target = analysis.symbols.singleOrNull { symbol ->
+            symbol.qualifiedName == symbolFqn && symbol.kind in MOVEABLE_KINDS &&
+                symbol.bindingKey != null && !symbol.recovered
+        } ?: return JavaMoveClassGuidanceCollectionResult.NotApplicable
+        val prepared = when (val preparation = JavaMoveClassTargetAuthorityEvaluator.prepare(
+            snapshot,
+            symbolFqn,
+            target.path,
+        )) {
+            is JavaMoveClassOfflineAuthorityPreparation.Eligible -> preparation.prepared
+            is JavaMoveClassOfflineAuthorityPreparation.Ineligible ->
+                return JavaMoveClassGuidanceCollectionResult.NotApplicable
+        }
+        val newDeclarationPath = preview.plan.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>()
+            .singleOrNull { it.path == target.path }?.newPath
+            ?: return JavaMoveClassGuidanceCollectionResult.NotApplicable
+        val drift = JavaMoveClassTargetAuthorityEvaluator.retainedDiagnosticIdentityDrift(
+            prepared,
+            targetPackage,
+            newDeclarationPath,
+            preview.plan.workspaceEdit,
+        ) ?: return JavaMoveClassGuidanceCollectionResult.NotApplicable
+        fun identity(value: JavaMoveClassRetainedDiagnosticIdentity) =
+            JavaMoveClassGuidanceBlocker.DiagnosticIdentity(
+                providerConfigurationHash = value.providerConfigurationHash,
+                problemId = value.problemId,
+                category = value.category,
+                severity = value.severity,
+                path = value.path,
+                sourceRange = value.sourceRange,
+                message = value.message,
+            )
+        val blocker = JavaMoveClassGuidanceBlocker.RetainedDiagnosticIdentityDrift(
+            mavenModule = drift.mavenModule,
+            sourceSet = drift.sourceSet,
+            path = drift.path,
+            phase = JavaMoveClassGuidanceDiagnosticPhase.BEFORE_VS_STAGED,
+            before = identity(drift.before),
+            staged = identity(drift.staged),
+            beforeDiagnosticMultisetSha256 = drift.beforeDiagnosticMultisetSha256,
+            stagedDiagnosticMultisetSha256 = drift.stagedDiagnosticMultisetSha256,
+            changedFields = drift.changedFields,
+            stagedOverlaySha256 = drift.stagedOverlaySha256,
+            diskDrift = false,
+        )
+        return collect(
+            snapshot,
+            symbolFqn,
+            targetPackage,
+            supplementalBlockers = listOf(blocker),
+            stagedOverlaySha256 = drift.stagedOverlaySha256,
         )
     }
 
@@ -279,6 +464,11 @@ internal object JavaMoveClassGuidanceCollector {
         analysis: JdtJavaSemanticAnalysisResult,
     ): SourceRange? {
         if (candidate.classification != JavaMoveClassCandidateClassification.UNRESOLVED) return null
+        val competingExplicitImports = JavaLexer.extractImports(content).filter { importStatement ->
+            !importStatement.isStatic && !importStatement.name.endsWith(".*") &&
+                importStatement.name.substringAfterLast('.') == simpleName
+        }.map(ImportStatement::name).distinct()
+        if (competingExplicitImports.size >= 2) return null
         val start = TextEdits.offsetOf(content, candidate.sourceRange.start)
         val terminal = TextEdits.rangeForOffset(
             content,
@@ -327,6 +517,22 @@ internal object JavaMoveClassGuidanceCollector {
         }
     }
 
+    private fun candidateRangeHash(candidates: List<JavaMoveClassCandidateRecord>): String =
+        javaMoveGuidanceHashParts(candidates.sortedWith(
+            compareBy<JavaMoveClassCandidateRecord> { it.path.invariantSeparatorsPathString }
+                .thenBy { it.sourceRange.start.line }
+                .thenBy { it.sourceRange.start.character },
+        ).map { candidate ->
+            listOf(
+                candidate.path.invariantSeparatorsPathString,
+                javaMoveGuidanceRangeIdentity(candidate.sourceRange),
+                candidate.lexicalText,
+                candidate.sourceSet,
+                candidate.classification,
+                candidate.bindingKey,
+            ).joinToString("\u0000")
+        })
+
     private fun restorationActions(
         blockers: List<JavaMoveClassGuidanceBlocker>,
     ): List<JavaMoveClassGuidanceRestorationAction> {
@@ -336,8 +542,15 @@ internal object JavaMoveClassGuidanceCollector {
                     JavaMoveClassGuidanceRestorationKind.RESTORE_SOURCE_INVENTORY
                 is JavaMoveClassGuidanceBlocker.SystemPathArtifactFingerprintMismatch ->
                     JavaMoveClassGuidanceRestorationKind.REFRESH_CLASSPATH_EVIDENCE
-                is JavaMoveClassGuidanceBlocker.RecoveredTargetUse ->
+                is JavaMoveClassGuidanceBlocker.RecoveredTargetUse,
+                is JavaMoveClassGuidanceBlocker.UnresolvedCandidate ->
                     JavaMoveClassGuidanceRestorationKind.REESTABLISH_EXACT_BINDINGS
+                is JavaMoveClassGuidanceBlocker.UnresolvedTargetLookupPrerequisite ->
+                    JavaMoveClassGuidanceRestorationKind.RESTORE_TARGET_NAME_LOOKUP
+                is JavaMoveClassGuidanceBlocker.ExplicitOldFqnOutsideClosure ->
+                    JavaMoveClassGuidanceRestorationKind.RESTORE_OBSERVER_CLOSURE
+                is JavaMoveClassGuidanceBlocker.RetainedDiagnosticIdentityDrift ->
+                    JavaMoveClassGuidanceRestorationKind.RESTORE_DIAGNOSTIC_IDENTITY
                 is JavaMoveClassGuidanceBlocker.MaterializedGeneratedRootInventoryFingerprintMismatch ->
                     JavaMoveClassGuidanceRestorationKind.EXTERNALLY_RESTORE_GENERATED_ROOT
             }
@@ -378,6 +591,7 @@ internal object JavaMoveClassGuidanceCollector {
     private fun canonicalEvidenceHash(
         requestIdentity: String,
         snapshotSha256: String,
+        stagedOverlaySha256: String?,
         blockers: List<JavaMoveClassGuidanceBlocker>,
         groups: JavaMoveClassGuidanceCandidateGroups,
         completeness: JavaMoveClassGuidanceCandidateCompleteness,
@@ -389,6 +603,7 @@ internal object JavaMoveClassGuidanceCollector {
         add(JavaMoveClassReviewOnlyGuidance.CHECKLIST_VERSION)
         add(requestIdentity)
         add(snapshotSha256)
+        stagedOverlaySha256?.let { add("stagedOverlay\u0000$it") }
         blockers.forEach { add(blockerIdentity(it)) }
         groups.allOccurrences.forEach { add(occurrenceIdentity(it)) }
         add(completeness.name)
@@ -450,7 +665,75 @@ internal object JavaMoveClassGuidanceCollector {
             blocker.expectedFingerprint,
             blocker.observedFingerprint,
         )
+        is JavaMoveClassGuidanceBlocker.UnresolvedCandidate -> listOf(
+            blocker.code,
+            blocker.authorityLayer,
+            blocker.mavenModule,
+            blocker.sourceSet,
+            blocker.path.invariantSeparatorsPathString,
+            blocker.contentSha256,
+            blocker.candidateRanges.joinToString("|") { javaMoveGuidanceRangeIdentity(it) },
+            blocker.bindingState,
+            blocker.competingFqns.joinToString(","),
+            blocker.classification,
+            blocker.recovered,
+            blocker.truncated,
+        )
+        is JavaMoveClassGuidanceBlocker.UnresolvedTargetLookupPrerequisite -> listOf(
+            blocker.code,
+            blocker.authorityLayer,
+            blocker.mavenModule,
+            blocker.sourceSet,
+            blocker.path.invariantSeparatorsPathString,
+            blocker.prerequisiteKind,
+            javaMoveGuidanceRangeIdentity(blocker.importRange),
+            blocker.contentSha256,
+            blocker.unresolvedOwner,
+            blocker.targetSimpleName,
+            blocker.affectedCandidateRangeHash,
+        )
+        is JavaMoveClassGuidanceBlocker.ExplicitOldFqnOutsideClosure -> listOf(
+            blocker.code,
+            blocker.authorityLayer,
+            blocker.mavenModule,
+            blocker.sourceSet,
+            blocker.path.invariantSeparatorsPathString,
+            javaMoveGuidanceRangeIdentity(blocker.sourceRange),
+            blocker.contentSha256,
+            blocker.fqn,
+            blocker.closureMembership,
+            blocker.dependencyPath,
+            blocker.closureEvidenceHash,
+            blocker.observedClassification,
+        )
+        is JavaMoveClassGuidanceBlocker.RetainedDiagnosticIdentityDrift -> listOf(
+            blocker.code,
+            blocker.authorityLayer,
+            blocker.mavenModule,
+            blocker.sourceSet,
+            blocker.path.invariantSeparatorsPathString,
+            blocker.phase,
+            diagnosticIdentity(blocker.before),
+            diagnosticIdentity(blocker.staged),
+            blocker.beforeDiagnosticMultisetSha256,
+            blocker.stagedDiagnosticMultisetSha256,
+            blocker.changedFields.joinToString(",") { it.wireName },
+            blocker.stagedOverlaySha256,
+            blocker.diskDrift,
+        )
     }.joinToString("\u0000")
+
+    private fun diagnosticIdentity(
+        diagnostic: JavaMoveClassGuidanceBlocker.DiagnosticIdentity,
+    ): String = listOf(
+        diagnostic.providerConfigurationHash,
+        diagnostic.problemId,
+        diagnostic.category,
+        diagnostic.severity,
+        diagnostic.path.invariantSeparatorsPathString,
+        javaMoveGuidanceRangeIdentity(diagnostic.sourceRange),
+        diagnostic.message,
+    ).joinToString("\u0000")
 
     private fun occurrenceIdentity(occurrence: JavaMoveClassGuidanceOccurrence): String = buildList {
         add(occurrence::class.simpleName.orEmpty())
@@ -512,7 +795,10 @@ internal object JavaMoveClassGuidanceCollector {
         JavaMoveClassGuidanceRestorationKind.RESTORE_SOURCE_INVENTORY to 1,
         JavaMoveClassGuidanceRestorationKind.REFRESH_CLASSPATH_EVIDENCE to 2,
         JavaMoveClassGuidanceRestorationKind.REESTABLISH_EXACT_BINDINGS to 3,
-        JavaMoveClassGuidanceRestorationKind.EXTERNALLY_RESTORE_GENERATED_ROOT to 4,
+        JavaMoveClassGuidanceRestorationKind.RESTORE_TARGET_NAME_LOOKUP to 4,
+        JavaMoveClassGuidanceRestorationKind.RESTORE_OBSERVER_CLOSURE to 5,
+        JavaMoveClassGuidanceRestorationKind.RESTORE_DIAGNOSTIC_IDENTITY to 6,
+        JavaMoveClassGuidanceRestorationKind.EXTERNALLY_RESTORE_GENERATED_ROOT to 7,
     )
 }
 

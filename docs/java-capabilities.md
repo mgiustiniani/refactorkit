@@ -7,7 +7,7 @@ may be displayed regardless of evidence, but only `JDT_BINDING` and documented
 | Operation | Stable apply evidence | Conservative boundary |
 |---|---|---|
 | Rename type | `JDT_BINDING` | Unclean/unresolved analysis produces review-only `LEXICAL_FALLBACK`; strings, reflection, generated code, and external binaries are not rewritten. |
-| Move type | `JDT_BINDING` | First-party `moveClass` projects unclean/unresolved compatibility evidence as edit-free `LEXICAL_FALLBACK_REVIEW`; existing target and invalid package refuse. |
+| Move type | `JDT_BINDING` | First-party `moveClass` projects broad unclean compatibility evidence as edit-free `LEXICAL_FALLBACK_REVIEW`; bounded candidate/lookup/closure/diagnostic uncertainty becomes typed non-managed guidance; missing active reactor structure refuses; leased non-managed source drift refuses under lock before WAL; existing target and invalid package refuse. |
 | Move source root | `STRUCTURAL` | Rename-only whole-root relocation preserves bytes/FQCNs; generated, overlapping, unrecognized, colliding, package-inconsistent, duplicate-type, symlink, or diagnostic-regressing plans refuse. |
 | Rename signed method/annotation element | `JDT_BINDING` | Exact overload and complete source-visible override family required; external family declaration refuses. |
 | Rename exact field | `JDT_BINDING` | Exact owner binding and collision checks required. |

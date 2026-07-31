@@ -98,7 +98,12 @@ results. A child path is not a license to discover ancestors or siblings outside
 the declared workspace. Each source set must carry exact roots, only safely
 declared and materialized generated sources, Maven-scoped reactor/external
 visibility, Java release/platform identity, provider evidence, and typed
-availability. Missing test evidence does not make main unavailable. BuildSourceSet
+availability. Every literal active module declared by the root aggregator must
+have a regular POM; a missing descriptor is retained as a typed unavailable
+synthetic module with workspace-relative declaration/range/no-follow evidence so
+semantic planning refuses before edit selection. Symlink or non-regular path
+states are not misreported as ordinary missing descriptors. Missing test evidence
+does not make main unavailable. BuildSourceSet
 keeps compile and runtime classpaths separate: runtime-only artifacts do not leak
 into owner main compilation, but a downstream test source set may consume the
 runtime export through an authoritative reactor dependency closure.

@@ -398,6 +398,82 @@ split-package failures and therefore cannot support authoritative refactoring.
   permanent-fixture acceptance, have production behavior and semantic validation
   evidence.
 
+== Evidence
+
+Evidence was refreshed on 2026-07-31 for only the bounded
+`REQ-JAVA-MAVEN-MOVE-AUTH-008` row against the corrected executable feature,
+current production and test code, and focused JUnit/Cucumber results:
+
+* The reconciled feature marks all 12 of 12 requirement definitions and all 22
+  of 22 expanded cases implemented-and-validated.
+* Six focused `REQ-JAVA-MAVEN-MOVE-AUTH-008` cases pass. Four return immutable
+  schema-v1 `REVIEW_ONLY_GUIDANCE` with typed authority-layer/blocker pairs:
+  `CANDIDATE_TOTALITY`/`java.maven.moveClass.candidate.unresolved` for an
+  inside-closure ambiguous candidate;
+  `TARGET_NAME_LOOKUP`/`java.maven.moveClass.targetLookup.unresolvedPrerequisite`
+  for unresolved static wildcard lookup;
+  `CLOSURE_CONSISTENCY`/`java.maven.moveClass.reverseObserverClosure.explicitOldFqnOutside`
+  for an outside-closure explicit old FQN, with that closure blocker taking
+  precedence; and
+  `DIAGNOSTIC_IDENTITY`/`java.maven.moveClass.retainedDiagnostic.identityDrift`
+  for same-S0 `BEFORE_VS_STAGED` diagnostic-identity drift. They return through
+  `JavaMoveClassOperationDispatcher`, with the diagnostic-identity case using
+  its second stage; none returns `LexicalReview`, a plan, or an edit. Source-built
+  CLI `--apply` refuses each guidance result as `guidance.nonManaged` before
+  `PatchEngine`, workspace-lock acquisition, WAL creation, or `.refactorkit`
+  residue.
+* The missing-active-module-POM case returns `PatchStatus.REFUSED` with
+  structural evidence and result-owned typed `JavaMoveClassStructuralRefusal`
+  data: layer `STRUCTURAL_CLOSURE`, input kind `ACTIVE_REACTOR_POM`, condition
+  `MISSING`, and blocker `java.maven.reactorDescriptor.missing` for the
+  root-declared active POM. Its deterministic,
+  component-wise, workspace-relative `NOFOLLOW` absence identity supports a
+  missing module directory as well as a missing final POM; those states have
+  distinct identities. A symlink component, final symlink, or non-regular final
+  path is not classified `MISSING`. Source-built CLI `--apply` returns the
+  structural refusal before lock acquisition and leaves no `.refactorkit`, WAL,
+  transaction, destination, or managed-edit residue.
+* The under-lock case uses generic immutable core
+  `OperationAuthorityFileEvidence` and `DiagnosticDetails`. An otherwise eligible
+  `REQ-JAVA-MAVEN-MOVE-AUTH-007` lease binds the non-managed `BOUND_OTHER`
+  candidate source as `CANDIDATE_INVENTORY` required file evidence.
+  `PatchEngine` captures one engine-owned snapshot S1 under lock, computes
+  expected and observed required-file-evidence SHA-256 identities, and returns
+  the `EVIDENCE_FRESHNESS` primary
+  `authorityLease.evidenceDrift` plus secondary `snapshot.scopeChanged` before
+  WAL creation. It preserves the external S1 bytes and may retain
+  `.refactorkit/workspace.lock`.
+* Identity vocabulary is intentionally asymmetric: the semantic
+  candidate-inventory SHA-256 is expected-only, while the required-file-evidence
+  SHA-256 has expected and observed identities. No observed semantic candidate
+  inventory or observed semantic candidate-inventory hash is produced or
+  claimed.
+* The six cases remain independent of `REQ-JAVA-MAVEN-MOVE-AUTH-003`, `004`,
+  `010`, `011`, and `012`: recovered-binding guidance and preview-construction
+  fingerprint mismatch remain `003`; broad lexical fallback remains `004`;
+  selected-path or selected-descriptor failures remain `010` and `012`; and
+  selected JAR, POM, effective-input, repository, or deterministic-path drift
+  remains `011`.
+
+Focused OpenJDK 21 evidence discovered 22 cases, selected, executed, and passed
+six, skipped sixteen by tag filter, and reported zero failures and zero errors.
+The independent review log has SHA-256
+`ba7dda54ba85904ddde200982fbc41613b4a48f95bd8481bdccfad3427de6edc`; the
+`gherkin-writer` execution log has SHA-256
+`6f7e2d8a9c767f265a117853267a37ab31ec31d0878637870b37202ec8ba2c71`.
+Subsequent independent full mutable-working-tree verification on 2026-07-31
+used OpenJDK 21.0.11 and command
+`./gradlew --no-daemon --rerun-tasks check goldenTest`. It reported
+`BUILD SUCCESSFUL` in 7m 33s: 1000 discovered, 780 executed, 220
+skipped/tag-filtered, 0 failures, 0 errors; Gradle reported 77 tasks executed.
+The full log SHA-256 is
+`243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`.
+This full-run evidence does not imply packaged-process, runtime, native-platform,
+or general authority or numerical coverage qualification. The SpotBugs baseline
+remains configured non-blocking. This focused evidence does not qualify a
+packaged CLI or runtime, a native platform matrix, or general Java/Maven
+diagnostics or `moveClass` authority.
+
 == Related Requirements
 
 * `RPK-JAVA-DIAG-001` -- release-aware Java platform authority.
@@ -416,19 +492,37 @@ split-package failures and therefore cannot support authoritative refactoring.
 * `RPK-JAVA-MOVE-002` through `RPK-JAVA-MOVE-004`, and `RPK-JAVA-MOVE-007` --
   complete Maven operation closure, candidate-total binding authority,
   target-scoped managed apply, and audit visibility for `moveClass`.
-* Wiki-reserved planned/absent `REQ-JAVA-MAVEN-MOVE-AUTH-010` --
-  selector-pruned child descriptor independence; maps to `RPK-JAVA-MOVE-002`,
-  `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
-* Wiki-reserved planned/absent `REQ-JAVA-MAVEN-MOVE-AUTH-011` --
+* Implemented-and-validated six-case `REQ-JAVA-MAVEN-MOVE-AUTH-008` --
+  target-relevant uncertainty, active-reactor-POM structural loss, and
+  under-lock non-managed candidate-file evidence drift fail closed at their
+  respective evidence phases; maps to `RPK-JAVA-MOVE-002`,
+  `RPK-JAVA-MOVE-003`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and
+  `RPK-JAVA-MOVE-007`.
+* Implemented-and-validated `REQ-JAVA-MAVEN-MOVE-AUTH-010` --
+  selector-pruned child descriptor independence until another path selects the
+  child; maps to `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-004`,
+  `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
+* Implemented-and-validated `REQ-JAVA-MAVEN-MOVE-AUTH-011` --
   RefactorKit-owned ordinary fixed-release simple Maven-2-layout selected-leaf
   absent-JAR evidence; maps to `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-003`,
   `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and `RPK-JAVA-MOVE-007`.
-* Wiki-reserved planned/absent `REQ-JAVA-MAVEN-MOVE-AUTH-012` -- included
-  POM/parent/BOM loss blocks; maps to `RPK-JAVA-MOVE-002`,
-  `RPK-JAVA-MOVE-004`, and `RPK-JAVA-MOVE-007`.
+* Implemented-and-validated six-case `REQ-JAVA-MAVEN-MOVE-AUTH-012` -- missing,
+  malformed, or drifted selected POM/parent/BOM/management/mediation/relocation
+  evidence refuses ordinary missing-leaf authority; maps to
+  `RPK-JAVA-MOVE-002`, `RPK-JAVA-MOVE-004`, `RPK-JAVA-MOVE-006`, and
+  `RPK-JAVA-MOVE-007`.
 
-These three identifiers are architecture reservations only. They have no current
-Gherkin, implementation, or qualification evidence.
+Traceability was rechecked on 2026-07-31 against
+link:../../features/java-maven-move-class-apply-authority.feature[the executable
+Maven move-class authority feature] and the bounded evidence above. The feature
+now marks 12 of 12 definitions and 22 of 22 expanded cases
+implemented-and-validated. Requirements `010` and `011` each define one
+executable case; `008` and `012` each expand to six cases. The
+link:../releases/v0.7.0-java-maven-move-class-acceptance.md[bounded acceptance
+record] predates the `008` reconciliation and is `needs-review` for this row; it
+is not `008` evidence. These bounded requirement-evidence statuses do not change
+this ADR's accepted lifecycle status or qualify the wider Java/Maven diagnostics
+epic.
 
 == Related ADRs
 

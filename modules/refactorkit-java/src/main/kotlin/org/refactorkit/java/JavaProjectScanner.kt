@@ -147,6 +147,34 @@ class JavaProjectScanner(
                     put("java.maven.artifactId", maven.coordinate.artifactId)
                     put("java.maven.version", maven.coordinate.version)
                     put("java.maven.packaging", maven.packaging)
+                    maven.reactorDescriptorFailure?.let { failure ->
+                        val range = failure.moduleDeclarationRange
+                        put("java.maven.reactorDescriptor.code", "java.maven.reactorDescriptor.missing")
+                        put("java.maven.reactorDescriptor.inputKind", "ACTIVE_REACTOR_POM")
+                        put("java.maven.reactorDescriptor.module", failure.module)
+                        put(
+                            "java.maven.reactorDescriptor.declaringPom",
+                            evidencePath(normalizedRoot, failure.declaringPom).toString().replace('\\', '/'),
+                        )
+                        put(
+                            "java.maven.reactorDescriptor.declaringPomSha256",
+                            failure.declaringPomContentSha256,
+                        )
+                        put(
+                            "java.maven.reactorDescriptor.moduleDeclarationRange",
+                            "${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}",
+                        )
+                        put(
+                            "java.maven.reactorDescriptor.expectedPath",
+                            evidencePath(normalizedRoot, failure.expectedPath).toString().replace('\\', '/'),
+                        )
+                        put("java.maven.reactorDescriptor.condition", failure.condition)
+                        put("java.maven.reactorDescriptor.noFollow", "true")
+                        put(
+                            "java.maven.reactorDescriptor.noFollowAbsenceFactHash",
+                            failure.noFollowAbsenceFactHash,
+                        )
+                    }
                     put(
                         "java.dependencyGraph.status",
                         if (maven.dependencyGraphFailures.isEmpty()) "complete" else "incomplete",

@@ -193,7 +193,7 @@ of the beta baseline for documented methods.
 | `kotlin.diagnostics` | `experimental` | Requires exact startup lease and snapshot; returns structured compiler diagnostics, explicit location precision, toolchain/build hashes, bounded runtime and process attestation. |
 | `kotlin.symbols` | `experimental` | Requires exact startup lease and snapshot; returns a structured ready/refused/error envelope, opaque JVM type/callable IDs, exact zero-based UTF-16 declaration selections, toolchain/build hashes, process attestation and explicit truncation. |
 | `kotlin.definition` | `experimental` | Requires the same authority plus an opaque ID returned by `kotlin.symbols`; resolves only against a newly attested saved snapshot and returns `kotlin.symbolNotFound` rather than guessing. |
-| `refactor.preview` | `beta-contract` | Patch-plan preview/refusal behavior for admitted operations. Java `moveClass` additionally returns plan-free `REVIEW_ONLY_GUIDANCE` for bounded enumerable authority defects or schema-v1 `LEXICAL_FALLBACK_REVIEW` for broad lexical uncertainty. |
+| `refactor.preview` | `beta-contract` | Patch-plan preview/refusal behavior for admitted operations. Java `moveClass` additionally returns plan-free `REVIEW_ONLY_GUIDANCE` for bounded enumerable authority defects, schema-v1 `LEXICAL_FALLBACK_REVIEW` for broad lexical uncertainty, or typed structural refusal for missing active reactor authority. |
 | `refactor.apply` | `beta-contract` | Requires exactly one non-blank `planId` or non-capability `operationId`. A `planId` applies the exact retained managed plan. A still-retained lexical-review `operationId` always returns typed `evidence.insufficient`; unknown/evicted identities are invalid. No operation ID can authorize a write. |
 | `refactor.discard` | `beta-contract` | Idempotently removes a pending source-bearing plan without workspace writes; returns `discarded=false` when absent. |
 | `patch.recover` | `experimental` | Explicit mutating recovery for a supplied workspace root. It is the only startup-oriented surface allowed to create the writer lock or compensate incomplete journals; ordinary project open/scan/LSP initialize perform read-only inspection and refuse when recovery is pending. |
@@ -319,7 +319,7 @@ The changes retain API `0.2`; importer shape remains `experimental` while
 |-----------|--------|--------------------|
 | `renameClass` | `beta-contract` | `symbol`, `arguments.newName` |
 | `renameMember` | `beta-contract` | `symbol`, `arguments.newName` |
-| `moveClass` | `beta-contract` | `symbol`, `arguments.targetPackage`; may return a managed plan, REQ-003 non-managed guidance, or REQ-004 `LEXICAL_FALLBACK_REVIEW` |
+| `moveClass` | `beta-contract` | `symbol`, `arguments.targetPackage`; may return a managed plan, REQ-003/008 non-managed guidance, REQ-004 `LEXICAL_FALLBACK_REVIEW`, or typed structural refusal |
 | `moveSourceRoot` | `beta-contract` | `arguments.from`, `arguments.to`; workspace-relative `/` paths |
 | `java.moveAcrossMavenModules` | `experimental` | `arguments.from`, `to`, optional `dependencyPom`, exact `sourceGroupId`, `sourceArtifactId`, `sourceVersion`, exact `destinationGroupId`, `destinationArtifactId`, `destinationVersion`; optional literal type/classifier and `allIdenticalOccurrences` |
 | `organizeImports` | `beta-contract` | `arguments.file` or `symbol` as file path |
@@ -350,10 +350,15 @@ produce only the same typed refusal before `PatchEngine`, lock, or WAL.
 
 Diagnostics may expose `evidence` (`COMPILER`, `STRUCTURAL`, `TRANSACTION`) and
 `category` (`SYNTAX`, `TYPE_RESOLUTION`, `PROJECT_STRUCTURE`, `SAFETY`) alongside
-stable code, severity, message, and range. Apply compares the exact staged error
-multiset against current errors plus explicit `diagnosticsAfterPreview`; any
-additional error is `diagnostics.regression`. Daemon JSON includes these fields;
-LSP carries them in diagnostic `data`.
+stable code, severity, message, and range. Core diagnostics may also carry
+immutable, deterministically ordered `DiagnosticDetails`; the bounded operation-
+authority drift row uses them for expected/observed file evidence and snapshot
+identities without claiming a recomputed observed semantic inventory. Apply
+compares the exact staged error multiset against current errors plus explicit
+`diagnosticsAfterPreview`; any additional error is `diagnostics.regression`.
+Transport exposure of additive detail fields remains capability-specific. Daemon
+JSON includes the established evidence/category fields; LSP carries them in
+diagnostic `data`.
 
 ## Refactoring evidence contract
 
@@ -369,7 +374,11 @@ Every plan exposes one stable evidence category:
 lock or WAL creation with `evidence.insufficient`. First-party Java `moveClass`
 admission surfaces project that evidence as the edit-free lexical-review envelope
 instead of registering, aggregating, or rendering the internal plan. Recipes stop
-at that step, discard the staged image, and return no aggregate plan.
+at that step, discard the staged image, and return no aggregate plan. Eligible
+target-scoped Maven plans may additionally bind non-managed workspace files in
+`OperationAuthorityFileEvidence`; `PatchEngine` revalidates them against one
+under-lock engine-owned snapshot observation before WAL and returns primary
+`authorityLease.evidenceDrift` on mismatch.
 
 ## LSP server baseline
 

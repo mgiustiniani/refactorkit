@@ -399,6 +399,26 @@
       "recipeAggregatePlan": false
     }
   },
+  "javaMoveClassAuthorityEvidence": {
+    "qualificationScope": "bounded-source-built-library-and-cli-fixture",
+    "previewSurfaces": [
+      "library",
+      "cli"
+    ],
+    "underLockDriftSurface": "library",
+    "guidanceSchemaVersion": 1,
+    "previewBlockerCodes": [
+      "java.maven.moveClass.candidate.unresolved",
+      "java.maven.moveClass.targetLookup.unresolvedPrerequisite",
+      "java.maven.moveClass.reverseObserverClosure.explicitOldFqnOutside",
+      "java.maven.moveClass.retainedDiagnostic.identityDrift"
+    ],
+    "structuralBlockerCode": "java.maven.reactorDescriptor.missing",
+    "underLockBlockerCode": "authorityLease.evidenceDrift",
+    "requiredFileEvidence": true,
+    "structuredDiagnosticDetails": true,
+    "observedSemanticCandidateInventory": false
+  },
   "languageKernel": {
     "schemaVersion": 1,
     "surfaces": [
@@ -474,6 +494,7 @@
     "diagnosticsGate": true,
     "transactionRollback": true,
     "workspaceScopedWrites": true,
+    "operationAuthorityFileEvidence": true,
     "lexicalFallbackApply": false
   }
 }

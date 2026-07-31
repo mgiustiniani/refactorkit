@@ -17,6 +17,8 @@ import java.nio.file.attribute.AclFileAttributeView
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.UserDefinedFileAttributeView
+import java.nio.file.attribute.BasicFileAttributes
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
@@ -223,8 +225,14 @@ class PatchEngine(
                     code = "approval.required",
                 ))
             }
-            addAll(validateOperationAuthorityLease(normalizedPlan, currentSnapshot))
-            addAll(validateEngineOwnedSnapshot(currentSnapshot))
+            val snapshotObservation = validateEngineOwnedSnapshot(currentSnapshot)
+            addAll(validateOperationAuthorityLease(
+                normalizedPlan,
+                currentSnapshot,
+                snapshotObservation.observedSnapshotSha256,
+                snapshotObservation.observedTrackedFileSha256ByPath,
+            ))
+            addAll(snapshotObservation.diagnostics)
             addAll(validateAffectedFilePreconditions(normalizedEdit, currentSnapshot))
         }
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
@@ -280,6 +288,8 @@ class PatchEngine(
     private fun validateOperationAuthorityLease(
         plan: PatchPlan,
         snapshot: ProjectSnapshot,
+        observedSnapshotSha256: String?,
+        observedTrackedFileSha256ByPath: Map<Path, String>?,
     ): List<Diagnostic> {
         val lease = plan.authorityLease ?: return emptyList()
         if (lease.snapshotHash != snapshot.hash) return listOf(Diagnostic(
@@ -287,6 +297,72 @@ class PatchEngine(
             Diagnostic.Severity.ERROR,
             code = "authorityLease.snapshotMismatch",
         ))
+
+        // Non-managed source evidence is the narrowest freshness boundary and must win
+        // diagnostic precedence over the broader engine-owned snapshot drift check.
+        val snapshotFiles = snapshot.trackedFiles.associateBy { it.path.normalize() }
+        val missingFileEvidence = lease.requiredFileEvidence.filter { expected ->
+            val source = snapshotFiles[expected.path]
+            source == null || sha256(source.content.toByteArray(Charsets.UTF_8)) != expected.expectedContentSha256
+        }
+        if (missingFileEvidence.isNotEmpty()) return listOf(Diagnostic(
+            "Operation-authority lease is missing ${missingFileEvidence.size} required file evidence record(s) " +
+                "from its exact preview snapshot",
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.evidenceMissing",
+        ))
+        val observedFileIdentities = linkedMapOf<Path, String>()
+        try {
+            lease.requiredFileEvidence.forEach { expected ->
+                observedFileIdentities[expected.path] = observedTrackedFileSha256ByPath
+                    ?.get(expected.path)
+                    ?: stableWorkspaceFileSha256(expected.path)
+            }
+        } catch (error: Exception) {
+            return listOf(Diagnostic(
+                "Operation-authority lease file evidence cannot be revalidated under lock: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "authorityLease.evidenceUnreadable",
+            ))
+        }
+        val driftedFile = lease.requiredFileEvidence.firstOrNull { expected ->
+            observedFileIdentities.getValue(expected.path) != expected.expectedContentSha256
+        }
+        if (driftedFile != null) {
+            val observedContentSha256 = observedFileIdentities.getValue(driftedFile.path)
+            val observedRequiredFileEvidenceSha256 = OperationAuthorityLease.fileEvidenceSha256(
+                lease.requiredFileEvidence,
+                observedFileIdentities,
+            )
+            val changedSourceManaged = driftedFile.path.normalize() in
+                plan.workspaceEdit.affectedFiles().map(Path::normalize)
+            val details = DiagnosticDetails(buildMap {
+                put("authorityLayer", "EVIDENCE_FRESHNESS")
+                put("evidenceKind", driftedFile.kind)
+                put("path", driftedFile.path.toString().replace('\\', '/'))
+                put("expectedContentSha256", driftedFile.expectedContentSha256)
+                put("observedContentSha256", observedContentSha256)
+                put("expectedRequiredFileEvidenceSha256", lease.requiredFileEvidenceSha256)
+                put("observedRequiredFileEvidenceSha256", observedRequiredFileEvidenceSha256)
+                put("previewSnapshotSha256", lease.snapshotHash)
+                observedSnapshotSha256?.let { put("observedSnapshotSha256", it) }
+                lease.attributes["candidateInventoryHash"]?.let {
+                    put("expectedCandidateInventorySha256", it)
+                }
+                put("changedSourceManaged", changedSourceManaged.toString())
+            })
+            return listOf(Diagnostic(
+                "Operation-authority lease evidence drift: kind=${driftedFile.kind} path=${driftedFile.path} " +
+                    "expectedContentSha256=${driftedFile.expectedContentSha256} " +
+                    "observedContentSha256=$observedContentSha256 " +
+                    "expectedRequiredFileEvidenceSha256=${lease.requiredFileEvidenceSha256} " +
+                    "observedRequiredFileEvidenceSha256=$observedRequiredFileEvidenceSha256",
+                Diagnostic.Severity.ERROR,
+                code = "authorityLease.evidenceDrift",
+                details = details,
+            ))
+        }
+
         val available = snapshot.classpathEvidence.toSet()
         val missing = lease.requiredClasspathEvidence.filterNot(available::contains)
         if (missing.isNotEmpty()) return listOf(Diagnostic(
@@ -315,6 +391,44 @@ class PatchEngine(
             code = "authorityLease.evidenceDrift",
         ))
     }
+
+    private fun stableWorkspaceFileSha256(relative: Path): String {
+        val absolute = resolveInsideWorkspace(relative)
+        require(absolute.startsWith(normalizedRoot)) { "Required evidence path escapes the workspace: $relative" }
+        require(validateNoSymbolicLinkTraversal(relative) == null) {
+            "Required evidence path traverses a symbolic link: $relative"
+        }
+        val before = Files.readAttributes(
+            absolute,
+            BasicFileAttributes::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )
+        require(before.isRegularFile && !Files.isSymbolicLink(absolute)) {
+            "Required evidence path is not a regular file: $relative"
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+        Files.newInputStream(absolute, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS).use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val after = Files.readAttributes(
+            absolute,
+            BasicFileAttributes::class.java,
+            LinkOption.NOFOLLOW_LINKS,
+        )
+        require(after.isRegularFile && before.size() == after.size() &&
+            before.lastModifiedTime() == after.lastModifiedTime() && before.fileKey() == after.fileKey()
+        ) { "Required evidence changed during under-lock validation: $relative" }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(bytes)
+        .joinToString("") { "%02x".format(it) }
 
     /**
      * Roll back an applied journaled transaction under the workspace lock.
@@ -522,17 +636,17 @@ class PatchEngine(
         }
     }
 
-    private fun validateEngineOwnedSnapshot(snapshot: ProjectSnapshot): List<Diagnostic> {
+    private fun validateEngineOwnedSnapshot(snapshot: ProjectSnapshot): EngineOwnedSnapshotObservation {
         val diagnostics = mutableListOf<Diagnostic>()
         if (snapshot.sourceExtensions.isEmpty()) {
-            return listOf(Diagnostic(
+            return EngineOwnedSnapshotObservation(listOf(Diagnostic(
                 "Snapshot source scope must declare at least one file extension",
                 Diagnostic.Severity.ERROR,
                 code = "snapshot.scopeInvalid",
-            ))
+            )))
         }
         diagnostics += validateClasspathEvidence(snapshot)
-        if (diagnostics.isNotEmpty()) return diagnostics
+        if (diagnostics.isNotEmpty()) return EngineOwnedSnapshotObservation(diagnostics)
 
         val declaredRoots = snapshot.modules.flatMap { it.sourceRoots }
             .map(::resolveInsideWorkspace)
@@ -556,7 +670,7 @@ class PatchEngine(
                 validateNoSymbolicLinkTraversal(normalizedRoot.relativize(root))?.let(diagnostics::add)
             }
         }
-        if (diagnostics.isNotEmpty()) return diagnostics
+        if (diagnostics.isNotEmpty()) return EngineOwnedSnapshotObservation(diagnostics)
 
         val languageByExtension = snapshot.files.mapNotNull { file ->
             val extension = extensionOf(file.path) ?: return@mapNotNull null
@@ -591,16 +705,17 @@ class PatchEngine(
                 actualAuxiliaryFiles += file.copy(content = Files.readString(absolute))
             }
         } catch (error: Exception) {
-            return listOf(Diagnostic(
+            return EngineOwnedSnapshotObservation(listOf(Diagnostic(
                 "Cannot rescan snapshot scope under workspace lock: ${error.message}",
                 Diagnostic.Severity.ERROR,
                 code = "snapshot.scopeUnreadable",
-            ))
+            )))
         }
 
+        val actualFiles = actualByPath.values.toList()
         val actualHash = ProjectSnapshot.hashSnapshot(
             snapshot.modules,
-            actualByPath.values.toList(),
+            actualFiles,
             snapshot.sourceExtensions,
             snapshot.ignoredDirectories,
             snapshot.classpathEvidence,
@@ -628,7 +743,26 @@ class PatchEngine(
                 code = "snapshot.scopeChanged",
             )
         }
-        return diagnostics
+        val observedTrackedFileSha256ByPath = (actualFiles + actualAuxiliaryFiles).associate { file ->
+            file.path.normalize() to sha256(file.content.toByteArray(Charsets.UTF_8))
+        }
+        return EngineOwnedSnapshotObservation(
+            diagnostics = diagnostics,
+            observedSnapshotSha256 = actualHash,
+            observedTrackedFileSha256ByPath = observedTrackedFileSha256ByPath,
+        )
+    }
+
+    private data class EngineOwnedSnapshotObservation(
+        val diagnostics: List<Diagnostic>,
+        val observedSnapshotSha256: String? = null,
+        val observedTrackedFileSha256ByPath: Map<Path, String>? = null,
+    ) {
+        init {
+            require((observedSnapshotSha256 == null) == (observedTrackedFileSha256ByPath == null)) {
+                "Observed snapshot identity and tracked-file identities must be available together"
+            }
+        }
     }
 
     private data class DiagnosticsGateValidation(

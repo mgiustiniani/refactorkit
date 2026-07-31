@@ -4,6 +4,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -34,6 +35,7 @@ class JavaMoveClassGuidanceJsonRenderer(
             put("targetPackage", guidance.request.targetPackage)
             put("requestIdentitySha256", guidance.requestIdentitySha256)
             put("snapshotSha256", guidance.snapshotSha256)
+            guidance.stagedOverlaySha256?.let { put("stagedOverlaySha256", it) }
             put("canonicalEvidenceSha256", guidance.canonicalEvidenceSha256)
             put("managed", false)
             put("applyable", false)
@@ -88,6 +90,7 @@ class JavaMoveClassGuidanceJsonRenderer(
         put("mavenModule", blocker.mavenModule)
         put("sourceSet", blocker.sourceSet)
         put("path", blocker.path.invariantSeparatorsPathString)
+        blocker.authorityLayer?.let { put("authorityLayer", it.name) }
         when (blocker) {
             is JavaMoveClassGuidanceBlocker.MissingReadableSourceInventoryEntry -> {
                 put("manifestPath", blocker.manifestPath.invariantSeparatorsPathString)
@@ -112,7 +115,63 @@ class JavaMoveClassGuidanceJsonRenderer(
                 put("expectedFingerprint", blocker.expectedFingerprint)
                 put("observedFingerprint", blocker.observedFingerprint)
             }
+            is JavaMoveClassGuidanceBlocker.UnresolvedCandidate -> {
+                put("contentSha256", blocker.contentSha256)
+                put("candidateRanges", buildJsonArray {
+                    blocker.candidateRanges.forEach { add(rangeJson(it)) }
+                })
+                put("bindingState", blocker.bindingState.name)
+                put("competingFqns", buildJsonArray {
+                    blocker.competingFqns.forEach { add(JsonPrimitive(it)) }
+                })
+                put("classification", blocker.classification.name)
+                put("candidateCompleteness", "COMPLETE")
+                put("recovered", blocker.recovered)
+                put("truncated", blocker.truncated)
+            }
+            is JavaMoveClassGuidanceBlocker.UnresolvedTargetLookupPrerequisite -> {
+                put("prerequisiteKind", blocker.prerequisiteKind.name)
+                put("importRange", rangeJson(blocker.importRange))
+                put("contentSha256", blocker.contentSha256)
+                put("unresolvedOwner", blocker.unresolvedOwner)
+                put("targetSimpleName", blocker.targetSimpleName)
+                put("affectedCandidateRangeHash", blocker.affectedCandidateRangeHash)
+            }
+            is JavaMoveClassGuidanceBlocker.ExplicitOldFqnOutsideClosure -> {
+                put("range", rangeJson(blocker.sourceRange))
+                put("contentSha256", blocker.contentSha256)
+                put("fqn", blocker.fqn)
+                put("affectedSourceSet", "${blocker.mavenModule}:${blocker.sourceSet}")
+                put("closureMembership", blocker.closureMembership.name)
+                put("dependencyPath", blocker.dependencyPath)
+                put("closureEvidenceHash", blocker.closureEvidenceHash)
+                put("observedClassification", blocker.observedClassification.name)
+            }
+            is JavaMoveClassGuidanceBlocker.RetainedDiagnosticIdentityDrift -> {
+                put("phase", blocker.phase.name)
+                put("before", diagnosticIdentityJson(blocker.before))
+                put("staged", diagnosticIdentityJson(blocker.staged))
+                put("beforeDiagnosticMultisetSha256", blocker.beforeDiagnosticMultisetSha256)
+                put("stagedDiagnosticMultisetSha256", blocker.stagedDiagnosticMultisetSha256)
+                put("changedFields", buildJsonArray {
+                    blocker.changedFields.forEach { add(JsonPrimitive(it.wireName)) }
+                })
+                put("stagedOverlaySha256", blocker.stagedOverlaySha256)
+                put("diskDrift", blocker.diskDrift)
+            }
         }
+    }
+
+    private fun diagnosticIdentityJson(
+        identity: JavaMoveClassGuidanceBlocker.DiagnosticIdentity,
+    ): JsonElement = buildJsonObject {
+        put("providerConfigurationHash", identity.providerConfigurationHash)
+        put("problemId", identity.problemId)
+        put("category", identity.category.name)
+        put("severity", identity.severity.name)
+        put("path", identity.path.invariantSeparatorsPathString)
+        put("range", rangeJson(identity.sourceRange))
+        put("message", identity.message)
     }
 
     private fun occurrencesJson(occurrences: List<JavaMoveClassGuidanceOccurrence>): JsonArray =

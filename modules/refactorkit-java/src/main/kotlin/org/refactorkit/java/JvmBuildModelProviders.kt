@@ -148,7 +148,9 @@ private object JavaModuleBuildModelProjector {
         val moduleIds = modules.map(Module::name).toSet()
         val diagnostics = modules.flatMap(::diagnostics)
         val inferredStatus = when {
-            diagnostics.any { it.code == "buildModel.unavailable" } -> BuildModelStatus.UNAVAILABLE
+            diagnostics.any {
+                it.code in setOf("buildModel.unavailable", "java.maven.reactorDescriptor.missing")
+            } -> BuildModelStatus.UNAVAILABLE
             diagnostics.any { it.code == "classpath.offlineMissing" } -> BuildModelStatus.OFFLINE_MISSING
             diagnostics.any { it.severity == Diagnostic.Severity.ERROR } -> BuildModelStatus.PARTIAL
             diagnostics.isNotEmpty() -> BuildModelStatus.PARTIAL
@@ -168,11 +170,14 @@ private object JavaModuleBuildModelProjector {
 
     private fun diagnostics(module: Module): List<BuildModelDiagnostic> = buildList {
         when (module.languageSettings["java.buildModel.status"]) {
-            "unavailable" -> add(BuildModelDiagnostic(
-                "buildModel.unavailable",
-                module.languageSettings["java.buildModel.message"] ?: "Build model unavailable",
-                module.name,
-            ))
+            "unavailable" -> {
+                val reactorDescriptorCode = module.languageSettings["java.maven.reactorDescriptor.code"]
+                add(BuildModelDiagnostic(
+                    reactorDescriptorCode ?: "buildModel.unavailable",
+                    module.languageSettings["java.buildModel.message"] ?: "Build model unavailable",
+                    module.languageSettings["java.maven.reactorDescriptor.module"] ?: module.name,
+                ))
+            }
             "partial" -> add(BuildModelDiagnostic(
                 "buildModel.partial",
                 module.languageSettings["java.buildModel.message"] ?: "Build model is partial",

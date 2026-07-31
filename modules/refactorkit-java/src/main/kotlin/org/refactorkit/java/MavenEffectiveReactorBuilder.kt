@@ -13,12 +13,16 @@ import org.apache.maven.model.building.FileModelSource
 import org.apache.maven.model.building.ModelSource
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.apache.maven.artifact.versioning.VersionRange
+import org.refactorkit.core.SourceRange
+import org.refactorkit.core.TextEdits
 import java.net.URI
 import javax.net.ssl.HttpsURLConnection
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
@@ -75,6 +79,27 @@ internal data class MavenMissingArtifactEvidence(
     val noRelocation: Boolean = false,
 )
 
+internal data class MavenReactorDescriptorFailure(
+    val module: String,
+    val declaringPom: Path,
+    val declaringPomContentSha256: String,
+    val moduleDeclarationRange: SourceRange,
+    val expectedPath: Path,
+    val condition: String,
+    val noFollowAbsenceFactHash: String,
+) {
+    fun structuralMessage(workspaceRoot: Path): String {
+        val root = workspaceRoot.toAbsolutePath().normalize()
+        val declaring = root.relativize(declaringPom.toAbsolutePath().normalize()).toString().replace('\\', '/')
+        val expected = root.relativize(expectedPath.toAbsolutePath().normalize()).toString().replace('\\', '/')
+        val range = "${moduleDeclarationRange.start.line}:${moduleDeclarationRange.start.character}-" +
+            "${moduleDeclarationRange.end.line}:${moduleDeclarationRange.end.character}"
+        return "MAVEN_REACTOR_DESCRIPTOR_MISSING module=$module declaringPom=$declaring " +
+            "declaringPomSha256=$declaringPomContentSha256 moduleDeclarationRange=$range " +
+            "expectedPath=$expected condition=$condition noFollowAbsenceFactHash=$noFollowAbsenceFactHash"
+    }
+}
+
 internal data class MavenDependencySelectorRecord(
     val declaringPom: Path,
     val consumer: String,
@@ -129,6 +154,7 @@ internal data class MavenModuleModel(
     val kotlinJvmTarget: String? = null,
     val kotlinTargetJdk: String? = null,
     val modelFailure: String? = null,
+    val reactorDescriptorFailure: MavenReactorDescriptorFailure? = null,
 )
 
 private data class MavenManagedDependency(val version: String, val scope: String)
@@ -170,7 +196,7 @@ internal class MavenEffectiveReactorBuilder(
         val effectiveCoordinates = effective.mapNotNull { (pom, result) -> result.model?.coordinate()?.let { it to pom } }.toMap()
         resolver.reactorModels = rawCoordinates + effectiveCoordinates
 
-        val modules = effective.mapValues { (pom, result) ->
+        val discoveredModules = effective.mapValues { (pom, result) ->
             val model = result.model
             if (model == null) {
                 val fallback = rawCoordinate(pom)?.first ?: MavenCoordinate("unknown", pom.parent.fileName.toString(), "unknown")
@@ -209,7 +235,170 @@ internal class MavenEffectiveReactorBuilder(
             }
             resolveModule(workspaceRoot, model, pom, resolver, effectiveCoordinates.keys, result)
         }.mapKeys { it.key.parent.toAbsolutePath().normalize() }
-        return MavenReactorModel(modules, normalizedPoms)
+        val rootPom = workspaceRoot.toAbsolutePath().normalize().resolve("pom.xml")
+        val rootModel = effective[rootPom]?.model
+        val missingActiveDescriptors = activeRootDescriptorFailures(workspaceRoot, rootPom, rootModel)
+        val missingModules = missingActiveDescriptors.associate { failure ->
+            val moduleRoot = failure.expectedPath.parent.toAbsolutePath().normalize()
+            val rootCoordinate = rootModel?.coordinate()
+            val message = failure.structuralMessage(workspaceRoot)
+            moduleRoot to MavenModuleModel(
+                root = moduleRoot,
+                coordinate = MavenCoordinate(
+                    rootCoordinate?.groupId ?: "unknown",
+                    moduleRoot.fileName?.toString() ?: failure.module.substringAfterLast('/'),
+                    rootCoordinate?.version ?: "unknown",
+                ),
+                packaging = "jar",
+                sourceLevel = rootModel?.let(::sourceLevel),
+                releaseLevel = rootModel?.let(::releaseLevel),
+                primaryMainSourceDirectory = null,
+                primaryTestSourceDirectory = null,
+                additionalMainSourceDirectories = emptyList(),
+                additionalTestSourceDirectories = emptyList(),
+                mainDependencies = emptyList(),
+                testDependencies = emptyList(),
+                mainDependencyScopes = emptyMap(),
+                testDependencyScopes = emptyMap(),
+                mainArtifacts = emptyList(),
+                runtimeArtifacts = emptyList(),
+                testArtifacts = emptyList(),
+                systemPathArtifacts = emptySet(),
+                modelInputs = setOf(rootPom),
+                importedBoms = emptySet(),
+                dependencyGraphFailures = listOf(message),
+                dependencySelectorRecords = emptyList(),
+                missingArtifacts = emptyList(),
+                mainMissingArtifacts = emptyList(),
+                runtimeMissingArtifacts = emptyList(),
+                testMissingArtifacts = emptyList(),
+                missingArtifactEvidence = emptyList(),
+                mainMissingArtifactEvidence = emptyList(),
+                testMissingArtifactEvidence = emptyList(),
+                testGeneratedPathHints = emptySet(),
+                modelFailure = message,
+                reactorDescriptorFailure = failure,
+            )
+        }
+        return MavenReactorModel(discoveredModules + missingModules, normalizedPoms)
+    }
+
+    private fun activeRootDescriptorFailures(
+        workspaceRoot: Path,
+        rootPom: Path,
+        rootModel: Model?,
+    ): List<MavenReactorDescriptorFailure> {
+        if (rootModel == null || !Files.isRegularFile(rootPom, LinkOption.NOFOLLOW_LINKS)) return emptyList()
+        val workspace = workspaceRoot.toAbsolutePath().normalize()
+        val content = Files.readString(rootPom)
+        val contentHash = sha256(rootPom)
+        return rootModel.modules.orEmpty().mapNotNull { declaredModule ->
+            val relativeModule = runCatching { Path.of(declaredModule).normalize() }.getOrNull()
+                ?.takeIf { !it.isAbsolute && !it.startsWith("..") } ?: return@mapNotNull null
+            val expected = workspace.resolve(relativeModule).resolve("pom.xml").normalize()
+            if (!expected.startsWith(workspace)) return@mapNotNull null
+            val relativeExpectedPath = workspace.relativize(expected)
+            val noFollowObservation = noFollowPathObservation(workspace, relativeExpectedPath)
+                ?: return@mapNotNull null
+            if (noFollowObservation.finalState != "ABSENT") return@mapNotNull null
+            val declarationPattern = Regex("<module>\\s*(${Regex.escape(declaredModule)})\\s*</module>")
+            val declaration = declarationPattern.findAll(content).toList().singleOrNull() ?: return@mapNotNull null
+            val valueRange = requireNotNull(declaration.groups[1]).range
+            val sourceRange = TextEdits.rangeForOffset(
+                content,
+                valueRange.first,
+                valueRange.last - valueRange.first + 1,
+            )
+            MavenReactorDescriptorFailure(
+                module = declaredModule,
+                declaringPom = rootPom,
+                declaringPomContentSha256 = contentHash,
+                moduleDeclarationRange = sourceRange,
+                expectedPath = expected,
+                condition = "MISSING",
+                noFollowAbsenceFactHash = noFollowObservation.factHash,
+            )
+        }.sortedBy(MavenReactorDescriptorFailure::module)
+    }
+
+    private data class NoFollowPathObservation(
+        val finalState: String,
+        val factHash: String,
+    )
+
+    /**
+     * Captures only deterministic, workspace-relative NOFOLLOW path state. No
+     * real paths, timestamps, file keys, permissions, or absolute roots enter
+     * the identity.
+     */
+    private fun noFollowPathObservation(
+        workspaceRoot: Path,
+        relativePath: Path,
+    ): NoFollowPathObservation? {
+        val workspace = workspaceRoot.toAbsolutePath().normalize()
+        val normalizedRelative = relativePath.normalize()
+        if (normalizedRelative.isAbsolute || normalizedRelative.startsWith("..") || normalizedRelative.nameCount == 0) {
+            return null
+        }
+        val stateParts = mutableListOf<String>()
+        var currentRelative = Path.of("")
+        var finalState = ""
+        var ancestorAbsent = false
+        for ((index, component) in normalizedRelative.withIndex()) {
+            currentRelative = currentRelative.resolve(component).normalize()
+            val absolute = workspace.resolve(currentRelative).normalize()
+            if (!absolute.startsWith(workspace)) return null
+            val attributes = if (ancestorAbsent) {
+                null
+            } else {
+                try {
+                    Files.readAttributes(
+                        absolute,
+                        BasicFileAttributes::class.java,
+                        LinkOption.NOFOLLOW_LINKS,
+                    )
+                } catch (_: NoSuchFileException) {
+                    null
+                } catch (_: Exception) {
+                    return null
+                }
+            }
+            finalState = when {
+                attributes == null -> "ABSENT"
+                attributes.isDirectory -> "DIRECTORY"
+                attributes.isRegularFile -> "FILE"
+                attributes.isSymbolicLink -> {
+                    val rawTarget = runCatching { Files.readSymbolicLink(absolute) }.getOrNull() ?: return null
+                    val resolvedTarget = if (rawTarget.isAbsolute) {
+                        rawTarget.toAbsolutePath().normalize()
+                    } else {
+                        absolute.parent.resolve(rawTarget).normalize()
+                    }
+                    if (!resolvedTarget.startsWith(workspace)) return null
+                    val targetIdentity = workspace.relativize(resolvedTarget)
+                        .toString().replace('\\', '/').ifBlank { "." }
+                    "SYMLINK:$targetIdentity"
+                }
+                else -> "OTHER"
+            }
+            stateParts += "component=${currentRelative.toString().replace('\\', '/')}"
+            stateParts += "state=$finalState"
+            if (index < normalizedRelative.nameCount - 1) {
+                when (finalState) {
+                    "DIRECTORY" -> Unit
+                    "ABSENT" -> ancestorAbsent = true
+                    else -> return null
+                }
+            }
+        }
+        return NoFollowPathObservation(
+            finalState = finalState,
+            factHash = hashParts(listOf(
+                "domain=refactorkit.maven.activeReactorDescriptor.noFollowState",
+                "version=1",
+                "path=${normalizedRelative.toString().replace('\\', '/')}",
+            ) + stateParts),
+        )
     }
 
     private fun resolveModule(

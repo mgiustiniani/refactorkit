@@ -11,6 +11,7 @@ import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.OperationAuthorityFileEvidence
 import org.refactorkit.core.OperationAuthorityLease
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceRange
@@ -200,6 +201,18 @@ internal sealed interface JavaMoveClassOfflineAuthorityPreparation {
     data class Eligible(val prepared: JavaMoveClassOfflineAuthorityPrepared) : JavaMoveClassOfflineAuthorityPreparation
     data class Ineligible(val blockers: List<String>) : JavaMoveClassOfflineAuthorityPreparation
 }
+
+internal data class JavaMoveClassDiagnosticIdentityDriftEvidence(
+    val mavenModule: String,
+    val sourceSet: String,
+    val path: Path,
+    val before: JavaMoveClassRetainedDiagnosticIdentity,
+    val staged: JavaMoveClassRetainedDiagnosticIdentity,
+    val beforeDiagnosticMultisetSha256: String,
+    val stagedDiagnosticMultisetSha256: String,
+    val changedFields: List<JavaMoveClassGuidanceDiagnosticChangedField>,
+    val stagedOverlaySha256: String,
+)
 
 internal object JavaMoveClassTargetAuthorityEvaluator {
     private const val MAVEN_PROVIDER = "maven-effective-v1"
@@ -433,18 +446,39 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
             allDiagnostics,
             workspaceEdit,
         )
+        val requiredCandidateFileEvidence = prepared.candidates
+            .filter { it.classification == JavaMoveClassCandidateClassification.BOUND_OTHER }
+            .groupBy { it.path.normalize() }
+            .toSortedMap(compareBy(Path::toString))
+            .map { (path, records) ->
+                val source = prepared.snapshot.files.single { it.path.normalize() == path }
+                OperationAuthorityFileEvidence(
+                    kind = "CANDIDATE_INVENTORY",
+                    path = path,
+                    expectedContentSha256 = rawSha256(source.content.toByteArray(Charsets.UTF_8)),
+                    attributes = mapOf(
+                        "classifications" to records.map { it.classification.name }.distinct().sorted().joinToString(","),
+                        "sourceSets" to records.map(JavaMoveClassCandidateRecord::sourceSet)
+                            .distinct().sorted().joinToString(","),
+                        "candidateRangeHash" to candidateHash(records),
+                        "changedSourceManaged" to "false",
+                    ),
+                )
+            }
         val coreLease = OperationAuthorityLease(
             kind = LEASE_KIND,
             operation = "moveClass",
             snapshotHash = prepared.snapshot.hash,
             evidenceHash = evidenceHash,
             requiredClasspathEvidence = requiredEvidence,
+            requiredFileEvidence = requiredCandidateFileEvidence,
             attributes = buildMap {
                 put("authorityMode", "TARGET_SCOPED")
                 put("reactorStructureStatus", "COMPLETE")
                 put("observerClosureStatus", "COMPLETE")
                 put("externalClasspathStatus", BuildModelStatus.OFFLINE_MISSING.name)
                 put("candidateInventoryHash", candidateHash(prepared.candidates))
+                put("candidateInventoryEvidenceHash", OperationAuthorityLease.fileEvidenceSha256(requiredCandidateFileEvidence))
                 put("stagedCandidateInventoryHash", candidateHash(candidates))
                 put("stagedSnapshotHash", staged.hash)
                 put("selectedMissingBinary.count", prepared.selectedMissingBinaryRecords.size.toString())
@@ -481,6 +515,91 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
             allDiagnosticsBefore = prepared.allDiagnostics,
             allDiagnosticsStaged = allDiagnostics,
             coreLease = coreLease,
+        )
+    }
+
+    fun retainedDiagnosticIdentityDrift(
+        prepared: JavaMoveClassOfflineAuthorityPrepared,
+        targetPackage: String,
+        newDeclarationPath: Path,
+        workspaceEdit: WorkspaceEdit,
+    ): JavaMoveClassDiagnosticIdentityDriftEvidence? {
+        val staged = runCatching { WorkspaceEditSimulator.apply(prepared.snapshot, workspaceEdit) }.getOrNull()
+            ?: return null
+        val stagedClosure = observerClosure(staged, newDeclarationPath, setOf(BuildModelStatus.OFFLINE_MISSING))
+            ?: return null
+        if (stagedClosure.owner != prepared.selection.closure.owner ||
+            stagedClosure.sourceSets != prepared.selection.closure.sourceSets
+        ) return null
+        val newFqn = JavaPackageUtil.fqn(targetPackage, JavaPackageUtil.simpleName(prepared.symbolFqn))
+        val analysis = analyzeOverlay(staged)
+        val target = analysis.symbols.singleOrNull { symbol ->
+            symbol.qualifiedName == newFqn && symbol.path == newDeclarationPath &&
+                symbol.kind in MOVEABLE_KINDS && symbol.bindingKey != null && !symbol.recovered
+        } ?: return null
+        val candidates = candidateInventory(
+            staged,
+            stagedClosure.model,
+            analysis,
+            newFqn,
+            requireNotNull(target.bindingKey),
+        )
+        if (candidates.isEmpty() || candidates.any {
+                it.classification == JavaMoveClassCandidateClassification.UNRESOLVED
+            } || targetNameLookupBlockers(staged, candidates, newFqn, newDeclarationPath).isNotEmpty()
+        ) return null
+        if (staged.files.filter { it.languageId == "java" }.any { file ->
+                JavaLexer.findOccurrences(file.content, prepared.symbolFqn).isNotEmpty()
+            }
+        ) return null
+        val blockers = mutableListOf<String>()
+        val stagedMissingEvidence = missingEvidence(staged, stagedClosure.model, stagedClosure.sourceSets, blockers)
+        if (blockers.isNotEmpty() ||
+            stagedMissingEvidence.systemPathEntries != prepared.offlineMissingEntries ||
+            stagedMissingEvidence.selectedBinaryRecords != prepared.selectedMissingBinaryRecords
+        ) return null
+        val stagedDiagnostics = diagnosticIdentities(
+            staged,
+            stagedClosure.model,
+            analysis.warnings,
+            prepared.offlineMissingEntries,
+            newFqn,
+        ).map { identity ->
+            if (identity.path == newDeclarationPath) identity.copy(path = prepared.declarationPath) else identity
+        }.sortedWith(DIAGNOSTIC_ORDER)
+        val beforeDiagnostics = prepared.allDiagnostics.sortedWith(DIAGNOSTIC_ORDER)
+        if (beforeDiagnostics.size != stagedDiagnostics.size || beforeDiagnostics.isEmpty()) return null
+        fun stableIdentity(identity: JavaMoveClassRetainedDiagnosticIdentity) = listOf(
+            identity.providerConfigurationHash,
+            identity.category,
+            identity.severity,
+            identity.path,
+            identity.sourceRange,
+        )
+        val changedPairs = beforeDiagnostics.zip(stagedDiagnostics).filter { (before, after) -> before != after }
+        if (changedPairs.size != 1) return null
+        val (before, after) = changedPairs.single()
+        if (stableIdentity(before) != stableIdentity(after)) return null
+        val changedFields = buildList {
+            if (before.problemId != after.problemId) add(JavaMoveClassGuidanceDiagnosticChangedField.PROBLEM_ID)
+            if (before.message != after.message) add(JavaMoveClassGuidanceDiagnosticChangedField.MESSAGE)
+        }
+        if (changedFields != listOf(
+                JavaMoveClassGuidanceDiagnosticChangedField.PROBLEM_ID,
+                JavaMoveClassGuidanceDiagnosticChangedField.MESSAGE,
+            )
+        ) return null
+        val owner = sourceSet(prepared.snapshot, prepared.selection.closure.model, before.path) ?: return null
+        return JavaMoveClassDiagnosticIdentityDriftEvidence(
+            mavenModule = owner.moduleId,
+            sourceSet = owner.sourceSetId,
+            path = before.path,
+            before = before,
+            staged = after,
+            beforeDiagnosticMultisetSha256 = diagnosticContractHash(beforeDiagnostics),
+            stagedDiagnosticMultisetSha256 = diagnosticContractHash(stagedDiagnostics),
+            changedFields = changedFields,
+            stagedOverlaySha256 = staged.hash,
         )
     }
 
@@ -1269,7 +1388,24 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
         },
     )
 
-    private fun observerClosure(
+    private fun diagnosticContractHash(
+        diagnostics: List<JavaMoveClassRetainedDiagnosticIdentity>,
+    ): String = hashParts(diagnostics.map { diagnostic ->
+        listOf(
+            diagnostic.providerConfigurationHash,
+            diagnostic.problemId,
+            diagnostic.category.name,
+            diagnostic.severity.name,
+            diagnostic.path.invariantSeparatorsPathString,
+            diagnostic.sourceRange.start.line,
+            diagnostic.sourceRange.start.character,
+            diagnostic.sourceRange.end.line,
+            diagnostic.sourceRange.end.character,
+            diagnostic.message,
+        ).joinToString("\u0000")
+    })
+
+    internal fun observerClosure(
         snapshot: ProjectSnapshot,
         declarationPath: Path,
         allowedStatuses: Set<BuildModelStatus>,
@@ -1299,7 +1435,7 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
         return MoveAuthorityObserverClosure(model, owner, closure)
     }
 
-    private fun sourceSet(
+    internal fun sourceSet(
         snapshot: ProjectSnapshot,
         model: BuildModel,
         path: Path,
@@ -1376,6 +1512,10 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
     }
 
     private fun sha256(value: String): String = hashParts(listOf(value))
+
+    private fun rawSha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(bytes)
+        .joinToString("") { "%02x".format(it) }
 
     private val SHA256 = Regex("[a-f0-9]{64}")
     private const val MAX_EFFECTIVE_INPUTS = 256

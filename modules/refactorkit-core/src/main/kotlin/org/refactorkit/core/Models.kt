@@ -3,6 +3,8 @@ package org.refactorkit.core
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.UUID
 
 @JvmInline
@@ -296,35 +298,152 @@ enum class RefactoringEvidence {
 }
 
 /**
+ * A generic workspace file whose exact content is required by an operation's
+ * authority decision even though the file is not itself a managed edit.
+ *
+ * Core deliberately knows only a caller-defined [kind], a safe relative path,
+ * and a content identity. Language-specific candidate semantics remain in the
+ * language adapter's immutable [attributes].
+ */
+class OperationAuthorityFileEvidence(
+    val kind: String,
+    path: Path,
+    val expectedContentSha256: String,
+    attributes: Map<String, String> = emptyMap(),
+) {
+    val path: Path = path.normalize()
+    private val attributeValues: Map<String, String> = Collections.unmodifiableMap(
+        LinkedHashMap(attributes.toSortedMap()),
+    )
+    val attributes: Map<String, String> get() = attributeValues
+
+    init {
+        require(kind.isNotBlank()) { "operation-authority file-evidence kind must not be blank" }
+        require(!path.isAbsolute && path == this.path && !this.path.startsWith("..")) {
+            "operation-authority file-evidence path must be normalized and workspace-relative"
+        }
+        require(SHA256.matches(expectedContentSha256)) {
+            "operation-authority expected file content hash must be SHA-256"
+        }
+        require(attributeValues.keys.all(String::isNotBlank)) {
+            "operation-authority file-evidence attribute keys must not be blank"
+        }
+    }
+
+    override fun equals(other: Any?): Boolean = other is OperationAuthorityFileEvidence &&
+        kind == other.kind && path == other.path && expectedContentSha256 == other.expectedContentSha256 &&
+        attributeValues == other.attributeValues
+
+    override fun hashCode(): Int {
+        var result = kind.hashCode()
+        result = 31 * result + path.hashCode()
+        result = 31 * result + expectedContentSha256.hashCode()
+        result = 31 * result + attributeValues.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "OperationAuthorityFileEvidence(kind=$kind, path=$path, expectedContentSha256=$expectedContentSha256, attributes=$attributeValues)"
+
+    private companion object {
+        val SHA256 = Regex("[a-f0-9]{64}")
+    }
+}
+
+/**
  * Immutable, operation-specific evidence that must still match the supplied
  * snapshot when a managed preview reaches the under-lock write boundary.
  *
  * The language planner owns the semantic meaning of [kind], [evidenceHash],
  * and [attributes]. Core only enforces that the lease belongs to this exact
- * operation/snapshot and that every required classpath presence or absence
- * record is part of the engine-owned snapshot evidence.
+ * operation/snapshot and that every required classpath or non-managed file
+ * evidence record is revalidated under the workspace lock.
  */
-data class OperationAuthorityLease(
+class OperationAuthorityLease(
     val kind: String,
     val operation: String,
     val snapshotHash: String,
     val evidenceHash: String,
-    val requiredClasspathEvidence: List<ClasspathEvidence> = emptyList(),
-    val attributes: Map<String, String> = emptyMap(),
+    requiredClasspathEvidence: Collection<ClasspathEvidence> = emptyList(),
+    requiredFileEvidence: Collection<OperationAuthorityFileEvidence> = emptyList(),
+    attributes: Map<String, String> = emptyMap(),
 ) {
+    private val requiredClasspathEvidenceValues: List<ClasspathEvidence> =
+        Collections.unmodifiableList(ArrayList(requiredClasspathEvidence))
+    private val requiredFileEvidenceValues: List<OperationAuthorityFileEvidence> =
+        Collections.unmodifiableList(ArrayList(requiredFileEvidence))
+    private val attributeValues: Map<String, String> = Collections.unmodifiableMap(
+        LinkedHashMap(attributes.toSortedMap()),
+    )
+
+    val requiredClasspathEvidence: List<ClasspathEvidence> get() = requiredClasspathEvidenceValues
+    val requiredFileEvidence: List<OperationAuthorityFileEvidence> get() = requiredFileEvidenceValues
+    val requiredFileEvidenceSha256: String = fileEvidenceSha256(requiredFileEvidenceValues)
+    val attributes: Map<String, String> get() = attributeValues
+
     init {
         require(kind.isNotBlank()) { "operation-authority lease kind must not be blank" }
         require(operation.isNotBlank()) { "operation-authority lease operation must not be blank" }
         require(SHA256.matches(snapshotHash)) { "operation-authority snapshot hash must be SHA-256" }
         require(SHA256.matches(evidenceHash)) { "operation-authority evidence hash must be SHA-256" }
-        require(requiredClasspathEvidence.distinctBy { it.path.normalize() to it.kind }.size == requiredClasspathEvidence.size) {
-            "operation-authority classpath evidence keys must be unique"
+        require(requiredClasspathEvidenceValues.distinctBy { it.path.normalize() to it.kind }.size ==
+            requiredClasspathEvidenceValues.size
+        ) { "operation-authority classpath evidence keys must be unique" }
+        require(requiredFileEvidenceValues.distinctBy(OperationAuthorityFileEvidence::path).size ==
+            requiredFileEvidenceValues.size
+        ) { "operation-authority required file-evidence paths must be unique" }
+        require(attributeValues.keys.all(String::isNotBlank)) {
+            "operation-authority attribute keys must not be blank"
         }
-        require(attributes.keys.all(String::isNotBlank)) { "operation-authority attribute keys must not be blank" }
     }
 
-    private companion object {
-        val SHA256 = Regex("[a-f0-9]{64}")
+    override fun equals(other: Any?): Boolean = other is OperationAuthorityLease &&
+        kind == other.kind && operation == other.operation && snapshotHash == other.snapshotHash &&
+        evidenceHash == other.evidenceHash && requiredClasspathEvidenceValues == other.requiredClasspathEvidenceValues &&
+        requiredFileEvidenceValues == other.requiredFileEvidenceValues && attributeValues == other.attributeValues
+
+    override fun hashCode(): Int {
+        var result = kind.hashCode()
+        result = 31 * result + operation.hashCode()
+        result = 31 * result + snapshotHash.hashCode()
+        result = 31 * result + evidenceHash.hashCode()
+        result = 31 * result + requiredClasspathEvidenceValues.hashCode()
+        result = 31 * result + requiredFileEvidenceValues.hashCode()
+        result = 31 * result + attributeValues.hashCode()
+        return result
+    }
+
+    override fun toString(): String = "OperationAuthorityLease(kind=$kind, operation=$operation, " +
+        "snapshotHash=$snapshotHash, evidenceHash=$evidenceHash, " +
+        "requiredClasspathEvidence=$requiredClasspathEvidenceValues, " +
+        "requiredFileEvidence=$requiredFileEvidenceValues, attributes=$attributeValues)"
+
+    companion object {
+        private val SHA256 = Regex("[a-f0-9]{64}")
+
+        fun fileEvidenceSha256(
+            evidence: Collection<OperationAuthorityFileEvidence>,
+            observedContentIdentities: Map<Path, String> = emptyMap(),
+        ): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            evidence.sortedBy { it.path.toString().replace('\\', '/') }.forEach { record ->
+                listOf(
+                    record.kind,
+                    record.path.toString().replace('\\', '/'),
+                    observedContentIdentities[record.path] ?: record.expectedContentSha256,
+                ).forEach { part ->
+                    digest.update(part.toByteArray(Charsets.UTF_8))
+                    digest.update(0)
+                }
+                record.attributes.toSortedMap().forEach { (key, value) ->
+                    digest.update(key.toByteArray(Charsets.UTF_8))
+                    digest.update(0)
+                    digest.update(value.toByteArray(Charsets.UTF_8))
+                    digest.update(0)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
     }
 }
 
@@ -347,7 +466,39 @@ enum class DiagnosticLocationPrecision {
     NONE,
 }
 
-data class Diagnostic(
+/**
+ * Language-neutral structured diagnostic data with deterministic iteration order.
+ * The caller's map is copied so diagnostics cannot change after construction.
+ */
+class DiagnosticDetails @JvmOverloads constructor(fields: Map<String, String> = emptyMap()) {
+    private val fieldValues: Map<String, String> = Collections.unmodifiableMap(
+        LinkedHashMap(fields.toSortedMap()),
+    )
+
+    val fields: Map<String, String> get() = fieldValues
+    val isEmpty: Boolean get() = fieldValues.isEmpty()
+
+    init {
+        require(fieldValues.keys.all(String::isNotBlank)) {
+            "diagnostic detail field names must not be blank"
+        }
+    }
+
+    operator fun get(field: String): String? = fieldValues[field]
+
+    override fun equals(other: Any?): Boolean = other is DiagnosticDetails && fieldValues == other.fieldValues
+
+    override fun hashCode(): Int = fieldValues.hashCode()
+
+    override fun toString(): String = "DiagnosticDetails(fields=$fieldValues)"
+
+    companion object {
+        @JvmField
+        val EMPTY: DiagnosticDetails = DiagnosticDetails()
+    }
+}
+
+data class Diagnostic @JvmOverloads constructor(
     val message: String,
     val severity: Severity,
     val location: SourceLocation? = null,
@@ -356,6 +507,7 @@ data class Diagnostic(
     val category: DiagnosticCategory? = null,
     val locationPrecision: DiagnosticLocationPrecision =
         if (location == null) DiagnosticLocationPrecision.NONE else DiagnosticLocationPrecision.EXACT_RANGE,
+    val details: DiagnosticDetails = DiagnosticDetails.EMPTY,
 ) {
     init {
         require((location == null) == (locationPrecision == DiagnosticLocationPrecision.NONE)) {

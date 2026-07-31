@@ -388,6 +388,16 @@ post-image hashes, post-apply rehydration and exact rollback cover both sets.
 Core tests prove one POM range edit passes all three diagnostic observations and
 rolls back byte-identically while the Java source remains unchanged.
 
+An operation lease may identify non-managed workspace files whose exact bytes
+participated in semantic authority through immutable
+`OperationAuthorityFileEvidence`. The same under-lock source/auxiliary walk now
+returns one observed snapshot identity and per-file content identities reused by
+lease validation. A mismatch returns primary `authorityLease.evidenceDrift` with
+immutable sorted `DiagnosticDetails`, followed by the broader
+`snapshot.scopeChanged` diagnostic, before WAL. The caller's external change is
+preserved; because the lock has already been acquired, `.refactorkit/workspace.lock`
+may remain even though no transaction or managed target edit exists.
+
 Java scans also capture hash-bound classpath evidence for every active classpath
 entry, prospective conventional compiled-output directory, local JAR directory,
 and generated classpath declaration file. Files and recursively traversed
