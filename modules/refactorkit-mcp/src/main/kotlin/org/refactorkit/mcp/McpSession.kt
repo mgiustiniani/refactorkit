@@ -22,6 +22,8 @@ import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.PendingPlanStore
+import org.refactorkit.core.PlanId
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.ProtocolPath
@@ -119,9 +121,7 @@ class McpSession(
     private var kotlinAdapter = KotlinLanguageAdapter()
     private var kotlinToolchain: KotlinSemanticToolchain? = null
     private var kotlinSemanticLease: String? = null
-    private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
-    }
+    private val pendingPlans = PendingPlanStore<PendingPlan>()
 
     var onExit: () -> Unit = {}
 
@@ -939,9 +939,9 @@ class McpSession(
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
-        if (plan.status == PatchStatus.PREVIEW) pendingPlans[plan.id.value] = PendingPlan(
+        if (plan.status == PatchStatus.PREVIEW) pendingPlans.insert(plan.id, PendingPlan(
             plan, languageId, if (languageId == "kotlin") args.string("semanticLease") else null,
-        )
+        ))
         return PreviewToolResult.Text(buildString {
             appendLine("Plan ID  : ${plan.id.value}")
             appendLine("Status   : ${plan.status}")
@@ -990,12 +990,12 @@ class McpSession(
                 )
             }
             is RefactoringApplyIdentity.ManagedPlan ->
-                textContent(toolApplyRefactoring(args, identity.planId.value))
+                textContent(toolApplyRefactoring(args, identity.planId))
         }
 
-    private fun toolApplyRefactoring(args: JsonObject, planId: String): String {
-        val pending = pendingPlans[planId]
-            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+    private fun toolApplyRefactoring(args: JsonObject, planId: PlanId): String {
+        val pending = pendingPlans.lookup(planId)
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: ${planId.value}")
         val plan = pending.plan
         if (pending.languageId == "kotlin") {
             val lease = args.string("semanticLease") ?: missing("semanticLease")
@@ -1088,7 +1088,7 @@ class McpSession(
             snapshot = snap,
         ))
 
-        pendingPlans[plan.id.value] = PendingPlan(plan)
+        pendingPlans.insert(plan.id, PendingPlan(plan))
         return buildString {
             appendLine("Plan ID  : ${plan.id.value}")
             appendLine("Status   : ${plan.status}")

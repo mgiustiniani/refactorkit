@@ -30,6 +30,8 @@ import org.refactorkit.core.PatchDiffRenderer
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.PendingPlanStore
+import org.refactorkit.core.PlanId
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.ProtocolPath
@@ -161,9 +163,7 @@ class DaemonSession(
     private var workspaceRefreshCount: Long = 0
     private var lastWorkspaceRefresh: WorkspaceRefreshOutcome? = null
 
-    private val pendingPlans = object : LinkedHashMap<String, PendingPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PendingPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
-    }
+    private val pendingPlans = PendingPlanStore<PendingPlan>()
 
     // ── public dispatcher ─────────────────────────────────────────────────────
 
@@ -1649,18 +1649,18 @@ class DaemonSession(
                 buildJsonObject { plan.refusalCode?.let { put("refusalCode", it) } },
             )
         }
-        pendingPlans[plan.id.value] = PendingPlan(
+        pendingPlans.insert(plan.id, PendingPlan(
             plan,
             languageId = requestedLanguage,
             semanticLease = if (requestedLanguage == "kotlin") p.string("semanticLease") else null,
             indexGeneration = if (requestedLanguage == "kotlin") workspaceIndex.snapshot()?.generation else null,
-        )
+        ))
         return planToJson(plan)
     }
 
     private fun refactorDiscard(params: JsonObject?): JsonElement {
         val planId = params?.string("planId") ?: missing("planId")
-        val discarded = pendingPlans.remove(planId) != null
+        val discarded = planId.isNotBlank() && pendingPlans.remove(PlanId(planId)) != null
         return PROTOCOL_JSON.encodeToJsonElement(DiscardResponseDto(planId, discarded))
     }
 
@@ -1677,10 +1677,10 @@ class DaemonSession(
                     JavaMoveClassLexicalFallbackReviewJsonProjection.refusalData(envelope),
                 )
             }
-            is RefactoringApplyIdentity.ManagedPlan -> identity.planId.value
+            is RefactoringApplyIdentity.ManagedPlan -> identity.planId
         }
-        val pending = pendingPlans[planId]
-            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+        val pending = pendingPlans.lookup(planId)
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: ${planId.value}")
         val plan = pending.plan
         if (pending.languageId == "kotlin") {
             val lease = values.string("semanticLease") ?: missing("semanticLease")
@@ -1743,7 +1743,7 @@ class DaemonSession(
                 val changes = fileChanges(plan.workspaceEdit, primary)
                 PROTOCOL_JSON.encodeToJsonElement(ApplyResponseDto(
                     status = "applied",
-                    planId = planId,
+                    planId = planId.value,
                     transactionId = result.transaction.id.value,
                     changedFiles = changes,
                     changedFilePaths = changes.map(ProtocolFileChangeDto::path),
@@ -1794,7 +1794,7 @@ class DaemonSession(
             resolvedTarget = target,
         ))
         val detail = withPreviewDiagnostics(imported, snap)
-        if (detail.applyEligible) pendingPlans[detail.plan.id.value] = PendingPlan(detail.plan, detail)
+        if (detail.applyEligible) pendingPlans.insert(detail.plan.id, PendingPlan(detail.plan, detail))
         return importPreviewToJson(detail, snap)
     }
 

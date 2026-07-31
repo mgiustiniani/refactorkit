@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from reviewed domain research and bounded implementation evidence. All twelve requirement definitions and 22 expanded cases are implemented and validated. REQ-JAVA-MAVEN-MOVE-AUTH-008 adds four immutable preview-guidance blocker vocabularies, result-owned active-reactor-POM structural refusal, generic required-file authority evidence, immutable structured diagnostic details, and an under-lock evidence-drift vocabulary that distinguishes expected semantic inventory from expected/observed file evidence. Existing `001`-`007` and `009`-`012` meanings remain independently bounded. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific; no packaged/runtime/native/general support is inferred.
+Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from reviewed domain research and bounded implementation evidence. Repository Gherkin now contains 14 implemented-and-validated definitions and 24 expanded cases: the twelve-definition/22-case Maven subset retains its independently bounded meanings, and REQ-PENDING-PLAN-STORE-001/002 add the source-built/in-process pending-plan vocabulary below. REQ-JAVA-MAVEN-MOVE-AUTH-008 adds four immutable preview-guidance blocker vocabularies, result-owned active-reactor-POM structural refusal, generic required-file authority evidence, immutable structured diagnostic details, and an under-lock evidence-drift vocabulary that distinguishes expected semantic inventory from expected/observed file evidence. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific; no packaged/runtime/native/general support is inferred. Pending-plan evidence likewise does not qualify packaged processes, concurrency, or general service extraction.
 
 [cols="1,3,2,2",options="header"]
 |===
@@ -19,9 +19,19 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |`Models.kt`; ADR 0002; `JavaMoveClassOperationDispatcher`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003/004/008
 
 |PlanId
-|Opaque identifier generated for a `PatchPlan`. At a protocol boundary it is an apply capability only when the exact eligible plan was admitted to that surface's pending managed-plan store. An internal lexical review plan's random UUID-based ID is not a capability and must never be exposed or aliased to an `operationId`; unknown `PlanId` input remains `INVALID_PARAMS`.
+|Opaque identifier generated for a `PatchPlan`. At a protocol boundary it is a revocable session-scoped lookup handle only when the exact surface-admitted payload is retained in that session's pending managed-plan store. It is not approval, authorization, a transaction ID, or possession-based write authority: explicit apply invocation and all `PatchEngine` gates remain mandatory. An internal lexical review plan's random UUID-based ID is not a protocol handle and must never be exposed or aliased to an `operationId`; unknown `PlanId` input remains `INVALID_PARAMS`.
 |Core / integrations
-|`Models.kt`; `RefactoringApplyIdentity`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
+|`Models.kt`; `RefactoringApplyIdentity`; ADRs 0002 and 0004; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004; reviewed `SRC-2026-07-31-002`
+
+|Pending Plan
+|Session-owned, in-memory registration of one exact `PatchPlan` plus any surface-owned apply-critical metadata under the plan identity. Membership makes the plan pending for that surface; it is not another `PatchStatus`, regenerated preview, durable transaction, WAL record, or rollback record. Missing, evicted, discarded, and cleared identities use the surface's existing indistinguishable not-found behavior.
+|Daemon / LSP / MCP orchestration
+|Implemented-and-validated REQ-PENDING-PLAN-STORE-001/002; `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt`; exact daemon/LSP/MCP session production paths
+
+|Bounded Pending-plan Store
+|Implemented language-neutral core component generic over the exact retained payload. Every integration session owns a separate instance. It provides identity-keyed insertion, access-order lookup, side-effect-free remove/clear, and silent least-recently-accessed eviction above exactly 128 entries. Admission, snapshot/lifecycle policy, protocol projection, approval, apply/rollback, filesystem access, WAL, transaction, and diagnostics remain outside it. Current evidence is source-built/in-process and does not qualify concurrency or a general service-extraction pattern.
+|Core primitive with daemon / LSP / MCP surface policy
+|`modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt`; `DaemonSession.kt`; `LspSession.kt`; `McpSession.kt`; implemented-and-validated REQ-PENDING-PLAN-STORE-001/002
 
 |WorkspaceEdit
 |Collection of file edits to modify, create, delete, or rename files in a workspace.

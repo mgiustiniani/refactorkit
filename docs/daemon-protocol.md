@@ -23,11 +23,15 @@ the caller invokes explicit mutating `patch.recover` before read-only
 {"jsonrpc":"2.0","id":6,"method":"patch.rollback","params":{"transactionId":"transaction-..."}}
 ```
 
-A successful preview is retained in an access-ordered LRU with at most 128
-plans. `project.open` clears the previous workspace's plans before read-only
-recovery inspection and scan; successful apply, rollback, and process shutdown clear all plans. Refused
-or diagnostics-blocked plans are never retained. Any apply refusal removes that
-plan. LRU eviction drops the oldest source-bearing plan reference.
+A successful preview is retained in the daemon session's language-neutral
+`PendingPlanStore`, an access-ordered LRU with at most 128 exact payloads.
+Successful lookup refreshes recency; eviction only releases the untouched least-
+recently accessed in-memory reference. `project.open` clears the previous
+workspace's plans before read-only recovery inspection and scan; successful
+apply, rollback, and process shutdown clear all plans. Refused or diagnostics-
+blocked plans are never retained. Any apply refusal removes that plan. These
+lifecycle decisions remain daemon policy; the shared store performs no filesystem,
+lock, WAL, transaction, authorization, or rollback action.
 
 A caller can release a plan immediately without touching the workspace:
 

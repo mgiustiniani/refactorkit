@@ -2,7 +2,9 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, needs-review for broader coverage and qualification. The `RPK-JAVA-DIAG-001..007` diagnostics-authority epic remains active and product-critical. Current repository Gherkin contains twelve requirement-bearing definitions and 22 executable cases after expansion of two six-row Scenario Outlines; 12/12 definitions and 22/22 expanded cases are `@implemented-and-validated`. Existing `001`-`007` and `009`-`012` evidence remains independently bounded. REQ-JAVA-MAVEN-MOVE-AUTH-008 now validates four immutable schema-v1 preview-guidance outcomes, one typed root-declared active-reactor-POM structural refusal, and one under-lock generic required-file-evidence drift refusal. Focused OpenJDK 21 evidence selected/executed/passed six of 22 cases, skipped sixteen by tag filter, and recorded zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. These execution totals do not change the twelve-definition/22-case Gherkin catalogue and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific; no bounded row qualifies packaged processes, runtime distributions, native platforms, or general authority.
+Status: implementation-informed, needs-review for broader coverage and qualification. The configured `features/` root now contains two feature documents, 14 repository-unique requirement definitions, 24 expanded executable cases, and 520 expanded case steps; all 14 definitions and all 24 cases are effectively `@implemented-and-validated`. The official OpenJDK 21.0.11 `io.cucumber:gherkin:28.0.0` audit reported zero parse/contract errors (log SHA-256 `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`). REQ-PENDING-PLAN-STORE-001/002 contribute two non-functional scenarios and 19 steps. Their focused source-built/in-process run passed both scenarios with 29 executed Gradle tasks and zero failures/errors (log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). Subsequent independent current whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This newer receipt is dated mutable source-built aggregate evidence; it does not qualify packaged processes, concurrent access, a general extraction pattern, or numerical coverage. Surface lifecycle policy remains separate, and no protocol capability or authority rule changed.
+
+The twelve-definition/22-case Maven move-class subset retains its independently bounded evidence. Existing `001`-`007` and `009`-`012` meanings are unchanged. REQ-JAVA-MAVEN-MOVE-AUTH-008 validates four immutable schema-v1 preview-guidance outcomes, one typed root-declared active-reactor-POM structural refusal, and one under-lock generic required-file-evidence drift refusal. Focused OpenJDK 21 evidence selected/executed/passed its six cases, skipped sixteen by tag filter, and recorded zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. These execution totals do not change the Maven subset and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific.
 
 == Requirement Sources
 
@@ -35,7 +37,7 @@ Status: implementation-informed, needs-review for broader coverage and qualifica
 |implementation-informed field evidence for one CLI/Linux/JDK-21 request; broader qualification needs review
 
 |`modules/*`
-|Implementation and test evidence.
+|Implementation and test evidence. Pending-plan production evidence is exactly `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt`, `modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt`, `modules/refactorkit-lsp/src/main/kotlin/org/refactorkit/lsp/LspSession.kt`, and `modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt`.
 |implementation-informed
 
 |`samples/*`
@@ -57,6 +59,10 @@ Status: implementation-informed, needs-review for broader coverage and qualifica
 |`features/java-maven-move-class-apply-authority.feature`
 |Executable Story BDD backlog for Maven move-class semantic preview, managed apply and rollback, observer discrimination, closure-scoped JDT warning authority, authority-loss guidance, cross-surface lexical-fallback refusal, zero-residue CLI refusal, candidate-total `OFFLINE_MISSING` authority, fail-closed uncertainty/drift handling, explicit transitive-test-scope preservation, descriptor-closed selector pruning before child lookup, alternate-path selected-POM refusal, RefactorKit-owned ordinary selected-JAR negative-presence authority with under-lock drift refusal, and six selected-descriptor loss/drift cases requiring structural pre-lock/pre-WAL refusal without a binary-absence downgrade.
 |12 requirement-bearing definitions and 22 example-expanded executable cases; all 12 IDs and all 22 cases effectively `@implemented-and-validated`; `008` and `012` each expand to six validated cases
+
+|`features/pending-plan-store-extraction.feature`
+|Executable non-functional Story BDD contract for exact generic session payload retention, true 128-entry access-order LRU, session isolation, side-effect-free removal, shared-store adoption, and preservation of the distinct daemon/LSP/MCP admission, removal, rollback, reset, close, and response policies without adding protocol capability or write authority.
+|Two ordinary requirement-bearing scenarios and 19 steps; REQ-PENDING-PLAN-STORE-001/002 inherit `@non-functional-requirement` and `@implemented-and-validated` from the feature; both passed the focused source-built/in-process runner
 |===
 
 The external research and target-scoped concepts above were reviewed against RefactorKit base commit `c1d70fc51ef84fa25baaab5678dece69f8ce739a`; bounded implementation claims rely separately on dated mutable working-tree evidence. The 2026-07-30 clarification defines full-reactor graph completeness as descriptor-closed over selected nodes: every active reactor POM remains mandatory, every selected external node needs complete effective descriptor closure, and every outgoing declaration/classification is hash-bound. Bounded `010` validates the prune/alternate-selected-path boundary; bounded `011` independently validates the ordinary sidecar-free selected-`jar` row and its three under-lock drift gates; and six-case dual-classified outline `012` validates fail-closed `MISSING`, `MALFORMED`, and `DRIFTED` selected-descriptor outcomes with parsed relocation/model identity proof and stable recorded evidence. The follow-up Magrathea field observation is separately implementation-informed for consumer commit `a48e3c06` through the source-built CLI on Linux/JDK 21 after `010`; it is not architecture research promoted into a requirement, did not require `011` or `012`, and does not establish integration/native-matrix or general qualification.
@@ -187,7 +193,7 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |Move Java class
 |Developer, Agent
 |For the first accepted same-module/source-set Maven `moveClass` shape, keep active-POM/selected-descriptor/candidate/platform/provider authority global while limiting selected-missing-binary and retained-diagnostic evidence to the operation closure. Implemented-and-validated `001`-`007` and `009`-`012` retain their bounded positive, guidance, lexical-review, scope, selector, ordinary-absence, and selected-descriptor evidence. Implemented-and-validated `008` adds four non-lexical preview-guidance blockers, one result-owned active-reactor-POM structural refusal, and one under-lock required-file-evidence freshness refusal. Its expected semantic candidate-inventory identity is distinct from expected/observed required-file-evidence identities. Caller classpath attestation, plugin execution, settings credentials, implicit network, and lexical promotion remain forbidden.
-|Current Gherkin has twelve validated IDs across 22 validated cases. Focused REQ-008 evidence passed six selected cases, skipped sixteen, and had zero failures/errors. Accepted ADR 0012 and the 20-module fixture govern only bounded evidence; the exact Magrathea `a48e3c06` CLI/Linux/JDK-21 result remains separate.
+|The Maven move-class feature has twelve validated IDs across 22 validated cases. Focused REQ-008 evidence passed six selected cases, skipped sixteen, and had zero failures/errors. Accepted ADR 0012 and the 20-module fixture govern only bounded evidence; the exact Magrathea `a48e3c06` CLI/Linux/JDK-21 result remains separate.
 |confirmed P0 target-scoped architecture; twelve bounded definitions/22 cases and one exact CLI field request implementation-informed; general, packaged/runtime integration, and native-matrix acceptance remain open
 
 |UC-JAVA-ORGANIZE-IMPORTS
@@ -235,23 +241,23 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-DAEMON
 |Serve JSON-RPC daemon
 |Developer/App/Tool
-|Provide long-running local JSON-RPC operations over stdio. Java lexical `moveClass` returns an edit-free envelope and never a pending plan; bounded audit correlation uses `operationId` only. Known operation refusal preserves blocker/envelope JSON-RPC error `data`.
-|`DaemonSession`, `DaemonRequestScheduler`, shared `RefactoringApplyIdentity`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004.
-|implementation-informed for ordinary plans and the bounded in-process daemon-session lexical contract; packaged stdio/runtime qualification remains open
+|Provide long-running local JSON-RPC operations over stdio. Java lexical `moveClass` returns an edit-free envelope and never a pending plan; bounded audit correlation uses `operationId` only. Ordinary admitted payloads are retained in the session-owned shared core store while daemon-specific admission, discard, apply/refusal, rollback, project-open, close, response, and authority policy stays in `DaemonSession`.
+|`DaemonSession`, `DaemonRequestScheduler`, shared `RefactoringApplyIdentity`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004 and REQ-PENDING-PLAN-STORE-001/002.
+|implementation-informed for ordinary plans, the bounded in-process lexical contract, and source-built/in-process pending-plan behavior; packaged stdio/runtime and concurrency qualification remains open
 
 |UC-LSP
 |Serve LSP
 |Editor / IDE
-|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics. Admitted native WorkspaceEdits are explicitly client-managed/no-rollback and carry tracked open-document versions; custom `applyPlan` is managed and refuses dirty/affected-open buffers. Java lexical `moveClass` returns command data before the WorkspaceEdit renderer, with neither `changes` nor `documentChanges` nor a pending plan; known-operation refusal occurs before editor application.
-|`LspSession`, `RefactorKitLsp`, transactionality audit `TX-007`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004.
-|implementation-informed for admitted edits and the bounded in-process lexical no-edit command path; packaged editor/native qualification remains open
+|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics. Admitted native WorkspaceEdits are explicitly client-managed/no-rollback and carry tracked open-document versions; custom `applyPlan` is managed and refuses dirty/affected-open buffers. Java lexical `moveClass` returns command data before the WorkspaceEdit renderer, with neither `changes` nor `documentChanges` nor a pending plan. Ordinary admitted plans use the session-owned shared core store while LSP-specific admission, selected removal, refusal/rollback retention, document lifecycle, response, and authority policy stays in `LspSession`.
+|`LspSession`, `RefactorKitLsp`, transactionality audit `TX-007`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004 and REQ-PENDING-PLAN-STORE-001/002.
+|implementation-informed for admitted edits, the bounded in-process lexical path, and source-built/in-process pending-plan behavior; packaged editor/native and concurrency qualification remains open
 
 |UC-MCP
 |Serve MCP tools/resources/prompts
 |Local LLM Agent
-|Expose deterministic project, symbol, diagnostics, preview/apply/rollback/import/context-bundle tools. Java lexical preview returns canonical `structuredContent` without Plan ID/apply instructions; exactly-one operation/plan identity is advertised, and a known `operationId` produces only `isError=true` structured refusal.
-|`McpSession`, `RefactorKitMcp`, shared `RefactoringApplyIdentity`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004.
-|implementation-informed for ordinary plans and the bounded in-process MCP-session lexical contract; packaged transport/runtime qualification remains open
+|Expose deterministic project, symbol, diagnostics, preview/apply/rollback/import/context-bundle tools. Java lexical preview returns canonical `structuredContent` without Plan ID/apply instructions; exactly-one operation/plan identity is advertised, and a known `operationId` produces only `isError=true` structured refusal. Ordinary retained payloads use the session-owned shared core store while MCP-specific preview/import admission, selected/stale-Kotlin removal, general refusal/rollback retention, project-scan/close, response, and authority policy stays in `McpSession`.
+|`McpSession`, `RefactorKitMcp`, shared `RefactoringApplyIdentity`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004 and REQ-PENDING-PLAN-STORE-001/002.
+|implementation-informed for ordinary plans, the bounded in-process lexical contract, and source-built/in-process pending-plan behavior; packaged transport/runtime and concurrency qualification remains open
 
 |UC-CONTEXT-BUNDLE
 |Generate AI context bundle
@@ -298,7 +304,7 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 
 |UC-JAVA-MOVE-CLASS
 |RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007; executable Gherkin REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012`
-|`features/java-maven-move-class-apply-authority.feature`; current source/tests and focused evidence; ADRs 0002, 0008, and 0010-0012; chapters 2, 4-6, 8, and 10-12. All twelve repository definitions and all 22 expanded cases map to this use case and carry bounded tagged evidence. REQ-008 maps its four guidance, one structural, and one freshness case without broadening REQ-003/004/010/011/012. The dated Magrathea `a48e3c06` CLI/Linux/JDK-21 result remains separate field evidence, not another Gherkin case or broader qualification.
+|`features/java-maven-move-class-apply-authority.feature`; current source/tests and focused evidence; ADRs 0002, 0008, and 0010-0012; chapters 2, 4-6, 8, and 10-12. All twelve definitions in that feature and all 22 expanded cases map to this use case and carry bounded tagged evidence. REQ-008 maps its four guidance, one structural, and one freshness case without broadening REQ-003/004/010/011/012. The dated Magrathea `a48e3c06` CLI/Linux/JDK-21 result remains separate field evidence, not another Gherkin case or broader qualification.
 
 |UC-PREVIEW-REFACTOR
 |REQ-SAFE-001
@@ -327,6 +333,10 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-MCP
 |REQ-AI-001
 |`docs/ai-workflow.md`, `docs/integration-contracts.md`, MCP module.
+
+|UC-DAEMON, UC-LSP, UC-MCP
+|REQ-PENDING-PLAN-STORE-001 and REQ-PENDING-PLAN-STORE-002
+|`features/pending-plan-store-extraction.feature`; exact `PendingPlanStore.kt`, `DaemonSession.kt`, `LspSession.kt`, and `McpSession.kt` production paths; `PendingPlanStoreCucumberTest`/steps; chapters 2, 4-6, 8, and 10-12. The mapping is supporting retention behavior inside existing integration use cases, not a new protocol capability or authority boundary.
 
 |UC-PACKAGE-CLI
 |REQ-PACKAGE-001
@@ -381,7 +391,7 @@ No row in this epic is marked implemented by this architecture phase. Existing p
 
 == Java/Maven Move-Class Apply Authority Epic
 
-This architecture integration summarizes the reviewed requirement without replacing specialist evidence. Accepted ADR 0012 distinguishes global source-set authority from narrower target-scoped Maven `moveClass` authority. Repository Gherkin contains exactly twelve definitions and 22 cases, all implemented-and-validated. Bounded `001`-`007` and `009`-`012` retain their existing meanings; bounded `008` establishes four immutable preview-guidance outcomes, one active-reactor-POM structural refusal, and one under-lock required-file-evidence refusal. No general, packaged, runtime, or native authority is inferred. The exact Magrathea `a48e3c06` request remains separately CLI/Linux/JDK-21-qualified.
+This architecture integration summarizes the reviewed requirement without replacing specialist evidence. Accepted ADR 0012 distinguishes global source-set authority from narrower target-scoped Maven `moveClass` authority. The Maven move-class feature contains exactly twelve definitions and 22 cases, all implemented-and-validated. Bounded `001`-`007` and `009`-`012` retain their existing meanings; bounded `008` establishes four immutable preview-guidance outcomes, one active-reactor-POM structural refusal, and one under-lock required-file-evidence refusal. No general, packaged, runtime, or native authority is inferred. The exact Magrathea `a48e3c06` request remains separately CLI/Linux/JDK-21-qualified.
 
 [cols="1,3,2,1",options="header"]
 |===
@@ -506,6 +516,31 @@ The dedicated OpenJDK-21 Cucumber report discovered 22 cases, selected/executed/
 
 REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` occur in the feature with repository-unique IDs. Ten ordinary scenarios and both six-row outlines (`008`, `012`) carry explicit `@implemented-and-validated`; their example rows inherit one ID, classification, and status. The feature reconciles to twelve definitions and 22 validated cases.
 
+== Pending-plan Store Extraction
+
+Status: implementation-informed and reconciled with feature-level `@implemented-and-validated`. The extraction is a supporting quality/safety contract for existing daemon/LSP/MCP use cases, not a new externally invocable use case.
+
+[cols="2,3,2,2,2",options="header"]
+|===
+|Requirement ID |Title / acceptance boundary |Classification |Architecture mapping |Declared status and observed evidence
+
+|REQ-PENDING-PLAN-STORE-001
+|Exact opaque payloads are retained by reference in separate session-owned generic stores. The fixed capacity is 128; successful lookup refreshes access recency; inserting entry 129 after touching entry 1 evicts entry 2; missing or evicted IDs preserve each surface's existing not-found response and require a new preview. Eviction, remove, and clear affect in-memory references only and create no workspace edit, filesystem write, workspace lock, WAL record, managed transaction, or rollback evidence.
+|Non-functional. The scenario constrains bounded resources, isolation, deterministic eviction, exact retention, safety, and absence of write side effects.
+|`C-TECH-028`; `QS-PROTO-003`; UC-DAEMON, UC-LSP, and UC-MCP; ADRs 0002 and 0004.
+|Feature-level inherited `@implemented-and-validated`; one focused source-built/in-process scenario with 13 steps passed on OpenJDK 21.0.11.
+
+|REQ-PENDING-PLAN-STORE-002
+|The shared store exposes only insert, successful access-order lookup, remove, and clear. `DaemonSession`, `LspSession`, and `McpSession` each own a separate instance while retaining their exact asymmetric preview/import admission, discard availability, selected-versus-all apply consumption, refusal consumption/retry, rollback, document/project reset, close, and success/error response policies at surface call sites. The extraction invents no uniform lifecycle, protocol response, approval, or authority rule.
+|Non-functional. The scenario constrains compatibility, separation of concerns, protocol stability, and authority/lifecycle ownership.
+|`C-TECH-028`; `QS-PROTO-003`; UC-DAEMON, UC-LSP, and UC-MCP; ADRs 0002 and 0004.
+|Feature-level inherited `@implemented-and-validated`; one focused source-built/in-process scenario with 6 steps passed on OpenJDK 21.0.11.
+|===
+
+Production evidence is exact and bounded to `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt`, `modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt`, `modules/refactorkit-lsp/src/main/kotlin/org/refactorkit/lsp/LspSession.kt`, and `modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt`. The CLI-hosted `PendingPlanStoreCucumberTest` and steps call the core primitive and real session classes in process. The OpenJDK 21.0.11 focused run passed two scenarios/19 steps, executed 29 Gradle tasks, and reported zero failures/errors; log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`. Subsequent independent whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This is dated mutable source-built aggregate evidence, not packaged/concurrency/general-extraction or numerical coverage qualification.
+
+This evidence does not qualify packaged executables/transports, concurrent access, long-running service races, or a general service-extraction pattern. It does not change protocol success/error shapes, `PlanId` authority, explicit-apply approval, `PatchEngine` gates, or the separate surface lifecycle matrix.
+
 == Transactionality Requirement Clarifications
 
 These requirements capture the audit's required contract decisions and acceptance gaps. They are not implementation claims.
@@ -565,11 +600,16 @@ These requirements capture the audit's required contract decisions and acceptanc
 
 == Gherkin Scenario Listing
 
-The project feature root `features/` contains one discovered feature source:
+The configured project feature root `features/` contains two discovered feature sources:
 
 * `features/java-maven-move-class-apply-authority.feature`
+* `features/pending-plan-store-extraction.feature`
 
-Its `Business Need` addresses `UC-JAVA-MOVE-CLASS` for a multi-module Maven workspace maintainer. The `Background` is not a production scenario. Each of twelve requirement-bearing definitions (ten `Scenario`, two `Scenario Outline`) has one repository-unique stable `@REQ-*` ID, at least one classification, and exactly one effective status. All twelve are `@implemented-and-validated`; the six rows under each outline inherit its ID/classification/status, producing 22 validated executable cases. OpenJDK-21 Gherkin 28 source validation found one feature document, twelve definitions, 22 expanded cases, twelve unique IDs, and zero parse/tag-contract errors. Focused REQ-008 evidence discovered 22, executed/passed six, skipped sixteen, and had zero failures/errors; independent log SHA-256 `ba7dda54ba85904ddde200982fbc41613b4a48f95bd8481bdccfad3427de6edc`, with `gherkin-writer` execution log `6f7e2d8a9c767f265a117853267a37ab31ec31d0878637870b37202ec8ba2c71`. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. Those execution totals do not alter the twelve-definition/22-case Gherkin reconciliation and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. Magrathea field evidence remains separate and bounded.
+The Maven feature's `Business Need` addresses `UC-JAVA-MOVE-CLASS` for a multi-module Maven workspace maintainer. Its `Background` is not a production scenario. Each of twelve requirement-bearing definitions (ten `Scenario`, two `Scenario Outline`) has one repository-unique stable `@REQ-*` ID, at least one classification, and exactly one effective status. All twelve are `@implemented-and-validated`; the six rows under each outline inherit its ID/classification/status, producing 22 validated executable cases. Focused REQ-008 evidence discovered 22, executed/passed six, skipped sixteen, and had zero failures/errors; independent log SHA-256 `ba7dda54ba85904ddde200982fbc41613b4a48f95bd8481bdccfad3427de6edc`, with `gherkin-writer` execution log `6f7e2d8a9c767f265a117853267a37ab31ec31d0878637870b37202ec8ba2c71`. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. Those execution totals do not alter the Maven subset and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. Magrathea field evidence remains separate and bounded.
+
+The pending-plan feature has no `Background` or examples. Its two ordinary scenarios each carry one repository-unique `@REQ-*` ID and inherit `@non-functional-requirement` plus `@implemented-and-validated` from the feature, producing two cases and 19 steps. The focused OpenJDK 21.0.11 source-built/in-process runner passed both scenarios, executed 29 Gradle tasks, and reported zero failures/errors; log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`. The subsequent independent 2026-07-31 whole-working-tree source-built run reported 1002 discovered, 782 executed, 220 skipped/tag-filtered, and zero failures/errors across 77 tasks; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`, with no `PendingPlanStore` findings in the configured non-blocking SpotBugs baseline. This evidence remains bounded to mutable source-built behavior; it does not qualify packaged or concurrent behavior, a general extraction pattern, or numerical coverage.
+
+The official OpenJDK 21.0.11 Gherkin 28 audit across both paths found two feature documents, 14 definitions, 24 expanded cases, 14 unique IDs, 260 declared scenario steps, one five-step background, and 520 expanded case steps. Every definition/case has exactly one effective implemented-and-validated status and a justified classification; parse and contract errors are zero. Audit log SHA-256: `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`.
 
 [cols="2,4,3,4,4,4,3,2,4",options="header"]
 |===
@@ -694,6 +734,26 @@ Its `Business Need` addresses `UC-JAVA-MOVE-CLASS` for a multi-module Maven work
 |`features/java-maven-move-class-apply-authority.feature`
 |`@implemented-and-validated` (Scenario Outline level; inherited by six example rows; no feature-level status)
 |The tagged `JavaMavenMoveClassSelectedDescriptorAuthorityCucumberTest` passed all six isolated fixture cases. Each case starts from an eligible ordinary `011` baseline and an engine-captured `MavenSelectedDescriptorAuthorityContext` with safe descriptor path/layer/SHA-256 expectations plus a SHA-256 parsed descriptor identity proving model/relocation interpretation. The independent mutations yield `MISSING` for selected POM, parent, or parsed identity; `MALFORMED` for selected-POM XML/model; and `DRIFTED` for imported BOM or dependency-management/mediation declaration. Each result is structural `REFUSED`/`INELIGIBLE` with `java.maven.selectedDescriptor.missing`, `.malformed`, or `.drifted`, no authority lease, and a repeat-stable blocker naming coordinate, direct path from `catalog-pricing:main`, `COMPILE`/`RUNTIME`/`TEST`, descriptor layer, and condition. Refusal precedes semantic edit selection, applyable plan ID, lock, and WAL; the failed descriptor is never reported as an admissible missing binary or proven leaf, `.refactorkit` is never created, and recorded bytes, paths, inventories, snapshot hash, descriptor facts, evidence records, and evidence hashes remain equal after evaluation.
+
+|REQ-PENDING-PLAN-STORE-001
+|Exact session payloads follow a true 128-entry access-order bound
+|Daemon/LSP/MCP session support; exact bounded pending-plan retention and isolation.
+|Non-functional. Exact payload identity, session isolation, resource bounds, true access-order eviction, missing-plan compatibility, and absence of write/transaction side effects are quality and safety constraints.
+|`@REQ-PENDING-PLAN-STORE-001 @non-functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|UC-DAEMON, UC-LSP, and UC-MCP; `C-TECH-028`; `QS-PROTO-003`; ADRs 0002 and 0004.
+|`features/pending-plan-store-extraction.feature`
+|`@implemented-and-validated` (feature-level inherited status)
+|`PendingPlanStoreCucumberTest`/steps used separate generic stores and exact object identity; filled 128 entries, touched entry 1, inserted entry 129, and observed entry 2 evicted; verified session isolation, missing-plan responses through real daemon/LSP/MCP sessions, and no direct sentinel-workspace, `.refactorkit`, lock, WAL, transaction, or rollback effect from eviction/remove/clear. The 13-step scenario passed in the focused OpenJDK 21.0.11 source-built/in-process run. It does not qualify packaged or concurrent behavior.
+
+|REQ-PENDING-PLAN-STORE-002
+|Integration surfaces preserve their existing lifecycle policies
+|Daemon/LSP/MCP session support; behavior-preserving store adoption with surface-owned policy.
+|Non-functional. Separation of concerns, compatibility, lifecycle asymmetry, response stability, and non-expansion of protocol/authority behavior are quality and safety constraints.
+|`@REQ-PENDING-PLAN-STORE-002 @non-functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|UC-DAEMON, UC-LSP, and UC-MCP; `C-TECH-028`; `QS-PROTO-003`; ADRs 0002 and 0004.
+|`features/pending-plan-store-extraction.feature`
+|`@implemented-and-validated` (feature-level inherited status)
+|The six-step scenario verified that the shared store's public boundary is only insert/lookup/remove/clear, verified distinct `PendingPlanStore` instances in real `DaemonSession`, `LspSession`, and `McpSession` objects, and exercised their existing in-process admission, discard availability, selected-versus-all apply consumption, general/stale-Kotlin refusal behavior, rollback retention/clear differences, project/document/close clearing, MCP importer exception, and success/error responses. Lifecycle policy remains at the surface call sites; no uniform lifecycle, protocol capability, or authority rule was introduced. Exact production paths are `PendingPlanStore.kt`, `DaemonSession.kt`, `LspSession.kt`, and `McpSession.kt`. Packaged, concurrency, and general service-extraction qualification remains open.
 |===
 
 === REQ-JAVA-MAVEN-MOVE-AUTH-008 Validated Example Matrix
@@ -794,17 +854,17 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |===
 |Metric |Total |Reconciliation
 
-|Project feature roots
+|Configured project feature roots
 |1
 |`features/`.
 
-|Discovered `.feature` paths
-|1
-|`features/java-maven-move-class-apply-authority.feature`.
+|Feature documents / discovered `.feature` paths
+|2
+|`features/java-maven-move-class-apply-authority.feature` and `features/pending-plan-store-extraction.feature`.
 
 |Requirement-bearing definitions
-|12
-|Ten `Scenario` declarations (REQ-JAVA-MAVEN-MOVE-AUTH-001 through `007`, `009`, `010`, and `011`) plus two `Scenario Outline` declarations (`008` and `012`); the `Background` is excluded.
+|14
+|Twelve ordinary `Scenario` declarations (ten Maven move-class plus two pending-plan scenarios) and two Maven `Scenario Outline` declarations (`008` and `012`); the one `Background` is excluded.
 
 |Scenario Outline definitions
 |2
@@ -815,20 +875,28 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |Six uncertainty/drift rows under `008` plus six selected-descriptor loss/drift rows under `012`.
 
 |Example-expanded executable cases
-|22
-|Ten ordinary scenarios plus six cases inherited from each of the `008` and `012` outlines.
+|24
+|Twelve ordinary scenarios plus six cases inherited from each of the `008` and `012` outlines.
+
+|Declared scenario steps
+|260
+|The twelve Maven definitions declare 241 scenario steps and the two pending-plan definitions declare 19; the separate five-step Maven `Background` is not included in this metric.
+
+|Expanded executable case steps
+|520
+|Official Gherkin pickles include inherited background steps and example expansion: 501 steps for the 22 Maven cases plus 19 steps for the two pending-plan cases.
 
 |Repository-unique stable requirement IDs in current Gherkin
-|12
-|Exactly one `@REQ-*` ID occurs on each requirement-bearing definition; the six cases under each outline intentionally inherit that outline's one ID, and no ID labels another definition.
+|14
+|Exactly one `@REQ-*` ID occurs on each requirement-bearing definition; the six cases under each Maven outline intentionally inherit that outline's one ID, and no ID labels another definition.
 
 |Functional-only requirement definitions
 |1
 |REQ-JAVA-MAVEN-MOVE-AUTH-002.
 
 |Non-functional-only requirement definitions
-|3
-|REQ-JAVA-MAVEN-MOVE-AUTH-004, REQ-JAVA-MAVEN-MOVE-AUTH-005, and REQ-JAVA-MAVEN-MOVE-AUTH-008.
+|5
+|REQ-JAVA-MAVEN-MOVE-AUTH-004, REQ-JAVA-MAVEN-MOVE-AUTH-005, REQ-JAVA-MAVEN-MOVE-AUTH-008, REQ-PENDING-PLAN-STORE-001, and REQ-PENDING-PLAN-STORE-002.
 
 |Dual-classified requirement definitions
 |8
@@ -839,7 +907,7 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |REQ-JAVA-MAVEN-MOVE-AUTH-001, REQ-JAVA-MAVEN-MOVE-AUTH-002, REQ-JAVA-MAVEN-MOVE-AUTH-003, REQ-JAVA-MAVEN-MOVE-AUTH-006, REQ-JAVA-MAVEN-MOVE-AUTH-007, REQ-JAVA-MAVEN-MOVE-AUTH-009, REQ-JAVA-MAVEN-MOVE-AUTH-010, REQ-JAVA-MAVEN-MOVE-AUTH-011, and REQ-JAVA-MAVEN-MOVE-AUTH-012.
 
 |Definitions carrying `@non-functional-requirement`
-|11
+|13
 |All requirement IDs except REQ-JAVA-MAVEN-MOVE-AUTH-002. Classification totals overlap for the eight dual-classified definitions.
 
 |Definitions with effective `@absent`
@@ -851,24 +919,28 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |No current expanded case is absent.
 
 |Definitions with effective `@implemented-and-validated`
-|12
-|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012`; every status is explicit at scenario or outline level and supported by bounded tagged Cucumber evidence.
+|14
+|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` plus REQ-PENDING-PLAN-STORE-001/002. Maven statuses are explicit at scenario/outline level; pending-plan statuses are inherited from the feature. Every definition has bounded tagged Cucumber evidence.
 
 |Example-expanded cases with effective `@implemented-and-validated`
-|22
-|Ten ordinary scenarios plus six cases inherited from each of outlines `008` and `012`.
+|24
+|Twelve ordinary scenarios plus six cases inherited from each of Maven outlines `008` and `012`.
 
 |Mappings to `UC-JAVA-MOVE-CLASS`
 |12
-|Every requirement-bearing definition, and therefore all 22 executable cases, maps to the same use case.
+|Every Maven move-class requirement-bearing definition, and therefore all 22 Maven executable cases, maps to this use case.
+
+|Mappings to UC-DAEMON, UC-LSP, and UC-MCP
+|2
+|REQ-PENDING-PLAN-STORE-001/002 and their two cases map to supporting retention behavior within all three existing integration use cases; they do not create a protocol capability.
 
 |Distinct `RPK-JAVA-MOVE-*` slices covered
 |7
 |The union of all twelve Gherkin requirement mappings is RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007 and conforms to accepted ADR 0012's target-scoped authority, declaration-scope, descriptor-closed selected-graph, ordinary selected-missing-binary, and fail-closed selected-descriptor refinements.
 
 |Observed implemented-and-validated requirement definitions
-|12
-|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` passed only bounded tagged rows. `008` and `012` each expand to six cases. Focused `008` evidence passed six selected cases, skipped sixteen others, and had zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. These are execution totals, not additional Gherkin definitions/cases or numerical coverage qualification. The receipt does not imply packaged-process/runtime/native-platform/general authority; the SpotBugs baseline remains configured non-blocking. Source-built/in-process and Magrathea field evidence remain separately bounded.
+|14
+|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` passed only bounded tagged rows. `008` and `012` each expand to six cases. Focused `008` evidence passed six selected cases, skipped sixteen others, and had zero failures/errors. The historical REQ-008-specific independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. REQ-PENDING-PLAN-STORE-001/002 passed both focused source-built/in-process scenarios and all 19 steps with 29 executed Gradle tasks and zero failures/errors; log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`. The subsequent current whole-working-tree verification on 2026-07-31 used the same OpenJDK and Gradle command: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`; the non-blocking SpotBugs baseline had no `PendingPlanStore` findings. These are dated mutable source-built execution totals, not additional Gherkin definitions/cases or packaged/concurrency/general-extraction/numerical-coverage qualification. Maven, pending-plan, and Magrathea evidence remain separately bounded.
 |===
 
 == Validation Modes
@@ -911,9 +983,13 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |===
 |Gap |Impact |Status
 
-|Executable Story BDD coverage is limited to Maven move-class authority
-|The repository has one feature source with twelve implemented-and-validated definitions and 22 validated expanded cases. Other use cases still have no mapped Gherkin scenarios.
-|needs-review; the Maven move-class feature is complete only for its bounded catalogue
+|Executable Story BDD coverage remains narrow
+|The configured root has two feature sources: twelve implemented-and-validated Maven move-class definitions/22 cases and two implemented-and-validated pending-plan definitions/cases. Most other use cases still have no mapped Gherkin scenarios.
+|needs-review; each existing feature is complete only for its bounded catalogue
+
+|Pending-plan extraction qualification is bounded
+|The focused runner calls source-built classes and real daemon/LSP/MCP sessions in process. It does not exercise packaged executables/transports, concurrent callers, long-running service races, or a reusable general service-extraction pattern; lifecycle policy remains surface-owned and no protocol/authority change is claimed.
+|needs-review before any packaged, concurrency, or generalized service-extraction claim
 
 |No explicit use-case metadata files
 |Use-case IDs in this appendix are derived from documentation and module evidence.

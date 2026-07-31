@@ -216,6 +216,15 @@ open-buffer semantic visibility, emitted version preconditions, monotonic-versio
 refusal, capability refusal, managed-write refusal with no disk mutation, and the
 existing closed-document managed apply/rollback flow.
 
+Pending-plan retention is explicitly outside the transaction boundary. Daemon,
+managed LSP, and MCP now share only a session-owned bounded access-order
+`PendingPlanStore`; insertion, lookup, eviction, removal, and clear touch in-memory
+references only and cannot create a workspace lock, WAL record, transaction, or
+rollback evidence. Admission, invalidation, apply/refusal consumption, and
+rollback-related clearing remain at their existing surface call sites. Bounded
+source-built acceptance is `REQ-PENDING-PLAN-STORE-001..002`; it is not packaged
+or concurrent-session qualification.
+
 ### TX-008 — Recipe transaction boundary
 
 Status: **closed after the audited baseline**.

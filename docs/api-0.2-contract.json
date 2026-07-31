@@ -419,6 +419,22 @@
     "structuredDiagnosticDetails": true,
     "observedSemanticCandidateInventory": false
   },
+  "pendingPlanRetention": {
+    "qualificationScope": "bounded-source-built-in-process",
+    "surfaces": [
+      "daemon",
+      "managed-lsp",
+      "mcp"
+    ],
+    "sessionOwned": true,
+    "maxEntries": 128,
+    "eviction": "access-order-lru",
+    "successfulLookupRefreshesRecency": true,
+    "exactOpaquePayload": true,
+    "lifecyclePolicy": "surface-owned",
+    "planIdAuthorizesWrite": false,
+    "filesystemOrTransactionEffects": false
+  },
   "languageKernel": {
     "schemaVersion": 1,
     "surfaces": [

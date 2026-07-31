@@ -221,6 +221,26 @@ Clients should use this response instead of inferring mutability or stability
 from method names. Capability discovery does not open a project and does not
 authorize filesystem access.
 
+### Session pending-plan retention
+
+Daemon, managed LSP, and MCP sessions each own a separate language-neutral
+`PendingPlanStore` with a maximum of 128 exact opaque payloads. Successful lookup
+refreshes access recency; insertion beyond the bound evicts the untouched least-
+recently accessed entry. Store insertion, lookup, eviction, removal, and clear are
+in-memory retention mechanics only: they do not authorize apply, write files,
+acquire the workspace lock, create WAL/transaction state, or provide rollback.
+An absent, discarded, cleared, or evicted plan ID requires a new preview.
+
+Admission and lifecycle remain surface policy. Daemon retains its discard,
+refusal-consumption, apply/rollback-wide-clear, project-open, and shutdown rules;
+managed LSP retains its document-lifecycle invalidation and selected-ID apply
+removal; MCP retains its scan/close invalidation, selected-ID success removal,
+stale-Kotlin consumption, and importer admission behavior. The extraction changes
+neither protocol responses nor the independent authorization and `PatchEngine`
+gates. Bounded source-built/in-process evidence is provided by
+`REQ-PENDING-PLAN-STORE-001..002`; packaged and concurrent-session qualification
+remain separate.
+
 ### `server.version` contract
 
 `server.version` is a read-only beta-contract method for compatibility checks.

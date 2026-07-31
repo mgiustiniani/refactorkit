@@ -22,8 +22,8 @@ import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.PendingPlanStore
 import org.refactorkit.core.ProjectSnapshot
-import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RefactoringApplyIdentity
 import org.refactorkit.core.RollbackMode
@@ -81,9 +81,7 @@ class LspSession {
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var supportsDocumentChanges: Boolean = false
     private val openDocuments = linkedMapOf<String, OpenDocument>()
-    private val pendingPlans = object : LinkedHashMap<String, PatchPlan>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PatchPlan>?) = size > ProtocolLimits.MAX_PENDING_PLANS
-    }
+    private val pendingPlans = PendingPlanStore<PatchPlan>()
 
     var onExit: () -> Unit = {}
     var onNotification: (method: String, params: JsonElement) -> Unit = { _, _ -> }
@@ -687,10 +685,10 @@ class LspSession {
                             JavaMoveClassLexicalFallbackReviewJsonProjection.refusalData(envelope),
                         )
                     }
-                    is RefactoringApplyIdentity.ManagedPlan -> identity.planId.value
+                    is RefactoringApplyIdentity.ManagedPlan -> identity.planId
                 }
-                val plan = pendingPlans[planId]
-                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+                val plan = pendingPlans.lookup(planId)
+                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: ${planId.value}")
                 requireManagedWriteSafe(plan.affectedFiles)
                 val current = scanner.scan(root)
                 when (val result = PatchEngine(root).apply(
@@ -813,7 +811,7 @@ class LspSession {
                 "LSP client must support versioned documentChanges for structural or open-document edits",
             )
         }
-        pendingPlans[plan.id.value] = plan
+        pendingPlans.insert(plan.id, plan)
         val changes = mutableMapOf<String, MutableList<JsonObject>>()
         val documentChanges = mutableListOf<JsonObject>()
         for (edit in normalizedEdit.edits) {

@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed. All twelve bounded Maven move-class definitions and all 22 expanded cases are implemented and validated. REQ-JAVA-MAVEN-MOVE-AUTH-001 through `007` and `009` through `012` retain their independently bounded evidence. Six-case `008` proves four immutable schema-v1 non-managed guidance outcomes, one typed active-reactor-POM structural refusal, and one under-lock required-file-evidence drift refusal. Focused OpenJDK 21 evidence passed six selected cases, skipped sixteen by tag filter, and recorded zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. This receipt does not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. Generalization, broader integration shapes, packaged execution, runtime distributions, and native-matrix qualification remain open. The exact Magrathea request at `a48e3c06` remains separately CLI/Linux/JDK-21-specific. Other priorities and measurable targets need review.
+Status: implementation-informed. All twelve bounded Maven move-class definitions and all 22 expanded cases are implemented and validated. REQ-JAVA-MAVEN-MOVE-AUTH-001 through `007` and `009` through `012` retain their independently bounded evidence. Six-case `008` proves four immutable schema-v1 non-managed guidance outcomes, one typed active-reactor-POM structural refusal, and one under-lock required-file-evidence drift refusal. Focused OpenJDK 21 evidence passed six selected cases, skipped sixteen by tag filter, and recorded zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. This receipt does not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. Generalization, broader integration shapes, packaged execution, runtime distributions, and native-matrix qualification remain open. The exact Magrathea request at `a48e3c06` remains separately CLI/Linux/JDK-21-specific. Other priorities and measurable targets need review. The behavior-preserving bounded pending-plan store extraction is implementation-informed: REQ-PENDING-PLAN-STORE-001/002 passed two source-built/in-process scenarios and 19 steps on OpenJDK 21.0.11 with 29 executed Gradle tasks and zero failures/errors (log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). Subsequent independent current whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This newer receipt is dated mutable source-built aggregate evidence; no packaged, concurrency, general extraction, or numerical coverage qualification is inferred.
 
 == Quality Tree
 
@@ -37,6 +37,7 @@ Status: implementation-informed. All twelve bounded Maven move-class definitions
 ** Permanent 20-active-module fixture created; all twelve requirement definitions and 22 expanded cases, including corrected two-phase six-case `008`, are implemented and validated; generalization, broader integration shapes, packaged execution, runtime distributions, and native-matrix qualification remain open, while the exact Magrathea CLI field request remains separately bounded
 * Extensibility
 ** Language-independent core
+** One generic core pending-plan retention primitive without moving surface lifecycle or language policy into core
 ** Language adapter contract
 ** Structural multi-language foundation and optional future LSP-backed adapters
 * Usability
@@ -49,6 +50,7 @@ Status: implementation-informed. All twelve bounded Maven move-class definitions
 * Performance and resource control
 ** Measurable reference-workspace budgets
 ** Bounded requests, results, caches, pending plans, transaction metadata, memory, and execution time
+** A fixed maximum of 128 pending plans per integration session with true access-order LRU and deterministic silent eviction
 * Testability
 ** Unit tests, golden tests, sample projects, agent simulation tests, CI
 
@@ -333,6 +335,12 @@ Status: implementation-informed. All twelve bounded Maven move-class definitions
 |An admitted native LSP edit is identified as client-managed/no-rollback, plans from full-sync open-buffer overlays, carries exact open-document versions, and refuses incapable clients; managed LSP writes reject dirty or affected-open buffers. An ineligible lexical move review must instead return no `changes`/`documentChanges` at all.
 |Transactionality audit `TX-007`; ADR 0004; `LspSession`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004.
 |ordinary ownership and bounded lexical no-edit command path implementation-informed; packaged/native editor qualification remains open
+
+|QS-PROTO-003
+|Behavioral compatibility, resource control, and maintainability
+|With daemon, LSP, and MCP using one generic core pending-plan store, each session still retains at most 128 exact payloads in true access order: successful lookup refreshes recency, a 129th insertion silently evicts the untouched least-recently accessed entry, and touching the oldest makes the previously second-oldest entry the eviction victim. Cross-surface characterization preserves each current admission/removal/clear matrix—including daemon-only discard, selected-versus-all apply consumption, refusal retry differences, rollback differences, document/project resets, and unconditional MCP importer registration—while every existing protocol response remains unchanged. Evict, remove, discard, and clear create no workspace write, lock, WAL, transaction, or rollback evidence.
+|`PendingPlanStore.kt`, `DaemonSession.kt`, `LspSession.kt`, `McpSession.kt`, and `PendingPlanStoreCucumberTest`/steps; implemented-and-validated REQ-PENDING-PLAN-STORE-001/002; focused OpenJDK 21.0.11 log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`; subsequent 2026-07-31 whole-working-tree source-built verification reported 1002 discovered, 782 executed, 220 skipped/tag-filtered, and zero failures/errors (77 tasks; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`), with no `PendingPlanStore` SpotBugs findings; ADRs 0002 and 0004.
+|implementation-informed for two source-built/in-process scenarios and 19 steps; packaged, concurrency, and general service-extraction qualification remains open
 
 |QS-RECIPE-001
 |Recoverability

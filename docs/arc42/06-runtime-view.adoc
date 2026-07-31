@@ -115,6 +115,81 @@ Status: implementation-informed from `LspSession`, `docs/integration-contracts.m
 
 Status: implementation-informed from `DaemonSession`, its daemon contract test, `docs/integration-contracts.md`, and the transactionality audit. Successful apply/rollback rescans into the stored session, clears stale pending plans, returns the new snapshot hash, and makes subsequent summary/symbol queries current (`TX-018` closed).
 
+== Runtime Scenario: Behavior-preserving Pending-plan Retention
+
+Status: implementation-informed for the bounded source-built/in-process runtime. `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt` is used by the exact production session paths `modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt`, `modules/refactorkit-lsp/src/main/kotlin/org/refactorkit/lsp/LspSession.kt`, and `modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt`. Implemented-and-validated REQ-PENDING-PLAN-STORE-001/002 exercise the matrix below without changing protocol or authority behavior.
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|The daemon, LSP, or MCP surface performs its existing preview and admission checks. Only after that surface-owned decision does it insert the exact plan plus any surface-owned apply-critical metadata into its own instance of the shared generic core store. The MCP external-import path deliberately retains its current unconditional insertion exception in this behavior-preserving slice.
+
+|2
+|Insertion retains the exact payload under the plan identity. The store is in-memory and per session; it does not regenerate a plan and does not share entries between sessions or surfaces.
+
+|3
+|A successful lookup returns the exact payload and mutates access recency. At most 128 entries remain. Inserting a 129th entry silently removes the least-recently accessed entry; touching the oldest before that insertion makes the previously second-oldest entry the eviction candidate.
+
+|4
+|The surface performs its existing language/lease, snapshot, diagnostics, approval, and `PatchEngine` work. The plan ID is only a revocable lookup handle: explicit apply invocation remains the approval event, and all normal managed-write gates still apply.
+
+|5
+|After apply, refusal, rollback, project/document lifecycle, or close, the surface invokes remove or clear according to its existing policy below. The shared store does not infer snapshot changes and does not run lifecycle callbacks.
+
+|6
+|Eviction, discard, selected removal, and clear remove references only. They create no filesystem write, `.refactorkit` state, workspace lock, WAL record, transaction, rollback evidence, or protocol notification.
+|===
+
+=== Surface-owned Lifecycle Matrix to Preserve
+
+[cols="1,3,3,3",options="header"]
+|===
+|Event |Daemon |LSP |MCP
+
+|Admission
+|Registers a non-refused managed refactoring preview; registers an external-import preview only when `applyEligible`.
+|Registers a non-refused plan only after LSP edit/capability and document-version checks pass.
+|Registers a refactoring result only when its status is `PREVIEW`; the external-import path currently registers its returned plan unconditionally, including a refused result.
+
+|Explicit discard
+|`refactor.discard` removes the selected ID once; repeat/unknown discard preserves the existing `discarded=false` response.
+|No explicit discard surface.
+|No explicit discard surface.
+
+|Apply succeeds
+|After refresh, clears all pending plans.
+|Removes only the selected ID, then refreshes; other entries remain.
+|Removes only the selected ID, then refreshes/closes stale semantic sessions; other entries remain.
+
+|Apply refuses
+|Removes the selected ID. Stale Kotlin authority also consumes it.
+|Retains the selected ID for the existing refusal paths.
+|Retains the selected ID for general refusal; stale Kotlin authority removes it.
+
+|Rollback succeeds
+|Refreshes and clears all pending plans.
+|Refreshes without an intrinsic pending-store clear.
+|Refreshes without an intrinsic pending-store clear.
+
+|Other lifecycle clear
+|`project.open` and session close/EOF clear all entries.
+|`initialize`, `didOpen`, `didChange`, `didSave`, and `didClose` clear all entries.
+|`project_scan` and session close/EOF clear all entries.
+
+|Missing, evicted, discarded, or cleared ID
+|Preserves the existing deterministic invalid-params / `Plan not found` behavior.
+|Preserves the existing deterministic invalid-params / `Plan not found` behavior.
+|Preserves the existing deterministic invalid-params / `Plan not found` behavior.
+|===
+
+Snapshot-changing lifecycle differences remain surface policy outside the store. In particular, successful daemon apply/rollback clears all entries, whereas LSP/MCP successful rollback does not intrinsically clear the pending store and LSP/MCP apply success removes only the selected entry. This slice must not normalize those differences, centralize apply/rollback, change admission, or change any response, error code, message, structured payload, or tool text. Such a normalization requires a separate behavior-changing requirement and architecture review.
+
+Focused OpenJDK 21.0.11 acceptance passed two scenarios and 19 steps with 29 Gradle tasks and zero failures/errors; log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`. The test invokes the core store and real daemon/LSP/MCP session classes in process. Subsequent independent whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. The newer receipt is dated mutable source-built aggregate evidence. It does not qualify packaged transports/processes, concurrent access, a general extraction pattern, or numerical coverage. Surface lifecycle policies remain separate, and plan lookup still supplies neither approval nor write authority.
+
+No runtime/dynamic C4 diagram is added: the protocol sequence, actors, containers, and relationships remain unchanged, and the extraction only replaces duplicate in-process retention mechanics.
+
 == Runtime Scenario: Staged Recipe Apply
 
 [cols="1,3",options="header"]
@@ -260,7 +335,7 @@ Status: implementation-informed for the four bounded REQ-JAVA-MAVEN-MOVE-AUTH-00
 
 == Runtime Scenario: Phase-partitioned REQ-008 Refusal
 
-Status: implementation-informed for six bounded source-built cases. The corrected feature marks REQ-JAVA-MAVEN-MOVE-AUTH-008 `@implemented-and-validated`; repository Gherkin reconciles to twelve of twelve definitions and 22 of 22 expanded cases validated. Focused OpenJDK 21 evidence selected, executed, and passed six cases, skipped sixteen by tag filter, and reported zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. The final receipt does not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking.
+Status: implementation-informed for six bounded source-built cases. The corrected Maven move-class feature marks REQ-JAVA-MAVEN-MOVE-AUTH-008 `@implemented-and-validated` and reconciles to twelve of twelve definitions and 22 of 22 expanded cases validated. Focused OpenJDK 21 evidence selected, executed, and passed six cases, skipped sixteen by tag filter, and reported zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. The final receipt does not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking.
 
 Surface evidence is partitioned: the four guidance previews and the structural preview refusal are accepted through the source-built library and CLI, while the under-lock drift refusal is library/`PatchEngine` acceptance only. REQ-004 alone has bounded recipe/daemon/LSP/MCP parity.
 

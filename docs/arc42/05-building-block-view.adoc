@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed. C2 model delegated to `c4model` and stored in `docs/c4/workspace.dsl`.
+Status: implementation-informed. C2 model delegated to `c4model` and stored in `docs/c4/workspace.dsl`. The internal bounded pending-plan store is implemented and validated for the source-built/in-process slice; no C2 topology changed.
 
 == Overview
 
@@ -140,3 +140,18 @@ C3 component diagrams were not generated in this baseline. Source code already e
 * `GenericOutline`, `GenericStructuralSearch`, `GenericLocalRenamePlanner`, `ExternalLspAdapter`.
 
 Status: actionable documentation gap; owner `arc42` with `c4model` when a deeper component view is needed.
+
+=== Internal Component: Bounded Pending-plan Store
+
+Status: implementation-informed for the bounded source-built/in-process extraction. The shared component is implemented at `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt`; separate instances are owned at `modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt`, `modules/refactorkit-lsp/src/main/kotlin/org/refactorkit/lsp/LspSession.kt`, and `modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt` in the mutable working tree based on `f587a707d7491974e4f55e4f61371a2e30648468`.
+
+The core component is generic over the retained payload so the daemon keeps its `PatchPlan`, importer detail, language, semantic lease, and index generation together; MCP keeps its plan/language/lease payload; and LSP retains its exact plan. Each daemon, LSP, or MCP session constructs and owns a separate instance. The component owns only:
+
+* identity-keyed insertion and exact payload retention;
+* successful lookup that refreshes access recency;
+* side-effect-free removal and clear; and
+* silent least-recently-accessed eviction above the fixed 128-entry limit.
+
+The integration session remains the component that decides admission, explicit discard availability, selected-versus-all removal after apply, refusal retry/consumption, rollback effects, and lifecycle clears. Snapshot-changing lifecycle differences therefore remain surface policy outside the core store. The store has no dependency on a language adapter, diagnostics provider, protocol serializer, `PatchEngine`, filesystem, WAL, transaction log, or rollback service.
+
+This is an internal C3-scale extraction inside the existing Core Patch and Model Engine plus existing integration dependencies. It adds no C1/C2 element, deployment node, durable data store, or relationship, and does not justify a new C4 diagram for this slice. Implemented-and-validated REQ-PENDING-PLAN-STORE-001/002 passed two scenarios and 19 steps on OpenJDK 21.0.11 with zero failures/errors (focused log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). Subsequent independent whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. The newer receipt is dated mutable source-built aggregate evidence; neither it nor the focused in-process run qualifies packaged behavior, concurrency, a general extraction pattern, or numerical coverage.
