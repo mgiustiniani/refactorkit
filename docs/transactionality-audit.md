@@ -225,6 +225,25 @@ rollback-related clearing remain at their existing surface call sites. Bounded
 source-built acceptance is `REQ-PENDING-PLAN-STORE-001..002`; it is not packaged
 or concurrent-session qualification.
 
+Rollback entry orchestration is now shared without moving rollback authority out
+of `PatchEngine`. `ManagedRollbackExecutor` performs one exact transaction-ID
+parse, one pre-lock `TransactionLog.loadRecord`, caller-selected visibility, and
+an optional surface-owned preflight before invoking public `PatchEngine.rollback`
+exactly once. CLI, managed LSP, and MCP preserve their previous `APPLIED_ONLY`
+visibility; daemon preserves `JOURNAL_RECORD`. The LSP preflight continues to
+reject dirty or affected open documents before any engine lock. Typed outcomes
+preserve the exact resolved pre-lock journal record and distinguish visible
+absence, preflight rejection, lookup failure, engine refusal, and rollback-call
+journal failure.
+
+The executor neither duplicates nor weakens under-lock recovery, APPLIED-state,
+image/conflict, force, durability, metadata, or journal-transition rules. Mode
+selection, protocol/CLI rendering, snapshot/index refresh, diagnostics,
+pending-plan and lexical-audit lifecycle remain surface-owned. Bounded
+source-built/in-process evidence is
+`REQ-MANAGED-ROLLBACK-EXECUTOR-001..002`; packaged, cross-platform, concurrent,
+and crash/restart qualification is not inferred.
+
 ### TX-008 — Recipe transaction boundary
 
 Status: **closed after the audited baseline**.

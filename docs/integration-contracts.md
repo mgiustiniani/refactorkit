@@ -241,6 +241,27 @@ gates. Bounded source-built/in-process evidence is provided by
 `REQ-PENDING-PLAN-STORE-001..002`; packaged and concurrent-session qualification
 remain separate.
 
+### Managed rollback execution boundary
+
+CLI, daemon, managed LSP, and MCP delegate transaction-ID parsing, one pre-lock
+journal-record lookup, lookup visibility, an optional surface preflight, and one
+`PatchEngine.rollback` call to the language-neutral `ManagedRollbackExecutor`.
+CLI, LSP, and MCP select `APPLIED_ONLY`; daemon retains its broader
+`JOURNAL_RECORD` visibility. Lookup failures, visible absence, preflight rejection,
+engine refusal, and rollback-call journal failure remain distinct typed outcomes.
+Every post-resolution outcome carries the exact resolved pre-lock journal record;
+it is lookup evidence and is not reloaded or described as post-rollback state.
+
+This shared executor does not select normal/force mode, render protocol or CLI
+responses, refresh snapshots/indexes, run diagnostics, clear pending plans or
+audit state, invent authorization, replace recovery/WAL, or alter the under-lock
+rollback algorithm. In particular, LSP still runs its dirty/open-document guard
+before engine entry and rethrows the same document-version rejection. Wire shapes,
+error mappings, and surface completion behavior are unchanged. Bounded
+source-built/in-process evidence is provided by
+`REQ-MANAGED-ROLLBACK-EXECUTOR-001..002`; packaged, cross-platform, concurrent,
+and crash/restart qualification remain separate.
+
 ### `server.version` contract
 
 `server.version` is a read-only beta-contract method for compatibility checks.

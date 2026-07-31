@@ -355,6 +355,16 @@ move reverses source/target. Normal rollback remains post-image conflict-safe;
 force remains explicit. Filesystem bytes/metadata are restored by the existing
 WAL contract.
 
+The daemon now delegates only shared rollback-entry mechanics to core
+`ManagedRollbackExecutor`: exact raw-ID parsing, one pre-lock journal lookup using
+`JOURNAL_RECORD` visibility, an allow preflight, and one public
+`PatchEngine.rollback` call. The resolved pre-lock record remains available for
+the inverse `changedFiles` projection. Response/error rendering, diagnostics,
+workspace/index refresh, pending-plan clearing, and lexical-audit lifecycle remain
+daemon-owned, so this extraction adds no method, request, response, error-code,
+or authority change. CLI, managed LSP, and MCP deliberately use the executor's
+narrower `APPLIED_ONLY` visibility.
+
 The importer primary file is the file for the sole public top-level type. With
 multiple public types it is the first declaration in source order, independent
 of set/map or diff ordering.

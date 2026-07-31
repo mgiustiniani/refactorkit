@@ -19,6 +19,8 @@ import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.LanguageCapabilityProtocol
+import org.refactorkit.core.ManagedRollbackExecutor
+import org.refactorkit.core.ManagedRollbackOutcome
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -34,8 +36,10 @@ import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
+import org.refactorkit.core.RollbackLookupVisibility
 import org.refactorkit.core.RollbackMode
-import org.refactorkit.core.TransactionId
+import org.refactorkit.core.RollbackPreflightDecision
+import org.refactorkit.core.RollbackPreflightGuard
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -1052,20 +1056,28 @@ class McpSession(
         val mode = if (args["force"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true) {
             RollbackMode.FORCE
         } else RollbackMode.NORMAL
-        val transactionId = TransactionId.parseOrNull(txId)
-            ?: return "Invalid transaction ID: $txId"
         val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-        val tx = log.load(transactionId)
-            ?: return "Transaction not found: $txId"
-        return when (val result = PatchEngine(root).rollback(tx, mode)) {
-            is ApplyResult.Applied -> {
+        val outcome = ManagedRollbackExecutor(log, PatchEngine(root)).execute(
+            txId,
+            RollbackLookupVisibility.APPLIED_ONLY,
+            mode,
+            RollbackPreflightGuard<Nothing> { RollbackPreflightDecision.Allow },
+        )
+        return when (outcome) {
+            is ManagedRollbackOutcome.InvalidTransactionId -> "Invalid transaction ID: $txId"
+            is ManagedRollbackOutcome.TransactionNotFound -> "Transaction not found: $txId"
+            is ManagedRollbackOutcome.JournalLookupFailed -> throw outcome.failure
+            is ManagedRollbackOutcome.PreflightRejected ->
+                error("Allow rollback preflight guard unexpectedly rejected")
+            is ManagedRollbackOutcome.RollbackCallJournalFailed -> throw outcome.failure
+            is ManagedRollbackOutcome.RolledBack -> {
                 snapshot = scanWorkspace(root)
                 moveClassDispatcher.clearLexicalReviewAudit()
                 "${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId."
             }
-            is ApplyResult.Refused -> {
-                val code = JsonRpcErrorCodes.rollbackRefusalCode(result.diagnostics)
-                "Rollback refused [$code]: ${result.diagnostics.joinToString("; ") { it.message }}"
+            is ManagedRollbackOutcome.Refused -> {
+                val code = JsonRpcErrorCodes.rollbackRefusalCode(outcome.diagnostics)
+                "Rollback refused [$code]: ${outcome.diagnostics.joinToString("; ") { it.message }}"
             }
         }
     }

@@ -435,6 +435,28 @@
     "planIdAuthorizesWrite": false,
     "filesystemOrTransactionEffects": false
   },
+  "managedRollbackExecution": {
+    "qualificationScope": "bounded-source-built-in-process",
+    "surfaces": [
+      "cli",
+      "daemon",
+      "managed-lsp",
+      "mcp"
+    ],
+    "lookupVisibility": {
+      "cli": "APPLIED_ONLY",
+      "daemon": "JOURNAL_RECORD",
+      "managed-lsp": "APPLIED_ONLY",
+      "mcp": "APPLIED_ONLY"
+    },
+    "maximumOuterJournalLookupsPerExecution": 1,
+    "maximumRollbackCallsPerExecution": 1,
+    "resolvedRecordRetained": true,
+    "surfacePreflightBeforeEngineLock": true,
+    "modeAndLifecyclePolicy": "surface-owned",
+    "patchEngineAuthorityUnchanged": true,
+    "wireContractChanged": false
+  },
   "languageKernel": {
     "schemaVersion": 1,
     "surfaces": [

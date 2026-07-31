@@ -19,6 +19,8 @@ import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.LanguageCapabilityProtocol
+import org.refactorkit.core.ManagedRollbackExecutor
+import org.refactorkit.core.ManagedRollbackOutcome
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -26,12 +28,14 @@ import org.refactorkit.core.PendingPlanStore
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RefactoringApplyIdentity
+import org.refactorkit.core.RollbackLookupVisibility
 import org.refactorkit.core.RollbackMode
+import org.refactorkit.core.RollbackPreflightDecision
+import org.refactorkit.core.RollbackPreflightGuard
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
-import org.refactorkit.core.TransactionId
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -713,24 +717,45 @@ class LspSession {
                 val mode = if (args?.get("force")?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true) {
                     RollbackMode.FORCE
                 } else RollbackMode.NORMAL
-                val parsedTransactionId = TransactionId.parseOrNull(transactionId)
-                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid transaction ID: $transactionId")
                 val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-                val tx = log.load(parsedTransactionId)
-                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Transaction not found: $transactionId")
-                requireManagedWriteSafe(tx.rollbackEdit.affectedFiles())
-                when (val result = PatchEngine(root).rollback(tx, mode)) {
-                    is ApplyResult.Applied -> {
+                val outcome = ManagedRollbackExecutor(log, PatchEngine(root)).execute(
+                    transactionId,
+                    RollbackLookupVisibility.APPLIED_ONLY,
+                    mode,
+                    RollbackPreflightGuard<JsonRpcException> { record ->
+                        try {
+                            requireManagedWriteSafe(record.transaction.rollbackEdit.affectedFiles())
+                            RollbackPreflightDecision.Allow
+                        } catch (rejection: JsonRpcException) {
+                            RollbackPreflightDecision.Reject(rejection)
+                        }
+                    },
+                )
+                when (outcome) {
+                    is ManagedRollbackOutcome.InvalidTransactionId ->
+                        throw JsonRpcException(
+                            JsonRpcErrorCodes.INVALID_PARAMS,
+                            "Invalid transaction ID: $transactionId",
+                        )
+                    is ManagedRollbackOutcome.TransactionNotFound ->
+                        throw JsonRpcException(
+                            JsonRpcErrorCodes.INVALID_PARAMS,
+                            "Transaction not found: $transactionId",
+                        )
+                    is ManagedRollbackOutcome.JournalLookupFailed -> throw outcome.failure
+                    is ManagedRollbackOutcome.PreflightRejected -> throw outcome.surfaceRejection
+                    is ManagedRollbackOutcome.RollbackCallJournalFailed -> throw outcome.failure
+                    is ManagedRollbackOutcome.RolledBack -> {
                         refreshSnapshot()
                         buildJsonObject {
                             put("status", "rolledBack")
                             put("transactionId", transactionId)
                         }
                     }
-                    is ApplyResult.Refused -> {
+                    is ManagedRollbackOutcome.Refused -> {
                         throw JsonRpcException(
-                            JsonRpcErrorCodes.rollbackRefusalCode(result.diagnostics),
-                            "Rollback refused: ${result.diagnostics.joinToString("; ") { it.message }}",
+                            JsonRpcErrorCodes.rollbackRefusalCode(outcome.diagnostics),
+                            "Rollback refused: ${outcome.diagnostics.joinToString("; ") { it.message }}",
                         )
                     }
                 }

@@ -12,15 +12,18 @@ import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.LanguageCapabilityProtocol
+import org.refactorkit.core.ManagedRollbackExecutor
+import org.refactorkit.core.ManagedRollbackOutcome
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPreviewRenderer
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RollbackLookupVisibility
 import org.refactorkit.core.RollbackMode
-import org.refactorkit.core.TransactionId
+import org.refactorkit.core.RollbackPreflightDecision
+import org.refactorkit.core.RollbackPreflightGuard
 import org.refactorkit.core.TransactionLog
-import org.refactorkit.core.TransactionLogException
 import org.refactorkit.daemon.DaemonSession
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -567,24 +570,37 @@ class RefactorKitCli(
             ?: run { System.err.println("patch rollback requires a transaction ID"); return 2 }
         val root = parsed.options["root"] ?: "."
         val workspaceRoot = Paths.get(root).toAbsolutePath().normalize()
-        val transactionId = TransactionId.parseOrNull(txId)
-            ?: run { System.err.println("Invalid transaction ID: $txId"); return 2 }
-        val log = TransactionLog(workspaceRoot.resolve(".refactorkit/transactions"))
-        val tx = try {
-            log.load(transactionId)
-        } catch (error: TransactionLogException) {
-            System.err.println("Transaction log error [${error.code}]: ${error.message}")
-            return 1
-        } ?: run { System.err.println("Transaction not found: $txId"); return 1 }
         val mode = if ("force" in parsed.flags) RollbackMode.FORCE else RollbackMode.NORMAL
-        return when (val result = PatchEngine(workspaceRoot).rollback(tx, mode)) {
-            is ApplyResult.Applied -> {
+        val log = TransactionLog(workspaceRoot.resolve(".refactorkit/transactions"))
+        val outcome = ManagedRollbackExecutor(log, PatchEngine(workspaceRoot)).execute(
+            txId,
+            RollbackLookupVisibility.APPLIED_ONLY,
+            mode,
+            RollbackPreflightGuard<Nothing> { RollbackPreflightDecision.Allow },
+        )
+        return when (outcome) {
+            is ManagedRollbackOutcome.InvalidTransactionId -> {
+                System.err.println("Invalid transaction ID: $txId")
+                2
+            }
+            is ManagedRollbackOutcome.TransactionNotFound -> {
+                System.err.println("Transaction not found: $txId")
+                1
+            }
+            is ManagedRollbackOutcome.JournalLookupFailed -> {
+                System.err.println("Transaction log error [${outcome.failure.code}]: ${outcome.failure.message}")
+                1
+            }
+            is ManagedRollbackOutcome.PreflightRejected ->
+                error("Allow rollback preflight guard unexpectedly rejected")
+            is ManagedRollbackOutcome.RollbackCallJournalFailed -> throw outcome.failure
+            is ManagedRollbackOutcome.RolledBack -> {
                 println("${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId.")
                 0
             }
-            is ApplyResult.Refused -> {
+            is ManagedRollbackOutcome.Refused -> {
                 System.err.println("Rollback refused:")
-                result.diagnostics.forEach { System.err.println("  ${it.severity}: ${it.message}") }
+                outcome.diagnostics.forEach { System.err.println("  ${it.severity}: ${it.message}") }
                 1
             }
         }

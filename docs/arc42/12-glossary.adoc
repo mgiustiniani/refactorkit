@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from reviewed domain research and bounded implementation evidence. Repository Gherkin now contains 14 implemented-and-validated definitions and 24 expanded cases: the twelve-definition/22-case Maven subset retains its independently bounded meanings, and REQ-PENDING-PLAN-STORE-001/002 add the source-built/in-process pending-plan vocabulary below. REQ-JAVA-MAVEN-MOVE-AUTH-008 adds four immutable preview-guidance blocker vocabularies, result-owned active-reactor-POM structural refusal, generic required-file authority evidence, immutable structured diagnostic details, and an under-lock evidence-drift vocabulary that distinguishes expected semantic inventory from expected/observed file evidence. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific; no packaged/runtime/native/general support is inferred. Pending-plan evidence likewise does not qualify packaged processes, concurrency, or general service extraction.
+Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from reviewed domain research and bounded implementation evidence. Repository Gherkin contains 16 definitions and 32 expanded cases, all effectively `@implemented-and-validated`: the twelve-definition/22-case Maven subset, two-definition/two-case pending-plan subset, and two-definition/eight-case managed-rollback subset retain separately bounded evidence. For managed rollback, a focused RED proved the mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`), and detached unmodifiable ordered snapshotting corrected it. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`); CLI/daemon/LSP/MCP adoption is source-inspected only. Final independent whole-working-tree verification used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). Earlier REQ-008- and PendingPlanStore-specific receipts remain historical evidence for their explicitly stated scopes. REQ-JAVA-MAVEN-MOVE-AUTH-008 adds four immutable preview-guidance blocker vocabularies, result-owned active-reactor-POM structural refusal, generic required-file authority evidence, immutable structured diagnostic details, and an under-lock evidence-drift vocabulary that distinguishes expected semantic inventory from expected/observed file evidence. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific; no packaged/runtime/native/general support is inferred. Pending-plan evidence likewise does not qualify packaged processes, concurrency, or general service extraction. Managed-rollback evidence is dated mutable source-built evidence and does not qualify packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority.
 
 [cols="1,3,2,2",options="header"]
 |===
@@ -62,6 +62,41 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |Versioned write-ahead recovery metadata stored under `.refactorkit/transactions`, durably created before mutation and atomically advanced through apply/rollback/recovery states. Schema-v2 SHA-256 integrity, v1-on-update migration, and blocking owner-only corruption quarantine are implemented; full metadata and complete fault evidence remain planned.
 |Core / workspace
 |`TransactionLog`, transactionality audit
+
+|Supplied Transaction ID
+|Raw string received by a rollback surface. In the implemented managed rollback boundary it is passed unchanged to `TransactionId.parseOrNull`; it is not trimmed, case-folded, canonicalized, or itself treated as authority.
+|Core rollback orchestration
+|Implemented-and-validated REQ-MANAGED-ROLLBACK-EXECUTOR-001/002; `features/managed-rollback-executor-extraction.feature`; `ManagedRollbackExecutor.kt`; final focused log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`
+
+|Rollback Lookup Visibility
+|Caller-selected initial journal visibility with values `APPLIED_ONLY` and `JOURNAL_RECORD`. CLI/LSP/MCP select `APPLIED_ONLY`, under which every non-`APPLIED` record is observationally absent before guard/engine work. Daemon selects `JOURNAL_RECORD`, under which any decodable ID-matching record reaches authoritative engine handling. Visibility is applied to one full `loadRecord` result; it is not a second lookup or rollback mode.
+|Core/surface rollback boundary
+|Implemented-and-validated REQ-MANAGED-ROLLBACK-EXECUTOR-001/002; `ManagedRollbackExecutor.kt`; ADR 0004; inspected CLI/daemon/LSP/MCP adoption
+
+|Resolved Journal Record
+|The exact complete `TransactionJournalRecord` returned by the executor's single outer pre-lock lookup and retained unchanged in every post-resolution outcome. It is lookup evidence, not current or post-rollback state: `PatchEngine` deliberately reloads under lock and may advance the journal after resolution.
+|Core rollback orchestration / daemon projection
+|Implemented-and-validated REQ-MANAGED-ROLLBACK-EXECUTOR-001/002; `ManagedRollbackExecutor.kt`; preserved `TransactionLog`/`PatchEngine` planning inspection at `27bc8a34`; focused in-process evidence
+
+|Rollback Preflight Guard
+|Generic surface-supplied read-only allow/reject decision invoked with the resolved journal record after visibility and before `PatchEngine` acquires its lock. LSP preserves dirty-document-first and then affected-open-document rejection; CLI, daemon, and MCP allow. It carries opaque surface rejection data and is neither authorization nor authoritative under-lock validation.
+|Core/surface rollback boundary
+|Implemented-and-validated REQ-MANAGED-ROLLBACK-EXECUTOR-001/002; `ManagedRollbackExecutor.kt`; ADR 0004; inspected surface adoption
+
+|Transaction-journal Failure
+|Exact `TransactionLogException` identity, code, message, and cause produced by journal access. Implemented outcomes distinguish failure during the single outer lookup, where no record was resolved, from failure escaping the one rollback call, where the resolved pre-lock record is available. It is neither visible-record absence nor an ordinary engine refusal.
+|Core rollback orchestration / journal safety
+|Implemented-and-validated REQ-MANAGED-ROLLBACK-EXECUTOR-002; `TransactionLog`; `ManagedRollbackExecutor.kt`; focused in-process evidence
+
+|Managed Rollback Executor
+|Implemented language-neutral core application service that parses one supplied ID, performs one outer full-record lookup, applies caller-selected visibility, runs an optional surface-owned preflight guard, invokes public `PatchEngine.rollback` exactly once, and returns typed outcomes retaining the exact resolved pre-lock record. It owns no rendering, mode policy, refresh/diagnostics/lifecycle, authorization, WAL/recovery replacement, direct write, or rollback algorithm.
+|Core Patch and Model Engine C3 component
+|Implemented-and-validated REQ-MANAGED-ROLLBACK-EXECUTOR-001/002; `ManagedRollbackExecutor.kt`; inspected CLI/daemon/LSP/MCP adoption; Chapters 4-10; ADRs 0002/0004; LLM Wiki concept `managed-rollback-executor`
+
+|Managed Rollback Outcome
+|Implemented typed result algebra comprising invalid ID, visible-record absence, lookup journal failure, preflight rejection, rollback-call journal failure, exact engine-applied success, and engine refusal. Every variant after successful resolution carries the same full resolved pre-lock record. Journal failures preserve exact exception identity; refusal diagnostics preserve construction-time order and values through a detached unmodifiable snapshot, so later source-list mutation cannot change the outcome.
+|Core/surface rollback handoff
+|Implemented-and-validated REQ-MANAGED-ROLLBACK-EXECUTOR-001/002; `ManagedRollbackExecutor.kt`; focused in-process evidence; inspected surface projection
 
 |Saga
 |Multi-step workflow that commits steps separately and attempts later compensation. RefactorKit recipes no longer use this boundary; they stage one recipe-wide transaction.

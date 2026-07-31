@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, needs-review for broader coverage and qualification. The configured `features/` root now contains two feature documents, 14 repository-unique requirement definitions, 24 expanded executable cases, and 520 expanded case steps; all 14 definitions and all 24 cases are effectively `@implemented-and-validated`. The official OpenJDK 21.0.11 `io.cucumber:gherkin:28.0.0` audit reported zero parse/contract errors (log SHA-256 `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`). REQ-PENDING-PLAN-STORE-001/002 contribute two non-functional scenarios and 19 steps. Their focused source-built/in-process run passed both scenarios with 29 executed Gradle tasks and zero failures/errors (log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). Subsequent independent current whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This newer receipt is dated mutable source-built aggregate evidence; it does not qualify packaged processes, concurrent access, a general extraction pattern, or numerical coverage. Surface lifecycle policy remains separate, and no protocol capability or authority rule changed.
+Status: implementation-informed; needs-review for broader coverage and qualification. The configured `features/` root contains three feature documents, 16 repository-unique requirement definitions, 32 expanded executable cases, and 587 expanded case steps; all 16 definitions and all 32 cases are effectively `@implemented-and-validated`. The final official OpenJDK 21.0.11 `io.cucumber:gherkin:28.0.0` audit reported 3 features, 16 definitions, 32 cases, 587 expanded steps, and zero errors (log SHA-256 `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`). The earlier three-feature source-reconciliation receipt, which recorded the managed-rollback feature's prior `@absent` state (log SHA-256 `af9cfc7e69ec589bd5512b963e9eebdce936e63b240e3b1860078f0989b20b7e`), and the still-earlier two-feature parser receipt (log SHA-256 `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`) remain historical evidence for their then-current sources, not the current aggregate. The managed-rollback feature contributes two non-functional definitions, eight cases, 19 declared steps, and 67 expanded steps. A focused RED proved the mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`); detached unmodifiable ordered snapshotting corrected it. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`). Production evidence is the core executor; CLI/daemon/LSP/MCP adoption is source-inspected only. REQ-PENDING-PLAN-STORE-001/002 contribute two non-functional scenarios and 19 steps. Their focused source-built/in-process run passed both scenarios with 29 executed Gradle tasks and zero failures/errors (log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). The historical PendingPlanStore-scoped whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This later scoped receipt is dated mutable source-built aggregate evidence; it does not qualify packaged processes, concurrent access, a general extraction pattern, or numerical coverage. Surface lifecycle policy remains separate, and no protocol capability or authority rule changed. Final independent whole-working-tree verification after the managed-rollback correction used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). This is the final current whole-working-tree source-built receipt; the earlier REQ-008- and PendingPlanStore-specific whole-working-tree receipts remain historical evidence for their explicitly stated scopes. It is dated mutable aggregate evidence and does not qualify packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority.
 
 The twelve-definition/22-case Maven move-class subset retains its independently bounded evidence. Existing `001`-`007` and `009`-`012` meanings are unchanged. REQ-JAVA-MAVEN-MOVE-AUTH-008 validates four immutable schema-v1 preview-guidance outcomes, one typed root-declared active-reactor-POM structural refusal, and one under-lock generic required-file-evidence drift refusal. Focused OpenJDK 21 evidence selected/executed/passed its six cases, skipped sixteen by tag filter, and recorded zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. These execution totals do not change the Maven subset and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific.
 
@@ -37,8 +37,8 @@ The twelve-definition/22-case Maven move-class subset retains its independently 
 |implementation-informed field evidence for one CLI/Linux/JDK-21 request; broader qualification needs review
 
 |`modules/*`
-|Implementation and test evidence. Pending-plan production evidence is exactly `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt`, `modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt`, `modules/refactorkit-lsp/src/main/kotlin/org/refactorkit/lsp/LspSession.kt`, and `modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt`.
-|implementation-informed
+|Implementation and test evidence. Pending-plan production evidence is exactly `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/PendingPlanStore.kt`, `modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt`, `modules/refactorkit-lsp/src/main/kotlin/org/refactorkit/lsp/LspSession.kt`, and `modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt`. Managed-rollback production evidence is `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/ManagedRollbackExecutor.kt` plus inspected adoption in `RefactorKitCli.kt`, `DaemonSession.kt`, `LspSession.kt`, and `McpSession.kt`; focused acceptance glue is `ManagedRollbackExecutorCucumberTest.kt` and `ManagedRollbackExecutorSteps.kt`.
+|implementation-informed within each separately stated evidence boundary
 
 |`samples/*`
 |Sample Maven, Gradle, Spring, JPA, and multi-module projects.
@@ -59,6 +59,10 @@ The twelve-definition/22-case Maven move-class subset retains its independently 
 |`features/java-maven-move-class-apply-authority.feature`
 |Executable Story BDD backlog for Maven move-class semantic preview, managed apply and rollback, observer discrimination, closure-scoped JDT warning authority, authority-loss guidance, cross-surface lexical-fallback refusal, zero-residue CLI refusal, candidate-total `OFFLINE_MISSING` authority, fail-closed uncertainty/drift handling, explicit transitive-test-scope preservation, descriptor-closed selector pruning before child lookup, alternate-path selected-POM refusal, RefactorKit-owned ordinary selected-JAR negative-presence authority with under-lock drift refusal, and six selected-descriptor loss/drift cases requiring structural pre-lock/pre-WAL refusal without a binary-absence downgrade.
 |12 requirement-bearing definitions and 22 example-expanded executable cases; all 12 IDs and all 22 cases effectively `@implemented-and-validated`; `008` and `012` each expand to six validated cases
+
+|`features/managed-rollback-executor-extraction.feature`
+|Executable non-functional Story BDD contract for one implemented language-neutral managed rollback resolution sequence, caller-selected initial journal visibility, exact resolved pre-lock record retention, surface-owned preflight, one real engine call, distinct typed outcomes, and exclusion of response/lifecycle/diagnostics policy.
+|Two requirement-bearing definitions expanding to eight cases and 67 case steps; REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 inherit `@non-functional-requirement` and `@implemented-and-validated` from the feature. All eight cases passed the final focused source-built/in-process runner after a RED proved and detached unmodifiable ordered snapshotting corrected mutable diagnostic aliasing; the final whole-working-tree source-built gate also passed, while surface adoption remains source-inspected. Neither receipt qualifies packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority.
 
 |`features/pending-plan-store-extraction.feature`
 |Executable non-functional Story BDD contract for exact generic session payload retention, true 128-entry access-order LRU, session isolation, side-effect-free removal, shared-store adoption, and preservation of the distinct daemon/LSP/MCP admission, removal, rollback, reset, close, and response policies without adding protocol capability or write authority.
@@ -171,9 +175,9 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-ROLLBACK
 |Run managed compensation
 |Developer, Agent/App
-|Persist compensation and pre/post recovery images before mutation, retain lifecycle history, and replay rollback under the workspace lock. Current normal rollback is not conflict-safe against post-apply changes and does not restore complete filesystem metadata.
-|Core tests, testkit agent simulation, transactionality audit `TX-002`, `TX-004`, `TX-013`.
-|implementation-informed limitation
+|Persist compensation and pre/post recovery images before mutation, retain lifecycle history, and replay rollback under the workspace lock. Current normal rollback is not conflict-safe against post-apply changes and does not restore complete filesystem metadata. Implemented REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 share only pre-lock resolution, caller-selected visibility, surface-owned guard invocation, one public engine call, and typed outcome transport while leaving rollback and surface policy in their existing owners.
+|Current core tests, testkit agent simulation, and transactionality audit `TX-002`, `TX-004`, `TX-013`; `ManagedRollbackExecutor.kt`; inspected CLI/daemon/LSP/MCP adoption; `features/managed-rollback-executor-extraction.feature`; mutable-diagnostics RED log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`; final focused log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`.
+|implementation-informed limitation for current rollback and implementation-informed bounded shared executor; packaged, cross-platform, concurrent rollback, crash/restart, numerical coverage, and altered rollback authority remain unqualified
 
 |UC-JAVA-RENAME-CLASS
 |Rename Java class
@@ -315,8 +319,8 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |`PatchEngine.apply`, snapshot hash validation, overlap/path validation, transactionality audit.
 
 |UC-ROLLBACK
-|REQ-SAFE-003, REQ-TX-004 through REQ-TX-006
-|`Transaction`, `TransactionLog`, agent simulation tests, transactionality audit.
+|REQ-SAFE-003, REQ-TX-004 through REQ-TX-006; REQ-MANAGED-ROLLBACK-EXECUTOR-001 and REQ-MANAGED-ROLLBACK-EXECUTOR-002
+|Current evidence: `Transaction`, `TransactionLog`, agent simulation tests, and transactionality audit. Implemented shared-orchestration mapping: `ManagedRollbackExecutor.kt`, inspected CLI/daemon/LSP/MCP adoption, `features/managed-rollback-executor-extraction.feature`, mutable-diagnostics RED log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`, final focused acceptance log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`, `C-TECH-029`, `C-BOUND-006`, `QS-SAFE-012`, `R-030`, and ADRs 0002/0004. Both managed-executor requirements are implementation-informed within the source-built/in-process boundary.
 
 |UC-RECIPE-RUN
 |REQ-TX-010
@@ -541,6 +545,29 @@ Production evidence is exact and bounded to `modules/refactorkit-core/src/main/k
 
 This evidence does not qualify packaged executables/transports, concurrent access, long-running service races, or a general service-extraction pattern. It does not change protocol success/error shapes, `PlanId` authority, explicit-apply approval, `PatchEngine` gates, or the separate surface lifecycle matrix.
 
+== Managed Rollback Executor Extraction
+
+Status: implementation-informed. REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 inherit `@non-functional-requirement` and `@implemented-and-validated` from `features/managed-rollback-executor-extraction.feature`. One ordinary scenario and one seven-row outline produce two definitions, eight cases, 19 declared steps, and 67 expanded case steps. Production evidence is `ManagedRollbackExecutor.kt`; inspected adoption is in CLI/daemon/LSP/MCP; runner/glue evidence is `ManagedRollbackExecutorCucumberTest.kt` and `ManagedRollbackExecutorSteps.kt`. A focused RED proved mutable diagnostic aliasing by mutating the source list after `execute` (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`); `Refused` now copies diagnostics into a detached unmodifiable ordered snapshot. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`). The final official Gherkin audit found 3 features, 16 definitions, 32 cases, 587 expanded steps, and zero errors (log SHA-256 `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`). Final independent whole-working-tree verification used the same OpenJDK and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). This is dated mutable source-built aggregate evidence. It does not qualify packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority.
+
+[cols="2,3,2,2,2",options="header"]
+|===
+|Requirement ID |Title / acceptance boundary |Classification |Architecture mapping |Declared status and observed evidence
+
+|REQ-MANAGED-ROLLBACK-EXECUTOR-001
+|One visible applied record is durably rolled back through the real engine. The implemented executor parses the exact raw ID, performs one pre-lock full-record lookup, applies `APPLIED_ONLY`, invokes one allow guard before the lock, calls public `PatchEngine.rollback` exactly once with the resolved transaction and supplied `NORMAL` mode, and returns the exact applied transaction plus the same complete resolved pre-lock record. `PatchEngine` alone owns its under-lock reload and rollback rules; the executor owns no caller response, lifecycle, refresh, diagnostics, or mode policy.
+|Non-functional. The scenario constrains ordering, responsibility boundaries, exact evidence retention, durability handoff, non-duplication, and behavior preservation rather than adding a new user-visible capability.
+|`UC-ROLLBACK`; `C-TECH-029`; `C-BOUND-006`; `QS-SAFE-012`; `R-030`; ADRs 0002 and 0004; Chapters 4-6 and 8-12.
+|Feature-level inherited `@implemented-and-validated`; the ordinary 11-step definition/case passed in the focused source-built/in-process run.
+
+|REQ-MANAGED-ROLLBACK-EXECUTOR-002
+|Short circuits and surface visibility retain distinct outcomes. Seven independent example rows preserve invalid raw input, visible absence, `APPLIED_ONLY` hiding of a non-`APPLIED` record, daemon `JOURNAL_RECORD` engine refusal, LSP dirty-document-first preflight rejection, outer lookup journal failure, and rollback-call journal failure. Each row fixes parse/lookup/guard/engine/lock counts and preserves the exact typed outcome and available failure/resolved-record evidence without moving response, session, refresh, or diagnostics policy into the executor. Exact journal-exception identity is retained; refusal diagnostics retain construction-time order and values in a detached unmodifiable snapshot rather than aliasing a mutable source list.
+|Non-functional. The outline constrains cross-surface compatibility, fail-fast ordering, document safety, outcome discrimination, exception fidelity, evidence identity, and separation of concerns.
+|`UC-ROLLBACK`; `C-TECH-029`; `C-BOUND-006`; `QS-SAFE-012`; `R-030`; ADRs 0002 and 0004; Chapters 4-6 and 8-12.
+|Feature-level inherited `@implemented-and-validated`; the outline's seven cases/eight declared steps/56 expanded case steps passed in the focused source-built/in-process run.
+|===
+
+The feature, production executor, acceptance glue, final focused run, and final whole-working-tree source-built run provide bounded implementation evidence for `ManagedRollbackExecutor`, `RollbackLookupVisibility`, and the typed outcome algebra. The mutable-diagnostics RED and corrected acceptance additionally prove detached unmodifiable ordered snapshotting for `Refused`; exact `TransactionLogException` identity and the exact resolved record remain intentionally retained. The retained record is explicitly pre-lock lookup evidence rather than current or post-rollback state. CLI/daemon/LSP/MCP adoption is confirmed by source inspection only, not packaged or cross-platform execution. Existing rollback evidence and `PatchEngine` authority remain bounded and unchanged.
+
 == Transactionality Requirement Clarifications
 
 These requirements capture the audit's required contract decisions and acceptance gaps. They are not implementation claims.
@@ -600,16 +627,19 @@ These requirements capture the audit's required contract decisions and acceptanc
 
 == Gherkin Scenario Listing
 
-The configured project feature root `features/` contains two discovered feature sources:
+The configured project feature root `features/` contains three discovered feature sources:
 
 * `features/java-maven-move-class-apply-authority.feature`
+* `features/managed-rollback-executor-extraction.feature`
 * `features/pending-plan-store-extraction.feature`
 
 The Maven feature's `Business Need` addresses `UC-JAVA-MOVE-CLASS` for a multi-module Maven workspace maintainer. Its `Background` is not a production scenario. Each of twelve requirement-bearing definitions (ten `Scenario`, two `Scenario Outline`) has one repository-unique stable `@REQ-*` ID, at least one classification, and exactly one effective status. All twelve are `@implemented-and-validated`; the six rows under each outline inherit its ID/classification/status, producing 22 validated executable cases. Focused REQ-008 evidence discovered 22, executed/passed six, skipped sixteen, and had zero failures/errors; independent log SHA-256 `ba7dda54ba85904ddde200982fbc41613b4a48f95bd8481bdccfad3427de6edc`, with `gherkin-writer` execution log `6f7e2d8a9c767f265a117853267a37ab31ec31d0878637870b37202ec8ba2c71`. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. Those execution totals do not alter the Maven subset and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. Magrathea field evidence remains separate and bounded.
 
+The managed-rollback feature has no `Background`. Its one ordinary scenario and one seven-row `Scenario Outline` each carry one repository-unique `@REQ-*` ID and inherit `@non-functional-requirement` plus `@implemented-and-validated` from the feature. REQ-MANAGED-ROLLBACK-EXECUTOR-001 contributes one 11-step case; REQ-MANAGED-ROLLBACK-EXECUTOR-002 contributes seven eight-step cases. A focused RED proved mutable diagnostic aliasing after `execute` (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`). After detached unmodifiable ordered snapshotting, the resulting two definitions, eight cases, 19 declared steps, and 67 expanded steps passed the final focused OpenJDK 21.0.11 source-built/in-process runner with 29 tasks and zero failures/errors/skips/undefined/ambiguous/pending; log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`. Production and acceptance paths are listed above. The final whole-working-tree source-built run passed with 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors, and 77 tasks (log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`). Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), and 25 glue-only Kotlin/lifecycle/generated warnings remain (13 NP, 1 RCN, 5 MS, 6 BC); the former three `Refused`-diagnostics EI/EI2 findings are eliminated. This aggregate run is not additional Gherkin case evidence, and surface adoption remains inspected rather than executed evidence.
+
 The pending-plan feature has no `Background` or examples. Its two ordinary scenarios each carry one repository-unique `@REQ-*` ID and inherit `@non-functional-requirement` plus `@implemented-and-validated` from the feature, producing two cases and 19 steps. The focused OpenJDK 21.0.11 source-built/in-process runner passed both scenarios, executed 29 Gradle tasks, and reported zero failures/errors; log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`. The subsequent independent 2026-07-31 whole-working-tree source-built run reported 1002 discovered, 782 executed, 220 skipped/tag-filtered, and zero failures/errors across 77 tasks; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`, with no `PendingPlanStore` findings in the configured non-blocking SpotBugs baseline. This evidence remains bounded to mutable source-built behavior; it does not qualify packaged or concurrent behavior, a general extraction pattern, or numerical coverage.
 
-The official OpenJDK 21.0.11 Gherkin 28 audit across both paths found two feature documents, 14 definitions, 24 expanded cases, 14 unique IDs, 260 declared scenario steps, one five-step background, and 520 expanded case steps. Every definition/case has exactly one effective implemented-and-validated status and a justified classification; parse and contract errors are zero. Audit log SHA-256: `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`.
+The final official OpenJDK 21.0.11 Gherkin 28 audit across all three paths found three feature documents, 16 definitions, 32 expanded cases, 16 unique IDs, 279 declared scenario steps, one separate five-step background, and 587 expanded case steps. Every definition/case has at least one justified classification and exactly one effective `@implemented-and-validated` status; errors are zero. Final audit log SHA-256: `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`. Earlier audit hashes `af9cfc7e69ec589bd5512b963e9eebdce936e63b240e3b1860078f0989b20b7e` and `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9` remain historical receipts for their then-current status/source sets.
 
 [cols="2,4,3,4,4,4,3,2,4",options="header"]
 |===
@@ -754,6 +784,26 @@ The official OpenJDK 21.0.11 Gherkin 28 audit across both paths found two featur
 |`features/pending-plan-store-extraction.feature`
 |`@implemented-and-validated` (feature-level inherited status)
 |The six-step scenario verified that the shared store's public boundary is only insert/lookup/remove/clear, verified distinct `PendingPlanStore` instances in real `DaemonSession`, `LspSession`, and `McpSession` objects, and exercised their existing in-process admission, discard availability, selected-versus-all apply consumption, general/stale-Kotlin refusal behavior, rollback retention/clear differences, project/document/close clearing, MCP importer exception, and success/error responses. Lifecycle policy remains at the surface call sites; no uniform lifecycle, protocol capability, or authority rule was introduced. Exact production paths are `PendingPlanStore.kt`, `DaemonSession.kt`, `LspSession.kt`, and `McpSession.kt`. Packaged, concurrency, and general service-extraction qualification remains open.
+
+|REQ-MANAGED-ROLLBACK-EXECUTOR-001
+|One visible applied record is durably rolled back through the real engine
+|CLI/daemon/LSP/MCP rollback callers; implemented shared resolution and authoritative engine handoff.
+|Non-functional. Exact ordering, full-record identity, responsibility separation, one-call behavior, durability handoff, and absence of caller-policy migration are correctness, safety, traceability, and compatibility constraints.
+|`@REQ-MANAGED-ROLLBACK-EXECUTOR-001 @non-functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|`UC-ROLLBACK`; `C-TECH-029`; `C-BOUND-006`; `QS-SAFE-012`; `R-030`; ADRs 0002 and 0004.
+|`features/managed-rollback-executor-extraction.feature`
+|`@implemented-and-validated` (feature-level inherited status)
+|`ManagedRollbackExecutorCucumberTest`/steps exercised the core executor with `TransactionLog` and real `PatchEngine` in process. The ordinary scenario declares and passed 11 steps as one case, including durable `ROLLED_BACK` journal state, pre-image path/byte/metadata restoration, exact complete resolved-record identity, one outer lookup, and one engine call. Source inspection confirms CLI/daemon/LSP/MCP adoption; no packaged or cross-platform surface execution is inferred.
+
+|REQ-MANAGED-ROLLBACK-EXECUTOR-002
+|Short circuits and surface visibility retain distinct outcomes
+|CLI/daemon/LSP/MCP rollback callers; implemented cross-surface compatibility boundary and typed failure/outcome handoff.
+|Non-functional. Fail-fast ordering, surface visibility, document safety, exact call counts, outcome discrimination, exception fidelity, evidence identity, and policy ownership are correctness, safety, and compatibility constraints.
+|`@REQ-MANAGED-ROLLBACK-EXECUTOR-002 @non-functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|`UC-ROLLBACK`; `C-TECH-029`; `C-BOUND-006`; `QS-SAFE-012`; `R-030`; ADRs 0002 and 0004.
+|`features/managed-rollback-executor-extraction.feature`
+|`@implemented-and-validated` (Scenario Outline inherits feature status; inherited by seven example rows)
+|The final focused runner passed all seven outline cases/56 expanded case steps. Acceptance glue verifies the declared parse/lookup/guard/engine/lock counts, distinct outcomes, exact record identity, journal exception identity/code/message/cause, and LSP rejection payload ordering in process. For the daemon refusal row it mutates the retained mutable diagnostics source after `execute`, verifies the outcome kept the ordered baseline values, and verifies the public outcome list rejects mutation. Actual surface adoption is source-inspected only; packaged, cross-platform, concurrent rollback, and crash/restart behavior remain unqualified.
 |===
 
 === REQ-JAVA-MAVEN-MOVE-AUTH-008 Validated Example Matrix
@@ -848,6 +898,52 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |`REFUSED` / `INELIGIBLE`
 |===
 
+=== REQ-MANAGED-ROLLBACK-EXECUTOR-002 Validated Example Matrix
+
+All seven rows inherit REQ-MANAGED-ROLLBACK-EXECUTOR-002, `@non-functional-requirement`, and `@implemented-and-validated` from one repository-unique `Scenario Outline`. The focused source-built/in-process runner passed every row; the work counts and typed outcomes below are bounded acceptance evidence, while named surface adoption is source-inspected.
+
+[cols="1,2,3,3",options="header"]
+|===
+|Example / surface |Initial condition and visibility |Validated work boundary |Validated typed outcome and evidence
+
+|1 — any rollback surface
+|Upper-case raw transaction ID; journal must not be accessed; caller-selected visibility; guard must not run.
+|`parseOrNull=1`; outer `loadRecord=0`; guard=0; real rollback=0; workspace lock=0.
+|`InvalidTransactionId` carries the exact unnormalized raw ID; no parsed ID or resolved record.
+
+|2 — CLI
+|No ID-matching record; `APPLIED_ONLY`; guard must not run.
+|Parse once; one outer pre-lock lookup; no guard, rollback, or lock.
+|`TransactionNotFound` carries the parsed ID and `APPLIED_ONLY`; no resolved record.
+
+|3 — CLI, LSP, and MCP
+|One complete ID-matching `ROLLED_BACK` record; `APPLIED_ONLY`; guard must not run.
+|Parse and outer lookup once; visibility hides the record; no guard, rollback, or lock.
+|`TransactionNotFound` carries the parsed ID and `APPLIED_ONLY`; hidden non-`APPLIED` record is not exposed.
+
+|4 — daemon
+|One complete ID-matching `ROLLED_BACK` record; `JOURNAL_RECORD`; allow guard.
+|Parse, outer lookup, guard, and real rollback once; engine lock reached.
+|`Refused` carries the exact resolved record and a detached unmodifiable snapshot of the ordered `transaction.notApplied` baseline; mutating the retained source list after `execute` changes the source but not the outcome, and mutation through the outcome list is rejected. The executor neither reloads nor reconstructs the record.
+
+|5 — LSP
+|One complete `APPLIED` record; `APPLIED_ONLY`; unrelated dirty document and affected open path both exist.
+|Parse, lookup, visibility, and one pre-lock guard; dirty-document-first rejection; no rollback or lock.
+|`PreflightRejected` carries the same resolved record and unchanged `DOCUMENT_VERSION_MISMATCH` payload.
+
+|6 — daemon lookup
+|Outer `loadRecord` throws exact `TransactionLogException E_lookup`; `JOURNAL_RECORD`; guard must not run.
+|Parse and one outer pre-lock lookup; no guard, rollback, or lock.
+|`JournalLookupFailed` carries parsed ID and exact code/message/cause; no resolved record.
+
+|7 — daemon rollback call
+|Outer lookup resolves one complete `APPLIED` record; under-lock engine journal access throws exact `TransactionLogException E_call`; `JOURNAL_RECORD`; allow guard.
+|Parse, outer lookup, guard, real rollback, and engine lock each reached once.
+|`RollbackCallJournalFailed` carries the same resolved record and exact code/message/cause.
+|===
+
+Visible absence, preflight rejection, engine refusal, lookup journal failure, and rollback-call journal failure remain distinct. Every row excludes response projection, session lifecycle, refresh, and diagnostics policy from the executor.
+
 === Reconciled Gherkin Totals
 
 [cols="3,1,5",options="header"]
@@ -859,44 +955,44 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |`features/`.
 
 |Feature documents / discovered `.feature` paths
-|2
-|`features/java-maven-move-class-apply-authority.feature` and `features/pending-plan-store-extraction.feature`.
+|3
+|`features/java-maven-move-class-apply-authority.feature`, `features/managed-rollback-executor-extraction.feature`, and `features/pending-plan-store-extraction.feature`.
 
 |Requirement-bearing definitions
-|14
-|Twelve ordinary `Scenario` declarations (ten Maven move-class plus two pending-plan scenarios) and two Maven `Scenario Outline` declarations (`008` and `012`); the one `Background` is excluded.
+|16
+|Thirteen ordinary `Scenario` declarations (ten Maven move-class, one managed rollback, and two pending-plan scenarios) plus three `Scenario Outline` declarations (Maven `008`/`012` and managed rollback `002`); the one Maven `Background` is excluded.
 
 |Scenario Outline definitions
-|2
-|REQ-JAVA-MAVEN-MOVE-AUTH-008 and REQ-JAVA-MAVEN-MOVE-AUTH-012.
+|3
+|REQ-JAVA-MAVEN-MOVE-AUTH-008, REQ-JAVA-MAVEN-MOVE-AUTH-012, and REQ-MANAGED-ROLLBACK-EXECUTOR-002.
 
 |Scenario Outline example rows
-|12
-|Six uncertainty/drift rows under `008` plus six selected-descriptor loss/drift rows under `012`.
+|19
+|Six uncertainty/drift rows under Maven `008`, six selected-descriptor loss/drift rows under Maven `012`, and seven short-circuit/visibility rows under managed rollback `002`.
 
 |Example-expanded executable cases
-|24
-|Twelve ordinary scenarios plus six cases inherited from each of the `008` and `012` outlines.
+|32
+|Thirteen ordinary scenarios plus 19 rows inherited from the three outlines.
 
 |Declared scenario steps
-|260
-|The twelve Maven definitions declare 241 scenario steps and the two pending-plan definitions declare 19; the separate five-step Maven `Background` is not included in this metric.
+|279
+|The twelve Maven definitions declare 241 scenario steps, the two managed-rollback definitions declare 19, and the two pending-plan definitions declare 19; the separate five-step Maven `Background` is not included in this metric.
 
 |Expanded executable case steps
-|520
-|Official Gherkin pickles include inherited background steps and example expansion: 501 steps for the 22 Maven cases plus 19 steps for the two pending-plan cases.
+|587
+|Official Gherkin pickles include inherited background steps and example expansion: 501 steps for the 22 Maven cases, 67 for the eight managed-rollback cases, and 19 for the two pending-plan cases.
 
 |Repository-unique stable requirement IDs in current Gherkin
-|14
-|Exactly one `@REQ-*` ID occurs on each requirement-bearing definition; the six cases under each Maven outline intentionally inherit that outline's one ID, and no ID labels another definition.
+|16
+|Exactly one `@REQ-*` ID occurs on each requirement-bearing definition. Example rows intentionally inherit their outline's one ID, and no ID labels another definition.
 
 |Functional-only requirement definitions
 |1
 |REQ-JAVA-MAVEN-MOVE-AUTH-002.
 
 |Non-functional-only requirement definitions
-|5
-|REQ-JAVA-MAVEN-MOVE-AUTH-004, REQ-JAVA-MAVEN-MOVE-AUTH-005, REQ-JAVA-MAVEN-MOVE-AUTH-008, REQ-PENDING-PLAN-STORE-001, and REQ-PENDING-PLAN-STORE-002.
+|7
+|REQ-JAVA-MAVEN-MOVE-AUTH-004, REQ-JAVA-MAVEN-MOVE-AUTH-005, REQ-JAVA-MAVEN-MOVE-AUTH-008, REQ-MANAGED-ROLLBACK-EXECUTOR-001, REQ-MANAGED-ROLLBACK-EXECUTOR-002, REQ-PENDING-PLAN-STORE-001, and REQ-PENDING-PLAN-STORE-002.
 
 |Dual-classified requirement definitions
 |8
@@ -907,7 +1003,7 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |REQ-JAVA-MAVEN-MOVE-AUTH-001, REQ-JAVA-MAVEN-MOVE-AUTH-002, REQ-JAVA-MAVEN-MOVE-AUTH-003, REQ-JAVA-MAVEN-MOVE-AUTH-006, REQ-JAVA-MAVEN-MOVE-AUTH-007, REQ-JAVA-MAVEN-MOVE-AUTH-009, REQ-JAVA-MAVEN-MOVE-AUTH-010, REQ-JAVA-MAVEN-MOVE-AUTH-011, and REQ-JAVA-MAVEN-MOVE-AUTH-012.
 
 |Definitions carrying `@non-functional-requirement`
-|13
+|15
 |All requirement IDs except REQ-JAVA-MAVEN-MOVE-AUTH-002. Classification totals overlap for the eight dual-classified definitions.
 
 |Definitions with effective `@absent`
@@ -919,16 +1015,20 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |No current expanded case is absent.
 
 |Definitions with effective `@implemented-and-validated`
-|14
-|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` plus REQ-PENDING-PLAN-STORE-001/002. Maven statuses are explicit at scenario/outline level; pending-plan statuses are inherited from the feature. Every definition has bounded tagged Cucumber evidence.
+|16
+|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012`, REQ-MANAGED-ROLLBACK-EXECUTOR-001/002, and REQ-PENDING-PLAN-STORE-001/002. Maven statuses are explicit at scenario/outline level; managed-rollback and pending-plan statuses are inherited from their features. Every definition retains separately bounded tagged Cucumber evidence.
 
 |Example-expanded cases with effective `@implemented-and-validated`
-|24
-|Twelve ordinary scenarios plus six cases inherited from each of Maven outlines `008` and `012`.
+|32
+|Thirteen ordinary implemented scenarios plus 19 cases inherited from the three outlines.
 
 |Mappings to `UC-JAVA-MOVE-CLASS`
 |12
 |Every Maven move-class requirement-bearing definition, and therefore all 22 Maven executable cases, maps to this use case.
+
+|Mappings to `UC-ROLLBACK`
+|2
+|REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 and their eight implemented-and-validated cases map to supporting orchestration within the existing rollback use case; they add no protocol capability or mutation authority.
 
 |Mappings to UC-DAEMON, UC-LSP, and UC-MCP
 |2
@@ -939,8 +1039,8 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |The union of all twelve Gherkin requirement mappings is RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007 and conforms to accepted ADR 0012's target-scoped authority, declaration-scope, descriptor-closed selected-graph, ordinary selected-missing-binary, and fail-closed selected-descriptor refinements.
 
 |Observed implemented-and-validated requirement definitions
-|14
-|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` passed only bounded tagged rows. `008` and `012` each expand to six cases. Focused `008` evidence passed six selected cases, skipped sixteen others, and had zero failures/errors. The historical REQ-008-specific independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. REQ-PENDING-PLAN-STORE-001/002 passed both focused source-built/in-process scenarios and all 19 steps with 29 executed Gradle tasks and zero failures/errors; log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`. The subsequent current whole-working-tree verification on 2026-07-31 used the same OpenJDK and Gradle command: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`; the non-blocking SpotBugs baseline had no `PendingPlanStore` findings. These are dated mutable source-built execution totals, not additional Gherkin definitions/cases or packaged/concurrency/general-extraction/numerical-coverage qualification. Maven, pending-plan, and Magrathea evidence remain separately bounded.
+|16
+|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` passed only bounded tagged rows. `008` and `012` each expand to six cases. Focused `008` evidence passed six selected cases, skipped sixteen others, and had zero failures/errors. The historical REQ-008-specific independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. REQ-PENDING-PLAN-STORE-001/002 passed both focused source-built/in-process scenarios and all 19 steps with 29 executed Gradle tasks and zero failures/errors; log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`. The historical PendingPlanStore-scoped whole-working-tree verification on 2026-07-31 used the same OpenJDK and Gradle command: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`; the non-blocking SpotBugs baseline had no `PendingPlanStore` findings. A focused RED first proved the REQ-MANAGED-ROLLBACK-EXECUTOR-002 mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`). After detached unmodifiable ordered snapshotting, REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 passed 8/8 source-built/in-process scenarios and 67/67 expanded steps with 29 tasks and zero failures/errors/skips/undefined/ambiguous/pending; final focused log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`. The final current whole-working-tree source-built verification used OpenJDK 21.0.11 and the same Gradle command: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings remain non-zero but reviewed/non-blocking: seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings); 25 glue-only Kotlin/lifecycle/generated warnings remain (13 NP, 1 RCN, 5 MS, 6 BC); the former three `Refused`-diagnostics EI/EI2 findings are eliminated. The REQ-008- and PendingPlanStore-specific whole-working-tree receipts remain historical evidence for their explicit scopes. These are dated mutable source-built execution totals, not additional Gherkin definitions/cases or packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority qualification. Maven, pending-plan, managed-rollback, and Magrathea evidence remain separately bounded; managed-rollback surface adoption is inspected only.
 |===
 
 == Validation Modes
@@ -984,8 +1084,12 @@ All rows inherit REQ-JAVA-MAVEN-MOVE-AUTH-012, `@functional-requirement`, `@non-
 |Gap |Impact |Status
 
 |Executable Story BDD coverage remains narrow
-|The configured root has two feature sources: twelve implemented-and-validated Maven move-class definitions/22 cases and two implemented-and-validated pending-plan definitions/cases. Most other use cases still have no mapped Gherkin scenarios.
+|The configured root has three feature sources: twelve implemented-and-validated Maven move-class definitions/22 cases, two implemented-and-validated managed-rollback definitions/eight cases, and two implemented-and-validated pending-plan definitions/cases. Most other use cases still have no mapped Gherkin scenarios.
 |needs-review; each existing feature is complete only for its bounded catalogue
+
+|Managed rollback executor qualification is bounded
+|REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 pass one positive case and seven compatibility/failure cases through the final source-built/in-process runner, and the final whole-working-tree source-built gate also passed; source inspection confirms CLI/daemon/LSP/MCP adoption. RED evidence proved mutable diagnostic aliasing, and detached unmodifiable ordered snapshotting eliminated its former three `Refused` EI/EI2 findings. Static findings are not zero: seven intentionally reviewed/non-blocking core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 non-blocking glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). The aggregate gate does not become packaged or cross-platform surface evidence, and no concurrent rollback, crash/restart, general rollback authority, numerical coverage, or `PatchEngine` authority change is qualified.
+|mitigated for the bounded source-built/in-process slice; reviewed static findings remain intentionally non-blocking; needs-review before any packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or broader surface-execution claim
 
 |Pending-plan extraction qualification is bounded
 |The focused runner calls source-built classes and real daemon/LSP/MCP sessions in process. It does not exercise packaged executables/transports, concurrent callers, long-running service races, or a reusable general service-extraction pattern; lifecycle policy remains surface-owned and no protocol/authority change is claimed.
