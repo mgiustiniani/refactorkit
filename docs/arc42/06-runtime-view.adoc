@@ -20,7 +20,7 @@ Status: implementation-informed for documented flows; no C4 dynamic diagrams yet
 |CLI delegates Java-specific analysis to `JavaLanguageAdapter` / planner classes.
 
 |4
-|For a managed or refused result, the planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, risk level, and an explicit JDT-backed, lexical, or refusal classification. The bounded Java/Maven CLI `moveClass` path first uses `JavaMoveClassOperationDispatcher`: its `Plan` arm wraps the existing `JavaMoveClassPreview`, while its disjoint `Guidance` arm carries only `JavaMoveClassReviewOnlyGuidance`.
+|For an admitted managed or refused result, the planner returns a `PatchPlan` with affected files, workspace edits, diagnostics, warnings, confidence, risk level, and an explicit JDT-backed, structural, or refusal classification. The bounded Java/Maven CLI `moveClass` path instead starts at the operation-specific `JavaMoveClassOperationDispatcher`, whose disjoint outcomes are non-lexical `Plan(JavaMoveClassPreview)`, REQ-003 `Guidance(JavaMoveClassReviewOnlyGuidance)`, and REQ-004 `LexicalReview(JavaMoveClassLexicalFallbackReviewEnvelope)`. A legacy lexical compatibility preview is projected to `LEXICAL_FALLBACK_REVIEW` before generic patch rendering; the `Plan` outcome rejects lexical evidence.
 
 |5
 |User reviews the preview. If applying, `PatchEngine` acquires the workspace writer lock, checks the derived current snapshot hash, revalidates affected paths, probes durability capability, renders complete post-images, durably journals intent, stages same-directory files, and commits per-path atomic replacements/deletes with directory flushes.
@@ -80,16 +80,16 @@ Status: implementation-informed from `docs/ai-workflow.md`, `docs/integration-co
 |LSP server maps requests to Java/core model operations.
 
 |4
-|For native rename and WorkspaceEdit-returning commands, the server labels the result client-managed/no-rollback; the editor applies it outside `PatchEngine`. Open-buffer text edits carry the exact tracked document version.
+|For admitted native rename and WorkspaceEdit-returning commands, the server labels the result client-managed/no-rollback; the editor applies it outside `PatchEngine`. Open-buffer text edits carry the exact tracked document version. This ownership model must not be reached by an ineligible lexical fallback.
 
 |5
 |`didOpen`/full-sync `didChange` overlays feed planning. Non-increasing versions and incapable clients for structural/open-document edits are refused; managed disk apply/rollback rejects unsaved or affected-open documents (`TX-007` closed).
 
 |6
-|For the custom `refactorkit.applyPlan` command, RefactorKit owns sequential writes and post-apply compensation logging, with the same non-crash-safe limitations as other managed apply paths.
+|For the custom `refactorkit.applyPlan` command, RefactorKit owns sequential writes and post-apply compensation logging, with the same non-crash-safe limitations as other managed apply paths. A known lexical-review `operationId` is instead refused as `evidence.insufficient` with structured blocker/envelope error data before this managed path.
 |===
 
-Status: implementation-informed from `docs/integration-contracts.md` and `docs/transactionality-audit.md`; stable LSP status remains capability-by-capability and acceptance-gated. Native edits and RefactorKit-managed apply have distinct transaction boundaries.
+Status: implementation-informed from `LspSession`, `docs/integration-contracts.md`, `docs/transactionality-audit.md`, and bounded REQ-JAVA-MAVEN-MOVE-AUTH-004 acceptance. Native edits and RefactorKit-managed apply retain distinct transaction boundaries. Lexical Java `moveClass` now dispatches before `planToLspWorkspaceEdit`, returns no `changes` or `documentChanges`, creates no pending plan, and cannot reach either client-managed or RefactorKit-managed application. Stable LSP status remains capability-by-capability and acceptance-gated; packaged editor/runtime/native qualification is not claimed.
 
 == Runtime Scenario: Daemon Capability Discovery Before Project Open
 
@@ -128,16 +128,16 @@ Status: implementation-informed from `DaemonSession`, its daemon contract test, 
 |`WorkspaceEditSimulator` applies the step to an immutable staged snapshot using the same structural-segment normalization as `PatchEngine`; each later step plans against that evolving snapshot.
 
 |3
-|Any refusal, diagnostics error, invalid edit, or later planning failure returns before journaling and leaves the workspace untouched.
+|Any refusal, diagnostics error, invalid edit, or later planning failure returns before journaling and leaves the workspace untouched. Implemented REQ-004 treats a lexical `moveClass` review as a terminal `RecipeResult.NonManaged`: it returns the envelope, discards prior in-memory staging, runs no later steps, and does not proceed to reduction.
 
 |4
-|After all steps succeed, the engine computes one initial-to-final workspace delta and exposes one recipe-wide preview plan.
+|After all eligible steps succeed, the engine computes one initial-to-final workspace delta and exposes one recipe-wide preview plan. No recipe-wide plan exists when a lexical-review or REQ-003 guidance step terminates the recipe.
 
 |5
 |Apply validates the initial engine-owned snapshot and commits the recipe-wide plan through one lock/WAL/staged replacement transaction. No-op recipes create no transaction.
 |===
 
-Status: implementation-informed from `docs/transactionality-audit.md`; `TX-008` is closed with one staged recipe transaction.
+Status: implementation-informed from `RecipeEngine`, `docs/transactionality-audit.md`, and bounded REQ-JAVA-MAVEN-MOVE-AUTH-004 acceptance. `TX-008` remains closed with one staged recipe transaction for successful admitted steps; lexical `moveClass` now returns before aggregate construction, with a null `recipePlan`, discarded prior staged image, no later step, and no transaction.
 
 == Runtime Scenario: External Java Class Import Preview
 
@@ -193,9 +193,44 @@ Status: confirmed architecture; active, product-critical. The first release-8/cu
 |Managed preview/apply compares baseline and exact staged post-image diagnostics across the affected and dependent-impact closure. Default policy rejects introduced errors; strict mode requires zero staged errors. Any affected-environment unavailability blocks regardless of baseline, and post-apply/rollback results bind the committed/restored snapshots.
 |===
 
+== Runtime Scenario: Cross-surface Legacy Lexical-fallback Review
+
+Status: implementation-informed for implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004. The evidence exercises one source-built/in-process production scenario through `JavaMoveClassOperationDispatcher`, `RefactorKitCli`, `RecipeEngine`, `DaemonSession`, `LspSession`, and `McpSession`; it does not qualify packaged processes, stdio/editor transport deployments, runtime distributions, native platforms, or general move-class authority.
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|The direct Java move-class operation API (`JavaMoveClassOperationDispatcher.preview`), CLI, recipe, daemon JSON-RPC session, managed LSP command session, or MCP tool session submits the same normalized Maven `moveClass` request against an exact `ProjectSnapshot`. This direct path is the Java operation outcome dispatcher, not the generic `LanguageAdapter` `PatchPlan` API.
+
+|2
+|Operation-specific Java analysis cannot establish semantic authority and creates a legacy internal compatibility preview with `LEXICAL_FALLBACK`. `JavaMoveClassOperationDispatcher` immediately projects that preview to its `LexicalReview` outcome. The compatibility plan's UUID `PlanId`, workspace edit, ranges, and replacement/create bytes remain internal and never cross the outcome/protocol boundary.
+
+|3
+|Before generic rendering, pending-plan registration, recipe reduction, or LSP `WorkspaceEdit` conversion, the dispatcher builds canonical schema-v1 `LEXICAL_FALLBACK_REVIEW`. Canonical JSON hashing produces `requestSha256`, exact `snapshotSha256`, hidden `reviewArtifactSha256`, and sorted-fact `evidenceSha256`. The hidden review-artifact identity commits to normalized internal compatibility file operations, exact edit ranges, and replacement/create byte hashes; exposed residual records do not contain those details. The deterministic non-capability `operationId` is `lexical-review-<sha256>` over the four identities and fixed disposition.
+
+|4
+|The surface returns the same immutable envelope with `semanticCompleteness=NOT_SEMANTICALLY_PROVEN`, `authorityStatus=REVIEW_ONLY`, `evidenceKind=LEXICAL_FALLBACK`, `managedWriteEligibility=INELIGIBLE`, and `blockerCode=evidence.insufficient`. Residual guidance contains only normalized path, current content SHA-256, typed risk facts, and `managedEdit=false`; it is capped at 200 records/262,144 canonical record bytes, reports `recordCompleteness=COMPLETE or TRUNCATED`, deterministic returned-category counts, and the four fixed next actions. The envelope has no protocol plan/edit/range/replacement/apply token, `changes`, `documentChanges`, transaction, or rollback field. Promotion metadata and internal random plan IDs do not affect any identity.
+
+|5
+|The Java-owned audit cache stores exact immutable envelopes only in an in-memory LRU keyed by `operationId`, bounded to 128 entries and 16,777,216 canonical bytes. Daemon/LSP/MCP session dispatchers insert no pending plan and clear audit state on relevant project, snapshot, mutation, semantic-session, initialization, and close transitions. CLI and recipes use short-lived dispatchers. A recipe stops immediately, discards prior staged images, returns a null aggregate plan, and creates no transaction.
+
+|6
+|Daemon, LSP, and MCP use the shared `RefactoringApplyIdentity.parse`, which requires exactly one non-blank `operationId` or `planId`. A still-known operation returns the same envelope and typed `evidence.insufficient` before `PatchEngine`, workspace lock, WAL, editor application, or mutation. Daemon and LSP use `PLAN_VALIDATION_FAILED (-32008)` and preserve blocker/envelope JSON-RPC error `data`; MCP returns `isError=true` with equivalent `structuredContent`.
+
+|7
+|No identity, both identities, a blank/non-string identity, an unknown or evicted `operationId`, and an arbitrary/unknown `planId` including `plan-lexical` are `INVALID_PARAMS (-32602)`. Unknown identity never becomes typed known lexical evidence.
+
+|8
+|The core lexical evidence gate remains defense in depth for direct compatibility-plan apply and refuses before lock/WAL. A fresh full-reactor scan with complete exact bindings preserves the existing `Plan` outcome with `SEMANTIC_PREVIEW`, `JDT_BINDING`, `ELIGIBLE`, and its managed edit; neither the old compatibility plan nor the lexical envelope is promoted.
+|===
+
+This flow does not replace the next REQ-003 scenario. `REVIEW_ONLY_GUIDANCE` describes four safely enumerable typed Maven authority defects and uses `guidance.nonManaged`; `LEXICAL_FALLBACK_REVIEW` describes legacy broad syntax/binding loss and uses `evidence.insufficient`.
+
 == Runtime Scenario: Review-only Java/Maven Move Guidance
 
-Status: implementation-informed for the four bounded REQ-JAVA-MAVEN-MOVE-AUTH-003 defects through the Java dispatcher and source-built CLI. This is not a generic cross-surface result algebra. Force/recipe/daemon/managed-LSP/MCP parity remains acceptance scope of absent REQ-JAVA-MAVEN-MOVE-AUTH-004; structural-loss and post-preview drift refusals remain scope of absent REQ-JAVA-MAVEN-MOVE-AUTH-008.
+Status: implementation-informed for the four bounded REQ-JAVA-MAVEN-MOVE-AUTH-003 defects through the Java dispatcher and source-built CLI. This remains distinct from the separately implemented REQ-004 `LexicalReview` outcome and is not a generic core result algebra. Structural-loss and post-preview drift refusals remain scope of absent REQ-JAVA-MAVEN-MOVE-AUTH-008.
 
 [cols="1,3",options="header"]
 |===

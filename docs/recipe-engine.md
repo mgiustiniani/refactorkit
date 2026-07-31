@@ -32,6 +32,11 @@ Safety behavior:
   lifecycle record under `.refactorkit/transactions`;
 - later-step refusal or failure occurs before journaling and leaves the workspace
   and transaction log untouched;
+- a Java `moveClass` step that has only legacy lexical evidence terminates the
+  recipe with the canonical schema-v1 `LEXICAL_FALLBACK_REVIEW`, discards any
+  prior staged image, returns no aggregate `PatchPlan`, and creates no managed
+  transaction; approval, warning acknowledgement, confidence, or force metadata
+  cannot promote it;
 - no-op recipes create no transaction;
 - diagnostics compare baseline and staged ERROR diagnostics and report baseline,
   staged, introduced, resolved, and unchanged counts; normal mode refuses only

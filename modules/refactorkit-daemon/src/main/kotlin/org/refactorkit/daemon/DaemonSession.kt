@@ -41,6 +41,7 @@ import org.refactorkit.core.WorkspaceIndexCompleteness
 import org.refactorkit.core.WorkspaceIndexSession
 import org.refactorkit.core.WorkspaceSymbolContribution
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RefactoringApplyIdentity
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RollbackMode
@@ -100,7 +101,10 @@ import org.refactorkit.typescript.TypeScriptToolchainDiscovery
 import org.refactorkit.typescript.TypeScriptToolchainDiscoveryPolicy
 import org.refactorkit.typescript.TypeScriptToolchainRequest
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
-import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewJsonProjection
+import org.refactorkit.java.JavaMoveClassOperationDispatcher
+import org.refactorkit.java.JavaMoveClassOperationOutcome
+import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
@@ -141,6 +145,7 @@ class DaemonSession(
         { request, policy -> KotlinToolchainDiscoverer(policy).discover(request) },
 ) : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
+    private val moveClassDispatcher = JavaMoveClassOperationDispatcher(adapter)
     private var scanner = JavaProjectScanner()
 
     @Volatile private var snapshot: ProjectSnapshot? = null
@@ -249,6 +254,7 @@ class DaemonSession(
         closeSemanticAdapters()
         adapter.clearSemanticCache()
         pendingPlans.clear()
+        moveClassDispatcher.clearLexicalReviewAudit()
         snapshot = null
         workspaceRoot = null
         workspaceIndex.clear()
@@ -355,6 +361,7 @@ class DaemonSession(
 
         val reconciliation = workspaceIndex.reconcile(next)
         snapshot = next
+        moveClassDispatcher.clearLexicalReviewAudit()
         val stoppedLanguages = semanticAdapters.keys.toSortedSet()
         semanticAdapters.values.forEach(TypeScriptSemanticAdapter::close)
         semanticAdapters.clear()
@@ -1292,7 +1299,7 @@ class DaemonSession(
         val scriptSnapshot = GenericProjectScanner(SCRIPT_EXTENSIONS).scan(root)
         val mergedFiles = (javaSnapshot.files + scriptSnapshot.files)
             .associateBy { it.path.normalize() }.values.sortedBy { it.path.toString() }
-        val merged = javaSnapshot.copy(
+        val merged = if (scriptSnapshot.files.isEmpty()) javaSnapshot else javaSnapshot.copy(
             files = mergedFiles,
             sourceExtensions = javaSnapshot.sourceExtensions + SCRIPT_EXTENSIONS.keys,
             ignoredDirectories = javaSnapshot.ignoredDirectories + scriptSnapshot.ignoredDirectories,
@@ -1568,7 +1575,22 @@ class DaemonSession(
             }
             "moveClass" -> {
                 val pkg = args["targetPackage"] ?: missing("arguments.targetPackage")
-                JavaMoveClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), pkg)
+                when (val outcome = moveClassDispatcher.preview(
+                    snap,
+                    symbol ?: missing("symbol"),
+                    pkg,
+                    moveClassPromotionAttempt(args),
+                )) {
+                    is JavaMoveClassOperationOutcome.Plan -> outcome.preview.plan
+                    is JavaMoveClassOperationOutcome.Guidance -> return buildJsonObject {
+                        put("resultType", outcome.guidance.resultType.name)
+                        put("schemaVersion", outcome.guidance.schemaVersion)
+                        put("managedWriteEligibility", "INELIGIBLE")
+                        put("blockerCode", "guidance.nonManaged")
+                    }
+                    is JavaMoveClassOperationOutcome.LexicalReview ->
+                        return JavaMoveClassLexicalFallbackReviewJsonProjection.toJson(outcome.envelope)
+                }
             }
             "moveSourceRoot" -> {
                 val from = args["from"] ?: missing("arguments.from")
@@ -1643,13 +1665,26 @@ class DaemonSession(
     }
 
     private fun refactorApply(params: JsonObject?): JsonElement {
-        val planId = params?.string("planId") ?: missing("planId")
+        val values = params ?: JsonObject(emptyMap())
+        val planId = when (val identity = RefactoringApplyIdentity.parse(values)) {
+            is RefactoringApplyIdentity.OperationCorrelation -> {
+                val operationId = identity.operationId
+                val envelope = moveClassDispatcher.findLexicalReview(operationId)
+                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Operation not found: $operationId")
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.PLAN_VALIDATION_FAILED,
+                    envelope.blockerCode,
+                    JavaMoveClassLexicalFallbackReviewJsonProjection.refusalData(envelope),
+                )
+            }
+            is RefactoringApplyIdentity.ManagedPlan -> identity.planId.value
+        }
         val pending = pendingPlans[planId]
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val plan = pending.plan
         if (pending.languageId == "kotlin") {
-            val lease = params?.string("semanticLease") ?: missing("semanticLease")
-            val generation = params?.string("expectedIndexGeneration")?.toLongOrNull()
+            val lease = values.string("semanticLease") ?: missing("semanticLease")
+            val generation = values.string("expectedIndexGeneration")?.toLongOrNull()
                 ?: missing("expectedIndexGeneration")
             if (lease != pending.semanticLease || lease != kotlinSemanticLease ||
                 generation != pending.indexGeneration || generation != workspaceIndex.snapshot()?.generation) {
@@ -1703,6 +1738,7 @@ class DaemonSession(
                 snapshot = refreshed
                 openWorkspaceIndex(refreshed)
                 pendingPlans.clear()
+                moveClassDispatcher.clearLexicalReviewAudit()
                 val primary = pending.importPreview?.primaryFile
                 val changes = fileChanges(plan.workspaceEdit, primary)
                 PROTOCOL_JSON.encodeToJsonElement(ApplyResponseDto(
@@ -1794,6 +1830,7 @@ class DaemonSession(
                 snapshot = refreshed
                 openWorkspaceIndex(refreshed)
                 pendingPlans.clear()
+                moveClassDispatcher.clearLexicalReviewAudit()
                 val changes = fileChanges(record.forwardEdit, rollback = true)
                 PROTOCOL_JSON.encodeToJsonElement(RollbackResponseDto(
                     status = "rolledBack",
@@ -2071,6 +2108,7 @@ class DaemonSession(
         kotlinAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
         kotlinSemanticLease = lease
         snapshot = attached
+        moveClassDispatcher.clearLexicalReviewAudit()
         openWorkspaceIndex(attached)
         return buildJsonObject {
             put("languageId", "kotlin")
@@ -2094,6 +2132,7 @@ class DaemonSession(
             })
         }
         snapshot?.let(::openWorkspaceIndex)
+        moveClassDispatcher.clearLexicalReviewAudit()
         kotlinAdapter = KotlinLanguageAdapter()
         kotlinToolchain = null
         kotlinSemanticLease = null
@@ -2584,6 +2623,21 @@ class DaemonSession(
 
     private fun portableEvidence(value: String): String = value.replace('\\', '/')
 
+    private fun moveClassPromotionAttempt(args: Map<String, String>): JavaMoveClassPromotionAttemptMetadata =
+        try {
+            JavaMoveClassPromotionAttemptMetadata.fromRaw(
+                approval = args["approval"],
+                warningAcknowledgement = args["warningAcknowledgement"],
+                confidence = args["confidence"],
+                force = args["force"],
+            )
+        } catch (failure: IllegalArgumentException) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                "arguments.${failure.message ?: "promotion metadata is invalid"}",
+            )
+        }
+
     private fun planToJson(plan: PatchPlan): JsonObject = buildJsonObject {
         put("planId", plan.id.value)
         put("operation", plan.operation)
@@ -2677,6 +2731,7 @@ class DaemonSession(
         closeSemanticAdapters()
         adapter.clearSemanticCache()
         pendingPlans.clear()
+        moveClassDispatcher.clearLexicalReviewAudit()
         snapshot = null
         workspaceRoot = null
         workspaceIndex.clear()

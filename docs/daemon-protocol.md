@@ -204,6 +204,17 @@ K2 rows for the saved snapshot, tags each row with its owning language and retai
 a concise `kotlin.toolchainNotConfigured` root when Kotlin inputs are unavailable;
 see `docs/requirements/mixed-jvm-diagnostics.md`.
 
+For Java/Maven `moveClass`, the operation-specific dispatcher admits exact JDT
+plans, returns REQ-003 non-managed guidance for bounded enumerable authority
+defects, or projects broad legacy lexical uncertainty as schema-v1
+`LEXICAL_FALLBACK_REVIEW`. The lexical-review result is explicitly
+`NOT_SEMANTICALLY_PROVEN`, exposes no `planId` or edit, and is retained only in a
+bounded edit-free audit cache under its deterministic non-capability
+`operationId`. `refactor.apply` accepts exactly one of `planId` or `operationId`:
+a still-known lexical operation returns `PLAN_VALIDATION_FAILED (-32008)` with
+`evidence.insufficient` and the same envelope in `error.data`, before lock/WAL;
+unknown or evicted identities return `INVALID_PARAMS (-32602)`.
+
 ## External Java import preview
 
 `java.importExternalClass` is preview-only. `targetDirectory` is an existing
@@ -300,7 +311,9 @@ Unknown license uses conservative `high` risk because core API `0.2` has no
 
 ## Apply and rollback
 
-Apply uses the exact retained plan:
+Managed apply uses an exact retained `planId`. A lexical-review `operationId` is
+audit correlation only and can never reach this managed result:
+
 
 ```json
 {

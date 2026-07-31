@@ -27,6 +27,8 @@ dependencies {
     implementation(project(":modules:refactorkit-testkit"))
     runtimeOnly(project(":modules:refactorkit-mcp"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    testImplementation(project(":modules:refactorkit-lsp"))
+    testImplementation(project(":modules:refactorkit-mcp"))
     testImplementation(kotlin("test"))
     testImplementation("io.cucumber:cucumber-java:7.20.1")
     testImplementation("io.cucumber:cucumber-junit-platform-engine:7.20.1")

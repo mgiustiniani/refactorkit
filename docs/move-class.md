@@ -4,9 +4,11 @@ This operation changes package identity and updates package/import/FQN reference
 For a byte-identical same-package move between module source roots, use
 [`move-source-root`](move-source-root.md); do not overload `moveClass`.
 
-Status: implementation-informed for `v0.3.0`. Move class previews
-package/path/import updates for one Java type. Clean JDT analysis scopes edits to
-binding-matched referencing files; unclean analysis reports lexical file scoping.
+Status: implementation-informed through the bounded `v0.7.0` Maven authority
+rows. Clean exact JDT analysis scopes managed package/path/import/FQN edits to
+binding-matched referencing files. Safely enumerable Maven authority defects
+return non-managed `REVIEW_ONLY_GUIDANCE`; broad unclean or unresolved analysis
+returns edit-free schema-v1 `LEXICAL_FALLBACK_REVIEW`, not an applyable plan.
 
 ## Command
 
@@ -17,7 +19,8 @@ refactorkit move-class \
   <root>
 ```
 
-Add `--apply` only after preview review.
+Add `--apply` only after reviewing an eligible JDT-backed preview. Guidance and
+lexical-review results always refuse apply before `PatchEngine`, lock, or WAL.
 
 ## Success conditions
 
@@ -57,8 +60,10 @@ annotations are found. Review these areas:
 
 - source-root detection for the new path is heuristic and should be checked in
   the affected file list;
-- parse/classpath warnings cause explicit lexical file scoping, which requires
-  additional review;
+- parse/classpath warnings may remove managed authority; broad uncertainty is
+  reported as `semanticCompleteness=NOT_SEMANTICALLY_PROVEN` with bounded
+  path/hash/risk residual guidance and fixed restoration actions, but no exposed
+  diff, source range, replacement, plan ID, or apply token;
 - comments and string literals are not rewritten;
 - reflection, generated code, annotation-processor output, `ServiceLoader`,
   native-image config, and resource files may still contain the old FQN;
@@ -71,7 +76,8 @@ annotations are found. Review these areas:
 
 ## Rollback expectations
 
-Applied moves are transaction-backed. Rollback can restore the modified package
+Only eligible JDT-backed moves can be applied and are transaction-backed.
+Rollback can restore the modified package
 declaration/import edits and rename the file back when the transaction is still
 valid. Rollback does not repair downstream code, generated sources, external
 configuration, or manual edits made after apply. Run diagnostics and relevant

@@ -29,8 +29,10 @@ import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaCreateMavenModulePlanner
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
+import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewJsonProjection
 import org.refactorkit.java.JavaMoveClassOperationDispatcher
 import org.refactorkit.java.JavaMoveClassOperationOutcome
+import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.java.MavenDependencyIdentity
@@ -74,7 +76,7 @@ class RefactorKitCli(
 ) {
     private val semanticJson = Json { prettyPrint = true }
     private val booleanOptions = setOf(
-        "apply", "force", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
+        "apply", "preview", "force", "approve", "acknowledge-warning", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
         "all-identical-occurrences",
         "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references", "json",
         "include-hierarchy", "accept-external-consumer-risk",
@@ -433,12 +435,34 @@ class RefactorKitCli(
         val toPkg = parsed.options["to-package"] ?: run { System.err.println("move-class requires --to-package"); return 2 }
         val root = parsed.positionals.firstOrNull() ?: "."
         val snap = scanFrom(root) ?: return 1
-        return when (val outcome = JavaMoveClassOperationDispatcher(javaAdapter).preview(snap, symbol, toPkg)) {
+        val promotionAttempt = try {
+            moveClassPromotionAttempt(parsed)
+        } catch (failure: IllegalArgumentException) {
+            System.err.println(failure.message)
+            return 2
+        }
+        return when (val outcome = JavaMoveClassOperationDispatcher(javaAdapter).preview(
+            snap,
+            symbol,
+            toPkg,
+            promotionAttempt,
+        )) {
             is JavaMoveClassOperationOutcome.Guidance -> {
                 println(moveClassGuidanceOutput.render(outcome.guidance))
                 if ("apply" in parsed.flags) {
                     System.err.println(
                         "Apply refused [guidance.nonManaged]: REVIEW_ONLY_GUIDANCE has no managed-write path.",
+                    )
+                    1
+                } else {
+                    0
+                }
+            }
+            is JavaMoveClassOperationOutcome.LexicalReview -> {
+                println(JavaMoveClassLexicalFallbackReviewJsonProjection.render(outcome.envelope))
+                if ("apply" in parsed.flags) {
+                    System.err.println(
+                        "Apply refused [evidence.insufficient]: lexical fallback review is non-managed.",
                     )
                     1
                 } else {
@@ -603,6 +627,14 @@ class RefactorKitCli(
 
     private fun scanner(flags: Set<String>): JavaProjectScanner =
         if ("resolve-dependencies" in flags) JavaProjectScanner(allowNetworkDependencyResolution = true) else scanner
+
+    private fun moveClassPromotionAttempt(parsed: ParsedArgs): JavaMoveClassPromotionAttemptMetadata =
+        JavaMoveClassPromotionAttemptMetadata.fromRaw(
+            approval = "true".takeIf { "approve" in parsed.flags },
+            warningAcknowledgement = "true".takeIf { "acknowledge-warning" in parsed.flags },
+            confidence = parsed.options["confidence"],
+            force = "true".takeIf { "force" in parsed.flags },
+        )
 
     private fun positional(args: List<String>, index: Int): String? =
         args.getOrNull(index)?.takeIf { !it.startsWith("-") }
@@ -1009,6 +1041,11 @@ class RefactorKitCli(
             }
             is RecipeResult.Applied -> { println("\n${result.summary}"); 0 }
             is RecipeResult.Failed  -> { System.err.println("Recipe failed: ${result.reason}"); 1 }
+            is RecipeResult.NonManaged -> {
+                println(JavaMoveClassLexicalFallbackReviewJsonProjection.render(result.envelope))
+                System.err.println("Recipe stopped [evidence.insufficient]: lexical fallback review is non-managed.")
+                1
+            }
         }
     }
 

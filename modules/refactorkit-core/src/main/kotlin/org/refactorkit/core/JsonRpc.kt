@@ -3,6 +3,8 @@ package org.refactorkit.core
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class JsonRpcRequest(
@@ -83,11 +85,45 @@ class JsonRpcException(
     val data: JsonElement? = null,
 ) : RuntimeException(message)
 
+/** Language-neutral correlation for a refactoring apply request. */
+sealed interface RefactoringApplyIdentity {
+    data class OperationCorrelation(val operationId: String) : RefactoringApplyIdentity
+    data class ManagedPlan(val planId: PlanId) : RefactoringApplyIdentity
+
+    companion object {
+        fun parse(values: JsonObject): RefactoringApplyIdentity {
+            val hasOperationId = "operationId" in values
+            val hasPlanId = "planId" in values
+            if (hasOperationId == hasPlanId) {
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS,
+                    "Exactly one of operationId or planId is required",
+                )
+            }
+            val identityField = if (hasOperationId) "operationId" else "planId"
+            val identity = (values[identityField] as? JsonPrimitive)
+                ?.takeIf(JsonPrimitive::isString)?.content?.takeIf(String::isNotBlank)
+                ?: throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS,
+                    "$identityField must be a non-blank string",
+                )
+            return when (identityField) {
+                "operationId" -> OperationCorrelation(identity)
+                else -> ManagedPlan(PlanId(identity))
+            }
+        }
+    }
+}
+
 fun successResponse(id: JsonElement?, result: JsonElement): JsonRpcResponse =
     JsonRpcResponse(id = id, result = result)
 
 fun errorResponse(id: JsonElement?, code: Int, message: String, data: JsonElement? = null): JsonRpcResponse =
     JsonRpcResponse(id = id, error = JsonRpcError(code = code, message = message, data = data))
+
+/** Preserve typed application error data across every JSON-RPC transport adapter. */
+fun errorResponse(id: JsonElement?, failure: JsonRpcException): JsonRpcResponse =
+    errorResponse(id, failure.code, failure.message, failure.data)
 
 fun isNotification(request: JsonRpcRequest): Boolean =
     request.id == null || request.id is JsonNull

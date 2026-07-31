@@ -6,6 +6,8 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
 
   This executable backlog covers ARC42 RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007.
   LEXICAL_FALLBACK is always review-only and can never acquire managed-write authority.
+  Declared status: 11 of 12 requirement definitions and 16 of 22 expanded cases carry
+  implemented-and-validated status; only six-case REQ-JAVA-MAVEN-MOVE-AUTH-008 remains absent.
 
   Background:
     Given the declared workspace root is the permanent fixture "testdata/acceptance/java-maven-move-class-authority-20-modules"
@@ -93,22 +95,50 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
     And every workspace byte, path, inventory entry, and snapshot hash equals the state recorded before its evaluation
 
   # RPK-JAVA-MOVE-004..005 and RPK-JAVA-MOVE-007
-  @REQ-JAVA-MAVEN-MOVE-AUTH-004 @non-functional-requirement @absent
+  @REQ-JAVA-MAVEN-MOVE-AUTH-004 @non-functional-requirement @implemented-and-validated
   Scenario: No force flag, recipe, or integration surface promotes lexical fallback
-    Given a move-class candidate is marked "LEXICAL_FALLBACK", review-only, and managed-write ineligible
-    When promotion is attempted independently through each entry path:
-      | entry path      | attempted promotion                                                                                                                |
-      | force           | approval, warning acknowledgement, or force metadata is attached before core apply                                                |
-      | recipe          | a moveClass step is composed into a recipe that is requested for apply                                                            |
-      | CLI             | refactorkit move-class --symbol com.acme.catalog.legacy.Product --to-package com.acme.catalog.api --apply                          |
-      | daemon JSON-RPC | refactor.apply with planId plan-lexical                                                                                              |
-      | managed LSP     | workspace/executeCommand with refactorkit.applyPlan and plan-lexical                                                                |
-      | MCP             | apply_refactoring with planId plan-lexical                                                                                          |
-    Then every path preserves "LEXICAL_FALLBACK" as review-only and managed-write ineligible
-    And no path returns a semantic preview, applyable plan ID, client-managed workspace edit, or transaction ID
-    And every managed apply attempt is refused with "evidence.insufficient" before write-ahead-log creation
-    And no workspace byte is mutated and no transaction is recorded
-    And every surface reports the operation ID, authority status, evidence kind, evidence hash, eligibility, blocker code, and residual guidance metadata
+    Given each entry path is evaluated independently against an isolated fixture copy with a broad syntax failure in the required observer "catalog-acceptance/src/test/java/com/acme/catalog/acceptance/ProductLifecycleSteps.java"
+    And the unchanged move cannot establish complete JDT binding authority and is classified with legacy evidence "LEXICAL_FALLBACK"
+    And no ".refactorkit" directory exists and the workspace bytes, paths, source inventory, and snapshot SHA-256 are recorded before each evaluation
+    When the move is previewed twice from the same normalized request and snapshot through each entry path:
+      | entry path              | preview operation                                                       |
+      | Java move-class outcome API | moveClass                                                               |
+      | CLI                     | refactorkit move-class --symbol com.acme.catalog.legacy.Product --to-package com.acme.catalog.api --preview |
+      | daemon JSON-RPC         | refactor.preview                                                        |
+      | managed LSP             | workspace/executeCommand with refactorkit.moveClass                     |
+      | MCP                     | preview_refactoring                                                     |
+    Then every path projects the same immutable canonical "LEXICAL_FALLBACK_REVIEW" envelope
+    And every envelope reports schema version 1, canonicalization "refactorkit.lexicalFallbackReview.canonical.v1", and hash algorithm "SHA-256"
+    And every envelope binds the normalized request, exact snapshot, bounded review artifact, and sorted typed evidence facts with "requestSha256", "snapshotSha256", "reviewArtifactSha256", and "evidenceSha256"
+    And every envelope has the same deterministic non-capability "operationId" derived from those identities and the fixed disposition, not a "PlanId"
+    And every envelope reports authority status "REVIEW_ONLY", evidence kind "LEXICAL_FALLBACK", managed-write eligibility "INELIGIBLE", and blocker code "evidence.insufficient"
+    And every envelope reports semantic completeness "NOT_SEMANTICALLY_PROVEN" and the fixed ordered actions "INSPECT_RESIDUALS", "RESTORE_SEMANTIC_EVIDENCE", "FULL_REACTOR_RESCAN", and "REQUEST_NEW_PREVIEW", while its edit-free residual guidance is capped at 200 records and 262144 canonical UTF-8 record bytes, exposes explicit "recordCompleteness" and "truncated" fields, reports deterministic "returnedRiskCategoryCounts", and sets "managedEdit" to false on every record without claiming semantic-reference or managed-edit capability
+    And repeat preview with the same canonical inputs returns the same envelope and "operationId"
+    But no envelope contains a "PatchPlan", "planId", "refactorkitPlanId", pending-plan handle, "WorkspaceEdit", affected edit, diff, replacement text, actionable apply token, transaction ID, or RefactorKit rollback capability
+    And daemon JSON-RPC, managed LSP, and MCP preview create no pending managed plan, while managed LSP returns neither "changes" nor "documentChanges"
+    And any retained "operationId" correlation is bounded, edit-free, audit-only, and separate from pending managed plans
+    And CLI preview renders the envelope without an actionable apply token
+    When approval, warning acknowledgement, confidence, or force metadata is attached without changing the canonical inputs
+    Then the envelope, every SHA-256 identity, the "operationId", and the review-only disposition remain unchanged
+    And no metadata converts the envelope to a semantic preview or managed plan
+    And any direct compatibility-plan apply is refused by the core lexical-evidence gate before workspace-lock acquisition and write-ahead-log creation
+    When a recipe reaches the lexical moveClass step in each position:
+      | recipe position                                                        |
+      | as its first step                                                       |
+      | after an earlier valid step has produced only an in-memory staged image |
+    Then recipe evaluation stops at that lexical step and returns its "LEXICAL_FALLBACK_REVIEW" directly instead of a recipe aggregate or plan
+    And any earlier staged image is discarded, no later step runs, and no pending plan or transaction is created
+    When the CLI apply command is invoked for the unchanged move
+    Then the CLI exits non-zero with "evidence.insufficient" before "PatchEngine", workspace-lock acquisition, and write-ahead-log creation
+    When each still-known "operationId" returned by daemon JSON-RPC, managed LSP, or MCP preview is submitted to that surface's apply entry point
+    Then each surface returns the same envelope with typed "evidence.insufficient" before "PatchEngine", workspace-lock acquisition, write-ahead-log creation, editor application, or mutation
+    And daemon JSON-RPC and managed LSP return "PLAN_VALIDATION_FAILED" code -32008 with structured data containing the blocker and envelope
+    And MCP returns "isError" true with structured data containing the blocker and envelope
+    But an arbitrary unknown "planId", including "plan-lexical", remains "INVALID_PARAMS" code -32602 and is never treated as known lexical evidence
+    And after every preview or refused apply, every workspace byte, path, inventory entry, and snapshot hash equals the recorded state
+    And no ".refactorkit" directory, lock file, write-ahead log, managed transaction, or RefactorKit rollback claim is created
+    And "LEXICAL_FALLBACK_REVIEW" remains distinct from REQ-003 "REVIEW_ONLY_GUIDANCE" and never uses its "guidance.nonManaged" contract
+    But a fresh full-reactor scan and new preview with complete exact bindings retain the existing "SEMANTIC_PREVIEW", "JDT_BINDING", "ELIGIBLE" managed-plan behavior
 
   @REQ-JAVA-MAVEN-MOVE-AUTH-005 @non-functional-requirement @implemented-and-validated
   Scenario: Refused lexical-fallback CLI apply leaves no managed-write residue

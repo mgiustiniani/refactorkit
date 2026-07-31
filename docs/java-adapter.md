@@ -31,12 +31,16 @@ and ADR 0012.
 
 ## Evidence and apply authority
 
-Every Java plan classifies itself as `JDT_BINDING`, `STRUCTURAL`, or
-`LEXICAL_FALLBACK`. Exact type/member binding operations use `JDT_BINDING`;
-syntax-local transforms use `STRUCTURAL`. An unclean/unresolved analysis may still
-produce a `LEXICAL_FALLBACK` diff for review, but core apply refuses it as
-`evidence.insufficient` before WAL creation. This prevents a visible fallback
-warning from becoming accidental semantic write authority.
+Every Java compatibility plan classifies itself as `JDT_BINDING`, `STRUCTURAL`,
+or `LEXICAL_FALLBACK`. Exact type/member binding operations use `JDT_BINDING`;
+syntax-local transforms use `STRUCTURAL`. The low-level planner may still retain
+an internal `LEXICAL_FALLBACK` diff for compatibility review, but core apply
+refuses it as `evidence.insufficient` before lock or WAL creation. First-party
+Java `moveClass` admission uses `JavaMoveClassOperationDispatcher` to project that
+internal artifact as immutable edit-free `LEXICAL_FALLBACK_REVIEW` before generic
+rendering, pending-plan registration, LSP edit conversion, or recipe aggregation.
+This prevents a visible fallback warning from becoming accidental semantic write
+authority.
 
 ## Generated-source boundary
 

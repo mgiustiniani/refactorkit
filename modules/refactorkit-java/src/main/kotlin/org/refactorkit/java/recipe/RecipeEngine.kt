@@ -23,7 +23,10 @@ import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaGeneratedSourcePolicy
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
-import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewEnvelope
+import org.refactorkit.java.JavaMoveClassOperationDispatcher
+import org.refactorkit.java.JavaMoveClassOperationOutcome
+import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
@@ -56,6 +59,21 @@ sealed interface RecipeResult {
         val reason: String,
         override val recipePlan: PatchPlan? = null,
     ) : RecipeResult
+
+    class NonManaged(
+        stepPlans: List<StepResult>,
+        val envelope: JavaMoveClassLexicalFallbackReviewEnvelope,
+    ) : RecipeResult {
+        override val stepPlans: List<StepResult> =
+            java.util.Collections.unmodifiableList(ArrayList(stepPlans))
+        override val recipePlan: PatchPlan? = null
+
+        init {
+            require(this.stepPlans.all { it.plan == null }) {
+                "non-managed recipe results cannot carry step plans"
+            }
+        }
+    }
 }
 
 data class DiagnosticDelta(
@@ -104,7 +122,40 @@ class RecipeEngine(
         for ((index, stepDef) in recipe.steps.withIndex()) {
             val step = stepDef.substitute(resolvedParams)
             val result = try {
-                executeStep(step, initialSnapshot, stagedSnapshot, touchedPaths)
+                if (step.type == "moveClass") {
+                    val symbol = step.params["symbol"] ?: error("moveClass step requires 'symbol'")
+                    val targetPackage = step.params["to"] ?: error("moveClass step requires 'to'")
+                    when (val outcome = JavaMoveClassOperationDispatcher(adapter).preview(
+                        stagedSnapshot,
+                        symbol,
+                        targetPackage,
+                        promotionAttempt(step.params),
+                    )) {
+                        is JavaMoveClassOperationOutcome.Plan -> StepResult("moveClass", outcome.preview.plan)
+                        is JavaMoveClassOperationOutcome.Guidance -> {
+                            val completed = stepResults + StepResult(
+                                "moveClass",
+                                null,
+                                message = outcome.guidance.resultType.name,
+                            )
+                            return RecipeResult.Failed(
+                                completed,
+                                "Step ${index + 1} 'moveClass' returned non-managed " +
+                                    outcome.guidance.resultType.name,
+                            )
+                        }
+                        is JavaMoveClassOperationOutcome.LexicalReview -> {
+                            val completed = stepResults.map { it.copy(plan = null) } + StepResult(
+                                "moveClass",
+                                null,
+                                message = outcome.envelope.resultType.name,
+                            )
+                            return RecipeResult.NonManaged(completed, outcome.envelope)
+                        }
+                    }
+                } else {
+                    executeStep(step, initialSnapshot, stagedSnapshot, touchedPaths)
+                }
             } catch (e: Exception) {
                 return RecipeResult.Failed(stepResults, "Step ${index + 1} '${step.type}' failed: ${e.message}")
             }
@@ -178,13 +229,6 @@ class RecipeEngine(
                 val newName = step.params["newName"] ?: error("renameMember step requires 'newName'")
                 val plan = JavaRenameMemberPlanner(adapter).preview(snap, symbol, newName)
                 StepResult("renameMember", plan)
-            }
-
-            "moveClass" -> {
-                val symbol = step.params["symbol"] ?: error("moveClass step requires 'symbol'")
-                val targetPkg = step.params["to"] ?: error("moveClass step requires 'to'")
-                val plan = JavaMoveClassPlanner(adapter).preview(snap, symbol, targetPkg)
-                StepResult("moveClass", plan)
             }
 
             "movePackage" -> {
@@ -438,6 +482,14 @@ class RecipeEngine(
             .map(String::trim)
             .filter { it.startsWith("package ") || it.startsWith("import ") }
             .toList()
+
+    private fun promotionAttempt(params: Map<String, String>): JavaMoveClassPromotionAttemptMetadata =
+        JavaMoveClassPromotionAttemptMetadata.fromRaw(
+            approval = params["approval"],
+            warningAcknowledgement = params["warningAcknowledgement"],
+            confidence = params["confidence"],
+            force = params["force"],
+        )
 
     private fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> =
         diagnosticsProvider?.invoke(snapshot) ?: adapter.diagnostics(snapshot)

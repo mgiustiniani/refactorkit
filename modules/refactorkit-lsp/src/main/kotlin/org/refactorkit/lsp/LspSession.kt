@@ -25,6 +25,7 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RefactoringApplyIdentity
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
@@ -42,7 +43,10 @@ import org.refactorkit.treesitter.GenericOutline
 import org.refactorkit.treesitter.TreeSitterAdapter
 import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.java.JavaLexer
-import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewJsonProjection
+import org.refactorkit.java.JavaMoveClassOperationDispatcher
+import org.refactorkit.java.JavaMoveClassOperationOutcome
+import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaPackageUtil
 import org.refactorkit.java.JavaProjectScanner
@@ -69,6 +73,7 @@ import kotlin.math.max
  */
 class LspSession {
     private val adapter = JavaLanguageAdapter()
+    private val moveClassDispatcher = JavaMoveClassOperationDispatcher(adapter)
     private val scanner = JavaProjectScanner()
     private val structuralAdapter = TreeSitterAdapter()
 
@@ -117,6 +122,8 @@ class LspSession {
         supportsDocumentChanges = params?.obj("capabilities")?.obj("workspace")
             ?.obj("workspaceEdit")?.get("documentChanges")?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true
         openDocuments.clear()
+        pendingPlans.clear()
+        moveClassDispatcher.clearLexicalReviewAudit()
         rootUri = params?.string("rootUri") ?: (params?.get("workspaceFolders") as? JsonArray)
             ?.firstOrNull()?.jsonObject?.string("uri")
         rootUri?.let { uri ->
@@ -595,8 +602,22 @@ class LspSession {
             "refactorkit.moveClass" -> {
                 val symbol = args?.string("symbol") ?: missing("symbol")
                 val pkg = args?.string("targetPackage") ?: missing("targetPackage")
-                val plan = JavaMoveClassPlanner(adapter).preview(snap, symbol, pkg)
-                planToLspWorkspaceEdit(plan, snap)
+                when (val outcome = moveClassDispatcher.preview(
+                    snap,
+                    symbol,
+                    pkg,
+                    moveClassPromotionAttempt(args),
+                )) {
+                    is JavaMoveClassOperationOutcome.Plan -> planToLspWorkspaceEdit(outcome.preview.plan, snap)
+                    is JavaMoveClassOperationOutcome.Guidance -> buildJsonObject {
+                        put("resultType", outcome.guidance.resultType.name)
+                        put("schemaVersion", outcome.guidance.schemaVersion)
+                        put("managedWriteEligibility", "INELIGIBLE")
+                        put("blockerCode", "guidance.nonManaged")
+                    }
+                    is JavaMoveClassOperationOutcome.LexicalReview ->
+                        JavaMoveClassLexicalFallbackReviewJsonProjection.toJson(outcome.envelope)
+                }
             }
             "refactorkit.organizeImports" -> {
                 val file = args?.string("file") ?: missing("file")
@@ -651,8 +672,25 @@ class LspSession {
                 planToLspWorkspaceEdit(plan, snap)
             }
             "refactorkit.applyPlan" -> {
-                val planId = args?.string("planId") ?: missing("planId")
-                val plan = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+                val values = args ?: JsonObject(emptyMap())
+                val planId = when (val identity = RefactoringApplyIdentity.parse(values)) {
+                    is RefactoringApplyIdentity.OperationCorrelation -> {
+                        val operationId = identity.operationId
+                        val envelope = moveClassDispatcher.findLexicalReview(operationId)
+                            ?: throw JsonRpcException(
+                                JsonRpcErrorCodes.INVALID_PARAMS,
+                                "Operation not found: $operationId",
+                            )
+                        throw JsonRpcException(
+                            JsonRpcErrorCodes.PLAN_VALIDATION_FAILED,
+                            envelope.blockerCode,
+                            JavaMoveClassLexicalFallbackReviewJsonProjection.refusalData(envelope),
+                        )
+                    }
+                    is RefactoringApplyIdentity.ManagedPlan -> identity.planId.value
+                }
+                val plan = pendingPlans[planId]
+                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
                 requireManagedWriteSafe(plan.affectedFiles)
                 val current = scanner.scan(root)
                 when (val result = PatchEngine(root).apply(
@@ -712,7 +750,9 @@ class LspSession {
     private fun refreshSnapshotFromUri(uri: String) {
         try {
             val path = Paths.get(URI(uri))
-            snapshot = overlayOpenDocuments(scanner.scan(path))
+            val refreshed = overlayOpenDocuments(scanner.scan(path))
+            if (snapshot?.hash != refreshed.hash) moveClassDispatcher.clearLexicalReviewAudit()
+            snapshot = refreshed
             publishDiagnostics()
         } catch (e: Exception) {
             System.err.println("RefactorKit LSP: failed to scan workspace: ${e.message}")
@@ -836,6 +876,21 @@ class LspSession {
             }
         }
     }
+
+    private fun moveClassPromotionAttempt(args: JsonObject?): JavaMoveClassPromotionAttemptMetadata =
+        try {
+            JavaMoveClassPromotionAttemptMetadata.fromRaw(
+                approval = args?.string("approval"),
+                warningAcknowledgement = args?.string("warningAcknowledgement"),
+                confidence = args?.string("confidence"),
+                force = args?.string("force"),
+            )
+        } catch (failure: IllegalArgumentException) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                failure.message ?: "Promotion metadata is invalid",
+            )
+        }
 
     private fun commandJson(title: String, command: String, argument: JsonObject): JsonObject = buildJsonObject {
         put("title", title)

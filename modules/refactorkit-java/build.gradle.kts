@@ -11,6 +11,7 @@ dependencies {
     implementation("org.eclipse.jdt:org.eclipse.jdt.core:3.44.0")
     implementation("org.apache.maven:maven-model-builder:3.9.9")
     implementation("org.yaml:snakeyaml:2.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }
 

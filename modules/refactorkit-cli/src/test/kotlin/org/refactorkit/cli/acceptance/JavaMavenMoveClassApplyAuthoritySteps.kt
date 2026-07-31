@@ -2387,7 +2387,10 @@ class JavaMavenMoveClassApplyAuthoritySteps {
         assertEquals("LEXICAL_FALLBACK", evidence)
         assertEquals("INELIGIBLE", eligibility)
         val preview = assertNotNull(previewResult)
-        assertTrue(preview.stdout.contains("Evidence: $evidence"), preview.failureMessage("preview evidence"))
+        val envelope = Json.parseToJsonElement(preview.stdout).jsonObject
+        assertEquals(evidence, envelope.getValue("evidenceKind").jsonPrimitive.content)
+        assertEquals(eligibility, envelope.getValue("managedWriteEligibility").jsonPrimitive.content)
+        assertEquals("LEXICAL_FALLBACK_REVIEW", envelope.getValue("resultType").jsonPrimitive.content)
         assertEquals(RefactoringEvidence.LEXICAL_FALLBACK, previewEvidence)
         assertTrue(
             "evidence.insufficient" in previewGateCodes,
@@ -2415,9 +2418,9 @@ class JavaMavenMoveClassApplyAuthoritySteps {
         assertEquals("evidence.insufficient", code)
         val apply = assertNotNull(applyResult)
         assertEquals(1, apply.exitCode, apply.failureMessage("apply refusal"))
-        assertTrue(apply.stderr.contains("Apply refused:"), apply.failureMessage("apply refusal"))
+        assertTrue(apply.stderr.contains("Apply refused [$code]"), apply.failureMessage("apply refusal"))
         assertTrue(
-            apply.stderr.contains("Lexical fallback previews are review-only"),
+            apply.stderr.contains("lexical fallback review is non-managed"),
             apply.failureMessage("typed lexical refusal"),
         )
         assertTrue(code in previewGateCodes, "The central apply validator must expose the typed refusal code")

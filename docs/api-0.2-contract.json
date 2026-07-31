@@ -41,6 +41,7 @@
     ],
     "booleanOptions": [
       "apply",
+      "preview",
       "force",
       "stdin",
       "whole-word",
@@ -51,6 +52,8 @@
       "allow-external-consumers",
       "allow-dynamic-references",
       "all-identical-occurrences",
+      "approve",
+      "acknowledge-warning",
       "json"
     ]
   },
@@ -377,7 +380,24 @@
       "java.moveAcrossMavenModules",
       "java.createMavenModule",
       "java.renameMavenModule"
-    ]
+    ],
+    "moveClassLexicalFallbackReview": {
+      "schemaVersion": 1,
+      "canonicalization": "refactorkit.lexicalFallbackReview.canonical.v1",
+      "resultType": "LEXICAL_FALLBACK_REVIEW",
+      "semanticCompleteness": "NOT_SEMANTICALLY_PROVEN",
+      "authorityStatus": "REVIEW_ONLY",
+      "evidenceKind": "LEXICAL_FALLBACK",
+      "managedWriteEligibility": "INELIGIBLE",
+      "blockerCode": "evidence.insufficient",
+      "operationIdIsCapability": false,
+      "applyIdentityExactlyOneOf": [
+        "operationId",
+        "planId"
+      ],
+      "protocolPlanOrEdit": false,
+      "recipeAggregatePlan": false
+    }
   },
   "languageKernel": {
     "schemaVersion": 1,
@@ -406,6 +426,10 @@
     "maxLspFrameBytes": 1048576,
     "maxExternalLspFrameBytes": 8388608,
     "maxPendingPlans": 128,
+    "maxLexicalReviewAuditEntries": 128,
+    "maxLexicalReviewAuditCanonicalBytes": 16777216,
+    "maxLexicalReviewResidualRecords": 200,
+    "maxLexicalReviewResidualCanonicalBytes": 262144,
     "maxSymbolResults": 200,
     "maxReferenceResults": 1000,
     "maxPreviewDiffBytes": 524288,

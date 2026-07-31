@@ -100,7 +100,7 @@ refuse without fallback. |
 | `refactorkit references --symbol <fqcn> [path]` / `java references` | `beta-contract` | Read-only reference listing; exact signed member selectors may use JDT binding evidence when analysis is clean, otherwise lexical fallback remains. |
 | `refactorkit rename --symbol <fqcn> --to <name> [--apply] [path]` | `beta-contract` | Java class rename uses exact JDT type/constructor/reference ranges when analysis is clean, explicit lexical fallback otherwise, and target-conflict refusal; preview/apply/rollback semantics remain mandatory. |
 | `refactorkit rename-member --symbol <FQN#member> --to <name> [--apply] [path]` | `beta-contract` | Signed method selectors use JDT exact-overload and scanned-source override-family propagation; external family members, constructors, or ambiguous evidence are refused. Unsigned member rename remains lexical. |
-| `refactorkit move-class --symbol <fqcn> --to-package <pkg> [--apply] [path]` | `beta-contract` | Clean JDT evidence scopes package/import/FQN edits to binding-matched files; lexical scoping is explicit otherwise. Invalid packages and existing targets are refused; framework/string warnings remain. |
+| `refactorkit move-class --symbol <fqcn> --to-package <pkg> [--apply] [path]` | `beta-contract` | Clean JDT evidence scopes eligible package/import/FQN edits to binding-matched files. Bounded Maven defects return non-managed guidance; broad lexical uncertainty returns schema-v1 edit-free `LEXICAL_FALLBACK_REVIEW`. Both refuse `--apply` before managed-write entry. Invalid packages and existing targets are refused; framework/string warnings remain. |
 | `refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]` | `beta-contract` | Whole-root rename-only transaction preserving bytes, packages, and FQCNs; typed `sourceRoot.*` refusal codes and post-image Maven/JDT diagnostics apply. |
 | `refactorkit java move-across-maven-modules ... [--apply]` | `experimental` | Complete-root ownership migration between existing effective Maven modules. Requires exact `--dependency-pom`, source/destination group/artifact/version intent; Java and lexical POM edits share one staged-reactor diagnostics gate, WAL transaction and rollback. |
 | `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; clean JDT evidence also removes binding-proven unused exact imports, while wildcard/unresolved imports and unclean files remain conservative. |
@@ -193,8 +193,8 @@ of the beta baseline for documented methods.
 | `kotlin.diagnostics` | `experimental` | Requires exact startup lease and snapshot; returns structured compiler diagnostics, explicit location precision, toolchain/build hashes, bounded runtime and process attestation. |
 | `kotlin.symbols` | `experimental` | Requires exact startup lease and snapshot; returns a structured ready/refused/error envelope, opaque JVM type/callable IDs, exact zero-based UTF-16 declaration selections, toolchain/build hashes, process attestation and explicit truncation. |
 | `kotlin.definition` | `experimental` | Requires the same authority plus an opaque ID returned by `kotlin.symbols`; resolves only against a newly attested saved snapshot and returns `kotlin.symbolNotFound` rather than guessing. |
-| `refactor.preview` | `beta-contract` | Patch-plan preview envelope and refusal behavior. |
-| `refactor.apply` | `beta-contract` | Requires `planId`; applies the exact retained plan, rejects stale snapshots/plans, refreshes session state, clears pending plans, and returns structured changes/diagnostics/snapshot evidence. |
+| `refactor.preview` | `beta-contract` | Patch-plan preview/refusal behavior for admitted operations. Java `moveClass` additionally returns plan-free `REVIEW_ONLY_GUIDANCE` for bounded enumerable authority defects or schema-v1 `LEXICAL_FALLBACK_REVIEW` for broad lexical uncertainty. |
+| `refactor.apply` | `beta-contract` | Requires exactly one non-blank `planId` or non-capability `operationId`. A `planId` applies the exact retained managed plan. A still-retained lexical-review `operationId` always returns typed `evidence.insufficient`; unknown/evicted identities are invalid. No operation ID can authorize a write. |
 | `refactor.discard` | `beta-contract` | Idempotently removes a pending source-bearing plan without workspace writes; returns `discarded=false` when absent. |
 | `patch.recover` | `experimental` | Explicit mutating recovery for a supplied workspace root. It is the only startup-oriented surface allowed to create the writer lock or compensate incomplete journals; ordinary project open/scan/LSP initialize perform read-only inspection and refuse when recovery is pending. |
 | `patch.rollback` | `beta-contract` | Requires `transactionId`; stays inside workspace root, refreshes session state, clears pending plans, and returns inverse WAL changes/diagnostics/snapshot evidence. |
@@ -319,7 +319,7 @@ The changes retain API `0.2`; importer shape remains `experimental` while
 |-----------|--------|--------------------|
 | `renameClass` | `beta-contract` | `symbol`, `arguments.newName` |
 | `renameMember` | `beta-contract` | `symbol`, `arguments.newName` |
-| `moveClass` | `beta-contract` | `symbol`, `arguments.targetPackage` |
+| `moveClass` | `beta-contract` | `symbol`, `arguments.targetPackage`; may return a managed plan, REQ-003 non-managed guidance, or REQ-004 `LEXICAL_FALLBACK_REVIEW` |
 | `moveSourceRoot` | `beta-contract` | `arguments.from`, `arguments.to`; workspace-relative `/` paths |
 | `java.moveAcrossMavenModules` | `experimental` | `arguments.from`, `to`, optional `dependencyPom`, exact `sourceGroupId`, `sourceArtifactId`, `sourceVersion`, exact `destinationGroupId`, `destinationArtifactId`, `destinationVersion`; optional literal type/classifier and `allIdenticalOccurrences` |
 | `organizeImports` | `beta-contract` | `arguments.file` or `symbol` as file path |
@@ -333,6 +333,18 @@ The changes retain API `0.2`; importer shape remains `experimental` while
 
 A refused preview must not silently fall back to text replacement. Clients should
 show the refusal, warnings, affected files when present, and next action.
+
+For Java `moveClass`, a legacy internal `LEXICAL_FALLBACK` compatibility preview
+is projected before generic rendering or pending-plan registration as immutable
+`LEXICAL_FALLBACK_REVIEW`. The envelope reports
+`semanticCompleteness=NOT_SEMANTICALLY_PROVEN`, `REVIEW_ONLY`, `INELIGIBLE`, and
+`evidence.insufficient`; binds deterministic request, snapshot, hidden review
+artifact, and evidence SHA-256 identities; and exposes only bounded path/content-
+hash/risk residual records with `managedEdit=false`, record completeness,
+returned-category counts, and fixed restoration actions. It contains no protocol
+plan ID, workspace edit, source range, replacement, apply token, transaction, or
+rollback capability. A known `operationId` is audit correlation only and can
+produce only the same typed refusal before `PatchEngine`, lock, or WAL.
 
 ## Diagnostic evidence contract
 
@@ -353,8 +365,11 @@ Every plan exposes one stable evidence category:
 - `STRUCTURAL`: deterministic local transformation without semantic identity claims;
 - `LEXICAL_FALLBACK`: review-only preview when semantic evidence is unavailable.
 
-`PatchEngine` refuses `LEXICAL_FALLBACK` before WAL creation with
-`evidence.insufficient`. Recipes retain the weakest evidence of any composed step.
+`PatchEngine` refuses an internal compatibility `LEXICAL_FALLBACK` plan before
+lock or WAL creation with `evidence.insufficient`. First-party Java `moveClass`
+admission surfaces project that evidence as the edit-free lexical-review envelope
+instead of registering, aggregating, or rendering the internal plan. Recipes stop
+at that step, discard the staged image, and return no aggregate plan.
 
 ## LSP server baseline
 
@@ -392,10 +407,15 @@ formatting are suppressed for script documents.
 
 ### LSP `workspace/executeCommand` preview and rollback contract
 
-Preview commands such as `refactorkit.renameClass`, `refactorkit.renameMember`,
-`refactorkit.moveClass`, `refactorkit.organizeImports`, and
-`refactorkit.safeDelete` return a WorkspaceEdit-compatible object with beta
-RefactorKit metadata:
+Admitted preview commands such as `refactorkit.renameClass`,
+`refactorkit.renameMember`, `refactorkit.moveClass`,
+`refactorkit.organizeImports`, and `refactorkit.safeDelete` return a
+WorkspaceEdit-compatible object with beta RefactorKit metadata. Java `moveClass`
+is the exception when authority is non-managed: REQ-003 guidance or REQ-004
+`LEXICAL_FALLBACK_REVIEW` is returned before WorkspaceEdit conversion and has no
+`changes`, `documentChanges`, pending plan, or editor-apply capability.
+
+For admitted plans, metadata includes:
 
 - `refactorkitPlanId`: pending plan id to pass to `refactorkit.applyPlan`;
 - `operation`, `status`, `summary`, `riskLevel`, `evidence`, and `warnings`;
@@ -412,8 +432,11 @@ journal/rollback transaction. `didOpen`/`didChange` full-sync text and strictly
 increasing versions are overlaid on disk scans for planning; lifecycle changes
 invalidate pending plans. Clients should preserve `refactorkitPlanId` only when
 using the distinct managed path. The LSP server stores pending plans internally
-so `refactorkit.applyPlan` can apply the exact previewed plan. `refactorkit.applyPlan` returns `{ "transactionId":
-"..." }`; `PatchEngine` owns write-ahead lifecycle persistence before mutation,
+so `refactorkit.applyPlan({planId})` can apply the exact previewed plan. The same
+command accepts `{operationId}` only to return the typed non-managed lexical-review
+refusal; the two identity fields are mutually exclusive. Successful managed apply
+returns `{ "transactionId": "..." }`; `PatchEngine` owns write-ahead lifecycle
+persistence before mutation,
 then the LSP session removes the pending plan, refreshes the workspace snapshot,
 and republishes diagnostics. Managed apply refuses with
 `DOCUMENT_VERSION_MISMATCH (-32007)` if any buffer is unsaved or an affected
@@ -472,6 +495,11 @@ closes the stale session. MCP EOF closes all owned semantic process trees.
 
 `preview_refactoring` beta operations are `renameClass`, `renameMember`,
 `moveClass`, `moveSourceRoot`, `organizeImports`, and `safeDelete`.
+For Java `moveClass`, MCP returns the same structured non-managed guidance or
+lexical-review envelope as the other first-party surfaces and registers no
+pending plan. `apply_refactoring` requires exactly one of `planId` or
+`operationId`; a known lexical operation returns a structured tool error with
+`evidence.insufficient`, while an unknown identity is invalid input.
 `moveSourceRoot` uses `arguments.from`/`arguments.to` and reports typed refusals
 in the tool text. Experimental `java.moveAcrossMavenModules` uses the same flat
 arguments as daemon `refactor.preview`; MCP apply selects its operation-specific

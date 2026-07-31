@@ -93,7 +93,7 @@ internal class DaemonRequestScheduler(
                 if (task.cancellation.isCancellationRequested()) cancelledResponse(request)
                 else successResponse(request.id, result)
             } catch (failure: JsonRpcException) {
-                errorResponse(request.id, failure.code, failure.message, failure.data)
+                errorResponse(request.id, failure)
             } catch (_: Exception) {
                 errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, "Internal error")
             }

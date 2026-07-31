@@ -202,6 +202,13 @@ symbols, diagnostics, and previews operate on a disk scan overlaid with current
 open-buffer content rather than stale disk-only snapshots. Document lifecycle
 changes invalidate pending managed plans.
 
+Java `moveClass` lexical fallback is classified before WorkspaceEdit conversion:
+managed LSP returns schema-v1 `LEXICAL_FALLBACK_REVIEW` with neither `changes`
+nor `documentChanges`, stores no pending plan, and exposes only a non-capability
+`operationId`. A known-operation `refactorkit.applyPlan` request returns typed
+`evidence.insufficient` before editor or managed application; unknown/evicted
+identities are invalid input.
+
 The custom `refactorkit.applyPlan`/rollback path remains RefactorKit-managed and
 WAL-backed, but refuses unsaved workspace buffers and any affected open document;
 this prevents server disk writes from diverging from editor buffers. Tests prove
@@ -224,8 +231,11 @@ After every step succeeds, the engine derives one recipe-wide delta from the
 initial snapshot to the final staged snapshot and applies exactly one `PatchPlan`
 against the initial engine-owned snapshot. The resulting write has one WAL
 record, one transaction ID, and normal atomic apply/recovery/rollback semantics;
-a no-op recipe writes no transaction. `movePackage` now creates one exact-package
-compilation-unit plan rather than composing per-class plans. Recipe reduction
+a no-op recipe writes no transaction. A Java `moveClass` step with only legacy
+lexical evidence terminates immediately with the edit-free
+`LEXICAL_FALLBACK_REVIEW`, discards the staged image, and returns no aggregate
+plan or transaction. `movePackage` now creates one exact-package compilation-unit
+plan rather than composing per-class plans. Recipe reduction
 renders rename-followed-by-modify edits against the staged file image, so target
 ranges are never interpreted against absent or stale original bytes. Tests cover
 later-step refusal with zero writes/records, dependent rename-then-move steps,

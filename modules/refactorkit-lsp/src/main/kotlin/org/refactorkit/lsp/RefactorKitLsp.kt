@@ -61,7 +61,7 @@ fun main() {
             val result = session.dispatch(request.method, request.params?.jsonObject)
             if (result is JsonNull) successResponse(request.id, JsonNull) else successResponse(request.id, result)
         } catch (e: JsonRpcException) {
-            errorResponse(request.id, e.code, e.message)
+            errorResponse(request.id, e)
         } catch (e: Exception) {
             errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, e.message ?: "Internal error")
         }

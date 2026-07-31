@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from reviewed domain research. REQ-JAVA-MAVEN-MOVE-AUTH-001/002 retain the bounded semantic preview/apply/rollback, observer, candidate, and residual vocabulary. REQ-JAVA-MAVEN-MOVE-AUTH-003 now validates the bounded meanings of immutable Java move-class review guidance, schema/checklist version 1, expected-evidence manifests, typed guidance groups/omissions/actions, JSON rendering, and pre-`PatchEngine` CLI refusal. Requirements `005` through `007` and `009` through `012` retain their independently bounded meanings. Cross-surface `004` and structural-loss/post-preview-drift `008` remain absent. Separately, the exact Magrathea request at commit `a48e3c06` remains CLI-qualified only on Linux/JDK 21 after `010`; no integration/native matrix or general support is inferred.
+Status: implementation-informed, with confirmed target-scoped Maven move-class authority terms integrated from reviewed domain research. REQ-JAVA-MAVEN-MOVE-AUTH-001/002 retain the bounded semantic preview/apply/rollback, observer, candidate, and residual vocabulary. REQ-JAVA-MAVEN-MOVE-AUTH-003 validates immutable Java move-class review guidance. REQ-JAVA-MAVEN-MOVE-AUTH-004 validates the distinct direct Java move-class outcome dispatcher, schema-v1 lexical-review envelope, non-capability `operationId`, hidden compatibility-artifact identity, bounded path/hash/risk residual guidance, audit-only cache, structured refusal, and no-protocol-edit vocabulary across its bounded source-built/in-process paths. Requirements `005` through `007` and `009` through `012` retain their independently bounded meanings. Only structural-loss/post-preview-drift `008` remains absent. Separately, the exact Magrathea request at commit `a48e3c06` remains CLI-qualified only on Linux/JDK 21 after `010`; no packaged integration/native matrix or general support is inferred.
 
 [cols="1,3,2,2",options="header"]
 |===
@@ -14,9 +14,14 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |README, AGENTS
 
 |PatchPlan
-|Structured preview/apply or refusal plan for a code modification, including operation, snapshot hash, affected files, workspace edit, diagnostics, warnings, risk, confidence, and evidence. In the bounded Java `moveClass` dispatcher, the existing `Plan(JavaMoveClassPreview)` arm remains separate from `Guidance(JavaMoveClassReviewOnlyGuidance)`; the guidance value is not a `PatchPlan` and has no plan conversion.
+|Structured preview/apply or refusal plan for a code modification, including operation, snapshot hash, affected files, workspace edit, diagnostics, warnings, risk, confidence, and evidence. In the bounded Java `moveClass` dispatcher, `Plan(JavaMoveClassPreview)` is separate from REQ-003 `Guidance(JavaMoveClassReviewOnlyGuidance)` and REQ-004 `LexicalReview(JavaMoveClassLexicalFallbackReviewEnvelope)`; the `Plan` arm rejects lexical evidence. A legacy lexical fallback may remain an internal review-only compatibility `PatchPlan`, but its ID/edit is not admitted as a protocol plan.
 |Core
-|`Models.kt`; ADR 0002; `JavaMoveClassOperationDispatcher`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003
+|`Models.kt`; ADR 0002; `JavaMoveClassOperationDispatcher`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003/004
+
+|PlanId
+|Opaque identifier generated for a `PatchPlan`. At a protocol boundary it is an apply capability only when the exact eligible plan was admitted to that surface's pending managed-plan store. An internal lexical review plan's random UUID-based ID is not a capability and must never be exposed or aliased to an `operationId`; unknown `PlanId` input remains `INVALID_PARAMS`.
+|Core / integrations
+|`Models.kt`; `RefactoringApplyIdentity`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
 
 |WorkspaceEdit
 |Collection of file edits to modify, create, delete, or rename files in a workspace.
@@ -179,14 +184,39 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |Accepted ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-004`; bounded `001`/`002`/`007`/`009`/`010`/`011`/`012`
 
 |Java Move-class Operation Outcome
-|Implemented Java-specific dispatcher result with `Plan(JavaMoveClassPreview)` and `Guidance(JavaMoveClassReviewOnlyGuidance)` arms. The plan arm preserves existing semantic-preview and refused `PatchPlan` behavior. The guidance arm cannot contain or become a plan; a restored environment requires a full rescan and a new dispatcher result. This type is not a generic core or cross-surface result algebra.
+|Implemented Java-specific dispatcher result with `Plan(JavaMoveClassPreview)`, `Guidance(JavaMoveClassReviewOnlyGuidance)`, and `LexicalReview(JavaMoveClassLexicalFallbackReviewEnvelope)` arms. The plan arm preserves existing non-lexical semantic-preview/refusal behavior and rejects lexical evidence. The two immutable non-managed arms remain mutually distinct and cannot become plans; a restored environment requires a full rescan and new dispatcher result. This is the direct Java move-class operation API, not the generic `LanguageAdapter` `PatchPlan` API or a generic core algebra.
 |Java adapter / Maven move class
-|`JavaMoveClassOperationDispatcher`; `RPK-JAVA-MOVE-001/005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003
+|`JavaMoveClassOperationDispatcher`; `RPK-JAVA-MOVE-001/005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003/004
 
 |Guided Manual Refactoring Fallback / Review-only Move Guidance
-|`JavaMoveClassReviewOnlyGuidance`, an immutable `REVIEW_ONLY_GUIDANCE` handoff for an intelligible Java/Maven `moveClass` request whose authority defect remains safely enumerable. Schema version 1 binds request identity, snapshot SHA-256, and deterministic canonical evidence SHA-256; it carries typed blockers with separate Maven module/source-set identity, exact-bound/unresolved-Java/Java-noncode/non-Java groups, explicit completeness and the bounded source-inventory omission, ordered restoration actions, and checklist version 1's seven human/VCS-owned steps. It is non-managed: no `PatchPlan`, `PlanId`, `WorkspaceEdit`, replacement text, pending-plan entry, WAL, transaction, RefactorKit rollback claim, or plan conversion. The source-built CLI renders JSON and returns `guidance.nonManaged` before `PatchEngine`, lock, and WAL.
+|`JavaMoveClassReviewOnlyGuidance`, an immutable `REVIEW_ONLY_GUIDANCE` handoff for an intelligible Java/Maven `moveClass` request whose authority defect remains safely enumerable. Schema version 1 binds request identity, snapshot SHA-256, and deterministic canonical evidence SHA-256; it carries typed blockers with separate Maven module/source-set identity, exact-bound/unresolved-Java/Java-noncode/non-Java groups, explicit completeness and the bounded source-inventory omission, ordered restoration actions, and checklist version 1's seven human/VCS-owned steps. It is non-managed: no `PatchPlan`, `PlanId`, `WorkspaceEdit`, replacement text, pending-plan entry, WAL, transaction, RefactorKit rollback claim, or plan conversion. The source-built CLI renders JSON and returns `guidance.nonManaged` before `PatchEngine`, lock, and WAL. It is not the legacy lexical-review envelope.
 |Java adapter / CLI user guidance
 |`JavaMoveClassGuidance.kt`; `JavaMoveClassGuidanceJsonRenderer`; `RPK-JAVA-MOVE-005/007`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-003
+
+|Lexical Fallback Review Authority Envelope
+|Implemented immutable schema-v1 protocol result `LEXICAL_FALLBACK_REVIEW` for a legacy Java/Maven `moveClass` `LEXICAL_FALLBACK`. It reports `semanticCompleteness=NOT_SEMANTICALLY_PROVEN`, `REVIEW_ONLY`, `LEXICAL_FALLBACK`, `INELIGIBLE`, and `evidence.insufficient`; binds normalized request, exact snapshot, hidden compatibility review artifact, and sorted evidence with four SHA-256 identities; exposes bounded path/content-hash/risk residual guidance; and contains no protocol plan/edit/range/replacement/apply/transaction capability. It is a safe operation-specific projection over an internal compatibility preview, not a semantic preview and not REQ-003 `REVIEW_ONLY_GUIDANCE`.
+|Java Maven move class / protocol admission
+|`JavaMoveClassLexicalFallbackReview*`; ADRs 0002, 0004, 0008, and 0012; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
+
+|Lexical Review Operation ID
+|Deterministic identifier `lexical-review-<64 lowercase hex>` computed from request, snapshot, hidden review-artifact, and evidence SHA-256 identities plus fixed disposition/actions. It is a non-capability audit correlation key. A known cached ID retrieves only the same immutable envelope for typed refusal; it never selects a pending plan or enters `PatchEngine`. Unknown or evicted IDs are `INVALID_PARAMS`.
+|Protocol audit / safety
+|`JavaMoveClassLexicalFallbackReviewJsonProjection.operationId`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
+
+|Lexical Review Artifact
+|Hidden canonical identity of the internal lexical compatibility workspace edit. `reviewArtifactSha256` commits to normalized file-operation paths; for modifications, current-content hashes plus exact start/end line/character ranges and replacement-byte hashes; for creates, absent status plus exact create-content hash and overwrite flag; and for delete/rename, current-content identity plus target path where applicable. The artifact itself, its ranges, and replacement/create bytes are not exposed in protocol residual records.
+|Java lexical review internals
+|`JavaMoveClassLexicalFallbackReviewJsonProjection.reviewArtifactSha256`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
+
+|Lexical Review Residual Guidance
+|Exposed edit-free review metadata containing only normalized path, current content SHA-256, typed risk facts, and `managedEdit=false`. Schema v1 caps returned records at 200 and 262,144 canonical UTF-8 bytes; reports `recordCompleteness=COMPLETE or TRUNCATED`, total/returned counts, deterministic returned counts for all four risk categories, and truncation; and uses the envelope's fixed four next actions. It exposes no source range, token hash, Maven owner, replacement/create content, file operation, semantic-reference claim, or affected-edit list.
+|Java lexical review protocol
+|`JavaMoveClassLexicalReviewResidualGuidance`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
+
+|Audit-only Lexical Review Cache
+|Synchronized Java-owned access-order LRU map from lexical review `operationId` to the exact immutable envelope, hard-capped at 128 entries and 16,777,216 aggregate canonical bytes. It is edit-free and separate from pending managed plans; it contains no internal `PatchPlan`, source replacement, authorization, authority lease, transaction, or callback into `PatchEngine`. Daemon/LSP/MCP clear it on relevant project, snapshot, mutation, semantic-session, initialization, and close transitions. Eviction/clearing changes only whether a later ID is known, never eligibility.
+|Java dispatcher and daemon / LSP / MCP session state
+|`JavaMoveClassLexicalReviewAuditCache`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
 
 |Move-class Expected-evidence Manifest
 |A strict format-version-1 properties file for one expected readable source entry or one materialized generated-root inventory. `JavaProjectScanner` captures the two recognized module-root filenames as `refactorkit-expected-evidence` auxiliary files; guidance validates owner/source set/path, exact snapshot content, and manifest content SHA-256. These manifests detect bounded mismatch or omission but do not grant semantic authority. The separate system-path classpath `.refactorkit-evidence` manifest remains classpath evidence and contributes its content hash plus expected/observed artifact fingerprints.
@@ -239,9 +269,9 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |`docs/releases/v1.0.0-plan.md`, ADRs 0002 and 0004
 
 |Evidence Classification
-|Per-operation outcome classified as JDT binding-backed, separately proven structural behavior, review-only lexical evidence, or refusal. In target-scoped move authority, lexical inventory is completeness/veto evidence only; it never upgrades a range to `JDT_BINDING` or mutation evidence. Exact JDT candidates stay separate from Java non-code and non-Java residuals, all guidance occurrences report `managedEdit=false`. `LEXICAL_FALLBACK` remains a review-only plan evidence kind rejected by `PatchEngine`; bounded REQ-003 authority loss instead returns plan-free Java guidance and the CLI refuses before entering `PatchEngine`. Bounded `001`/`002` prove semantic and discrimination rows; bounded `003` proves only four guidance defects and preserves REQ-005 broad syntax-failure lexical behavior. A separate CLI/Linux/JDK-21 run at Magrathea commit `a48e3c06` remains request-specific; none generalizes to other surfaces or native matrices.
+|Per-operation outcome classified as JDT binding-backed, separately proven structural behavior, review-only lexical evidence, or refusal. In target-scoped move authority, lexical inventory is completeness/veto evidence only; it never upgrades a range to `JDT_BINDING` or mutation evidence. Exact JDT candidates stay separate from Java non-code and non-Java residuals, all guidance occurrences report `managedEdit=false`. `LEXICAL_FALLBACK` remains a review-only internal compatibility-plan evidence kind rejected by `PatchEngine`; the implemented Java move-class outcome dispatcher projects it to `LEXICAL_FALLBACK_REVIEW` without exposing plan ID/edit/range/replacement capability. Bounded REQ-003 authority loss instead returns distinct plan-free `REVIEW_ONLY_GUIDANCE`. Bounded `001`/`002` prove semantic/discrimination rows; `003` proves four guidance defects; `004` proves the lexical-review boundary and clean-JDT preservation. A separate CLI/Linux/JDK-21 run at Magrathea commit `a48e3c06` remains request-specific; no bounded row generalizes to packaged/native matrices.
 |Java / safety
-|ADRs 0002, 0008, and 0012; `RPK-JAVA-MOVE-003..005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001/002/003/005; dated Magrathea field evidence
+|ADRs 0002, 0004, 0008, and 0012; `RPK-JAVA-MOVE-003..005`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-001/002/003/004/005; dated Magrathea field evidence
 
 |Release Candidate (RC)
 |Immutable `v1.0.0-rc.N` tag used only after the deep language roadmap, Clojure integration, alpha/beta validation, and API freeze to validate proposed stable contracts and artifacts; a failed tagged candidate is replaced by a new commit and RC number.
@@ -279,9 +309,9 @@ Status: implementation-informed, with confirmed target-scoped Maven move-class a
 |`refactorkit-web-importer`, importer docs
 
 |Recipe
-|YAML-defined multi-step refactoring workflow whose steps are previewed against one evolving staged snapshot and reduced to one recipe-wide managed apply/rollback transaction.
+|YAML-defined multi-step refactoring workflow whose eligible steps are previewed against one evolving staged snapshot and reduced to one recipe-wide managed apply/rollback transaction. Implemented REQ-004 is a terminal exception: a lexical `moveClass` returns `RecipeResult.NonManaged`, discards prior in-memory staging, runs no later step, and has no recipe-wide plan; REQ-003 guidance remains a separate terminal type.
 |Java / CLI
-|`docs/recipe-engine.md`, `recipes/java/rename-package.yml`, transactionality audit
+|`RecipeEngine`; `docs/recipe-engine.md`; transactionality audit; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004
 
 |Golden Test
 |Test case with before/after trees, request JSON, and expected plan metadata.

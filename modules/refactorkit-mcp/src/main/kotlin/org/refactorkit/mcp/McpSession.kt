@@ -26,6 +26,7 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.RefactorKitVersion
+import org.refactorkit.core.RefactoringApplyIdentity
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.SourceLocation
@@ -44,7 +45,11 @@ import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
 import org.refactorkit.webimporter.SourceKind
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
-import org.refactorkit.java.JavaMoveClassPlanner
+import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewEnvelope
+import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewJsonProjection
+import org.refactorkit.java.JavaMoveClassOperationDispatcher
+import org.refactorkit.java.JavaMoveClassOperationOutcome
+import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
 import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
@@ -104,6 +109,7 @@ class McpSession(
         { request, policy -> KotlinToolchainDiscoverer(policy).discover(request) },
 ) : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
+    private val moveClassDispatcher = JavaMoveClassOperationDispatcher(adapter)
     private val scanner = JavaProjectScanner()
 
     @Volatile private var snapshot: ProjectSnapshot? = null
@@ -137,7 +143,9 @@ class McpSession(
 
     // ── MCP lifecycle ─────────────────────────────────────────────────────────
 
-    private fun initialize(params: JsonObject?): JsonElement = buildJsonObject {
+    private fun initialize(params: JsonObject?): JsonElement {
+        moveClassDispatcher.clearLexicalReviewAudit()
+        return buildJsonObject {
         put("protocolVersion", PROTOCOL_VERSION)
         put("capabilities", buildJsonObject {
             put("tools", buildJsonObject { put("listChanged", false) })
@@ -154,6 +162,7 @@ class McpSession(
                 KotlinAdapterRegistration.descriptor(),
             ) + TypeScriptAdapterDescriptors.descriptors(),
         ))
+        }
     }
 
     // ── tools ─────────────────────────────────────────────────────────────────
@@ -264,12 +273,14 @@ class McpSession(
                     "semanticLease" to "string: required for Kotlin rename",
                     "arguments" to "object: operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)",
                 )))
-            add(tool("apply_refactoring", "Apply a previously previewed plan.",
-                required = listOf("planId"),
+            add(tool("apply_refactoring", "Apply a managed plan or refuse a known review-only operation.",
+                required = emptyList(),
                 props = mapOf(
-                    "planId" to "string: plan ID returned by preview_refactoring",
+                    "operationId" to "string: non-capability ID returned by lexical review",
+                    "planId" to "string: managed plan ID returned by preview_refactoring",
                     "semanticLease" to "string: required for Kotlin rename apply",
-                )))
+                ),
+                exactlyOneOf = listOf("operationId", "planId")))
             add(tool("rollback_refactoring", "Roll back a previously applied transaction; normal mode refuses post-apply changes.",
                 required = listOf("transactionId"),
                 props = mapOf(
@@ -297,17 +308,18 @@ class McpSession(
     private fun toolsCall(params: JsonObject?): JsonElement {
         val name = params?.string("name") ?: missing("name")
         val args = (params?.get("arguments") as? JsonObject) ?: JsonObject(emptyMap())
-        return textContent(runCatching { callTool(name, args) }.fold(
-            onSuccess = { it },
-            onFailure = { e ->
-                return buildJsonObject {
-                    put("content", buildJsonArray {
-                        add(buildJsonObject { put("type", "text"); put("text", "Error: ${e.message}") })
-                    })
-                    put("isError", true)
-                }
-            },
-        ))
+        return try {
+            when (name) {
+                "preview_refactoring" -> previewToolContent(toolPreviewRefactoring(args))
+                "apply_refactoring" -> toolApplyRefactoringContent(args)
+                else -> textContent(callTool(name, args))
+            }
+        } catch (failure: JsonRpcException) {
+            if (name == "apply_refactoring") throw failure
+            toolErrorContent(failure)
+        } catch (failure: Exception) {
+            toolErrorContent(failure)
+        }
     }
 
     private fun callTool(name: String, args: JsonObject): String = when (name) {
@@ -328,8 +340,6 @@ class McpSession(
         "diagnostics"           -> toolDiagnostics(args)
         "diagnostics_v2"        -> toolDiagnosticsV2(args)
         "available_refactorings"-> toolAvailableRefactorings(args)
-        "preview_refactoring"   -> toolPreviewRefactoring(args)
-        "apply_refactoring"     -> toolApplyRefactoring(args)
         "rollback_refactoring"  -> toolRollbackRefactoring(args)
         "import_external_java_class" -> toolImportExternalJavaClass(args)
         "generate_context_bundle" -> toolGenerateContextBundle(args)
@@ -438,6 +448,7 @@ class McpSession(
         kotlinAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
         kotlinSemanticLease = lease
         snapshot = attached
+        moveClassDispatcher.clearLexicalReviewAudit()
         return "Started Kotlin compiler diagnostics. Semantic lease: $lease. Snapshot: ${attached.hash}. " +
             "Toolchain SHA-256: ${toolchain.provenance.projectionHash}. Build SHA-256: ${model.attributes["projectionHash"]}."
     }
@@ -450,6 +461,7 @@ class McpSession(
         kotlinAdapter = KotlinLanguageAdapter()
         kotlinToolchain = null
         kotlinSemanticLease = null
+        moveClassDispatcher.clearLexicalReviewAudit()
         return if (stopped) "Stopped Kotlin compiler diagnostics." else "No Kotlin compiler diagnostics session was configured."
     }
 
@@ -653,6 +665,8 @@ class McpSession(
             )
         }
         closeSemanticAdapters()
+        pendingPlans.clear()
+        moveClassDispatcher.clearLexicalReviewAudit()
         val snap = scanWorkspace(path)
         snapshot = snap
         workspaceRoot = path
@@ -760,7 +774,22 @@ class McpSession(
             "- organizeImports: organize one Java or compiler-proven Kotlin import block"
     }
 
-    private fun toolPreviewRefactoring(args: JsonObject): String {
+    private fun moveClassPromotionAttempt(args: Map<String, String>): JavaMoveClassPromotionAttemptMetadata =
+        try {
+            JavaMoveClassPromotionAttemptMetadata.fromRaw(
+                approval = args["approval"],
+                warningAcknowledgement = args["warningAcknowledgement"],
+                confidence = args["confidence"],
+                force = args["force"],
+            )
+        } catch (failure: IllegalArgumentException) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                "arguments.${failure.message ?: "promotion metadata is invalid"}",
+            )
+        }
+
+    private fun toolPreviewRefactoring(args: JsonObject): PreviewToolResult {
         val operation = args.string("operation") ?: missing("operation")
         val symbol = args.string("symbol")
         val languageId = args.string("languageId") ?: "java"
@@ -775,7 +804,11 @@ class McpSession(
                 if (languageId == "kotlin") {
                     val lease = args.string("semanticLease") ?: missing("semanticLease")
                     val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
-                    if (lease != kotlinSemanticLease || expected != snap.hash) return "Refused [kotlin.renameAuthorityStale]: Kotlin rename authority is stale."
+                    if (lease != kotlinSemanticLease || expected != snap.hash) {
+                        return PreviewToolResult.Text(
+                            "Refused [kotlin.renameAuthorityStale]: Kotlin rename authority is stale.",
+                        )
+                    }
                     KotlinManagedDeclarationRenamePlanner(kotlinAdapter).preview(
                         snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
                         opArgs["newName"] ?: missing("arguments.newName"),
@@ -804,7 +837,9 @@ class McpSession(
                 val lease = args.string("semanticLease") ?: missing("semanticLease")
                 val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
                 if (lease != kotlinSemanticLease || expected != snap.hash) {
-                    return "Refused [kotlin.moveAuthorityStale]: Kotlin move authority is stale."
+                    return PreviewToolResult.Text(
+                        "Refused [kotlin.moveAuthorityStale]: Kotlin move authority is stale.",
+                    )
                 }
                 KotlinJvmMoveDeclarationPlanner(kotlinAdapter).preview(
                     snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
@@ -867,7 +902,19 @@ class McpSession(
                 includeHierarchy = opArgs["includeHierarchy"]?.toBooleanStrictOrNull() ?: false,
                 acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
             )
-            "moveClass"    -> JavaMoveClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["targetPackage"] ?: missing("arguments.targetPackage"))
+            "moveClass" -> when (val outcome = moveClassDispatcher.preview(
+                snap,
+                symbol ?: missing("symbol"),
+                opArgs["targetPackage"] ?: missing("arguments.targetPackage"),
+                moveClassPromotionAttempt(opArgs),
+            )) {
+                is JavaMoveClassOperationOutcome.Plan -> outcome.preview.plan
+                is JavaMoveClassOperationOutcome.Guidance -> return PreviewToolResult.Text(
+                    "Non-managed ${outcome.guidance.resultType.name} [guidance.nonManaged].",
+                )
+                is JavaMoveClassOperationOutcome.LexicalReview ->
+                    return PreviewToolResult.LexicalReview(outcome.envelope)
+            }
             "moveSourceRoot" -> JavaMoveSourceRootPlanner(adapter).preview(
                 snap, Paths.get(opArgs["from"] ?: missing("arguments.from")), Paths.get(opArgs["to"] ?: missing("arguments.to")),
             )
@@ -880,7 +927,9 @@ class McpSession(
                     val lease = args.string("semanticLease") ?: missing("semanticLease")
                     val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
                     if (lease != kotlinSemanticLease || expected != snap.hash) {
-                        return "Refused [kotlin.organizeImportsAuthorityStale]: Kotlin organize-imports authority is stale."
+                        return PreviewToolResult.Text(
+                            "Refused [kotlin.organizeImportsAuthorityStale]: Kotlin organize-imports authority is stale.",
+                        )
                     }
                     KotlinOrganizeImportsPlanner(kotlinAdapter).preview(snap, file)
                 } else JavaOrganizeImportsPlanner().previewSingleFile(snap, file)
@@ -893,7 +942,7 @@ class McpSession(
         if (plan.status == PatchStatus.PREVIEW) pendingPlans[plan.id.value] = PendingPlan(
             plan, languageId, if (languageId == "kotlin") args.string("semanticLease") else null,
         )
-        return buildString {
+        return PreviewToolResult.Text(buildString {
             appendLine("Plan ID  : ${plan.id.value}")
             appendLine("Status   : ${plan.status}")
             appendLine("Summary  : ${plan.summary}")
@@ -916,12 +965,37 @@ class McpSession(
             }
             if (plan.status == PatchStatus.REFUSED) appendLine("\nRefused. Do NOT apply.")
             else appendLine("\nTo apply: use tool apply_refactoring with planId=${plan.id.value}")
-        }.trim()
+        }.trim())
     }
 
-    private fun toolApplyRefactoring(args: JsonObject): String {
-        val planId = args.string("planId") ?: missing("planId")
-        val pending = pendingPlans[planId] ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
+    private fun previewToolContent(result: PreviewToolResult): JsonElement = when (result) {
+        is PreviewToolResult.Text -> textContent(result.value)
+        is PreviewToolResult.LexicalReview -> structuredToolContent(
+            JavaMoveClassLexicalFallbackReviewJsonProjection.render(result.envelope, pretty = false),
+            JavaMoveClassLexicalFallbackReviewJsonProjection.toJson(result.envelope),
+            isError = false,
+        )
+    }
+
+    private fun toolApplyRefactoringContent(args: JsonObject): JsonElement =
+        when (val identity = RefactoringApplyIdentity.parse(args)) {
+            is RefactoringApplyIdentity.OperationCorrelation -> {
+                val operationId = identity.operationId
+                val envelope = moveClassDispatcher.findLexicalReview(operationId)
+                    ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Operation not found: $operationId")
+                structuredToolContent(
+                    "Apply refused [${envelope.blockerCode}]: lexical fallback review is non-managed.",
+                    JavaMoveClassLexicalFallbackReviewJsonProjection.refusalData(envelope),
+                    isError = true,
+                )
+            }
+            is RefactoringApplyIdentity.ManagedPlan ->
+                textContent(toolApplyRefactoring(args, identity.planId.value))
+        }
+
+    private fun toolApplyRefactoring(args: JsonObject, planId: String): String {
+        val pending = pendingPlans[planId]
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: $planId")
         val plan = pending.plan
         if (pending.languageId == "kotlin") {
             val lease = args.string("semanticLease") ?: missing("semanticLease")
@@ -962,6 +1036,7 @@ class McpSession(
                 // Refresh snapshot and close sessions bound to the pre-apply image.
                 snapshot = scanWorkspace(root)
                 closeSemanticAdapters()
+                moveClassDispatcher.clearLexicalReviewAudit()
                 "Applied successfully.\nTransaction ID: ${result.transaction.id.value}\nTo rollback: use tool rollback_refactoring with transactionId=${result.transaction.id.value}"
             }
             is ApplyResult.Refused -> {
@@ -985,6 +1060,7 @@ class McpSession(
         return when (val result = PatchEngine(root).rollback(tx, mode)) {
             is ApplyResult.Applied -> {
                 snapshot = scanWorkspace(root)
+                moveClassDispatcher.clearLexicalReviewAudit()
                 "${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId."
             }
             is ApplyResult.Refused -> {
@@ -1197,15 +1273,38 @@ class McpSession(
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private fun textContent(text: String): JsonElement = buildJsonObject {
+    private fun textContent(text: String): JsonElement = structuredToolContent(
+        text,
+        structured = null,
+        isError = false,
+    )
+
+    private fun toolErrorContent(failure: Throwable): JsonElement = buildJsonObject {
+        put("content", buildJsonArray {
+            add(buildJsonObject { put("type", "text"); put("text", "Error: ${failure.message}") })
+        })
+        put("isError", true)
+    }
+
+    private fun structuredToolContent(
+        text: String,
+        structured: JsonObject?,
+        isError: Boolean,
+    ): JsonElement = buildJsonObject {
         put("content", buildJsonArray {
             add(buildJsonObject { put("type", "text"); put("text", text) })
         })
-        put("isError", false)
+        structured?.let { put("structuredContent", it) }
+        put("isError", isError)
     }
 
-    private fun tool(name: String, description: String, required: List<String>, props: Map<String, String>): JsonElement =
-        buildJsonObject {
+    private fun tool(
+        name: String,
+        description: String,
+        required: List<String>,
+        props: Map<String, String>,
+        exactlyOneOf: List<String> = emptyList(),
+    ): JsonElement = buildJsonObject {
             put("name", name)
             put("description", description)
             put("inputSchema", buildJsonObject {
@@ -1218,6 +1317,15 @@ class McpSession(
                     }
                 })
                 put("required", buildJsonArray { required.forEach { add(JsonPrimitive(it)) } })
+                if (exactlyOneOf.isNotEmpty()) {
+                    put("oneOf", buildJsonArray {
+                        exactlyOneOf.forEach { field ->
+                            add(buildJsonObject {
+                                put("required", buildJsonArray { add(JsonPrimitive(field)) })
+                            })
+                        }
+                    })
+                }
             })
         }
 
@@ -1270,7 +1378,7 @@ class McpSession(
     private fun scanWorkspace(root: Path): ProjectSnapshot {
         val javaSnapshot = scanner.scan(root)
         val scriptSnapshot = GenericProjectScanner(SCRIPT_EXTENSIONS).scan(root)
-        val merged = javaSnapshot.copy(
+        val merged = if (scriptSnapshot.files.isEmpty()) javaSnapshot else javaSnapshot.copy(
             files = (javaSnapshot.files + scriptSnapshot.files).associateBy { it.path.normalize() }
                 .values.sortedBy { it.path.toString() },
             sourceExtensions = javaSnapshot.sourceExtensions + SCRIPT_EXTENSIONS.keys,
@@ -1307,8 +1415,16 @@ class McpSession(
     override fun close() {
         closeSemanticAdapters()
         pendingPlans.clear()
+        moveClassDispatcher.clearLexicalReviewAudit()
         snapshot = null
         workspaceRoot = null
+    }
+
+    private sealed interface PreviewToolResult {
+        data class Text(val value: String) : PreviewToolResult
+        data class LexicalReview(
+            val envelope: JavaMoveClassLexicalFallbackReviewEnvelope,
+        ) : PreviewToolResult
     }
 
     private data class PendingPlan(
