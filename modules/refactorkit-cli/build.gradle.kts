@@ -1,4 +1,6 @@
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.bundling.Zip
+import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.application.tasks.CreateStartScripts
 import java.io.File
 
@@ -37,6 +39,18 @@ dependencies {
 
 sourceSets.test {
     resources.srcDir(rootProject.file("features"))
+}
+
+val packagedMavenMoveClassAuthorityTestSourceSet = sourceSets.create("packagedMavenMoveClassAuthorityTest") {
+    kotlin.srcDir("src/packagedMavenMoveClassAuthorityTest/kotlin")
+    resources.srcDir(rootProject.file("features"))
+}
+
+configurations.named(packagedMavenMoveClassAuthorityTestSourceSet.implementationConfigurationName) {
+    extendsFrom(configurations.testImplementation.get())
+}
+configurations.named(packagedMavenMoveClassAuthorityTestSourceSet.runtimeOnlyConfigurationName) {
+    extendsFrom(configurations.testRuntimeOnly.get())
 }
 
 tasks.named<CreateStartScripts>("startScripts") {
@@ -229,6 +243,49 @@ tasks.register("refactorkitRuntimeDist") {
         out.resolve("bin/refactorkit-daemon").setExecutable(true)
         out.resolve("bin/refactorkit-mcp").setExecutable(true)
         println("Self-contained RefactorKit CLI package: ${out.absolutePath}")
+    }
+}
+
+val packagedMavenMoveClassAuthorityPackageRoot = packageDir.map { it.asFile.absolutePath }
+val packagedMavenMoveClassAuthorityRepositoryRoot = providers.provider {
+    rootProject.layout.projectDirectory.asFile.absolutePath
+}
+val packagedMavenMoveClassAuthorityFixture = rootProject.layout.projectDirectory.dir(
+    "testdata/acceptance/java-maven-move-class-authority-20-modules",
+)
+val packagedMavenMoveClassAuthorityCucumberJson = layout.buildDirectory.file(
+    "reports/cucumber/packaged-maven-move-class-authority.json",
+)
+
+tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
+    group = "verification"
+    description = "Run packaged-process Cucumber validation for Maven move-class authority."
+    dependsOn("refactorkitRuntimeDist")
+    inputs.dir(packageDir)
+        .withPropertyName("packagedRuntime")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(packagedMavenMoveClassAuthorityFixture)
+        .withPropertyName("mavenMoveClassAuthorityFixture")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(packagedMavenMoveClassAuthorityCucumberJson)
+        .withPropertyName("cucumberJsonReport")
+
+    testClassesDirs = packagedMavenMoveClassAuthorityTestSourceSet.output.classesDirs
+    classpath = packagedMavenMoveClassAuthorityTestSourceSet.runtimeClasspath
+    useJUnitPlatform()
+    maxParallelForks = 1
+    forkEvery = 0
+
+    doFirst {
+        systemProperty("refactorkit.packaged.root", packagedMavenMoveClassAuthorityPackageRoot.get())
+        systemProperty("refactorkit.repository.root", packagedMavenMoveClassAuthorityRepositoryRoot.get())
+    }
+
+    reports {
+        junitXml.required.set(true)
+        junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/packagedMavenMoveClassAuthorityTest"))
+        html.required.set(true)
+        html.outputLocation.set(layout.buildDirectory.dir("reports/tests/packagedMavenMoveClassAuthorityTest"))
     }
 }
 

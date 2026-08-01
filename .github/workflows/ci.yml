@@ -72,6 +72,21 @@ jobs:
       - name: Package self-contained CLI
         run: ./gradlew packageCliRuntime distCliRuntimeZip
 
+      - name: Run packaged Maven move-class authority validation
+        timeout-minutes: 20
+        run: ./gradlew :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest
+
+      - name: Upload packaged Maven move-class authority reports (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-move-class-authority-reports-linux-x86_64
+          path: |
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority.json
+            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthorityTest/TEST-*.xml
+            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthorityTest/**
+          if-no-files-found: warn
+
       - name: Verify CLI runtime distribution
         run: |
           sha256sum modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
@@ -199,6 +214,21 @@ jobs:
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
 
+      - name: Run native packaged Maven move-class authority validation
+        timeout-minutes: 20
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --no-daemon
+
+      - name: Upload packaged Maven move-class authority reports (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-move-class-authority-reports-${{ matrix.platform }}
+          path: |
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority.json
+            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthorityTest/TEST-*.xml
+            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthorityTest/**
+          if-no-files-found: warn
+
       - name: Native packaged build-model acceptance
         shell: python
         run: |
@@ -236,7 +266,7 @@ jobs:
         run: |
           import pathlib, xml.etree.ElementTree as ET
           found = False
-          for report in pathlib.Path("modules").glob("*/build/test-results/test/TEST-*.xml"):
+          for report in pathlib.Path("modules").glob("*/build/test-results/*/TEST-*.xml"):
               root = ET.parse(report).getroot()
               for case in root.findall("testcase"):
                   failure = case.find("failure")
@@ -254,7 +284,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: refactorkit-test-reports-${{ matrix.platform }}
-          path: modules/*/build/test-results/test/**
+          path: |
+            modules/*/build/test-results/**
+            modules/*/build/reports/tests/**
           if-no-files-found: ignore
 
       - name: Name platform artifact and checksum

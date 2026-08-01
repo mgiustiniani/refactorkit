@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed for local runtime/package facts and the published `v0.3.0` deployment; stable release verification is planned.
+Status: implementation-informed for local runtime/package facts, the published `v0.3.0` deployment, and one local Linux `amd64` packaged-process REQ-001 observation on the mutable tree; stable release verification is planned. All four post-commit native CI ledger rows remain `CONFIGURED_UNOBSERVED`.
 
 == Deployment Overview
 
@@ -49,6 +49,20 @@ RefactorKit is a local tool/library, not a hosted service. Current repository ev
 |In-process use; stable public API and packaging policy need review.
 |planned, needs-review
 |===
+
+== Local Packaged-process Qualification Deployment
+
+The dedicated packaged Cucumber mode now runs the existing Packaged CLI distribution as separate child OS processes. It is test/deployment evidence only: it introduces no shipped artifact, product protocol, durable store, runtime participant, or deployment node. One isolated byte copy of the permanent 20-module fixture is the workspace; the package's embedded runtime is subject-process execution authority, while the OpenJDK 21.0.11 host used by Gradle/Cucumber remains outside that runtime claim.
+
+Official final local Linux `amd64` execution observed the real launcher and canonical embedded `runtime/bin/java`, with SHA-256 `fa9cd72b54f269d76053da247665cb931ff39631d1ac38c7b55aaa0c9dcadef3` and `bd12685bb6403175bb8803ef143738bf74d06565223be944de1dad20ef5e5625` respectively. The unchanged unpacked-package manifest SHA-256 was `681822f781379f5ddbe67389d1e33606f8931ca6fc4a75a3b3fc09f657b88430`; the permanent fixture and isolated copy shared manifest SHA-256 `905b354c151e8219d6f755335ecac381a0dab83df20de55d22f8a15a8695829e`. `:modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --rerun-tasks` reported `BUILD SUCCESSFUL` in 22s with 35 tasks, JUnit 22 discovered/1 executed/21 tag-filtered/0 failures or errors, and one selected Cucumber scenario with five background plus fourteen scenario steps (19/19 passed) and 2/2 hooks; there were zero timeouts, truncations, or process leaks. Packaged log SHA-256 is `1fa8cf358882196659abd76e9793214d906383cf780124580ed9f64fb3d643c2`; JSON SHA-256 is `9ea18b8638846c08a63c78c6201ef44c7205bb7a62a21da7fd184688e5ada955`.
+
+The separately reported source-built whole-tree gate passed on the same JDK in 6m43s with 1045 standard tests discovered, 817 executed, 228 skipped/tag-filtered, zero failures/errors, 140 XML files, and 82 tasks executed (log SHA-256 `89438b03d5228f8ff8173b82a5dc587a36b0907d476dd2adffceff54bca874ef`); those totals intentionally exclude the dedicated packaged task. Targeted custom-source-set PMD/SpotBugs tasks passed (log SHA-256 `2cf542051224e2e81f81b5f7ec8132a59ef04258ff2902346076ab39b25c0ff2`). Static classification remains intentionally non-zero: 99 reviewed/non-blocking findings in packaged test/deployment glue/harness (57 NP, 14 MS, 12 BC, 6 AT, 9 RCN, 1 UrF), mostly Kotlin `lateinit`/generated-representation and conservative single-thread-harness concurrency warnings. No production source was added or modified by this slice; the wider static baseline remains non-blocking, and neither aggregate static cleanliness nor numerical/child-JVM coverage is claimed.
+
+This local observation does not promote the release ledger. Native CI wiring and `if: always()` report uploads are implemented but unexecuted. Linux x86-64 CI, Windows x86-64, macOS x86-64, and macOS arm64 remain `CONFIGURED_UNOBSERVED` for existing `REQ-JAVA-MAVEN-MOVE-AUTH-001` until exact post-commit native CI receipts are reviewed. Windows/macOS logic is configured and statically reviewed only. Generic native packaging success, the local mutable-tree pass, a source-built run, or another operation's packaged acceptance cannot promote a row. Ordinary `test`/`check` remain package-independent.
+
+The evidence is bounded to the exact real unpacked launcher, embedded runtime, fixture, request, and 16-command local sequence. It deliberately does not qualify archives, checksums, SBOMs, attestations, signing, downloaded assets, REQ-002..012, other integration/library surfaces, Magrathea/general populations, crash/concurrency, child-JVM coverage, or an unobserved host. CLI apply replans within its child process; the runner makes no cross-process plan-ID claim. External protocol and product semantics are unchanged.
+
+The earlier delegated C4 review remains applicable: the existing Automation/CI-to-CLI, CLI-to-Core/Java Adapter, and CLI-to-Build Toolchain relationships cover the implemented evidence plumbing. `docs/c4/workspace.dsl` remains unchanged. Revisit only if qualification code becomes shipped or adds a product participant, protocol, store, relationship, or deployment target.
 
 == Published Deployment Evidence
 

@@ -34,6 +34,47 @@ Status: implementation-informed for documented flows; no C4 dynamic diagrams yet
 
 Status: implementation-informed from CLI, Java adapter, patch engine, testkit docs, and `docs/transactionality-audit.md`. This is a preflighted compensatable batch, not an ACID or crash-safe transaction.
 
+== Implemented Runtime Scenario: Local Packaged-process REQ-001 Qualification
+
+Status: implementation-informed for one official final local run of the mutable, uncommitted tree on OpenJDK 21.0.11, Linux `amd64`, with a separate independent review receipt retained below. This is a second validation mode for the existing `REQ-JAVA-MAVEN-MOVE-AUTH-001` scenario and same pickle, not a new requirement or case. Native CI wiring and `if: always()` report uploads are implemented but unexecuted. Linux x86-64 CI, Windows x86-64, macOS x86-64, and macOS arm64 remain `CONFIGURED_UNOBSERVED` until exact post-commit CI receipts exist; Windows/macOS behavior is configured and statically reviewed only.
+
+[cols="1,3",options="header"]
+|===
+|Step |Observed interaction
+
+|1
+|The explicitly invoked `:modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest` task receives the unpacked self-contained CLI, creates one no-follow byte copy of the permanent 20-module fixture, and selects only the existing `@REQ-JAVA-MAVEN-MOVE-AUTH-001` pickle. Its source set, glue, JSON, and JUnit reports are separate from ordinary `test` and `check`.
+
+|2
+|The harness invokes the real unpacked launcher and embedded Java as child OS processes with isolated home/temp state and a scrubbed allowlisted environment. `JAVA_HOME`, `JDK_JAVA_OPTIONS`, `_JAVA_OPTIONS`, `CLASSPATH`, Maven/Gradle options, and proxy variables are absent; one controlled `JAVA_TOOL_OPTIONS` supplies only isolated home/temp properties. A poison `java` shim is first on minimal `PATH` and remains uninvoked. Canonical child `java.home` is the package runtime. Observed SHA-256 identities are launcher `fa9cd72b54f269d76053da247665cb931ff39631d1ac38c7b55aaa0c9dcadef3` and embedded Java `bd12685bb6403175bb8803ef143738bf74d06565223be944de1dad20ef5e5625`.
+
+|3
+|Sixteen bounded child commands cover embedded-runtime identity, baseline and repeat scan, clean baseline diagnostics, references, definition, two previews, a contended-lock apply probe, post-probe scan, one successful apply, post-apply scan/diagnostics, normal rollback, and restored scan/diagnostics. The baseline has 20 modules, seven scanned Java sources, clean diagnostics, and snapshot `450701694755605cc1f413bf48cfc15fbf265c1e5af99b3e4b422b8635de592c`.
+
+|4
+|The two fixed `move-class --preview` children return byte-equal normalized `SEMANTIC_PREVIEW` / `JDT_BINDING` / `ELIGIBLE` output. The exact observers are `catalog-pricing/src/main/java/com/acme/catalog/pricing/CatalogPrice.java`, `catalog-storefront/src/main/java/com/acme/catalog/storefront/ProductTile.java`, and `catalog-acceptance/src/test/java/com/acme/catalog/acceptance/ProductLifecycleSteps.java`. The five affected paths are those three plus `catalog-model/src/main/java/com/acme/catalog/legacy/Product.java` and `catalog-model/src/main/java/com/acme/catalog/api/Product.java`.
+
+|5
+|While the harness holds `.refactorkit/workspace.lock`, a separate packaged apply child exits with the exact operational stderr `Apply refused:` followed by `  ERROR: Workspace is locked by another RefactorKit writer`. Refusal occurs before any transaction/WAL record. The runner observes no projected `workspace.locked` code and makes no core-code correlation claim. It removes the probe lock metadata and confirms the baseline before the successful path.
+
+|6
+|One packaged CLI apply replans the fixed request inside that child process and has a rendered preview portion equal to the canonical preview. The runner makes no cross-process plan-ID claim. The sole schema-v8 journal reaches `APPLIED` with operation `moveClass`, explicit CLI approval, and five top-level `FileEdit` entries: four `Modify` entries and one `Rename`. Nested `TextEdit` counts across the modifies are exactly `1/2/1/1`—five text edits total, not one per modify. The committed paths are the exact five listed above, and fresh post-apply diagnostics are clean.
+
+|7
+|`patch rollback <transaction-id>` performs normal rollback, advances that same sole journal through `ROLLING_BACK` to `ROLLED_BACK`, creates no second record, and restores every non-engine byte, path kind, seven-source inventory entry, and the original snapshot exactly. Rollback diagnostics are clean.
+
+|8
+|The run reports zero child timeouts, zero truncated streams, and zero surviving registered direct-child handles or leaked descendants. No-follow cleanup completes; the permanent fixture and its copy have manifest SHA-256 `905b354c151e8219d6f755335ecac381a0dab83df20de55d22f8a15a8695829e`, while the unchanged unpacked package manifest is `681822f781379f5ddbe67389d1e33606f8931ca6fc4a75a3b3fc09f657b88430`.
+|===
+
+Official final local packaged evidence used `:modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --rerun-tasks`: `BUILD SUCCESSFUL` in 22s with 35 tasks; JUnit discovered 22 cases, executed one, tag-filtered 21, and reported zero failures/errors; the selected Cucumber scenario passed five background plus fourteen scenario steps (19/19) and 2/2 hooks. Packaged log SHA-256 is `1fa8cf358882196659abd76e9793214d906383cf780124580ed9f64fb3d643c2`; Cucumber JSON SHA-256 is `9ea18b8638846c08a63c78c6201ef44c7205bb7a62a21da7fd184688e5ada955`. An earlier independent read-only review remains separate corroborating evidence: packaged log SHA-256 `7a71b69b745e10e9339d8cdd911c346e422328d58163db52eb92a536e8735d9e`, JSON SHA-256 `f3ecf22fa195dbbd4e88e5a68937f7f55dec4ad4a6d90504cdc34588444df340`; its separate source-built REQ-001 rerun passed 22 discovered/one executed/21 tag-filtered/zero failures or errors, log SHA-256 `96ad297a087aa9790f00353c8647351c28d563420867f1cd66c64d91ffd3a01e`.
+
+On the same JDK, official final source-built whole-tree execution of `./gradlew --no-daemon --rerun-tasks check goldenTest` reported `BUILD SUCCESSFUL` in 6m43s: standard test tasks discovered 1045, executed 817, skipped/tag-filtered 228, and had zero failures/errors; 140 XML files and 82 executed tasks; log SHA-256 `89438b03d5228f8ff8173b82a5dc587a36b0907d476dd2adffceff54bca874ef`. The dedicated packaged task is separately reported and intentionally not included in those standard-test totals. Targeted custom-source-set PMD/SpotBugs tasks passed (log SHA-256 `2cf542051224e2e81f81b5f7ec8132a59ef04258ff2902346076ab39b25c0ff2`). The packaged glue/harness has exactly 99 reviewed/non-blocking SpotBugs findings: 57 NP, 14 MS, 12 BC, 6 AT, 9 RCN, and 1 UrF. They are test/deployment validation-adapter findings, mostly Kotlin `lateinit`/generated-representation and conservative single-thread-harness concurrency warnings; no production source file was added or modified by this slice. The wider static baseline remains non-blocking; aggregate static cleanliness and numerical or child-JVM coverage are not claimed.
+
+This local observation excludes REQ-002 through REQ-012; daemon, LSP, MCP, recipe, and library entry points; Magrathea and general Maven populations; crash/restart/concurrency; archive trust/checksum/SBOM/attestation/signing; coverage of the child JVM; every unobserved native host; and any external protocol or product-semantic change. It is bounded only to the exact local unpacked package, host/architecture, fixture, and command sequence described above and does not promote a native CI ledger row.
+
+The earlier ADR and C4 reviews remain sufficient: implementation added qualification evidence plumbing over the existing packaged CLI topology, with no new durable decision, production actor, container, store, deployment node, protocol, or relationship. No ADR body, Structurizr element/relationship, or dynamic C4 view changed.
+
 == Runtime Scenario: AI-assisted Refactoring through MCP
 
 [cols="1,3",options="header"]

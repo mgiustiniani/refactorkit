@@ -245,6 +245,106 @@ Every supported native runtime runs `scripts/smoke-packaged-build-model.py` with
 collision refusal. A launcher-only smoke is not sufficient for Build Model or
 transactional support.
 
+## Local packaged-process Maven move-class qualification
+
+Status: **implementation-informed** for one official final OpenJDK 21.0.11
+local run on Linux `amd64` against the mutable, uncommitted tree, with
+independent review evidence retained separately. Native CI wiring and
+`if: always()` report uploads are implemented but unexecuted. Linux x86-64 CI,
+Windows x86-64, macOS x86-64, and macOS arm64 remain
+**CONFIGURED_UNOBSERVED** until exact post-commit CI receipts are reviewed.
+Windows/macOS behavior is configured and statically reviewed only.
+
+`packagedMavenMoveClassAuthorityTest` is a second Cucumber validation mode for
+existing `REQ-JAVA-MAVEN-MOVE-AUTH-001`, not a new requirement or case. It
+reuses `features/java-maven-move-class-apply-authority.feature`, selects the same
+existing pickle, and uses dedicated packaged-only glue, source set, explicit
+Gradle task, Cucumber JSON, and JUnit XML. The task depends on the unpacked
+`refactorkitRuntimeDist`; ordinary `test` and `check` remain packaging-
+independent. External protocol and product semantics are unchanged.
+
+The observed row uses one no-follow byte copy of the permanent 20-module fixture
+and invokes the real unpacked self-contained launcher and embedded Java as child
+OS processes. Subject processes use isolated home/temp directories and a
+scrubbed allowlisted environment: `JAVA_HOME`, `JDK_JAVA_OPTIONS`,
+`_JAVA_OPTIONS`, `CLASSPATH`, Maven/Gradle options, and proxy variables are
+absent, while one controlled `JAVA_TOOL_OPTIONS` supplies isolated home/temp
+properties. A poison `java` shim is first on minimal `PATH` and remains
+uninvoked; canonical child `java.home` is the package runtime.
+
+Observed SHA-256 identities:
+
+- fixture and isolated-copy manifests:
+  `905b354c151e8219d6f755335ecac381a0dab83df20de55d22f8a15a8695829e`;
+- unchanged unpacked-package manifest:
+  `681822f781379f5ddbe67389d1e33606f8931ca6fc4a75a3b3fc09f657b88430`;
+- real launcher:
+  `fa9cd72b54f269d76053da247665cb931ff39631d1ac38c7b55aaa0c9dcadef3`;
+- embedded Java:
+  `bd12685bb6403175bb8803ef143738bf74d06565223be944de1dad20ef5e5625`.
+
+Sixteen bounded child commands prove embedded-runtime identity, baseline and
+repeat scans, references/definition, clean diagnostics, two equal
+`SEMANTIC_PREVIEW`/`JDT_BINDING`/`ELIGIBLE` previews, a separate contended-lock
+probe, one successful apply, fresh post-apply scan/diagnostics, normal rollback,
+and restored scan/diagnostics. The exact observers are the pricing, storefront,
+and acceptance-step Java paths; with the old and new target paths they form five
+affected paths.
+
+The lock probe observes only exact CLI human text `Apply refused:` followed by
+`ERROR: Workspace is locked by another RefactorKit writer` and refuses before
+WAL. `workspace.locked` is not projected, and this runner makes no core-code
+correlation claim. The successful CLI apply replans inside its own child process
+and compares rendered preview text; the runner makes no cross-process plan-ID
+claim. The sole schema-v8 transaction has five top-level `FileEdit` entries:
+four `Modify` plus one `Rename`. Nested `TextEdit` counts are `1/2/1/1` across
+the modifies, five total—there is no one-edit-per-modify invariant. Fresh
+post-apply diagnostics are clean, normal rollback advances the same sole record
+to `ROLLED_BACK`, and exact baseline bytes, path kinds, seven-source inventory,
+and snapshot are restored. Fixture and package manifests remain unchanged.
+
+Official final local packaged evidence used
+`:modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --rerun-tasks`:
+`BUILD SUCCESSFUL` in 22s with 35 tasks. JUnit discovered 22 cases, executed
+one, tag-filtered 21, and reported zero failures/errors; the selected Cucumber
+scenario passed five background plus fourteen scenario steps (19/19) and 2/2
+hooks. All 16 commands had zero timeouts, output truncations, and process leaks.
+Packaged log SHA-256:
+`1fa8cf358882196659abd76e9793214d906383cf780124580ed9f64fb3d643c2`.
+Cucumber JSON SHA-256:
+`9ea18b8638846c08a63c78c6201ef44c7205bb7a62a21da7fd184688e5ada955`.
+A separate source-built REQ-001 review rerun passed 22 discovered/one executed/
+21 tag-filtered/zero failures or errors; log SHA-256:
+`96ad297a087aa9790f00353c8647351c28d563420867f1cd66c64d91ffd3a01e`.
+
+On the same JDK, official final whole-tree source-built execution of
+`./gradlew --no-daemon --rerun-tasks check goldenTest` reported
+`BUILD SUCCESSFUL` in 6m43s. Standard test tasks discovered 1045, executed 817,
+skipped/tag-filtered 228, and had zero failures/errors; 140 XML files and 82
+tasks executed; log SHA-256:
+`89438b03d5228f8ff8173b82a5dc587a36b0907d476dd2adffceff54bca874ef`.
+The dedicated packaged task is separately reported and intentionally not
+included in those standard-test totals.
+
+Targeted custom-source-set PMD/SpotBugs tasks passed; log SHA-256:
+`2cf542051224e2e81f81b5f7ec8132a59ef04258ff2902346076ab39b25c0ff2`.
+Static classification is intentionally non-zero. The custom packaged glue/
+harness has exactly 99 reviewed/non-blocking SpotBugs findings: 57 NP, 14 MS,
+12 BC, 6 AT, 9 RCN, and 1 UrF. These are test/deployment validation-adapter
+findings, mostly Kotlin `lateinit`/generated representation and conservative
+single-thread harness concurrency warnings. No production source file was added
+or modified by this slice. The wider static baseline remains non-blocking;
+aggregate static cleanliness and numerical or child-JVM coverage are not
+claimed.
+
+This local row excludes `REQ-JAVA-MAVEN-MOVE-AUTH-002` through `012`, daemon,
+LSP, MCP, recipe, and library surfaces, Magrathea and general Maven populations,
+crash/restart/concurrency, archive trust/checksum/SBOM/attestation/signing,
+coverage of the child JVM, and every unobserved native host. It qualifies only
+the exact local unpacked package, host/architecture, fixture, request, launcher,
+embedded runtime, and command sequence; it does not promote a native CI ledger
+row.
+
 ## Verification
 
 Archive trust details and unsigned platform status are normative in
