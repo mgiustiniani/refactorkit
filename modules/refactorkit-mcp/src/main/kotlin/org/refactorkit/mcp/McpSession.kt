@@ -55,12 +55,9 @@ import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewJsonProjection
 import org.refactorkit.java.JavaMoveClassOperationDispatcher
 import org.refactorkit.java.JavaMoveClassOperationOutcome
 import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
-import org.refactorkit.java.JavaMoveSourceRootPlanner
-import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
-import org.refactorkit.java.JavaRenameClassPlanner
-import org.refactorkit.java.JavaRenameMemberPlanner
-import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.java.JavaRefactoringPreviewCommand
+import org.refactorkit.java.JavaRefactoringPreviewDispatcher
 import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
 import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
@@ -850,8 +847,18 @@ class McpSession(
                     opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
                 )
             }
-            "renameClass"  -> JavaRenameClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
-            "renameMember" -> JavaRenameMemberPlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["newName"] ?: missing("arguments.newName"))
+            "renameClass" -> {
+                val target = org.refactorkit.core.SymbolId(symbol ?: missing("symbol"))
+                val newName = opArgs["newName"] ?: missing("arguments.newName")
+                val command = JavaRefactoringPreviewCommand.RenameClass(target, newName)
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
+            }
+            "renameMember" -> {
+                val target = org.refactorkit.core.SymbolId(symbol ?: missing("symbol"))
+                val newName = opArgs["newName"] ?: missing("arguments.newName")
+                val command = JavaRefactoringPreviewCommand.RenameMember(target, newName)
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
+            }
             "extractMethod" -> JavaExtractMethodPlanner().preview(
                 snap,
                 Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")),
@@ -918,9 +925,12 @@ class McpSession(
                 is JavaMoveClassOperationOutcome.LexicalReview ->
                     return PreviewToolResult.LexicalReview(outcome.envelope)
             }
-            "moveSourceRoot" -> JavaMoveSourceRootPlanner(adapter).preview(
-                snap, Paths.get(opArgs["from"] ?: missing("arguments.from")), Paths.get(opArgs["to"] ?: missing("arguments.to")),
-            )
+            "moveSourceRoot" -> {
+                val from = Paths.get(opArgs["from"] ?: missing("arguments.from"))
+                val to = Paths.get(opArgs["to"] ?: missing("arguments.to"))
+                val command = JavaRefactoringPreviewCommand.MoveSourceRoot(from, to)
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
+            }
             JavaMoveAcrossMavenModulesPlanner.OPERATION -> adapter.applyRefactoring(
                 RefactoringRequest(operation = operation, arguments = opArgs, snapshot = snap),
             )
@@ -935,10 +945,18 @@ class McpSession(
                         )
                     }
                     KotlinOrganizeImportsPlanner(kotlinAdapter).preview(snap, file)
-                } else JavaOrganizeImportsPlanner().previewSingleFile(snap, file)
+                } else {
+                    val command = JavaRefactoringPreviewCommand.OrganizeImports(file)
+                    JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
+                }
             }
             "formatFile" -> JavaFormatFilePlanner(adapter).preview(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
-            "safeDelete"   -> JavaSafeDeletePlanner(adapter).preview(snap, symbol ?: missing("symbol"), opArgs["force"]?.toBoolean() ?: false)
+            "safeDelete" -> {
+                val target = org.refactorkit.core.SymbolId(symbol ?: missing("symbol"))
+                val force = opArgs["force"]?.toBoolean() ?: false
+                val command = JavaRefactoringPreviewCommand.SafeDelete(target, force)
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
+            }
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 

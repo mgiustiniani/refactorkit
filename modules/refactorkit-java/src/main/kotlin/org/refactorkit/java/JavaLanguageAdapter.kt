@@ -844,7 +844,8 @@ class JavaLanguageAdapter(
             ?: return notImplemented(request, "moveSourceRoot requires arguments.from")
         val to = request.arguments["to"]
             ?: return notImplemented(request, "moveSourceRoot requires arguments.to")
-        return JavaMoveSourceRootPlanner(this).preview(request.snapshot, Path.of(from), Path.of(to))
+        val command = JavaRefactoringPreviewCommand.MoveSourceRoot(Path.of(from), Path.of(to))
+        return JavaRefactoringPreviewDispatcher().preview(request.snapshot, this, command)
     }
 
     private fun applyCreateMavenModule(request: RefactoringRequest): PatchPlan {
@@ -894,19 +895,21 @@ class JavaLanguageAdapter(
     private class MissingOwnershipArgument(val plan: PatchPlan) : RuntimeException()
 
     private fun applyRenameMember(request: RefactoringRequest): PatchPlan {
-        val symbol = request.symbolId?.value
+        val symbol = request.symbolId
             ?: return notImplemented(request, "renameMember requires symbolId")
         val newName = request.arguments["newName"]
             ?: return notImplemented(request, "renameMember requires arguments.newName")
-        return JavaRenameMemberPlanner(this).preview(request.snapshot, symbol, newName)
+        val command = JavaRefactoringPreviewCommand.RenameMember(symbol, newName)
+        return JavaRefactoringPreviewDispatcher().preview(request.snapshot, this, command)
     }
 
     private fun applyRenameClass(request: RefactoringRequest): PatchPlan {
-        val symbol = request.symbolId?.value
+        val symbol = request.symbolId
             ?: return notImplemented(request, "renameClass requires symbolId")
         val newName = request.arguments["newName"]
             ?: return notImplemented(request, "renameClass requires arguments.newName")
-        return JavaRenameClassPlanner(this).preview(request.snapshot, symbol, newName)
+        val command = JavaRefactoringPreviewCommand.RenameClass(symbol, newName)
+        return JavaRefactoringPreviewDispatcher().preview(request.snapshot, this, command)
     }
 
     private fun applyExtractMethod(request: RefactoringRequest): PatchPlan {
@@ -1015,7 +1018,8 @@ class JavaLanguageAdapter(
     private fun applyOrganizeImports(request: RefactoringRequest): PatchPlan {
         val file = request.arguments["file"]
             ?: return notImplemented(request, "organizeImports requires arguments.file")
-        return JavaOrganizeImportsPlanner().previewSingleFile(request.snapshot, java.nio.file.Paths.get(file))
+        val command = JavaRefactoringPreviewCommand.OrganizeImports(java.nio.file.Paths.get(file))
+        return JavaRefactoringPreviewDispatcher().preview(request.snapshot, this, command)
     }
 
     private fun applyFormatFile(request: RefactoringRequest): PatchPlan {
@@ -1025,10 +1029,11 @@ class JavaLanguageAdapter(
     }
 
     private fun applySafeDelete(request: RefactoringRequest): PatchPlan {
-        val symbol = request.symbolId?.value
+        val symbol = request.symbolId
             ?: return notImplemented(request, "safeDelete requires symbolId")
         val force = request.arguments["force"]?.toBoolean() ?: false
-        return JavaSafeDeletePlanner(this).preview(request.snapshot, symbol, force)
+        val command = JavaRefactoringPreviewCommand.SafeDelete(symbol, force)
+        return JavaRefactoringPreviewDispatcher().preview(request.snapshot, this, command)
     }
 
     private fun notImplemented(request: RefactoringRequest, reason: String) = PatchPlan(

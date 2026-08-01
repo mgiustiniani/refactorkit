@@ -51,6 +51,68 @@ root-declared active module POM produces result-owned
 `JavaMoveClassStructuralRefusal`; symlink or non-regular descriptor paths are not
 misclassified as ordinary missing files.
 
+## Java refactoring preview command boundary
+
+The Java adapter now owns a sealed `JavaRefactoringPreviewCommand` hierarchy with
+exactly five plan-only variants: `RenameClass`, `RenameMember`, `MoveSourceRoot`,
+single-file `OrganizeImports`, and `SafeDelete`. The
+`JavaRefactoringPreviewDispatcher` has no retained fields. Its public `preview`
+call supplies an `ExistingJavaRefactoringPreviewPlannerInvoker` for that call; an
+internal overload accepts the `JavaRefactoringPreviewPlannerInvoker` seam and
+maps each variant to the existing planner without changing the supplied snapshot,
+current adapter, typed values, returned `PatchPlan`, or escaping exception.
+
+`JavaLanguageAdapter.applyRefactoring(RefactoringRequest)` remains the generic
+compatibility decoder. Its five operation-specific decoders preserve existing
+string/path/boolean conversion, the absent `safeDelete.force=false` default,
+missing-argument refused plans, and unknown-operation behavior, then construct a
+complete command and converge on the dispatcher. There is no parallel direct-
+planner route for those five operations. Daemon and MCP use the same dispatcher
+only after their own parsing and required-field validation.
+
+The boundary is stateless and ends at plan return. It owns no `moveClass`
+`Plan`/`Guidance`/`LexicalReview`, other-language/mixed/experimental/Maven route,
+CLI/LSP or multi-file-import adoption, pending-plan policy, diagnostics,
+filesystem write, `PatchEngine`, lock/WAL/transaction, apply/rollback, lifecycle,
+protocol rendering, or persistence. `ManagedApplyInvoker` remains rejected and
+absent. No external protocol schema or capability catalogue changed.
+
+A missing-API compile RED has SHA-256
+`3221bc7bc6aaef1a21117032ce6f22ea7c28ea8efb05a2797e2fec1beb3b5af8`.
+After the initial REQ-003 source-only review block, corrected split runners passed
+all four definitions/eight cases/94 steps on OpenJDK 21.0.11 (log SHA-256
+`10c805b67306026cb4ab4a79de9b7258c712e28aaf0bb0070279edbbc44914f5`;
+JSON SHA-256
+`2059c28d57fde8f72b2e3f0de9fe6d95062c8de6cad40aeaeee3e4175a378ef6`
+and
+`999ee1a13d8577113113236e7b2241a5fac881e97327705eb1e4d1858ed83baa`).
+The Java module regression reported 253 discovered, 252 executed, one tag-
+filtered, and zero failures/errors within combined regression log SHA-256
+`9a1cb587e7e377682a09353f470140a76e4dae1e5cb42a727f8ed346e2a0e9b1`.
+Focused evidence remains source-built/in-process. Final dated mutable
+whole-working-tree source-built verification on 2026-08-01 used OpenJDK 21.0.11
+and
+`./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in
+6m 54s; 1045 tests were discovered, 817 executed, 228 skipped/tag-filtered,
+zero failures/errors, 140 XML files were produced, and 79 tasks executed; log
+SHA-256
+`fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`.
+The targeted affected-module static command passed (log SHA-256
+`8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Its
+classification is deliberately non-zero: the full targeted log contains no
+finding owned by `JavaRefactoringPreviewCommand`,
+`JavaRefactoringPreviewDispatcher`,
+`ExistingJavaRefactoringPreviewPlannerInvoker`, daemon `refactorPreview`, MCP
+`toolPreviewRefactoring`, or the five changed generic decoder helpers. Exactly
+48 reviewed/non-blocking slice-local glue findings remain: Java-module command
+glue 24 (15 NP, 6 RCN, 1 Dm, 2 BC) and CLI real-surface glue 24 (13 NP, 7 RCN,
+4 BC). Dispatcher-method references arise from generated Kotlin nullability
+analysis at glue call sites, not production methods. Wider configured
+SpotBugs/PMD baselines remain non-blocking; aggregate static cleanliness and
+numerical coverage are not claimed. This dated source-built aggregate does not
+qualify packaged, native, cross-platform, concurrent, crash-restart,
+general-orchestration, or numerical-coverage behavior.
+
 ## Generated-source boundary
 
 Generated Java remains analyzable for symbols/references but is never rewritten

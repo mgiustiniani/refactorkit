@@ -469,6 +469,35 @@ Status: implementation-informed for the bounded source-built/in-process sequence
 
 This extraction preserves call ordering, including current post-apply scan-before-semantic-cleanup behavior; changing that ordering is a separate lifecycle decision. `PatchEngine`, diagnostics selection, apply/WAL/automatic rollback/explicit rollback/recovery, protocol rendering, CLI, and LSP are not participants in composition. Delegated C4 review found no new participant or relationship, so no runtime/dynamic C4 diagram is required for this bounded internal sequence.
 
+== Implemented Runtime Scenario: Java Refactoring Preview Command Dispatch
+
+Status: implementation-informed for the bounded source-built/in-process flow plus dated mutable source-built aggregate evidence. The sealed five-variant command hierarchy, fieldless dispatcher, internal per-call planner-invoker seam, five generic decoder routes, and daemon/MCP adoption are present in the current mutable working tree. Focused OpenJDK 21.0.11 acceptance passed seven Java-module cases/85 steps plus one real public-surface case/9 steps (all four definitions, eight cases, 94/94 steps; log SHA-256 `10c805b67306026cb4ab4a79de9b7258c712e28aaf0bb0070279edbbc44914f5`). The real-surface runner uses public `DaemonSession`/`McpSession` dispatch for all five operations and missing/unknown/refused paths. Final whole-working-tree verification on 2026-08-01 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 6m 54s; 1045 tests discovered, 817 executed, 228 skipped/tag-filtered, zero failures/errors; 140 XML files; 79 tasks executed; log SHA-256 `fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`. The targeted affected-module static command passed (log SHA-256 `8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Its honest non-zero classification has no finding owned by `JavaRefactoringPreviewCommand`, `JavaRefactoringPreviewDispatcher`, `ExistingJavaRefactoringPreviewPlannerInvoker`, daemon `refactorPreview`, MCP `toolPreviewRefactoring`, or the five changed generic decoder helpers; exactly 48 reviewed/non-blocking slice-local glue findings remain: Java-module command glue 24 (15 NP, 6 RCN, 1 Dm, 2 BC) and CLI real-surface glue 24 (13 NP, 7 RCN, 4 BC). Dispatcher-method references are generated Kotlin nullability analysis at glue call sites, not production-method findings. Wider configured SpotBugs/PMD baselines remain non-blocking; aggregate static cleanliness and numerical coverage are not claimed. This is dated mutable source-built aggregate evidence, not packaged, native, cross-platform, concurrent, crash-restart, general-orchestration, or numerical-coverage qualification.
+
+[cols="1,3",options="header"]
+|===
+|Step |Observed behavior-preserving interaction
+
+|1
+|Daemon `refactor.preview` or MCP `preview_refactoring` receives one of exactly five initial Java routes: `renameClass`, `renameMember`, `moveSourceRoot`, single-file Java `organizeImports`, or `safeDelete`. The surface preserves its existing request parsing, aliases/defaults, primitive-argument treatment, required-field checks, unknown-operation handling, and protocol-specific exception or error wording.
+
+|2
+|Only after those checks does the surface construct one complete immutable `JavaRefactoringPreviewCommand`. Missing or unknown input must not cross the boundary and change from a surface validation failure into a planner refusal. The single-file import command does not normalize or adopt CLI multi-file behavior.
+
+|3
+|The surface invokes the fieldless Java dispatcher with the exact current session `ProjectSnapshot`, the exact current session `JavaLanguageAdapter`, and the command. The dispatcher captures no startup adapter, snapshot, session, cache, lease, or plan.
+
+|4
+|The dispatcher selects exactly one existing Java planner. It passes the command values without aliasing, default invention, path/coordinate conversion, normalization, sorting, or deduplication, returns the planner's exact `PatchPlan` unchanged, and does not catch or remap an escaping planner exception.
+
+|5
+|After the plan returns, daemon or MCP continues its existing surface-specific refused-plan handling, pending-plan admission, language/lease metadata retention, rendering, and response behavior. None of those downstream decisions moves into the command boundary.
+
+|6
+|Separately, generic `JavaLanguageAdapter.applyRefactoring(RefactoringRequest)` preserves its current generic decode and refusal contract, then dispatches the same typed command for each of the five routes. It must not invoke a parallel copy of those planners. Exact parity is required at the canonical downstream planner path, not by unifying daemon/MCP protocol parsing.
+|===
+
+The sequence ends at plan return. It excludes `moveClass` `Plan`/`Guidance`/`LexicalReview`, Kotlin/TypeScript/external routing, mixed add-parameter, experimental/Maven operations, CLI/LSP adoption, pending-plan policy itself, snapshot refresh, diagnostics, `PatchEngine`, authorization, lock/WAL/recovery/apply/rollback, lifecycle, rendering, and protocol errors. It performs no workspace write or persistence. Delegated LATE C4 review found no new participant or relationship: the dispatcher is an internal Java-adapter hop already covered by existing relationships, so no runtime/dynamic C4 view is justified unless later work changes topology or authority. External protocol schemas and capability catalogues remain unchanged.
+
 == Runtime Diagrams
 
 No runtime/dynamic C4 diagrams were added in this baseline. This remains an actionable documentation gap if scenario visualization becomes necessary; the diagnostics and bounded implemented guidance flow are documented textually until a dynamic view adds enduring value.

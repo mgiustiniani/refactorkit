@@ -13,6 +13,13 @@ dependencies {
     implementation("org.yaml:snakeyaml:2.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
+    testImplementation("io.cucumber:cucumber-java:7.20.1")
+    testImplementation("io.cucumber:cucumber-junit-platform-engine:7.20.1")
+    testImplementation("org.junit.platform:junit-platform-suite:1.11.2")
+}
+
+sourceSets.test {
+    resources.srcDir(rootProject.file("features"))
 }
 
 tasks.test {

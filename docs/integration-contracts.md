@@ -317,6 +317,60 @@ source-built/in-process evidence is provided by
 and regression-tested, not packaged, native, cross-platform, concurrent, or
 numerical-coverage qualification.
 
+### Java refactoring preview command dispatch
+
+For exactly `renameClass`, `renameMember`, `moveSourceRoot`, single-file Java
+`organizeImports`, and `safeDelete`, daemon `refactor.preview` and MCP
+`preview_refactoring` now construct one complete sealed
+`JavaRefactoringPreviewCommand` only after their existing parsing, aliases,
+defaults, required-field checks, and unknown-operation handling. They invoke the
+fieldless `JavaRefactoringPreviewDispatcher` with the current session snapshot
+and Java adapter. The dispatcher uses an internal per-call invoker seam to call
+one unchanged default planner and returns the exact `PatchPlan` or escaping
+exception. The five generic `JavaLanguageAdapter.applyRefactoring` decoders
+preserve their own missing/unknown/refusal behavior and converge on the same
+canonical downstream mapping.
+
+Surface policy remains separate: daemon and MCP keep distinct refused-plan
+handling, pending-plan admission, rendering, and errors. `moveClass`, other
+languages, mixed/experimental/Maven routes, CLI/LSP adoption, multi-file imports,
+diagnostics, lifecycle, `PatchEngine`, apply/rollback, persistence, and
+`ManagedApplyInvoker` are outside this boundary. No method, tool, request,
+response, error code, external protocol schema, capability catalogue, stability
+classification, or write authority changed.
+
+The corrected split-runner evidence passed all four
+`REQ-JAVA-PREVIEW-COMMAND-001..004` definitions/eight cases/94 steps on OpenJDK
+21.0.11 (log SHA-256
+`10c805b67306026cb4ab4a79de9b7258c712e28aaf0bb0070279edbbc44914f5`).
+REQ-003 uses real public `DaemonSession`/`McpSession` dispatch for all five
+operations plus missing, unknown, and refused paths and verifies no preview
+writes/residue. Independent Java/daemon/MCP regressions passed with zero
+failures/errors (log SHA-256
+`9a1cb587e7e377682a09353f470140a76e4dae1e5cb42a727f8ed346e2a0e9b1`).
+Focused qualification remains source-built/in-process. Final dated mutable
+whole-working-tree source-built verification on 2026-08-01 used OpenJDK 21.0.11
+and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL`
+in 6m 54s; 1045 tests were discovered, 817 executed, 228 skipped/tag-filtered,
+zero failures/errors, 140 XML files were produced, and 79 tasks executed; log
+SHA-256
+`fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`.
+The targeted affected-module static command passed (log SHA-256
+`8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Its
+classification is deliberately non-zero: the full targeted log contains no
+finding owned by `JavaRefactoringPreviewCommand`,
+`JavaRefactoringPreviewDispatcher`,
+`ExistingJavaRefactoringPreviewPlannerInvoker`, daemon `refactorPreview`, MCP
+`toolPreviewRefactoring`, or the five changed generic decoder helpers. Exactly
+48 reviewed/non-blocking slice-local glue findings remain: Java-module command
+glue 24 (15 NP, 6 RCN, 1 Dm, 2 BC) and CLI real-surface glue 24 (13 NP, 7 RCN,
+4 BC). Dispatcher-method references are generated Kotlin nullability analysis at
+glue call sites, not production-method findings. Wider configured SpotBugs/PMD
+baselines remain non-blocking; neither aggregate static cleanliness nor numerical
+coverage is claimed. This dated aggregate does not qualify packaged, native,
+cross-platform, concurrent, crash-restart, general-orchestration, or
+numerical-coverage behavior.
+
 ### `server.version` contract
 
 `server.version` is a read-only beta-contract method for compatibility checks.

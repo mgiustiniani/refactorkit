@@ -112,12 +112,9 @@ import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewJsonProjection
 import org.refactorkit.java.JavaMoveClassOperationDispatcher
 import org.refactorkit.java.JavaMoveClassOperationOutcome
 import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
-import org.refactorkit.java.JavaMoveSourceRootPlanner
-import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
-import org.refactorkit.java.JavaRenameClassPlanner
-import org.refactorkit.java.JavaRenameMemberPlanner
-import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.java.JavaRefactoringPreviewCommand
+import org.refactorkit.java.JavaRefactoringPreviewDispatcher
 import org.refactorkit.webimporter.ExternalImportPreview
 import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
@@ -1509,11 +1506,19 @@ class DaemonSession(
             }
             "renameClass" -> {
                 val newName = args["newName"] ?: missing("arguments.newName")
-                JavaRenameClassPlanner(adapter).preview(snap, symbol ?: missing("symbol"), newName)
+                val command = JavaRefactoringPreviewCommand.RenameClass(
+                    SymbolId(symbol ?: missing("symbol")),
+                    newName,
+                )
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
             }
             "renameMember" -> {
                 val newName = args["newName"] ?: missing("arguments.newName")
-                JavaRenameMemberPlanner(adapter).preview(snap, symbol ?: missing("symbol"), newName)
+                val command = JavaRefactoringPreviewCommand.RenameMember(
+                    SymbolId(symbol ?: missing("symbol")),
+                    newName,
+                )
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
             }
             "extractMethod" -> {
                 val file = args["file"] ?: symbol ?: missing("arguments.file")
@@ -1599,7 +1604,8 @@ class DaemonSession(
             "moveSourceRoot" -> {
                 val from = args["from"] ?: missing("arguments.from")
                 val to = args["to"] ?: missing("arguments.to")
-                JavaMoveSourceRootPlanner(adapter).preview(snap, Paths.get(from), Paths.get(to))
+                val command = JavaRefactoringPreviewCommand.MoveSourceRoot(Paths.get(from), Paths.get(to))
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
             }
             JavaMoveAcrossMavenModulesPlanner.OPERATION -> adapter.applyRefactoring(
                 RefactoringRequest(operation = operation, arguments = args, snapshot = snap),
@@ -1621,7 +1627,8 @@ class DaemonSession(
                     )
                     KotlinOrganizeImportsPlanner(kotlinAdapter).preview(snap, Paths.get(file))
                 } else {
-                    JavaOrganizeImportsPlanner().previewSingleFile(snap, Paths.get(file))
+                    val command = JavaRefactoringPreviewCommand.OrganizeImports(Paths.get(file))
+                    JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
                 }
             }
             "formatFile" -> {
@@ -1630,7 +1637,11 @@ class DaemonSession(
             }
             "safeDelete" -> {
                 val force = args["force"]?.toBoolean() ?: false
-                JavaSafeDeletePlanner(adapter).preview(snap, symbol ?: missing("symbol"), force)
+                val command = JavaRefactoringPreviewCommand.SafeDelete(
+                    SymbolId(symbol ?: missing("symbol")),
+                    force,
+                )
+                JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
             }
             "createMavenModule" -> {
                 val moduleName = args["moduleName"] ?: missing("arguments.moduleName")

@@ -279,6 +279,47 @@ source-built/in-process evidence is
 `REQ-WORKSPACE-SNAPSHOT-COMPOSER-001..005`; CLI/LSP and packaged, concurrent,
 cross-platform, crash/restart, and numerical-coverage claims are excluded.
 
+The Java Refactoring Preview Command boundary is likewise outside the managed
+transaction boundary. Its sealed five-variant values, fieldless dispatcher, and
+internal per-call planner invoker only select one existing planner and return the
+exact `PatchPlan` or exception. The five generic Java decoder routes and the five
+daemon/MCP post-parse routes converge there, but authorization, pending-plan
+lifecycle, diagnostics, `PatchEngine`, workspace lock, WAL, transaction, recovery,
+apply, automatic rollback, and explicit rollback remain unchanged in their
+existing owners. Preview acceptance verifies no workspace writes or
+`.refactorkit` residue.
+
+`ManagedApplyInvoker` is explicitly rejected: exact forwarding would add no
+transaction invariant, while absorbing root/snapshot selection, pending lookup,
+diagnostics, authorization, lifecycle, rendering, or recovery would cross the
+audited surface/engine authority boundary. No TX finding, transaction schema,
+protocol schema, capability catalogue, or closure status changes. Bounded
+`REQ-JAVA-PREVIEW-COMMAND-001..004` source-built/in-process acceptance passed all
+four definitions/eight cases/94 steps (log SHA-256
+`10c805b67306026cb4ab4a79de9b7258c712e28aaf0bb0070279edbbc44914f5`). Final
+dated mutable whole-working-tree source-built verification on 2026-08-01 used
+OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`:
+`BUILD SUCCESSFUL` in 6m 54s; 1045 tests were discovered, 817 executed, 228
+skipped/tag-filtered, zero failures/errors, 140 XML files were produced, and 79
+tasks executed; log SHA-256
+`fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`.
+The targeted affected-module static command passed (log SHA-256
+`8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Its
+classification is deliberately non-zero: the full targeted log contains no
+finding owned by `JavaRefactoringPreviewCommand`,
+`JavaRefactoringPreviewDispatcher`,
+`ExistingJavaRefactoringPreviewPlannerInvoker`, daemon `refactorPreview`, MCP
+`toolPreviewRefactoring`, or the five changed generic decoder helpers. Exactly
+48 reviewed/non-blocking slice-local glue findings remain: Java-module command
+glue 24 (15 NP, 6 RCN, 1 Dm, 2 BC) and CLI real-surface glue 24 (13 NP, 7 RCN,
+4 BC). Dispatcher-method references arise from generated Kotlin nullability
+analysis at glue call sites, not production methods. Wider configured
+SpotBugs/PMD baselines remain non-blocking; neither aggregate static cleanliness
+nor numerical coverage is claimed. This dated source-built aggregate complements
+the focused source-built/in-process receipt and does not qualify packaged,
+native, cross-platform, concurrent, crash-restart, general-orchestration, or
+numerical-coverage behavior.
+
 ### TX-008 — Recipe transaction boundary
 
 Status: **closed after the audited baseline**.

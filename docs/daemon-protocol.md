@@ -219,6 +219,58 @@ a still-known lexical operation returns `PLAN_VALIDATION_FAILED (-32008)` with
 `evidence.insufficient` and the same envelope in `error.data`, before lock/WAL;
 unknown or evicted identities return `INVALID_PARAMS (-32602)`.
 
+## Java plan-only preview command dispatch
+
+For `renameClass`, `renameMember`, `moveSourceRoot`, single-file Java
+`organizeImports`, and `safeDelete`, `DaemonSession` now completes the existing
+JSON-RPC parsing, alias/default conversion, required-field checks, and unknown-
+operation handling before constructing one sealed `JavaRefactoringPreviewCommand`.
+It then calls the fieldless `JavaRefactoringPreviewDispatcher` with the current
+session snapshot and current Java adapter. An internal per-call invoker seam maps
+the command to one unchanged default planner and returns the exact planner result
+or exception. Refused-plan conversion, pending-plan admission, and structured
+plan rendering remain daemon-owned after dispatch.
+
+This is an internal implementation reconciliation, not a protocol revision.
+`refactor.preview` method/operation names, arguments, response and error shapes,
+stability classifications, `server.capabilities`, external schemas, and
+capability catalogues are unchanged. The boundary excludes `moveClass`, all
+other-language/mixed/experimental/Maven routes, CLI/LSP, multi-file imports,
+diagnostics, lifecycle, managed apply/rollback, persistence, and
+`ManagedApplyInvoker`.
+
+Bounded OpenJDK 21.0.11 source-built/in-process acceptance passed all four
+requirements/eight cases/94 steps (log SHA-256
+`10c805b67306026cb4ab4a79de9b7258c712e28aaf0bb0070279edbbc44914f5`).
+The corrected REQ-003 case uses public daemon and MCP session dispatch for all
+five operations plus missing, unknown, and refused paths and verifies no preview
+writes/residue. Daemon regression remained 58/58 within the combined zero-
+failure Java/daemon/MCP regression receipt SHA-256
+`9a1cb587e7e377682a09353f470140a76e4dae1e5cb42a727f8ed346e2a0e9b1`.
+Final dated mutable whole-working-tree source-built verification on 2026-08-01
+used OpenJDK 21.0.11 and
+`./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in
+6m 54s; 1045 tests were discovered, 817 executed, 228 skipped/tag-filtered,
+zero failures/errors, 140 XML files were produced, and 79 tasks executed; log
+SHA-256
+`fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`.
+The targeted affected-module static command passed (log SHA-256
+`8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`).
+The classification is deliberately non-zero: the full targeted log contains no
+finding owned by `JavaRefactoringPreviewCommand`,
+`JavaRefactoringPreviewDispatcher`,
+`ExistingJavaRefactoringPreviewPlannerInvoker`, daemon `refactorPreview`, MCP
+`toolPreviewRefactoring`, or the five changed generic decoder helpers. Exactly
+48 reviewed/non-blocking slice-local glue findings remain: Java-module command
+glue 24 (15 NP, 6 RCN, 1 Dm, 2 BC) and CLI real-surface glue 24 (13 NP, 7 RCN,
+4 BC). Dispatcher-method references are generated Kotlin nullability analysis at
+glue call sites, not production-method findings. Wider configured SpotBugs/PMD
+baselines remain non-blocking; aggregate static cleanliness and numerical
+coverage are not claimed. This dated mutable source-built aggregate complements
+the focused source-built/in-process receipt and does not qualify packaged,
+native, cross-platform, concurrent, crash-restart, general-orchestration, or
+numerical-coverage behavior.
+
 ## External Java import preview
 
 `java.importExternalClass` is preview-only. `targetDirectory` is an existing
