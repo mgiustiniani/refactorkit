@@ -262,6 +262,33 @@ source-built/in-process evidence is provided by
 `REQ-MANAGED-ROLLBACK-EXECUTOR-001..002`; packaged, cross-platform, concurrent,
 and crash/restart qualification remain separate.
 
+### Managed-apply diagnostics-gate selection
+
+Daemon `refactor.apply` and MCP `apply_refactoring` now delegate their identical
+JVM diagnostics-gate routing expression to the stateless
+`ManagedApplyDiagnosticsGateSelector` in `refactorkit-jvm`. The selector uses the
+exact pending-plan language ID plus original plan operation, evidence, and
+affected-file metadata. It preserves `java-maven-ownership`, `java-jdt`,
+`kotlin-k2-java-jdt`, and `kotlin-k2` gate identities and the existing ordered
+Kotlin mixed-JVM precedence. Every other exact language ID is resolved once by
+the calling surface and the resulting external gate is returned unchanged.
+
+Selection is lazy: no built-in or external diagnostics provider runs until
+`PatchEngine.apply` evaluates the returned gate under its workspace lock. The
+surface passes its current adapters on every apply, so semantic start/stop and
+lease lifecycle remain outside the selector. Resolver exceptions propagate
+unchanged. The selector does not validate pending plans or leases, scan a
+workspace, run post-success diagnostics, render responses, close adapters, create
+WAL state, mutate files, or alter automatic rollback and recovery.
+
+This bounded extraction deliberately excludes CLI, managed LSP, recipes, testkit,
+and direct-library apply because their existing gate-selection policies are not
+the duplicated full-language daemon/MCP expression. Wire shapes, error mappings,
+authorization strings, and `PatchEngine` authority are unchanged. Bounded
+source-built/in-process evidence is provided by
+`REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001..002`; packaged, native,
+cross-platform, concurrent, and broader apply qualification remain separate.
+
 ### `server.version` contract
 
 `server.version` is a read-only beta-contract method for compatibility checks.

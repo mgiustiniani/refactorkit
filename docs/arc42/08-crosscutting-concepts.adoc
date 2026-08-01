@@ -41,6 +41,129 @@ The stable target also compares diagnostics before preview, after preview simula
 
 Status: implementation-informed for the current generic/JDT gate. It does not establish the planned full-reactor, release-aware Java/Maven authority described below. Managed Java surfaces supply JDT diagnostics to a core gate that compares current and exact staged post-image snapshots under lock before WAL, refusing new errors or unavailable diagnostics. TypeScript managed gates and IDE diagnostics use the independent `typescript-compiler-exact-v1` path rather than LSP publications. Experimental Kotlin diagnostics use `kotlin-compiler-diagnostics-k2-v1`, an external K2 process over an immutable overlay with snapshot/build/toolchain attestation; compiler XML lacks trustworthy end offsets, so diagnostic locations remain explicitly line-only. The separate `kotlin-compiler-jvm-declarations-k2-v1` read row accepts exact compiler PSI declared-type selections only after successful compilation and matching JVM class-file evidence, producing type IDs from binary identity rather than offsets; an implicit companion selects its `object` keyword because it has no source name identifier. The first function row additionally binds an opaque callable ID to generated JVM owner, method name and descriptor and refuses ambiguous overload/bridge evidence. Neither read backend has mutation authority. Direct library apply requires an explicit gate (`TX-015` closed).
 
+=== Implemented Stateless Managed-apply Diagnostics-gate Selector
+
+Status: implementation-informed within a bounded source-built/in-process selector and daemon/MCP regression boundary, with dated whole-working-tree aggregate evidence. REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002 and all 11 expanded cases in `features/managed-apply-diagnostics-gate-selector.feature` are `@implemented-and-validated`. Production evidence is `modules/refactorkit-jvm/src/main/kotlin/org/refactorkit/jvm/ManagedApplyDiagnosticsGateSelector.kt`; source inspection confirms adoption only in `DaemonSession.refactorApply` and `McpSession.toolApplyRefactoring`; the JVM module build supplies the feature resource plus Cucumber/JUnit scaffold, and `ManagedApplyDiagnosticsGateSelectorCucumberTest.kt` with its steps supplies acceptance glue. Final independent OpenJDK 21.0.11 acceptance passed 11/11 scenarios and 92/92 steps with zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `74749cf8635d7bbbac3abb4a3eeaf669f6aab3d58770e423094ce791c7882997`); daemon regression passed 58/58 and MCP regression passed 26/26. The official four-feature audit records 18 unique definitions, 43 cases, and 679 expanded steps, all implemented-and-validated with zero errors (log SHA-256 `fb7c81a1d3223e6959d6838ac38c5c737f1bf8804570489405ed59bc1a279bc7`). Final whole-working-tree source-built verification on the same OpenJDK used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 11s; 1021 discovered, 801 executed, 220 skipped/tag-filtered, zero failures/errors; 78 tasks; log SHA-256 `e3e4b3e02fac87003f12cbf87801298653eb12e43c213d1f40fe5177ece75e02`. The standalone `:modules:refactorkit-jvm:compileTestKotlin --rerun-tasks` command initially failed because `testRuntimeClasspath` was resolved eagerly during configuration (RED log SHA-256 `798419c8a27a9a0c9ca74dd3d41ab2851acfb84d3d4f492002aaed71bfafa98a`); it passed after the compiler-classpath system property was deferred to test execution (GREEN log SHA-256 `c0ee8f6dfc932015dbb8b2067a3f3637c2208b6888a72bc672369bbb3d5df7e7`). This RED/GREEN pair is build-scaffold correctness evidence only, not product or package qualification. The selector's initial one production NP finding was eliminated by making the final-segment non-null requirement explicit. The final full log contains no production finding for `ManagedApplyDiagnosticsGateSelector.kt` or its provider functions; 23 glue-only Kotlin/generated findings remain non-blocking (2 RCN, 13 MS, 1 SA, 7 BC), and the broader configured SpotBugs baseline remains non-blocking. The 2026-07-31 EARLY review at commit `642c1876848bf7f10dcbcc25be36fdd616b930f6` and pre-promotion audit SHA-256 `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14` remain historical evidence. This qualification covers selector behavior, daemon/MCP regression, and dated source-built aggregate verification only; it makes no packaged, native, cross-platform, concurrent, apply-authority, or numerical-coverage claim.
+
+==== Smallest Shared Boundary
+
+The implemented extraction is the formerly identical `DiagnosticsGate` selection passed to `PatchEngine.apply` by `DaemonSession.refactorApply` and `McpSession.toolApplyRefactoring`. It belongs in `refactorkit-jvm`, which already depends on core, Java, and Kotlin while both adopting surfaces already depend on it. Core remains language-independent; `refactorkit-jvm` gains no TypeScript, daemon, MCP, protocol, filesystem, WAL, or lifecycle dependency.
+
+The implemented selector is stateless and called once per apply attempt with the current adapter fields:
+
+[source,kotlin]
+----
+object ManagedApplyDiagnosticsGateSelector {
+    fun select(
+        plan: PatchPlan,
+        languageId: String,
+        javaAdapter: JavaLanguageAdapter,
+        kotlinAdapter: KotlinLanguageAdapter,
+        externalGateResolver: (String) -> DiagnosticsGate,
+    ): DiagnosticsGate
+}
+----
+
+It accepts no `ProjectSnapshot`, diagnostics provider, process manager, lease, index, root, renderer, or lifecycle collaborator. It returns one `DiagnosticsGate`, not diagnostics, a provider result, route enum, apply result, or wrapped adapter. It must not retain adapters: Kotlin semantic start replaces the initial unconfigured adapter with a K2-configured instance, and stop/refresh/success/close can reset it. Each apply therefore supplies the exact Java and Kotlin adapter instances current at that attempt.
+
+Selection metadata is limited to exact `PendingPlan.languageId` plus the original `PatchPlan.operation`, `PatchPlan.evidence`, and `PatchPlan.affectedFiles`. The selector must not infer language from source content/snapshot files, recompute affected files from `WorkspaceEdit`, normalize case, or validate that metadata looks like an expected planner result.
+
+==== Exact Ordered Branch Table
+
+Rows are precedence-ordered; a later row is evaluated only after earlier predicates fail.
+
+[cols="1,3,2,4",options="header"]
+|===
+|Order |Exact predicate |Gate ID |Provider or returned gate
+
+|1
+|`languageId == "java"` and `plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION` (`"java.moveAcrossMavenModules"`)
+|`java-maven-ownership`
+|`JavaMoveAcrossMavenModulesPlanner(javaAdapter)::diagnostics`
+
+|2
+|`languageId == "java"` after row 1 fails
+|`java-jdt`
+|`javaAdapter::diagnostics`
+
+|3
+|`languageId == "kotlin"`, Java-affected predicate true, and `plan.operation == "moveDeclaration"`
+|`kotlin-k2-java-jdt`
+|`KotlinJvmMoveDeclarationPlanner(kotlinAdapter).diagnostics(candidate)`
+
+|4
+|`languageId == "kotlin"`, Java-affected true, operation is not `moveDeclaration`, and `plan.evidence == RefactoringEvidence.JDT_BINDING`
+|`kotlin-k2-java-jdt`
+|`JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)`
+
+|5
+|`languageId == "kotlin"`, Java-affected true, and rows 3-4 failed
+|`kotlin-k2-java-jdt`
+|`KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)`
+
+|6
+|`languageId == "kotlin"` and Java-affected predicate false
+|`kotlin-k2`
+|`kotlinAdapter.compilerDiagnostics(candidate).diagnostics`
+
+|7
+|Every other exact language ID
+|resolver-owned
+|Return `externalGateResolver(languageId)` unchanged
+|===
+
+The final production Java-affected predicate is exactly:
+
+[source,kotlin]
+----
+plan.affectedFiles.any {
+    Objects.requireNonNull(it.fileName).toString().endsWith(".java")
+}
+----
+
+This reads the original plan metadata before `PatchEngine` normalizes the workspace edit and replaces its internal plan's affected-file set. `Objects.requireNonNull` makes the original platform-null final-segment requirement explicit: a root path still raises `NullPointerException`, as the earlier implicit dereference did. The predicate remains case-sensitive and tests only the final segment: `Foo.java` matches, `Foo.JAVA` does not, and a directory named `Foo.java` whose final segment is `Actually.kt` does not match. Exact language IDs are also case-sensitive and are neither lowercased nor normalized. The Maven operation test exists only inside the exact Java branch. For Kotlin, the Java-affected split precedes operation/evidence routing; within the mixed branch, `moveDeclaration` wins even with `JDT_BINDING`, then `JDT_BINDING` wins, and every other metadata combination takes the broad fallback. The production mixed gate ID remains exactly `kotlin-k2-java-jdt`; a longer planner-test label is not substituted.
+
+==== Laziness, External Resolution, and Ordering
+
+Calling `select` must invoke zero diagnostics providers. Constructing a `DiagnosticsGate`, binding the Maven planner as today, or creating a provider closure is allowed; no Java adapter diagnostics, Maven rebuild, K2/compiler diagnostics, JDT analysis, ephemeral Java compilation, or external synchronized diagnostics may run. Mixed planners remain instantiated inside their provider closure so they use the supplied current Kotlin adapter when the provider runs.
+
+The external resolver is called exactly once and only for row 7 during selection. Daemon supplies its existing `requireSemanticAdapter(languageId).diagnosticsGate()` behavior, including exact TypeScript/JavaScript validation and daemon-specific exceptions; MCP supplies its existing map lookup and MCP-specific exception wording. Resolver exceptions propagate unchanged. The returned gate—including `typescript-compiler-exact-v1` today—is returned unchanged and opaque to `refactorkit-jvm`. The active adapter lookup therefore happens now, but semantic-scope/completeness/toolchain/project-evidence checks and synchronized diagnostics happen later when `PatchEngine` invokes the returned provider. Deferring lookup would remap a missing-adapter protocol error to `diagnostics.unavailable`; eagerly invoking the provider would violate the lock boundary.
+
+Provider output is also preserved verbatim:
+
+* Maven ownership delegates to the supplied Java adapter when no `maven-pom` auxiliary file exists; otherwise its provider materializes tracked files, rebuilds the Maven model offline, and runs that same adapter. This work remains lazy.
+* Ordinary Java returns `javaAdapter.diagnostics` without selector-level transformation.
+* Kotlin-only returns `KotlinCompilerDiagnosticsResult.diagnostics` directly, including singleton refused/error diagnostics.
+* All three mixed planners return available compiler/K2 diagnostics first and converted JDT diagnostics second; mixed-evidence failure returns one synthesized `ERROR`. The Java-to-Kotlin planner retains its ephemeral annotation-processing-disabled Java compilation before K2/JDT evidence.
+* External adapters retain their own gate ID, provider, failure, and ordering semantics.
+
+The selector performs no sorting, deduplication, severity conversion, tagging, bounding, or reversal. Ordering remains observable in refusal messages and response diagnostics even though core regression comparison is multiset-based.
+
+==== PatchEngine Authority and Explicit Exclusions
+
+The authority sequence remains unchanged:
+
+. The surface validates pending identity and its Kotlin lease/index rules, resolves the root, and scans the saved workspace.
+. It selects a lazy gate; only external active-adapter lookup may occur at this point.
+. It calls `PatchEngine.apply` with the unchanged plan, current snapshot, authorization surface, and selected gate.
+. `PatchEngine` acquires the one-writer lock, performs recovery/preflight/snapshot/approval/authority/precondition checks, and only then invokes the provider on baseline and exact simulated staged snapshots.
+. `PatchEngine` subtracts preview-approved regressions, refuses unapproved new `ERROR` identities before WAL, and otherwise owns WAL/mutation.
+. The same provider checks the rehydrated post-image. Mismatch or unavailability triggers automatic rollback and then one restored-baseline provider check.
+. Only after `PatchEngine` returns may a surface render, refresh, close/reset adapters, or clear state according to its existing behavior.
+
+The selector owns none of the following:
+
+* CLI, managed LSP, recipes, testkit, or direct library apply sites;
+* daemon post-success response diagnostics or diagnostics bounding;
+* preview planner routing, preview diagnostics, diagnostics queries, context/query resources, or symbol/index routes;
+* pending-plan identity, lexical-review refusal, Kotlin lease/index checks, saved-workspace scanning, authorization strings, response/error rendering, or plan cleanup;
+* Java/Kotlin/TypeScript toolchain and adapter start, stop, restart, close, cache, index, invalidation, or lease lifecycle;
+* `PatchEngine`, diagnostics regression identity, provider invocation, workspace locking, apply, WAL, post-image verification, automatic rollback, explicit rollback, or recovery.
+
+Daemon post-success diagnostics are specifically excluded because they are not the duplicated gate-selection contract: Java success reporting uses ordinary Java diagnostics even for the Maven ownership operation, external success reports no response diagnostics there, and bounding/cleanup order is daemon-owned. Reusing the selected provider would add calls and change behavior.
+
+No C4 or deployment change follows: this is an implemented internal C3-scale responsibility inside the existing Shared JVM Semantic Composition building block and existing daemon/MCP dependencies. Delegated C4 validation passed with the Structurizr DSL unchanged. Delegated ADR review found no contradiction with accepted ADRs 0002, 0004, or 0006 and no new decision requiring an ADR; `PatchEngine` authority and surface policy remain unchanged. Reconsider ADR/C4 work only if a later proposal changes routing policy, diagnostics authority, protocol/lifecycle ownership, persistence, participants, or runtime relationships.
+
 == Java/Maven Diagnostics Authority
 
 Status: confirmed architecture; active, product-critical. ADR 0012 and `RPK-JAVA-DIAG-001..007` are normative. Release 8/current-release packaged diagnostics and post-model module filtering are first implemented rows; this section does not claim epic completion.
@@ -323,7 +446,7 @@ Status: implementation-informed.
 
 == Managed Rollback Orchestration
 
-Status: implementation-informed for a bounded mutable source-built slice based on RefactorKit commit `27bc8a34b14caf2fce9ae06e4ad5536e49a62c01`. Production evidence is `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/ManagedRollbackExecutor.kt`; inspected adoption is in `RefactorKitCli.kt`, `DaemonSession.kt`, `LspSession.kt`, and `McpSession.kt`; acceptance glue is `ManagedRollbackExecutorCucumberTest.kt` plus `ManagedRollbackExecutorSteps.kt`. REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 define two non-functional definitions/eight cases, all `@implemented-and-validated`. A focused RED proved the mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`); `Refused` now snapshots diagnostics as a detached unmodifiable ordered list. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`). The final official Gherkin audit found 3 features, 16 unique requirement definitions, 32 cases, and 587 expanded steps with zero errors (log SHA-256 `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`). Final independent whole-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). The LLM Wiki concept `managed-rollback-executor`, reviewed 2026-07-31, remains architecture research/recommendation evidence rather than an ADR. Qualification is limited to dated mutable source-built/in-process and aggregate whole-working-tree evidence plus inspected surface adoption: no packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority claim is made.
+Status: implementation-informed for a bounded mutable source-built slice based on RefactorKit commit `27bc8a34b14caf2fce9ae06e4ad5536e49a62c01`. Production evidence is `modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/ManagedRollbackExecutor.kt`; inspected adoption is in `RefactorKitCli.kt`, `DaemonSession.kt`, `LspSession.kt`, and `McpSession.kt`; acceptance glue is `ManagedRollbackExecutorCucumberTest.kt` plus `ManagedRollbackExecutorSteps.kt`. REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 define two non-functional definitions/eight cases, all `@implemented-and-validated`. A focused RED proved the mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`); `Refused` now snapshots diagnostics as a detached unmodifiable ordered list. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`). The historical three-feature official Gherkin audit found 16 unique requirement definitions, 32 cases, and 587 expanded steps with zero errors (log SHA-256 `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`). The current four-feature audit records the two managed-apply selector definitions and their 11 cases as `@implemented-and-validated`; their separately bounded selector evidence does not change this managed-rollback evidence boundary. The earlier four-feature audit that recorded them as `@absent` remains historical pre-promotion evidence (log SHA-256 `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14`). The historical rollback-scoped whole-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). The LLM Wiki concept `managed-rollback-executor`, reviewed 2026-07-31, remains architecture research/recommendation evidence rather than an ADR. Qualification is limited to dated mutable source-built/in-process and aggregate whole-working-tree evidence plus inspected surface adoption: no packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority claim is made.
 
 The implemented `ManagedRollbackExecutor` is a language-neutral core application service for duplicated transaction resolution around the existing public rollback boundary. Its fixed ordering is:
 

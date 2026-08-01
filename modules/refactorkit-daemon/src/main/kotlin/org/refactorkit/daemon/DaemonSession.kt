@@ -18,7 +18,6 @@ import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.CompletionTrigger
 import org.refactorkit.core.Diagnostic
-import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileChangeKind
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
@@ -81,6 +80,7 @@ import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import org.refactorkit.kotlin.KotlinOrganizeImportsPlanner
 import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
+import org.refactorkit.jvm.ManagedApplyDiagnosticsGateSelector
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
 import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
 import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
@@ -1702,26 +1702,13 @@ class DaemonSession(
             plan,
             currentSnap,
             ApplyAuthorization.explicit("daemon-json-rpc"),
-            when (pending.languageId) {
-                "java" -> if (plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION) {
-                    DiagnosticsGate.enabled(
-                        "java-maven-ownership",
-                        JavaMoveAcrossMavenModulesPlanner(adapter)::diagnostics,
-                    )
-                } else DiagnosticsGate.enabled("java-jdt", adapter::diagnostics)
-                "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
-                    DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
-                        when {
-                            plan.operation == "moveDeclaration" -> KotlinJvmMoveDeclarationPlanner(kotlinAdapter).diagnostics(candidate)
-                            plan.evidence == RefactoringEvidence.JDT_BINDING -> JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
-                            else -> KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)
-                        }
-                    }
-                } else DiagnosticsGate.enabled("kotlin-k2") { candidate ->
-                    kotlinAdapter.compilerDiagnostics(candidate).diagnostics
-                }
-                else -> requireSemanticAdapter(pending.languageId).diagnosticsGate()
-            },
+            ManagedApplyDiagnosticsGateSelector.select(
+                plan = plan,
+                languageId = pending.languageId,
+                javaAdapter = adapter,
+                kotlinAdapter = kotlinAdapter,
+                externalGateResolver = { languageId -> requireSemanticAdapter(languageId).diagnosticsGate() },
+            ),
         )) {
             is ApplyResult.Applied -> {
                 val refreshed = scanWorkspace(root)

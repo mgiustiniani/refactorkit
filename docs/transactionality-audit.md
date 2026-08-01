@@ -244,6 +244,24 @@ source-built/in-process evidence is
 `REQ-MANAGED-ROLLBACK-EXECUTOR-001..002`; packaged, cross-platform, concurrent,
 and crash/restart qualification is not inferred.
 
+Daemon and MCP now share only their managed-apply diagnostics-gate routing
+mechanics. `ManagedApplyDiagnosticsGateSelector` receives the current adapters
+and exact original plan metadata, selects the existing gate ID/provider closure,
+and performs no diagnostics during selection. External adapter lookup remains
+synchronous and surface-owned; the returned provider remains lazy. `PatchEngine`
+continues to own under-lock baseline/staged/post-image/restored-baseline provider
+execution, regression comparison, pre-WAL refusal, mutation, verification, and
+automatic rollback.
+
+The selector does not own pending-plan or Kotlin lease checks, scanning,
+authorization, response errors, adapter lifecycle, daemon post-success
+diagnostics, WAL, or recovery. CLI, managed LSP, recipes, testkit, and direct
+library apply retain their different pre-existing gate choices. Bounded
+source-built/in-process evidence is
+`REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001..002`; no packaged, native,
+cross-platform, concurrent, broader apply-authority, or numerical-coverage claim
+is inferred.
+
 ### TX-008 — Recipe transaction boundary
 
 Status: **closed after the audited baseline**.

@@ -365,6 +365,17 @@ daemon-owned, so this extraction adds no method, request, response, error-code,
 or authority change. CLI, managed LSP, and MCP deliberately use the executor's
 narrower `APPLIED_ONLY` visibility.
 
+For managed apply, daemon and MCP also share the stateless
+`ManagedApplyDiagnosticsGateSelector`. The daemon supplies its current Java and
+Kotlin adapters and keeps external semantic-adapter lookup in its existing
+resolver. Selection returns the existing lazy gate without running diagnostics;
+`PatchEngine` still invokes it under lock and owns regression refusal, WAL,
+post-image verification, and automatic rollback. Pending-plan/lease validation,
+authorization, response rendering, post-success bounded diagnostics, index and
+adapter lifecycle remain daemon-owned. This adds no method, request, response,
+error-code, capability, or authority change. CLI, managed LSP, recipes, and
+testkit retain their existing different gate-selection paths.
+
 The importer primary file is the file for the sole public top-level type. With
 multiple public types it is the first declaration in source order, independent
 of set/map or diff ordering.

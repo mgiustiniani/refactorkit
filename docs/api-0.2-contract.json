@@ -457,6 +457,38 @@
     "patchEngineAuthorityUnchanged": true,
     "wireContractChanged": false
   },
+  "managedApplyDiagnosticsGateSelection": {
+    "qualificationScope": "bounded-source-built-in-process",
+    "adoptingSurfaces": [
+      "daemon",
+      "mcp"
+    ],
+    "excludedSurfaces": [
+      "cli",
+      "managed-lsp",
+      "recipes",
+      "testkit",
+      "direct-library"
+    ],
+    "builtInGateIds": [
+      "java-jdt",
+      "java-maven-ownership",
+      "kotlin-k2",
+      "kotlin-k2-java-jdt"
+    ],
+    "selectionMetadata": [
+      "languageId",
+      "plan.operation",
+      "plan.evidence",
+      "plan.affectedFiles"
+    ],
+    "diagnosticsProviderInvocationsDuringSelection": 0,
+    "externalResolverCallsPerExternalSelection": 1,
+    "externalGateReturnedUnchanged": true,
+    "currentAdaptersSuppliedPerCall": true,
+    "patchEngineAuthorityUnchanged": true,
+    "wireContractChanged": false
+  },
   "languageKernel": {
     "schemaVersion": 1,
     "surfaces": [
