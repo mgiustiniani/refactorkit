@@ -39,6 +39,7 @@ import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.WorkspaceSnapshotComposer
 import org.refactorkit.core.WorkspaceIndex
 import org.refactorkit.core.WorkspaceIndexCompleteness
 import org.refactorkit.core.WorkspaceIndexSession
@@ -1299,17 +1300,16 @@ class DaemonSession(
     }
 
     private fun scanWorkspace(root: Path): ProjectSnapshot {
-        val javaSnapshot = scanner.scan(root)
-        val scriptSnapshot = GenericProjectScanner(SCRIPT_EXTENSIONS).scan(root)
-        val mergedFiles = (javaSnapshot.files + scriptSnapshot.files)
-            .associateBy { it.path.normalize() }.values.sortedBy { it.path.toString() }
-        val merged = if (scriptSnapshot.files.isEmpty()) javaSnapshot else javaSnapshot.copy(
-            files = mergedFiles,
-            sourceExtensions = javaSnapshot.sourceExtensions + SCRIPT_EXTENSIONS.keys,
-            ignoredDirectories = javaSnapshot.ignoredDirectories + scriptSnapshot.ignoredDirectories,
+        val currentKotlinToolchain = kotlinToolchain
+        return WorkspaceSnapshotComposer().compose(
+            root = root,
+            authoritativeBaseScanner = scanner::scan,
+            sourceInventoryScanner = GenericProjectScanner(SCRIPT_EXTENSIONS)::scan,
+            conditionalEvidenceAttacher = { snapshot -> TypeScriptBuildModelIntegration.attach(snapshot) },
+            finalEvidenceAttacher = currentKotlinToolchain?.let { toolchain ->
+                { snapshot: ProjectSnapshot -> KotlinJvmBuildModelIntegration.attach(snapshot, toolchain) }
+            },
         )
-        val languageAttached = if (scriptSnapshot.files.isEmpty()) merged else TypeScriptBuildModelIntegration.attach(merged)
-        return kotlinToolchain?.let { KotlinJvmBuildModelIntegration.attach(languageAttached, it) } ?: languageAttached
     }
 
     private fun csvAttribute(value: String?): List<String> = value.orEmpty().split(',')

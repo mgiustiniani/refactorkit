@@ -376,6 +376,22 @@ adapter lifecycle remain daemon-owned. This adds no method, request, response,
 error-code, capability, or authority change. CLI, managed LSP, recipes, and
 testkit retain their existing different gate-selection paths.
 
+Daemon project open, saved-workspace refresh, managed-apply baseline/post-image,
+and rollback refresh now obtain their mixed snapshots through the shared core
+`WorkspaceSnapshotComposer`; MCP uses the same composer at its existing scan and
+mutation-refresh points. The daemon still supplies its configured
+`JavaProjectScanner`, exact TS/TSX/JS/JSX `GenericProjectScanner`, conditional
+TypeScript build-model attachment, and current optional Kotlin/JVM attachment on
+every invocation. An empty script inventory remains exact Java-snapshot
+pass-through before optional Kotlin attachment.
+
+The composer changes no JSON-RPC method, request, response, error, capability, or
+write authority. Saved-workspace watcher timing, refresh refusal/rendering,
+`WorkspaceIndex` reconciliation, pending plans, lexical audit, semantic leases,
+post-apply scan-before-adapter-cleanup, and stored snapshot replacement remain in
+`DaemonSession`. It performs no write, lock, WAL, transaction, apply, recovery, or
+rollback action. CLI and LSP are outside this extraction.
+
 The importer primary file is the file for the sole public top-level type. With
 multiple public types it is the first declaration in source order, independent
 of set/map or diff ordering.

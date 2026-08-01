@@ -83,6 +83,27 @@ leaking local repository layout or secrets. Capability discovery advertises
 MCP `project_summary` exposes the same high-level provider/status/source-set
 information without classpath contents.
 
+## Mixed-workspace snapshot composition
+
+Daemon and MCP use the language-neutral core `WorkspaceSnapshotComposer` to
+preserve one ordered mixed-workspace pipeline without moving concrete provider
+policy into core. The authoritative primary snapshot retains workspace, modules,
+classpath evidence, build models, and auxiliary files. A non-empty secondary
+source inventory may replace normalized-path source entries and contributes only
+its files, source-extension declarations, and ignored directories. Conditional
+TypeScript build evidence is attached after that overlay; optional current
+Kotlin/JVM evidence is attached last because its projection hash binds the
+pre-attachment snapshot.
+
+An empty secondary source inventory preserves the exact primary snapshot and does
+not attach TypeScript evidence, even when a configuration file is present. The
+composer accepts scanners and attachers per invocation, retains none of them,
+and propagates their exact failures. It imports no concrete language adapter and
+executes no build or project code. Scanner selection, toolchain availability,
+refresh/index/session lifecycle, and all mutation authority remain outside this
+internal composition contract. Bounded evidence is
+`REQ-WORKSPACE-SNAPSHOT-COMPOSER-001..005`; CLI and LSP remain unchanged.
+
 ## Authoritative Java/Maven diagnostics boundary
 
 Status: active, product-critical. Full-reactor modeling and post-model module

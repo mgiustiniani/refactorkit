@@ -289,6 +289,34 @@ source-built/in-process evidence is provided by
 `REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001..002`; packaged, native,
 cross-platform, concurrent, and broader apply qualification remain separate.
 
+### Workspace snapshot composition
+
+Daemon and MCP now delegate their identical mixed-workspace snapshot pipeline to
+the stateless, language-neutral core `WorkspaceSnapshotComposer`. Each invocation
+receives the surface's current primary scanner, secondary source-inventory
+scanner, conditional evidence attacher, and optional final evidence attacher. An
+empty secondary inventory preserves the exact authoritative base instance before
+the optional final attachment. A non-empty inventory overlays only files, source
+extensions, and ignored directories; normalized-path collisions retain the later
+source, and surviving files are ordered by `Path.toString()`.
+
+Concrete language policy remains outside core. Daemon and MCP still supply the
+exact TS/TSX/JS/JSX mapping, attach TypeScript build evidence only for a non-empty
+script inventory, and attach current Kotlin/JVM evidence last only when a current
+toolchain exists. Scanner and attacher exceptions propagate unchanged. The
+composer retains no collaborator or session state and owns no watcher, index,
+pending-plan, semantic lifecycle, diagnostics, `PatchEngine`, lock, WAL,
+transaction, rollback, or protocol behavior.
+
+This extraction changes neither project-open/scan methods nor response shapes.
+Saved-workspace refresh timing, post-apply scan-before-cleanup ordering, stored
+snapshot replacement, index reconciliation, and invalidation remain surface
+policy. CLI and LSP do not adopt the composer in this slice. Bounded
+source-built/in-process evidence is provided by
+`REQ-WORKSPACE-SNAPSHOT-COMPOSER-001..005`; daemon/MCP adoption is source-inspected
+and regression-tested, not packaged, native, cross-platform, concurrent, or
+numerical-coverage qualification.
+
 ### `server.version` contract
 
 `server.version` is a read-only beta-contract method for compatibility checks.

@@ -262,6 +262,23 @@ source-built/in-process evidence is
 cross-platform, concurrent, broader apply-authority, or numerical-coverage claim
 is inferred.
 
+Daemon and MCP mixed-workspace acquisition now shares only the language-neutral
+`WorkspaceSnapshotComposer`. It invokes per-call scanners in order, conditionally
+overlays source inventory and TypeScript build evidence, and applies optional
+current Kotlin/JVM evidence last. Empty secondary inventory preserves the exact
+base snapshot before that optional final attachment. The composer has no retained
+state and does not catch or reinterpret provider failures.
+
+This is read-side snapshot composition, not transaction or refresh authority.
+Watcher timing, stored snapshot replacement, index reconciliation, semantic
+session cleanup, pending-plan/audit invalidation, diagnostics, and protocol
+responses remain surface-owned. `PatchEngine` still independently validates the
+caller-supplied composed snapshot under its lock and exclusively owns WAL,
+mutation, post-image verification, compensation, rollback, and recovery. Bounded
+source-built/in-process evidence is
+`REQ-WORKSPACE-SNAPSHOT-COMPOSER-001..005`; CLI/LSP and packaged, concurrent,
+cross-platform, crash/restart, and numerical-coverage claims are excluded.
+
 ### TX-008 — Recipe transaction boundary
 
 Status: **closed after the audited baseline**.
