@@ -14,6 +14,20 @@ data class DiagnosticsGate(
         fun disabled(id: String) = DiagnosticsGate(id, null)
         fun authoritative(id: String, provider: AuthoritativeDiagnosticsProvider) =
             DiagnosticsGate(id, AuthoritativeDiagnosticsAdapter(provider))
+
+        /**
+         * Retains PatchEngine's authoritative path while deferring operation-gate
+         * construction until the first authoritative candidate evaluation.
+         */
+        fun lazyAuthoritative(
+            id: String,
+            gateFactory: () -> DiagnosticsGate,
+        ) = DiagnosticsGate(
+            id,
+            AuthoritativeDiagnosticsAdapter(
+                LazyAuthoritativeDiagnosticsProvider(id, gateFactory),
+            ),
+        )
     }
 }
 
@@ -22,6 +36,24 @@ private class AuthoritativeDiagnosticsAdapter(
 ) : (ProjectSnapshot) -> List<Diagnostic> {
     override fun invoke(candidate: ProjectSnapshot): List<Diagnostic> =
         delegate.evaluate(candidate).diagnostics
+}
+
+private class LazyAuthoritativeDiagnosticsProvider(
+    private val expectedGateId: String,
+    gateFactory: () -> DiagnosticsGate,
+) : AuthoritativeDiagnosticsProvider {
+    private val delegate: AuthoritativeDiagnosticsProvider by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        val gate = gateFactory()
+        require(gate.id == expectedGateId) {
+            "Lazy authoritative gate factory returned '${gate.id}' instead of '$expectedGateId'"
+        }
+        requireNotNull(gate.authoritativeProvider) {
+            "Lazy authoritative gate factory returned a non-authoritative gate '$expectedGateId'"
+        }
+    }
+
+    override fun evaluate(candidate: ProjectSnapshot): AuthoritativeDiagnosticsEvaluation =
+        delegate.evaluate(candidate)
 }
 
 internal val DiagnosticsGate.authoritativeProvider: AuthoritativeDiagnosticsProvider?

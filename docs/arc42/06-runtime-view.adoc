@@ -597,6 +597,66 @@ relationships, so no dynamic C4 view is justified. Protocols, recipes,
 packaged/native/cross-platform execution, general Maven projects, native CI, and
 release-wide support remain unqualified; `docs/c4/workspace.dsl` is unchanged.
 
+== Implemented Runtime Scenario: Exact Maven Module-rename Authoritative Selection
+
+Status: implementation-informed for REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-001
+only. The requirement is explicitly `@non-functional-requirement` and
+`@implemented-and-validated`. The final official JDK 21 focused rerun passed one
+scenario, all 25 scenario steps plus six inherited Background steps (31
+expanded), and two hooks, with no failures, skips, or undefined results. The
+focused log SHA-256 is
+`4e826737d94150bcebe0a38d3fee970e84339532f3fe4ef07189da2506bdedef`; the
+Cucumber JSON SHA-256 is
+`2cf337ab1f963b133222b941df0fd577b9518794e60d23dde81390ba6e760a4c`.
+Independent review returned `PASS_FOR_PROMOTION`. The existing selector 11/92
+and direct module-rename 1/50 Cucumber regressions passed, as did focused core,
+Java, daemon, and MCP regressions. The subsequent required
+`./gradlew --no-daemon --rerun-tasks check goldenTest` gate is authoritative for
+the promoted tree: `BUILD SUCCESSFUL` in 7m 31s with 82/82 tasks; standard
+`test` XML only, excluding the intentionally separate stale packaged Maven task,
+reconciles 146 files, 1,068 discovered, 835 executed, 233 skipped/tag-filtered,
+and zero failures/errors (log SHA-256
+`663ddcf3cb836fa2058d65160b57df19202b2f1908a0331faeb96ee6ca66209d`; XML
+manifest SHA-256
+`bca4e1f718f56ce3095ef9168267b42506f467ec5b1046408e764b1948502905`).
+Static analysis remains configured non-blocking, and no aggregate numerical
+coverage is claimed. Earlier RED, implementation, and focused receipts remain
+historical.
+
+[cols="1,3",options="header"]
+|===
+|Step |Validated interaction
+
+|1
+|A caller retains the canonical `java.renameMavenModule` preview, immutable authority lease, exact `S0`, tracked candidate `C1`, authoritative `S1`, and `D0` supplied by the already-qualified direct-library row. This requirement does not add a preview route or reconstruct those values.
+
+|2
+|The normal five-argument `ManagedApplyDiagnosticsGateSelector.select` receives exact language ID `java`, the retained plan, and current adapters. It compares the raw operation against public `JavaRenameMavenModulePlanner.OPERATION`; public `DIAGNOSTICS_GATE_ID` supplies exact gate ID `java-rename-maven-module-staged-reactor-v1`. The constants grant neither approval nor provider authority.
+
+|3
+|Only exact raw operation `java.renameMavenModule` takes that branch. Case changes, missing prefix, another Maven operation, leading/trailing U+0020, and ordinary Java operations retain their exact raw bytes and take their real existing Maven-ownership or Java-JDT fallbacks. Selection performs no trimming, case-folding, prefixing, aliasing, or relabelling.
+
+|4
+|The exact branch returns `DiagnosticsGate.lazyAuthoritative`. Gate creation and ID inspection do not construct or invoke the operation gate, run fallback providers, analyze Maven/JDT, start a child process, access the case workspace, or perform an attributable socket read/write.
+
+|5
+|At first evaluation, the language-neutral lazy provider constructs the retained operation gate once through `LazyThreadSafetyMode.SYNCHRONIZED`, requires the returned gate to have the exact expected ID and an authoritative provider, and reuses that provider thereafter. The API exposes no evaluation observer. A separate inert mechanics probe validated zero constructions before evaluation and exactly one across three evaluations without participating in the production apply.
+
+|6
+|One explicitly approved `PatchEngine.apply` receives the exact retained plan and production-selected gate. The operation-owned provider evaluates exact baseline `S0`, staged candidate `C1`, and committed `S1`; generic `java-jdt` and `java-maven-ownership` fallbacks are not invoked for this apply. No caller-supplied operation-gate factory, observer, fallback function, or mechanics gate participates.
+
+|7
+|The sole schema-v8 transaction reaches `APPLIED` with the canonical operation, five-entry edit, approval, pre/post snapshots, and history. Normal rollback advances that same record to `ROLLED_BACK`, creates no second transaction, and restores exact `S0`/`D0` without mutating the permanent fixture.
+
+|8
+|Observed child-process and attributable socket activity remains zero for this bounded sequence. CLI/LSP/MCP preview routes, recipes, public daemon/MCP behavior beyond selector selection, packaged/native/cross-platform execution, general Maven projects, release qualification, and broad support remain outside the validated runtime view; REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-003 owns future daemon/MCP adoption evidence.
+|===
+
+This remains an internal selector -> Core `DiagnosticsGate` -> Java planner ->
+`PatchEngine` sequence over existing participants and relationships. It adds no
+runtime participant, protocol, deployment node, or durable store, so no dynamic
+C4 or Structurizr change is justified.
+
 == Planned Runtime Scenario: Kotlin Companion Move Refusal
 
 Status: confirmed planned behavior; the local P0 build-scaffolding gate is resolved, but the production correction and its executable qualification remain open.

@@ -477,10 +477,10 @@ internal object JavaRenameMavenModuleContract {
         else -> value
     }
 
-    const val OPERATION = "java.renameMavenModule"
+    const val OPERATION = JavaRenameMavenModulePlanner.OPERATION
     const val MAVEN_PROVIDER = "maven-effective-v1"
     const val LEASE_KIND = "java.renameMavenModule.maven-effective-v1"
-    const val DIAGNOSTICS_GATE_ID = "java-rename-maven-module-staged-reactor-v1"
+    const val DIAGNOSTICS_GATE_ID = JavaRenameMavenModulePlanner.DIAGNOSTICS_GATE_ID
     const val FIXTURE_REPOSITORY = "fixture-repository"
     const val SOURCE_UNRECOGNIZED = "mavenOwnership.sourceUnrecognized"
     const val DESTINATION_UNRECOGNIZED = "mavenOwnership.destinationUnrecognized"

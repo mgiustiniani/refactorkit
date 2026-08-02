@@ -129,6 +129,8 @@ the wider configured SpotBugs baseline remains non-blocking.
 
 Status: implementation-informed within a bounded source-built/in-process selector and daemon/MCP regression boundary, with dated whole-working-tree aggregate evidence. REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002 and all 11 expanded cases in `features/managed-apply-diagnostics-gate-selector.feature` are `@implemented-and-validated`. Production evidence is `modules/refactorkit-jvm/src/main/kotlin/org/refactorkit/jvm/ManagedApplyDiagnosticsGateSelector.kt`; source inspection confirms adoption only in `DaemonSession.refactorApply` and `McpSession.toolApplyRefactoring`; the JVM module build supplies the feature resource plus Cucumber/JUnit scaffold, and `ManagedApplyDiagnosticsGateSelectorCucumberTest.kt` with its steps supplies acceptance glue. Final independent OpenJDK 21.0.11 acceptance passed 11/11 scenarios and 92/92 steps with zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `74749cf8635d7bbbac3abb4a3eeaf669f6aab3d58770e423094ce791c7882997`); daemon regression passed 58/58 and MCP regression passed 26/26. The preceding official four-feature audit recorded 18 unique definitions, 43 cases, and 679 expanded steps, all implemented-and-validated with zero errors (log SHA-256 `fb7c81a1d3223e6959d6838ac38c5c737f1bf8804570489405ed59bc1a279bc7`). The preceding official five-feature audit recorded 23 unique definitions, 51 cases, 340 declared steps, and 744 expanded steps, all implemented-and-validated with zero parse/tag/status/duplicate-ID errors (log SHA-256 `b40dc349e7d500b8d5068c15869c4908fb89c68519041e0006c60e2fd9b58867`). Final whole-working-tree source-built verification on the same OpenJDK used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 11s; 1021 discovered, 801 executed, 220 skipped/tag-filtered, zero failures/errors; 78 tasks; log SHA-256 `e3e4b3e02fac87003f12cbf87801298653eb12e43c213d1f40fe5177ece75e02`. The standalone `:modules:refactorkit-jvm:compileTestKotlin --rerun-tasks` command initially failed because `testRuntimeClasspath` was resolved eagerly during configuration (RED log SHA-256 `798419c8a27a9a0c9ca74dd3d41ab2851acfb84d3d4f492002aaed71bfafa98a`); it passed after the compiler-classpath system property was deferred to test execution (GREEN log SHA-256 `c0ee8f6dfc932015dbb8b2067a3f3637c2208b6888a72bc672369bbb3d5df7e7`). This RED/GREEN pair is build-scaffold correctness evidence only, not product or package qualification. The selector's initial one production NP finding was eliminated by making the final-segment non-null requirement explicit. The final full log contains no production finding for `ManagedApplyDiagnosticsGateSelector.kt` or its provider functions; 23 glue-only Kotlin/generated findings remain non-blocking (2 RCN, 13 MS, 1 SA, 7 BC), and the broader configured SpotBugs baseline remains non-blocking. The 2026-07-31 EARLY review at commit `642c1876848bf7f10dcbcc25be36fdd616b930f6` and pre-promotion audit SHA-256 `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14` remain historical evidence. This qualification covers selector behavior, daemon/MCP regression, and dated source-built aggregate verification only; it makes no packaged, native, cross-platform, concurrent, apply-authority, or numerical-coverage claim.
 
+REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-001 later adds one exact operation-owned route without changing the component boundary. `DiagnosticsGate.lazyAuthoritative` is language-neutral; it defers authoritative gate construction through gate creation and ID inspection, uses synchronized one-time construction, validates exact gate identity plus authoritative-provider presence, and exposes no observer. Exact raw operation `java.renameMavenModule` selects `java-rename-maven-module-staged-reactor-v1`; every case/spacing/prefix/alias non-match retains the real existing fallback. The final official JDK 21 focused acceptance passed one scenario, all 25 scenario steps plus six Background steps (31 expanded), and two hooks, with no failures, skips, or undefined results (log SHA-256 `4e826737d94150bcebe0a38d3fee970e84339532f3fe4ef07189da2506bdedef`; Cucumber JSON SHA-256 `2cf337ab1f963b133222b941df0fd577b9518794e60d23dde81390ba6e760a4c`), and independent review returned `PASS_FOR_PROMOTION`. The subsequent required whole-tree gate passed in 7m 31s with 82/82 tasks; standard `test` XML only, excluding the intentionally separate stale packaged Maven task, reconciles 146 files, 1,068 discovered, 835 executed, 233 skipped/tag-filtered, and zero failures/errors (log SHA-256 `663ddcf3cb836fa2058d65160b57df19202b2f1908a0331faeb96ee6ca66209d`; XML manifest SHA-256 `bca4e1f718f56ce3095ef9168267b42506f467ec5b1046408e764b1948502905`). Static analysis remains configured non-blocking, and no aggregate numerical coverage is claimed. This qualifies one production-selector/direct-`PatchEngine` apply/normal-rollback sequence, not public daemon/MCP behavior beyond selector selection or any preview route.
+
 ==== Smallest Shared Boundary
 
 The implemented extraction is the formerly identical `DiagnosticsGate` selection passed to `PatchEngine.apply` by `DaemonSession.refactorApply` and `McpSession.toolApplyRefactoring`. It belongs in `refactorkit-jvm`, which already depends on core, Java, and Kotlin while both adopting surfaces already depend on it. Core remains language-independent; `refactorkit-jvm` gains no TypeScript, daemon, MCP, protocol, filesystem, WAL, or lifecycle dependency.
@@ -148,9 +150,9 @@ object ManagedApplyDiagnosticsGateSelector {
 }
 ----
 
-It accepts no `ProjectSnapshot`, diagnostics provider, process manager, lease, index, root, renderer, or lifecycle collaborator. It returns one `DiagnosticsGate`, not diagnostics, a provider result, route enum, apply result, or wrapped adapter. It must not retain adapters: Kotlin semantic start replaces the initial unconfigured adapter with a K2-configured instance, and stop/refresh/success/close can reset it. Each apply therefore supplies the exact Java and Kotlin adapter instances current at that attempt.
+It accepts no `ProjectSnapshot`, diagnostics provider, process manager, index, root, renderer, or lifecycle collaborator. It returns one `DiagnosticsGate`, not diagnostics, a provider result, route enum, apply result, or wrapped adapter. It must not retain adapters: each call receives the current Java and Kotlin instances. The exact module-rename result may retain only the immutable supplied plan and its operation lease inside the returned gate so the operation-owned provider can be constructed at first evaluation; the selector itself remains stateless.
 
-Selection metadata is limited to exact `PendingPlan.languageId` plus the original `PatchPlan.operation`, `PatchPlan.evidence`, and `PatchPlan.affectedFiles`. The selector must not infer language from source content/snapshot files, recompute affected files from `WorkspaceEdit`, normalize case, or validate that metadata looks like an expected planner result.
+Selection metadata is limited to the exact caller-supplied language ID (`PendingPlan.languageId` at the two production surface call sites) plus the original `PatchPlan.operation`, `PatchPlan.evidence`, and `PatchPlan.affectedFiles`. The selector must not infer language from source content/snapshot files, recompute affected files from `WorkspaceEdit`, normalize case, or validate that metadata looks like an expected planner result.
 
 ==== Exact Ordered Branch Table
 
@@ -161,36 +163,41 @@ Rows are precedence-ordered; a later row is evaluated only after earlier predica
 |Order |Exact predicate |Gate ID |Provider or returned gate
 
 |1
-|`languageId == "java"` and `plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION` (`"java.moveAcrossMavenModules"`)
+|`languageId == "java"` and `plan.operation == JavaRenameMavenModulePlanner.OPERATION` (`"java.renameMavenModule"`)
+|`java-rename-maven-module-staged-reactor-v1`
+|Return `DiagnosticsGate.lazyAuthoritative` bound to the same immutable plan/lease; first evaluation constructs `JavaRenameMavenModulePlanner().diagnosticsGate(plan)` exactly once
+
+|2
+|`languageId == "java"` and row 1 failed, but `plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION` (`"java.moveAcrossMavenModules"`)
 |`java-maven-ownership`
 |`JavaMoveAcrossMavenModulesPlanner(javaAdapter)::diagnostics`
 
-|2
-|`languageId == "java"` after row 1 fails
+|3
+|`languageId == "java"` after rows 1-2 fail
 |`java-jdt`
 |`javaAdapter::diagnostics`
 
-|3
+|4
 |`languageId == "kotlin"`, Java-affected predicate true, and `plan.operation == "moveDeclaration"`
 |`kotlin-k2-java-jdt`
 |`KotlinJvmMoveDeclarationPlanner(kotlinAdapter).diagnostics(candidate)`
 
-|4
+|5
 |`languageId == "kotlin"`, Java-affected true, operation is not `moveDeclaration`, and `plan.evidence == RefactoringEvidence.JDT_BINDING`
 |`kotlin-k2-java-jdt`
 |`JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)`
 
-|5
-|`languageId == "kotlin"`, Java-affected true, and rows 3-4 failed
+|6
+|`languageId == "kotlin"`, Java-affected true, and rows 4-5 failed
 |`kotlin-k2-java-jdt`
 |`KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(candidate)`
 
-|6
+|7
 |`languageId == "kotlin"` and Java-affected predicate false
 |`kotlin-k2`
 |`kotlinAdapter.compilerDiagnostics(candidate).diagnostics`
 
-|7
+|8
 |Every other exact language ID
 |resolver-owned
 |Return `externalGateResolver(languageId)` unchanged
@@ -205,16 +212,17 @@ plan.affectedFiles.any {
 }
 ----
 
-This reads the original plan metadata before `PatchEngine` normalizes the workspace edit and replaces its internal plan's affected-file set. `Objects.requireNonNull` makes the original platform-null final-segment requirement explicit: a root path still raises `NullPointerException`, as the earlier implicit dereference did. The predicate remains case-sensitive and tests only the final segment: `Foo.java` matches, `Foo.JAVA` does not, and a directory named `Foo.java` whose final segment is `Actually.kt` does not match. Exact language IDs are also case-sensitive and are neither lowercased nor normalized. The Maven operation test exists only inside the exact Java branch. For Kotlin, the Java-affected split precedes operation/evidence routing; within the mixed branch, `moveDeclaration` wins even with `JDT_BINDING`, then `JDT_BINDING` wins, and every other metadata combination takes the broad fallback. The production mixed gate ID remains exactly `kotlin-k2-java-jdt`; a longer planner-test label is not substituted.
+This reads the original plan metadata before `PatchEngine` normalizes the workspace edit and replaces its internal plan's affected-file set. `Objects.requireNonNull` makes the original platform-null final-segment requirement explicit: a root path still raises `NullPointerException`, as the earlier implicit dereference did. The predicate remains case-sensitive and tests only the final segment: `Foo.java` matches, `Foo.JAVA` does not, and a directory named `Foo.java` whose final segment is `Actually.kt` does not match. Exact language IDs are also case-sensitive and are neither lowercased nor normalized. Both Maven operation tests exist only inside the exact Java branch. The module-rename test has first Java precedence and uses public planner constants; raw operation identity is not trimmed, case-folded, prefixed, aliased, or relabelled. For Kotlin, the Java-affected split precedes operation/evidence routing; within the mixed branch, `moveDeclaration` wins even with `JDT_BINDING`, then `JDT_BINDING` wins, and every other metadata combination takes the broad fallback. The production mixed gate ID remains exactly `kotlin-k2-java-jdt`; a longer planner-test label is not substituted.
 
 ==== Laziness, External Resolution, and Ordering
 
-Calling `select` must invoke zero diagnostics providers. Constructing a `DiagnosticsGate`, binding the Maven planner as today, or creating a provider closure is allowed; no Java adapter diagnostics, Maven rebuild, K2/compiler diagnostics, JDT analysis, ephemeral Java compilation, or external synchronized diagnostics may run. Mixed planners remain instantiated inside their provider closure so they use the supplied current Kotlin adapter when the provider runs.
+Calling `select` must invoke zero diagnostics providers. For the exact module-rename row it creates only `DiagnosticsGate.lazyAuthoritative`; reading its ID still constructs neither the Java planner gate nor its provider. On first evaluation, core's private lazy authoritative provider uses `LazyThreadSafetyMode.SYNCHRONIZED` to construct one delegate, requires the factory's gate ID to equal the declared ID, requires an authoritative provider, and reuses it for all evaluations. There is deliberately no evaluation observer; the production selector supplies its own factory, and no caller- or test-supplied factory participates in the production apply. Other built-in closures remain lazy, and no Java adapter diagnostics, Maven rebuild, K2/compiler diagnostics, JDT analysis, ephemeral Java compilation, or external synchronized diagnostics may run at selection.
 
-The external resolver is called exactly once and only for row 7 during selection. Daemon supplies its existing `requireSemanticAdapter(languageId).diagnosticsGate()` behavior, including exact TypeScript/JavaScript validation and daemon-specific exceptions; MCP supplies its existing map lookup and MCP-specific exception wording. Resolver exceptions propagate unchanged. The returned gate—including `typescript-compiler-exact-v1` today—is returned unchanged and opaque to `refactorkit-jvm`. The active adapter lookup therefore happens now, but semantic-scope/completeness/toolchain/project-evidence checks and synchronized diagnostics happen later when `PatchEngine` invokes the returned provider. Deferring lookup would remap a missing-adapter protocol error to `diagnostics.unavailable`; eagerly invoking the provider would violate the lock boundary.
+The external resolver is called exactly once and only for row 8 during selection. Daemon supplies its existing `requireSemanticAdapter(languageId).diagnosticsGate()` behavior, including exact TypeScript/JavaScript validation and daemon-specific exceptions; MCP supplies its existing map lookup and MCP-specific exception wording. Resolver exceptions propagate unchanged. The returned gate—including `typescript-compiler-exact-v1` today—is returned unchanged and opaque to `refactorkit-jvm`. The active adapter lookup therefore happens now, but semantic-scope/completeness/toolchain/project-evidence checks and synchronized diagnostics happen later when `PatchEngine` invokes the returned provider. Deferring lookup would remap a missing-adapter protocol error to `diagnostics.unavailable`; eagerly invoking the provider would violate the lock boundary.
 
 Provider output is also preserved verbatim:
 
+* Exact module rename delegates authoritative S0/C1/S1 evaluation to the retained operation-owned gate; generic Java and Maven-ownership providers are not fallback observers for that apply.
 * Maven ownership delegates to the supplied Java adapter when no `maven-pom` auxiliary file exists; otherwise its provider materializes tracked files, rebuilds the Maven model offline, and runs that same adapter. This work remains lazy.
 * Ordinary Java returns `javaAdapter.diagnostics` without selector-level transformation.
 * Kotlin-only returns `KotlinCompilerDiagnosticsResult.diagnostics` directly, including singleton refused/error diagnostics.
@@ -225,7 +233,7 @@ The selector performs no sorting, deduplication, severity conversion, tagging, b
 
 ==== PatchEngine Authority and Explicit Exclusions
 
-The authority sequence below remains the exact current diagnostics-only behavior. The planned model-changing authoritative evaluation is additive and does not alter selector routing, gate identity, or existing call sites:
+The authority sequence below remains unchanged for diagnostics-only gates. The implemented exact module-rename branch instead uses the already-qualified model-changing authoritative S0/C1/S1 path; adding its lazy selector route changes neither `PatchEngine` ownership nor any other gate identity:
 
 . The surface validates pending identity and its Kotlin lease/index rules, resolves the root, and scans the saved workspace.
 . It selects a lazy gate; only external active-adapter lookup may occur at this point.
@@ -237,7 +245,7 @@ The authority sequence below remains the exact current diagnostics-only behavior
 
 The selector owns none of the following:
 
-* CLI, managed LSP, recipes, testkit, or direct library apply sites;
+* CLI, managed LSP, recipes, testkit, or direct-library selector adoption; all CLI/LSP/MCP preview routes and public daemon/MCP behavior beyond selection;
 * daemon post-success response diagnostics or diagnostics bounding;
 * preview planner routing, preview diagnostics, diagnostics queries, context/query resources, or symbol/index routes;
 * pending-plan identity, lexical-review refusal, Kotlin lease/index checks, saved-workspace scanning, authorization strings, response/error rendering, or plan cleanup;
@@ -288,7 +296,7 @@ There is no persistence classification to add: the output is an in-memory immuta
 
 == `v0.7.x` Completion Authority
 
-Status: confirmed program architecture; remaining implementation is planned or otherwise open unless a separately cited bounded row is already qualified. The normative satellite is link:../requirements/v0.7.x-completion-contract.md[`docs/requirements/v0.7.x-completion-contract.md`]. The requirements appendix decomposes the non-Gherkin completion rows without altering the existing 32-definition/76-case Gherkin inventory.
+Status: confirmed program architecture; remaining implementation is planned or otherwise open unless a separately cited bounded row is already qualified. The normative satellite is link:../requirements/v0.7.x-completion-contract.md[`docs/requirements/v0.7.x-completion-contract.md`]. The requirements appendix separates non-Gherkin completion rows from the current 37-definition/82-case Gherkin inventory (33/77 implemented-and-validated and 4/5 absent).
 
 The cross-cutting invariant is that operation authority survives every translation and composition boundary. A surface, recipe, generic operation label, confidence value, approval, source-file presence, or another operation's acceptance cannot manufacture semantic or release authority.
 

@@ -9,6 +9,14 @@ import org.refactorkit.core.ProjectSnapshot
  * Directory and artifact identity are independent caller intents; neither is inferred.
  */
 class JavaRenameMavenModulePlanner {
+    companion object {
+        /** Exact managed-operation identity; this constant grants no apply authority. */
+        const val OPERATION = "java.renameMavenModule"
+
+        /** Exact operation-owned diagnostics identity; this constant grants no provider authority. */
+        const val DIAGNOSTICS_GATE_ID = "java-rename-maven-module-staged-reactor-v1"
+    }
+
     fun preview(
         snapshot: ProjectSnapshot,
         oldModuleDir: String,

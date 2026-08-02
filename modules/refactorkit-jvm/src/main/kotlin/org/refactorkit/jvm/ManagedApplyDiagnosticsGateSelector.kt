@@ -7,6 +7,7 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
+import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import java.util.Objects
 
@@ -24,6 +25,7 @@ internal data class ManagedApplyDiagnosticsProviderFunctions(
  *
  * Implements REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001 and
  * REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-002 without invoking a diagnostics provider.
+ * REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-001 adds one exact lazy authoritative route.
  */
 object ManagedApplyDiagnosticsGateSelector {
     fun select(
@@ -66,12 +68,17 @@ object ManagedApplyDiagnosticsGateSelector {
         externalGateResolver: (String) -> DiagnosticsGate,
         providerFunctions: ManagedApplyDiagnosticsProviderFunctions,
     ): DiagnosticsGate = when (languageId) {
-        "java" -> if (plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION) {
-            DiagnosticsGate.enabled("java-maven-ownership") { candidate ->
-                providerFunctions.javaMavenOwnership(javaAdapter, candidate)
+        "java" -> when (plan.operation) {
+            JavaRenameMavenModulePlanner.OPERATION -> DiagnosticsGate.lazyAuthoritative(
+                JavaRenameMavenModulePlanner.DIAGNOSTICS_GATE_ID,
+            ) {
+                JavaRenameMavenModulePlanner().diagnosticsGate(plan)
             }
-        } else {
-            DiagnosticsGate.enabled("java-jdt") { candidate ->
+            JavaMoveAcrossMavenModulesPlanner.OPERATION ->
+                DiagnosticsGate.enabled("java-maven-ownership") { candidate ->
+                    providerFunctions.javaMavenOwnership(javaAdapter, candidate)
+                }
+            else -> DiagnosticsGate.enabled("java-jdt") { candidate ->
                 providerFunctions.javaJdt(javaAdapter, candidate)
             }
         }
