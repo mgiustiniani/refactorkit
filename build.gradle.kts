@@ -115,5 +115,5 @@ tasks.register("packageCliRuntime") {
 tasks.register("distCliRuntimeZip") {
     group = "distribution"
     description = "Build the zipped self-contained RefactorKit CLI package."
-    dependsOn(":modules:refactorkit-cli:refactorkitRuntimeDist")
+    dependsOn(":modules:refactorkit-cli:refactorkitRuntimeZip")
 }
