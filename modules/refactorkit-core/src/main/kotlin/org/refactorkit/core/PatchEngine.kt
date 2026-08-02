@@ -371,10 +371,11 @@ class PatchEngine(
             )
             val changedSourceManaged = driftedFile.path.normalize() in
                 plan.workspaceEdit.affectedFiles().map(Path::normalize)
+            val canonicalPath = ProtocolPath.serialize(driftedFile.path)
             val details = DiagnosticDetails(buildMap {
                 put("authorityLayer", "EVIDENCE_FRESHNESS")
                 put("evidenceKind", driftedFile.kind)
-                put("path", driftedFile.path.toString().replace('\\', '/'))
+                put("path", canonicalPath)
                 put("expectedContentSha256", driftedFile.expectedContentSha256)
                 put("observedContentSha256", observedContentSha256)
                 put("expectedRequiredFileEvidenceSha256", lease.requiredFileEvidenceSha256)
@@ -387,7 +388,7 @@ class PatchEngine(
                 put("changedSourceManaged", changedSourceManaged.toString())
             })
             return listOf(Diagnostic(
-                "Operation-authority lease evidence drift: kind=${driftedFile.kind} path=${driftedFile.path} " +
+                "Operation-authority lease evidence drift: kind=${driftedFile.kind} path=$canonicalPath " +
                     "expectedContentSha256=${driftedFile.expectedContentSha256} " +
                     "observedContentSha256=$observedContentSha256 " +
                     "expectedRequiredFileEvidenceSha256=${lease.requiredFileEvidenceSha256} " +

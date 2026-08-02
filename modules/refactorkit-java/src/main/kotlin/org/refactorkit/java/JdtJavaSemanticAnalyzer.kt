@@ -139,7 +139,7 @@ class JdtJavaSemanticAnalyzer {
         additionalClasspathEntries: List<Path>,
         platformAuthorities: Map<Int, JavaReleasePlatformAuthority>,
         platformClasspaths: Map<Int, JavaReleasePlatformClasspath>,
-    ): JdtJavaSemanticAnalysisResult {
+    ): JdtJavaSemanticAnalysisResult = JdtClasspathResourceScope().use { classpathResources ->
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
             .map { file ->
@@ -189,7 +189,7 @@ class JdtJavaSemanticAnalyzer {
                     ?: 25
                 analyzeFileWithReferences(
                     file, sourceRoots, classpathEntries, sourceLevel,
-                    platformAuthorities[sourceLevel], platformClasspaths[sourceLevel],
+                    platformAuthorities[sourceLevel], platformClasspaths[sourceLevel], classpathResources,
                 )
             }
         if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
@@ -372,7 +372,17 @@ class JdtJavaSemanticAnalyzer {
     }
 
     fun analyzeFile(file: SourceFile, sourceLevel: Int = 25): List<JdtJavaSemanticSymbol> =
-        analyzeFileWithReferences(file, emptyArray(), emptyArray(), sourceLevel.coerceIn(8, 25), null, null).symbols
+        JdtClasspathResourceScope().use { classpathResources ->
+            analyzeFileWithReferences(
+                file,
+                emptyArray(),
+                emptyArray(),
+                sourceLevel.coerceIn(8, 25),
+                null,
+                null,
+                classpathResources,
+            ).symbols
+        }
 
     private fun analyzeFileWithReferences(
         file: SourceFile,
@@ -381,9 +391,18 @@ class JdtJavaSemanticAnalyzer {
         sourceLevel: Int,
         platformAuthority: JavaReleasePlatformAuthority?,
         platformClasspath: JavaReleasePlatformClasspath?,
+        classpathResources: JdtClasspathResourceScope,
     ): FileAnalysis {
         if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
-        val compilationUnit = parse(file, sourceRoots, classpathEntries, sourceLevel, platformAuthority, platformClasspath)
+        val compilationUnit = parse(
+            file,
+            sourceRoots,
+            classpathEntries,
+            sourceLevel,
+            platformAuthority,
+            platformClasspath,
+            classpathResources,
+        )
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
         val rawReferences = mutableListOf<RawReference>()
@@ -963,6 +982,7 @@ class JdtJavaSemanticAnalyzer {
         sourceLevel: Int,
         platformAuthority: JavaReleasePlatformAuthority?,
         platformClasspath: JavaReleasePlatformClasspath?,
+        classpathResources: JdtClasspathResourceScope,
     ): CompilationUnit {
         val parser = ASTParser.newParser(AST.JLS25)
         parser.setKind(ASTParser.K_COMPILATION_UNIT)
@@ -987,6 +1007,7 @@ class JdtJavaSemanticAnalyzer {
         parser.setResolveBindings(true)
         parser.setBindingsRecovery(true)
         parser.setStatementsRecovery(true)
+        classpathResources.prepare(parser)
         platformClasspath?.prepare(parser)
         return parser.createAST(null) as CompilationUnit
     }

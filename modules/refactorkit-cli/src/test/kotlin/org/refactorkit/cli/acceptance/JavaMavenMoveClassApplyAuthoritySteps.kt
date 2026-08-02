@@ -60,6 +60,7 @@ import org.refactorkit.java.JdtJavaDiagnosticCategory
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -302,8 +303,27 @@ class JavaMavenMoveClassApplyAuthoritySteps {
     @After("@REQ-JAVA-MAVEN-MOVE-AUTH-003 or @REQ-JAVA-MAVEN-MOVE-AUTH-005 or @REQ-JAVA-MAVEN-MOVE-AUTH-006 or @REQ-JAVA-MAVEN-MOVE-AUTH-007 or @REQ-JAVA-MAVEN-MOVE-AUTH-009 or @REQ-JAVA-MAVEN-MOVE-AUTH-010 or @REQ-JAVA-MAVEN-MOVE-AUTH-011 or @REQ-JAVA-MAVEN-MOVE-AUTH-012")
     fun removeScenarioWorkspace() {
         if (!this::temporaryRoot.isInitialized || !Files.exists(temporaryRoot)) return
-        Files.walk(temporaryRoot).use { paths ->
-            paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+        try {
+            val retainedArchives = openWorkspaceJarDescriptors()
+            assertTrue(
+                retainedArchives.isEmpty(),
+                "RefactorKit analysis retained fixture JAR descriptors after the scenario: $retainedArchives",
+            )
+        } finally {
+            Files.walk(temporaryRoot).use { paths ->
+                paths.sorted(Comparator.reverseOrder()).forEach { path ->
+                    try {
+                        Files.deleteIfExists(path)
+                    } catch (failure: FileSystemException) {
+                        val relative = temporaryRoot.relativize(path).invariantSeparatorsPathString
+                        throw AssertionError(
+                            "Cucumber cleanup could not delete '$relative'; JDT analysis must release fixture " +
+                                "archives before @After cleanup",
+                            failure,
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -3388,6 +3408,29 @@ class JavaMavenMoveClassApplyAuthoritySteps {
             candidate = candidate.parent
         }
         error("Cannot locate repository root from ${Path.of("").toAbsolutePath()}")
+    }
+
+    private fun openWorkspaceJarDescriptors(): List<String> {
+        val descriptorDirectory = Path.of("/proc/self/fd")
+        if (!Files.isDirectory(descriptorDirectory, LinkOption.NOFOLLOW_LINKS)) return emptyList()
+        val normalizedWorkspace = workspaceRoot.toAbsolutePath().normalize()
+        val retained = mutableListOf<String>()
+        Files.list(descriptorDirectory).use { descriptors ->
+            descriptors.forEach { descriptor ->
+                val target = try {
+                    Path.of(Files.readSymbolicLink(descriptor).toString().removeSuffix(" (deleted)"))
+                } catch (_: Exception) {
+                    return@forEach
+                }
+                if (target.isAbsolute && target.normalize().startsWith(normalizedWorkspace) &&
+                    target.fileName?.toString()?.endsWith(".jar", ignoreCase = true) == true
+                ) {
+                    retained += descriptor.fileName.toString() + " -> " +
+                        normalizedWorkspace.relativize(target.normalize()).invariantSeparatorsPathString
+                }
+            }
+        }
+        return retained.sorted()
     }
 
     private fun deleteRecursively(root: Path) {

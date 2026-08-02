@@ -23,6 +23,7 @@ import java.nio.file.StandardOpenOption
 import java.util.Base64
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
+import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.io.path.readText
 import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
@@ -316,7 +317,13 @@ class WorkspaceSnapshotComposerSteps {
     fun deterministicPathStringOrder(table: DataTable) {
         val expectedRows = table.asMaps().sortedBy { it.getValue("order").toInt() }
         val result = assertNotNull(overlayResult)
-        assertEquals(expectedRows.map { it.getValue("path") }, result.files.map { it.path.toString() })
+        val expectedPaths = expectedRows.map { it.getValue("path") }
+        val actualPaths = result.files.map { it.path.invariantSeparatorsPathString }
+        assertEquals(
+            expectedPaths,
+            actualPaths,
+            "Canonical source ordering must retain the exact invariant path order",
+        )
         assertEquals(expectedRows.map { it.getValue("content marker") }, result.files.map(SourceFile::content))
     }
 
@@ -446,7 +453,8 @@ class WorkspaceSnapshotComposerSteps {
             val input = assertNotNull(call.conditionalInput)
             assertEquals(
                 listOf("${call.name}/Base.java", "${call.name}/input.ts"),
-                input.files.map { it.path.toString() },
+                input.files.map { it.path.invariantSeparatorsPathString },
+                "${call.name} overlay must retain its exact invariant path order",
             )
             assertEquals(setOf("java", "ts"), input.sourceExtensions)
         }

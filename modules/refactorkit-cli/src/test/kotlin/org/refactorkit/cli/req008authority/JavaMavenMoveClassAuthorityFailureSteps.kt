@@ -237,7 +237,10 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                 assertEquals("EVIDENCE_FRESHNESS", authorityLayer)
                 val refused = assertIs<ApplyResult.Refused>(applyOutcome)
                 assertEquals(blockerCode, refused.diagnostics.first().code)
-                assertTrue(refused.diagnostics.drop(1).any { it.code == "snapshot.scopeChanged" })
+                assertTrue(
+                    refused.diagnostics.drop(1).any { it.code == "snapshot.scopeChanged" },
+                    "Under-lock evidence drift must also report the independently observed snapshot scope change",
+                )
             }
         }
     }
@@ -398,10 +401,11 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                 assertEvidenceDriftContractReferencesCorrectEvidence(contract)
                 val lease = assertNotNull(baselinePreview.preview.plan.authorityLease)
                 val evidence = lease.requiredFileEvidence.single { it.path == Path.of(DECOY_SOURCE_PATH) }
+                val canonicalDecoyPath = Path.of(DECOY_SOURCE_PATH).invariantSeparatorsPathString
                 assertEquals("CANDIDATE_INVENTORY", evidence.kind)
-                assertFalse(evidence.path.isAbsolute)
-                assertEquals(evidence.path, evidence.path.normalize())
-                assertFalse(evidence.path.startsWith(".."))
+                assertFalse(evidence.path.isAbsolute, "Candidate evidence path must remain workspace-relative")
+                assertEquals(evidence.path, evidence.path.normalize(), "Candidate evidence path must remain normalized")
+                assertFalse(evidence.path.startsWith(".."), "Candidate evidence path must remain inside the workspace")
                 assertSha256(evidence.expectedContentSha256)
                 assertEquals("BOUND_OTHER", evidence.attributes["classifications"])
                 assertEquals("false", evidence.attributes["changedSourceManaged"])
@@ -414,14 +418,28 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                     (evidence.attributes as MutableMap<String, String>)["classification"] = "UNRESOLVED"
                 }
                 val diagnostic = assertIs<ApplyResult.Refused>(applyOutcome).diagnostics.first()
-                assertTrue(diagnostic.message.contains("path=$DECOY_SOURCE_PATH"))
-                assertTrue(diagnostic.message.contains("expectedContentSha256=${evidence.expectedContentSha256}"))
-                assertTrue(diagnostic.message.contains("observedContentSha256="))
-                assertTrue(diagnostic.message.contains("expectedRequiredFileEvidenceSha256=${lease.requiredFileEvidenceSha256}"))
+                assertTrue(
+                    diagnostic.message.contains("path=$canonicalDecoyPath"),
+                    "Evidence-drift diagnostic must name the canonical decoy path: ${diagnostic.message}",
+                )
+                assertTrue(
+                    diagnostic.message.contains("expectedContentSha256=${evidence.expectedContentSha256}"),
+                    "Evidence-drift diagnostic must name the preview content hash: ${diagnostic.message}",
+                )
+                assertTrue(
+                    diagnostic.message.contains("observedContentSha256="),
+                    "Evidence-drift diagnostic must name the under-lock content hash: ${diagnostic.message}",
+                )
+                assertTrue(
+                    diagnostic.message.contains(
+                        "expectedRequiredFileEvidenceSha256=${lease.requiredFileEvidenceSha256}",
+                    ),
+                    "Evidence-drift diagnostic must bind the preview file-evidence hash: ${diagnostic.message}",
+                )
                 val fields = diagnostic.details.fields
                 assertEquals("EVIDENCE_FRESHNESS", fields["authorityLayer"])
                 assertEquals("CANDIDATE_INVENTORY", fields["evidenceKind"])
-                assertEquals(DECOY_SOURCE_PATH, fields["path"])
+                assertEquals(canonicalDecoyPath, fields["path"], "Typed diagnostic path must use invariant separators")
                 assertEquals(evidence.expectedContentSha256, fields["expectedContentSha256"])
                 assertEquals(sha256(DECOY_DRIFT_SOURCE.toByteArray()), fields["observedContentSha256"])
                 assertEquals(lease.requiredFileEvidenceSha256, fields["expectedRequiredFileEvidenceSha256"])
@@ -429,18 +447,25 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                 assertTrue(
                     fields["expectedRequiredFileEvidenceSha256"] !=
                         fields["observedRequiredFileEvidenceSha256"],
+                    "Under-lock file-evidence identity must differ after external decoy drift",
                 )
                 assertEquals(lease.snapshotHash, fields["previewSnapshotSha256"])
                 val independentlyObservedSnapshotSha256 = assertNotNull(observedSnapshot).hash
                 assertEquals(independentlyObservedSnapshotSha256, fields["observedSnapshotSha256"])
-                assertTrue(independentlyObservedSnapshotSha256 != lease.snapshotHash)
+                assertTrue(
+                    independentlyObservedSnapshotSha256 != lease.snapshotHash,
+                    "Observed S1 must differ from preview S0 after external decoy drift",
+                )
                 assertEquals(
                     lease.attributes.getValue("candidateInventoryHash"),
                     fields["expectedCandidateInventorySha256"],
                 )
                 assertEquals("false", fields["changedSourceManaged"])
-                assertFalse("observedCandidateInventorySha256" in fields)
-                assertEquals(fields.keys.sorted(), fields.keys.toList())
+                assertFalse(
+                    "observedCandidateInventorySha256" in fields,
+                    "Refusal must not claim that a post-preview candidate inventory was semantically rebuilt",
+                )
+                assertEquals(fields.keys.sorted(), fields.keys.toList(), "Typed diagnostic fields must be canonical")
                 assertFailsWith<UnsupportedOperationException> {
                     @Suppress("UNCHECKED_CAST")
                     (fields as MutableMap<String, String>)["authorityLayer"] = "MUTATED"
@@ -453,7 +478,10 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                 assertEquals(diagnostic, diagnostic.copy())
                 assertSha256(lease.attributes.getValue("candidateInventoryHash"))
                 assertSha256(lease.attributes.getValue("candidateInventoryEvidenceHash"))
-                assertFalse(baselinePreview.preview.plan.workspaceEdit.affectedFiles().contains(Path.of(DECOY_SOURCE_PATH)))
+                assertFalse(
+                    baselinePreview.preview.plan.workspaceEdit.affectedFiles().contains(Path.of(DECOY_SOURCE_PATH)),
+                    "The externally drifted BOUND_OTHER decoy must remain outside the managed edit",
+                )
             }
         }
     }
@@ -499,7 +527,10 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                 assertSha256(lease.attributes.getValue("stagedSnapshotHash"))
                 val observed = assertNotNull(observedSnapshot)
                 assertSha256(observed.hash)
-                assertTrue(observed.hash != baselineSnapshot.hash)
+                assertTrue(
+                    observed.hash != baselineSnapshot.hash,
+                    "Observed S1 must preserve and identify the external decoy drift rather than equal preview S0",
+                )
             }
         }
     }
@@ -543,8 +574,11 @@ class JavaMavenMoveClassAuthorityFailureSteps {
             }
             EVIDENCE_DRIFT_CASE -> {
                 assertIs<ApplyResult.Refused>(applyOutcome)
-                assertTrue(Files.isRegularFile(workspaceRoot.resolve(".refactorkit/workspace.lock")))
-                assertFalse(hasWriteAheadLog())
+                assertTrue(
+                    Files.isRegularFile(workspaceRoot.resolve(".refactorkit/workspace.lock")),
+                    "Authority-lease refusal must occur after workspace-lock acquisition; lock residue may remain",
+                )
+                assertFalse(hasWriteAheadLog(), "Authority-lease refusal must occur before WAL creation")
             }
         }
     }
@@ -558,12 +592,20 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                 assertFalse(Files.exists(workspaceRoot.resolve(PRODUCT_TARGET_PATH), LinkOption.NOFOLLOW_LINKS))
             }
             EVIDENCE_DRIFT_CASE -> {
-                assertEquals(DECOY_DRIFT_SOURCE, Files.readString(workspaceRoot.resolve(DECOY_SOURCE_PATH)))
-                assertFalse(hasWriteAheadLog())
-                assertFalse(Files.exists(workspaceRoot.resolve(PRODUCT_TARGET_PATH), LinkOption.NOFOLLOW_LINKS))
+                assertEquals(
+                    DECOY_DRIFT_SOURCE,
+                    Files.readString(workspaceRoot.resolve(DECOY_SOURCE_PATH)),
+                    "External decoy drift bytes must be preserved exactly",
+                )
+                assertFalse(hasWriteAheadLog(), "Refused apply must preserve the pre-WAL boundary")
+                assertFalse(
+                    Files.exists(workspaceRoot.resolve(PRODUCT_TARGET_PATH), LinkOption.NOFOLLOW_LINKS),
+                    "Refused apply must not create the managed destination",
+                )
                 assertEquals(
                     Files.readString(fixtureTemplate.resolve(PRODUCT_SOURCE_PATH)),
                     Files.readString(workspaceRoot.resolve(PRODUCT_SOURCE_PATH)),
+                    "Refused apply must not mutate the managed source",
                 )
             }
         }
@@ -606,7 +648,10 @@ class JavaMavenMoveClassAuthorityFailureSteps {
                 val firstDetails = assertNotNull(firstApplyDiagnosticDetails)
                 val repeatedObservedSnapshotSha256 = assertNotNull(observedSnapshot).hash
                 assertEquals(repeatedObservedSnapshotSha256, repeated.details["observedSnapshotSha256"])
-                assertTrue(repeatedObservedSnapshotSha256 != baselineSnapshot.hash)
+                assertTrue(
+                    repeatedObservedSnapshotSha256 != baselineSnapshot.hash,
+                    "Repeated observed S1 must still differ from its fresh preview S0",
+                )
                 assertEquals(
                     firstDetails["observedSnapshotSha256"],
                     repeated.details["observedSnapshotSha256"],
