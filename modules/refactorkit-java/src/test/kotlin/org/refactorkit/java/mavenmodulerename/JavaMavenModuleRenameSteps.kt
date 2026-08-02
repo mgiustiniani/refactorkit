@@ -1155,7 +1155,13 @@ class JavaMavenModuleRenameSteps {
     @Then("ApplyResult.Applied returns one transaction {string} only after under-lock snapshot, destination, raw-origin, effective-model, staged-image, and diagnostic revalidation succeeds")
     fun applyReturnsOneTransactionAfterRevalidation(name: String) {
         assertEquals("T1", name)
-        val applied = assertIs<ApplyResult.Applied>(assertNotNull(applyResult))
+        val result = assertNotNull(applyResult)
+        val refusalEvidence = (result as? ApplyResult.Refused)?.diagnostics
+            ?.joinToString(separator = " | ") { diagnostic ->
+                "${diagnostic.code.orEmpty()}:${diagnostic.message}:${diagnostic.details.fields}"
+            }
+            .orEmpty()
+        val applied = assertIs<ApplyResult.Applied>(result, refusalEvidence)
         assertEquals(1, applyCount)
         assertEquals(applied.transaction, selectedTransaction)
         assertEquals(positivePreviews.first().plan.id, applied.transaction.planId)

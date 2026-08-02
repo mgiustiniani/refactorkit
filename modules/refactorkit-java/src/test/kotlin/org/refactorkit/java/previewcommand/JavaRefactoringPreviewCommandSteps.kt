@@ -33,6 +33,7 @@ import java.nio.file.StandardOpenOption
 import java.util.Base64
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
+import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
@@ -665,11 +666,11 @@ class JavaRefactoringPreviewCommandSteps {
                 assertEquals("grandTotal", command.newName)
             }
             is JavaRefactoringPreviewCommand.MoveSourceRoot -> {
-                assertEquals("modules/legacy/src/main/java", command.from.toString())
-                assertEquals("modules/billing/src/main/java", command.to.toString())
+                assertEquals("modules/legacy/src/main/java", command.from.invariantSeparatorsPathString)
+                assertEquals("modules/billing/src/main/java", command.to.invariantSeparatorsPathString)
             }
             is JavaRefactoringPreviewCommand.OrganizeImports ->
-                assertEquals("src/main/java/com/acme/billing/Invoice.java", command.file.toString())
+                assertEquals("src/main/java/com/acme/billing/Invoice.java", command.file.invariantSeparatorsPathString)
             is JavaRefactoringPreviewCommand.SafeDelete -> {
                 assertEquals("com.acme.legacy.ObsoleteTax", command.symbolId.value)
                 assertTrue(command.force)
