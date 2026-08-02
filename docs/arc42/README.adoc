@@ -3,9 +3,9 @@
 :sectnums:
 :icons: font
 
-Status: implementation-informed baseline aligned with the `v0.4.0` hardening release and supreme multi-language `v1.0.0` roadmap. The authoritative Java/Maven diagnostics epic is active and product-critical; first platform/module-filter rows are implemented, but epic completion and all-language acceptance remain open.
+Status: implementation-informed baseline with a confirmed, release-blocking `v0.7.x` completion program. Previously accepted and bounded Java/Maven evidence remains intact. Remaining K5, T5, J1, and I1 work is planned or otherwise open unless separately qualified. The local P0 build-scaffolding admission gate is resolved on the corrected working tree: the authorized slice changed only `modules/refactorkit-kotlin/build.gradle.kts`, passed the `testClasses` RED/GREEN pair (SHA-256 `72d7920f6e7609f3d7c3855c8c946f8fb7498cd5c1a4f625a29b149181145917` / `1c9819e09ec44341b708fd747f5ee1b2656cae296a5edcb3d2d3b8ef66c3b745`), and passed full OpenJDK 21 `check goldenTest` with 82/82 tasks, 1,062 tests, 228 skipped, and zero failures/errors (log SHA-256 `48ac4ede4257552295b41c824721f845c609af6a58b3bb1bcd3e0a7924a02286`). This is bounded source-built scaffold evidence only. Actions run `30746237578` remains failed; corrected-revision CI and every unqualified product/package/native/release row remain open.
 
-This directory contains the arc42 documentation for RefactorKit, the deterministic refactoring and code-intelligence engine in this repository.
+This directory contains the central mutable architecture narrative for RefactorKit, the deterministic refactoring and code-intelligence engine in this repository. The normative release-scope satellite is link:../requirements/v0.7.x-completion-contract.md[the `v0.7.x` completion contract]; the release checklist, support matrix, ADR bodies, executable Gherkin, C4 DSL, and evidence reports remain specialist satellites and must not be promoted beyond their exact evidence.
 
 == Chapters
 
@@ -38,6 +38,9 @@ The current baseline was created from repository evidence:
 * `AGENTS.md`
 * `docs/*.md`
 * `docs/releases/v0.4.0-plan.md`
+* `docs/releases/v0.7.0-plan.md`
+* `docs/releases/v0.7.0-support-matrix.md`
+* `docs/requirements/v0.7.x-completion-contract.md`
 * `docs/releases/v1.0.0-plan.md`
 * `docs/adr/0009-supreme-multilanguage-v1-roadmap.adoc`
 * `docs/adr/0012-authoritative-release-aware-java-maven-diagnostics.adoc`
@@ -47,6 +50,7 @@ The current baseline was created from repository evidence:
 * `recipes/`
 * `testdata/golden/`
 * `.github/workflows/ci.yml`
+* reviewed 2026-08-02 domain handoff and LLM Wiki concepts `typed-typescript-refactor-authority`, `authority-preserving-recipe-composition`, and `release-evidence-identity`, against repository commit `2b5aa7234cc385214acb6958834763288aefc527`
 
 == Status Conventions
 

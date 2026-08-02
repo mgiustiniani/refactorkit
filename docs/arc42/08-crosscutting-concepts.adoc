@@ -2,6 +2,8 @@
 :toc:
 :sectnums:
 
+Completion-program status: confirmed `v0.7.x` authority rules are planned or otherwise open and do not promote current prototype source. The local P0 all-module scaffold admission gate is resolved by bounded source-built evidence; corrected-revision CI, product qualification, and release qualification remain open. Previously accepted bounded evidence remains unchanged.
+
 Status: implementation-informed with explicit gaps. All twelve bounded Maven move-class Story BDD definitions and all 22 expanded cases are implemented and validated. Existing evidence for `001`-`007` and `009`-`012` remains independently bounded. Six-case `008` validates four immutable schema-v1 guidance outcomes, a typed root-declared active-reactor-POM structural refusal, and an under-lock generic required-file-evidence drift refusal. The four guidance cases stay disjoint from REQ-004 `LEXICAL_FALLBACK_REVIEW`; the structural and freshness cases stay disjoint from selected-path/descriptor/artifact cases `010`-`012`. Focused OpenJDK 21 evidence passed six selected cases, skipped sixteen by tag filter, and reported zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. This receipt does not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. The exact Magrathea request at `a48e3c06` remains CLI/Linux/JDK-21-specific. Separately, existing REQ-001 now has one implementation-informed local Linux `amd64` packaged-process observation on the mutable tree; it qualifies neither runtime distributions generally nor a native CI row, and broader native/general authority remains open.
 
 == Patch Safety
@@ -283,6 +285,117 @@ Composition is read-only: it owns no workspace write, build/lifecycle execution,
 CLI and LSP retain their existing scan and lifecycle behavior. Recipes, testkit/direct-library behavior, a generalized scanner registry, concrete adapter imports in core, and a new orchestration module remain outside this slice. Composition returns only an immutable snapshot and owns no stored state, index, protocol, persistence, or mutation authority.
 
 There is no persistence classification to add: the output is an in-memory immutable value. Existing transaction log/WAL state remains `TransactionLog`/`PatchEngine` responsibility. Delegated ADR review found this policy already fits ADRs 0004, 0009, and 0010 without changing ADRs 0002 or 0006; delegated C4 review validated the unchanged DSL. Reassess only if the boundary gains state, concurrency control, persistence, build/network/credential execution, concrete core-adapter dependencies, another surface, a new module, protocol behavior, writes, or different topology/relationships.
+
+== `v0.7.x` Completion Authority
+
+Status: confirmed program architecture; remaining implementation is planned or otherwise open unless a separately cited bounded row is already qualified. The normative satellite is link:../requirements/v0.7.x-completion-contract.md[`docs/requirements/v0.7.x-completion-contract.md`]. The requirements appendix decomposes the non-Gherkin completion rows without altering the existing 32-definition/76-case Gherkin inventory.
+
+The cross-cutting invariant is that operation authority survives every translation and composition boundary. A surface, recipe, generic operation label, confidence value, approval, source-file presence, or another operation's acceptance cannot manufacture semantic or release authority.
+
+=== Kotlin Companion Ownership
+
+A companion object is a nested declaration owned by its enclosing Kotlin type. Its `Owner$Companion` binary identity and compiler PSI selection make it navigable, but do not grant independent source-file or package ownership. Therefore:
+
+* an admitted whole enclosing-type/file move may carry the companion unchanged;
+* selecting the companion itself as a `moveDeclaration` target must return a stable typed refusal with no edit or apply capability;
+* companion extraction is a separately named future operation with separate identity, consumer, diagnostics, and acceptance requirements; and
+* the current `KotlinJvmMoveDeclarationPlanner` branch that accepts an `OBJECT` companion as a standalone target is implementation-informed negative evidence at commit `2b5aa7234cc385214acb6958834763288aefc527`, not a promoted capability.
+
+The exact refusal code is intentionally not invented here. It must be fixed by the executable requirement before production correction.
+
+=== Typed TypeScript Refactor Authority
+
+Research/recommendation status: reviewed 2026-08-02 against repository commit `2b5aa7234cc385214acb6958834763288aefc527`, pinned TypeScript 5.9.3 and typescript-language-server 5.1.3. Primary excerpts and package/source hashes are retained in LLM Wiki source packet `SRC-2026-08-02-013`; the synthesis is concept `typed-typescript-refactor-authority`. This research delimits the design but is not a requirement, implementation claim, ADR, or qualification receipt.
+
+Typed TypeScript refactor authority is the snapshot-scoped right to request one exact upstream operation/action and normalize its immutable proposal. It binds:
+
+* toolchain hashes and process provenance;
+* semantic lease and exact saved/overlay snapshot;
+* zero-based UTF-16 selection/range;
+* compiler preferences and formatting options;
+* exact returned refactor name/action name or file/import operation identity;
+* normalized source and structural file edits, including project-model inputs;
+* exact staged compiler diagnostics and operation limits; and
+* refusal when an action is missing, ambiguous, interactive without typed input, stale, uncapturable, outside the overlay, or project-reference incomplete.
+
+[cols="1,2,3,1",options="header"]
+|===
+|T5 row |Pinned upstream authority |Required distinction |Status
+
+|Source-file relocation
+|`getEditsForFileRename`
+|Moves a file and rewrites compiler-proven import/export module specifiers; it is not declaration movement.
+|planned
+
+|Declaration move
+|Exact `getApplicableRefactors` result followed by the matching `getEditsForRefactor` refactor/action
+|Moves selected declarations between files/modules; action identity and interactive requirements are explicit.
+|planned
+
+|Module-specifier / project-reference migration
+|Typed compiler/project-model evaluation plus exact edits
+|Rewrites specifiers and `tsconfig` project references as a model-changing operation; npm package/module rename is separate.
+|planned
+
+|Organize imports
+|`organizeImports` with `All`, `SortAndCombine`, or `RemoveUnused`
+|Each mode and formatting/preference identity is explicit; a generic organize label is insufficient.
+|planned
+
+|Extract function / constant
+|Exact returned applicable-refactor action
+|Function and constant extraction remain separate action identities with bounded control/data-flow proof.
+|planned
+
+|Inline variable
+|Exact returned applicable-refactor action
+|Variable inlining does not prove function inlining.
+|planned
+
+|Change signature
+|Separately proven compiler operation or stable typed unsupported refusal
+|No inspected public TypeScript 5.9.3 service operation establishes general change-signature authority.
+|planned
+
+|Inline function
+|Separately proven compiler operation/action or stable typed unsupported refusal
+|Never inferred from inline-variable or extract evidence.
+|planned conditional row
+|===
+
+At the reviewed HEAD, `TypeScriptMoveSymbolPlanner`, `TypeScriptOrganizeImportsPlanner`, `TypeScriptExtractMethodPlanner`, and `TypeScriptChangeSignaturePlanner` send invented or unqualified LSP shapes; `inlineMethod` delegates to the extract planner; direct behavioral tests for those planners are absent; and the Java-only recipe engine cannot execute TypeScript recipes. These facts are negative evidence that keeps every T5 row open. They must not be converted into support claims.
+
+Dynamic and mixed JavaScript never inherit TypeScript certainty. A JavaScript shape may be completed by an exact separately proven proposal or by a truthful stable typed refusal when compiler evidence is incomplete. The refusal closes the safety contract for that shape, not a mutation-success row.
+
+=== API `0.2` LSP Module-rename Ownership
+
+The existing compatibility split is preserved:
+
+* Standard/API `0.2` LSP module or identifier rename returns a version-checked `WorkspaceEdit` proposal marked `refactorkitEditOwnership=client-managed` and `refactorkitRollbackAvailable=false`. Editor application creates no RefactorKit WAL or rollback record.
+* The optional `refactorkitPlanId` is a lookup handle only. It does not turn editor application into managed apply.
+* Only explicit `refactorkit.applyPlan` of the retained exact plan enters `PatchEngine`; it refuses dirty or affected-open documents and then retains normal authorization, staged-diagnostics, lock, WAL, recovery, and rollback authority.
+* Evidence for the client-managed proposal cannot qualify the managed route, and evidence for managed apply cannot relabel an already editor-applied proposal as rollbackable.
+
+This is a compatibility preservation under ADRs 0002 and 0004, not a protocol-version or ownership change.
+
+=== Authority-preserving Recipe Composition
+
+Research/recommendation status: reviewed 2026-08-02 against commit `2b5aa7234cc385214acb6958834763288aefc527` from LLM Wiki concept `authority-preserving-recipe-composition`. The domain review identified no new aggregate. Recipe definitions, resolved parameters, child commands/plans, and composite evaluations are immutable documents/values; the existing transaction journal remains the only WAL.
+
+A recipe is safe only when it composes authority as well as bytes. For each authority-owning child it must retain the exact operation identity, original `PatchPlan`, evidence, operation-authority lease, auxiliary evidence files, provider/toolchain provenance, and diagnostics or authoritative-evaluation gate that applies to the final candidate. There are only two admissible designs:
+
+. Delegate a bounded single authority-owning mutation to its exact child plan/gate, allowing only non-mutating projection or summary steps around it.
+. Construct a separately proven recipe-wide authoritative evaluation over the complete final candidate while preserving every child prerequisite and refusal semantic.
+
+Until design 2 is accepted, a second authority-owning mutation, stale or mismatched child authority, dropped auxiliary input, changed operation identity, unavailable final evaluator, or proposal/review-only child must refuse before lock and WAL. The current `RecipeEngine.composeRecipePlan` relabeling to `recipe:<id>`, generic `java-jdt` apply gate, and file-only delta that omits auxiliary POM documents are negative evidence for model-changing operation composition. Existing qualified ordinary recipe behavior and REQ-004's terminal non-managed branch remain intact; they do not qualify this wider row.
+
+=== Release Evidence Identity and Resolved Local P0 Admission Gate
+
+A release evidence identity is an immutable audit document joining one clean tagged revision to the exact native artifacts and operation-family qualification reports published from it. Its mandatory tuple is repository, immutable tag, full commit SHA, clean/version state, platform/architecture, archive name/hash, extracted runtime/tree identity, fixture/request/scenario identity, toolchain hashes, report hashes, SPDX SBOM hash, and provenance/SBOM attestation subject digest. The support matrix is only a projection. Final promotion additionally requires independent download and verification of the published native assets, no-global-Java launch, and representative managed apply/rollback on each native host.
+
+At EARLY review time the exact clean pushed production baseline was `HEAD=origin/main=2b5aa7234cc385214acb6958834763288aefc527`. Actions run `30746237578` subsequently completed with conclusion `failure`: the `build` job failed distribution verification, Windows x86_64 and macOS x86_64 failed build/test, and macOS arm64 succeeded. This remains a separate mixed negative CI observation and grants no release qualification. The historical baseline also failed OpenJDK 21 `testClasses` before compilation because `:modules:refactorkit-kotlin:testRuntimeClasspath` had already been resolved when `testImplementation` was mutated (log SHA-256 `408d45e7e2c1bea4152c220af283455421a3bee84dca2b3f069832e9541983d5`). The authorized scaffolding slice reproduced RED (SHA-256 `72d7920f6e7609f3d7c3855c8c946f8fb7498cd5c1a4f625a29b149181145917`), changed only `modules/refactorkit-kotlin/build.gradle.kts` by deferring resolution into `tasks.test.doFirst`, and passed the GREEN rerun (SHA-256 `1c9819e09ec44341b708fd747f5ee1b2656cae296a5edcb3d2d3b8ef66c3b745`). Full OpenJDK 21 `check goldenTest` then passed 82/82 tasks and 1,062 tests with 228 skipped and zero failures/errors (log SHA-256 `48ac4ede4257552295b41c824721f845c609af6a58b3bb1bcd3e0a7924a02286`). This resolves only local scaffold admission; corrected-revision CI and all unqualified K5/T5/J1/I1, package, native, cross-platform, and release work remain open.
+
+None of the concepts in this section introduces a new actor, deployable container, persistent runtime store, or relationship. They refine existing adapter, surface, recipe, patch, and release-evidence responsibilities. The scaffolding-only LATE correction changes no architectural policy or authority boundary, so neither an ADR nor a C4 update is needed.
 
 == Java/Maven Diagnostics Authority
 

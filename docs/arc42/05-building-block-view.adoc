@@ -118,6 +118,42 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 |implementation-informed limitation
 |===
 
+== Planned `v0.7.x` Completion Responsibilities
+
+Status: confirmed allocation to existing building blocks; the local P0 scaffold admission gate is resolved, while implementation and qualification remain planned or otherwise open. No new aggregate, module, container, store, or relationship is introduced.
+
+[cols="1,3,2,1",options="header"]
+|===
+|Existing building block |Completion responsibility |Boundary |Status
+
+|Kotlin Language Adapter / Shared JVM Semantic Composition
+|Recognize that a companion object has no independent move identity. An enclosing public type/file move may carry the companion; a standalone companion selection returns a stable typed refusal. Companion extraction requires a future separately named operation.
+|Must preserve K2/JVM owner identity and existing mixed-JVM gates; must not reinterpret nested companion identity as top-level ownership.
+|confirmed; corrective row planned
+
+|TypeScript/JavaScript Semantic Adapter
+|Own typed T5 request values, pinned-protocol translation, returned action identity, proposal evidence, and stable refusal for each distinct operation row. `getEditsForFileRename`, explicit organize-import modes, and applicable-refactor/action selection remain different authorities.
+|The adapter is a proposal provider only. It neither writes files nor owns `PatchEngine`, WAL, rollback, recipe policy, or release promotion. Dynamic/mixed JavaScript receives separate evidence/refusal.
+|confirmed; current advanced planners are unqualified prototype/negative evidence
+
+|LSP Server
+|Preserve API `0.2` module/identifier rename as a versioned client-managed proposal with no RefactorKit rollback, while retaining the explicit managed `applyPlan` route as a separate operation.
+|Only managed apply may cross into `PatchEngine`; dirty or affected-open documents still refuse. Proposal metadata must not imply a transaction.
+|confirmed compatibility; operation-specific qualification planned
+
+|Recipe Engine
+|Retain each authority-owning child plan's exact operation identity, evidence, lease, auxiliary inputs, and diagnostics/evaluation gate, or build a separately proven recipe-wide authoritative final-candidate evaluation.
+|Relabeling to `recipe:<id>` cannot erase operation authority. Until the wider evaluator exists, permit at most one authority-owning mutation plus non-mutating projection/summary steps.
+|confirmed; corrective implementation planned
+
+|Test Harness / Release Qualification
+|Preserve the now-green all-module test-compilation scaffold, then produce operation-family evidence and one release evidence manifest joined to clean tagged native artifacts, SBOMs, attestations, and independent downloaded-asset verification.
+|The bounded correction changed only `modules/refactorkit-kotlin/build.gradle.kts` and deferred runtime-classpath resolution to test execution. Evidence documents and release assets are immutable audit artifacts, not runtime stores or product aggregates. Support matrices remain projections.
+|local P0 admission gate resolved; corrected-revision CI and I1 qualification open
+|===
+
+The current C1/C2 model already contains every participant and dependency needed for these responsibilities. The rules change admission and evidence inside the Kotlin, TypeScript, LSP, recipe, core, and qualification paths without adding runtime topology. Therefore `docs/c4/workspace.dsl` remains unchanged and C4 work was not delegated in this EARLY phase.
+
 == Key Dependencies
 
 * CLI depends on core, Java and Kotlin adapters, daemon, web importer, tree-sitter foundation, and testkit.

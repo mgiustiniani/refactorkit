@@ -15,7 +15,11 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
+val testRuntimeClasspath = configurations.testRuntimeClasspath
+
 tasks.test {
     useJUnitPlatform()
-    systemProperty("kotlin.compiler.test.classpath", configurations.testRuntimeClasspath.get().asPath)
+    doFirst {
+        systemProperty("kotlin.compiler.test.classpath", testRuntimeClasspath.get().asPath)
+    }
 }

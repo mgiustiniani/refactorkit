@@ -2,6 +2,8 @@
 :toc:
 :sectnums:
 
+Completion-program note: the confirmed non-Gherkin `v0.7.x` rows in this appendix are release-scope requirements derived from `docs/requirements/v0.7.x-completion-contract.md`. They remain explicitly planned or open except for the locally resolved P0 build-scaffold admission gate, and they do not alter the configured feature inventory, Gherkin tags, implementation statuses, or totals below. The scaffold receipt promotes no production capability status.
+
 Status: implementation-informed for separately bounded implemented slices and needs-review for broader coverage and qualification. The configured `features/` root contains eight feature documents, 32 repository-unique requirement definitions, 76 expanded executable cases, 479 declared scenario steps, one background with five background steps, and 1,016 expanded case steps. All 32 definitions and all 76 cases are effectively `@implemented-and-validated`; every other effective status is zero. The post-promotion official `io.cucumber:gherkin:28.0.0` repository-wide audit on OpenJDK 21.0.11 reports those totals with zero parse/tag/status/duplicate-ID/reconciliation errors (log SHA-256 `ed57576520bdfa92810ebbe93e0e4c238632feae2a74a10a99b35f8e16101925`). The preceding seven-feature audit remains historical evidence for its exact then-current 28 definitions/60 cases/433 declared steps/885 expanded steps, including the one absent Maven module-rename definition/case (log SHA-256 `271ec890cad8065f0536ab27ca885d81e7d070382ca96fdf9d8cf26afa7e137a`). The preceding six-feature post-promotion audit remains historical evidence for its exact then-current 27 definitions/59 cases/386 declared steps/838 expanded steps (log SHA-256 `f20f39f2421edaf4c5208363a3479a0f7696635631a27d95aeb2a99d04d9be0d`). The authoritative diagnostics-evaluation feature contributes four functional definitions/16 cases/43 declared steps/128 expanded steps, all `@implemented-and-validated`; independent acceptance passed 16/16 scenarios and 128/128 steps (log/JSON SHA-256 `bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`/`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`). The module-rename feature contributes one functional definition/case and 50 declared/expanded steps, also `@implemented-and-validated`; its independent log/JSON SHA-256 are `b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`/`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`. Final review returned `PASS_FOR_PROMOTION` (manifest SHA-256 `6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`; summary SHA-256 `76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`). These promotions do not qualify broad module rename/move, protocols, recipes, packaged/native/cross-platform execution, general Maven projects, native CI, release-wide support, or the broad roadmap row. The Java preview-command feature contributes four non-functional definitions/eight cases/46 declared steps/94 expanded steps. Its corrected split runners passed seven Java-module scenarios/85 steps plus one real public daemon/MCP session scenario/9 steps. Final dated mutable whole-working-tree source-built verification passed on OpenJDK 21.0.11 with 1045 tests discovered, 817 executed, 228 skipped/tag-filtered, zero failures/errors, 140 XML files, and 79 executed tasks (log SHA-256 `fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`); the targeted affected-module static command passed with an intentionally non-zero classification of exactly 48 reviewed/non-blocking slice-local glue findings (log SHA-256 `8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Workspace Snapshot Composition contributes five non-functional definitions/eight cases/41 declared steps/65 expanded steps. Production evidence is the stateless language-neutral core `WorkspaceSnapshotComposer`; a meaningful compile RED failed because that composer was missing (log SHA-256 `d2876ad413703a3895999a9377f8b7c6a713578eb8156b652bb079c70f1a6d95`). Final independent OpenJDK 21.0.11 focused source-built/in-process acceptance passed 8/8 scenarios and 65/65 steps with zero failures, errors, or skips (log SHA-256 `08e8be47c53e6131f75637cddcd3a7092c91da56e9c0b2a8627f9a48f7a7e422`; Cucumber JSON SHA-256 `9d530ea27bbc8b6af6420b785bb6ad85d1a589a7f17ac5ef622bade27a71fd61`). Adoption is source-inspected only in private daemon/MCP `scanWorkspace`; independent daemon 58/58 and MCP 26/26 regressions passed (combined log SHA-256 `9acaed65925c596ef0c161d363c1d8383acd216747e7bc4c93d50ee19c92c9ae`). CLI/LSP and packaged/native/cross-platform/concurrent/numerical-coverage/general-orchestration qualification remain excluded. The preceding official OpenJDK 21.0.11 `io.cucumber:gherkin:28.0.0` four-feature audit remains historical evidence for its then-current 18 implemented definitions/43 cases/299 declared steps/679 expanded steps (log SHA-256 `fb7c81a1d3223e6959d6838ac38c5c737f1bf8804570489405ed59bc1a279bc7`). For REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002, final independent OpenJDK 21.0.11 source-built/in-process acceptance passed 11/11 scenarios and 92/92 steps with zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `74749cf8635d7bbbac3abb4a3eeaf669f6aab3d58770e423094ce791c7882997`); daemon regression passed 58/58 and MCP regression passed 26/26. Final whole-working-tree source-built verification on the same OpenJDK used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 11s; 1021 discovered, 801 executed, 220 skipped/tag-filtered, zero failures/errors; 78 tasks; log SHA-256 `e3e4b3e02fac87003f12cbf87801298653eb12e43c213d1f40fe5177ece75e02`. Explicit non-null final-segment handling eliminated the selector's initial production NP finding while preserving root-path `NullPointerException` and exact `.java`/`.JAVA` behavior. The final full log contains no production finding for `ManagedApplyDiagnosticsGateSelector.kt` or its provider functions; 23 glue-only Kotlin/generated findings remain non-blocking (2 RCN, 13 MS, 1 SA, 7 BC), and the broader configured SpotBugs baseline remains non-blocking. Production evidence is the stateless selector plus source-inspected adoption only at daemon/MCP managed apply. CLI/LSP/recipes/testkit/direct library remain excluded, `PatchEngine` authority is unchanged, and no packaged, native, cross-platform, concurrent, apply-authority, or numerical-coverage claim is made. The preceding four-feature audit that recorded the selector definitions/cases as `@absent` (log SHA-256 `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14`) remains historical pre-promotion evidence. The preceding final three-feature audit (log SHA-256 `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`), the earlier three-feature source-reconciliation receipt that recorded managed rollback as then-`@absent` (log SHA-256 `af9cfc7e69ec589bd5512b963e9eebdce936e63b240e3b1860078f0989b20b7e`), and the still-earlier two-feature parser receipt (log SHA-256 `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`) remain historical evidence for their then-current sources and statuses, not the current aggregate. The managed-rollback feature contributes two non-functional definitions, eight cases, 19 declared steps, and 67 expanded steps. A focused RED proved the mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`); detached unmodifiable ordered snapshotting corrected it. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`). Production evidence is the core executor; CLI/daemon/LSP/MCP adoption is source-inspected only. REQ-PENDING-PLAN-STORE-001/002 contribute two non-functional scenarios and 19 steps. Their focused source-built/in-process run passed both scenarios with 29 executed Gradle tasks and zero failures/errors (log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). The historical PendingPlanStore-scoped whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This later scoped receipt is dated mutable source-built aggregate evidence; it does not qualify packaged processes, concurrent access, a general extraction pattern, or numerical coverage. Surface lifecycle policy remains separate, and no protocol capability or authority rule changed. Historical pre-selector whole-working-tree verification after the managed-rollback correction used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). This is the historical pre-selector whole-working-tree source-built receipt for the managed-rollback correction; the earlier REQ-008- and PendingPlanStore-specific whole-working-tree receipts remain historical evidence for their explicitly stated scopes. It is dated mutable aggregate evidence and does not qualify the selector, packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority.
 
 Final official whole-working-tree verification for the Workspace Snapshot Composition working tree on 2026-08-01 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 7s; 1029 discovered, 809 executed, 220 skipped/tag-filtered, zero failures/errors; 136 XML files; 78 tasks executed; log SHA-256 `0ca52ed3fd881743b361bcf14b2c7b9f90d3be7890253980389ab21f3145022f`. The aggregate log has no production finding attributable to `WorkspaceSnapshotComposer.kt` or the daemon/MCP adoption. Static findings are not zero: 21 slice-local glue-only Kotlin/generated SpotBugs findings in `WorkspaceSnapshotComposerSteps.kt` remain non-blocking (6 NP, 3 RCN, 12 BC), and the broader configured baseline remains non-blocking. This is dated mutable source-built aggregate evidence alongside the independently retained focused source-built/in-process acceptance, daemon/MCP regressions, and Gherkin audit. It does not add Gherkin definitions/cases or qualify packaged, native, cross-platform, concurrent, crash-restart, general-orchestration, or numerical-coverage behavior. The preceding selector whole-tree receipt remains historical evidence for its scope.
@@ -25,6 +27,14 @@ The twelve-definition/22-case Maven move-class subset retains its independently 
 |`docs/*.md`
 |Subsystem behavior and limitations. `docs/transactionality-audit.md` is the evidence baseline for current apply, compensation, journal, LSP, recipe, and recovery limitations `TX-001` through `TX-018`.
 |implementation-informed
+
+|`docs/requirements/v0.7.x-completion-contract.md`
+|Normative release-blocking scope for every remaining K5, T5, J1, and I1 row, including the P0 build-scaffolding admission gate, Kotlin companion ownership, decomposed typed TypeScript operations, API `0.2` LSP ownership, authority-preserving recipes, and release evidence identity.
+|confirmed program contract; scaffold admission resolved locally, all other implementation/qualification planned or open by row
+
+|LLM Wiki source packet `SRC-2026-08-02-013` and concepts `typed-typescript-refactor-authority`, `authority-preserving-recipe-composition`, and `release-evidence-identity`
+|Dated research/recommendation and ubiquitous-language input reviewed 2026-08-02 against RefactorKit commit `2b5aa7234cc385214acb6958834763288aefc527`. The packet preserves pinned TypeScript 5.9.3 and typescript-language-server 5.1.3 excerpts/hashes. These sources delimit authority and evidence but are not executable requirements, ADRs, implementation claims, or release receipts.
+|reviewed research; needs executable acceptance before implementation promotion
 
 |`docs/requirements/java-maven-authoritative-diagnostics.md`
 |Normative repository contract for exact release platforms, full-reactor source-set visibility, typed availability, change-specific authority, secure discovery, and permanent qualification.
@@ -103,6 +113,120 @@ The LATE REQ-JAVA-MAVEN-MOVE-AUTH-004 review reconciles the promoted feature wit
 
 The LATE REQ-JAVA-MAVEN-MOVE-AUTH-008 review reconciles the corrected feature with current production/test code. Four complete preview uncertainties return immutable schema-v1 `JavaMoveClassReviewOnlyGuidance` with typed layers/codes for inside-closure ambiguity, unresolved static wildcard lookup, outside-closure explicit old FQN with closure precedence, and same-`S0` before/staged diagnostic identity drift; the last is collected by the dispatcher's second stage. None of those four returns `LexicalReview`, plan, or edit, and source-built CLI apply refuses `guidance.nonManaged` pre-`PatchEngine`/lock/WAL/residue. Missing root-declared `catalog-shipping/pom.xml` returns result-owned typed `JavaMoveClassStructuralRefusal`; deterministic component-wise workspace-relative `NOFOLLOW` identity supports a missing module directory and distinguishes it from a missing final POM, while symlink/non-regular states are not `MISSING`; source-built CLI refuses pre-lock/no-residue. The final case starts from eligible REQ-007 and binds one non-managed `BOUND_OTHER` source through immutable `OperationAuthorityFileEvidence`. `PatchEngine` captures one under-lock observed engine snapshot `S1`; immutable `DiagnosticDetails` reports primary `authorityLease.evidenceDrift` plus secondary `snapshot.scopeChanged` before WAL, preserving external `S1` and possibly the lock file. The semantic candidate-inventory hash is expected-only; expected/observed hashes describe required-file evidence, and no observed semantic inventory is claimed. All six remain independent of REQ-003/004/010/011/012. Surface evidence is limited to the source-built library and CLI for the five preview-time rows, and to library/`PatchEngine` acceptance for the under-lock row; no REQ-008 recipe/daemon/LSP/MCP parity is claimed.
 
+== Confirmed `v0.7.x` Completion Contract Requirements (Non-Gherkin)
+
+The following stable IDs decompose the user-confirmed completion program. They are not `.feature` scenarios and are excluded from the 32-definition/76-case Gherkin totals. `Declared status` records the confirmed requirement; `Observed status` never exceeds repository/build evidence.
+
+[cols="1,1,4,2,2,3",options="header"]
+|===
+|ID |Classification |Contract |Use case |Declared status |Observed status / evidence
+
+|RPK-V07-COMPLETION-001
+|non-functional / release process
+|Every still-open K5, T5, J1, and I1 row remains independently release-blocking. API stays `0.2`; a row closes only through exact linked acceptance or an explicitly permitted stable refusal, never through source presence, parent-checkbox wording, or another operation's evidence.
+|UC-V07-QUALIFY
+|confirmed
+|active and incomplete; completion contract is normative
+
+|RPK-V07-SCAFFOLD-001
+|non-functional / build correctness
+|Before production completion work, a clean OpenJDK 21 checkout must pass `./gradlew --no-daemon testClasses` for all modules. The prerequisite fix is scaffolding-only and must not hide the RED with selective compilation/tests.
+|UC-V07-QUALIFY
+|confirmed P0 gate
+|resolved for local admission on the corrected working tree: historical clean `HEAD=origin/main=2b5aa7234cc385214acb6958834763288aefc527` failed with log SHA-256 `408d45e7e2c1bea4152c220af283455421a3bee84dca2b3f069832e9541983d5`; the authorized slice reproduced RED (`72d7920f6e7609f3d7c3855c8c946f8fb7498cd5c1a4f625a29b149181145917`), changed only `modules/refactorkit-kotlin/build.gradle.kts` to defer `testRuntimeClasspath` resolution into `tasks.test.doFirst`, passed GREEN (`1c9819e09ec44341b708fd747f5ee1b2656cae296a5edcb3d2d3b8ef66c3b745`), and passed full OpenJDK 21 `check goldenTest` with 82/82 tasks, 1,062 tests, 228 skipped, and zero failures/errors (log SHA-256 `48ac4ede4257552295b41c824721f845c609af6a58b3bb1bcd3e0a7924a02286`). Actions run `30746237578` remains failed; corrected-revision CI and every other unqualified row remain open
+
+|RPK-V07-KOT-COMPANION-MOVE-001
+|functional with safety refusal
+|A companion object is not independently movable. A supported enclosing type/file move may carry it unchanged; extraction is a separate future operation. Direct companion selection returns a stable typed refusal with no edit/apply capability; the exact code must be fixed by executable acceptance before implementation.
+|UC-KOTLIN-MOVE-DECLARATION
+|confirmed
+|planned correction; current companion-target planner branch is negative evidence, not qualification
+
+|RPK-V07-TS-AUTHORITY-001
+|non-functional / semantic safety
+|Every T5 proposal binds pinned toolchain/process provenance, lease, exact snapshot/overlay, UTF-16 selection, preferences, exact upstream operation or returned refactor/action identity, normalized edits, staged compiler diagnostics, and limits. Invented LSP shapes and generic labels grant no authority. Dynamic/mixed JavaScript requires separate evidence or truthful stable refusal.
+|UC-TYPESCRIPT-T5
+|confirmed
+|planned; reviewed research `SRC-2026-08-02-013`; current advanced planners are negative evidence
+
+|RPK-V07-TS-FILE-RELOCATE-001
+|functional
+|Relocate one TypeScript source file through exact `getEditsForFileRename` authority and compiler-proven import/export updates. Do not conflate with declaration move.
+|UC-TYPESCRIPT-T5
+|confirmed distinct T5 row
+|planned / unqualified
+
+|RPK-V07-TS-DECLARATION-MOVE-001
+|functional
+|Move selected declarations through one exact action returned by `getApplicableRefactors` and selected through `getEditsForRefactor`. Preserve action/interactive-input identity; do not infer from file relocation.
+|UC-TYPESCRIPT-T5
+|confirmed distinct T5 row
+|planned / unqualified
+
+|RPK-V07-TS-MODULE-MIGRATION-001
+|functional
+|Rewrite exact module specifiers and TypeScript project references as one separately evaluated model-changing migration. npm package/module rename is outside this row.
+|UC-TYPESCRIPT-T5
+|confirmed distinct T5 row
+|planned / unqualified
+
+|RPK-V07-TS-ORGANIZE-IMPORTS-001
+|functional
+|Expose and qualify explicit `All`, `SortAndCombine`, and `RemoveUnused` organize-import modes with exact preferences/format evidence; one mode cannot qualify another.
+|UC-TYPESCRIPT-T5
+|confirmed distinct T5 row
+|planned / unqualified
+
+|RPK-V07-TS-EXTRACT-001
+|functional
+|Treat extract-function and extract-constant as exact returned action identities with bounded control/data-flow proof and typed refusal for unavailable/interactive/ambiguous actions.
+|UC-TYPESCRIPT-T5
+|confirmed distinct T5 row
+|planned / unqualified
+
+|RPK-V07-TS-INLINE-VARIABLE-001
+|functional
+|Inline a variable only through its exact compiler action and staged diagnostics. This row grants no inline-function authority.
+|UC-TYPESCRIPT-T5
+|confirmed distinct T5 row
+|planned / unqualified
+
+|RPK-V07-TS-CHANGE-SIGNATURE-001
+|functional
+|Change signature only with separately proven declaration-family, overload/override, and call-site authority; otherwise return a stable typed refusal.
+|UC-TYPESCRIPT-T5
+|confirmed distinct T5 row
+|planned / unqualified; no inspected public TypeScript 5.9.3 operation proves general authority
+
+|RPK-V07-TS-INLINE-FUNCTION-001
+|functional with safety refusal
+|Promote inline function only as a separately proven compiler/action row, never from inline-variable or extract evidence. Without complete authority, retain a stable typed refusal.
+|UC-TYPESCRIPT-T5
+|confirmed conditional T5 row
+|planned / unqualified; current `inlineMethod` extract delegation is negative evidence
+
+|RPK-V07-LSP-MODULE-RENAME-001
+|non-functional / API compatibility and ownership
+|Preserve API `0.2` LSP module/identifier rename as a version-checked client-managed proposal with rollback unavailable. Only explicit application of the exact retained plan through `PatchEngine`, after dirty/affected-open-document guards, may claim WAL/recovery/rollback. Qualify the two routes independently.
+|UC-LSP
+|confirmed compatibility
+|generic ownership metadata implementation-informed; operation-specific acceptance planned
+
+|RPK-V07-RECIPE-AUTHORITY-001
+|non-functional / mutation safety
+|A recipe preserves each authority-owning child's exact operation identity, plan, evidence, lease, auxiliary inputs, and diagnostics/evaluation gate, or uses a separately proven recipe-wide final-candidate evaluator. Until then, admit at most one authority-owning mutation plus non-mutating projection/summary steps and refuse stale, lost, relabelled, review-only, or second authority before WAL.
+|UC-RECIPE-RUN
+|confirmed
+|planned correction; current `recipe:<id>`/generic-gate/file-only reduction is negative evidence for model-changing children
+
+|RPK-V07-RELEASE-EVIDENCE-001
+|non-functional / supply-chain integrity
+|Join repository, immutable tag, full commit, clean/version state, platform/architecture, final archive and extracted-image hashes, fixture/request/scenario/toolchain identities, operation-family report hashes, SPDX SBOM hash, and attestation subject digest in one versioned release evidence manifest. Independently download, verify, launch without global Java, and execute representative apply/rollback on each final published native asset.
+|UC-V07-QUALIFY
+|confirmed
+|planned I1; local/source-built/queued/running/intermediate-artifact evidence remains non-substitutable
+|===
+
 == Use-case Overview Diagram
 
 [source,plantuml]
@@ -124,6 +248,8 @@ rectangle RefactorKit {
   usecase "Run Managed Compensation" as UC_ROLLBACK
   usecase "Run Java Refactoring" as UC_JAVA
   usecase "Rename Direct-child Maven Module" as UC_MODULE_RENAME
+  usecase "Move Kotlin Declaration Safely" as UC_KOTLIN_MOVE
+  usecase "Run Typed TypeScript T5 Refactoring" as UC_TS_T5
   usecase "Run Recipe" as UC_RECIPE
   usecase "Import External Java Class" as UC_IMPORT
   usecase "Serve JSON-RPC Daemon" as UC_DAEMON
@@ -131,6 +257,7 @@ rectangle RefactorKit {
   usecase "Serve MCP Tools" as UC_MCP
   usecase "Generate Agent Context Bundle" as UC_CONTEXT
   usecase "Package Self-contained CLI" as UC_PACKAGE
+  usecase "Qualify v0.7.x Release" as UC_V07_QUALIFY
   usecase "Run Golden Tests" as UC_GOLDEN
   usecase "Run Structural Multi-language Tools" as UC_STRUCT
 }
@@ -139,14 +266,18 @@ Developer --> UC_PREVIEW
 Developer --> UC_APPLY
 Developer --> UC_ROLLBACK
 Developer --> UC_JAVA
+Developer --> UC_KOTLIN_MOVE
+Developer --> UC_TS_T5
 Developer --> UC_RECIPE
 Developer --> UC_IMPORT
 Developer --> UC_STRUCT
 CI --> UC_SCAN
 CI --> UC_DIAG
 CI --> UC_PACKAGE
+CI --> UC_V07_QUALIFY
 CI --> UC_GOLDEN
 IDEUser --> UC_LSP
+IDEUser --> UC_TS_T5
 Agent --> UC_MCP
 Agent --> UC_CONTEXT
 Agent --> UC_IMPORT
@@ -159,8 +290,12 @@ UC_AUTH_DIAG ..> UC_ROLLBACK : on post-apply mismatch
 UC_JAVA ..> UC_PREVIEW : includes
 UC_MODULE_RENAME ..> UC_PREVIEW : includes
 UC_MODULE_RENAME ..> UC_APPLY : after approval
+UC_KOTLIN_MOVE ..> UC_PREVIEW : includes or refuses
+UC_TS_T5 ..> UC_PREVIEW : typed proposal or refusal
 UC_RECIPE ..> UC_PREVIEW : includes
 UC_IMPORT ..> UC_PREVIEW : includes
+UC_V07_QUALIFY ..> UC_PACKAGE : verifies final assets
+UC_V07_QUALIFY ..> UC_GOLDEN : includes source acceptance
 UC_APPLY ..> UC_ROLLBACK : after complete success
 @enduml
 ----
@@ -276,12 +411,26 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |Change-signature docs and tests.
 |implementation-informed
 
+|UC-KOTLIN-MOVE-DECLARATION
+|Move a Kotlin declaration safely
+|Developer, Agent
+|Move only an independently owned compiler-proven Kotlin declaration under the bounded K5 contract. A companion object cannot be selected independently; moving a supported enclosing type/file may carry it, while extraction remains separate.
+|Planned executable `RPK-V07-KOT-COMPANION-MOVE-001` refusal plus existing bounded enclosing-type move regressions.
+|confirmed requirement; standalone companion correction planned/unqualified, no longer scaffold-blocked, and no support promoted
+
+|UC-TYPESCRIPT-T5
+|Run a typed TypeScript T5 refactoring
+|Developer, Agent, Editor
+|Request one distinctly named source-file relocation, declaration move, module-specifier/project-reference migration, organize-import mode, extract-function/constant, inline-variable, change-signature, or separately proven inline-function action through typed compiler/server authority. Dynamic/mixed JavaScript returns separate evidence or stable refusal.
+|Non-Gherkin `RPK-V07-TS-*` rows, pinned protocol acceptance, staged compiler diagnostics, managed/native acceptance or exact refusal.
+|confirmed requirement catalogue; all advanced rows planned/unqualified
+
 |UC-RECIPE-RUN
 |Run recipe
 |Developer, CI, Agent
-|Stage eligible YAML-defined Java refactoring steps against one evolving immutable snapshot, reduce the initial-to-final delta to one recipe-wide `PatchPlan`, and apply through one WAL transaction. Planning failure/no-op writes nothing. Implemented REQ-004 adds a terminal `RecipeResult.NonManaged` branch for lexical `moveClass`: discard prior staging, run no later step, and return no aggregate plan. REQ-003/008 guidance remains a distinct dispatcher result; this use-case row claims no recipe-path parity for it.
-|`RecipeEngine`, recipe tests, transactionality audit `TX-008`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004.
-|implementation-informed for eligible recipe transactions and the bounded lexical early-stop
+|Stage eligible YAML-defined Java refactoring steps against one evolving immutable snapshot and apply one admitted final candidate through one WAL transaction. Planning failure/no-op writes nothing. Implemented REQ-004 retains its terminal non-managed lexical branch. For authority-owning model-changing children, planned `RPK-V07-RECIPE-AUTHORITY-001` additionally requires exact child operation/plan/evidence/lease/auxiliary-input/gate preservation or a separately proven recipe-wide evaluator; net-byte relabeling is insufficient.
+|`RecipeEngine`, recipe tests, transactionality audit `TX-008`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004; planned `RPK-V07-RECIPE-AUTHORITY-001`.
+|implementation-informed only for existing eligible/lexical boundaries; authority-preserving model-changing composition planned and current generic path is negative evidence
 
 |UC-IMPORT-EXTERNAL-JAVA
 |Import external Java class
@@ -300,9 +449,9 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-LSP
 |Serve LSP
 |Editor / IDE
-|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics. Admitted native WorkspaceEdits are explicitly client-managed/no-rollback and carry tracked open-document versions; custom `applyPlan` is managed and refuses dirty/affected-open buffers. Java lexical `moveClass` returns command data before the WorkspaceEdit renderer, with neither `changes` nor `documentChanges` nor a pending plan. Ordinary admitted plans use the session-owned shared core store while LSP-specific admission, selected removal, refusal/rollback retention, document lifecycle, response, and authority policy stays in `LspSession`.
-|`LspSession`, `RefactorKitLsp`, transactionality audit `TX-007`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004 and REQ-PENDING-PLAN-STORE-001/002.
-|implementation-informed for admitted edits, the bounded in-process lexical path, and source-built/in-process pending-plan behavior; packaged editor/native and concurrency qualification remains open
+|Expose editor-native definition, references, rename, code actions, symbols, semantic tokens, and diagnostics. Admitted native WorkspaceEdits—including API `0.2` module/identifier rename proposals—are explicitly client-managed/no-rollback and carry tracked open-document versions. Custom `applyPlan` is a distinct managed route that refuses dirty/affected-open buffers before `PatchEngine`. Java lexical `moveClass` still returns no edit or pending plan. Ordinary admitted plans use the session-owned shared core store while LSP-specific admission, lifecycle, response, and authority policy stays in `LspSession`.
+|`LspSession`, `RefactorKitLsp`, transactionality audit `TX-007`; implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004 and REQ-PENDING-PLAN-STORE-001/002; planned `RPK-V07-LSP-MODULE-RENAME-001`.
+|implementation-informed for generic ownership and existing bounded paths; operation-specific module-rename proposal/managed-route qualification planned, with no API `0.2` ownership change
 
 |UC-MCP
 |Serve MCP tools/resources/prompts
@@ -331,6 +480,13 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |Build runtime distribution with embedded Java runtime and smoke-test it.
 |Packaging docs, Gradle tasks, CI.
 |implementation-informed
+
+|UC-V07-QUALIFY
+|Qualify the `v0.7.x` release
+|Maintainer, CI
+|Preserve the now-green all-module test-compilation admission gate, then reconcile every still-open completion row and operation-family report to one clean tagged native release evidence identity. Independently download and verify final assets, launch without global Java, and execute representative managed apply/rollback before promotion.
+|`RPK-V07-COMPLETION-001`, `RPK-V07-SCAFFOLD-001`, and `RPK-V07-RELEASE-EVIDENCE-001`; release manifest, native reports, SBOMs, attestations, downloaded-asset receipts.
+|local P0 scaffold admission resolved; corrected-revision CI and I1/release qualification open
 
 |UC-GOLDEN-TESTS
 |Run golden tests
@@ -387,12 +543,12 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |Current evidence: `Transaction`, `TransactionLog`, agent simulation tests, and transactionality audit. Implemented shared-orchestration mapping: `ManagedRollbackExecutor.kt`, inspected CLI/daemon/LSP/MCP adoption, `features/managed-rollback-executor-extraction.feature`, mutable-diagnostics RED log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`, final focused acceptance log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`, `C-TECH-029`, `C-BOUND-006`, `QS-SAFE-012`, `R-030`, and ADRs 0002/0004. Both managed-executor requirements are implementation-informed within the source-built/in-process boundary.
 
 |UC-RECIPE-RUN
-|REQ-TX-010
-|Recipe engine tests and transactionality audit.
+|REQ-TX-010; RPK-V07-RECIPE-AUTHORITY-001
+|Existing recipe tests and transactionality audit qualify only their exact eligible/terminal-refusal boundaries. The completion row is confirmed but planned: model-changing composition must preserve exact child operation/plan/evidence/lease/auxiliary inputs/gate or use a separately proven final-candidate evaluator. Current generic relabeling is negative evidence.
 
 |UC-LSP
-|REQ-TX-009
-|LSP module/tests and transactionality audit.
+|REQ-TX-009; RPK-V07-LSP-MODULE-RENAME-001
+|Existing LSP tests and transactionality audit establish the generic client-managed/no-rollback versus managed-apply split. The completion row preserves API `0.2` and requires operation-specific module/identifier rename acceptance for both independently qualified routes.
 
 |UC-IMPORT-EXTERNAL-JAVA
 |REQ-IMPORT-001
@@ -409,6 +565,18 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |UC-SCAN, UC-DAEMON, UC-MCP
 |REQ-WORKSPACE-SNAPSHOT-COMPOSER-001 through REQ-WORKSPACE-SNAPSHOT-COMPOSER-005
 |`features/workspace-snapshot-composer-extraction.feature`; `WorkspaceSnapshotComposer.kt`; source-inspected private daemon/MCP adoption; `C-TECH-031`; `C-BOUND-008`; `QS-SNAPSHOT-001`/`002`; `R-032`; Chapters 2, 4-6, and 8-12. All five definitions/eight cases are `@implemented-and-validated`. This is supporting implemented composition within existing scan and integration use cases, not a new user-visible capability, protocol, persistence boundary, or mutation authority.
+
+|UC-KOTLIN-MOVE-DECLARATION
+|RPK-V07-KOT-COMPANION-MOVE-001
+|Confirmed non-Gherkin completion requirement: standalone companion selection must refuse; a supported enclosing move may carry it; extraction is separate. Existing companion-target source is negative evidence and no implementation status is promoted.
+
+|UC-TYPESCRIPT-T5
+|RPK-V07-TS-AUTHORITY-001; RPK-V07-TS-FILE-RELOCATE-001; RPK-V07-TS-DECLARATION-MOVE-001; RPK-V07-TS-MODULE-MIGRATION-001; RPK-V07-TS-ORGANIZE-IMPORTS-001; RPK-V07-TS-EXTRACT-001; RPK-V07-TS-INLINE-VARIABLE-001; RPK-V07-TS-CHANGE-SIGNATURE-001; RPK-V07-TS-INLINE-FUNCTION-001
+|Confirmed non-Gherkin T5 decomposition. `SRC-2026-08-02-013` and `typed-typescript-refactor-authority` are research inputs only. Current planner source/invented methods/inline delegation and Java-only recipes are negative evidence; every row remains planned or must close through its permitted stable refusal.
+
+|UC-V07-QUALIFY
+|RPK-V07-COMPLETION-001; RPK-V07-SCAFFOLD-001; RPK-V07-RELEASE-EVIDENCE-001
+|Completion contract; historical clean-baseline RED SHA-256 `408d45e7e2c1bea4152c220af283455421a3bee84dca2b3f069832e9541983d5`; scaffold-slice RED/GREEN SHA-256 `72d7920f6e7609f3d7c3855c8c946f8fb7498cd5c1a4f625a29b149181145917` / `1c9819e09ec44341b708fd747f5ee1b2656cae296a5edcb3d2d3b8ef66c3b745`; full OpenJDK 21 source-built aggregate log SHA-256 `48ac4ede4257552295b41c824721f845c609af6a58b3bb1bcd3e0a7924a02286`. Actions run `30746237578` remains a separate `failure`; corrected-revision CI, the canonical release manifest, and independently downloaded final native-asset verification remain open. No source-built/local/intermediate subject is promoted into release evidence.
 
 |UC-PACKAGE-CLI
 |REQ-PACKAGE-001
@@ -1824,11 +1992,31 @@ Visible absence, preflight rejection, engine refusal, lookup journal failure, an
 |A dedicated runner executes an existing tagged pickle through the real self-contained launcher and embedded runtime as child OS processes. It is a validation mode, not a new requirement/case. The REQ-001 mode is implementation-informed from one local Linux `amd64` mutable-tree observation; each post-commit native CI row remains independently `CONFIGURED_UNOBSERVED` until its exact reviewed receipt exists. Source-built, generic package, static-review, or local evidence cannot promote those ledger rows.
 |===
 
-== Open Requirements Gaps
+== Requirements Gaps and Resolved Admission Evidence
 
 [cols="1,3,1",options="header"]
 |===
 |Gap |Impact |Status
+
+|Historical P0 build-scaffolding regression
+|At clean pushed revision `2b5aa7234cc385214acb6958834763288aefc527`, OpenJDK 21 all-module `testClasses` failed before compilation because Kotlin test dependencies were mutated after runtime classpath resolution. The isolated correction and its RED/GREEN plus full-suite receipts resolve local production admission only. Actions run `30746237578` remains a separate failed historical-SHA observation; corrected-revision CI, product qualification, packaged/native/cross-platform evidence, and release qualification remain open.
+|resolved locally; `RPK-V07-SCAFFOLD-001`; preserve the green gate
+
+|Kotlin standalone companion movement contradicts the confirmed ownership rule
+|Current planner source admits a companion as a direct `moveDeclaration` target, but the confirmed contract permits only enclosing-type/file carry and requires a stable direct-selection refusal. The exact refusal code and executable acceptance are not yet fixed.
+|planned corrective requirement; `RPK-V07-KOT-COMPANION-MOVE-001`, no support claim
+
+|TypeScript T5 executable authority is missing
+|The eight operation rows and overarching typed-authority contract have no executable Gherkin/acceptance in the configured root. Current advanced planners use unqualified request shapes, inline delegates to extract, and TypeScript recipes are not executable through the Java-only engine. Dynamic/mixed JavaScript needs separate success/refusal evidence.
+|planned release blocker; `RPK-V07-TS-*`, current source is negative evidence
+
+|Authority-preserving model-changing recipes are unproven
+|Existing recipe reduction can retain net bytes while losing operation-owned evaluation or auxiliary model inputs. No executable row proves exact child-authority retention or a recipe-wide authoritative final-candidate evaluator.
+|planned release blocker; `RPK-V07-RECIPE-AUTHORITY-001`
+
+|Release evidence subjects are not yet joined
+|The clean revision, operation-family reports, native archives/extracted images, SBOMs, attestations, and independently downloaded final assets do not yet reconcile through one immutable manifest. A support matrix or intermediate Actions artifact cannot close this gap.
+|planned I1 blocker; `RPK-V07-RELEASE-EVIDENCE-001`
 
 |Executable Story BDD coverage remains narrow
 |The configured root has eight feature sources and 32 definitions/76 cases, all `@implemented-and-validated`. The newly promoted authoritative diagnostics-evaluation definitions contribute 4/16 and the module-rename definition contributes 1/1; every feature remains complete only for its separately bounded catalogue. Most other use cases still have no mapped Gherkin scenarios.

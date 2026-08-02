@@ -23,6 +23,7 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 ## Architecture documentation
 
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
+- Release-blocking `v0.7.x` completion contract: [`docs/requirements/v0.7.x-completion-contract.md`](docs/requirements/v0.7.x-completion-contract.md)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
 - Active product-critical Java/Maven diagnostics authority: [`docs/requirements/java-maven-authoritative-diagnostics.md`](docs/requirements/java-maven-authoritative-diagnostics.md)
 - Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)

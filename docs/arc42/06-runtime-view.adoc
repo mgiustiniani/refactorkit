@@ -597,6 +597,74 @@ relationships, so no dynamic C4 view is justified. Protocols, recipes,
 packaged/native/cross-platform execution, general Maven projects, native CI, and
 release-wide support remain unqualified; `docs/c4/workspace.dsl` is unchanged.
 
+== Planned Runtime Scenario: Kotlin Companion Move Refusal
+
+Status: confirmed planned behavior; the local P0 build-scaffolding gate is resolved, but the production correction and its executable qualification remain open.
+
+[cols="1,3",options="header"]
+|===
+|Step |Planned interaction
+
+|1
+|A caller selects a compiler-proven Kotlin companion object as the direct target of `moveDeclaration`.
+
+|2
+|The Kotlin/shared-JVM planning boundary resolves the companion's nested JVM/source ownership and recognizes that it has no independent source-file or top-level declaration ownership.
+
+|3
+|Planning returns a stable typed refusal with no edit, affected file, pending managed plan, client-managed LSP edit, lease, WAL, transaction, or rollback claim. The exact refusal code must be fixed by the executable requirement before implementation.
+
+|4
+|If the caller instead selects the enclosing top-level type for a supported whole-file move, the existing operation may carry the companion as part of that enclosing declaration. Extracting it or its members is a new future operation and requires a new preview.
+|===
+
+== Planned Runtime Scenario: Typed TypeScript T5 Proposal and Apply
+
+Status: confirmed authority sequence; every T5 operation row remains planned or truthfully refused. Current advanced planner source is negative evidence, not a qualified runtime flow.
+
+[cols="1,3",options="header"]
+|===
+|Step |Planned interaction
+
+|1
+|A CLI/daemon/MCP or API `0.2` surface translates one explicitly named operation—source-file relocation, declaration move, module-specifier/project-reference migration, one organize-import mode, extract function/constant, inline variable, change signature, or separately proven inline function—into a typed adapter command bound to the active toolchain, semantic lease, exact snapshot/overlay, UTF-16 selection, and preferences.
+
+|2
+|The TypeScript adapter invokes the matching pinned TypeScript 5.9.3 authority: `getEditsForFileRename`, `organizeImports`, or an exact action returned by `getApplicableRefactors` and selected through `getEditsForRefactor`. A typescript-language-server command returning `void` requires an explicit typed edit-capture sequence; it is not treated as a `WorkspaceEdit` response.
+
+|3
+|The adapter normalizes an immutable proposal and retains exact action/provenance evidence, or returns a stable typed refusal for missing, ambiguous, interactive, stale, uncapturable, project-incomplete, dynamic, or unsupported authority. Dynamic/mixed JavaScript never inherits the TypeScript result.
+
+|4
+|For standard API `0.2` LSP module/identifier rename, the response remains version-checked and `client-managed` with rollback unavailable; the editor applies it outside RefactorKit. That proposal is not a managed qualification receipt.
+
+|5
+|Only an explicitly retained managed plan may be passed to `PatchEngine`. The managed LSP route first enforces its dirty/affected-open-document guard; `PatchEngine` then owns lock-held evidence revalidation, exact staged compiler diagnostics, authorization, WAL, apply, recovery, and rollback.
+|===
+
+== Planned Runtime Scenario: Authority-preserving Recipe Composition
+
+Status: confirmed safety sequence; current generic relabeling is negative evidence for authority-owning model-changing children.
+
+[cols="1,3",options="header"]
+|===
+|Step |Planned interaction
+
+|1
+|Recipe orchestration parses parameters and asks the owning language/build adapter for each child preview against the evolving immutable candidate, without writing.
+
+|2
+|For an authority-owning mutation, orchestration retains the exact child operation identity, `PatchPlan`, evidence, authority lease, auxiliary inputs, and diagnostics or authoritative-evaluation gate. It must not substitute a generic `recipe:<id>` operation or weaker gate.
+
+|3
+|Until a recipe-wide final-candidate evaluator is independently proven, a second authority-owning mutation, stale/mismatched child authority, lost auxiliary input, review/proposal-only result, or changed operation identity returns typed refusal before reduction, lock, or WAL. Non-mutating summary/projection steps may follow the sole admitted mutation.
+
+|4
+|Apply enters `PatchEngine` with the exact retained child authority and one managed transaction. A future recipe-wide evaluator may instead attest the complete final candidate, but only after its own executable requirement and qualification.
+|===
+
+These sequences add no runtime participant or relationship; they refine messages and admission inside existing interactions. No dynamic C4 work was delegated.
+
 == Runtime Diagrams
 
 No runtime/dynamic C4 diagrams were added in this baseline. This remains an actionable documentation gap if scenario visualization becomes necessary; the diagnostics and bounded implemented guidance flow are documented textually until a dynamic view adds enduring value.

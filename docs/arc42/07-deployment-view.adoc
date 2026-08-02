@@ -64,6 +64,24 @@ The evidence is bounded to the exact real unpacked launcher, embedded runtime, f
 
 The earlier delegated C4 review remains applicable: the existing Automation/CI-to-CLI, CLI-to-Core/Java Adapter, and CLI-to-Build Toolchain relationships cover the implemented evidence plumbing. `docs/c4/workspace.dsl` remains unchanged. Revisit only if qualification code becomes shipped or adds a product participant, protocol, store, relationship, or deployment target.
 
+== `v0.7.x` Completion and Release-evidence Gate
+
+Status: local production admission gate resolved; deployment and release qualification remain planned or open.
+
+At the 2026-08-02 EARLY review, local `HEAD` and `origin/main` both identified the clean pushed production baseline as `2b5aa7234cc385214acb6958834763288aefc527`. GitHub Actions CI run `30746237578`, run number 371/attempt 1 for that exact SHA, completed at `2026-08-02T12:12:47Z` with conclusion `failure`. Its `build` job failed **Verify CLI runtime distribution**; Windows x86_64 and macOS x86_64 failed **Build and test**; macOS arm64 succeeded. The public annotations include Windows path-separator assertions and locked-JAR cleanup failures plus a macOS x86_64 Kotlin compiler-diagnostics timeout; those remain bounded negative CI observations, not one inferred root cause or release evidence.
+
+Independently, the historical baseline failed OpenJDK 21 `./gradlew --no-daemon testClasses` before compilation because the Kotlin module resolved `testRuntimeClasspath` before a later `testImplementation` mutation (log SHA-256 `408d45e7e2c1bea4152c220af283455421a3bee84dca2b3f069832e9541983d5`). The authorized LATE scaffolding slice reproduced RED (SHA-256 `72d7920f6e7609f3d7c3855c8c946f8fb7498cd5c1a4f625a29b149181145917`), changed only `modules/refactorkit-kotlin/build.gradle.kts` to defer resolution into `tasks.test.doFirst`, and passed the GREEN rerun (SHA-256 `1c9819e09ec44341b708fd747f5ee1b2656cae296a5edcb3d2d3b8ef66c3b745`). Full OpenJDK 21 `check goldenTest` then passed 82/82 tasks and 1,062 tests with 228 skipped and zero failures/errors (log SHA-256 `48ac4ede4257552295b41c824721f845c609af6a58b3bb1bcd3e0a7924a02286`). This resolves only the local scaffold admission gate; corrected-revision CI, packaged/native/cross-platform evidence, and every unqualified K5/T5/J1/I1 or release row remain open.
+
+A final native release row must bind all of the following into one versioned immutable release evidence identity:
+
+* repository, immutable tag, full commit SHA, clean/version state, and revision-derived timestamp;
+* platform/architecture, final archive name and SHA-256, and extracted runtime/tree identity;
+* fixture, request, scenario, operation-family report, and explicit toolchain identities;
+* SPDX SBOM hash and provenance/SBOM attestation subject digest; and
+* an independent post-publication download, checksum/attestation verification, extraction, no-global-Java launch, and representative managed apply/rollback receipt on that native host.
+
+Source-built tests, local package observations, queued/running CI, and intermediate Actions artifacts remain distinct evidence subjects. A support-matrix row is a downstream projection and cannot create authority. These constraints change release evidence, not deployment topology, so `docs/c4/workspace.dsl` remains unchanged and no deployment-view delegation was needed.
+
 == Published Deployment Evidence
 
 The immutable `v0.3.0` tag points to commit `ba114134be605b7b0076e7471f8111c081a8aaa3`. The https://github.com/mgiustiniani/refactorkit/releases/tag/v0.3.0[GitHub Release] is latest and non-prerelease and publishes the runtime ZIP with its `.sha256` asset. The downloaded archive matched SHA-256 `0cf054a7eb99a86734f663ca0966da2b47259b8a4658bca97f9044bc2d21ff10`, passed version, help, and sample-project scan checks with `JAVA_HOME` unset, and was deployed locally.
