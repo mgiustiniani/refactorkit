@@ -510,8 +510,6 @@ internal object JavaRenameMavenModuleContract {
     const val MAX_COPY_ENTRIES = 100_000
     const val MAX_COPY_FILE_BYTES = 32L * 1024 * 1024
     const val MAX_COPY_TOTAL_BYTES = 512L * 1024 * 1024
-    const val TEMP_DELETE_ATTEMPTS = 20
-    const val TEMP_DELETE_RETRY_MILLIS = 50L
     val ROOT_POM = Path.of("pom.xml")
     val MODULE_DIRECTORY = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
     val ARTIFACT_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")

@@ -12,8 +12,6 @@ import org.refactorkit.java.JavaRenameMavenModuleContract.MAX_COPY_FILE_BYTES
 import org.refactorkit.java.JavaRenameMavenModuleContract.MAX_COPY_TOTAL_BYTES
 import org.refactorkit.java.JavaRenameMavenModuleContract.PlannerRefusal
 import org.refactorkit.java.JavaRenameMavenModuleContract.SOURCE_UNRECOGNIZED
-import org.refactorkit.java.JavaRenameMavenModuleContract.TEMP_DELETE_ATTEMPTS
-import org.refactorkit.java.JavaRenameMavenModuleContract.TEMP_DELETE_RETRY_MILLIS
 import org.refactorkit.java.JavaRenameMavenModuleContract.hashStrings
 import org.refactorkit.java.JavaRenameMavenModuleContract.pathString
 import org.refactorkit.java.JavaRenameMavenModuleContract.refuse
@@ -26,7 +24,6 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.BasicFileAttributes
-import java.util.Comparator
 import java.util.EnumSet
 
 /** Owns bounded no-follow workspace copying, tracked-image reconciliation, and ordered staging edits. */
@@ -240,22 +237,11 @@ internal object JavaRenameMavenModuleWorkspace {
 
     private fun deleteNoFollow(root: Path) {
         if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return
-        var lastFailure: Exception? = null
-        repeat(TEMP_DELETE_ATTEMPTS) { attempt ->
-            try {
-                Files.walk(root).use { paths ->
-                    paths.sorted(Comparator.reverseOrder()).forEach { path ->
-                        require(!Files.isSymbolicLink(path)) { "Staged cleanup encountered a symbolic link" }
-                        Files.deleteIfExists(path)
-                    }
-                }
-                return
-            } catch (failure: Exception) {
-                lastFailure = failure
-                if (attempt + 1 < TEMP_DELETE_ATTEMPTS) Thread.sleep(TEMP_DELETE_RETRY_MILLIS)
-            }
+        val paths = Files.walk(root).use { stream -> stream.toList() }
+        paths.sortedByDescending(Path::getNameCount).forEach { path ->
+            require(!Files.isSymbolicLink(path)) { "Staged cleanup encountered a symbolic link" }
+            Files.delete(path)
         }
-        throw IllegalStateException("Cannot remove the bounded staged Maven workspace", lastFailure)
     }
 
     fun resolveInside(root: Path, relative: Path): Path {
