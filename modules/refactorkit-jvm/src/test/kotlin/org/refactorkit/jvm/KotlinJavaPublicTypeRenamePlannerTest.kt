@@ -24,12 +24,29 @@ import kotlin.io.path.exists
 import kotlin.io.path.readBytes
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class KotlinJavaPublicTypeRenamePlannerTest {
+    private val temporaryDirectories = mutableListOf<Path>()
+
+    @AfterTest
+    fun deleteTemporaryDirectories() {
+        var cleanupFailure: Throwable? = null
+        temporaryDirectories.asReversed().forEach { directory ->
+            try {
+                deleteNoFollow(directory)
+            } catch (failure: Throwable) {
+                cleanupFailure?.addSuppressed(failure) ?: run { cleanupFailure = failure }
+            }
+        }
+        temporaryDirectories.clear()
+        cleanupFailure?.let { throw it }
+    }
+
     @Test
     fun ephemeralJavaCompilationFailurePublishesNoConsumerEvidence() {
         val fixture = javaDeclarationFixture()
@@ -931,6 +948,15 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     private fun temporaryDirectory(prefix: String): Path {
         val base = Path.of(System.getProperty("user.dir")).resolve("build/test-tmp").toAbsolutePath().normalize()
         Files.createDirectories(base)
-        return Files.createTempDirectory(base, prefix)
+        return Files.createTempDirectory(base, prefix).also(temporaryDirectories::add)
+    }
+
+    private fun deleteNoFollow(root: Path) {
+        if (!Files.exists(root)) return
+        val paths = Files.walk(root).use { stream -> stream.toList() }
+        paths.sortedByDescending(Path::getNameCount).forEach { path ->
+            require(!Files.isSymbolicLink(path)) { "Temporary test cleanup refuses symbolic link: $path" }
+            Files.delete(path)
+        }
     }
 }
