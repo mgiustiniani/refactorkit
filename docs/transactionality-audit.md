@@ -1,6 +1,6 @@
 # Transactionality and Requirements Audit
 
-Status: transactionality findings closed for the qualified managed-file contract carried by `0.4.0` and the long-range multi-language roadmap.
+Status: transactionality findings closed for the qualified managed-file and diagnostics-only contract carried by `0.4.0`; the additive authoritative-evaluation path is implementation-informed only for REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004` and the bounded direct-library Maven module-rename consumer. General model-changing operations and release/support qualification remain open.
 
 Audit baseline: commit `5f47ad0` (`Preflight patch file state safely`).
 
@@ -488,9 +488,13 @@ workspace lock, but remain disjoint from language `files` and `sourceExtensions`
 so tracking Maven POM bytes does not broaden source discovery to arbitrary XML.
 `WorkspaceEditSimulator` preserves source/auxiliary ownership across create,
 modify, rename and delete steps. PatchEngine affected-file preconditions,
-post-image hashes, post-apply rehydration and exact rollback cover both sets.
-Core tests prove one POM range edit passes all three diagnostic observations and
-rolls back byte-identically while the Java source remains unchanged.
+post-image file rendering, post-apply byte rehydration and exact rollback cover
+both sets. Its simulator-derived post-image snapshot hash is exact by itself only when the
+edit cannot change hash-bound modules, classpath evidence, or build models; the
+implemented bounded TX-015 authoritative mode below rehydrates and journals
+semantic identity for an explicitly selected model-changing operation. Core tests prove one POM range edit whose semantic
+metadata remains valid passes all three diagnostic observations and rolls back
+byte-identically while the Java source remains unchanged.
 
 An operation lease may identify non-managed workspace files whose exact bytes
 participated in semantic authority through immutable
@@ -516,26 +520,94 @@ writer guarantee and remains destructive-concurrency test scope.
 
 ### TX-015 — Central diagnostics transaction gate
 
-Status: **closed after the audited baseline**.
+Status: **closed for the existing diagnostics-only mode and implementation-informed
+for the bounded authoritative mode selected by
+REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`; no general
+model-changing-operation or surface/support qualification is inferred**.
 
-`PatchEngine` now owns diagnostics-regression evaluation under the workspace
-lock after snapshot/precondition validation and before WAL creation. A configured
-`DiagnosticsGate` diagnoses the current snapshot, applies the normalized edit to
-an immutable staged snapshot, diagnoses the exact post-image, and refuses any
-increase in ERROR diagnostics as `diagnostics.regression`; provider failure
-refuses as `diagnostics.unavailable`. Both map to `DIAGNOSTICS_FAILED (-32015)`.
-Existing identical errors are tolerated using multiset comparison, while new or
-additional errors block without workspace or journal writes.
+`PatchEngine` owns diagnostics-regression evaluation under the workspace lock
+after snapshot/precondition validation and before WAL creation. An enabled
+legacy `DiagnosticsGate` returns diagnostics only: core invokes it on `S0`,
+applies the normalized edit through `WorkspaceEditSimulator`, and invokes it on
+that immutable candidate. Existing identical errors are tolerated by exact
+multiset identity, preview-approved regressions are subtracted, new or additional
+errors refuse as `diagnostics.regression`, and provider failure refuses as
+`diagnostics.unavailable`. A disabled gate invokes no provider. Post-apply and
+automatic-rollback checks compare complete diagnostic multisets. These call,
+order, identity, regression, failure, no-call, hash, and schema-v8 meanings remain
+exact.
 
-CLI, daemon, managed LSP, MCP, recipe, and golden-test flows configure the JDT
-Java diagnostics provider centrally rather than trusting planner-populated
-metadata. Because `PatchEngine` commits exactly the validated staged post-images,
-the pre-WAL simulated snapshot is the authoritative post-apply diagnostic state.
-Core tests prove regression refusal and preservation of pre-existing errors. The
-ungated two-/three-argument `PatchEngine.apply` overloads were removed before API
-freeze: every direct library caller must now provide both `ApplyAuthorization`
-and `DiagnosticsGate`. Test-only package extensions make any intentionally
-disabled gate explicit rather than a production default.
+The simulator preserves `S0.modules`, `S0.classpathEvidence`, and
+`S0.buildModels`. Its result is therefore the authoritative staged snapshot by
+itself only when the edit cannot change those fields. For a model-changing
+build-descriptor edit it is exact file candidate `C1`. The additive authoritative
+mode returns one invocation-scoped `AuthoritativeDiagnosticsEvaluation`
+containing one authoritative `ProjectSnapshot` plus diagnostics for that exact
+candidate. Construction deep-detaches every outer and nested collection in the
+snapshot/module/build-model graph, the diagnostic list, and every
+`DiagnosticDetails.fields` map; caller aliases and exposed views cannot change
+construction-time values or create cached-versus-fresh hash drift.
+
+Core preserves normalized workspace root, source/auxiliary partition, tracked
+paths/language IDs/bytes, source extensions, and ignored directories, and permits
+only modules, classpath evidence, and build models to be rehydrated. Before WAL,
+core independently normalizes and enforces containment for module/build roots and
+recomputes the current no-follow path/kind fingerprint for explicitly permitted
+external regular-file classpath evidence. Provider-supplied outside roots,
+symlink substitution, or fabricated evidence cannot authorize a write.
+
+Baseline evaluation equals `S0`/`D0`; staged evaluation of exact `C1` yields
+`S1`/`D1`. After provider completion and before WAL, core repeats under-lock
+workspace and operation-lease revalidation and proves rendered images equal the
+`C1`/`S1` tracked image. The sole schema-v8 `PREPARED` record uses `S0.hash` and
+`S1.hash`. After commit, evaluation reproduces exactly `S1.hash` and the complete
+`D1` multiset. Hash, diagnostic, or availability mismatch advances that same
+record from `APPLIED` through `ROLLING_BACK` to `ROLLED_BACK`; restored evaluation
+must reproduce `S0.hash` and `D0`, or report recovery failure. No second
+transaction is created. The transient result is discarded with the apply
+attempt, and schema-v8 remains the sole WAL/idempotency/exact-result store.
+
+Independent OpenJDK 21.0.11 review returned `PASS_FOR_PROMOTION` (manifest
+SHA-256 `6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`;
+summary SHA-256
+`76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`).
+The authoritative runner passed 16/16 scenarios and 128/128 steps (log SHA-256
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`;
+JSON SHA-256
+`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`).
+The bounded direct-library Maven consumer passed 1/1 scenario and 50/50 steps
+(log SHA-256
+`b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`;
+JSON SHA-256
+`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`).
+
+Final post-promotion whole-working-tree verification on OpenJDK 21.0.11 used
+`./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in
+7m 29s; 82 tasks executed; 144 standard-test XML files; 1,062 tests discovered,
+834 executed, 228 skipped/tag-filtered; zero failures/errors. The full log is
+`/tmp/refactorkit-authoritative-module-rename-final-check.log` with SHA-256
+`c3a7b2a902b45267b60179da887c143d9e79f180f9e7ee4043e7631d4e66326d`;
+the standard-test XML checksum-manifest SHA-256 is
+`951f7bd281fc4900a096a2295937ee73784294f0ecb2a5c63f469d0c1dea907a`.
+SpotBugs remains configured non-blocking with `ignoreFailures=true`. The
+independent receipt's reviewed/non-blocking slice classification records zero
+EI/EI2 for the five corrected module-rename contract target classes; one
+non-real authoritative-evaluation EI on a defensive unmodifiable diagnostics
+list; Kotlin compiler collection-cast BC and non-correctness-boxing Bx reports;
+47 authoritative glue findings (27 BC, 11 MS, 6 NP, 1 RCN, 2 UrF); and 113
+module-rename glue findings (37 BC, 19 MS, 46 NP, 10 RCN, 1 REC). The glue
+reports are lifecycle-nullability or generated-bytecode/static-field findings,
+and no slice defect remained unclassified. PMD has no Kotlin source input for
+this slice and supplies no Kotlin finding claim. No aggregate numerical coverage
+is available; these test totals are not coverage. The existing dedicated
+packaged Maven task
+`:modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest` is intentionally
+excluded from the standard totals.
+
+CLI, daemon, managed LSP, MCP, recipes, packaged/native/cross-platform execution,
+general Maven projects, and release-wide support remain unqualified. The final
+source-built receipt likewise does not qualify packaged, native,
+cross-platform, or general Maven support.
 
 ### TX-016 — Approval semantics and audit state
 
@@ -628,10 +700,14 @@ The current requirements should be corrected before API `1.0` freeze.
 ## Closure record
 
 TX-001 through TX-018 are closed for the qualified managed-file transaction
-contract described above. Evidence includes deterministic boundary faults, real
-process kills, restart compensation, rollback conflicts, corruption quarantine,
-raw truncation, distinct mounted stores, metadata restoration, diagnostics,
-approval, protocol mapping, and integration state refresh.
+contract described above. TX-015 additionally has implemented-and-validated
+evidence for the exact authoritative-evaluation boundary and bounded direct-library
+Maven module-rename consumer described above. That promotion does not generalize
+the mode to other model-changing operations or qualify protocols, recipes,
+packaged/native/cross-platform behavior, general Maven projects, or release-wide
+support. Existing deterministic fault, kill, restart, rollback, corruption,
+truncation, mounted-store, metadata, diagnostics, approval, protocol-mapping, and
+state-refresh evidence retains its separately stated scope.
 
 ## Stable-release verdict
 

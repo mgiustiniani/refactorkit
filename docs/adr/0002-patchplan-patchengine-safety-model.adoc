@@ -73,3 +73,181 @@ The following open findings qualify the accepted direction and must not be read 
 * Startup recovery handles compatible interrupted lifecycle states and blocks conflicts; deterministic faults, real process kills, raw truncation, corruption quarantine, compensation failure, and cross-store lifecycles are covered.
 * Managed snapshot-aware writes close the normal RefactorKit-writer scan-to-mutation race and independently detect newly appeared declared-scope sources and changed Java classpath artifacts; native editor-applied LSP edits and hostile concurrent filesystem namespace replacement remain outside that evidence.
 * Stable `1.0` transactionality must not be claimed until the required guarantees are either evidenced or narrowed to precise degraded guarantees.
+
+== Bounded Authoritative Evaluation Clarification (2026-08-02)
+
+This append-only clarification preserves this decision's *Accepted* lifecycle,
+status text, history, and earlier evidence. Independent review on 2026-08-02
+found `REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001` through `004`
+implemented-and-validated for the bounded contract below, with
+`REQ-JAVA-MAVEN-MODULE-RENAME-001` as its validated model-changing consumer.
+Those requirement-evidence promotions do not change this ADR's lifecycle or
+qualify broader transactionality, Java/Maven support, or a release.
+
+=== Authoritative candidate evaluation
+
+For an edit that can change hash-bound semantic metadata, the Core Patch and
+Transaction Execution bounded context owns one language-neutral application
+port and its invariants. For each exact immutable candidate, that port returns
+exactly one transient immutable value containing one authoritative
+`ProjectSnapshot` and the diagnostic multiset evaluated from that same
+candidate. Core is the upstream policy owner; a language-specific bounded
+context is a downstream provider through an anti-corruption layer and cannot
+introduce a language type or language dependency into core.
+
+The evaluation value is not an aggregate, entity, domain event, repository,
+projection, or durable service. It has no entity identity or independent
+lifecycle: its value identity is the authoritative snapshot identity together
+with the exact diagnostic multiset for one invocation, and it is discarded
+within the lock-held `PatchEngine.apply` attempt. Its consistency boundary is
+that apply attempt and its existing transaction. Natural cardinality is one
+candidate request to one value; no reactive stream, subscription, hidden
+blocking boundary, mutable singleton, or God service is introduced.
+
+Core constructs or validates the authoritative result while preserving the
+candidate's normalized workspace root; exact source/auxiliary partition;
+normalized tracked paths, language IDs, and bytes; `sourceExtensions`; and
+`ignoredDirectories`. Only `modules`, `classpathEvidence`, and `buildModels` may
+be rehydrated. Provider-owned temporary roots, a changed tracked inventory,
+repartitioned files, or different tracked bytes are never snapshot authority.
+
+The bounded implementation enforces transitive immutability. At construction,
+`AuthoritativeDiagnosticsEvaluation` deep-detaches every caller-owned outer and
+nested collection reachable through:
+
+* `ProjectSnapshot`, including its files, auxiliary files, source/ignore sets,
+  modules, classpath evidence, and build models;
+* every `Module`, including all source-root, classpath, dependency, output, and
+  language-settings collections;
+* every `BuildModel`, `BuildModule`, and `BuildSourceSet`, including their nested
+  module/source-set, diagnostic, attribute, source-root, classpath, output, and
+  dependency collections; and
+* the evaluation diagnostics list and every `DiagnosticDetails.fields` map.
+
+No retained caller alias or attempted mutation through an exposed outer or
+nested collection may change the evaluation or produce a partial change. The
+complete exposed snapshot-and-diagnostic graph is the construction-time value
+identity. After any such attempt, the exposed `ProjectSnapshot.hash` and a fresh
+canonical hash recomputed from all exposed snapshot state must both equal its
+construction-time snapshot identity; the complete diagnostic multiset,
+including every details map, must remain equal to its construction-time
+component of that identity.
+
+Core, not the downstream provider, performs path acceptance on every returned
+result. Against the preserved candidate workspace it resolves and
+normalizes each `Module.root`; every entry in that module's `sourceRoots`,
+`mainSourceRoots`, `testSourceRoots`, `generatedSourceRoots`, and
+`generatedTestSourceRoots`; every `BuildModule.root` in every returned
+`BuildModel`; and every source/generated-source root in each `BuildSourceSet`.
+Each must remain workspace-contained. An anti-corruption-layer translation or
+provider-owned isolated materialization is not authority to introduce an
+arbitrary root.
+
+An explicit absolute external classpath entry remains admissible only through
+the existing explicit external-classpath policy. For the exact path and kind
+bound by that policy, core independently recomputes the entry's current
+no-follow path/kind fingerprint and requires exact equality with the supplied
+evidence. Missing or unreadable evidence, path or kind drift, symlink
+substitution, or a fabricated fingerprint is an authority violation. For a
+baseline or staged result it refuses before `PREPARED` and before any WAL
+record; at a committed or restored evaluation it cannot attest the image and
+follows the existing rollback/recovery rules. Provider authority includes
+neither arbitrary roots nor fabricated classpath facts.
+
+`WorkspaceEditSimulator` therefore remains exact post-image snapshot authority
+only when the edit cannot change hash-bound semantic metadata. For a
+model-changing edit it produces the exact staged file candidate `C1`, not an
+authoritative successor that may retain `S0` modules, classpath evidence, or
+build models.
+
+=== Lock, WAL, apply, and restoration invariants
+
+The implemented bounded ordering is fail-closed:
+
+* Baseline evaluation returns a snapshot exactly equal to `S0` and baseline
+  diagnostics `D0`; a baseline mismatch or unavailable evaluation refuses the
+  apply without a WAL record.
+* Core simulates the normalized edit to exact candidate `C1`. Staged evaluation
+  preserves the candidate shell described above and returns authoritative
+  snapshot `S1` plus staged diagnostics `D1` for that exact image.
+* After provider completion and before WAL creation, core repeats under the
+  existing workspace lock both engine-owned workspace revalidation and the
+  operation-authority lease revalidation. Drift, provider unavailability, or a
+  failed diagnostic gate refuses before `PREPARED` and before workspace
+  mutation.
+* Rendered transaction post-images must equal the tracked image of `C1` and
+  `S1`. The existing schema-v8 `PREPARED` record stores
+  `preSnapshotHash=S0.hash` and `postSnapshotHash=S1.hash`; the latter is not a
+  file-only successor with stale semantic metadata.
+* After apply, authoritative evaluation of committed bytes must reproduce
+  exactly `S1.hash` and the complete `D1` multiset under the existing diagnostic
+  identity. Hash mismatch, diagnostic mismatch, or evaluation unavailability
+  triggers automatic rollback through the same journaled transaction.
+* After that restoration, authoritative evaluation must reproduce exactly
+  `S0.hash` and `D0`. A failure to restore or attest that baseline remains an
+  explicit recovery failure rather than a successful apply result.
+
+=== Compatibility and persistence
+
+The existing `DiagnosticsGate.enabled` and `DiagnosticsGate.disabled` call and
+no-call behavior, provider invocation order, diagnostic identity, error-only
+multiset regression and approved-regression semantics, and typed
+unavailability/refusal behavior remain exact for diagnostics-only evaluation.
+Operations whose edits cannot change hash-bound semantic metadata retain their
+existing exact simulator-derived pre/post hashes. Existing journal records and
+hash meanings are not rewritten.
+
+The authoritative evaluation is invocation-scoped and transient. The existing
+schema-v8 transaction journal remains the sole WAL, idempotency, and exact-result
+store; the bounded implementation uses no schema bump, historical migration,
+new repository or other store, event store, outbox, audit-evidence store,
+immutable document store, or projection. It adds no durable evaluation
+serialization and no core language dependency.
+
+=== Promotion evidence and qualification boundary
+
+The linked
+link:../../features/authoritative-diagnostics-evaluation.feature[REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through -004]
+and
+link:../../features/java-maven-module-rename.feature[REQ-JAVA-MAVEN-MODULE-RENAME-001]
+definitions are `@implemented-and-validated` within their exact executable
+bounds. This is requirement-evidence status, not a change to the accepted
+decision lifecycle.
+
+Independent read-only final review used OpenJDK 21.0.11 and returned
+`PASS_FOR_PROMOTION`. The evidence root is
+`/tmp/refactorkit-final-promotion-review-iluBkK`; the `SHA256SUMS` manifest has
+SHA-256 `6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`,
+and `REVIEW_SUMMARY.txt` has SHA-256
+`76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`.
+The authoritative-evaluation run passed 16 of 16 scenarios and 128 of 128 steps;
+its log SHA-256 is
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`
+and its Cucumber JSON SHA-256 is
+`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`.
+The first core run passed 117 of 117 tests, and the managed diagnostics selector
+regression passed 11 scenarios and 92 steps.
+
+The evidence covers deep detachment across the complete exposed snapshot,
+build-model, and diagnostic graph; fresh canonical-hash stability; core-owned
+pre-WAL containment; independently recomputed no-follow external classpath
+fingerprint authenticity; exact `S0`/`C1`/`S1` schema-v8 identities; and
+same-record automatic rollback with exact restored-baseline attestation. The
+bounded Maven module-rename consumer passed one scenario and 50 steps; its exact
+three-POM-range/two-file-rename behavior is recorded in
+link:0012-authoritative-release-aware-java-maven-diagnostics.adoc[ADR 0012].
+
+Static analysis is reviewed evidence, not an aggregate-cleanliness claim.
+`StageFacts`, `GateExpectation`, `ReactorView`, `ModuleView`, and `SourceSetView`
+have zero raw and zero real SpotBugs EI/EI2 findings. The one reported
+`AuthoritativeDiagnosticsEvaluation` EI warning is classified non-real: its
+getter returns a defensively copied unmodifiable list, and deep caller-alias and
+exposed-view mutation probes retained every exact value without partial change.
+PMD reported `NO-SOURCE` for Kotlin and therefore supplies no PMD cleanliness
+evidence. The wider configured SpotBugs baseline remains non-blocking.
+
+This promotion does not qualify broad Java/Maven module rename or move,
+CLI/daemon/LSP/MCP or other protocol surfaces, recipes, packaged or native
+execution, native CI rows, operating-system/architecture/cross-platform
+behavior, disposable real or general Maven projects, or release-wide/general
+Java/Maven diagnostics, refactoring, transactionality, or support.

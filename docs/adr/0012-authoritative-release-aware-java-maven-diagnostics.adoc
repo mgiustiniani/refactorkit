@@ -538,3 +538,189 @@ epic.
   offline effective models, source-set ownership, and generated-root boundaries.
 * link:0011-credential-and-executable-build-provider-boundaries.adoc[ADR 0011] --
   preserves credential-free and non-executable provider boundaries.
+
+== Bounded Evaluation and Maven Module-Rename Clarification (2026-08-02)
+
+This append-only clarification preserves this decision's *Accepted* lifecycle,
+status text, history, and earlier evidence. Independent review on 2026-08-02
+found `REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001` through `004` and
+`REQ-JAVA-MAVEN-MODULE-RENAME-001` implemented-and-validated within the bounded
+contracts below. Those requirement-evidence promotions neither complete the
+`RPK-JAVA-DIAG-001` through `007` epic nor qualify a release or general
+Java/Maven support.
+
+The phrase _exact staged post-image_ in this decision means one authoritative
+snapshot-and-diagnostics result for one exact candidate, as constrained by
+link:0002-patchplan-patchengine-safety-model.adoc[ADR 0002]. Core Patch and
+Transaction Execution owns the language-neutral application port, result
+invariants, lock-held consistency boundary, and WAL use. Java/Maven Ownership
+Migration is the downstream provider through an anti-corruption layer. Its
+provider may evaluate a no-follow isolated materialization, but it has no file
+mutation or workspace-authority role and must translate temporary roots and
+semantic paths back to the caller's candidate root.
+
+For each invocation the provider returns exactly one transient immutable value
+containing an authoritative `ProjectSnapshot` plus the Java/Maven diagnostic
+multiset produced from that same candidate. The implemented value is
+transitively immutable, not merely top-level read-only: core deep-detaches every
+outer and nested collection reachable through `ProjectSnapshot`, each `Module`,
+`BuildModel`, `BuildModule`, and `BuildSourceSet`, the diagnostics list, and
+every `DiagnosticDetails.fields` map. Caller aliases and exposed collection
+views cannot change or partially change it. Its complete exposed
+snapshot-and-diagnostic graph is the construction-time value identity. The
+exposed snapshot hash and a fresh canonical hash recomputed from all exposed
+snapshot state must remain equal to the construction-time snapshot identity,
+while the complete diagnostics and details must remain equal to their
+construction-time component of that identity.
+
+Core preserves the normalized workspace root; source/auxiliary partition;
+tracked paths, language IDs, and bytes; source-extension scope; and
+ignored-directory policy. The provider may rehydrate only compatibility
+`modules`, `classpathEvidence`, and `buildModels`. On every provider result,
+core, rather than the provider, normalizes and validates `Module.root`, every
+module source-root collection, `BuildModule.root` for every module in every
+returned `BuildModel`, and build source-set roots as workspace-contained paths.
+Provider temporary roots are not authority. Explicit absolute external
+classpath evidence remains possible only under the existing explicit policy.
+Core must independently verify the exact policy-bound path and kind, recompute
+the entry's current no-follow path/kind fingerprint, and require exact equality
+with the supplied fingerprint. Missing or unreadable evidence, path/kind drift,
+symlink substitution, or fabricated fingerprints refuse a baseline or
+staged result before WAL. The provider can supply neither arbitrary roots nor
+fabricated classpath facts.
+
+This is a one-request/one-value application-port result, not an aggregate,
+entity, event, reactive subscription, repository, projection, durable service,
+or mutable God service, and it introduces no Maven, JDT, or other language
+dependency into core.
+
+Baseline evaluation must equal `S0` and its diagnostic multiset `D0`. Evaluation
+of the exact simulated file candidate `C1` must return authoritative staged
+snapshot `S1` and diagnostics `D1`. After provider completion and before WAL,
+core repeats under-lock engine-owned workspace and operation-authority lease
+revalidation. Schema-v8 `PREPARED` then records `S0.hash` as
+`preSnapshotHash` and `S1.hash` as `postSnapshotHash`. Post-apply evaluation must
+reproduce exactly `S1.hash` and the complete `D1` multiset. Mismatch or
+unavailability automatically rolls back the same transaction, after which
+restored evaluation must reproduce exactly `S0.hash` and `D0`; restoration or
+attestation failure remains a recovery failure.
+
+`WorkspaceEditSimulator` is authoritative by itself only for edits that cannot
+change hash-bound semantic metadata. The current `DiagnosticsGate.enabled` and
+`DiagnosticsGate.disabled` call/no-call and provider-order semantics,
+diagnostic identity, error-multiset regression behavior, approved diagnostic
+handling, typed failure behavior, and exact hashes remain unchanged for
+existing diagnostics-only operations. The new evaluation value is
+invocation-scoped and discarded. Schema-v8 remains the sole WAL, idempotency,
+and exact-result store, with no schema bump, record rewrite, migration, new
+store, event store, outbox, audit store, immutable document store, projection,
+or durable evaluator serialization.
+
+=== Bounded Maven module-rename XML range authority
+
+For the implemented-and-validated bounded direct-library module-rename row, the
+Java adapter obtains POM structure and exact raw-POM element-text
+byte/character ranges only from maintained Woodstox `7.1.1` StAX2 location
+information over the same hash-bound raw POM documents. Parser-reported
+locations are the sole structural and range authority for the authorized
+literal replacements. No POM or effective model is serialized, and every byte
+outside those exact ranges remains outside mutation authority.
+
+Parser construction must be fail-closed: DTD processing, external general
+entity resolution, and external parameter entity resolution are disabled;
+external DTD access is denied. The planning path executes no Maven, Maven
+wrapper, plugin, or lifecycle goal and accesses no settings, credentials,
+credential helpers, or network. Inability to
+establish those parser controls or exact raw-document ranges refuses planning
+rather than falling back.
+
+This selection explicitly rejects and replaces operation-owned hand-written XML
+tokenization; it is not an alternate or fallback authority. The Woodstox/StAX2
+dependency is bounded to `refactorkit-java` compile/runtime scope and is absent
+from the `refactorkit-core` runtime. Core remains language-independent and
+XML-library-independent in its models, ports, and dependency graph.
+
+=== Implemented direct-child edit shape
+
+The bounded
+link:../../features/java-maven-module-rename.feature[REQ-JAVA-MAVEN-MODULE-RENAME-001]
+implementation requires independently explicit old/new direct-child directory
+intent and explicit artifact intent; a directory rename does not infer a Maven
+coordinate change. Its positive fixture row renames `catalog-model` to
+`catalog-domain` and changes the artifact to the caller-explicit
+`catalog-domain`. It produces exactly five ordered `FileEdit` entries:
+
+. one raw-POM element-text replacement at
+  `catalog-model/pom.xml` range `9:14-9:27` for the child project's direct
+  `artifactId`;
+. one replacement at root `pom.xml` range `74:12-74:25` for the exact direct
+  `module` entry;
+. one replacement at `catalog-pricing/pom.xml` range `13:18-13:31` for the
+  effective-model-proven direct dependency `artifactId`;
+. one file rename from `catalog-model/pom.xml` to
+  `catalog-domain/pom.xml`; and
+. one file rename of the unchanged bytes from
+  `catalog-model/src/main/java/com/acme/catalog/legacy/Product.java` to
+  `catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java`.
+
+Only those three parser-authorized element-text ranges change; no directory
+rename operation, POM serialization, transitive-consumer edit, or other source
+or XML-byte mutation is authorized. A complete offline staged reactor and exact
+Maven/JDT diagnostic multiset are required. Explicit direct-library apply then
+uses the authoritative gate from
+link:0002-patchplan-patchengine-safety-model.adoc[ADR 0002], records one
+schema-v8 transaction with `S0`/`S1` identities, and normal rollback advances
+that same record and restores the exact original image.
+
+=== Promotion evidence and qualification boundary
+
+The linked
+link:../../features/authoritative-diagnostics-evaluation.feature[REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through -004]
+and `REQ-JAVA-MAVEN-MODULE-RENAME-001` definitions are
+`@implemented-and-validated` within their exact executable bounds. This is
+requirement-evidence status, not a change to the accepted decision lifecycle.
+
+Independent read-only final review used OpenJDK 21.0.11 and returned
+`PASS_FOR_PROMOTION`. The evidence root is
+`/tmp/refactorkit-final-promotion-review-iluBkK`; the `SHA256SUMS` manifest has
+SHA-256 `6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`,
+and `REVIEW_SUMMARY.txt` has SHA-256
+`76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`.
+
+The authoritative-evaluation run passed 16 of 16 scenarios and 128 of 128 steps;
+its log SHA-256 is
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`
+and its Cucumber JSON SHA-256 is
+`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`.
+It validates deep-detached evaluation, core-owned pre-WAL semantic containment,
+independently recomputed no-follow external fingerprint authenticity, exact
+`S0`/`C1`/`S1` schema-v8 identity, and same-record automatic rollback. The Maven
+module-rename run passed its one scenario and all 50 steps; its log SHA-256 is
+`b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`
+and its Cucumber JSON SHA-256 is
+`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`.
+The first core run passed 117 of 117 tests, 52 of 52 selected Maven
+editor/scanner/planner regressions passed, and the managed diagnostics selector
+passed 11 scenarios and 92 steps.
+
+Static analysis is reviewed evidence, not an aggregate-cleanliness claim.
+`StageFacts`, `GateExpectation`, `ReactorView`, `ModuleView`, and `SourceSetView`
+have zero raw and zero real SpotBugs EI/EI2 findings. The one reported
+`AuthoritativeDiagnosticsEvaluation` EI warning is classified non-real because
+its getter returns a defensively copied unmodifiable list; deep caller-alias and
+exposed-view mutation probes passed without partial change and retained exact
+values. PMD reported `NO-SOURCE` for Kotlin and therefore supplies no PMD
+cleanliness evidence. The wider configured SpotBugs baseline remains
+non-blocking.
+
+The maintained parser probe confirmed Woodstox `7.1.1`, parser-reported exact
+offsets, and refusal of DTD/external-DTD plus external general and parameter
+entity paths. Woodstox is scoped to `refactorkit-java` only; its reviewed JAR
+SHA-256 is
+`02b9d022e9d47704ff8a7a859a0dbfd3b2882a8311eb7ff1e180f760ccda2712`.
+
+This promotion does not qualify broad Java/Maven module rename or move,
+CLI/daemon/LSP/MCP or other protocol surfaces, recipes, packaged or native
+execution, native CI rows, operating-system/architecture/cross-platform
+behavior, disposable real or general Maven projects, or release-wide/general
+Java/Maven diagnostics, refactoring, transactionality, or support.

@@ -571,8 +571,18 @@ class JavaProjectScanner(
 
     fun detectModuleRoots(root: Path): List<Path> {
         if (!root.exists()) return emptyList()
+        val scansMavenReactor = Files.isRegularFile(root.resolve("pom.xml"))
         return Files.walk(root).use { stream ->
-            stream.filter { Files.isDirectory(it) && conventionalSourceRoots(it).isNotEmpty() }
+            stream.filter { candidate ->
+                val conventionalRoots = conventionalSourceRoots(candidate)
+                val isEmptyOrphanedMavenHierarchy = scansMavenReactor &&
+                    candidate != root &&
+                    !Files.isRegularFile(candidate.resolve("pom.xml")) &&
+                    conventionalRoots.none(::containsJvmSource)
+                Files.isDirectory(candidate) &&
+                    conventionalRoots.isNotEmpty() &&
+                    !isEmptyOrphanedMavenHierarchy
+            }
                 .filter { !isIgnoredDirectory(root, it) }
                 .collect(Collectors.toList()).distinct().sortedBy { it.toString() }
         }

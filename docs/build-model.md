@@ -45,9 +45,85 @@ edges must resolve to a module in the same model.
 
 ## Snapshot and compatibility
 
-`ProjectSnapshot.buildModels` is hash-bound. `PatchEngine` retains the exact model
-while validating pre/post source images, and existing POM/BOM/artifact evidence
-continues to detect on-disk build-input drift under the workspace lock.
+`ProjectSnapshot.buildModels` is hash-bound. For an edit that cannot change
+`modules`, `classpathEvidence`, or `buildModels`, retaining those exact fields
+while staging new tracked bytes is authoritative and the current
+`WorkspaceEditSimulator`/`PatchEngine` hash behavior remains exact. For a
+model-changing descriptor edit, however, that simulator result is only the exact
+file candidate `C1`; carrying semantic fields forward from `S0` is stale metadata
+and must not define the authoritative post-image snapshot or journal hash.
+Existing POM/BOM/artifact evidence continues to detect on-disk build-input drift
+under the workspace lock.
+
+## Implemented bounded authoritative snapshot diagnostics evaluation
+
+Status: implementation-informed for
+`REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001` through `004` and its bounded
+`REQ-JAVA-MAVEN-MODULE-RENAME-001` consumer. All five definitions and their 17
+expanded cases are `@implemented-and-validated`. This does not qualify the wider
+Java/Maven diagnostics epic, general descriptor-changing operations, a release,
+or any protocol, packaged, native, cross-platform, or general-Maven support row.
+
+Core Patch and Transaction Execution exposes an additive language-neutral
+application port whose one invocation returns one transient immutable
+`AuthoritativeDiagnosticsEvaluation`: one authoritative `ProjectSnapshot` plus
+the diagnostics produced for that exact candidate. The value deep-detaches every
+caller-owned outer and nested collection reachable through `ProjectSnapshot`,
+each `Module`, `BuildModel`, `BuildModule`, and `BuildSourceSet`, the diagnostics
+list, and every `DiagnosticDetails.fields` map. Mutation through caller aliases or
+exposed views cannot change the construction-time value, and a fresh canonical
+hash recomputed from the complete exposed snapshot remains equal to its retained
+snapshot hash.
+
+Core preserves the candidate's normalized workspace root, exact
+source/auxiliary partition, normalized tracked paths, language IDs and bytes,
+`sourceExtensions`, and `ignoredDirectories`. Only compatibility `modules`,
+`classpathEvidence`, and `buildModels` may be rehydrated. Before WAL, core—not
+the provider—normalizes and enforces workspace containment for module and build
+source-set roots. Explicit external regular-file classpath evidence remains
+admissible only when core independently recomputes its current no-follow
+path/kind fingerprint and it exactly matches the supplied evidence. Arbitrary
+roots, symlink substitution, missing or unreadable evidence, and fabricated
+fingerprints fail closed; a provider-owned temporary root or different tracked
+image is never authority.
+
+The lock-held sequence is exact: baseline evaluation reproduces full `S0` and
+diagnostics `D0`; evaluation of simulated file candidate `C1` yields full staged
+snapshot `S1` and diagnostics `D1`; after provider completion, core repeats
+engine-owned workspace and operation-authority lease revalidation before WAL.
+Rendered post-images equal the tracked image in `C1`/`S1`, and the schema-v8
+`PREPARED` record uses `S0.hash` and `S1.hash`. Evaluation after commit reproduces
+`S1.hash` and the complete `D1` multiset. A hash, diagnostic, or availability
+mismatch advances that same record through automatic rollback, after which
+restored evaluation must reproduce `S0.hash` and `D0`; no second transaction is
+created.
+
+This is additive to the diagnostics-only gate. The exact
+`DiagnosticsGate.enabled`/`disabled` call and no-call behavior, provider order,
+diagnostic identity, error-multiset regression and preview-approved-regression
+semantics, typed failures, and existing simulator-derived hashes remain unchanged
+for operations that cannot change hash-bound semantic metadata. The evaluation
+is discarded with the apply attempt. Schema-v8 remains the sole
+WAL/idempotency/exact-result store: there is no schema bump, new store, event
+stream, durable evaluator, God service, or core dependency on Java, Maven, JDT,
+or another language adapter.
+
+Independent final review on OpenJDK 21.0.11 returned `PASS_FOR_PROMOTION`
+(evidence manifest SHA-256
+`6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`;
+summary SHA-256
+`76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`).
+The authoritative evaluation runner passed 16/16 scenarios and 128/128 steps
+(log SHA-256
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`;
+JSON SHA-256
+`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`).
+The bounded module-rename runner passed 1/1 scenario and 50/50 steps. Static
+analysis is deliberately not reported as aggregate clean: the five targeted
+module-rename evidence types have zero raw/real EI/EI2 findings, the one
+`AuthoritativeDiagnosticsEvaluation` EI warning is non-real over a defensively
+copied unmodifiable list and deep mutation probes passed, PMD was `NO-SOURCE`
+for Kotlin, and the wider configured SpotBugs baseline remains non-blocking.
 
 API `0.2` keeps the existing `Module` fields for compatibility. The Java adapter
 now has explicit `BuildModelProvider` implementations and provider identities:

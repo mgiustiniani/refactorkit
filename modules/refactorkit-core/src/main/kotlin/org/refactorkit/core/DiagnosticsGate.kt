@@ -12,8 +12,20 @@ data class DiagnosticsGate(
     companion object {
         fun enabled(id: String, provider: (ProjectSnapshot) -> List<Diagnostic>) = DiagnosticsGate(id, provider)
         fun disabled(id: String) = DiagnosticsGate(id, null)
+        fun authoritative(id: String, provider: AuthoritativeDiagnosticsProvider) =
+            DiagnosticsGate(id, AuthoritativeDiagnosticsAdapter(provider))
     }
 }
+
+private class AuthoritativeDiagnosticsAdapter(
+    val delegate: AuthoritativeDiagnosticsProvider,
+) : (ProjectSnapshot) -> List<Diagnostic> {
+    override fun invoke(candidate: ProjectSnapshot): List<Diagnostic> =
+        delegate.evaluate(candidate).diagnostics
+}
+
+internal val DiagnosticsGate.authoritativeProvider: AuthoritativeDiagnosticsProvider?
+    get() = (provider as? AuthoritativeDiagnosticsAdapter)?.delegate
 
 internal fun diagnosticsRegression(
     before: List<Diagnostic>,
@@ -31,6 +43,18 @@ internal fun diagnosticsRegression(
             remaining[identity] = count - 1
             false
         } else true
+    }
+}
+
+internal fun diagnosticMultisetDifferenceCount(
+    expected: List<Diagnostic>,
+    observed: List<Diagnostic>,
+): Int {
+    val expectedCounts = expected.groupingBy(::diagnosticIdentity).eachCount()
+    val observedCounts = observed.groupingBy(::diagnosticIdentity).eachCount()
+    return (expectedCounts.keys + observedCounts.keys).sumOf { identity ->
+        val difference = (expectedCounts[identity] ?: 0) - (observedCounts[identity] ?: 0)
+        if (difference < 0) -difference else difference
     }
 }
 

@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: mixed: implementation-informed for the separately bounded implemented slices, including Workspace Snapshot Composition and the Java Refactoring Preview Command boundary, and needs-review for broader coverage and qualification. The configured `features/` root contains six feature documents, 27 repository-unique requirement definitions, 59 expanded executable cases, 386 declared scenario steps, and 838 expanded case steps; all 27 definitions and all 59 cases are effectively `@implemented-and-validated`. The official post-promotion repository-wide audit reported those same totals with zero parse/tag/status/duplicate-ID/reconciliation errors (log SHA-256 `f20f39f2421edaf4c5208363a3479a0f7696635631a27d95aeb2a99d04d9be0d`). The Java preview-command feature contributes four non-functional definitions/eight cases/46 declared steps/94 expanded steps. Its corrected split runners passed seven Java-module scenarios/85 steps plus one real public daemon/MCP session scenario/9 steps. Final dated mutable whole-working-tree source-built verification passed on OpenJDK 21.0.11 with 1045 tests discovered, 817 executed, 228 skipped/tag-filtered, zero failures/errors, 140 XML files, and 79 executed tasks (log SHA-256 `fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`); the targeted affected-module static command passed with an intentionally non-zero classification of exactly 48 reviewed/non-blocking slice-local glue findings (log SHA-256 `8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Workspace Snapshot Composition contributes five non-functional definitions/eight cases/41 declared steps/65 expanded steps. Production evidence is the stateless language-neutral core `WorkspaceSnapshotComposer`; a meaningful compile RED failed because that composer was missing (log SHA-256 `d2876ad413703a3895999a9377f8b7c6a713578eb8156b652bb079c70f1a6d95`). Final independent OpenJDK 21.0.11 focused source-built/in-process acceptance passed 8/8 scenarios and 65/65 steps with zero failures, errors, or skips (log SHA-256 `08e8be47c53e6131f75637cddcd3a7092c91da56e9c0b2a8627f9a48f7a7e422`; Cucumber JSON SHA-256 `9d530ea27bbc8b6af6420b785bb6ad85d1a589a7f17ac5ef622bade27a71fd61`). Adoption is source-inspected only in private daemon/MCP `scanWorkspace`; independent daemon 58/58 and MCP 26/26 regressions passed (combined log SHA-256 `9acaed65925c596ef0c161d363c1d8383acd216747e7bc4c93d50ee19c92c9ae`). CLI/LSP and packaged/native/cross-platform/concurrent/numerical-coverage/general-orchestration qualification remain excluded. The preceding official OpenJDK 21.0.11 `io.cucumber:gherkin:28.0.0` four-feature audit remains historical evidence for its then-current 18 implemented definitions/43 cases/299 declared steps/679 expanded steps (log SHA-256 `fb7c81a1d3223e6959d6838ac38c5c737f1bf8804570489405ed59bc1a279bc7`). For REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002, final independent OpenJDK 21.0.11 source-built/in-process acceptance passed 11/11 scenarios and 92/92 steps with zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `74749cf8635d7bbbac3abb4a3eeaf669f6aab3d58770e423094ce791c7882997`); daemon regression passed 58/58 and MCP regression passed 26/26. Final whole-working-tree source-built verification on the same OpenJDK used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 11s; 1021 discovered, 801 executed, 220 skipped/tag-filtered, zero failures/errors; 78 tasks; log SHA-256 `e3e4b3e02fac87003f12cbf87801298653eb12e43c213d1f40fe5177ece75e02`. Explicit non-null final-segment handling eliminated the selector's initial production NP finding while preserving root-path `NullPointerException` and exact `.java`/`.JAVA` behavior. The final full log contains no production finding for `ManagedApplyDiagnosticsGateSelector.kt` or its provider functions; 23 glue-only Kotlin/generated findings remain non-blocking (2 RCN, 13 MS, 1 SA, 7 BC), and the broader configured SpotBugs baseline remains non-blocking. Production evidence is the stateless selector plus source-inspected adoption only at daemon/MCP managed apply. CLI/LSP/recipes/testkit/direct library remain excluded, `PatchEngine` authority is unchanged, and no packaged, native, cross-platform, concurrent, apply-authority, or numerical-coverage claim is made. The preceding four-feature audit that recorded the selector definitions/cases as `@absent` (log SHA-256 `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14`) remains historical pre-promotion evidence. The preceding final three-feature audit (log SHA-256 `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`), the earlier three-feature source-reconciliation receipt that recorded managed rollback as then-`@absent` (log SHA-256 `af9cfc7e69ec589bd5512b963e9eebdce936e63b240e3b1860078f0989b20b7e`), and the still-earlier two-feature parser receipt (log SHA-256 `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`) remain historical evidence for their then-current sources and statuses, not the current aggregate. The managed-rollback feature contributes two non-functional definitions, eight cases, 19 declared steps, and 67 expanded steps. A focused RED proved the mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`); detached unmodifiable ordered snapshotting corrected it. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`). Production evidence is the core executor; CLI/daemon/LSP/MCP adoption is source-inspected only. REQ-PENDING-PLAN-STORE-001/002 contribute two non-functional scenarios and 19 steps. Their focused source-built/in-process run passed both scenarios with 29 executed Gradle tasks and zero failures/errors (log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). The historical PendingPlanStore-scoped whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This later scoped receipt is dated mutable source-built aggregate evidence; it does not qualify packaged processes, concurrent access, a general extraction pattern, or numerical coverage. Surface lifecycle policy remains separate, and no protocol capability or authority rule changed. Historical pre-selector whole-working-tree verification after the managed-rollback correction used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). This is the historical pre-selector whole-working-tree source-built receipt for the managed-rollback correction; the earlier REQ-008- and PendingPlanStore-specific whole-working-tree receipts remain historical evidence for their explicitly stated scopes. It is dated mutable aggregate evidence and does not qualify the selector, packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority.
+Status: implementation-informed for separately bounded implemented slices and needs-review for broader coverage and qualification. The configured `features/` root contains eight feature documents, 32 repository-unique requirement definitions, 76 expanded executable cases, 479 declared scenario steps, one background with five background steps, and 1,016 expanded case steps. All 32 definitions and all 76 cases are effectively `@implemented-and-validated`; every other effective status is zero. The post-promotion official `io.cucumber:gherkin:28.0.0` repository-wide audit on OpenJDK 21.0.11 reports those totals with zero parse/tag/status/duplicate-ID/reconciliation errors (log SHA-256 `ed57576520bdfa92810ebbe93e0e4c238632feae2a74a10a99b35f8e16101925`). The preceding seven-feature audit remains historical evidence for its exact then-current 28 definitions/60 cases/433 declared steps/885 expanded steps, including the one absent Maven module-rename definition/case (log SHA-256 `271ec890cad8065f0536ab27ca885d81e7d070382ca96fdf9d8cf26afa7e137a`). The preceding six-feature post-promotion audit remains historical evidence for its exact then-current 27 definitions/59 cases/386 declared steps/838 expanded steps (log SHA-256 `f20f39f2421edaf4c5208363a3479a0f7696635631a27d95aeb2a99d04d9be0d`). The authoritative diagnostics-evaluation feature contributes four functional definitions/16 cases/43 declared steps/128 expanded steps, all `@implemented-and-validated`; independent acceptance passed 16/16 scenarios and 128/128 steps (log/JSON SHA-256 `bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`/`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`). The module-rename feature contributes one functional definition/case and 50 declared/expanded steps, also `@implemented-and-validated`; its independent log/JSON SHA-256 are `b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`/`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`. Final review returned `PASS_FOR_PROMOTION` (manifest SHA-256 `6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`; summary SHA-256 `76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`). These promotions do not qualify broad module rename/move, protocols, recipes, packaged/native/cross-platform execution, general Maven projects, native CI, release-wide support, or the broad roadmap row. The Java preview-command feature contributes four non-functional definitions/eight cases/46 declared steps/94 expanded steps. Its corrected split runners passed seven Java-module scenarios/85 steps plus one real public daemon/MCP session scenario/9 steps. Final dated mutable whole-working-tree source-built verification passed on OpenJDK 21.0.11 with 1045 tests discovered, 817 executed, 228 skipped/tag-filtered, zero failures/errors, 140 XML files, and 79 executed tasks (log SHA-256 `fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`); the targeted affected-module static command passed with an intentionally non-zero classification of exactly 48 reviewed/non-blocking slice-local glue findings (log SHA-256 `8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Workspace Snapshot Composition contributes five non-functional definitions/eight cases/41 declared steps/65 expanded steps. Production evidence is the stateless language-neutral core `WorkspaceSnapshotComposer`; a meaningful compile RED failed because that composer was missing (log SHA-256 `d2876ad413703a3895999a9377f8b7c6a713578eb8156b652bb079c70f1a6d95`). Final independent OpenJDK 21.0.11 focused source-built/in-process acceptance passed 8/8 scenarios and 65/65 steps with zero failures, errors, or skips (log SHA-256 `08e8be47c53e6131f75637cddcd3a7092c91da56e9c0b2a8627f9a48f7a7e422`; Cucumber JSON SHA-256 `9d530ea27bbc8b6af6420b785bb6ad85d1a589a7f17ac5ef622bade27a71fd61`). Adoption is source-inspected only in private daemon/MCP `scanWorkspace`; independent daemon 58/58 and MCP 26/26 regressions passed (combined log SHA-256 `9acaed65925c596ef0c161d363c1d8383acd216747e7bc4c93d50ee19c92c9ae`). CLI/LSP and packaged/native/cross-platform/concurrent/numerical-coverage/general-orchestration qualification remain excluded. The preceding official OpenJDK 21.0.11 `io.cucumber:gherkin:28.0.0` four-feature audit remains historical evidence for its then-current 18 implemented definitions/43 cases/299 declared steps/679 expanded steps (log SHA-256 `fb7c81a1d3223e6959d6838ac38c5c737f1bf8804570489405ed59bc1a279bc7`). For REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002, final independent OpenJDK 21.0.11 source-built/in-process acceptance passed 11/11 scenarios and 92/92 steps with zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `74749cf8635d7bbbac3abb4a3eeaf669f6aab3d58770e423094ce791c7882997`); daemon regression passed 58/58 and MCP regression passed 26/26. Final whole-working-tree source-built verification on the same OpenJDK used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 11s; 1021 discovered, 801 executed, 220 skipped/tag-filtered, zero failures/errors; 78 tasks; log SHA-256 `e3e4b3e02fac87003f12cbf87801298653eb12e43c213d1f40fe5177ece75e02`. Explicit non-null final-segment handling eliminated the selector's initial production NP finding while preserving root-path `NullPointerException` and exact `.java`/`.JAVA` behavior. The final full log contains no production finding for `ManagedApplyDiagnosticsGateSelector.kt` or its provider functions; 23 glue-only Kotlin/generated findings remain non-blocking (2 RCN, 13 MS, 1 SA, 7 BC), and the broader configured SpotBugs baseline remains non-blocking. Production evidence is the stateless selector plus source-inspected adoption only at daemon/MCP managed apply. CLI/LSP/recipes/testkit/direct library remain excluded, `PatchEngine` authority is unchanged, and no packaged, native, cross-platform, concurrent, apply-authority, or numerical-coverage claim is made. The preceding four-feature audit that recorded the selector definitions/cases as `@absent` (log SHA-256 `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14`) remains historical pre-promotion evidence. The preceding final three-feature audit (log SHA-256 `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`), the earlier three-feature source-reconciliation receipt that recorded managed rollback as then-`@absent` (log SHA-256 `af9cfc7e69ec589bd5512b963e9eebdce936e63b240e3b1860078f0989b20b7e`), and the still-earlier two-feature parser receipt (log SHA-256 `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9`) remain historical evidence for their then-current sources and statuses, not the current aggregate. The managed-rollback feature contributes two non-functional definitions, eight cases, 19 declared steps, and 67 expanded steps. A focused RED proved the mutable diagnostic alias defect (log SHA-256 `952026debab60a44de9090b524fba39e90a03de37f72e1b086a1065176fe9724`); detached unmodifiable ordered snapshotting corrected it. Final independent focused OpenJDK 21.0.11 source-built/in-process acceptance passed 8/8 scenarios and 67/67 expanded steps with 29 tasks and zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `7e74ca9cf7080c7b8b2c32295cd17bdec193140346c48a08a4534549e85226ea`). Production evidence is the core executor; CLI/daemon/LSP/MCP adoption is source-inspected only. REQ-PENDING-PLAN-STORE-001/002 contribute two non-functional scenarios and 19 steps. Their focused source-built/in-process run passed both scenarios with 29 executed Gradle tasks and zero failures/errors (log SHA-256 `724e1e1378219cb9f3211ade826c037edb1e31c08c688ea7142a6dc00cca4a6c`). The historical PendingPlanStore-scoped whole-working-tree verification on 2026-07-31 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 23s; 1002 discovered, 782 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; log SHA-256 `03848917d90be1c4d3b4852038bd4364d3d9dc9329c3e749f67e44a0828dcdd4`. SpotBugs retained its configured non-blocking baseline and reported no `PendingPlanStore` findings. This later scoped receipt is dated mutable source-built aggregate evidence; it does not qualify packaged processes, concurrent access, a general extraction pattern, or numerical coverage. Surface lifecycle policy remains separate, and no protocol capability or authority rule changed. Historical pre-selector whole-working-tree verification after the managed-rollback correction used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 5s; 1010 tests discovered, 790 executed, 220 skipped/tag-filtered, zero failures/errors; 77 tasks; log SHA-256 `2e2b6ef136f9e4eaeedab0c7bb4de7705fbc9b116adc09603631c38d26010c96`. Slice-local SpotBugs findings are non-zero but reviewed/non-blocking: the former three `Refused`-diagnostics EI/EI2 findings are eliminated; seven core medium findings remain (five exact `TransactionLogException` identity warnings required by REQ-MANAGED-ROLLBACK-EXECUTOR-002 and two private dependency-injection collaborator-retention warnings), plus 25 glue-only Kotlin/lifecycle/generated warnings (13 NP, 1 RCN, 5 MS, 6 BC). This is the historical pre-selector whole-working-tree source-built receipt for the managed-rollback correction; the earlier REQ-008- and PendingPlanStore-specific whole-working-tree receipts remain historical evidence for their explicitly stated scopes. It is dated mutable aggregate evidence and does not qualify the selector, packaged or cross-platform execution, concurrent rollback, crash/restart, general rollback authority, numerical coverage, or altered `PatchEngine` authority.
 
 Final official whole-working-tree verification for the Workspace Snapshot Composition working tree on 2026-08-01 used OpenJDK 21.0.11 and `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 7s; 1029 discovered, 809 executed, 220 skipped/tag-filtered, zero failures/errors; 136 XML files; 78 tasks executed; log SHA-256 `0ca52ed3fd881743b361bcf14b2c7b9f90d3be7890253980389ab21f3145022f`. The aggregate log has no production finding attributable to `WorkspaceSnapshotComposer.kt` or the daemon/MCP adoption. Static findings are not zero: 21 slice-local glue-only Kotlin/generated SpotBugs findings in `WorkspaceSnapshotComposerSteps.kt` remain non-blocking (6 NP, 3 RCN, 12 BC), and the broader configured baseline remains non-blocking. This is dated mutable source-built aggregate evidence alongside the independently retained focused source-built/in-process acceptance, daemon/MCP regressions, and Gherkin audit. It does not add Gherkin definitions/cases or qualify packaged, native, cross-platform, concurrent, crash-restart, general-orchestration, or numerical-coverage behavior. The preceding selector whole-tree receipt remains historical evidence for its scope.
 
@@ -62,6 +62,14 @@ The twelve-definition/22-case Maven move-class subset retains its independently 
 |Build/test/package/smoke validation pipeline.
 |implementation-informed
 
+|`features/authoritative-diagnostics-evaluation.feature`
+|Executable functional Story BDD backlog for language-neutral authoritative snapshot and diagnostic evaluation of model-changing candidates through the existing public `PatchEngine.apply` boundary: exact S0/C1/S1 identity, provider-shell constraints, post-provider revalidation, schema-v8 journaling, same-record automatic rollback, and additive diagnostics-only compatibility.
+|Four repository-unique requirement-bearing definitions (two ordinary scenarios and two outlines), 16 expanded cases, 43 declared scenario steps, and 128 expanded case steps. REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004` inherit `@functional-requirement` and `@implemented-and-validated` from the feature. Independent OpenJDK 21.0.11 execution passed all 16 scenarios/128 steps and validates deep detachment, pre-WAL authority, exact S0/C1/S1 identity, same-record automatic rollback, and diagnostics-only compatibility within the bounded mode.
+
+|`features/java-maven-module-rename.feature`
+|Executable functional Story BDD backlog for one bounded direct-library rename of an exact root-aggregator direct-child directory and its independently caller-authorized artifact component, including origin-proven POM edits, deterministic preview, one managed apply, and exact normal rollback.
+|One ordinary requirement-bearing scenario/case with 50 declared and expanded steps. REQ-JAVA-MAVEN-MODULE-RENAME-001 has explicit scenario-level `@functional-requirement` and `@implemented-and-validated`; independent OpenJDK 21.0.11 execution passed 1/1 scenario and 50/50 steps. The status is bounded to the direct-library fixture contract and makes no broader support claim.
+
 |`features/java-maven-move-class-apply-authority.feature`
 |Executable Story BDD backlog for Maven move-class semantic preview, managed apply and rollback, observer discrimination, closure-scoped JDT warning authority, authority-loss guidance, cross-surface lexical-fallback refusal, zero-residue CLI refusal, candidate-total `OFFLINE_MISSING` authority, fail-closed uncertainty/drift handling, explicit transitive-test-scope preservation, descriptor-closed selector pruning before child lookup, alternate-path selected-POM refusal, RefactorKit-owned ordinary selected-JAR negative-presence authority with under-lock drift refusal, and six selected-descriptor loss/drift cases requiring structural pre-lock/pre-WAL refusal without a binary-absence downgrade.
 |12 requirement-bearing definitions and 22 example-expanded executable cases; all 12 IDs and all 22 cases effectively `@implemented-and-validated`; `008` and `012` each expand to six validated cases
@@ -110,10 +118,12 @@ rectangle RefactorKit {
   usecase "Scan Workspace" as UC_SCAN
   usecase "Build Symbol Index" as UC_SYMBOLS
   usecase "Run Diagnostics" as UC_DIAG
+  usecase "Evaluate Authoritative Snapshot Diagnostics" as UC_AUTH_DIAG
   usecase "Preview Refactoring" as UC_PREVIEW
   usecase "Apply Patch Plan" as UC_APPLY
   usecase "Run Managed Compensation" as UC_ROLLBACK
   usecase "Run Java Refactoring" as UC_JAVA
+  usecase "Rename Direct-child Maven Module" as UC_MODULE_RENAME
   usecase "Run Recipe" as UC_RECIPE
   usecase "Import External Java Class" as UC_IMPORT
   usecase "Serve JSON-RPC Daemon" as UC_DAEMON
@@ -142,7 +152,13 @@ Agent --> UC_CONTEXT
 Agent --> UC_IMPORT
 App --> UC_PREVIEW
 App --> UC_APPLY
+App --> UC_MODULE_RENAME
+UC_APPLY ..> UC_AUTH_DIAG : includes for model-changing edits
+UC_AUTH_DIAG ..> UC_DIAG : includes
+UC_AUTH_DIAG ..> UC_ROLLBACK : on post-apply mismatch
 UC_JAVA ..> UC_PREVIEW : includes
+UC_MODULE_RENAME ..> UC_PREVIEW : includes
+UC_MODULE_RENAME ..> UC_APPLY : after approval
 UC_RECIPE ..> UC_PREVIEW : includes
 UC_IMPORT ..> UC_PREVIEW : includes
 UC_APPLY ..> UC_ROLLBACK : after complete success
@@ -175,6 +191,13 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |Report structural findings and, for the planned authoritative Java/Maven slice, either source-accurate semantic diagnostics from a complete attested source-set environment or concise typed unavailability. Maven compile/test remains supplementary evidence.
 |Current Java adapter tests plus planned `RPK-JAVA-DIAG-001..007` permanent/native packaged acceptance.
 |generic command implementation-informed; authoritative epic planned, product-critical
+
+|UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION
+|Evaluate authoritative snapshot diagnostics
+|Embedding JVM application / managed-apply caller
+|For a model-changing edit explicitly admitted to the bounded authoritative mode through public `PatchEngine.apply`, bind baseline, staged, committed, and restored diagnostics to authoritative snapshots of the same exact candidates; constrain provider authority over the tracked shell; journal exact `S1.hash`; and automatically roll back a post-apply mismatch through the same record. Existing diagnostics-only gates remain additive compatibility behavior.
+|`features/authoritative-diagnostics-evaluation.feature`; `C-TECH-034`; `R-036`; accepted ADRs 0002/0012; independent 16/16-scenario, 128/128-step acceptance.
+|implementation-informed and `@implemented-and-validated` for four functional definitions/16 cases; no generic operation, protocol, package/platform, release, or support qualification
 
 |UC-PREVIEW-REFACTOR
 |Preview refactoring
@@ -217,6 +240,13 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |For the first accepted same-module/source-set Maven `moveClass` shape, keep active-POM/selected-descriptor/candidate/platform/provider authority global while limiting selected-missing-binary and retained-diagnostic evidence to the operation closure. Implemented-and-validated `001`-`007` and `009`-`012` retain their bounded positive, guidance, lexical-review, scope, selector, ordinary-absence, and selected-descriptor evidence. Implemented-and-validated `008` adds four non-lexical preview-guidance blockers, one result-owned active-reactor-POM structural refusal, and one under-lock required-file-evidence freshness refusal. Its expected semantic candidate-inventory identity is distinct from expected/observed required-file-evidence identities. Caller classpath attestation, plugin execution, settings credentials, implicit network, and lexical promotion remain forbidden.
 |The Maven move-class feature has twelve validated IDs across 22 validated cases. Focused REQ-008 evidence passed six selected cases, skipped sixteen, and had zero failures/errors. Accepted ADR 0012 and the 20-module fixture govern only bounded evidence; the exact Magrathea `a48e3c06` CLI/Linux/JDK-21 result remains separate.
 |confirmed P0 target-scoped architecture; twelve bounded definitions/22 cases and one exact CLI field request implementation-informed; general, packaged/runtime integration, and native-matrix acceptance remain open
+
+|UC-JAVA-RENAME-MAVEN-MODULE
+|Rename one direct-child Maven module
+|Maven workspace maintainer through an embedding JVM application
+|For the first bounded row, invoke the public Java scanner/planner directly against one declared authoritative offline reactor, rename exact direct child `catalog-model` to `catalog-domain`, and change the artifact component only because the caller independently supplies `newArtifactId=catalog-domain`. Origin-proven POM modifications precede two child-file renames; explicit direct-library apply and normal rollback remain owned by `PatchEngine` and the existing journal.
+|`features/java-maven-module-rename.feature`; independent 1/1-scenario, 50/50-step direct-library acceptance; accepted ADRs 0002/0010/0012.
+|implementation-informed and `@implemented-and-validated` for the exact direct-library fixture row; no protocol, recipe, package/platform, general-Maven, native-CI, release, or broader support qualification
 
 |UC-JAVA-ORGANIZE-IMPORTS
 |Organize Java imports
@@ -324,9 +354,17 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 |RPK-JAVA-DIAG-001 through RPK-JAVA-DIAG-007; antecedents RPK-PKG-007/009, REQ-TX-007, RPK-JVM-DIAG-002/003/005/006
 |`docs/requirements/java-maven-authoritative-diagnostics.md`; ADR 0012; chapters 6, 8, and 10. Epic status is active/product-critical; linked executable acceptance, not this mapping, is implementation evidence.
 
+|UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION, UC-DIAGNOSTICS, UC-APPLY-PATCH, UC-ROLLBACK
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-004
+|`features/authoritative-diagnostics-evaluation.feature`; `C-TECH-034`; `R-036`; accepted ADRs 0002 and 0012; Chapters 5, 6, and 8-12. All four functional definitions and all 16 expanded cases are `@implemented-and-validated`. The mapping is bounded to the additive language-neutral evaluator and does not imply generic operation, protocol, packaged/native/cross-platform, release, or support qualification.
+
 |UC-JAVA-MOVE-CLASS
 |RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007; executable Gherkin REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012`
 |`features/java-maven-move-class-apply-authority.feature`; current source/tests and focused evidence; ADRs 0002, 0008, and 0010-0012; chapters 2, 4-6, 8, and 10-12. All twelve definitions in that feature and all 22 expanded cases map to this use case and carry bounded tagged evidence. REQ-008 maps its four guidance, one structural, and one freshness case without broadening REQ-003/004/010/011/012. The dated Magrathea `a48e3c06` CLI/Linux/JDK-21 result remains separate field evidence, not another Gherkin case or broader qualification. The implemented packaged-process runner is a second validation mode for the same REQ-001 mapping and same pickle; it adds no use case, requirement, case, or status. One local Linux `amd64` run is observed, while all four native CI rows remain `CONFIGURED_UNOBSERVED`.
+
+|UC-JAVA-RENAME-MAVEN-MODULE, UC-PREVIEW-REFACTOR, UC-APPLY-PATCH, UC-ROLLBACK
+|REQ-JAVA-MAVEN-MODULE-RENAME-001
+|`features/java-maven-module-rename.feature`; `docs/requirements/java-maven-ownership-migration.md`; `C-TECH-033`; `C-BOUND-010`; `QS-MODULE-RENAME-001`; `R-035`; accepted ADRs 0002, 0010, and 0012. The one functional definition/case is `@implemented-and-validated`. The mapping remains direct-library/fixture bounded and promotes no integration surface or broader support row.
 
 |UC-PREVIEW-REFACTOR
 |REQ-SAFE-001
@@ -593,6 +631,64 @@ The dedicated OpenJDK-21 Cucumber report discovered 22 cases, selected/executed/
 
 REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` occur in the feature with repository-unique IDs. Ten ordinary scenarios and both six-row outlines (`008`, `012`) carry explicit `@implemented-and-validated`; their example rows inherit one ID, classification, and status. The feature reconciles to twelve definitions and 22 validated cases.
 
+== Authoritative Snapshot Diagnostics Evaluation
+
+Status: implementation-informed and `@implemented-and-validated`. `features/authoritative-diagnostics-evaluation.feature` contains two ordinary scenarios and two `Scenario Outline` declarations, no `Background`, four repository-unique functional requirement IDs, 16 expanded cases, 43 declared scenario steps, and 128 expanded case steps. Classification and status are inherited from feature-level `@functional-requirement @implemented-and-validated`. Independent OpenJDK 21.0.11 execution passed 16/16 scenarios and 128/128 steps (log/JSON SHA-256 `bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`/`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`).
+
+[cols="2,3,2,2,2",options="header"]
+|===
+|Requirement ID |Title / acceptance boundary |Classification |Architecture mapping |Declared status and observed evidence
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001
+|An authoritative post-image is journaled and committed with one exact identity. Baseline evaluation is exact `S0`/`D0`; simulation yields tracked candidate `C1`; staged evaluation returns exact `S1`/`D1` while preserving the candidate root, source/auxiliary partition, tracked paths/language IDs/bytes, extension scope, and ignore policy. After provider completion, `PatchEngine` repeats live-workspace and operation-lease validation under the same lock, proves rendered-image equality, writes schema-v8 `PREPARED` with `postSnapshotHash=S1.hash`, and returns success only after committed evaluation reproduces `S1.hash` and the complete `D1` multiset.
+|Functional only. The source declares functional behavior for the managed apply result and exact transaction identity; it declares no non-functional tag, even though safety and authority invariants are acceptance details.
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, and `UC-APPLY-PATCH`; `C-TECH-034`; `R-036`; accepted ADRs 0002 and 0012; Chapters 5, 6, 8, and 10-12.
+|Feature-level inherited `@implemented-and-validated`; one ordinary 17-step case passed in the independent runner.
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|Provider authority violation `"<case>"` is refused before WAL. Eight independent rows cover workspace root, source/auxiliary split, tracked path, language ID, tracked content, source extensions, ignored directories, and provider-induced live workspace mutation. Each violation is reported before a `PREPARED` record or managed edit; the read-only transaction listing stays empty, and provider output or diagnostics never authorize a write.
+|Functional only. The outline specifies eight observable authority-violation refusal outcomes and no non-functional classification tag.
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, and `UC-APPLY-PATCH`; `C-TECH-034`; `R-036`; accepted ADRs 0002 and 0012; Chapters 5, 6, 8, and 10-12.
+|Feature-level inherited `@implemented-and-validated`; twelve example-expanded cases from seven declared outline steps, totaling 84 expanded case steps, passed in the independent runner.
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-003
+|Post-apply `"<mismatch>"` advances the same record through automatic rollback. Two independent rows cover semantic snapshot mismatch and diagnostic multiset mismatch after the sole record reached `APPLIED`; that schema-v8 record advances through `PREPARED, APPLYING, APPLIED, ROLLING_BACK, ROLLED_BACK`, exact baseline bytes/directories are restored, restored evaluation reproduces `S0.hash`/`D0`, and no second transaction is created.
+|Functional only. The outline specifies the automatic-rollback result and retained transaction lifecycle; it declares no non-functional classification tag.
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, `UC-APPLY-PATCH`, and `UC-ROLLBACK`; `C-TECH-034`; `R-036`; accepted ADRs 0002 and 0012; Chapters 5, 6, 8, and 10-12.
+|Feature-level inherited `@implemented-and-validated`; two example-expanded cases from eight declared outline steps, totaling 16 expanded case steps, passed in the independent runner.
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-004
+|Existing diagnostics-only gates retain additive compatibility. One case fixes enabled-provider invocation at baseline, staged, and committed inputs, disabled-provider invocation at zero, current simulator-derived journal hashes, lazy construction, diagnostic regression/unavailability/post-apply/rollback semantics, schema-v8 record meanings, and the absence of any schema bump, historical rewrite, new persistence, serialized evaluator state, scanner registry, language-specific core type, or provider write authority.
+|Functional only. The scenario specifies observable compatibility behavior for existing enabled/disabled apply paths and declares no non-functional classification tag.
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, `UC-APPLY-PATCH`, and `UC-ROLLBACK`; `C-TECH-034`; accepted ADRs 0002 and 0012; Chapters 5, 6, 8, and 10-12.
+|Feature-level inherited `@implemented-and-validated`; one ordinary 11-step compatibility case passed in the independent runner.
+|===
+
+The case accounting is exact: REQ-001 contributes one case, REQ-002 contributes twelve, REQ-003 contributes two, and REQ-004 contributes one, for 16 cases. Validated behavior includes deep-detached construction-time identity, core-owned pre-WAL semantic containment and no-follow external-fingerprint authenticity, exact S0/C1/S1 schema-v8 identity, same-record automatic rollback, and unchanged legacy diagnostics-only behavior. Static evidence is deliberately bounded and not an aggregate-cleanliness claim:
+`StageFacts`, `GateExpectation`, `ReactorView`, `ModuleView`, and `SourceSetView`
+have zero raw and zero real EI/EI2 findings; the one
+`AuthoritativeDiagnosticsEvaluation` EI warning is non-real over a defensively
+copied unmodifiable list and deep mutation probes passed. PMD was `NO-SOURCE`
+for Kotlin, and the wider configured SpotBugs baseline remains non-blocking.
+Broader operation/surface/support qualification is not inferred.
+
+== Bounded Maven Module Rename
+
+Status: implementation-informed and `@implemented-and-validated`. `features/java-maven-module-rename.feature` contains one ordinary functional scenario, no `Background`, no `Scenario Outline`, one repository-unique stable requirement ID, 50 declared scenario steps, and one 50-step executable case. Independent OpenJDK 21.0.11 execution passed 1/1 scenario and 50/50 steps (log/JSON SHA-256 `b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`/`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`).
+
+[cols="2,3,2,2,2",options="header"]
+|===
+|Requirement ID |Title / acceptance boundary |Classification |Architecture mapping |Declared status and observed evidence
+
+|REQ-JAVA-MAVEN-MODULE-RENAME-001
+|An explicit direct-child directory and artifact rename commits once and rolls back exactly. On no-follow disposable copies of `testdata/acceptance/java-maven-move-class-authority-20-modules`, a direct JVM-library caller must prove one sole aggregator, exact direct child `catalog-model`, absent destination `catalog-domain`, the child project's literal artifact origin, one root direct-module origin, and one effective-model-proven literal dependency origin. Caller-explicit `newArtifactId=catalog-domain` authorizes the artifact change; omission preserves `catalog-model` and authorizes no coordinate edit. The normalized edit is exactly three POM modifications followed by two file renames, stages one complete 20-child reactor with unchanged authoritative diagnostics, applies once through `PatchEngine` with authorization surface `direct-library`, journals one schema-v8 transaction, and restores the exact non-engine image through normal rollback. The scenario also requires bounded refusals for inferred coordinate intent and property-managed or ambiguous origins.
+|Functional only. The source declares `@functional-requirement` and no `@non-functional-requirement`; the exact classification is preserved even though determinism, least authority, diagnostics, and rollback are acceptance details.
+|`UC-JAVA-RENAME-MAVEN-MODULE`, `UC-PREVIEW-REFACTOR`, `UC-APPLY-PATCH`, and `UC-ROLLBACK`; `C-TECH-033`; `C-BOUND-010`; `QS-MODULE-RENAME-001`; `R-035`; accepted ADRs 0002, 0010, and 0012.
+|Explicit scenario-level `@implemented-and-validated`; no inherited status. The independent direct-library runner passed. Historical prototype defects remain negative evidence rather than a description of the promoted planner.
+|===
+
+The first row is bounded to direct library use, one exact root-aggregator direct child, the named permanent fixture shape, and independently explicit directory/artifact intent. It performs exactly three POM range edits (`catalog-model/pom.xml` `9:14-9:27`, root `pom.xml` `74:12-74:25`, and `catalog-pricing/pom.xml` `13:18-13:31`) plus two file renames. Woodstox 7.1.1 is scoped to `refactorkit-java` only; exact offsets and DTD/external-DTD/entity denial passed, and its reviewed JAR SHA-256 is `02b9d022e9d47704ff8a7a859a0dbfd3b2882a8311eb7ff1e180f760ccda2712`. The row excludes module creation; nested or non-direct modules; positive profile/property-managed/inherited/duplicate/ambiguous origin editing; other coordinate components; JPMS; CLI, daemon, LSP, MCP, and other protocol surfaces; recipes; packaged/native/cross-platform qualification; disposable real-project acceptance; general Maven support; native CI; release-wide support; and completion of the broad Java module rename/move roadmap item.
+
 == Pending-plan Store Extraction
 
 Status: implementation-informed and reconciled with feature-level `@implemented-and-validated`. The extraction is a supporting quality/safety contract for existing daemon/LSP/MCP use cases, not a new externally invocable use case.
@@ -828,8 +924,10 @@ These requirements capture the audit's required contract decisions and acceptanc
 
 == Gherkin Scenario Listing
 
-The configured project feature root `features/` contains six discovered feature sources:
+The configured project feature root `features/` contains eight discovered feature sources:
 
+* `features/authoritative-diagnostics-evaluation.feature`
+* `features/java-maven-module-rename.feature`
 * `features/java-maven-move-class-apply-authority.feature`
 * `features/java-refactoring-preview-command-boundary.feature`
 * `features/managed-apply-diagnostics-gate-selector.feature`
@@ -837,7 +935,13 @@ The configured project feature root `features/` contains six discovered feature 
 * `features/pending-plan-store-extraction.feature`
 * `features/workspace-snapshot-composer-extraction.feature`
 
-The Maven feature's `Business Need` addresses `UC-JAVA-MOVE-CLASS` for a multi-module Maven workspace maintainer. Its `Background` is not a production scenario. Each of twelve requirement-bearing definitions (ten `Scenario`, two `Scenario Outline`) has one repository-unique stable `@REQ-*` ID, at least one classification, and exactly one effective status. All twelve are `@implemented-and-validated`; the six rows under each outline inherit its ID/classification/status, producing 22 validated executable cases. Focused REQ-008 evidence discovered 22, executed/passed six, skipped sixteen, and had zero failures/errors; independent log SHA-256 `ba7dda54ba85904ddde200982fbc41613b4a48f95bd8481bdccfad3427de6edc`, with `gherkin-writer` execution log `6f7e2d8a9c767f265a117853267a37ab31ec31d0878637870b37202ec8ba2c71`. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. Those execution totals do not alter the Maven subset and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. Magrathea field evidence remains separate and bounded. The implemented dedicated packaged Cucumber mode selects the same REQ-001 pickle as a second validation mode; it does not change the twelve definitions, 22 cases, classifications, or effective statuses. One official final OpenJDK 21.0.11/Linux `amd64` run is observed: the dedicated task reported `BUILD SUCCESSFUL` in 22s with 35 tasks; JUnit 22 discovered/one executed/21 tag-filtered/zero failures or errors; and Cucumber five background plus fourteen scenario steps (19/19) with 2/2 hooks; packaged log SHA-256 `1fa8cf358882196659abd76e9793214d906383cf780124580ed9f64fb3d643c2`, JSON SHA-256 `9ea18b8638846c08a63c78c6201ef44c7205bb7a62a21da7fd184688e5ada955`. The separate final whole-tree source-built gate passed 1045 discovered/817 executed/228 skipped or tag-filtered standard tests with zero failures/errors, 140 XML files, and 82 tasks (log SHA-256 `89438b03d5228f8ff8173b82a5dc587a36b0907d476dd2adffceff54bca874ef`); it intentionally excludes the packaged task. Targeted custom-source-set PMD/SpotBugs tasks passed (log SHA-256 `2cf542051224e2e81f81b5f7ec8132a59ef04258ff2902346076ab39b25c0ff2`) with an intentionally non-zero classification of 99 reviewed/non-blocking packaged test/deployment glue/harness findings (57 NP, 14 MS, 12 BC, 6 AT, 9 RCN, 1 UrF), no production source addition/modification by this slice, and no aggregate-static-cleanliness or numerical/child-JVM-coverage claim. Its four post-commit native CI rows remain `CONFIGURED_UNOBSERVED`; wiring/report uploads are implemented but unexecuted. The separate source-built REQ-001 review rerun passed 22/one/21/zero with log SHA-256 `96ad297a087aa9790f00353c8647351c28d563420867f1cd66c64d91ffd3a01e`.
+The authoritative diagnostics-evaluation `Feature` maps to `UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION` with supporting `UC-DIAGNOSTICS`, `UC-APPLY-PATCH`, and `UC-ROLLBACK` behavior. It has no `Background`. Its two ordinary scenarios and two outlines carry four repository-unique REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004` IDs and inherit exactly `@functional-requirement` plus `@implemented-and-validated` from the feature. REQ-001 contributes one 17-step case, REQ-002 contributes twelve seven-step cases, REQ-003 contributes two eight-step cases, and REQ-004 contributes one 11-step case: four definitions, 16 cases, 43 declared steps, and 128 expanded steps. All passed the independent OpenJDK 21.0.11 runner; source reconciliation separately establishes parseability, classification, status, uniqueness, paths, and counts.
+
+The Maven module-rename feature's `Business Need` addresses `UC-JAVA-RENAME-MAVEN-MODULE` for a Maven workspace maintainer through the direct JVM library. It has no `Background`, outline, or examples. Its one ordinary 50-step scenario/case carries repository-unique REQ-JAVA-MAVEN-MODULE-RENAME-001, explicit `@functional-requirement`, and explicit scenario-level `@implemented-and-validated`. The source and passing runner bound planning to the public Java scanner/planner over one declared offline direct-child reactor, followed by separately authorized `PatchEngine` apply and normal rollback; every named protocol, recipe, package/platform, real-project, general-Maven, native-CI, support, and broad-roadmap scope remains excluded.
+
+Final post-promotion whole-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 29s; 82 tasks executed; 144 standard-test XML files; 1,062 tests discovered, 834 executed, 228 skipped/tag-filtered; zero failures/errors. The full log is `/tmp/refactorkit-authoritative-module-rename-final-check.log` with SHA-256 `c3a7b2a902b45267b60179da887c143d9e79f180f9e7ee4043e7631d4e66326d`; the standard-test XML checksum-manifest SHA-256 is `951f7bd281fc4900a096a2295937ee73784294f0ecb2a5c63f469d0c1dea907a`. SpotBugs remains configured non-blocking with `ignoreFailures=true`. The independent receipt classified the slice as reviewed/non-blocking: the five corrected module-rename contract target classes have zero EI/EI2; the authoritative-evaluation EI is non-real on a defensive unmodifiable diagnostics list; relevant BC/Bx reports are Kotlin compiler collection-cast/non-correctness-boxing artifacts; and the 47 authoritative glue findings (27 BC, 11 MS, 6 NP, 1 RCN, 2 UrF) plus 113 module-rename glue findings (37 BC, 19 MS, 46 NP, 10 RCN, 1 REC) are test/glue lifecycle-nullability or generated-bytecode/static-field reports. No slice defect remained unclassified. PMD has no Kotlin source input for this slice and supplies no Kotlin finding claim. No aggregate numerical coverage is available; these totals are not coverage. The existing dedicated packaged Maven task `:modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest` is intentionally excluded from the standard totals. This source-built receipt does not qualify packaged, native, cross-platform, or general Maven support.
+
+The Maven move-class feature's `Business Need` addresses `UC-JAVA-MOVE-CLASS` for a multi-module Maven workspace maintainer. Its `Background` is not a production scenario. Each of twelve requirement-bearing definitions (ten `Scenario`, two `Scenario Outline`) has one repository-unique stable `@REQ-*` ID, at least one classification, and exactly one effective status. All twelve are `@implemented-and-validated`; the six rows under each outline inherit its ID/classification/status, producing 22 validated executable cases. Focused REQ-008 evidence discovered 22, executed/passed six, skipped sixteen, and had zero failures/errors; independent log SHA-256 `ba7dda54ba85904ddde200982fbc41613b4a48f95bd8481bdccfad3427de6edc`, with `gherkin-writer` execution log `6f7e2d8a9c767f265a117853267a37ab31ec31d0878637870b37202ec8ba2c71`. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. Those execution totals do not alter the Maven subset and do not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. Magrathea field evidence remains separate and bounded. The implemented dedicated packaged Cucumber mode selects the same REQ-001 pickle as a second validation mode; it does not change the twelve definitions, 22 cases, classifications, or effective statuses. One official final OpenJDK 21.0.11/Linux `amd64` run is observed: the dedicated task reported `BUILD SUCCESSFUL` in 22s with 35 tasks; JUnit 22 discovered/one executed/21 tag-filtered/zero failures or errors; and Cucumber five background plus fourteen scenario steps (19/19) with 2/2 hooks; packaged log SHA-256 `1fa8cf358882196659abd76e9793214d906383cf780124580ed9f64fb3d643c2`, JSON SHA-256 `9ea18b8638846c08a63c78c6201ef44c7205bb7a62a21da7fd184688e5ada955`. The separate final whole-tree source-built gate passed 1045 discovered/817 executed/228 skipped or tag-filtered standard tests with zero failures/errors, 140 XML files, and 82 tasks (log SHA-256 `89438b03d5228f8ff8173b82a5dc587a36b0907d476dd2adffceff54bca874ef`); it intentionally excludes the packaged task. Targeted custom-source-set PMD/SpotBugs tasks passed (log SHA-256 `2cf542051224e2e81f81b5f7ec8132a59ef04258ff2902346076ab39b25c0ff2`) with an intentionally non-zero classification of 99 reviewed/non-blocking packaged test/deployment glue/harness findings (57 NP, 14 MS, 12 BC, 6 AT, 9 RCN, 1 UrF), no production source addition/modification by this slice, and no aggregate-static-cleanliness or numerical/child-JVM-coverage claim. Its four post-commit native CI rows remain `CONFIGURED_UNOBSERVED`; wiring/report uploads are implemented but unexecuted. The separate source-built REQ-001 review rerun passed 22/one/21/zero with log SHA-256 `96ad297a087aa9790f00353c8647351c28d563420867f1cd66c64d91ffd3a01e`.
 
 The managed-apply diagnostics-gate selector feature has no `Background`. Its ten-row `Scenario Outline` and one ordinary scenario each carry one repository-unique `@REQ-*` ID and inherit `@non-functional-requirement` plus `@implemented-and-validated` from the feature. REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001 contributes ten eight-step cases; REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-002 contributes one 12-step case. The resulting two definitions, 11 cases, 20 declared steps, and 92 expanded steps passed the final independent focused OpenJDK 21.0.11 source-built/in-process run with zero failures, errors, skips, undefined, ambiguous, or pending results (log SHA-256 `74749cf8635d7bbbac3abb4a3eeaf669f6aab3d58770e423094ce791c7882997`). Daemon/MCP adoption is source-inspected and their regressions passed 58/58 and 26/26. Final whole-working-tree source-built verification passed in 7m 11s with 1021 discovered, 801 executed, 220 skipped/tag-filtered, zero failures/errors, and 78 tasks (log SHA-256 `e3e4b3e02fac87003f12cbf87801298653eb12e43c213d1f40fe5177ece75e02`); selector production findings are zero after the explicit non-null cleanup, while 23 glue-only Kotlin/generated findings remain non-blocking (2 RCN, 13 MS, 1 SA, 7 BC) and the broader configured SpotBugs baseline remains non-blocking. Broader execution and authority are not inferred.
 
@@ -849,11 +953,61 @@ The Workspace Snapshot Composer feature has no `Background`. Its four ordinary s
 
 The Java Refactoring Preview Command feature has no `Background`. Its one five-row `Scenario Outline` and three ordinary scenarios each carry one repository-unique `@REQ-*` ID and inherit `@non-functional-requirement` plus `@implemented-and-validated` from the feature. REQ-JAVA-PREVIEW-COMMAND-001 contributes five 12-step cases; REQ-002/003/004 contribute one case with 11/9/14 steps respectively. The result is four definitions, eight cases, 46 declared scenario steps, and 94 expanded steps. The first independent review blocked promotion while REQ-003 was source-only. The corrected split runners passed seven Java-module cases/85 steps plus one real public daemon/MCP session case/9 steps, all eight cases with zero failures/errors (log SHA-256 `10c805b67306026cb4ab4a79de9b7258c712e28aaf0bb0070279edbbc44914f5`). Final dated mutable source-built aggregate verification passed with 1045 discovered/817 executed/228 skipped or tag-filtered, zero failures/errors, 140 XML files, and 79 tasks (log SHA-256 `fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`); targeted static verification passed with the reviewed non-zero 48-glue-finding classification (log SHA-256 `8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`). Focused evidence remains bounded source-built/in-process behavior only; this does not qualify packaged/native/cross-platform/concurrent/crash-restart/general-orchestration/numerical-coverage behavior.
 
-The official post-promotion repository-wide `gherkin-writer` audit across all six paths found six feature documents, 27 definitions, 59 expanded cases, 27 unique IDs, 386 declared scenario steps, one separate five-step background, and 838 expanded case steps. Every definition/case has at least one justified classification and exactly one effective status; all 27 definitions and 59 cases are `@implemented-and-validated`. Parse/tag/status/duplicate-ID/reconciliation errors are zero (log SHA-256 `f20f39f2421edaf4c5208363a3479a0f7696635631a27d95aeb2a99d04d9be0d`). The preceding official five-feature audit remains historical evidence for its then-current source set (log SHA-256 `b40dc349e7d500b8d5068c15869c4908fb89c68519041e0006c60e2fd9b58867`); the preceding official four-feature audit is likewise historical (log SHA-256 `fb7c81a1d3223e6959d6838ac38c5c737f1bf8804570489405ed59bc1a279bc7`). The pre-promotion four-feature audit hash `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14` and earlier audit hashes `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`, `af9cfc7e69ec589bd5512b963e9eebdce936e63b240e3b1860078f0989b20b7e`, and `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9` remain preserved receipts for their then-current source sets and statuses.
+The current repository-wide audit using official `io.cucumber:gherkin:28.0.0` across all eight paths found eight feature documents, 32 definitions, 76 expanded cases, 32 unique IDs, 479 declared scenario steps, one separate five-step background, and 1,016 expanded case steps. Every definition/case has at least one justified classification and exactly one effective status: all 32 definitions/76 cases are `@implemented-and-validated`, and every other effective status has zero definitions/cases. Parse/tag/status/duplicate-ID/reconciliation errors are zero (OpenJDK 21.0.11 log SHA-256 `ed57576520bdfa92810ebbe93e0e4c238632feae2a74a10a99b35f8e16101925`). The preceding official seven-feature audit remains historical evidence for 28 definitions/60 cases/433 declared steps/885 expanded steps, including the one absent Maven module-rename definition/case (log SHA-256 `271ec890cad8065f0536ab27ca885d81e7d070382ca96fdf9d8cf26afa7e137a`). The preceding official six-feature post-promotion audit remains historical evidence for 27 definitions/59 cases/386 declared steps/838 expanded steps, all then `@implemented-and-validated` (log SHA-256 `f20f39f2421edaf4c5208363a3479a0f7696635631a27d95aeb2a99d04d9be0d`). The preceding official five-feature audit remains historical evidence for its then-current source set (log SHA-256 `b40dc349e7d500b8d5068c15869c4908fb89c68519041e0006c60e2fd9b58867`); the preceding official four-feature audit is likewise historical (log SHA-256 `fb7c81a1d3223e6959d6838ac38c5c737f1bf8804570489405ed59bc1a279bc7`). The pre-promotion four-feature audit hash `57a48fbdf31f91e2ab0d54443849225ba51a4349cc8be84236f62210adc90c14` and earlier audit hashes `f4f9fd559ef9220c145017a2723fc4b8e888424448a392a11d20c1dc33d379c0`, `af9cfc7e69ec589bd5512b963e9eebdce936e63b240e3b1860078f0989b20b7e`, and `13989eb5bad0498de6661715236b46401b15d3401d450137640f2af89cb76ba9` remain preserved receipts for their then-current source sets and statuses.
 
 [cols="2,4,3,4,4,4,3,2,4",options="header"]
 |===
 |Requirement ID |Scenario |Actor / capability |Classification and rationale |Source tags |Architecture mapping |Feature path |Effective declared status |Validation mode / observed implementation
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001
+|An authoritative post-image is journaled and committed with one exact identity
+|Embedding JVM application and Core Patch/Transaction Execution; authoritative model-changing managed apply.
+|Functional only. The exact accepted apply result, authoritative S1 journal identity, and committed S1/D1 reproduction are observable behavior. The source declares no non-functional tag.
+|`@REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 @functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, and `UC-APPLY-PATCH`; `C-TECH-034`; `R-036`; accepted ADRs 0002 and 0012.
+|`features/authoritative-diagnostics-evaluation.feature`
+|`@implemented-and-validated` (feature-level inherited status)
+|Independent OpenJDK 21.0.11 execution passed the ordinary 17-step case as part of the 16/16-scenario, 128/128-step authoritative runner; exact evaluation/journal/apply identity and deep-detachment probes passed.
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|Provider authority violation `"<case>"` is refused before WAL
+|Embedding JVM application and Core Patch/Transaction Execution; candidate-shell authority enforcement and pre-WAL refusal.
+|Functional only. Twelve authority-violation refusal results are observable behavior. The source declares no non-functional tag.
+|`@REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002 @functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, and `UC-APPLY-PATCH`; `C-TECH-034`; `R-036`; accepted ADRs 0002 and 0012.
+|`features/authoritative-diagnostics-evaluation.feature`
+|`@implemented-and-validated` (Scenario Outline inherits feature status; inherited by twelve example rows)
+|Seven declared outline steps expand to twelve cases/84 case steps covering tracked-shell identity, module/build-root containment, no-follow external-fingerprint authenticity, and post-provider live-workspace revalidation. All refusal paths passed before WAL.
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-003
+|Post-apply `"<mismatch>"` advances the same record through automatic rollback
+|Embedding JVM application and Core Patch/Transaction Execution; post-apply verification and automatic managed compensation.
+|Functional only. The mismatch result, one-record lifecycle, exact restoration, and returned refusal are observable behavior. The source declares no non-functional tag.
+|`@REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-003 @functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, `UC-APPLY-PATCH`, and `UC-ROLLBACK`; `C-TECH-034`; `R-036`; accepted ADRs 0002 and 0012.
+|`features/authoritative-diagnostics-evaluation.feature`
+|`@implemented-and-validated` (Scenario Outline inherits feature status; inherited by two example rows)
+|Eight declared outline steps expand to two cases/16 case steps for semantic snapshot mismatch and diagnostic multiset mismatch. Both passed same-record automatic rollback, exact restoration, restored S0/D0 evaluation, and one-record lifecycle validation.
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-004
+|Existing diagnostics-only gates retain additive compatibility
+|Existing `DiagnosticsGate.enabled`/`disabled` callers and Core Patch/Transaction Execution; additive API compatibility.
+|Functional only. Enabled/disabled invocation, hash, record, apply, and rollback results are observable compatibility behavior. The source declares no non-functional tag.
+|`@REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-004 @functional-requirement @implemented-and-validated` (classification/status inherited from Feature)
+|`UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, `UC-DIAGNOSTICS`, `UC-APPLY-PATCH`, and `UC-ROLLBACK`; `C-TECH-034`; accepted ADRs 0002 and 0012.
+|`features/authoritative-diagnostics-evaluation.feature`
+|`@implemented-and-validated` (feature-level inherited status)
+|The ordinary 11-step case passed exact enabled/disabled call order, lazy/no-call behavior, legacy hashes, diagnostics identity, rollback semantics, schema-v8 compatibility, and negative ownership.
+
+|REQ-JAVA-MAVEN-MODULE-RENAME-001
+|An explicit direct-child directory and artifact rename commits once and rolls back exactly
+|Maven workspace maintainer through a direct JVM-library caller; bounded direct-child module-directory and independently authorized artifact rename.
+|Functional only. The source declares exactly `@functional-requirement`; it does not declare `@non-functional-requirement`. Deterministic preview, least-authority origin proof, diagnostics, one transaction, and exact rollback remain acceptance details within this exact declared classification.
+|`@REQ-JAVA-MAVEN-MODULE-RENAME-001 @functional-requirement @implemented-and-validated`
+|`UC-JAVA-RENAME-MAVEN-MODULE`, `UC-PREVIEW-REFACTOR`, `UC-APPLY-PATCH`, and `UC-ROLLBACK`; `C-TECH-033`; `C-BOUND-010`; `QS-MODULE-RENAME-001`; `R-035`; accepted ADRs 0002, 0010, and 0012.
+|`features/java-maven-module-rename.feature`
+|`@implemented-and-validated` (explicit scenario-level status; no inherited status)
+|Independent OpenJDK 21.0.11 execution passed the one 50-step scenario/case. The row is bounded to direct public Java scanner/planner use over a no-follow disposable copy of the exact 20-direct-child fixture, caller-explicit `catalog-model` to `catalog-domain` directory and artifact intent, exactly three parser-authorized POM modifications before two file renames, separately authorized `PatchEngine` apply on surface `direct-library`, one exact-S1 schema-v8 record, and exact normal rollback. Broader origin/module/coordinate/JPMS/protocol/recipe/package/platform/real-project/general-Maven/native-CI/support/roadmap scopes remain excluded.
 
 |REQ-JAVA-MAVEN-MOVE-AUTH-001
 |A binding-clean move is committed once and rolled back byte for byte
@@ -1124,6 +1278,115 @@ The official post-promotion repository-wide `gherkin-writer` audit across all si
 |`features/java-refactoring-preview-command-boundary.feature`
 |`@implemented-and-validated` (feature-level inherited status)
 |The Java-module runner passed the one 14-step case, proving exact plan/exception pass-through, no retained fields, exactly five variants, named exclusions, no independent diagnostics/write/lock/WAL/transaction/apply/rollback/lifecycle/persistence behavior, and no `ManagedApplyInvoker`.
+|===
+
+=== REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION Validated Expanded Case Matrix
+
+All 16 rows inherit `@functional-requirement` and
+`@implemented-and-validated` from
+`features/authoritative-diagnostics-evaluation.feature`. Every row passed the
+independent OpenJDK 21.0.11 runner (16/16 scenarios, 128/128 steps; log SHA-256
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`).
+
+[cols="2,2,3,3,2",options="header"]
+|===
+|Requirement |Expanded case |Exact source condition |Required result |Effective status / evidence
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001
+|1 — exact authoritative post-image
+|Exact baseline `S0`/`D0`, exact staged file candidate `C1`, and deep-detached provider result `S1`/`D1` for that candidate.
+|Core verifies construction-time identity, pre-WAL authority, exact schema-v8 `S1.hash`, and committed `S1`/`D1` before `Applied` returns.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|2 — workspace root
+|Provider returns a snapshot rooted at a different bounded workspace.
+|Refuse normalized-workspace-root authority before WAL or managed edit.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|3 — source and auxiliary split
+|Provider repartitions one tracked file between source and auxiliary inventories.
+|Refuse source/auxiliary-partition authority before WAL or managed edit.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|4 — tracked path
+|Provider returns one tracked file under a different normalized path.
+|Refuse tracked-path-inventory authority before WAL or managed edit.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|5 — language ID
+|Provider changes one tracked file's language ID.
+|Refuse tracked-language-identity authority before WAL or managed edit.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|6 — tracked content
+|Provider changes one tracked file's content.
+|Refuse tracked-content authority before WAL or managed edit.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|7 — source extensions
+|Provider returns a different `sourceExtensions` set.
+|Refuse source-extension-scope authority before WAL or managed edit.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|8 — ignored directories
+|Provider returns a different `ignoredDirectories` set.
+|Refuse ignored-directory-policy authority before WAL or managed edit.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|9 — outside Module root
+|Provider places one `Module.root` outside the candidate workspace.
+|Core refuses normalized module-root containment before WAL.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|10 — outside Module source root
+|Provider places one module source root outside the candidate workspace.
+|Core refuses normalized module-source-root containment before WAL.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|11 — outside BuildModule root
+|Provider places one `BuildModule.root` outside the candidate workspace.
+|Core refuses normalized build-module-root containment before WAL.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|12 — fabricated external fingerprint
+|Provider claims a fingerprint different from core's current no-follow recomputation for an explicitly allowed external regular file.
+|Core refuses external classpath-evidence authenticity before WAL.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002
+|13 — live workspace mutation
+|Provider changes a live tracked file while otherwise returning the exact candidate.
+|Post-provider live-S0 revalidation refuses before WAL; provider diagnostics authorize no write.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-003
+|14 — semantic snapshot mismatch
+|Committed evaluation returns a hash different from `S1.hash` with diagnostics `D1`.
+|The same schema-v8 record advances through automatic rollback and restored `S0`/`D0`; no second transaction exists.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-003
+|15 — diagnostic multiset mismatch
+|Committed evaluation returns exact `S1.hash` with diagnostics different from `D1`.
+|The same record follows the identical automatic-rollback and restored-evaluation contract.
+|`@implemented-and-validated`; passed
+
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-004
+|16 — diagnostics-only compatibility
+|Enabled and disabled legacy gates are used without authoritative evaluation.
+|Enabled retains three lazy provider calls and existing hashes/semantics; disabled invokes no provider; schema-v8 meanings stay unchanged.
+|`@implemented-and-validated`; passed
 |===
 
 === REQ-JAVA-PREVIEW-COMMAND-001 Validated Example Matrix
@@ -1404,40 +1667,48 @@ Visible absence, preflight rejection, engine refusal, lookup journal failure, an
 |`features/`.
 
 |Feature documents / discovered `.feature` paths
-|6
-|`features/java-maven-move-class-apply-authority.feature`, `features/java-refactoring-preview-command-boundary.feature`, `features/managed-apply-diagnostics-gate-selector.feature`, `features/managed-rollback-executor-extraction.feature`, `features/pending-plan-store-extraction.feature`, and `features/workspace-snapshot-composer-extraction.feature`.
+|8
+|`features/authoritative-diagnostics-evaluation.feature`, `features/java-maven-module-rename.feature`, `features/java-maven-move-class-apply-authority.feature`, `features/java-refactoring-preview-command-boundary.feature`, `features/managed-apply-diagnostics-gate-selector.feature`, `features/managed-rollback-executor-extraction.feature`, `features/pending-plan-store-extraction.feature`, and `features/workspace-snapshot-composer-extraction.feature`.
 
 |Requirement-bearing definitions
-|27
-|Twenty-one ordinary `Scenario` declarations (ten Maven move-class, three Java preview-command, one managed-apply selector, one managed rollback, two pending-plan, and four Workspace Snapshot Composer scenarios) plus six `Scenario Outline` declarations (Maven `008`/`012`, Java preview-command `001`, managed-apply selector `001`, managed rollback `002`, and Workspace Snapshot Composer `004`); the one Maven `Background` is excluded.
+|32
+|Twenty-four ordinary `Scenario` declarations (two authoritative diagnostics-evaluation, one Maven module-rename, ten Maven move-class, three Java preview-command, one managed-apply selector, one managed rollback, two pending-plan, and four Workspace Snapshot Composer scenarios) plus eight `Scenario Outline` declarations (authoritative diagnostics-evaluation `002`/`003`, Maven move-class `008`/`012`, Java preview-command `001`, managed-apply selector `001`, managed rollback `002`, and Workspace Snapshot Composer `004`); the one Maven move-class `Background` is excluded.
 
 |Scenario Outline definitions
-|6
-|REQ-JAVA-MAVEN-MOVE-AUTH-008, REQ-JAVA-MAVEN-MOVE-AUTH-012, REQ-JAVA-PREVIEW-COMMAND-001, REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001, REQ-MANAGED-ROLLBACK-EXECUTOR-002, and REQ-WORKSPACE-SNAPSHOT-COMPOSER-004.
+|8
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-002, REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-003, REQ-JAVA-MAVEN-MOVE-AUTH-008, REQ-JAVA-MAVEN-MOVE-AUTH-012, REQ-JAVA-PREVIEW-COMMAND-001, REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001, REQ-MANAGED-ROLLBACK-EXECUTOR-002, and REQ-WORKSPACE-SNAPSHOT-COMPOSER-004.
 
 |Scenario Outline example rows
-|38
-|Six uncertainty/drift rows under Maven `008`, six selected-descriptor loss/drift rows under Maven `012`, five command rows under Java preview-command `001`, ten routing rows under managed-apply selector `001`, seven short-circuit/visibility rows under managed rollback `002`, and four collaborator-failure rows under Workspace Snapshot Composer `004`.
+|52
+|Twelve provider-authority rows under authoritative diagnostics `002`, two post-apply-mismatch rows under authoritative diagnostics `003`, six uncertainty/drift rows under Maven `008`, six selected-descriptor loss/drift rows under Maven `012`, five command rows under Java preview-command `001`, ten routing rows under managed-apply selector `001`, seven short-circuit/visibility rows under managed rollback `002`, and four collaborator-failure rows under Workspace Snapshot Composer `004`.
 
 |Example-expanded executable cases
-|59
-|Twenty-one ordinary scenarios plus 38 rows inherited from the six outlines.
+|76
+|Twenty-four ordinary scenarios plus 52 rows inherited from the eight outlines.
+
+|Background declarations
+|1
+|The Maven move-class feature contains the sole `Background`.
+
+|Background steps
+|5
+|The sole background contributes five steps to each Maven move-class pickle but is excluded from declared scenario-step totals.
 
 |Declared scenario steps
-|386
-|The twelve Maven definitions declare 241 scenario steps, the four Java preview-command definitions declare 46, the two managed-apply selector definitions declare 20, the two managed-rollback definitions declare 19, the two pending-plan definitions declare 19, and the five Workspace Snapshot Composer definitions declare 41; the separate five-step Maven `Background` is not included in this metric.
+|479
+|The four authoritative diagnostics-evaluation definitions declare 43 scenario steps, the Maven module-rename definition declares 50, the twelve Maven move-class definitions declare 241, the four Java preview-command definitions declare 46, the two managed-apply selector definitions declare 20, the two managed-rollback definitions declare 19, the two pending-plan definitions declare 19, and the five Workspace Snapshot Composer definitions declare 41; the separate five-step Maven move-class `Background` is not included in this metric.
 
 |Expanded executable case steps
-|838
-|Gherkin pickles include inherited background steps and example expansion: 501 steps for the 22 Maven cases, 94 for the eight Java preview-command cases, 92 for the 11 managed-apply selector cases, 67 for the eight managed-rollback cases, 19 for the two pending-plan cases, and 65 for the eight Workspace Snapshot Composer cases.
+|1,016
+|Gherkin pickles include inherited background steps and example expansion: 128 steps for the 16 authoritative diagnostics-evaluation cases, 50 for the one Maven module-rename case, 501 for the 22 Maven move-class cases, 94 for the eight Java preview-command cases, 92 for the 11 managed-apply selector cases, 67 for the eight managed-rollback cases, 19 for the two pending-plan cases, and 65 for the eight Workspace Snapshot Composer cases.
 
 |Repository-unique stable requirement IDs in current Gherkin
-|27
+|32
 |Exactly one `@REQ-*` ID occurs on each requirement-bearing definition. Example rows intentionally inherit their outline's one ID, and no ID labels another definition.
 
 |Functional-only requirement definitions
-|1
-|REQ-JAVA-MAVEN-MOVE-AUTH-002.
+|6
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`, REQ-JAVA-MAVEN-MODULE-RENAME-001, and REQ-JAVA-MAVEN-MOVE-AUTH-002.
 
 |Non-functional-only requirement definitions
 |18
@@ -1448,12 +1719,12 @@ Visible absence, preflight rejection, engine refusal, lookup journal failure, an
 |REQ-JAVA-MAVEN-MOVE-AUTH-001, REQ-JAVA-MAVEN-MOVE-AUTH-003, REQ-JAVA-MAVEN-MOVE-AUTH-006, REQ-JAVA-MAVEN-MOVE-AUTH-007, REQ-JAVA-MAVEN-MOVE-AUTH-009, REQ-JAVA-MAVEN-MOVE-AUTH-010, REQ-JAVA-MAVEN-MOVE-AUTH-011, and REQ-JAVA-MAVEN-MOVE-AUTH-012.
 
 |Definitions carrying `@functional-requirement`
-|9
-|REQ-JAVA-MAVEN-MOVE-AUTH-001, REQ-JAVA-MAVEN-MOVE-AUTH-002, REQ-JAVA-MAVEN-MOVE-AUTH-003, REQ-JAVA-MAVEN-MOVE-AUTH-006, REQ-JAVA-MAVEN-MOVE-AUTH-007, REQ-JAVA-MAVEN-MOVE-AUTH-009, REQ-JAVA-MAVEN-MOVE-AUTH-010, REQ-JAVA-MAVEN-MOVE-AUTH-011, and REQ-JAVA-MAVEN-MOVE-AUTH-012.
+|14
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`, REQ-JAVA-MAVEN-MODULE-RENAME-001, REQ-JAVA-MAVEN-MOVE-AUTH-001, REQ-JAVA-MAVEN-MOVE-AUTH-002, REQ-JAVA-MAVEN-MOVE-AUTH-003, REQ-JAVA-MAVEN-MOVE-AUTH-006, REQ-JAVA-MAVEN-MOVE-AUTH-007, REQ-JAVA-MAVEN-MOVE-AUTH-009, REQ-JAVA-MAVEN-MOVE-AUTH-010, REQ-JAVA-MAVEN-MOVE-AUTH-011, and REQ-JAVA-MAVEN-MOVE-AUTH-012.
 
 |Definitions carrying `@non-functional-requirement`
 |26
-|All requirement IDs except REQ-JAVA-MAVEN-MOVE-AUTH-002. Classification totals overlap for the eight dual-classified definitions.
+|All requirement IDs except REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`, REQ-JAVA-MAVEN-MODULE-RENAME-001, and REQ-JAVA-MAVEN-MOVE-AUTH-002. Classification totals overlap for the eight dual-classified definitions.
 
 |Definitions with effective `@absent`
 |0
@@ -1464,22 +1735,30 @@ Visible absence, preflight rejection, engine refusal, lookup journal failure, an
 |None.
 
 |Definitions with effective `@implemented-and-validated`
-|27
-|REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012`, REQ-JAVA-PREVIEW-COMMAND-001 through `004`, REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002, REQ-MANAGED-ROLLBACK-EXECUTOR-001/002, REQ-PENDING-PLAN-STORE-001/002, and REQ-WORKSPACE-SNAPSHOT-COMPOSER-001 through `005`. Maven statuses are explicit at scenario/outline level; Java preview-command, selector, managed-rollback, pending-plan, and composer statuses are inherited from their features. Every definition retains separately bounded evidence.
+|32
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`, REQ-JAVA-MAVEN-MODULE-RENAME-001, REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012`, REQ-JAVA-PREVIEW-COMMAND-001 through `004`, REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002, REQ-MANAGED-ROLLBACK-EXECUTOR-001/002, REQ-PENDING-PLAN-STORE-001/002, and REQ-WORKSPACE-SNAPSHOT-COMPOSER-001 through `005`. Every definition retains separately bounded evidence.
 
 |Example-expanded cases with effective `@implemented-and-validated`
-|59
-|Twenty-one ordinary implemented scenarios plus 38 cases inherited from the six implemented outlines.
+|76
+|All twenty-four ordinary scenarios plus all 52 cases inherited from the eight outlines.
+
+|Mappings to `UC-AUTHORITATIVE-DIAGNOSTICS-EVALUATION`, with diagnostics/apply/rollback supporting mappings
+|4
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004` and all 16 functional implemented-and-validated cases map to the bounded language-neutral authoritative evaluation capability plus existing diagnostics, managed-apply, and rollback use cases. The mapping adds no protocol capability, durable persistence, generic operation, or provider authority.
+
+|Mappings to `UC-JAVA-RENAME-MAVEN-MODULE`, with preview/apply/rollback supporting mappings
+|1
+|REQ-JAVA-MAVEN-MODULE-RENAME-001 and its one functional implemented-and-validated case map to the bounded direct-library module-rename use case plus existing preview, managed-apply, and rollback capabilities. The mapping adds no protocol capability or broader support claim.
 
 |Mappings to `UC-JAVA-MOVE-CLASS`
 |12
 |Every Maven move-class requirement-bearing definition, and therefore all 22 Maven executable cases, maps to this use case.
 
-|Mappings to `UC-ROLLBACK`
+|Managed-rollback-executor mappings to `UC-ROLLBACK`
 |2
 |REQ-MANAGED-ROLLBACK-EXECUTOR-001/002 and their eight implemented-and-validated cases map to supporting orchestration within the existing rollback use case; they add no protocol capability or mutation authority.
 
-|Mappings to UC-APPLY-PATCH, UC-DAEMON, and UC-MCP
+|Managed-apply-selector mappings to UC-APPLY-PATCH, UC-DAEMON, and UC-MCP
 |2
 |REQ-MANAGED-APPLY-DIAGNOSTICS-SELECTOR-001/002 and their 11 implemented-and-validated cases map to supporting gate selection within the existing managed-apply integration paths. The mapping adds no protocol capability or apply authority.
 
@@ -1552,8 +1831,16 @@ Visible absence, preflight rejection, engine refusal, lookup journal failure, an
 |Gap |Impact |Status
 
 |Executable Story BDD coverage remains narrow
-|The configured root has six feature sources: twelve implemented-and-validated Maven move-class definitions/22 cases, four implemented-and-validated Java preview-command definitions/eight cases, two implemented-and-validated managed-apply selector definitions/11 cases, two implemented-and-validated managed-rollback definitions/eight cases, two implemented-and-validated pending-plan definitions/cases, and five implemented-and-validated Workspace Snapshot Composer definitions/eight cases. Most other use cases still have no mapped Gherkin scenarios.
-|needs-review; each feature is complete only for its separately bounded catalogue
+|The configured root has eight feature sources and 32 definitions/76 cases, all `@implemented-and-validated`. The newly promoted authoritative diagnostics-evaluation definitions contribute 4/16 and the module-rename definition contributes 1/1; every feature remains complete only for its separately bounded catalogue. Most other use cases still have no mapped Gherkin scenarios.
+|needs-review; status reconciliation is complete, while broad use-case coverage and every stated qualification exclusion remain open
+
+|Authoritative snapshot diagnostics evaluation qualification is bounded
+|REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004` provide four repository-unique functional implemented-and-validated definitions and 16 cases at `features/authoritative-diagnostics-evaluation.feature`. Independent 16/16-scenario, 128/128-step evidence validates the exact public `PatchEngine` boundary, deep detachment, core-owned pre-WAL authority, S0/C1/S1 journaling, same-record automatic rollback, and diagnostics-only compatibility. It does not qualify arbitrary model-changing operations, protocols, packages/platforms, releases, or support.
+|mitigated for the exact bounded application-port mode; retain regression evidence and all broader exclusions
+
+|Bounded Maven module rename qualification is bounded
+|REQ-JAVA-MAVEN-MODULE-RENAME-001 has one repository-unique functional implemented-and-validated scenario/case and 50 steps at `features/java-maven-module-rename.feature`. Its direct-library boundary covers only the named 20-direct-child fixture shape, independently explicit directory/artifact intent, exactly three parser-authorized POM ranges plus two file renames, separately authorized `PatchEngine` apply, one exact-S1 journal record, and exact normal rollback. Protocol/recipe/package/native/cross-platform/real-project/general-Maven/native-CI/support and broad-roadmap completion remain excluded.
+|mitigated for the exact direct-library fixture row; broader qualification remains open and the broad roadmap/support rows stay unpromoted
 
 |Java Refactoring Preview Command qualification and final gate are bounded
 |REQ-JAVA-PREVIEW-COMMAND-001 through `004` validate the sealed five-variant values, fieldless dispatcher, per-call invoker seam, exact default-planner mapping, generic decoder convergence, real daemon/MCP session dispatch after parsing, exact plan/exception fidelity, no writes/residue, and all named exclusions through bounded source-built/in-process runners. External protocol schemas/capability catalogues did not change. Final dated mutable whole-working-tree verification passed with 1045 discovered/817 executed/228 skipped or tag-filtered, zero failures/errors, 140 XML files, and 79 tasks (SHA-256 `fddde07b954c36898252e510ad07758408f2c9b4e35b9102a5e71d7dd518d535`); targeted static verification passed (SHA-256 `8f29ec9da3ff6a96d0044423e8ac1f415b2651ce0870fab9b2b86d6f5f007c33`) with no finding owned by the named production boundary/adoption paths and exactly 48 reviewed/non-blocking glue findings. No packaged/native/cross-platform/concurrent/crash-restart/general-orchestration/numerical-coverage execution is qualified.

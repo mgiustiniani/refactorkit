@@ -1,9 +1,19 @@
 package org.refactorkit.java
 
+import com.ctc.wstx.api.WstxInputProperties
+import com.ctc.wstx.stax.WstxInputFactory
+import org.codehaus.stax2.XMLStreamReader2
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
+import java.io.StringReader
+import java.util.ArrayList
+import java.util.Collections
+import javax.xml.stream.XMLInputFactory
+import javax.xml.stream.XMLResolver
+import javax.xml.stream.XMLStreamConstants
+import javax.xml.stream.XMLStreamException
 
 internal sealed interface PomRewriteResult {
     data class Edits(val edits: List<TextEdit>) : PomRewriteResult
@@ -14,7 +24,7 @@ internal sealed interface PomRewriteResult {
 internal object MavenPomDependencyEditor {
     fun rewrite(pom: SourceFile, request: MavenDependencyRewrite): PomRewriteResult {
         val content = pom.content
-        val parsed = runCatching { XmlLexicalTree.parse(content) }.getOrElse {
+        val parsed = runCatching { WoodstoxXmlTree.parse(content) }.getOrElse {
             return PomRewriteResult.Refused(
                 "mavenOwnership.ambiguousPomOrigin",
                 "POM XML cannot be located losslessly: ${it.message}",
@@ -23,9 +33,15 @@ internal object MavenPomDependencyEditor {
         val located = parsed.descendants().filter { it.localName == "dependency" }.mapNotNull { dependency ->
             dependencyCoordinate(dependency, content)?.let { dependency to it }
         }.toList()
-        val dependencies = located.filter { (node, _) ->
-            node.parent?.localName == "dependencies" && node.parent?.parent?.localName == "project"
-        }.map { it.second }
+        val directProjectDependencies = parsed.descendants()
+            .filter { it.localName == "project" }
+            .flatMap { project ->
+                project.children.asSequence()
+                    .filter { it.localName == "dependencies" }
+                    .flatMap { it.children.asSequence().filter { child -> child.localName == "dependency" } }
+            }
+            .toSet()
+        val dependencies = located.filter { (node, _) -> node in directProjectDependencies }.map { it.second }
         if (located.any { (_, coordinate) ->
                 coordinate.mayRepresent(request.source) &&
                     coordinate.values.values.any { value -> "\${" in value.text }
@@ -36,8 +52,7 @@ internal object MavenPomDependencyEditor {
             )
         }
         if (located.any { (node, coordinate) ->
-                coordinate.identityOrNull() == request.source &&
-                    !(node.parent?.localName == "dependencies" && node.parent?.parent?.localName == "project")
+                coordinate.identityOrNull() == request.source && node !in directProjectDependencies
             }) {
             return PomRewriteResult.Refused(
                 "mavenOwnership.ambiguousPomOrigin",
@@ -236,107 +251,118 @@ internal object MavenPomDependencyEditor {
     }
 }
 
-private data class XmlNode(
+internal class XmlNode(
     val localName: String,
     val contentStart: Int,
-    var contentEnd: Int,
-    val parent: XmlNode?,
-    val children: MutableList<XmlNode> = mutableListOf(),
+    val contentEnd: Int,
+    children: Collection<XmlNode>,
 ) {
+    private val childValues: List<XmlNode> = Collections.unmodifiableList(ArrayList(children))
+    val children: List<XmlNode> get() = childValues
+
     fun descendants(): Sequence<XmlNode> = sequence {
-        children.forEach { child ->
+        childValues.forEach { child ->
             yield(child)
             yieldAll(child.descendants())
         }
     }
 }
 
-/** Minimal bounded XML tokenizer used only to locate exact element text offsets. */
-private object XmlLexicalTree {
+/** Bounded structural/range reader backed exclusively by maintained Woodstox parser locations. */
+internal object WoodstoxXmlTree {
+    const val parserSelection: String = "MAINTAINED_NON_EXECUTING"
+    const val dtdProcessing: String = "DISABLED"
+    const val externalGeneralEntities: String = "DISABLED"
+    const val externalParameterEntities: String = "DISABLED"
+    const val externalDtdAccess: String = "DENIED"
+    const val rangeAuthority: String = "PARSER_REPORTED_ELEMENT_TEXT"
+
+    val parserImplementation: String = WstxInputFactory::class.java.name
+    val parserVersion: String = WstxInputFactory::class.java.`package`.implementationVersion
+        ?.takeIf(String::isNotBlank)
+        ?: error("Woodstox implementation version is unavailable")
+
     fun parse(content: String): XmlNode {
-        require(content.length <= MAX_POM_CHARS) { "POM exceeds the bounded lexical limit" }
-        val document = XmlNode("#document", 0, content.length, null)
-        val stack = ArrayDeque<XmlNode>()
-        stack.addLast(document)
-        var cursor = 0
+        require(content.length <= MAX_POM_CHARS) { "POM exceeds the bounded document limit" }
+        val reader = inputFactory().createXMLStreamReader(StringReader(content)) as? XMLStreamReader2
+            ?: error("Woodstox did not provide XMLStreamReader2 location authority")
+        val stack = ArrayDeque<OpenElement>()
+        stack.addLast(OpenElement("#document", 0, false))
         var elements = 0
-        while (cursor < content.length) {
-            val open = content.indexOf('<', cursor)
-            if (open < 0) break
-            when {
-                content.startsWith("<!--", open) -> cursor = terminated(content, open + 4, "-->")
-                content.startsWith("<![CDATA[", open) -> cursor = terminated(content, open + 9, "]]>")
-                content.startsWith("<?", open) -> cursor = terminated(content, open + 2, "?>")
-                content.startsWith("<!", open) -> cursor = scanDeclaration(content, open + 2)
-                else -> {
-                    val close = scanTagEnd(content, open + 1)
-                    val body = content.substring(open + 1, close).trim()
-                    val closing = body.startsWith('/')
-                    val selfClosing = body.endsWith('/')
-                    val name = body.removePrefix("/").removeSuffix("/").trimStart()
-                        .takeWhile { !it.isWhitespace() && it != '/' }
-                    require(name.isNotBlank()) { "Empty XML element name" }
-                    val local = name.substringAfter(':')
-                    if (closing) {
-                        require(stack.size > 1 && stack.last().localName == local) {
-                            "Mismatched XML closing element: $name"
-                        }
-                        stack.removeLast().contentEnd = open
-                    } else {
+        try {
+            while (reader.hasNext()) {
+                when (reader.next()) {
+                    XMLStreamConstants.START_ELEMENT -> {
                         require(++elements <= MAX_ELEMENTS) { "POM exceeds the bounded element limit" }
-                        val parent = stack.last()
-                        val node = XmlNode(
-                            local,
-                            close + 1,
-                            if (selfClosing) close + 1 else content.length,
-                            parent,
-                        )
-                        parent.children += node
-                        if (!selfClosing) stack.addLast(node)
+                        stack.addLast(OpenElement(
+                            localName = reader.localName,
+                            contentStart = characterOffset(
+                                reader.locationInfo.endingCharOffset,
+                                content.length,
+                            ),
+                            emptyElement = reader.isEmptyElement,
+                        ))
                     }
-                    cursor = close + 1
+                    XMLStreamConstants.END_ELEMENT -> {
+                        require(stack.size > 1) { "Unexpected XML closing element: ${reader.localName}" }
+                        val open = stack.removeLast()
+                        require(open.localName == reader.localName) {
+                            "Mismatched XML closing element: ${reader.localName}"
+                        }
+                        val closingStart = characterOffset(
+                            reader.locationInfo.startingCharOffset,
+                            content.length,
+                        )
+                        val contentEnd = if (open.emptyElement) open.contentStart else closingStart
+                        require(contentEnd >= open.contentStart) {
+                            "Woodstox reported an invalid element-text range for ${open.localName}"
+                        }
+                        stack.last().children += XmlNode(
+                            localName = open.localName,
+                            contentStart = open.contentStart,
+                            contentEnd = contentEnd,
+                            children = open.children,
+                        )
+                    }
+                    XMLStreamConstants.DTD -> error("DTD declarations are disabled for POM range parsing")
                 }
             }
+            require(stack.size == 1) { "Unclosed XML element" }
+            val document = stack.removeLast()
+            return XmlNode("#document", 0, content.length, document.children)
+        } finally {
+            reader.closeCompletely()
         }
-        require(stack.size == 1) { "Unclosed XML element" }
-        return document
     }
 
-    private fun scanTagEnd(content: String, start: Int): Int {
-        var quote: Char? = null
-        for (index in start until content.length) {
-            val current = content[index]
-            if (quote != null) {
-                if (current == quote) quote = null
-            } else when (current) {
-                '\'', '"' -> quote = current
-                '>' -> return index
-            }
-        }
-        error("Unclosed XML tag")
+    private fun inputFactory(): WstxInputFactory = WstxInputFactory().apply {
+        setProperty(XMLInputFactory.SUPPORT_DTD, false)
+        setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false)
+        setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false)
+        setProperty(WstxInputProperties.P_MAX_CHARACTERS, MAX_POM_CHARS.toLong())
+        setProperty(WstxInputProperties.P_MAX_ELEMENT_COUNT, MAX_ELEMENTS.toLong())
+        xmlResolver = DENY_EXTERNAL_RESOLVER
+        setProperty(WstxInputProperties.P_DTD_RESOLVER, DENY_EXTERNAL_RESOLVER)
+        setProperty(WstxInputProperties.P_ENTITY_RESOLVER, DENY_EXTERNAL_RESOLVER)
+        setProperty(WstxInputProperties.P_UNDECLARED_ENTITY_RESOLVER, DENY_EXTERNAL_RESOLVER)
     }
 
-    private fun scanDeclaration(content: String, start: Int): Int {
-        var bracketDepth = 0
-        var quote: Char? = null
-        for (index in start until content.length) {
-            val current = content[index]
-            if (quote != null) {
-                if (current == quote) quote = null
-            } else when (current) {
-                '\'', '"' -> quote = current
-                '[' -> bracketDepth++
-                ']' -> bracketDepth--
-                '>' -> if (bracketDepth == 0) return index + 1
-            }
+    private fun characterOffset(offset: Long, documentLength: Int): Int {
+        require(offset in 0..documentLength.toLong()) {
+            "Woodstox reported a character offset outside the bounded document: $offset"
         }
-        error("Unclosed XML declaration")
+        return offset.toInt()
     }
 
-    private fun terminated(content: String, start: Int, marker: String): Int {
-        val end = content.indexOf(marker, start)
-        require(end >= 0) { "Unclosed XML lexical section" }
-        return end + marker.length
+    private class OpenElement(
+        val localName: String,
+        val contentStart: Int,
+        val emptyElement: Boolean,
+        val children: MutableList<XmlNode> = mutableListOf(),
+    )
+
+    private val DENY_EXTERNAL_RESOLVER = XMLResolver { _, systemId, _, _ ->
+        throw XMLStreamException("External XML resource access is denied: ${systemId.orEmpty()}")
     }
 
     private const val MAX_POM_CHARS = 4 * 1024 * 1024

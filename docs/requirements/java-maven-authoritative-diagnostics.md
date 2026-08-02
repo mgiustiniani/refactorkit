@@ -100,6 +100,37 @@ the restored bytes are diagnosed again and must reproduce baseline identities.
 Any unavailable affected environment blocks semantic mutation even when the same
 unavailability existed at baseline.
 
+For an edit that can change hash-bound modules, classpath evidence, or build
+models, _exact staged post-image_ means the implemented bounded authoritative
+snapshot-diagnostics evaluation result `S1` and its diagnostics, not a
+`WorkspaceEditSimulator` file candidate that retains `S0` semantic metadata.
+Core deep-detaches the complete returned snapshot/build/diagnostic collection
+graph, preserves candidate root, source/auxiliary partition, tracked
+paths/language IDs/bytes, extension scope, and ignore policy, and allows only
+modules, classpath evidence, and build models to be rehydrated. Before WAL it
+normalizes and enforces module/build-root containment and independently
+recomputes the no-follow path/kind fingerprint of explicitly allowed external
+regular-file classpath evidence. Baseline equals `S0`/`D0`, provider completion
+is followed by under-lock workspace/lease revalidation, schema-v8 records exact
+`S1.hash`, committed evaluation reproduces `S1` plus staged diagnostics, and a
+mismatch advances the same record through automatic rollback to an evaluated
+`S0`/`D0` baseline. Existing diagnostics-only gate semantics and hashes remain
+exact, and no new durable store or schema is introduced.
+
+REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004` are
+`@implemented-and-validated` within this language-neutral bounded application-port
+contract. Independent OpenJDK 21.0.11 review returned `PASS_FOR_PROMOTION`
+(manifest SHA-256
+`6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`;
+summary SHA-256
+`76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`).
+The focused runner passed 16/16 scenarios and 128/128 steps (log SHA-256
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`;
+Cucumber JSON SHA-256
+`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`).
+This promotion is not full `RPK-JAVA-DIAG-001..007`, release-wide, packaged,
+native, cross-platform, protocol-surface, or general Java/Maven qualification.
+
 ## RPK-JAVA-DIAG-006 — Secure reproducibility
 
 All discovery is bounded, offline by default, plugin-free and credential-free.

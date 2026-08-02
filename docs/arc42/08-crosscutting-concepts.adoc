@@ -29,7 +29,7 @@ Transaction identifiers now enforce the generated UUIDv4 grammar; normalized tra
 
 Normal rollback verifies exact retained post-images under the workspace lock and refuses conflicts without writes; explicit force restores pre-images and records the override (`TX-004` closed for versioned records). Snapshot-aware apply independently rescans hash-bound source roots/extensions/ignore policy under the workspace lock, so stale library snapshots cannot omit newly appeared declared-scope sources. Java classpath artifacts and discovery manifests are likewise fingerprinted and revalidated (`TX-014` closed for source/classpath scope). Recipe steps are evaluated against one evolving immutable snapshot and reduced to one recipe-wide `PatchPlan`; apply creates one WAL transaction, while planning failure writes nothing (`TX-008` closed).
 
-Status: implementation-informed from `docs/transactionality-audit.md`. Write-ahead lifecycle, compatible startup compensation, explicit `RECOVERY_REQUIRED`, conflict-safe rollback, durable supported-filesystem replacement, and engine-owned source/classpath scope are implemented. Versioned checksums, independent image hashes, migration, quarantine, metadata policy, deterministic faults, real kills, truncation, and cross-store evidence close the qualified transactionality requirements.
+Status: implementation-informed from `docs/transactionality-audit.md`. Write-ahead lifecycle, compatible startup compensation, explicit `RECOVERY_REQUIRED`, conflict-safe rollback, durable supported-filesystem replacement, and engine-owned source/classpath scope are implemented. Versioned checksums, independent image hashes, migration, quarantine, metadata policy, deterministic faults, real kills, truncation, and cross-store evidence close the qualified diagnostics-only transactionality requirements. For selected edits that can change modules, classpath evidence, or build models, the implemented bounded authoritative mode replaces stale simulator-carried semantic metadata with exact `S1` journal identity and same-record automatic rollback. General model-changing operations and broader support remain unqualified.
 
 == Diagnostics Model
 
@@ -39,7 +39,89 @@ Additive API `0.2` `diagnostics.v2` provides the IDE authority envelope for Type
 
 The stable target also compares diagnostics before preview, after preview simulation, after apply, and after rollback where an operation requires those gates. A configured regression beyond the approved plan causes refusal.
 
-Status: implementation-informed for the current generic/JDT gate. It does not establish the planned full-reactor, release-aware Java/Maven authority described below. Managed Java surfaces supply JDT diagnostics to a core gate that compares current and exact staged post-image snapshots under lock before WAL, refusing new errors or unavailable diagnostics. TypeScript managed gates and IDE diagnostics use the independent `typescript-compiler-exact-v1` path rather than LSP publications. Experimental Kotlin diagnostics use `kotlin-compiler-diagnostics-k2-v1`, an external K2 process over an immutable overlay with snapshot/build/toolchain attestation; compiler XML lacks trustworthy end offsets, so diagnostic locations remain explicitly line-only. The separate `kotlin-compiler-jvm-declarations-k2-v1` read row accepts exact compiler PSI declared-type selections only after successful compilation and matching JVM class-file evidence, producing type IDs from binary identity rather than offsets; an implicit companion selects its `object` keyword because it has no source name identifier. The first function row additionally binds an opaque callable ID to generated JVM owner, method name and descriptor and refuses ambiguous overload/bridge evidence. Neither read backend has mutation authority. Direct library apply requires an explicit gate (`TX-015` closed).
+Status: implementation-informed for the current generic/JDT diagnostics-only gate. It does not establish the planned full-reactor, release-aware Java/Maven authority described below. Managed Java surfaces supply JDT diagnostics to a core gate that compares `S0` and a simulated staged candidate under lock before WAL, refusing new errors or unavailable diagnostics. That candidate is an exact staged `ProjectSnapshot` only when the edit cannot change hash-bound modules, classpath evidence, or build models; for a model-changing descriptor edit, `WorkspaceEditSimulator` preserves stale `S0` semantic metadata and supplies only exact file candidate `C1`. TypeScript managed gates and IDE diagnostics use the independent `typescript-compiler-exact-v1` path rather than LSP publications. Experimental Kotlin diagnostics use `kotlin-compiler-diagnostics-k2-v1`, an external K2 process over an immutable overlay with snapshot/build/toolchain attestation; compiler XML lacks trustworthy end offsets, so diagnostic locations remain explicitly line-only. The separate `kotlin-compiler-jvm-declarations-k2-v1` read row accepts exact compiler PSI declared-type selections only after successful compilation and matching JVM class-file evidence, producing type IDs from binary identity rather than offsets; an implicit companion selects its `object` keyword because it has no source name identifier. The first function row additionally binds an opaque callable ID to generated JVM owner, method name and descriptor and refuses ambiguous overload/bridge evidence. Neither read backend has mutation authority. Direct library apply still requires an explicit gate; TX-015 remains closed for the legacy diagnostics-only mode and is implementation-informed for the separately selected bounded authoritative mode.
+
+=== Implemented Authoritative Snapshot Diagnostics Evaluation
+
+Status: implementation-informed for
+REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`. Their four
+definitions and 16 expanded cases are `@implemented-and-validated`; the bounded
+REQ-JAVA-MAVEN-MODULE-RENAME-001 consumer is likewise promoted for its one exact
+case. This does not qualify a generic evaluator service or broader operation,
+surface, package, platform, Maven-population, release, or support boundary.
+
+This concept is a transient immutable value plus a language-neutral core
+application port. It is not an aggregate, entity, event, repository, projection,
+stream, durable service, scanner registry, or orchestration God service. One
+evaluation request for one exact immutable candidate returns one authoritative
+`ProjectSnapshot` and diagnostics evaluated from that same candidate; the value
+is discarded during the one lock-held `PatchEngine.apply` attempt. At
+construction, core deep-detaches every caller-owned outer and nested collection
+reachable through `ProjectSnapshot`, each `Module`, `BuildModel`, `BuildModule`,
+and `BuildSourceSet`, the diagnostics list, and every `DiagnosticDetails` map.
+No caller alias or exposed view may mutate or partially mutate the value. A fresh
+canonical hash over complete exposed snapshot state must remain equal to its
+construction-time identity, and complete diagnostics/details must remain at
+their construction-time values. A Java/Maven or other language provider is
+downstream through an anti-corruption layer and has no file-mutation or
+candidate-shell authority.
+
+Core preserves the candidate's normalized workspace root; exact source versus
+auxiliary partition; normalized tracked inventory, paths, language IDs, and
+bytes; `sourceExtensions`; and `ignoredDirectories`. Only compatibility
+`modules`, `classpathEvidence`, and `buildModels` may be rehydrated. On every
+provider result, core independently normalizes and validates each `Module.root`,
+every module source root, every `BuildModule.root`, and build source-set root as
+workspace-contained. An explicit absolute external classpath entry remains
+permitted under the existing policy only when core independently recomputes its
+current no-follow path/kind fingerprint and it exactly matches the supplied
+evidence. Missing/unreadable evidence, path/kind drift, symlink substitution, or
+a fabricated fingerprint refuses before WAL. An isolated provider must map
+temporary roots and semantic paths back to the candidate and may never return an
+arbitrary root, fabricate a classpath fact, repartition files, add/drop tracked
+paths, or change bytes.
+
+The implemented invariant sequence is:
+
+. Evaluate the baseline and require the complete result snapshot to equal `S0`
+  with diagnostics `D0`; otherwise refuse without WAL.
+. Simulate the normalized edit to exact tracked file candidate `C1`, then evaluate
+  it to authoritative staged `S1` and diagnostics `D1`.
+. After provider completion and before WAL, repeat engine-owned workspace and
+  operation-authority lease revalidation under the existing lock; prove rendered
+  transaction images equal the `C1`/`S1` tracked image.
+. Persist schema-v8 `PREPARED` with `preSnapshotHash=S0.hash` and
+  `postSnapshotHash=S1.hash`, then commit the exact images.
+. Evaluate committed bytes and require exact `S1.hash` plus the complete `D1`
+  multiset. Any hash/diagnostic mismatch or unavailability automatically rolls
+  back through the same record; evaluate restoration and require exact `S0.hash`
+  plus `D0`, or report recovery failure.
+
+The current `DiagnosticsGate.enabled`/`disabled` call and no-call semantics,
+provider order, diagnostic identity, error-only multiset regression and
+preview-approved-regression handling, typed failures, and existing hashes remain
+exact for diagnostics-only operations. The authoritative value is never durable.
+Schema-v8 remains the sole WAL/idempotency/exact-result store with no schema bump,
+historical rewrite, second journal, repository, event store, outbox, audit store,
+document store, projection, or serialized evaluator state. Core imports no
+language type. Accepted ADRs 0002 and 0012 record this bounded implementation without changing
+their lifecycle; no new ADR or C4 topology change follows.
+
+Independent final review on OpenJDK 21.0.11 returned `PASS_FOR_PROMOTION`
+(evidence manifest SHA-256
+`6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`;
+summary SHA-256
+`76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`).
+The authoritative runner passed 16/16 scenarios and 128/128 steps (log SHA-256
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`;
+JSON SHA-256
+`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`).
+Deep mutation probes retained exact values and fresh/cached hashes. Target
+`StageFacts`, `GateExpectation`, `ReactorView`, `ModuleView`, and `SourceSetView`
+have zero raw and zero real EI/EI2 findings. The one reported
+`AuthoritativeDiagnosticsEvaluation` EI warning is non-real over a defensively
+copied unmodifiable list; PMD was `NO-SOURCE` for Kotlin rather than clean, and
+the wider configured SpotBugs baseline remains non-blocking.
 
 === Implemented Stateless Managed-apply Diagnostics-gate Selector
 
@@ -141,7 +223,7 @@ The selector performs no sorting, deduplication, severity conversion, tagging, b
 
 ==== PatchEngine Authority and Explicit Exclusions
 
-The authority sequence remains unchanged:
+The authority sequence below remains the exact current diagnostics-only behavior. The planned model-changing authoritative evaluation is additive and does not alter selector routing, gate identity, or existing call sites:
 
 . The surface validates pending identity and its Kotlin lease/index rules, resolves the root, and scans the saved workspace.
 . It selects a lazy gate; only external active-adapter lookup may occur at this point.
@@ -447,6 +529,88 @@ The structural preview variant is intentionally different. The root POM remains 
 The post-preview freshness variant is a separate managed-apply phase. An eligible REQ-007 preview binds request, `S0`, staged `S*`, expected semantic candidate-inventory hash, and `E0`. Generic immutable `OperationAuthorityFileEvidence` binds the non-managed `BOUND_OTHER` decoy source, safe relative path, expected content hash, and typed attributes. After lock acquisition an injected external change replaces that source with valid `ProductDecoy` before lease validation/WAL. `PatchEngine` captures one engine-owned `S1`/tracked-file observation, then returns typed `ApplyResult.Refused` with primary `authorityLease.evidenceDrift` and secondary `snapshot.scopeChanged`. Immutable sorted `DiagnosticDetails` carries `EVIDENCE_FRESHNESS`, `CANDIDATE_INVENTORY`, path, expected/observed content hashes, `S0`, `S1`, the expected candidate-inventory hash, and expected/observed required-file-evidence hashes. There is no observed semantic candidate inventory/hash. External `S1` is preserved, no WAL/transaction/managed target edit/destination is created, and `.refactorkit/workspace.lock` may remain.
 
 Blocker selection is deterministic. The explicit old-FQN outside-closure blocker has precedence over generic `candidate.unresolved`; otherwise the inside-closure row would subsume it. No REQ-008 variant is `LEXICAL_FALLBACK_REVIEW`. Recovered bindings and preview-construction fingerprint mismatch stay under REQ-003; broad lexical failure stays under REQ-004; selected-path and selected-descriptor failures stay under REQ-010/012; and selected JAR/POM/effective-input/repository/path drift stays under REQ-011. Candidate truncation, unbounded inventory, provider loss, or other unreadable/unsafe structure is not qualified by these six cases.
+
+== Implemented Bounded Maven Module Rename
+
+Status: implementation-informed for REQ-JAVA-MAVEN-MODULE-RENAME-001. Its one
+functional scenario/case is `@implemented-and-validated`. Independent OpenJDK
+21.0.11 execution passed 1/1 scenario and 50/50 steps (log SHA-256
+`b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`;
+JSON SHA-256
+`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`).
+The historical commit-`6d4fb130` prototype remains negative evidence; it no
+longer describes the promoted implementation.
+
+The planner is classified as a stateless Java/Maven domain service with
+application-service orchestration responsibility in the Java Language Adapter.
+Its request, raw POM documents, effective-reactor model, exact origin/range
+facts, staged reactor, diagnostics, and returned `PatchPlan` are immutable. It
+has no aggregate identity, entity lifecycle, repository, cache, or persistence.
+The existing transaction journal remains the WAL and exact-result record;
+`PatchEngine` remains the sole managed apply/recovery/rollback authority.
+
+Module location and coordinate identity are separate concepts. The first fixture
+request renames direct-child directory `catalog-model` to `catalog-domain` and
+independently supplies `newArtifactId=catalog-domain`. Directory spelling never
+supplies artifact intent. Omitting `newArtifactId` preserves the old artifact and
+authorizes no child or dependency coordinate range. When explicit intent is
+present, the only editable origins are the child POM's direct top-level project
+artifact literal, one exact direct root module literal, and literal dependency
+artifact origins whose effective-model identity resolves to the exact old child
+coordinate. A parent artifact, transitive consumer, lexical same-name tag, or
+unproven origin is not editable evidence.
+
+POM mutation is lossless. Maintained Woodstox 7.1.1 parses the same hash-bound raw
+POM documents, and StAX2 location information is the sole source of exact raw
+element-text ranges. DTD processing, external general and parameter entities,
+and external DTD access are disabled. Inability to establish those controls or
+exact ranges refuses planning. Operation-owned hand-written XML tokenization is
+rejected rather than retained as a fallback, no POM or effective model is
+serialized, and the Woodstox 7.1.1/StAX2 dependency remains bounded to
+`refactorkit-java`; core stays XML-library independent. Its reviewed JAR SHA-256
+is `02b9d022e9d47704ff8a7a859a0dbfd3b2882a8311eb7ff1e180f760ccda2712`, and
+exact-offset plus DTD/external-DTD/general-entity/parameter-entity denial probes
+passed. Exact element-text ranges
+share their original coordinate spaces. Comments, whitespace, line endings,
+namespace syntax, CDATA, processing instructions, unknown elements, plugin
+configuration, unrelated coordinates, and the fixture dependency's
+`${project.version}` text remain byte-identical. In one normalized ordered
+`WorkspaceEdit`, `catalog-model/pom.xml` is modified at its old path before that
+POM or any other child file is renamed. The complete staged image must rebuild as
+one available effective reactor and pass authoritative before/staged diagnostics
+without Maven, wrapper, lifecycle, plugin, annotation processor, settings,
+credential/helper, or network use. Equal immutable inputs yield equal normalized
+edits, affected paths, model evidence, warnings, and diagnostics independent of
+the opaque plan ID.
+
+Preview writes nothing. A caller must separately provide explicit apply
+authorization to `PatchEngine` with the implemented authoritative staged-reactor
+evaluation. Baseline evaluation must equal `S0`/`D0`; simulation yields exact
+tracked candidate `C1`; staged evaluation yields authoritative `S1`/`D1`; and,
+after provider completion, `PatchEngine` repeats no-follow workspace and
+operation-lease validation under its lock before schema-v8 `PREPARED` records
+`S1.hash`. Exact post-apply S1/diagnostics mismatch or unavailability triggers
+automatic rollback and exact restored S0/diagnostics evaluation. A later normal
+explicit rollback retains existing journal-image/conflict authority, advances
+the same transaction, and relies on a fresh caller-owned authoritative scan to
+attest restored reactor/snapshot/diagnostic identity.
+
+The first row is intentionally closed around one no-follow disposable copy of
+the permanent aggregator-plus-20-direct-child fixture. Nested/profile/property-
+backed/inherited/ambiguous edited origins, create-module behavior,
+`groupId`/`version`/`packaging`/`type`/`classifier`, JPMS,
+CLI/daemon/LSP/MCP surfaces, recipes, packaged/native/platform qualification,
+disposable real-project
+acceptance, and general Maven projects are excluded. The row does not close the
+broad J1 module rename/move checkbox. These rules narrow existing accepted ADR
+0002/0010/0012 boundaries without changing decision lifecycle, persistence,
+participants, topology, or relationships. ADRs 0002 and 0012 now contain the bounded implementation record; no new ADR or
+C4 update is warranted. The accepted positive edit is exactly three raw-POM
+range modifications—`catalog-model/pom.xml` `9:14-9:27`, root `pom.xml`
+`74:12-74:25`, and `catalog-pricing/pom.xml` `13:18-13:31`—followed by two file
+renames. Broad module rename/move, protocols, recipes, packaged/native/
+cross-platform execution, general Maven projects, native CI, support-matrix
+promotion, and release-wide support remain unqualified.
 
 == Risk Model
 

@@ -238,30 +238,65 @@ class PatchEngine(
         if (diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
             ApplyResult.Refused(diagnostics)
         } else {
-            val gateValidation = validateDiagnosticsGate(
-                currentSnapshot,
-                normalizedEdit,
-                normalizedPlan.diagnosticsAfterPreview,
-                diagnosticsGate,
-            )
-            if (gateValidation.diagnostics.isNotEmpty()) {
-                return@withWorkspaceLock ApplyResult.Refused(gateValidation.diagnostics)
-            }
-            val approval = ApprovalRecord(
-                kind = if (normalizedPlan.requiresUserApproval) ApprovalKind.EXPLICIT_APPLY else ApprovalKind.NOT_REQUIRED,
-                surface = authorization.surface,
-                actor = authorization.actor,
-                recordedAt = java.time.Instant.now(),
-            )
-            val applied = applyPrepared(normalizedPlan, currentSnapshot, approval)
-            if (applied is ApplyResult.Applied && gateValidation.provider != null) {
-                validatePostApplyDiagnostics(
+            val authoritativeProvider = diagnosticsGate.authoritativeProvider
+            if (authoritativeProvider == null) {
+                val gateValidation = validateDiagnosticsGate(
                     currentSnapshot,
-                    applied.transaction,
-                    gateValidation,
-                    diagnosticsGate.id,
+                    normalizedEdit,
+                    normalizedPlan.diagnosticsAfterPreview,
+                    diagnosticsGate,
                 )
-            } else applied
+                if (gateValidation.diagnostics.isNotEmpty()) {
+                    return@withWorkspaceLock ApplyResult.Refused(gateValidation.diagnostics)
+                }
+                val approval = ApprovalRecord(
+                    kind = if (normalizedPlan.requiresUserApproval) ApprovalKind.EXPLICIT_APPLY else ApprovalKind.NOT_REQUIRED,
+                    surface = authorization.surface,
+                    actor = authorization.actor,
+                    recordedAt = java.time.Instant.now(),
+                )
+                val applied = applyPrepared(normalizedPlan, currentSnapshot, approval)
+                if (applied is ApplyResult.Applied && gateValidation.provider != null) {
+                    validatePostApplyDiagnostics(
+                        currentSnapshot,
+                        applied.transaction,
+                        gateValidation,
+                        diagnosticsGate.id,
+                    )
+                } else applied
+            } else {
+                val gateValidation = validateAuthoritativeDiagnosticsGate(
+                    currentSnapshot,
+                    normalizedPlan,
+                    diagnosticsGate.id,
+                    authoritativeProvider,
+                )
+                if (gateValidation.diagnostics.isNotEmpty()) {
+                    return@withWorkspaceLock ApplyResult.Refused(gateValidation.diagnostics)
+                }
+                val approval = ApprovalRecord(
+                    kind = if (normalizedPlan.requiresUserApproval) ApprovalKind.EXPLICIT_APPLY else ApprovalKind.NOT_REQUIRED,
+                    surface = authorization.surface,
+                    actor = authorization.actor,
+                    recordedAt = java.time.Instant.now(),
+                )
+                val stagedEvaluation = requireNotNull(gateValidation.stagedEvaluation)
+                val applied = applyPrepared(
+                    normalizedPlan,
+                    currentSnapshot,
+                    approval,
+                    requireNotNull(gateValidation.stagedWorkspaceEdit),
+                    stagedEvaluation.snapshot.hash,
+                )
+                if (applied is ApplyResult.Applied) {
+                    validatePostApplyAuthoritativeDiagnostics(
+                        currentSnapshot,
+                        applied.transaction,
+                        gateValidation,
+                        diagnosticsGate.id,
+                    )
+                } else applied
+            }
         }
     }
 
@@ -773,6 +808,332 @@ class PatchEngine(
         val provider: ((ProjectSnapshot) -> List<Diagnostic>)? = null,
     )
 
+    private data class AuthoritativeDiagnosticsGateValidation(
+        val diagnostics: List<Diagnostic>,
+        val baselineEvaluation: AuthoritativeDiagnosticsEvaluation? = null,
+        val stagedCandidate: ProjectSnapshot? = null,
+        val stagedEvaluation: AuthoritativeDiagnosticsEvaluation? = null,
+        val stagedWorkspaceEdit: StagedWorkspaceEdit? = null,
+        val provider: AuthoritativeDiagnosticsProvider,
+    )
+
+    private fun validateAuthoritativeDiagnosticsGate(
+        snapshot: ProjectSnapshot,
+        plan: PatchPlan,
+        gateId: String,
+        provider: AuthoritativeDiagnosticsProvider,
+    ): AuthoritativeDiagnosticsGateValidation {
+        val baselineEvaluation = try {
+            provider.evaluate(snapshot)
+        } catch (error: Exception) {
+            return AuthoritativeDiagnosticsGateValidation(
+                diagnostics = listOf(authoritativeUnavailable(gateId, "baseline", error)),
+                provider = provider,
+            )
+        }
+        val baselineBoundaryDiagnostics = validateAuthoritativeSnapshotBoundary(snapshot, baselineEvaluation.snapshot)
+        if (baselineBoundaryDiagnostics.isNotEmpty()) {
+            return AuthoritativeDiagnosticsGateValidation(baselineBoundaryDiagnostics, provider = provider)
+        }
+        if (baselineEvaluation.snapshot != snapshot || baselineEvaluation.snapshot.hash != snapshot.hash) {
+            return AuthoritativeDiagnosticsGateValidation(
+                diagnostics = listOf(Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' baseline result did not preserve exact S0 hash",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.baselineSnapshotMismatch",
+                    details = DiagnosticDetails(mapOf(
+                        "expectedSnapshotHash" to snapshot.hash,
+                        "observedSnapshotHash" to baselineEvaluation.snapshot.hash,
+                    )),
+                )),
+                provider = provider,
+            )
+        }
+
+        val stagedCandidate = try {
+            WorkspaceEditSimulator.apply(snapshot, plan.workspaceEdit)
+        } catch (error: Exception) {
+            return AuthoritativeDiagnosticsGateValidation(
+                diagnostics = listOf(Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' cannot simulate exact staged candidate C1: ${error.message}",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.candidateSimulationFailed",
+                )),
+                provider = provider,
+            )
+        }
+        val stagedEvaluation = try {
+            provider.evaluate(stagedCandidate)
+        } catch (error: Exception) {
+            return AuthoritativeDiagnosticsGateValidation(
+                diagnostics = listOf(authoritativeUnavailable(gateId, "staged", error)),
+                provider = provider,
+            )
+        }
+        val stagedBoundaryDiagnostics = validateAuthoritativeSnapshotBoundary(
+            stagedCandidate,
+            stagedEvaluation.snapshot,
+        )
+        if (stagedBoundaryDiagnostics.isNotEmpty()) {
+            return AuthoritativeDiagnosticsGateValidation(stagedBoundaryDiagnostics, provider = provider)
+        }
+
+        val regressions = diagnosticsRegression(baselineEvaluation.diagnostics, stagedEvaluation.diagnostics)
+        val unapprovedRegressions = diagnosticsRegression(plan.diagnosticsAfterPreview, regressions)
+        if (unapprovedRegressions.isNotEmpty()) {
+            return AuthoritativeDiagnosticsGateValidation(
+                diagnostics = listOf(Diagnostic(
+                    "Diagnostics gate '$gateId' found ${unapprovedRegressions.size} unapproved new error(s): " +
+                        unapprovedRegressions.joinToString("; ") { it.message },
+                    Diagnostic.Severity.ERROR,
+                    code = "diagnostics.regression",
+                )),
+                provider = provider,
+            )
+        }
+
+        val observation = validateEngineOwnedSnapshot(snapshot)
+        val postProviderDiagnostics = buildList {
+            addAll(validateOperationAuthorityLease(
+                plan,
+                snapshot,
+                observation.observedSnapshotSha256,
+                observation.observedTrackedFileSha256ByPath,
+            ))
+            addAll(observation.diagnostics)
+            addAll(validateAffectedFilePreconditions(plan.workspaceEdit, snapshot))
+        }.map { diagnostic ->
+            diagnostic.copy(
+                message = "Authoritative diagnostics post-provider live S0 revalidation failed: ${diagnostic.message}",
+            )
+        }
+        if (postProviderDiagnostics.isNotEmpty()) {
+            return AuthoritativeDiagnosticsGateValidation(postProviderDiagnostics, provider = provider)
+        }
+
+        val stagedWorkspaceEdit = try {
+            stageWorkspaceEdit(plan.workspaceEdit)
+        } catch (error: Exception) {
+            return AuthoritativeDiagnosticsGateValidation(
+                diagnostics = listOf(Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' cannot render transaction images: ${error.message}",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.stagedImageUnavailable",
+                )),
+                provider = provider,
+            )
+        }
+        val imageDiagnostics = validateAuthoritativeStagedImages(
+            snapshot,
+            stagedCandidate,
+            stagedEvaluation.snapshot,
+            stagedWorkspaceEdit,
+        )
+        if (imageDiagnostics.isNotEmpty()) {
+            return AuthoritativeDiagnosticsGateValidation(imageDiagnostics, provider = provider)
+        }
+        return AuthoritativeDiagnosticsGateValidation(
+            diagnostics = emptyList(),
+            baselineEvaluation = baselineEvaluation,
+            stagedCandidate = stagedCandidate,
+            stagedEvaluation = stagedEvaluation,
+            stagedWorkspaceEdit = stagedWorkspaceEdit,
+            provider = provider,
+        )
+    }
+
+    private fun authoritativeUnavailable(gateId: String, phase: String, error: Exception): Diagnostic = Diagnostic(
+        "Authoritative diagnostics gate '$gateId' failed during $phase evaluation: ${error.message}",
+        Diagnostic.Severity.ERROR,
+        code = "diagnostics.unavailable",
+        details = DiagnosticDetails(mapOf("phase" to phase)),
+    )
+
+    private fun validateAuthoritativeSnapshotBoundary(
+        candidate: ProjectSnapshot,
+        authoritative: ProjectSnapshot,
+    ): List<Diagnostic> = buildList {
+        fun violation(boundary: String, code: String) = Diagnostic(
+            "Authoritative diagnostics provider violated $boundary",
+            Diagnostic.Severity.ERROR,
+            code = code,
+            details = DiagnosticDetails(mapOf("violatedBoundary" to boundary)),
+        )
+        if (candidate.workspace.root.toAbsolutePath().normalize() !=
+            authoritative.workspace.root.toAbsolutePath().normalize()
+        ) {
+            add(violation("normalized workspace root", "authoritative.workspaceRootMismatch"))
+        }
+
+        fun normalized(files: List<SourceFile>): List<SourceFile> = files
+            .map { it.copy(path = it.path.normalize()) }
+            .sortedWith(compareBy<SourceFile> { it.path.toString() }
+                .thenBy(SourceFile::languageId)
+                .thenBy(SourceFile::content))
+        fun normalizedPaths(files: List<SourceFile>): List<Path> =
+            files.map { it.path.normalize() }.sortedBy(Path::toString)
+
+        val candidateTracked = normalized(candidate.trackedFiles)
+        val authoritativeTracked = normalized(authoritative.trackedFiles)
+        if (candidateTracked.map(SourceFile::path) != authoritativeTracked.map(SourceFile::path)) {
+            add(violation("tracked path inventory", "authoritative.trackedPathMismatch"))
+        } else {
+            val sourcePartitionChanged = normalizedPaths(candidate.files) != normalizedPaths(authoritative.files)
+            val auxiliaryPartitionChanged = normalizedPaths(candidate.auxiliaryFiles) !=
+                normalizedPaths(authoritative.auxiliaryFiles)
+            if (sourcePartitionChanged || auxiliaryPartitionChanged) {
+                add(violation(
+                    "source and auxiliary partition",
+                    "authoritative.sourceAuxiliaryPartitionMismatch",
+                ))
+            }
+            if (candidateTracked.map { it.path to it.languageId } !=
+                authoritativeTracked.map { it.path to it.languageId }
+            ) {
+                add(violation("tracked language identity", "authoritative.languageIdMismatch"))
+            } else if (candidateTracked != authoritativeTracked) {
+                add(violation("tracked content", "authoritative.trackedContentMismatch"))
+            }
+        }
+        if (candidate.sourceExtensions != authoritative.sourceExtensions) {
+            add(violation("source extension scope", "authoritative.sourceExtensionsMismatch"))
+        }
+        if (candidate.ignoredDirectories != authoritative.ignoredDirectories) {
+            add(violation("ignored-directory policy", "authoritative.ignoredDirectoriesMismatch"))
+        }
+
+        val candidateWorkspace = candidate.workspace.root.toAbsolutePath().normalize()
+        fun resolvesInsideCandidateWorkspace(path: Path): Boolean = try {
+            val resolved = if (path.isAbsolute) {
+                path.toAbsolutePath().normalize()
+            } else {
+                candidateWorkspace.resolve(path).normalize()
+            }
+            resolved.startsWith(candidateWorkspace)
+        } catch (_: Exception) {
+            false
+        }
+        fun requireContained(boundary: String, code: String, paths: Iterable<Path>) {
+            if (paths.any { !resolvesInsideCandidateWorkspace(it) }) {
+                add(violation(boundary, code))
+            }
+        }
+
+        requireContained(
+            "normalized workspace containment of Module.root",
+            "authoritative.moduleRootOutsideWorkspace",
+            authoritative.modules.map(Module::root),
+        )
+        requireContained(
+            "normalized workspace containment of Module.sourceRoots",
+            "authoritative.moduleSourceRootsOutsideWorkspace",
+            authoritative.modules.flatMap(Module::sourceRoots),
+        )
+        requireContained(
+            "normalized workspace containment of Module.mainSourceRoots",
+            "authoritative.moduleMainSourceRootsOutsideWorkspace",
+            authoritative.modules.flatMap(Module::mainSourceRoots),
+        )
+        requireContained(
+            "normalized workspace containment of Module.testSourceRoots",
+            "authoritative.moduleTestSourceRootsOutsideWorkspace",
+            authoritative.modules.flatMap(Module::testSourceRoots),
+        )
+        requireContained(
+            "normalized workspace containment of Module.generatedSourceRoots",
+            "authoritative.moduleGeneratedSourceRootsOutsideWorkspace",
+            authoritative.modules.flatMap(Module::generatedSourceRoots),
+        )
+        requireContained(
+            "normalized workspace containment of Module.generatedTestSourceRoots",
+            "authoritative.moduleGeneratedTestSourceRootsOutsideWorkspace",
+            authoritative.modules.flatMap(Module::generatedTestSourceRoots),
+        )
+        requireContained(
+            "normalized workspace containment of Module.mainOutputDirectories",
+            "authoritative.moduleMainOutputDirectoriesOutsideWorkspace",
+            authoritative.modules.flatMap(Module::mainOutputDirectories),
+        )
+        requireContained(
+            "normalized workspace containment of Module.testOutputDirectories",
+            "authoritative.moduleTestOutputDirectoriesOutsideWorkspace",
+            authoritative.modules.flatMap(Module::testOutputDirectories),
+        )
+        requireContained(
+            "normalized workspace containment of BuildModule.root",
+            "authoritative.buildModuleRootOutsideWorkspace",
+            authoritative.buildModels.flatMap(BuildModel::modules).map(BuildModule::root),
+        )
+        requireContained(
+            "normalized workspace containment of BuildSourceSet.sourceRoots",
+            "authoritative.buildSourceSetSourceRootsOutsideWorkspace",
+            authoritative.buildModels.flatMap(BuildModel::modules)
+                .flatMap(BuildModule::sourceSets)
+                .flatMap(BuildSourceSet::sourceRoots),
+        )
+        requireContained(
+            "normalized workspace containment of BuildSourceSet.generatedSourceRoots",
+            "authoritative.buildSourceSetGeneratedSourceRootsOutsideWorkspace",
+            authoritative.buildModels.flatMap(BuildModel::modules)
+                .flatMap(BuildModule::sourceSets)
+                .flatMap(BuildSourceSet::generatedSourceRoots),
+        )
+        requireContained(
+            "normalized workspace containment of BuildSourceSet.outputDirectories",
+            "authoritative.buildSourceSetOutputDirectoriesOutsideWorkspace",
+            authoritative.buildModels.flatMap(BuildModel::modules)
+                .flatMap(BuildModule::sourceSets)
+                .flatMap(BuildSourceSet::outputDirectories),
+        )
+
+        val inauthenticExternalEvidence = authoritative.classpathEvidence.any { evidence ->
+            if (!evidence.path.isAbsolute) {
+                false
+            } else {
+                runCatching {
+                    val absolute = evidence.path.toAbsolutePath().normalize()
+                    !absolute.startsWith(candidateWorkspace) &&
+                        ClasspathEvidence.fingerprint(absolute, evidence.kind) != evidence.fingerprint
+                }.getOrElse { true }
+            }
+        }
+        if (inauthenticExternalEvidence) {
+            add(violation(
+                "no-follow fingerprint authenticity of classpathEvidence",
+                "authoritative.classpathEvidenceAuthenticityMismatch",
+            ))
+        }
+    }
+
+    private fun validateAuthoritativeStagedImages(
+        baseline: ProjectSnapshot,
+        stagedCandidate: ProjectSnapshot,
+        authoritative: ProjectSnapshot,
+        staged: StagedWorkspaceEdit,
+    ): List<Diagnostic> {
+        val paths = staged.preImages.map { it.path.normalize() }
+        val postPaths = staged.postImages.map { it.path.normalize() }
+        val uniquePaths = paths.distinct()
+        val baselineTracked = baseline.trackedFiles.associateBy { it.path.normalize() }
+        val candidateTracked = stagedCandidate.trackedFiles.associateBy { it.path.normalize() }
+        val authoritativeTracked = authoritative.trackedFiles.associateBy { it.path.normalize() }
+        val expectedPre = uniquePaths.associateWith { baselineTracked[it]?.content }
+        val expectedCandidatePost = uniquePaths.associateWith { candidateTracked[it]?.content }
+        val expectedAuthoritativePost = uniquePaths.associateWith { authoritativeTracked[it]?.content }
+        val observedPre = staged.preImages.associate { it.path.normalize() to it.content }
+        val observedPost = staged.postImages.associate { it.path.normalize() to it.content }
+        val exact = paths.size == uniquePaths.size &&
+            postPaths == paths &&
+            observedPre == expectedPre &&
+            observedPost == expectedCandidatePost &&
+            observedPost == expectedAuthoritativePost
+        return if (exact) emptyList() else listOf(Diagnostic(
+            "Rendered transaction images do not equal the exact tracked C1/S1 image",
+            Diagnostic.Severity.ERROR,
+            code = "authoritative.stagedImageMismatch",
+        ))
+    }
+
     private fun validateDiagnosticsGate(
         snapshot: ProjectSnapshot,
         edit: WorkspaceEdit,
@@ -855,6 +1216,145 @@ class PatchEngine(
             )
         }
         return ApplyResult.Refused(listOfNotNull(failure, restoredFailure))
+    }
+
+    private fun validatePostApplyAuthoritativeDiagnostics(
+        baselineSnapshot: ProjectSnapshot,
+        transaction: Transaction,
+        validation: AuthoritativeDiagnosticsGateValidation,
+        gateId: String,
+    ): ApplyResult {
+        val baselineEvaluation = requireNotNull(validation.baselineEvaluation)
+        val stagedEvaluation = requireNotNull(validation.stagedEvaluation)
+        val record = transactionLog.loadRecord(transaction.id)
+            ?: return ApplyResult.Refused(listOf(Diagnostic(
+                "Post-apply authoritative diagnostics cannot load transaction ${transaction.id.value}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.journalMissing",
+            )))
+        val failure = authoritativePostApplyFailure(stagedEvaluation, validation.provider, gateId)
+        if (failure == null) return ApplyResult.Applied(transaction)
+
+        val rollbackDiagnostics = rollbackAppliedRecord(
+            record,
+            "Automatic rollback after post-apply authoritative diagnostics failure",
+        )
+        if (rollbackDiagnostics.isNotEmpty()) return ApplyResult.Refused(listOf(failure) + rollbackDiagnostics)
+        val restoredFailure = authoritativeRestoredFailure(
+            baselineSnapshot,
+            baselineEvaluation,
+            validation.provider,
+            gateId,
+        )
+        return ApplyResult.Refused(listOfNotNull(failure, restoredFailure))
+    }
+
+    private fun authoritativePostApplyFailure(
+        expected: AuthoritativeDiagnosticsEvaluation,
+        provider: AuthoritativeDiagnosticsProvider,
+        gateId: String,
+    ): Diagnostic? = try {
+        val committedCandidate = rehydrateSnapshot(expected.snapshot)
+        if (committedCandidate.hash != expected.snapshot.hash) {
+            Diagnostic(
+                "Authoritative diagnostics gate '$gateId' observed a committed candidate hash different from S1.hash",
+                Diagnostic.Severity.ERROR,
+                code = "authoritative.postApplySnapshotMismatch",
+            )
+        } else {
+            val committedEvaluation = provider.evaluate(committedCandidate)
+            val boundaryDiagnostics = validateAuthoritativeSnapshotBoundary(
+                committedCandidate,
+                committedEvaluation.snapshot,
+            )
+            val semanticMismatch = boundaryDiagnostics.isNotEmpty() ||
+                committedEvaluation.snapshot.hash != expected.snapshot.hash
+            val diagnosticDifferences = diagnosticMultisetDifferenceCount(
+                expected.diagnostics,
+                committedEvaluation.diagnostics,
+            )
+            val liveAfterProvider = rehydrateSnapshot(expected.snapshot)
+            when {
+                semanticMismatch -> Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' observed a post-apply semantic snapshot mismatch" +
+                        boundaryDiagnostics.firstOrNull()?.let { ": ${it.message}" }.orEmpty(),
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.postApplySnapshotMismatch",
+                )
+                diagnosticDifferences != 0 -> Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' observed $diagnosticDifferences post-apply " +
+                        "diagnostic multiset mismatch(es)",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.postApplyDiagnosticsMismatch",
+                )
+                liveAfterProvider.hash != expected.snapshot.hash -> Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' observed live workspace mutation after committed evaluation",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.postApplySnapshotMismatch",
+                )
+                else -> null
+            }
+        }
+    } catch (error: Exception) {
+        Diagnostic(
+            "Authoritative diagnostics gate '$gateId' failed after apply: ${error.message}",
+            Diagnostic.Severity.ERROR,
+            code = "authoritative.postApplyUnavailable",
+        )
+    }
+
+    private fun authoritativeRestoredFailure(
+        baselineSnapshot: ProjectSnapshot,
+        expected: AuthoritativeDiagnosticsEvaluation,
+        provider: AuthoritativeDiagnosticsProvider,
+        gateId: String,
+    ): Diagnostic? = try {
+        val restoredCandidate = rehydrateSnapshot(baselineSnapshot)
+        if (restoredCandidate.hash != baselineSnapshot.hash) {
+            Diagnostic(
+                "Authoritative diagnostics gate '$gateId' could not restore exact S0 hash",
+                Diagnostic.Severity.ERROR,
+                code = "authoritative.rollbackSnapshotMismatch",
+            )
+        } else {
+            val restoredEvaluation = provider.evaluate(restoredCandidate)
+            val boundaryDiagnostics = validateAuthoritativeSnapshotBoundary(
+                restoredCandidate,
+                restoredEvaluation.snapshot,
+            )
+            val semanticMismatch = boundaryDiagnostics.isNotEmpty() ||
+                restoredEvaluation.snapshot.hash != baselineSnapshot.hash
+            val diagnosticDifferences = diagnosticMultisetDifferenceCount(
+                expected.diagnostics,
+                restoredEvaluation.diagnostics,
+            )
+            val liveAfterProvider = rehydrateSnapshot(baselineSnapshot)
+            when {
+                semanticMismatch -> Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' did not reproduce exact S0 hash after rollback",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.rollbackSnapshotMismatch",
+                )
+                diagnosticDifferences != 0 -> Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' observed $diagnosticDifferences rollback " +
+                        "diagnostic multiset mismatch(es)",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.rollbackDiagnosticsMismatch",
+                )
+                liveAfterProvider.hash != baselineSnapshot.hash -> Diagnostic(
+                    "Authoritative diagnostics gate '$gateId' observed live workspace mutation after restored evaluation",
+                    Diagnostic.Severity.ERROR,
+                    code = "authoritative.rollbackSnapshotMismatch",
+                )
+                else -> null
+            }
+        }
+    } catch (error: Exception) {
+        Diagnostic(
+            "Authoritative diagnostics gate '$gateId' failed after automatic rollback: ${error.message}",
+            Diagnostic.Severity.ERROR,
+            code = "authoritative.rollbackUnavailable",
+        )
     }
 
     private fun rehydrateSnapshot(expected: ProjectSnapshot): ProjectSnapshot = expected.copy(
@@ -1008,9 +1508,11 @@ class PatchEngine(
         plan: PatchPlan,
         snapshot: ProjectSnapshot,
         approval: ApprovalRecord,
+        stagedWorkspaceEdit: StagedWorkspaceEdit? = null,
+        exactPostSnapshotHash: String? = null,
     ): ApplyResult {
         val record = try {
-            prepareJournalRecord(plan, snapshot, approval)
+            prepareJournalRecord(plan, snapshot, approval, stagedWorkspaceEdit, exactPostSnapshotHash)
         } catch (error: Exception) {
             return ApplyResult.Refused(listOf(Diagnostic(
                 "Cannot stage transaction before apply: ${error.message}",
@@ -1060,8 +1562,10 @@ class PatchEngine(
         plan: PatchPlan,
         snapshot: ProjectSnapshot,
         approval: ApprovalRecord,
+        stagedWorkspaceEdit: StagedWorkspaceEdit? = null,
+        exactPostSnapshotHash: String? = null,
     ): TransactionJournalRecord {
-        val staged = stageWorkspaceEdit(plan.workspaceEdit)
+        val staged = stagedWorkspaceEdit ?: stageWorkspaceEdit(plan.workspaceEdit)
         val preImages = staged.preImages.map { image ->
             val ownership = readOwnership(image.path)
             image.copy(
@@ -1099,7 +1603,7 @@ class PatchEngine(
             postImages = postImages,
             createdDirectories = missingParentDirectories(postImages),
             preSnapshotHash = snapshot.hash,
-            postSnapshotHash = postSnapshotHash(snapshot, postImages),
+            postSnapshotHash = exactPostSnapshotHash ?: postSnapshotHash(snapshot, postImages),
             state = JournalState.PREPARED,
             history = listOf(JournalEvent(
                 JournalState.PREPARED,

@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed for existing topology and implemented bounded components, including Workspace Snapshot Composition and the Java Refactoring Preview Command boundary. C2 model delegated to `c4model` and stored in `docs/c4/workspace.dsl`. The internal bounded pending-plan store, `ManagedRollbackExecutor`, stateless snapshot composer, and Java preview dispatcher are implemented and validated for their separately bounded source-built/in-process slices. The Java command boundary has real in-process daemon/MCP session-dispatch evidence but no packaged/native/cross-platform/concurrent qualification; none of these internal C3 responsibilities changes C2 topology. LATE C4 reassessment validated the DSL unchanged.
+Status: implementation-informed for existing topology and implemented bounded components, including Workspace Snapshot Composition, the Java Refactoring Preview Command boundary, authoritative snapshot diagnostics evaluation, and the bounded direct-child Maven module-rename planner. C2 model delegated to `c4model` and stored in `docs/c4/workspace.dsl`. The internal bounded pending-plan store, `ManagedRollbackExecutor`, stateless snapshot composer, and Java preview dispatcher are implemented and validated for their separately bounded source-built/in-process slices. The Java command boundary has real in-process daemon/MCP session-dispatch evidence but no packaged/native/cross-platform/concurrent qualification; none of these internal C3 responsibilities changes C2 topology. LATE C4 reassessment validated the DSL unchanged.
 
 == Overview
 
@@ -251,3 +251,130 @@ Daemon and MCP are the only production adopters in this slice. Their surface ACL
 The component explicitly excludes `moveClass` and its Java-owned `Plan`/`Guidance`/`LexicalReview` outcome algebra; Kotlin, TypeScript/JavaScript, and external semantic routing; mixed Java/Kotlin add-parameter; experimental and Maven-special operations; CLI and LSP production adoption; pending-plan policy; snapshot composition/refresh; diagnostics; `PatchEngine`; authorization, lock, WAL, recovery, apply, automatic or explicit rollback; adapter/session lifecycle; rendering; and protocol errors. It introduces no store or persistence classification.
 
 This is an internal C3/code-scale responsibility inside the existing Java Language Adapter. The real-surface runner executes public `DaemonSession`/`McpSession` dispatch for all five operations plus missing, unknown, and refused paths and verifies preview leaves no write residue. External protocol schemas and capability catalogues did not change. Delegated LATE C4 review validated existing daemon/MCP-to-Java-adapter and Java-adapter-to-core relationships unchanged; no actor, container, store, deployment node, participant, topology, relationship, or useful dynamic view changed, so `docs/c4/workspace.dsl` remains unchanged. Delegated LATE ADR review found no changed durable policy under accepted ADRs 0002, 0004, and 0006. `ManagedApplyInvoker` remains rejected because an exact four-value `PatchEngine.apply` forwarder adds no invariant, whereas owning caller/PatchEngine policy would turn it into a God service. Qualification is source-built/in-process only, not packaged, native, cross-platform, concurrent, or general orchestration.
+
+=== Implemented Internal Component: Bounded Maven Module-rename Planner
+
+Status: implementation-informed for the exact direct-library
+REQ-JAVA-MAVEN-MODULE-RENAME-001 row. Its one scenario/case is
+`@implemented-and-validated`; independent OpenJDK 21.0.11 acceptance passed 1/1
+scenario and 50/50 steps (log SHA-256
+`b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`;
+JSON SHA-256
+`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`).
+The commit-`6d4fb130` prototype remains historical negative evidence, not a
+statement about the promoted implementation.
+
+The implemented component is a stateless Java/Maven domain service with
+application-service orchestration responsibility inside the existing Java
+Language Adapter. One call accepts the exact immutable `ProjectSnapshot` and
+explicit directory/artifact intent, consumes immutable raw POM documents and one
+authoritative effective-reactor projection, derives immutable origin/range and
+diagnostic evidence, and returns one `PatchPlan`. It retains no identity,
+snapshot, model, cache, lease, lifecycle, or mutable repository state.
+
+For the first direct-library row it owns only planning:
+
+* prove root-child `catalog-model`, absent `catalog-domain`, and caller-explicit
+  `newArtifactId=catalog-domain` within the one declared offline reactor;
+* derive POM structure and exact raw element-text ranges solely from maintained
+  Woodstox 7.1.1 StAX2 location information over hash-bound POM bytes, with DTD
+  processing, external general/parameter entities, and external DTD access
+  disabled, no POM serialization, and refusal rather than a hand-written
+  tokenizer fallback;
+* select only the child project's direct artifact text, one exact direct parent
+  module text, and effective-model-proven literal dependency artifact origins;
+* produce byte-preserving range modifications followed by deterministic child
+  file renames in one `WorkspaceEdit`, with the moved POM modification before its
+  rename; and
+* construct the complete staged reactor and Java/Maven diagnostic evidence used
+  by preview, while supplying the rebuilt snapshot and diagnostics through the
+  implemented core-constrained evaluation port for later `PatchEngine` authority.
+
+The maintained Woodstox 7.1.1/StAX2 dependency is bounded to
+`refactorkit-java`; core remains Java-, Maven-, and XML-library-independent. Its
+reviewed JAR SHA-256 is
+`02b9d022e9d47704ff8a7a859a0dbfd3b2882a8311eb7ff1e180f760ccda2712`.
+Exact-offset and DTD/external-DTD/general-entity/parameter-entity denial probes
+passed. The positive row emits exactly three POM range modifications
+(`catalog-model/pom.xml` `9:14-9:27`, root `pom.xml` `74:12-74:25`, and
+`catalog-pricing/pom.xml` `13:18-13:31`) followed by two file renames. The component creates no
+aggregate, entity, repository, durable service, or data store. `PatchEngine` remains the application boundary for explicit authorized
+apply, the existing Transaction Log Store remains the WAL, and normal rollback
+advances the same managed transaction. Nested/profile/property-backed/inherited
+or ambiguous edited origins, module creation, other coordinate dimensions,
+JPMS, CLI/daemon/LSP/MCP surfaces, recipes, packaged/native/platform
+qualification, and general projects are not component responsibilities in this
+row.
+
+This placement adds no C1/C2 element or relationship. Existing Embedded Library
+Runtime to Java Language Adapter, Java Language Adapter to Core, Core to Target
+Workspace, and Core to Transaction Log Store relationships already cover the
+implemented flow. Broad module rename/move, protocols, recipes,
+packaged/native/cross-platform execution, general Maven projects, native CI, and
+release-wide support remain outside this component's qualification.
+
+=== Implemented Core Value and Application Port: Authoritative Snapshot Diagnostics Evaluation
+
+Status: implementation-informed for REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001
+through `004`. All four definitions and 16 expanded cases are
+`@implemented-and-validated`. Independent OpenJDK 21.0.11 acceptance passed 16/16
+scenarios and 128/128 steps (log SHA-256
+`bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`;
+JSON SHA-256
+`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`).
+The mode is additive to the existing diagnostics-only `DiagnosticsGate` behavior.
+
+Core Patch and Transaction Execution owns a language-neutral, invocation-scoped
+application port. One evaluation request for one exact immutable candidate
+returns one immutable value containing exactly one authoritative
+`ProjectSnapshot` plus the diagnostic multiset from that same candidate. The
+value has no entity identity, retained lifecycle, repository, cache, event,
+projection, stream, or persistence. It is discarded during the one lock-held
+apply attempt.
+
+At construction core deep-detaches every caller-owned outer and nested
+collection reachable through the returned `ProjectSnapshot`, each `Module`,
+`BuildModel`, `BuildModule`, and `BuildSourceSet`, the diagnostics list, and every
+`DiagnosticDetails` map. Exposed views cannot mutate or partially mutate the
+value. Its complete exposed state retains construction-time identity: a fresh
+canonical hash over exposed snapshot state remains equal to the construction-time
+hash, and the complete diagnostics/details remain unchanged.
+
+Core constructs or validates the result shell. The candidate's normalized
+workspace root, source/auxiliary partition, normalized tracked inventory and
+paths, language IDs and bytes, source-extension scope, and ignored-directory
+policy are invariant. Only compatibility modules, classpath evidence, and build
+models may be rehydrated. On every provider result, core normalizes and validates
+each `Module.root`, every module source root, every `BuildModule.root`, and build
+source-set root as workspace-contained. Explicit absolute external classpath
+evidence remains admissible under the existing policy only when core
+independently recomputes its current no-follow path/kind fingerprint and it
+exactly matches the supplied evidence. Missing/unreadable evidence, path/kind
+drift, symlink substitution, or fabricated fingerprints refuse before WAL. A
+language provider operates through an anti-corruption layer and may use an
+isolated materialization, but temporary/arbitrary roots, fabricated classpath
+facts, or provider-owned tracked files cannot cross as authority. Core gains no
+Java, Maven, JDT, Kotlin, TypeScript, or other adapter dependency.
+
+The current diagnostics-only `DiagnosticsGate.enabled`/`disabled` constructors,
+provider invocation/no-invocation order, diagnostic identity and error-multiset
+regression behavior, preview-approved diagnostics, typed failures, and existing
+hashes remain unchanged. The new port is additive for edits that can change
+hash-bound semantic metadata; it does not become a general scanner registry or
+shared orchestration God service.
+
+The schema-v8 transaction journal remains the sole WAL, idempotency, and
+exact-result store. The transient evaluation is never serialized, requires no
+schema bump or record migration, and creates no repository, event store, outbox,
+audit store, document store, or projection. ADRs 0002 and 0012 record the bounded implementation consequences without
+changing their Accepted lifecycle; there is no new ADR. Final independent review
+returned `PASS_FOR_PROMOTION` (manifest SHA-256
+`6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`;
+summary SHA-256
+`76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`).
+Targeted module-rename evidence types have zero raw/real EI/EI2 findings; the one
+`AuthoritativeDiagnosticsEvaluation` EI warning is non-real over a defensively
+copied unmodifiable list and deep mutation probes passed. PMD was `NO-SOURCE`
+for Kotlin rather than clean, and the wider configured SpotBugs baseline remains
+non-blocking. No C4 update is justified because no participant, deployable
+boundary, durable state, protocol, or relationship changed.
