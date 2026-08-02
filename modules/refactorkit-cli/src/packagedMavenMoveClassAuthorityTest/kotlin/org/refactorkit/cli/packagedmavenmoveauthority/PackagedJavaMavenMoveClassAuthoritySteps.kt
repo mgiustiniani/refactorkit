@@ -146,7 +146,7 @@ class PackagedJavaMavenMoveClassAuthoritySteps {
             }
         } finally {
             if (this::temporaryRoot.isInitialized) {
-                cleanupAttempts = deleteTreeNoFollowWithRetries(temporaryRoot)
+                cleanupAttempts = deleteTreeNoFollowOnce(temporaryRoot)
                 assertFalse(Files.exists(temporaryRoot, LinkOption.NOFOLLOW_LINKS), "Temporary workspace cleanup failed")
             }
             if (this::scenario.isInitialized) {
@@ -992,37 +992,27 @@ class PackagedJavaMavenMoveClassAuthoritySteps {
         return TreeManifest(entries.toSortedMap())
     }
 
-    private fun deleteTreeNoFollowWithRetries(root: Path): Int {
-        val maximumAttempts = if (isWindows()) 6 else 1
-        var lastFailure: IOException? = null
-        repeat(maximumAttempts) { index ->
-            try {
-                deleteTreeNoFollow(root)
-                if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return index + 1
-            } catch (failure: IOException) {
-                lastFailure = failure
-            }
-            if (index + 1 < maximumAttempts) Thread.sleep(100L * (index + 1))
+    private fun deleteTreeNoFollowOnce(root: Path): Int {
+        deleteTreeNoFollow(root)
+        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
+            throw IOException("Bounded no-follow cleanup did not remove the temporary tree")
         }
-        throw lastFailure ?: IOException("Bounded no-follow cleanup did not remove the temporary tree")
+        return 1
     }
 
     private fun deleteTreeNoFollow(root: Path) {
         if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return
         Files.walkFileTree(root, object : SimpleFileVisitor<Path>() {
             override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                Files.deleteIfExists(file)
+                Files.delete(file)
                 return FileVisitResult.CONTINUE
             }
 
-            override fun visitFileFailed(file: Path, failure: IOException): FileVisitResult {
-                Files.deleteIfExists(file)
-                return FileVisitResult.CONTINUE
-            }
+            override fun visitFileFailed(file: Path, failure: IOException): FileVisitResult = throw failure
 
             override fun postVisitDirectory(directory: Path, failure: IOException?): FileVisitResult {
                 if (failure != null) throw failure
-                Files.deleteIfExists(directory)
+                Files.delete(directory)
                 return FileVisitResult.CONTINUE
             }
         })
