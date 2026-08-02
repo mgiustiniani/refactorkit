@@ -57,24 +57,57 @@ Business Need: Preserve direct-child Maven module-rename authority across manage
     And no child process or RefactorKit-attributable socket read or write was observed during selection, fallback evaluation, the mechanics probe, apply, or rollback
 
   @REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-002 @functional-requirement @non-functional-requirement @absent
-  Scenario: CLI apply refuses staged provider drift and otherwise journals and reverses the authoritative rename
-    Given the actual source-built RefactorKit CLI has the case workspace and one independent refusal-probe copy, both at exact "S0" with an empty transaction journal
-    And the exact command is `refactorkit java rename-module --old-module-dir catalog-model --new-module-dir catalog-domain --new-artifact-id catalog-domain --root . --apply`
-    And a controlled refusal-probe fault makes the operation-owned staged evaluator preserve "C1" root, paths, partition, and language IDs but change one auxiliary "catalog-pricing/pom.xml" byte relative to "C1"
-    When the exact command is invoked against the refusal-probe copy
-    Then the CLI exits non-zero through its existing "Apply refused" rendering with the authoritative tracked-content violation
-    And refusal occurs after workspace-lock acquisition but before a PREPARED journal record and before any planned POM modification or file rename
-    And the refusal-probe non-engine bytes and path kinds remain exact "S0", while lock-file residue is not represented as a transaction
-    When the exact command is invoked against the unchanged case workspace without the controlled fault
+  Scenario: CLI refuses an under-lock required-POM change and otherwise journals and reverses the authoritative rename
+    Given the actual source-built RefactorKit CLI has the unchanged case workspace and one independent refusal-probe copy, both at exact "S0" with an empty transaction journal
+    And the exact command is `refactorkit java rename-module --old-module-dir catalog-model --new-module-dir catalog-domain --new-artifact-id catalog-domain --root <case-workspace-absolute-path> --apply`, where the value substituted for `<case-workspace-absolute-path>` is the normalized absolute root of the disposable copy used by that invocation and all other operation arguments and flags remain exact
+    And REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-001's executable production-selector qualification dynamically counts provider and authoritative-factory invocations through the normal five-argument `ManagedApplyDiagnosticsGateSelector.select` entry, proving zero generic "java-jdt" provider invocations and exactly one lazy operation-owned authoritative-provider construction at first evaluation for exact operation "java.renameMavenModule"
+    And the refusal probe alone may use reflection solely to invoke one private test constructor or private test factory whose sole input is `PatchFaultInjector`, retained as a private final construction-time dependency; the seam, including every synthetic bridge, is absent from public JVM bytecode and Kotlin and Java APIs, while production `main` and the unchanged default public constructor always use the no-fault construction path
+    And that construction seam exposes no mutable `PatchEngine`, patch-engine factory, injector property, setter, post-construction or global injection hook, or race; it can only construct the refusal CLI and cannot substitute a diagnostics provider, diagnostics gate, planner-returned plan, CLI authorization, or the no-fault production path
+    When the exact command is invoked against the refusal-probe copy through that reflectively constructed refusal CLI after substituting only `<case-workspace-absolute-path>` with that copy's normalized absolute root, and the existing `BEFORE_AUTHORITY_LEASE_VALIDATION` fault point replaces the final LF byte of required "catalog-pricing/pom.xml" with ASCII space after workspace-lock acquisition
+    Then the CLI exits non-zero, every hash placeholder in the exact stderr below is substituted with its independently retained or recomputed 64-character lowercase hexadecimal value from the lease, "S0", and the mutated refusal copy rather than a value parsed back from stderr, and each `<SP>` marker is decoded as one ASCII space
+    And stderr consists of exactly these ordered lines followed by one line terminator and no other stderr text:
+      | order | exact decoded line |
+      | 1     | Apply refused: |
+      | 2     | <SP><SP>ERROR [authorityLease.evidenceDrift]: Operation-authority lease evidence drift: kind=MAVEN_REACTOR_RAW_POM path=catalog-pricing/pom.xml expectedContentSha256=<expected-content-sha256> observedContentSha256=<observed-content-sha256> expectedRequiredFileEvidenceSha256=<expected-required-file-evidence-sha256> observedRequiredFileEvidenceSha256=<observed-required-file-evidence-sha256> (authorityLayer=EVIDENCE_FRESHNESS, changedSourceManaged=true, evidenceKind=MAVEN_REACTOR_RAW_POM, expectedCandidateInventorySha256=<expected-candidate-inventory-sha256>, expectedContentSha256=<expected-content-sha256>, expectedRequiredFileEvidenceSha256=<expected-required-file-evidence-sha256>, observedContentSha256=<observed-content-sha256>, observedRequiredFileEvidenceSha256=<observed-required-file-evidence-sha256>, observedSnapshotSha256=<observed-snapshot-sha256>, path=catalog-pricing/pom.xml, previewSnapshotSha256=<preview-snapshot-sha256>) |
+    And line 2 is the first and sole diagnostic, its code and message are exact, and its complete detail set is rendered once in ascending key order as shown
+    And an executable probe through that same production diagnostic-line renderer maps severity ERROR, message "coded refusal", code "probe.code", and empty details to exact decoded line `<SP><SP>ERROR [probe.code]: coded refusal`, so every present code renders independently of whether details are empty
+    And refusal occurs before any PREPARED journal state, write-ahead-log record, or managed entry of the canonical five-entry target edit
+    And the refusal probe preserves the externally changed final POM byte; every other non-engine byte and every path kind remains exact "S0", no equality of the whole copy to "S0" is asserted, and possible workspace-lock residue is not a PREPARED record or transaction
+    When the exact command is invoked against the unchanged case workspace through the production CLI path after substituting only `<case-workspace-absolute-path>` with that copy's normalized absolute root and without the seam or fault
     Then `--apply` supplies explicit CLI approval for the exact planner-returned "java.renameMavenModule" plan
-    And the lazy operation-owned gate accepts authoritative baseline "S0" and staged "C1"/"S1" before WAL, then attests committed "S1" and "D0"
-    And the sole schema-v8 journal record first becomes PREPARED only after approval, live-snapshot, lease, destination, raw-POM, effective-reactor, and staged-authority validation
+    And that real CLI apply invokes the normal five-argument `ManagedApplyDiagnosticsGateSelector.select` production entry exactly once with the exact plan, language ID "java", the adapters current for the CLI invocation, and its normal external-gate resolver instead of a CLI-local operation `when` branch or any duplicated routing decision
+    And the selected real operation-owned gate "java-rename-maven-module-staged-reactor-v1" uses that exact plan and lease to evaluate authoritative "S0" and staged "C1" before PREPARED, then committed "S1" with "D0" after APPLIED and before CLI success
+    And combined executable evidence uses this real CLI invocation to qualify selector adoption and committed "S1", and REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-001's dynamic invocation counts to prove zero generic "java-jdt" provider invocations and exact one-time lazy authoritative-provider construction; source or bytecode occurrence and absence of a gate ID from stdout or stderr are not accepted as substitutes
+    And the sole journal record has integer literal `schemaVersion` 8, never an expected value obtained from `CURRENT_SCHEMA_VERSION` or another production current-version constant, and first becomes PREPARED only after approval, live-snapshot, lease, destination, raw-POM, effective-reactor, and staged-authority validation
     And the CLI succeeds with one transaction ID after that same record reaches APPLIED with the exact five-entry forward edit, complete "S0" and "S1" images, and approval surface "cli"
+    And before any journal image or directory field is used as an oracle, independent no-follow filesystem observations capture exact "S0" before apply and committed "S1" before journal inspection and project both through the schema-version-8 `FileImage` field contract
+    And the ordered pre-images and post-images in the record equal that independent oracle field by field for every canonical affected path:
+      | exposed FileImage field  | exact independent expectation |
+      | path                     | the canonical normalized affected-path order, including each absent rename source or destination image |
+      | content                  | the exact independently captured UTF-8 content, or null exactly where that path is absent in the corresponding image |
+      | contentSha256            | an independently computed SHA-256 of that content, or null exactly when content is null |
+      | posixPermissions         | the exact no-follow permission set for an existing image when POSIX attributes are supported, the exact source-derived post-image set required by the contract, or null exactly when absent or unsupported |
+      | lastModifiedMillis       | the exact independently captured pre-image millisecond timestamp for an existing file, null for an absent pre-image, and null for every post-image as specified by the schema-version-8 contract |
+      | ownerName                | the exact independently captured pre-image owner for an existing file, null for an absent pre-image, and null for every post-image as specified by the schema-version-8 contract |
+      | groupName                | the exact independently captured pre-image group when POSIX ownership is supported, null when absent or unsupported, and null for every post-image as specified by the schema-version-8 contract |
+      | userDefinedAttributes    | the exact independently captured sorted xattr name/base64-value map when that view is supported, with the exact source-retained post-image map, or null exactly when absent or unsupported |
+      | aclEntries               | the exact independently captured ordered ACL type, principal, sorted permissions, and sorted flags when that view is supported, with the exact source-retained post-image entries, or null exactly when absent or unsupported |
+    And the record's `createdDirectories` equals this exact independently declared ordered list rather than a value copied from that record:
+      | order | normalized directory path |
+      | 1     | catalog-domain |
+      | 2     | catalog-domain/src |
+      | 3     | catalog-domain/src/main |
+      | 4     | catalog-domain/src/main/java |
+      | 5     | catalog-domain/src/main/java/com |
+      | 6     | catalog-domain/src/main/java/com/acme |
+      | 7     | catalog-domain/src/main/java/com/acme/catalog |
+      | 8     | catalog-domain/src/main/java/com/acme/catalog/legacy |
+    And the independent image oracle and literal directory list are retained for the rollback assertion and are never obtained from either the APPLIED record under test or a later copy of the same record
     And the committed non-engine workspace is exact "S1" and no second record or target edit exists
-    When `refactorkit patch rollback` is invoked for that transaction without force
-    Then normal rollback succeeds and the same record reaches ROLLED_BACK without a second transaction
+    When `refactorkit patch rollback <transaction-id> --root <case-workspace-absolute-path>` is invoked without force after substituting `<transaction-id>` with that transaction ID and `<case-workspace-absolute-path>` with the same normalized absolute disposable-copy root used by the primary invocation
+    Then normal rollback succeeds and the same record with integer literal `schemaVersion` 8 reaches ROLLED_BACK without a second transaction and still equals the independent pre-image, post-image, and exact `createdDirectories` oracles
     And every non-engine byte, path kind, reactor fact, snapshot identity, auxiliary-POM fact, and diagnostic equals the original "S0" and "D0"
-    And only the workspace lock and the one advanced schema-v8 record remain as expected engine residue
+    And in the primary copy only the workspace lock and the one advanced record with integer literal `schemaVersion` 8 remain as expected engine residue
 
   @REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-003 @functional-requirement @non-functional-requirement @absent
   Scenario Outline: <surface> retains and applies the exact authoritative plan before refreshing successful state

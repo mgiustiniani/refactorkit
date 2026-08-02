@@ -490,6 +490,10 @@ class PatchEngineTest {
                 Path.of("Modify.java"),
                 listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 12)), "Changed")),
             ),
+            FileEdit.Modify(
+                Path.of("Old.java"),
+                listOf(TextEdit(SourceRange(SourcePosition(0, 6), SourcePosition(0, 9)), "Renamed")),
+            ),
             FileEdit.Rename(Path.of("Old.java"), Path.of("New.java")),
             FileEdit.Create(Path.of("nested/Created.java"), "class Created {}\n"),
         ))
@@ -506,7 +510,7 @@ class PatchEngineTest {
 
         assertEquals("class Changed {}\n", Files.readString(modify))
         assertFalse(Files.exists(oldName))
-        assertEquals("class Old {}\n", Files.readString(root.resolve("New.java")))
+        assertEquals("class Renamed {}\n", Files.readString(root.resolve("New.java")))
         assertTrue(Files.exists(root.resolve("nested/Created.java")))
         assertNoWorkspaceStageFiles(root)
         if (posix) {
@@ -1118,11 +1122,13 @@ class PatchEngineTest {
             ))),
         )
         Files.writeString(root.resolve(dependency), "jar-after")
+        Files.writeString(root.resolve("Added.java"), "class Added {}\n")
 
         val result = PatchEngine(root).apply(plan, snapshot)
 
         assertIs<ApplyResult.Refused>(result)
         assertTrue(result.diagnostics.any { it.code == "snapshot.classpathChanged" }, result.diagnostics.toString())
+        assertTrue(result.diagnostics.any { it.code == "snapshot.scopeChanged" }, result.diagnostics.toString())
         assertEquals("class Example {}\n", Files.readString(root.resolve(source)))
         assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).list().isEmpty())
     }

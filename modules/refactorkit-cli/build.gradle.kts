@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":modules:refactorkit-java"))
     implementation(project(":modules:refactorkit-web-importer"))
     implementation(project(":modules:refactorkit-daemon"))
+    implementation(project(":modules:refactorkit-jvm"))
     implementation(project(":modules:refactorkit-tree-sitter"))
     implementation(project(":modules:refactorkit-typescript"))
     implementation(project(":modules:refactorkit-kotlin"))

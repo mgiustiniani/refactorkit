@@ -15,6 +15,7 @@ import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.ManagedRollbackExecutor
 import org.refactorkit.core.ManagedRollbackOutcome
 import org.refactorkit.core.PatchEngine
+import org.refactorkit.core.PatchFaultInjector
 import org.refactorkit.core.PatchPreviewRenderer
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
@@ -48,7 +49,9 @@ import org.refactorkit.java.JavaSafeDeletePlanner
 import org.refactorkit.java.recipe.RecipeEngine
 import org.refactorkit.java.recipe.RecipeLoader
 import org.refactorkit.java.recipe.RecipeResult
+import org.refactorkit.jvm.ManagedApplyDiagnosticsGateSelector
 import org.refactorkit.kotlin.KotlinAdapterRegistration
+import org.refactorkit.kotlin.KotlinLanguageAdapter
 import org.refactorkit.testkit.GoldenTestLoader
 import org.refactorkit.testkit.GoldenTestRunner
 import org.refactorkit.treesitter.GenericLocalRenamePlanner
@@ -71,12 +74,26 @@ fun main(args: Array<String>) {
     if (code != 0) kotlin.system.exitProcess(code)
 }
 
+/** Reflection-only refusal probe; production construction always selects the no-fault path. */
+private fun refactorKitCliWithPatchFaultInjector(patchFaultInjector: PatchFaultInjector): RefactorKitCli =
+    RefactorKitCli(moveClassGuidanceOutput = CliPatchFaultConstruction(patchFaultInjector))
+
 class RefactorKitCli(
     private val scanner: JavaProjectScanner = JavaProjectScanner(),
     private val javaAdapter: JavaLanguageAdapter = JavaLanguageAdapter(),
     private val semanticSessionFactory: () -> DaemonSession = ::DaemonSession,
-    private val moveClassGuidanceOutput: JavaMoveClassGuidanceOutputPort = JavaMoveClassGuidanceJsonRenderer(),
+    moveClassGuidanceOutput: JavaMoveClassGuidanceOutputPort = JavaMoveClassGuidanceJsonRenderer(),
 ) {
+    private val kotlinAdapter = KotlinLanguageAdapter()
+    private val patchFaultInjector: PatchFaultInjector =
+        (moveClassGuidanceOutput as? CliPatchFaultConstruction)?.value() ?: PatchFaultInjector.NONE
+    private val moveClassGuidanceOutput: JavaMoveClassGuidanceOutputPort =
+        if (moveClassGuidanceOutput is CliPatchFaultConstruction) {
+            JavaMoveClassGuidanceJsonRenderer()
+        } else {
+            moveClassGuidanceOutput
+        }
+
     private val semanticJson = Json { prettyPrint = true }
     private val booleanOptions = setOf(
         "apply", "preview", "force", "approve", "acknowledge-warning", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
@@ -553,7 +570,7 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
         val workspaceRoot = Paths.get(root).toAbsolutePath().normalize()
-        val diagnostics = PatchEngine(workspaceRoot).recover()
+        val diagnostics = patchEngineFor(workspaceRoot).recover()
         if (diagnostics.isNotEmpty()) {
             System.err.println("Recovery failed:")
             diagnostics.forEach { System.err.println("  ${it.severity}: ${it.message}") }
@@ -572,7 +589,7 @@ class RefactorKitCli(
         val workspaceRoot = Paths.get(root).toAbsolutePath().normalize()
         val mode = if ("force" in parsed.flags) RollbackMode.FORCE else RollbackMode.NORMAL
         val log = TransactionLog(workspaceRoot.resolve(".refactorkit/transactions"))
-        val outcome = ManagedRollbackExecutor(log, PatchEngine(workspaceRoot)).execute(
+        val outcome = ManagedRollbackExecutor(log, patchEngineFor(workspaceRoot)).execute(
             txId,
             RollbackLookupVisibility.APPLIED_ONLY,
             mode,
@@ -610,17 +627,19 @@ class RefactorKitCli(
 
     private fun applyPlanAndLog(plan: org.refactorkit.core.PatchPlan, snap: ProjectSnapshot, root: String): Int {
         val workspaceRoot = snap.workspace.root
-        val engine = PatchEngine(workspaceRoot)
+        val engine = patchEngineFor(workspaceRoot)
+        val diagnosticsGate = ManagedApplyDiagnosticsGateSelector.select(
+            plan = plan,
+            languageId = "java",
+            javaAdapter = javaAdapter,
+            kotlinAdapter = kotlinAdapter,
+            externalGateResolver = ::normalExternalGateResolver,
+        )
         return when (val result = engine.apply(
             plan,
             snap,
             ApplyAuthorization.explicit("cli"),
-            if (plan.operation == JavaMoveAcrossMavenModulesPlanner.OPERATION) {
-                DiagnosticsGate.enabled(
-                    "java-maven-ownership",
-                    JavaMoveAcrossMavenModulesPlanner(JavaLanguageAdapter())::diagnostics,
-                )
-            } else DiagnosticsGate.enabled("java-jdt", JavaLanguageAdapter()::diagnostics),
+            diagnosticsGate,
         )) {
             is ApplyResult.Applied -> {
                 println("Applied. Transaction: ${result.transaction.id.value}")
@@ -629,11 +648,17 @@ class RefactorKitCli(
             }
             is ApplyResult.Refused -> {
                 System.err.println("Apply refused:")
-                result.diagnostics.forEach { System.err.println("  ${it.severity}: ${it.message}") }
+                CliDiagnosticLineRenderer.renderSelected(result.diagnostics).forEach(System.err::println)
                 1
             }
         }
     }
+
+    private fun patchEngineFor(workspaceRoot: Path): PatchEngine =
+        PatchEngine(workspaceRoot, faultInjector = patchFaultInjector)
+
+    private fun normalExternalGateResolver(languageId: String): DiagnosticsGate =
+        error("Direct CLI managed apply has no active external diagnostics adapter for language '$languageId'")
 
     private fun scanFrom(root: String, flags: Set<String> = emptySet()): ProjectSnapshot? {
         val path = Paths.get(root)

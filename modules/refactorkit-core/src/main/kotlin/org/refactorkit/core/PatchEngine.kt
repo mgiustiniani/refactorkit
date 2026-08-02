@@ -682,7 +682,7 @@ class PatchEngine(
             )))
         }
         diagnostics += validateClasspathEvidence(snapshot)
-        if (diagnostics.isNotEmpty()) return EngineOwnedSnapshotObservation(diagnostics)
+        val scopeDiagnosticStart = diagnostics.size
 
         val declaredRoots = snapshot.modules.flatMap { it.sourceRoots }
             .map(::resolveInsideWorkspace)
@@ -706,7 +706,7 @@ class PatchEngine(
                 validateNoSymbolicLinkTraversal(normalizedRoot.relativize(root))?.let(diagnostics::add)
             }
         }
-        if (diagnostics.isNotEmpty()) return EngineOwnedSnapshotObservation(diagnostics)
+        if (diagnostics.size > scopeDiagnosticStart) return EngineOwnedSnapshotObservation(diagnostics)
 
         val languageByExtension = snapshot.files.mapNotNull { file ->
             val extension = extensionOf(file.path) ?: return@mapNotNull null
@@ -1579,11 +1579,10 @@ class PatchEngine(
             )
         }
         val postPermissions = derivePostPermissions(plan.workspaceEdit)
+        val postMetadataSources = derivePostMetadataSources(plan.workspaceEdit, preImages)
+        val preImagesByPath = preImages.associateBy(FileImage::path)
         val postImages = staged.postImages.map { image ->
-            val sourceImage = preImages.firstOrNull { it.path == image.path && it.content != null }
-                ?: preImages.firstOrNull { candidate ->
-                    candidate.content == image.content && staged.postImages.firstOrNull { it.path == candidate.path }?.content == null
-                }
+            val sourceImage = image.content?.let { postMetadataSources[image.path] }?.let(preImagesByPath::get)
             image.copy(
                 posixPermissions = postPermissions[image.path],
                 userDefinedAttributes = sourceImage?.userDefinedAttributes,
@@ -1779,6 +1778,29 @@ class PatchEngine(
             return null
         }
         return Files.getPosixFilePermissions(absolute, LinkOption.NOFOLLOW_LINKS)
+    }
+
+    private fun derivePostMetadataSources(
+        workspaceEdit: WorkspaceEdit,
+        preImages: List<FileImage>,
+    ): Map<Path, Path?> {
+        val sources = preImages.associate { image ->
+            image.path to image.path.takeIf { image.content != null }
+        }.toMutableMap()
+        workspaceEdit.edits.forEach { edit ->
+            val path = normalizedRoot.relativize(resolveInsideWorkspace(edit.path))
+            when (edit) {
+                is FileEdit.Create -> sources.putIfAbsent(path, null)
+                is FileEdit.Delete -> sources[path] = null
+                is FileEdit.Rename -> {
+                    val target = normalizedRoot.relativize(resolveInsideWorkspace(edit.newPath))
+                    sources[target] = sources[path]
+                    sources[path] = null
+                }
+                is FileEdit.Modify -> Unit
+            }
+        }
+        return sources
     }
 
     private fun derivePostPermissions(workspaceEdit: WorkspaceEdit): Map<Path, Set<PosixFilePermission>?> {
