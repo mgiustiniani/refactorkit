@@ -13,6 +13,7 @@ import org.refactorkit.mcp.McpSession
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import kotlin.io.path.exists
 import kotlin.io.path.readText
 import kotlin.test.Test
@@ -186,6 +187,74 @@ class JavaRenameMavenModuleDaemonMcpApplyRollbackSurfaceTest {
         } finally {
             session.close()
             root.toFile().deleteRecursively()
+        }
+    }
+
+    // ── refusal-probe: one auxiliary-POM byte drift relative to the C1 lease ──
+
+    private fun journalRecords(): List<Path> {
+        if (!Files.isDirectory(journalDir)) return emptyList()
+        Files.list(journalDir).use { stream ->
+            return stream.toList().sortedBy { it.fileName.toString() }
+        }
+    }
+
+    @Test
+    fun daemonRefusalProbeRejectsAuxiliaryPomByteDrift() {
+        copyFixture()
+        val session = DaemonSession()
+        try {
+            session.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
+            val planId = daemonPreview(session, root)
+
+            // Stage ONE auxiliary-POM byte drift relative to the canonical C1 snapshot:
+            // catalog-pricing depends on catalog-model, so its POM is required lease evidence.
+            val auxiliaryPom = root.resolve("catalog-pricing/pom.xml")
+            Files.write(auxiliaryPom, "\n".toByteArray(), StandardOpenOption.APPEND)
+
+            // Apply with only the retained planId: the authoritative tracked-content
+            // violation must refuse — no transaction, no WAL/PREPARED record, no target edit.
+            var refused = false
+            try {
+                daemonApply(session, planId)
+            } catch (refusal: Exception) {
+                refused = true
+            }
+            assertTrue(refused, "apply after auxiliary-POM byte drift must refuse")
+
+            assertTrue(journalRecords().isEmpty(), "refused apply must write no journal record")
+            assertTrue(root.resolve("catalog-model").exists(), "source module must remain (no target edit)")
+            assertTrue(!root.resolve("catalog-domain").exists(), "no renamed target may exist")
+            assertTrue(auxiliaryPom.readText().endsWith("\n"), "probe byte must persist (no refresh/rollback side effect)")
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun mcpRefusalProbeRejectsAuxiliaryPomByteDrift() {
+        copyFixture()
+        val session = McpSession()
+        try {
+            // mcpPreview internally dispatches tools/call project_scan then preview_refactoring.
+            val planId = mcpPreview(session, root)
+
+            val auxiliaryPom = root.resolve("catalog-pricing/pom.xml")
+            Files.write(auxiliaryPom, "\n".toByteArray(), StandardOpenOption.APPEND)
+
+            var refused = false
+            try {
+                mcpApply(session, planId)
+            } catch (refusal: Exception) {
+                refused = true
+            }
+            assertTrue(refused, "apply after auxiliary-POM byte drift must refuse")
+            assertTrue(journalRecords().isEmpty(), "refused apply must write no journal record")
+            assertTrue(root.resolve("catalog-model").exists(), "source module must remain (no target edit)")
+            assertTrue(!root.resolve("catalog-domain").exists(), "no renamed target may exist")
+            assertTrue(auxiliaryPom.readText().endsWith("\n"), "probe byte must persist (no refresh/rollback side effect)")
+        } finally {
+            session.close()
         }
     }
 }
