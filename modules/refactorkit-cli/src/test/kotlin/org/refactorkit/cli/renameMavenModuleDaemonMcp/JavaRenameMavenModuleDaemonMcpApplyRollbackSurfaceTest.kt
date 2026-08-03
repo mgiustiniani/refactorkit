@@ -2,8 +2,8 @@ package org.refactorkit.cli.renameMavenModuleDaemonMcp
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.get
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -12,9 +12,9 @@ import org.refactorkit.daemon.DaemonSession
 import org.refactorkit.mcp.McpSession
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.exists
 import kotlin.io.path.readText
-import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -25,205 +25,167 @@ import kotlin.test.assertTrue
  * authoritative renameMavenModule plan, and normal rollback advances the same
  * schema-v8 journal record to ROLLED_BACK while restoring baseline "S0".
  *
- * Both surfaces are exercised through their public dispatch entry points only
- * (refactor.preview -> refactor.apply -> patch.rollback for daemon,
- * preview_refactoring -> apply_refactoring -> rollback_refactoring for MCP).
+ * Both surfaces are exercised through their public dispatch entry points only:
+ *   daemon: project.open -> refactor.preview -> refactor.apply -> patch.rollback
+ *   MCP   : tools/call project_scan -> preview_refactoring -> apply_refactoring -> rollback_refactoring
+ *
+ * The rename destination module directory is ABSENT in the fixture (a rename
+ * destination must not pre-exist), and sessions are closed after each run.
  */
 class JavaRenameMavenModuleDaemonMcpApplyRollbackSurfaceTest {
 
-    private data class Surface(
-        val session: Any,
-        val openMethod: String,
-        val previewMethod: String,
-        val applyMethod: String,
-        val rollbackMethod: String,
-        val label: String,
-    )
-
     private lateinit var root: Path
     private lateinit var journalDir: Path
-    private lateinit var invoiceBaseline: String
 
-    private fun writeFixture() {
+    private fun repositoryRoot(): Path {
+        var candidate: Path? = Path.of("").toAbsolutePath()
+        while (candidate != null) {
+            if (Files.isRegularFile(candidate.resolve("settings.gradle.kts")) &&
+                Files.isDirectory(candidate.resolve("modules/refactorkit-java"))) return candidate
+            candidate = candidate.parent
+        }
+        error("Cannot locate repository root")
+    }
+
+    private fun copyFixture() {
+        val fixture = repositoryRoot().resolve("testdata/acceptance/java-maven-move-class-authority-20-modules")
         root = Files.createTempDirectory("rename-maven-module-daemon-mcp-")
-        root.resolve("pom.xml").writeText(
-            """
-            <project>
-              <modelVersion>4.0.0</modelVersion>
-              <groupId>fixture</groupId>
-              <artifactId>aggregator</artifactId>
-              <version>1</version>
-              <packaging>pom</packaging>
-              <properties><maven.compiler.release>21</maven.compiler.release></properties>
-              <modules><module>source</module><module>target</module></modules>
-            </project>
-            """.trimIndent() + "\n",
-        )
-        val sourcePom = root.resolve("source/pom.xml")
-        Files.createDirectories(sourcePom.parent)
-        sourcePom.writeText(childPom("source"))
-        val targetPom = root.resolve("target/pom.xml")
-        Files.createDirectories(targetPom.parent)
-        targetPom.writeText(childPom("target"))
-        val invoice = root.resolve("source/src/main/java/fixture/Invoice.java")
-        Files.createDirectories(invoice.parent)
-        invoice.writeText(
-            """
-            package fixture;
-
-            import java.util.Set;
-            import java.util.List;
-
-            public class Invoice {
-                public int total() { return 7; }
+        Files.walk(fixture).use { stream ->
+            stream.forEach { path ->
+                val rel = fixture.relativize(path)
+                val target = root.resolve(rel)
+                if (Files.isDirectory(path)) Files.createDirectories(target)
+                else Files.copy(path, target, StandardCopyOption.COPY_ATTRIBUTES)
             }
-            """.trimIndent() + "\n",
-        )
-        val obsolete = root.resolve("source/src/main/java/fixture/ObsoleteTax.java")
-        Files.createDirectories(obsolete.parent)
-        obsolete.writeText(
-            """
-            package fixture;
-
-            public class ObsoleteTax {
-            }
-            """.trimIndent() + "\n",
-        )
-        invoiceBaseline = invoice.readText()
+        }
         journalDir = root.resolve(".refactorkit/transactions")
     }
 
-    private fun childPom(artifactId: String): String = """
-        <project>
-          <modelVersion>4.0.0</modelVersion>
-          <parent>
-            <groupId>fixture</groupId>
-            <artifactId>aggregator</artifactId>
-            <version>1</version>
-            <relativePath>../pom.xml</relativePath>
-          </parent>
-          <artifactId>$artifactId</artifactId>
-        </project>
-    """.trimIndent() + "\n"
-
-    private fun renameParams(): JsonObject = buildJsonObject {
-        put("operation", "renameMavenModule")
-        put("oldModuleDir", "source")
-        put("newModuleDir", "target")
-        put("newArtifactId", "target")
-        put("languageId", "java")
-    }
-
-    private fun openParams(): JsonObject = buildJsonObject {
-        put("root", root.toString())
-    }
-
-    private fun applyParams(planId: String): JsonObject = buildJsonObject {
-        put("planId", planId)
-    }
-
-    private fun rollbackParams(transactionId: String): JsonObject = buildJsonObject {
-        put("transactionId", transactionId)
-    }
-
-    private fun dispatch(surface: Surface, method: String, params: JsonObject): JsonObject {
-        val response = when (val session = surface.session) {
-            is DaemonSession -> session.dispatch(method, params)
-            is McpSession -> session.dispatch(method, params)
-            else -> error("unexpected surface session")
-        }
-        return response.jsonObject
-    }
-
-    private fun openWorkspace(surface: Surface) {
-        val response = dispatch(surface, surface.openMethod, openParams())
-        assertTrue(!response.isEmpty, "${surface.label} must open the workspace")
-    }
-
-    private fun preview(surface: Surface): String {
-        val response = dispatch(surface, surface.previewMethod, renameParams())
-        val planId = response.getValue("planId").jsonPrimitive.content
-        assertTrue(planId.isNotBlank(), "${surface.label} preview must return a planId")
-        return planId
-    }
-
-    private fun apply(surface: Surface, planId: String): String {
-        val response = dispatch(surface, surface.applyMethod, applyParams(planId))
-        val transactionId = response.getValue("transactionId").jsonPrimitive.content
-        assertTrue(transactionId.isNotBlank(), "${surface.label} apply must return a transactionId")
-        return transactionId
-    }
-
-    private fun rollback(surface: Surface, transactionId: String) {
-        val response = dispatch(surface, surface.rollbackMethod, rollbackParams(transactionId))
-        assertTrue(!response.isEmpty, "${surface.label} rollback must return a response")
-    }
-
-    private fun recordFile(transactionId: String): Path {
-        val candidate = journalDir.resolve("$transactionId.json")
-        assertTrue(candidate.exists(), "journal record for $transactionId must exist")
-        return candidate
-    }
-
-    private fun recordState(transactionId: String): String {
-        val json = Json.parseToJsonElement(recordFile(transactionId).readText()).jsonObject
+    private fun recordState(txId: String): String {
+        val candidate = journalDir.resolve("$txId.json")
+        assertTrue(candidate.exists(), "journal record for $txId must exist")
+        val json = Json.parseToJsonElement(candidate.readText()).jsonObject
         val schema = json["schemaVersion"]?.jsonPrimitive?.content?.toInt()
         assertEquals(8, schema, "journal record must be schema-v8")
         return assertNotNull(json["state"]?.jsonPrimitive?.content, "journal record state")
     }
 
-    private fun invoiceAfter(): String {
-        val invoice = root.resolve("source/src/main/java/fixture/Invoice.java")
-        return if (invoice.exists()) invoice.readText() else ""
+    // ── daemon JSON-RPC surface ───────────────────────────────────────────────
+
+    private fun daemonPreview(session: DaemonSession, root: Path): String {
+        session.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
+        val response = session.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "renameMavenModule")
+            put("languageId", "java")
+            put("arguments", buildJsonObject {
+                put("oldModuleDir", "catalog-model")
+                put("newModuleDir", "catalog-domain")
+                put("newArtifactId", "catalog-domain")
+            })
+        }).jsonObject
+        val planId = response["planId"]?.jsonPrimitive?.content
+        assertTrue(!planId.isNullOrBlank(), "daemon preview must return a planId")
+        assertEquals("java.renameMavenModule", response["operation"]?.jsonPrimitive?.content)
+        return planId!!
+    }
+
+    private fun daemonApply(session: DaemonSession, planId: String): String {
+        val response = session.dispatch("refactor.apply", buildJsonObject { put("planId", planId) }).jsonObject
+        val txId = response["transactionId"]?.jsonPrimitive?.content
+        assertTrue(!txId.isNullOrBlank(), "daemon apply must return a transactionId")
+        assertEquals("applied", response["status"]?.jsonPrimitive?.content)
+        return txId!!
+    }
+
+    private fun daemonRollback(session: DaemonSession, txId: String): Boolean {
+        val response = session.dispatch("patch.rollback", buildJsonObject { put("transactionId", txId) }).jsonObject
+        return response["rolledBack"]?.jsonPrimitive?.content?.toBoolean() ?: false
     }
 
     @Test
     fun daemonRetainsAppliesAndReversesExactPlan() {
-        writeFixture()
-        val surface = Surface(
-            DaemonSession(),
-            "project.open",
-            "refactor.preview",
-            "refactor.apply",
-            "patch.rollback",
-            "daemon",
-        )
-        openWorkspace(surface)
+        copyFixture()
+        val session = DaemonSession()
+        try {
+            val planId = daemonPreview(session, root)
+            val txId = daemonApply(session, planId)
 
-        val planId = preview(surface)
-        val transactionId = apply(surface, planId)
+            assertEquals("APPLIED", recordState(txId), "daemon journal APPLIED record")
+            assertTrue(journalDir.exists(), "daemon journal must exist after apply")
 
-        assertEquals("APPLIED", recordState(transactionId), "daemon journal APPLIED record")
-        assertTrue(journalDir.exists(), "daemon journal must exist after apply")
+            assertTrue(daemonRollback(session, txId), "daemon normal rollback must succeed")
 
-        rollback(surface, transactionId)
+            assertEquals("ROLLED_BACK", recordState(txId), "daemon same record ROLLED_BACK")
+            assertTrue(root.resolve("catalog-model").exists(), "daemon rollback must restore baseline catalog-model")
+            assertTrue(!root.resolve("catalog-domain").exists(), "daemon rollback must remove catalog-domain")
+        } finally {
+            session.close()
+            root.toFile().deleteRecursively()
+        }
+    }
 
-        assertEquals("ROLLED_BACK", recordState(transactionId), "daemon same record ROLLED_BACK")
-        assertEquals(invoiceBaseline, invoiceAfter(), "daemon rollback must restore baseline S0")
+    // ── MCP tools surface ─────────────────────────────────────────────────────
+
+    private fun mcpTool(session: McpSession, name: String, args: JsonObject): String {
+        val envelope = session.dispatch("tools/call", buildJsonObject {
+            put("name", name)
+            put("arguments", args)
+        }).jsonObject
+        assertTrue(envelope["isError"]?.jsonPrimitive?.content != "true", "tool $name must not be an error envelope")
+        val content = envelope["content"]?.jsonArray ?: error("tool $name must return content")
+        return content.joinToString("\n") { it.jsonObject["text"]?.jsonPrimitive?.content.orEmpty() }
+    }
+
+    private fun mcpPreview(session: McpSession, root: Path): String {
+        mcpTool(session, "project_scan", buildJsonObject { put("root", root.toString()) })
+        // REQ003 no-placeholder criterion: the preview request for renameMavenModule
+        // carries NO "symbol" field and must still produce an actionable plan.
+        val text = mcpTool(session, "preview_refactoring", buildJsonObject {
+            put("operation", "renameMavenModule")
+            put("languageId", "java")
+            put("arguments", buildJsonObject {
+                put("oldModuleDir", "catalog-model")
+                put("newModuleDir", "catalog-domain")
+                put("newArtifactId", "catalog-domain")
+            })
+        })
+        // The contract fix exposes the canonical operation in the preview text.
+        assertTrue(text.contains("Operation: java.renameMavenModule"),
+            "MCP preview must expose the canonical operation, got:\n$text")
+        return Regex("Plan ID  :\\s*(\\S+)").find(text)?.groupValues?.get(1)
+            ?: error("MCP preview must return a Plan ID, got:\n$text")
+    }
+
+    private fun mcpApply(session: McpSession, planId: String): String {
+        val text = mcpTool(session, "apply_refactoring", buildJsonObject { put("planId", planId) })
+        return Regex("Transaction ID: (\\S+)").find(text)?.groupValues?.get(1)
+            ?: error("MCP apply must return a Transaction ID, got:\n$text")
+    }
+
+    private fun mcpRollback(session: McpSession, txId: String): Boolean {
+        val text = mcpTool(session, "rollback_refactoring", buildJsonObject { put("transactionId", txId) })
+        return Regex("Rolled back transaction (\\S+)").find(text) != null
     }
 
     @Test
     fun mcpRetainsAppliesAndReversesExactPlan() {
-        writeFixture()
-        val surface = Surface(
-            McpSession(),
-            "project_scan",
-            "preview_refactoring",
-            "apply_refactoring",
-            "rollback_refactoring",
-            "mcp",
-        )
-        openWorkspace(surface)
+        copyFixture()
+        val session = McpSession()
+        try {
+            val planId = mcpPreview(session, root)
+            val txId = mcpApply(session, planId)
 
-        val planId = preview(surface)
-        val transactionId = apply(surface, planId)
+            assertEquals("APPLIED", recordState(txId), "MCP journal APPLIED record")
+            assertTrue(journalDir.exists(), "MCP journal must exist after apply")
 
-        assertEquals("APPLIED", recordState(transactionId), "MCP journal APPLIED record")
-        assertTrue(journalDir.exists(), "MCP journal must exist after apply")
+            assertTrue(mcpRollback(session, txId), "MCP normal rollback must succeed")
 
-        rollback(surface, transactionId)
-
-        assertEquals("ROLLED_BACK", recordState(transactionId), "MCP same record ROLLED_BACK")
-        assertEquals(invoiceBaseline, invoiceAfter(), "MCP rollback must restore baseline S0")
+            assertEquals("ROLLED_BACK", recordState(txId), "MCP same record ROLLED_BACK")
+            assertTrue(root.resolve("catalog-model").exists(), "MCP rollback must restore baseline catalog-model")
+            assertTrue(!root.resolve("catalog-domain").exists(), "MCP rollback must remove catalog-domain")
+        } finally {
+            session.close()
+            root.toFile().deleteRecursively()
+        }
     }
 }

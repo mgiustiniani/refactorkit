@@ -55,6 +55,7 @@ import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewJsonProjection
 import org.refactorkit.java.JavaMoveClassOperationDispatcher
 import org.refactorkit.java.JavaMoveClassOperationOutcome
 import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
+import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRefactoringPreviewCommand
 import org.refactorkit.java.JavaRefactoringPreviewDispatcher
@@ -264,9 +265,9 @@ class McpSession(
                 required = listOf("symbol"),
                 props = mapOf("symbol" to "string: fully-qualified symbol name")))
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
-                required = listOf("operation", "symbol"),
+                required = listOf("operation"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | organizeImports | formatFile | safeDelete",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
                     "languageId" to "string: java | kotlin | typescript | javascript (default java)",
                     "expectedSnapshotHash" to "string: required for Kotlin rename",
@@ -934,6 +935,12 @@ class McpSession(
             JavaMoveAcrossMavenModulesPlanner.OPERATION -> adapter.applyRefactoring(
                 RefactoringRequest(operation = operation, arguments = opArgs, snapshot = snap),
             )
+            "java.renameMavenModule", "renameMavenModule" -> {
+                val oldModuleDir = opArgs["oldModuleDir"] ?: missing("arguments.oldModuleDir")
+                val newModuleDir = opArgs["newModuleDir"] ?: missing("arguments.newModuleDir")
+                val newArtifactId = opArgs["newArtifactId"]
+                JavaRenameMavenModulePlanner().preview(snap, oldModuleDir, newModuleDir, newArtifactId)
+            }
             "organizeImports" -> {
                 val file = Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file"))
                 if (languageId == "kotlin") {
@@ -965,6 +972,7 @@ class McpSession(
         ))
         return PreviewToolResult.Text(buildString {
             appendLine("Plan ID  : ${plan.id.value}")
+            appendLine("Operation: ${plan.operation}")
             appendLine("Status   : ${plan.status}")
             appendLine("Summary  : ${plan.summary}")
             appendLine("Risk     : ${plan.riskLevel}")
