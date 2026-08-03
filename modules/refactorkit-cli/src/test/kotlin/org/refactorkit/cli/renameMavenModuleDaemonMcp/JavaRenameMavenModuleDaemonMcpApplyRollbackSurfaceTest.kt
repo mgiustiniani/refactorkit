@@ -114,6 +114,10 @@ class JavaRenameMavenModuleDaemonMcpApplyRollbackSurfaceTest {
             // operation-name occurrence. A source/operation-name occurrence alone is never
             // accepted as route evidence.
             assertPlanIdIsGeneratedIdentifier(planId)
+            // Refresh-state lifecycle: preview alone must NOT refresh/write the workspace.
+            // No journal record exists before APPLIED; the workspace stays byte-identical S0.
+            assertTrue(journalRecords().isEmpty(),
+                "preview must not mutate the workspace: no journal record before APPLIED")
             val txId = daemonApply(session, planId)
 
             assertEquals("APPLIED", recordState(txId), "daemon journal APPLIED record")
@@ -179,6 +183,10 @@ class JavaRenameMavenModuleDaemonMcpApplyRollbackSurfaceTest {
         val session = McpSession()
         try {
             val planId = mcpPreview(session, root)
+            // Refresh-state lifecycle: preview alone must NOT refresh/write the workspace.
+            // No journal record exists before APPLIED; the workspace stays byte-identical S0.
+            assertTrue(journalRecords().isEmpty(),
+                "preview must not mutate the workspace: no journal record before APPLIED")
             val txId = mcpApply(session, planId)
 
             assertEquals("APPLIED", recordState(txId), "MCP journal APPLIED record")
