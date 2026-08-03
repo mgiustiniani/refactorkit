@@ -56,7 +56,7 @@ Business Need: Preserve direct-child Maven module-rename authority across manage
     And the same schema-v8 record reaches ROLLED_BACK with no second transaction
     And no child process or RefactorKit-attributable socket read or write was observed during selection, fallback evaluation, the mechanics probe, apply, or rollback
 
-  @REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-002 @functional-requirement @non-functional-requirement @absent
+  @REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-002 @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: CLI refuses an under-lock required-POM change and otherwise journals and reverses the authoritative rename
     Given the actual source-built RefactorKit CLI has the unchanged case workspace and one independent refusal-probe copy, both at exact "S0" with an empty transaction journal
     And the exact command is `refactorkit java rename-module --old-module-dir catalog-model --new-module-dir catalog-domain --new-artifact-id catalog-domain --root <case-workspace-absolute-path> --apply`, where the value substituted for `<case-workspace-absolute-path>` is the normalized absolute root of the disposable copy used by that invocation and all other operation arguments and flags remain exact
