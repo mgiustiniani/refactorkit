@@ -109,6 +109,11 @@ class JavaRenameMavenModuleDaemonMcpApplyRollbackSurfaceTest {
         val session = DaemonSession()
         try {
             val planId = daemonPreview(session, root)
+            // Route evidence: the structured PREVIEW response keys the plan by a generated
+            // plan identifier — never a source-file, symbol, package, module-dir, or
+            // operation-name occurrence. A source/operation-name occurrence alone is never
+            // accepted as route evidence.
+            assertPlanIdIsGeneratedIdentifier(planId)
             val txId = daemonApply(session, planId)
 
             assertEquals("APPLIED", recordState(txId), "daemon journal APPLIED record")
@@ -238,6 +243,10 @@ class JavaRenameMavenModuleDaemonMcpApplyRollbackSurfaceTest {
         try {
             // mcpPreview internally dispatches tools/call project_scan then preview_refactoring.
             val planId = mcpPreview(session, root)
+            // Route evidence: the preview_refactoring result keys the plan by a generated
+            // plan identifier — never a source-file, symbol, package, module-dir, or
+            // operation-name occurrence.
+            assertPlanIdIsGeneratedIdentifier(planId)
 
             val auxiliaryPom = root.resolve("catalog-pricing/pom.xml")
             Files.write(auxiliaryPom, "\n".toByteArray(), StandardOpenOption.APPEND)
@@ -257,4 +266,17 @@ class JavaRenameMavenModuleDaemonMcpApplyRollbackSurfaceTest {
             session.close()
         }
     }
+    /** Route evidence: the plan must be keyed by a generated plan identifier, never by a
+     *  source-file, symbol, package, module-directory, or operation-name occurrence. */
+    private fun assertPlanIdIsGeneratedIdentifier(planId: String) {
+        val sourceOccurrences = listOf(
+            "catalog-model", "catalog-domain",                        // module directories
+            "com.acme.catalog.model", "com.acme.catalog.domain",      // packages
+            "CatalogModel", "CatalogDomain",                          // symbols
+            "renameMavenModule",                                      // operation name
+        )
+        assertTrue(sourceOccurrences.none { planId.contains(it) },
+            "planId must be a generated plan identifier, not a source/operation-name occurrence; got: $planId")
+    }
+
 }
