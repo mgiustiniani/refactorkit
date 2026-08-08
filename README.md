@@ -222,6 +222,16 @@ For example:
 ./gradlew :modules:refactorkit-cli:run --args="scan samples/java-maven-simple"
 ```
 
+### Source-built command discovery
+
+Use the qualified source-built CLI route to discover the bounded Java command catalogue:
+
+```bash
+./gradlew :modules:refactorkit-cli:run --args="commands --json"
+```
+
+The public command is `refactorkit commands --json`. It emits one deterministic closed `refactorkit.cli-command-catalog/v1` document with exactly the top-level fields `schema`, `schemaVersion`, and `commands`; every entry has exactly `name`, `operation`, `aliases`, `modes`, `mutationAuthority`, `jsonSupport`, `stability`, and `requiredArguments`. The qualified catalogue contains only `java create-module`, `java move-across-maven-modules`, and `java rename-module`. `jsonSupport: "catalog-only"` does not claim operation-result JSON. Current evidence is limited to the source-built local Linux/JDK-21/current-CPU path; the installed launcher was not invoked, so installed, packaged, release, or wider-platform parity is not implied. See the [executable requirements appendix](docs/arc42/appendix-requirements.adoc).
+
 ### Project inspection
 
 ```bash

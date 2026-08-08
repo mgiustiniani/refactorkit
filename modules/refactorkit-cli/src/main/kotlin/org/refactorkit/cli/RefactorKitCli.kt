@@ -3,6 +3,7 @@ package org.refactorkit.cli
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -111,6 +112,7 @@ class RefactorKitCli(
         }
         return when (args.first()) {
             "capabilities"    -> cmdCapabilities()
+            "commands"        -> cmdCommands(args.drop(1))
             "scan"            -> cmdScan(args.drop(1))
             "index"           -> cmdIndex(args.drop(1))
             "intelligence"    -> cmdIntelligence(args.drop(1))
@@ -1100,6 +1102,56 @@ class RefactorKitCli(
         return 0
     }
 
+    private fun cmdCommands(args: List<String>): Int {
+        if (args != listOf("--json")) {
+            System.err.println("Usage: refactorkit commands --json")
+            return 2
+        }
+        val catalogue = buildJsonObject {
+            put("schema", "refactorkit.cli-command-catalog/v1")
+            put("schemaVersion", 1)
+            put("commands", buildJsonArray {
+                add(commandCatalogueEntry(
+                    "java create-module",
+                    "java.createMavenModule",
+                    listOf("--module-name", "--parent-pom"),
+                ))
+                add(commandCatalogueEntry(
+                    "java move-across-maven-modules",
+                    "java.moveAcrossMavenModules",
+                    listOf("--from", "--to"),
+                ))
+                add(commandCatalogueEntry(
+                    "java rename-module",
+                    "java.renameMavenModule",
+                    listOf("--old-module-dir", "--new-module-dir"),
+                ))
+            })
+        }
+        println(Json.Default.encodeToString(catalogue))
+        return 0
+    }
+
+    private fun commandCatalogueEntry(
+        name: String,
+        operation: String,
+        requiredArguments: List<String>,
+    ): JsonObject = buildJsonObject {
+        put("name", name)
+        put("operation", operation)
+        put("aliases", buildJsonArray {})
+        put("modes", buildJsonArray {
+            add(JsonPrimitive("preview"))
+            add(JsonPrimitive("apply"))
+        })
+        put("mutationAuthority", "refactorkit-managed")
+        put("jsonSupport", "catalog-only")
+        put("stability", "experimental")
+        put("requiredArguments", buildJsonArray {
+            requiredArguments.forEach { add(JsonPrimitive(it)) }
+        })
+    }
+
     // ── outline ───────────────────────────────────────────────────────────────
 
     private fun cmdOutline(args: List<String>): Int {
@@ -1215,6 +1267,7 @@ class RefactorKitCli(
           refactorkit --help
           refactorkit --version
           refactorkit capabilities
+          refactorkit commands --json
           refactorkit scan              <path>
           refactorkit index             [<path>] [--json]
           refactorkit intelligence search [<path>] [--kind workspace-symbols|document-symbols|completion|hover|signature-help] [--query <text>] [--language <id>] [--file <relative-path>] [--limit <n>] [--json]
@@ -1241,7 +1294,9 @@ class RefactorKitCli(
           refactorkit java diagnostics  <path>                                  (alias for diagnostics)
           refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]
           refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
-          refactorkit java move-across-maven-modules --from <root> --to <root> --dependency-pom <pom> --source-group-id <id> --source-artifact-id <id> --source-version <v> --destination-group-id <id> --destination-artifact-id <id> --destination-version <v> [--root <path>] [--apply]
+          refactorkit java create-module --module-name <name> --parent-pom <pom> [--root <path>] [--apply]
+          refactorkit java move-across-maven-modules --from <root> --to <root> [--dependency-pom <pom> --source-group-id <id> --source-artifact-id <id> --source-version <v> --destination-group-id <id> --destination-artifact-id <id> --destination-version <v>] [--root <path>] [--apply]
+          refactorkit java rename-module --old-module-dir <dir> --new-module-dir <dir> [--new-artifact-id <id>] [--root <path>] [--apply]
           refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
           refactorkit kotlin diagnostics <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--request-id <id>]
           refactorkit kotlin symbols <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--query <text>] [--file <workspace-relative.kt>]

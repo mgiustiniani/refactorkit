@@ -1,0 +1,48 @@
+RefactorKit 0.7.0-SNAPSHOT  deterministic refactoring engine
+
+Usage:
+  refactorkit --help
+  refactorkit --version
+  refactorkit capabilities
+  refactorkit scan              <path>
+  refactorkit index             [<path>] [--json]
+  refactorkit intelligence search [<path>] [--kind workspace-symbols|document-symbols|completion|hover|signature-help] [--query <text>] [--language <id>] [--file <relative-path>] [--limit <n>] [--json]
+  refactorkit symbols           <path>
+  refactorkit diagnostics       <path>
+  refactorkit references        --symbol <fqcn>  [<path>]
+  refactorkit definition        --symbol <fqcn>  [<path>]
+  refactorkit rename            --symbol <fqcn> --to <name>               [--apply] [<path>]
+  refactorkit rename-member     --symbol <FQN#member> --to <newName>      [--apply] [<path>]
+  refactorkit extract-method    --file <path> --start-line <n> --end-line <n> --method-name <name> [--apply] [--root <path>]
+  refactorkit change-signature  --symbol <FQN#method> --old-name <param> --new-name <param> [--apply] [<path>]
+  refactorkit change-signature  --operation add-parameter --symbol <FQN#method> --type <javaType> --name <param> --default <expr> [--apply] [<path>]
+  refactorkit change-signature  --operation change-parameter-type --symbol <FQN#method> --name <param> --type <javaType> [--apply] [<path>]
+  refactorkit change-signature  --operation add-parameter --symbol <FQN#method> --type <javaType> --name <param> --default <expression> [--include-hierarchy --accept-external-consumer-risk] [--apply] [<path>]
+  refactorkit change-signature  --operation reorder-parameters --symbol <FQN#method> --order <param1,param2,...> [--apply] [<path>]
+  refactorkit change-signature  --operation remove-parameter --symbol <FQN#method> --name <param> [--apply] [<path>]
+  refactorkit move-class        --symbol <fqcn> --to-package <pkg>        [--apply] [<path>]
+  refactorkit organize-imports  <file...>                               [--apply] [--root <path>]
+  refactorkit format-file       <file>                                  [--apply] [--root <path>]
+  refactorkit safe-delete       --symbol <fqcn>                        [--apply] [--force] [<path>]
+  refactorkit patch recover     [--root <path>]
+  refactorkit patch rollback    <transaction-id> [--force]              [--root <path>]
+  refactorkit java symbols      <path>                                  (alias for symbols)
+  refactorkit java diagnostics  <path>                                  (alias for diagnostics)
+  refactorkit java import-class --target-package <pkg> (--stdin|--file <path>) [--apply] [<root>]
+  refactorkit java move-source-root --from <root> --to <root> [--root <path>] [--apply]
+  refactorkit java move-across-maven-modules --from <root> --to <root> --dependency-pom <pom> --source-group-id <id> --source-artifact-id <id> --source-version <v> --destination-group-id <id> --destination-artifact-id <id> --destination-version <v> [--root <path>] [--apply]
+  refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
+  refactorkit kotlin diagnostics <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--request-id <id>]
+  refactorkit kotlin symbols <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--query <text>] [--file <workspace-relative.kt>]
+  refactorkit kotlin definition <root> --symbol <opaque-id> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+  refactorkit kotlin definition <root> --file <relative.kt> --line <zero-based> --character <zero-based> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+  refactorkit kotlin references <root> --file <relative.kt> --line <zero-based> --character <zero-based> [--exclude-declaration] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+  refactorkit kotlin rename <root> --symbol <jvm-symbol-id> --to <new-name> [--accept-external-consumer-risk] [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+  refactorkit kotlin move-declaration <root> --symbol <jvm-symbol-id> --to-package <package> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+  refactorkit kotlin organize-imports <root> --file <relative.kt> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+  refactorkit kotlin change-signature <root> --symbol <java-jvm-method-id> --type <javaType> --name <parameter> --default <expr> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+  refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
+  refactorkit outline           <file>                                  [--language <lang>]
+  refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]
+  refactorkit local-rename      <file> --from <name> --to <name>       [--apply] [--root <path>]
+  refactorkit test-golden       [<case-name>]                          [--golden-dir <path>]
