@@ -1,0 +1,71 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:refactorkit-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-core:compileJava NO-SOURCE
+> Task :modules:refactorkit-core:processResources NO-SOURCE
+> Task :modules:refactorkit-core:classes UP-TO-DATE
+> Task :modules:refactorkit-core:jar UP-TO-DATE
+> Task :modules:refactorkit-java:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-java:compileJava NO-SOURCE
+> Task :modules:refactorkit-java:processResources NO-SOURCE
+> Task :modules:refactorkit-java:classes UP-TO-DATE
+> Task :modules:refactorkit-java:jar UP-TO-DATE
+> Task :modules:refactorkit-kotlin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-kotlin:compileJava UP-TO-DATE
+> Task :modules:refactorkit-kotlin:processResources NO-SOURCE
+> Task :modules:refactorkit-kotlin:classes UP-TO-DATE
+> Task :modules:refactorkit-kotlin:jar UP-TO-DATE
+> Task :modules:refactorkit-lsp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-tree-sitter:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-tree-sitter:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:compileJava NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:processResources NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:classes UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:jar UP-TO-DATE
+> Task :modules:refactorkit-typescript:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-typescript:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-typescript:compileJava NO-SOURCE
+> Task :modules:refactorkit-typescript:processResources UP-TO-DATE
+> Task :modules:refactorkit-typescript:classes UP-TO-DATE
+> Task :modules:refactorkit-typescript:jar UP-TO-DATE
+> Task :modules:refactorkit-lsp:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-lsp:compileJava NO-SOURCE
+> Task :modules:refactorkit-lsp:processResources NO-SOURCE
+> Task :modules:refactorkit-lsp:classes UP-TO-DATE
+> Task :modules:refactorkit-lsp:jar UP-TO-DATE
+> Task :modules:refactorkit-lsp:processTestResources UP-TO-DATE
+> Task :modules:refactorkit-lsp:compileTestKotlin
+> Task :modules:refactorkit-lsp:compileTestJava NO-SOURCE
+> Task :modules:refactorkit-lsp:testClasses UP-TO-DATE
+
+> Task :modules:refactorkit-lsp:test
+
+JavaMavenModuleRenameSurface005CucumberTest > Preserve direct-child Maven module-rename authority across managed public surfaces > Only LSP applyPlan manages the retained exact plan through preflight, authority, and rollback FAILED
+    java.lang.IllegalStateException at JavaMavenModuleRenameSurface005Steps.kt:673
+
+6 tests completed, 1 failed, 5 skipped
+
+> Task :modules:refactorkit-lsp:test FAILED
+
+[Incubating] Problems report is available at: file:///home/paperboy/workspace/refactorkit/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':modules:refactorkit-lsp:test'.
+> There were failing tests. See the report at: file:///home/paperboy/workspace/refactorkit/modules/refactorkit-lsp/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 11s
+17 actionable tasks: 2 executed, 15 up-to-date

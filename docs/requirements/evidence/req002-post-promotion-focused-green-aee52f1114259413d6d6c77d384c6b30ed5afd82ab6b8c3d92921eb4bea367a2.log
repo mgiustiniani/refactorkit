@@ -1,0 +1,119 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:refactorkit-cli:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:processResources NO-SOURCE
+> Task :modules:refactorkit-daemon:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:processResources NO-SOURCE
+> Task :modules:refactorkit-jvm:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:processResources NO-SOURCE
+> Task :modules:refactorkit-jvm:processResources NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-tree-sitter:processResources NO-SOURCE
+> Task :modules:refactorkit-typescript:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-typescript:processResources
+> Task :modules:refactorkit-web-importer:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-web-importer:processResources NO-SOURCE
+> Task :modules:refactorkit-daemon:processResources NO-SOURCE
+> Task :modules:refactorkit-testkit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-testkit:processResources NO-SOURCE
+> Task :modules:refactorkit-cli:processResources NO-SOURCE
+> Task :modules:refactorkit-lsp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-lsp:processResources NO-SOURCE
+> Task :modules:refactorkit-mcp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-mcp:processResources NO-SOURCE
+> Task :modules:refactorkit-cli:processTestResources
+> Task :modules:refactorkit-core:compileKotlin
+> Task :modules:refactorkit-core:compileJava NO-SOURCE
+> Task :modules:refactorkit-core:classes UP-TO-DATE
+> Task :modules:refactorkit-core:jar
+> Task :modules:refactorkit-tree-sitter:compileKotlin
+> Task :modules:refactorkit-tree-sitter:compileJava NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:classes UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:jar
+> Task :modules:refactorkit-kotlin:compileKotlin
+
+> Task :modules:refactorkit-kotlin:compileJava
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+Note: /home/paperboy/workspace/refactorkit/modules/refactorkit-kotlin/src/main/java/org/refactorkit/kotlin/bridge/KotlinCompilerSymbolExtractor.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+3 warnings
+
+> Task :modules:refactorkit-kotlin:classes
+> Task :modules:refactorkit-kotlin:jar
+> Task :modules:refactorkit-typescript:compileKotlin
+> Task :modules:refactorkit-typescript:compileJava NO-SOURCE
+> Task :modules:refactorkit-typescript:classes
+> Task :modules:refactorkit-typescript:jar
+
+> Task :modules:refactorkit-java:compileKotlin
+w: file:///home/paperboy/workspace/refactorkit/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:13:8 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///home/paperboy/workspace/refactorkit/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1380:86 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///home/paperboy/workspace/refactorkit/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1383:71 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///home/paperboy/workspace/refactorkit/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1386:56 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///home/paperboy/workspace/refactorkit/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1389:69 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///home/paperboy/workspace/refactorkit/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenPomDependencyEditor.kt:183:52 Condition is always 'true'.
+
+> Task :modules:refactorkit-java:compileJava NO-SOURCE
+> Task :modules:refactorkit-java:classes UP-TO-DATE
+> Task :modules:refactorkit-java:jar
+> Task :modules:refactorkit-web-importer:compileKotlin
+> Task :modules:refactorkit-web-importer:compileJava NO-SOURCE
+> Task :modules:refactorkit-web-importer:classes UP-TO-DATE
+> Task :modules:refactorkit-web-importer:jar
+> Task :modules:refactorkit-jvm:compileKotlin
+> Task :modules:refactorkit-jvm:compileJava NO-SOURCE
+> Task :modules:refactorkit-jvm:classes UP-TO-DATE
+> Task :modules:refactorkit-jvm:jar
+> Task :modules:refactorkit-testkit:compileKotlin
+> Task :modules:refactorkit-testkit:compileJava NO-SOURCE
+> Task :modules:refactorkit-testkit:classes UP-TO-DATE
+> Task :modules:refactorkit-testkit:jar
+> Task :modules:refactorkit-lsp:compileKotlin
+> Task :modules:refactorkit-lsp:compileJava NO-SOURCE
+> Task :modules:refactorkit-lsp:classes UP-TO-DATE
+> Task :modules:refactorkit-lsp:jar
+> Task :modules:refactorkit-mcp:compileKotlin
+> Task :modules:refactorkit-mcp:compileJava NO-SOURCE
+> Task :modules:refactorkit-mcp:classes UP-TO-DATE
+> Task :modules:refactorkit-mcp:jar
+> Task :modules:refactorkit-daemon:compileKotlin
+> Task :modules:refactorkit-daemon:compileJava NO-SOURCE
+> Task :modules:refactorkit-daemon:classes UP-TO-DATE
+> Task :modules:refactorkit-daemon:jar
+> Task :modules:refactorkit-cli:compileKotlin
+
+> Task :modules:refactorkit-cli:compileJava
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+
+> Task :modules:refactorkit-cli:classes
+> Task :modules:refactorkit-cli:jar
+> Task :modules:refactorkit-cli:compileTestKotlin
+
+> Task :modules:refactorkit-cli:compileTestJava
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+
+> Task :modules:refactorkit-cli:testClasses
+> Task :modules:refactorkit-cli:test
+
+[Incubating] Problems report is available at: file:///home/paperboy/workspace/refactorkit/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 51s
+31 actionable tasks: 31 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.6.1/userguide/configuration_cache_enabling.html

@@ -88,6 +88,7 @@ workspace "RefactorKit" "Deterministic refactoring and code-intelligence engine 
         lsp -> core "Maps LSP workspace edits, commands, and diagnostics to patch-oriented models" "In-process calls"
         lsp -> javaAdapter "Delegates Java navigation, references, rename, code actions, symbols, semantic tokens, and diagnostics" "In-process calls"
         lsp -> kotlinAdapter "Reports Kotlin capability/refusal metadata without claiming LSP ownership" "In-process calls"
+        lsp -> jvmComposition "Selects an operation-owned diagnostics gate for retained plans before apply" "In-process calls"
 
         mcp -> core "Generates project resources, focused context, previews, applies, and rollbacks" "In-process calls"
         mcp -> javaAdapter "Delegates project scan, symbols, definitions, references, diagnostics, and Java refactorings" "In-process calls"

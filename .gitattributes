@@ -6,3 +6,6 @@
 *.gif binary
 *.zip binary
 *.jar binary
+
+# Immutable runtime receipts preserve tool-emitted bytes, including trailing spaces.
+docs/requirements/evidence/*.log whitespace=-blank-at-eol,-blank-at-eof

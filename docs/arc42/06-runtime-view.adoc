@@ -132,6 +132,37 @@ Status: implementation-informed from `docs/ai-workflow.md`, `docs/integration-co
 
 Status: implementation-informed from `LspSession`, `docs/integration-contracts.md`, `docs/transactionality-audit.md`, and bounded REQ-JAVA-MAVEN-MOVE-AUTH-004 acceptance. Native edits and RefactorKit-managed apply retain distinct transaction boundaries. Lexical Java `moveClass` now dispatches before `planToLspWorkspaceEdit`, returns no `changes` or `documentChanges`, creates no pending plan, and cannot reach either client-managed or RefactorKit-managed application. Stable LSP status remains capability-by-capability and acceptance-gated; packaged editor/runtime/native qualification is not claimed.
 
+== Runtime Scenario: Client-managed LSP Maven Module-rename Proposal
+
+Status: implementation-informed and implemented-and-validated for the bounded REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-004 runtime. The immutable baseline is `REQ004-BDD-EVIDENCE-001` (SHA-256 `61079d0aba9a9bf156faa80eadb937cca20155eeab47006df746cbd677123c1c`). Independent requirements quality review returned `PASS` with no findings against reviewed HEAD `db25c9af2d62c8e9e90f93792a6c6593e6e13698` plus scoped boundary manifest SHA-256 `e797994c103d960546c32547de01ad6182b080dafdba52599854eaa74656c8ee`. Existing production already supplies the bounded behavior; no production source changed for SURFACE-004. SURFACE-004 and the separately evidenced SURFACE-005 are now both declared `@implemented-and-validated`, but evidence from either route never qualifies the other.
+
+[cols="1,3",options="header"]
+|===
+|Step |Observed interaction
+
+|1
+|One API `0.2` LSP session negotiates versioned `documentChanges`; an independent legacy session does not. Both begin from exact `S0`, with all fixture documents closed, no retained plan, and no RefactorKit journal entry.
+
+|2
+|The version-capable session invokes `refactorkit.renameMavenModule` through public in-process `LspSession.dispatch`. The Java planner remains the upstream semantic supplier of the canonical immutable `PatchPlan` and core `WorkspaceEdit`; the LSP adapter is the downstream protocol/anti-corruption boundary. Read-only proposal creation invokes no operation apply gate, `PatchEngine.apply`, workspace lock, WAL, transaction, state refresh, recovery, or rollback.
+
+|3
+|The LSP adapter returns an immutable proposal with operation `java.renameMavenModule`, status `PREVIEW`, `client-managed` ownership, rollback unavailable, document versions checked, and versioned `documentChanges`. The response equals an independently constructed exact five-entry oracle: three POM modifications followed by two file renames. All three closed text documents carry JSON `null` versions, and neither rename operation fabricates a document version.
+
+|4
+|A per-session plan ID correlates the retained planner payload for the distinct managed command, but it is not approval, authorization, semantic identity, transaction identity, or evidence of managed apply. SURFACE-005 alone owns explicit `refactorkit.applyPlan` behavior.
+
+|5
+|A harness-side editor/client simulator applies only the five returned protocol operations outside LSP and without lifecycle notification. The editor owns those writes. From RefactorKit's perspective this application is non-transactional and non-rollbackable: no lock-held freshness/lease revalidation, WAL transition, pre/post-image capture, atomic staging, transaction assignment, recovery record, rollback record, or other engine/journal state exists. An editor's own undo behavior is outside RefactorKit guarantees.
+
+|6
+|The legacy session is refused with `DOCUMENT_VERSION_MISMATCH` before edit return or plan retention, leaving workspace bytes and journal state unchanged. Zero pending-plan retention and this fail-closed ordering are test-only observations; no production observation hook or seam was added.
+|===
+
+After the SURFACE-004 independent `PASS`, Gherkin promotion changed only SURFACE-004 and produced feature SHA-256 `20d3df5193586bfe0b3db202bf48295c1c8cfd9b41bfcaa3f71ce76846be0e81`; the later SURFACE-005 refinement produced historical SHA-256 `25b71b2630590db5034cd58755fd0892dad800b1c3f199946770a003e668f3a8`. After the separate SURFACE-005 independent `PASS`, promotion changed only its status tag and produced historical feature SHA-256 `793e02aa42e0f4d90f4a85382910b1e684bb80e3f8547d9c02080c4d8b6a8a17`. The later SURFACE-002 feature-only regression reconciliation produced historical pre-promotion feature SHA-256 `7df1e5ab23804def6fa7d633df66fd6a42423b1c913ec12170b8fcca1715bf36`. After independent `PASS`, a status-only promotion preserved the scenario-local child-process/socket observation step and produced current feature SHA-256 `1c29ad27146f06072c9815a1e056e2702cd25b8975ea2f0307385091e9859ad3`; SURFACE-002 is now `@implemented-and-validated`, and this leaves the separately bounded SURFACE-004 runtime evidence unchanged. The post-promotion JDK 21 source-built/in-process focused runner `org.refactorkit.lsp.mavenmodulerenamesurface004.JavaMavenModuleRenameSurface004CucumberTest` reported `BUILD SUCCESSFUL`; Cucumber JSON SHA-256 `79234761252fdcb07845a34eda0581c7f4b53beecbe21e1eb294d00c552731ff` contains one scenario and 17/17 passed results. The reviewed supporting `LspSessionTest` regression remains 22/22 with zero failures/errors/skips (XML SHA-256 `d84069c7f4318d41cf4f2f64276df7af2e01e00082a56a24c638e2571d0de69d`). Only LSP Cucumber test dependencies/resources, the runner, and glue were added. No numerical coverage is claimed.
+
+Proposal evidence and editor-application evidence do not qualify SURFACE-005 managed apply. SURFACE-005 is separately implemented-and-validated under baseline SHA-256 `0be6995539bab1088406c042b577edf5723cf27d4eb60092c39a621122c66ea0` and the evidence recorded below. This bounded SURFACE-004 evidence does not qualify stdio or other external transport, packaged/native/editor integration, cross-platform execution, general Maven projects, release behavior, or broad support. Its proposal sequence itself changes no participant or relationship; the separate SURFACE-005 selector dependency is documented below. ADRs 0002 and 0004 already own the authority split; no new decision is introduced.
+
 == Runtime Scenario: Daemon Capability Discovery Before Project Open
 
 [cols="1,3",options="header"]
@@ -652,10 +683,86 @@ historical.
 |Observed child-process and attributable socket activity remains zero for this bounded sequence. CLI/LSP/MCP preview routes, recipes, public daemon/MCP behavior beyond selector selection, packaged/native/cross-platform execution, general Maven projects, release qualification, and broad support remain outside the validated runtime view; REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-003 owns future daemon/MCP adoption evidence.
 |===
 
-This remains an internal selector -> Core `DiagnosticsGate` -> Java planner ->
-`PatchEngine` sequence over existing participants and relationships. It adds no
-runtime participant, protocol, deployment node, or durable store, so no dynamic
-C4 or Structurizr change is justified.
+That implemented row remains an internal selector -> Core `DiagnosticsGate` ->
+Java planner -> `PatchEngine` sequence over existing participants and
+relationships. It added no runtime participant, protocol, deployment node, or
+durable store. The implementation-informed LSP adoption below uses the same
+participants; only the structural LSP Server -> Shared JVM Semantic Composition
+relationship became architecturally relevant.
+
+== Runtime Scenario: LSP Retained Module-rename Apply and Rollback
+
+Status: implementation-informed and implemented-and-validated for bounded
+source-built/in-process Story BDD evidence through public `LspSession.dispatch`.
+Independent requirements review returned `PASS` with no findings for AC-005-01
+through AC-005-11. The immutable baseline is
+`docs/requirements/req005-surface005-baseline.md` SHA-256
+`0be6995539bab1088406c042b577edf5723cf27d4eb60092c39a621122c66ea0`, and the
+promoted feature SHA-256 is
+`793e02aa42e0f4d90f4a85382910b1e684bb80e3f8547d9c02080c4d8b6a8a17`.
+The durable pre-production focused Cucumber RED log at
+`docs/requirements/evidence/req005-pre-production-focused-cucumber-red.log`
+(SHA-256
+`b7ae8c9bfbd7122404403f13b10107a46f359030187bd9459e7b26d42f400cc8`)
+proves only that runtime managed apply failed before the success assertions: the
+run failed at `JavaMavenModuleRenameSurface005Steps.kt:673` with `BUILD FAILED`,
+one failed test, and five skipped. Separate source/diff/domain inspection
+identified the former generic `java-jdt` route; neither that route nor the
+producer-reported moved-type diagnostic detail is a hash-bound claim from this
+log. The minimal production correction adds the direct `refactorkit-lsp` dependency
+on `refactorkit-jvm` and routes `LspSession.applyPlan` through the existing
+public five-argument selector while preserving LSP-owned preflight and
+success-only lifecycle.
+
+[cols="1,3",options="header"]
+|===
+|Step |Implementation-informed interaction
+
+|1
+|Three independent version-capable API `0.2` sessions retain their own canonical proposal and exact plan over separate S0 fixture copies. No editor applies the client-managed proposal, and a retained plan ID is still neither approval nor a transaction.
+
+|2
+|The dirty probe detects its divergent unrelated tracked buffer before the affected Product open-document condition. The affected-open probe then refuses because Product is open even though clean. Both `DOCUMENT_VERSION_MISMATCH` refusals occur before fresh apply scan, diagnostics-gate construction, `PatchEngine`, lock, WAL, target edit, plan removal, or refresh; both plans remain retained.
+
+|3
+|The clean/closed primary session resolves the same retained `PatchPlan` and authority lease, performs a fresh exact S0 scan retaining every auxiliary POM byte, and supplies explicit approval surface `lsp-managed-command` only for `refactorkit.applyPlan`.
+
+|4
+|`LspSession` calls the existing five-argument `ManagedApplyDiagnosticsGateSelector.select` with that exact plan, exact language `java`, the session-current Java/Kotlin adapters, and its normal external resolver. No duplicated LSP-local operation branch is introduced. Exact `java.renameMavenModule` selects lazy gate `java-rename-maven-module-staged-reactor-v1`; generic `java-jdt` is neither selected nor evaluated for this apply.
+
+|5
+|`PatchEngine` receives the exact retained plan, S0, authorization, and selected operation-owned gate. It evaluates exact S0, C1, and committed S1 with D0 and advances one schema-v8 transaction through the existing WAL lifecycle to `APPLIED` before the LSP response exposes its transaction ID.
+
+|6
+|Only `ApplyResult.Applied` permits `LspSession` to remove the primary plan and refresh exact S1. An engine refusal retains the existing refusal lifecycle and cannot masquerade as successful cleanup or refresh.
+
+|7
+|Normal `refactorkit.rollback` resolves the same applied record through the existing managed rollback boundary. Successful rollback advances that record to `ROLLED_BACK`, creates no second transaction, restores every non-engine byte/path kind to S0, and only then refreshes exact S0/D0.
+
+|8
+|SURFACE-004 remains a separate versioned client-managed/no-RefactorKit-rollback proposal path. Its proposal or editor-application evidence cannot qualify this managed row, and this managed row cannot relabel the proposal as transactional.
+|===
+
+Post-promotion JDK 21 evidence through public in-process
+`LspSession.dispatch` reported `BUILD SUCCESSFUL` for one SURFACE-005 scenario
+and 47/47 passed results (Cucumber JSON SHA-256
+`4ade22bb82466b27e7f265f29e7070a6d8f0aa6c5004a35cccee1d30a4204e54`).
+Fresh regressions also passed: promoted SURFACE-004 17/17 (JSON SHA-256
+`d9e68222f88122043c16c49374d2ada9a6dbcb2b9317890987e619b84af9d685`),
+`LspSessionTest` 22/22 (XML SHA-256
+`4a6876354dc83d364a7001a495f5ff0aad0a2c75e42437c726abe797e7f11c6d`),
+and selector SURFACE-001 30/30 (JSON SHA-256
+`4a11d1150dfe2bca5c072b8f6ea1d1f8b4896375dde39f22a0d6a3f533f0f46c`).
+This evidence confirms only the bounded source-built/in-process public dispatch
+path: no external editor or transport, packaged/native/platform execution,
+concurrency, crash/restart, general Maven project, release, broader-support, or
+numerical-coverage claim is made. `PatchEngine` and `TransactionLog` retain WAL,
+idempotency, exact-result, and rollback-evidence roles; the transaction record
+is not a domain event and no observer seam, event store, new container, or new
+persistence type was introduced. Delegated LATE C4 review reconciled the LSP
+Server -> Shared JVM Semantic Composition in-process relationship. The runtime
+sequence uses existing participants, so no separate dynamic view is needed.
+SURFACE-005 is declared `@implemented-and-validated`; every qualification exclusion stated above remains open.
 
 == Planned Runtime Scenario: Kotlin Companion Move Refusal
 

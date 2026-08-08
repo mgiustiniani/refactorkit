@@ -14,7 +14,6 @@ import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
-import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
@@ -61,7 +60,9 @@ import org.refactorkit.java.JavaMoveSourceRootPlanner
 import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
+import org.refactorkit.jvm.ManagedApplyDiagnosticsGateSelector
 import org.refactorkit.kotlin.KotlinAdapterRegistration
+import org.refactorkit.kotlin.KotlinLanguageAdapter
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -77,6 +78,7 @@ import kotlin.math.max
  */
 class LspSession {
     private val adapter = JavaLanguageAdapter()
+    private val kotlinAdapter = KotlinLanguageAdapter()
     private val moveClassDispatcher = JavaMoveClassOperationDispatcher(adapter)
     private val scanner = JavaProjectScanner()
     private val structuralAdapter = TreeSitterAdapter()
@@ -695,11 +697,23 @@ class LspSession {
                     ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: ${planId.value}")
                 requireManagedWriteSafe(plan.affectedFiles)
                 val current = scanner.scan(root)
+                val diagnosticsGate = ManagedApplyDiagnosticsGateSelector.select(
+                    plan = plan,
+                    languageId = "java",
+                    javaAdapter = adapter,
+                    kotlinAdapter = kotlinAdapter,
+                    externalGateResolver = { languageId ->
+                        throw JsonRpcException(
+                            JsonRpcErrorCodes.INVALID_PARAMS,
+                            "Managed apply diagnostics are unavailable for language: $languageId",
+                        )
+                    },
+                )
                 when (val result = PatchEngine(root).apply(
                     plan,
                     current,
                     ApplyAuthorization.explicit("lsp-managed-command"),
-                    DiagnosticsGate.enabled("java-jdt", adapter::diagnostics),
+                    diagnosticsGate,
                 )) {
                     is ApplyResult.Applied -> {
                         pendingPlans.remove(planId)
