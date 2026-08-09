@@ -1,0 +1,28 @@
+verdict: PASS
+baselineId: V070-P0-ROWS-088-136-REVIEW-001
+baselineSha256: 451cb1309d5fcd08beaa9db20cedf7116c90ca284fac4c0459d78382a64c52cb
+reviewedRevision: 38adc8827e6251df58807db23df37cdf24680c86 (tree cf7e806f26b290941fd758ba6f011d7532233d11; diff 289b2ed2c0e6aac36e9b3522e47f6b99f7bcc4d0..38adc8827e6251df58807db23df37cdf24680c86)
+reviewedScope: P0-ROADMAP-SUPPORT-088, P0-MANAGED-WRITE-136
+requirementMatrix:
+  - requirement: P0-ROADMAP-SUPPORT-088
+    acceptanceCriteria: P0-088-AC1..AC6
+    implementationEvidence: docs/releases/v0.7.0-plan.md:88; docs/releases/v0.7.0-support-matrix.md; scripts/verify-v070-roadmap-support-claims.py; scripts/test-verify-v070-roadmap-support-claims.py; .github/workflows/ci.yml
+    verificationEvidence: Fresh checker passed; four negative/current-projection tests passed; nine representative roadmap rows remain open; exactly four native rows remain CONFIGURED_UNOBSERVED; plan/support hashes match the handoff
+    status: SATISFIED
+  - requirement: P0-MANAGED-WRITE-136
+    acceptanceCriteria: P0-136-AC1..AC7; REQ-JAVA-MAVEN-MOVE-AUTH-013 baseline SHA-256 dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6
+    implementationEvidence: modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/{Models.kt,WorkspaceEditIdentity.kt,PatchEngine.kt}; modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/{JavaMoveClassTargetAuthority.kt,JavaRenameMavenModulePlanning.kt}; features/java-maven-move-class-apply-authority.feature; modules/refactorkit-cli/src/test/kotlin/org/refactorkit/cli/req013authority/
+    verificationEvidence: Fresh JDK 21 rerun passed 5 focused Core tests and all 9 REQ-013 fixture cases; source inspection confirmed typed completeness, canonical edit identity, both production producers, lock-held pre-WAL validation, exact staged diagnostics, typed refusals, external-condition preservation, and lock-only residue; committed RED, whole-tree, independent-review, post-promotion, Cucumber, and 13-ID/31-case packaged evidence hashes match
+    status: SATISFIED
+blockingFindings: []
+nonBlockingFindings: []
+unverifiedClaims:
+  - Linux x86-64, Windows x86-64, macOS x86-64, and macOS arm64 operation-specific native results remain CONFIGURED_UNOBSERVED.
+  - Broad/general Maven move-class authority, packaged/native J1, K1/K2/K5/T5/I1, publication, and installed-runtime promotion remain unqualified.
+commandsRun:
+  - "git status/revision/tree/diff/diff --check and SHA-256 inspections: exit 0; worktree clean"
+  - "python3 scripts/test-verify-v070-roadmap-support-claims.py: exit 0; 4 tests passed"
+  - "python3 scripts/verify-v070-roadmap-support-claims.py: exit 0; PASSED, 9 open representative rows and 4 CONFIGURED_UNOBSERVED native rows"
+  - "JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon --rerun-tasks :modules:refactorkit-core:test --tests 'org.refactorkit.core.WorkspaceEditIdentityTest' --tests 'org.refactorkit.core.OperationAuthorityLeaseTest' :modules:refactorkit-cli:test --tests 'org.refactorkit.cli.req013authority.JavaMavenMoveClassUnderLockAuthorityCucumberTest': exit 0; BUILD SUCCESSFUL; 5 Core tests and 9 REQ-013 cases passed"
+  - "Committed evidence JSON/log reconciliation: exit 0; REQ-013 9/9 and packaged matrix 13 IDs/31 cases passed with no nonpassing result"
+requiredNextAction: A follow-up status-only commit may close P0 checkbox rows 88 and 136. This PASS does not authorize closure of rows 173 or 230, any native row, or any excluded support/release claim.
