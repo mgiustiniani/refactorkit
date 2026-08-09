@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -29,7 +30,7 @@ REQUIRED_SUPPORT_CLAIMS = {
     "module-boundary": "Packaged/native/cross-platform module rename or move and general Maven-module authority remain unqualified.",
     "recipe-boundary": "Recipe evidence is operation-specific; no generic or advanced migration-recipe authority is claimed.",
     "sbom-boundary": "SBOM workflow wiring is configured, but final SPDX assets, attestations, publication, and downloaded-asset verification remain unqualified.",
-    "move-class-native-boundary": "All four Maven move-class native rows remain `CONFIGURED_UNOBSERVED`.",
+    "move-class-native-boundary": "Native evidence state is explicit and uniform; no row is qualified before independent review.",
 }
 
 REQUIRED_NATIVE_WORKFLOW_TOKENS = {
@@ -76,12 +77,29 @@ def verify(repository_root: Path) -> dict[str, object]:
         if token not in workflow:
             failures.append(f"dedicated native workflow token is missing: {name}")
 
-    native_state_count = support.count("| `CONFIGURED_UNOBSERVED` |")
-    if native_state_count != 4:
+    native_states = re.findall(
+        r"^\| (?:Linux|Windows|macOS) \| [^|]+ \| public-CLI REQ-001 plus "
+        r"packaged-production 13-ID/31-case matrix \| `([^`]+)` \|$",
+        support,
+        flags=re.MULTILINE,
+    )
+    if len(native_states) != 4 or len(set(native_states)) != 1:
         failures.append(
-            "Maven move-class native ledger must contain exactly four "
-            f"CONFIGURED_UNOBSERVED rows, found {native_state_count}"
+            "Maven move-class native ledger must contain four rows in one uniform state; "
+            f"observed {native_states}"
         )
+    native_state = native_states[0] if len(native_states) == 4 and len(set(native_states)) == 1 else "INVALID"
+    allowed_states = {"CONFIGURED_UNOBSERVED", "PASS_REVIEW_PENDING", "PASSED"}
+    if native_state not in allowed_states:
+        failures.append(f"Maven move-class native ledger has unsupported state: {native_state}")
+    native_parent_rows_open = (
+        "- [ ] Prove semantic preview, one-transaction apply, exact post-apply diagnostics," in plan
+        or "- [ ] Prove the remaining authority/refusal shapes through separately scoped" in plan
+    )
+    if native_parent_rows_open and native_state == "PASSED":
+        failures.append("native rows cannot be PASSED while either P0 native parent row is open")
+    if not native_parent_rows_open and native_state != "PASSED":
+        failures.append("closed P0 native parent rows require all four native rows to be PASSED")
 
     exact_jdk_count = workflow.count("java-version: '21.0.11+10.0.LTS'")
     if exact_jdk_count != 3:
@@ -98,7 +116,9 @@ def verify(repository_root: Path) -> dict[str, object]:
         "openRoadmapRowsVerified": sorted(OPEN_PLAN_ROWS),
         "supportBoundariesVerified": sorted(REQUIRED_SUPPORT_CLAIMS),
         "nativeWorkflowTokensVerified": sorted(REQUIRED_NATIVE_WORKFLOW_TOKENS),
-        "configuredUnobservedNativeRows": native_state_count,
+        "nativeRows": len(native_states),
+        "nativeEvidenceState": native_state,
+        "nativeParentRowsOpen": native_parent_rows_open,
         "exactTemurin2111Pins": exact_jdk_count,
         "failures": failures,
     }

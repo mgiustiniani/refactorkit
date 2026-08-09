@@ -1,0 +1,344 @@
+{
+  "baselineSha256": "dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6",
+  "dedicatedJobsConclusion": "success",
+  "featureSha256": "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696",
+  "overallWorkflowConclusion": "failure",
+  "platforms": {
+    "linux-x86_64": {
+      "artifactId": 9044423303,
+      "artifactName": "packaged-maven-move-class-authority-reports-linux-x86_64",
+      "artifactSize": 1010310,
+      "jobUrl": "https://github.com/mgiustiniani/refactorkit/actions/runs/31336067318/job/93301999413",
+      "matrixManifestSha256": "37513f14522111540ec906b625ef78742e72b6093cb5c589c028e291aaf584a4",
+      "nativeReceipt": {
+        "baselineSha256": "dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6",
+        "ci": {
+          "repository": "mgiustiniani/refactorkit",
+          "runAttempt": "1",
+          "runId": "31336067318"
+        },
+        "completeMatrix": {
+          "path": "matrix-manifest.json",
+          "sha256": "37513f14522111540ec906b625ef78742e72b6093cb5c589c028e291aaf584a4",
+          "totals": {
+            "hooks": 62,
+            "requirements": 13,
+            "scenarios": 31,
+            "steps": 436
+          }
+        },
+        "featureSha256": "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696",
+        "host": {
+          "machine": "x86_64",
+          "system": "Linux"
+        },
+        "jdk": {
+          "embeddedReleaseSha256": "3123a9179115c408914ebfbd95e267119f8deaaadcb3947910f1e757ba0e81c2",
+          "embeddedVersionOutput": [
+            "openjdk version \"21.0.11\" 2026-04-21 LTS",
+            "OpenJDK Runtime Environment Temurin-21.0.11+10 (build 21.0.11+10-LTS)",
+            "OpenJDK 64-Bit Server VM Temurin-21.0.11+10 (build 21.0.11+10-LTS, mixed mode)"
+          ],
+          "setupJavaIdentity": "temurin/21.0.11+10.0.LTS"
+        },
+        "platform": "linux-x86_64",
+        "publicCli": {
+          "cucumber": {
+            "path": "packaged-maven-move-class-authority.json",
+            "results": 16,
+            "scenarios": 1,
+            "sha256": "723c6a9508b43d9b87a7c6e1756afecc9ee3a707edcf9cf4340ac4915f4ef4bc",
+            "status": "PASSED"
+          },
+          "junit": {
+            "errors": 0,
+            "executed": 1,
+            "failures": 0,
+            "files": [
+              {
+                "path": "TEST-Examples-1.xml",
+                "sha256": "83dc310fe0e95a8d1343163025fe5e2429bc9d4b45ccd86f01d39ca1babae2ba"
+              },
+              {
+                "path": "TEST-Examples-2.xml",
+                "sha256": "f3120f6af4179be6ab3dcc19e050b2b4663f12f337f79fd25f4ea017d555eff2"
+              },
+              {
+                "path": "TEST-Post-preview-authority-lease-validation-under-workspace-lock.xml",
+                "sha256": "13749123e6ac36ded7bd12405d2533d198e81181dc88a65f37c58b8bb8980b26"
+              },
+              {
+                "path": "TEST-Preview-time-authority-evaluation-before-workspace-lock.xml",
+                "sha256": "fdb47b9ff9773ee0a97eb96f86d278b7fe331ab24dcffb1dcef5e3c712714b19"
+              },
+              {
+                "path": "TEST-feature_classpath_java-maven-move-class-apply-authority.feature.xml",
+                "sha256": "28af115ce89570ad478b79e47317e5658d2e7fcff3c1c59a0ebc11ff7f84afe3"
+              }
+            ],
+            "skipped": 30,
+            "tests": 31
+          }
+        },
+        "schema": "refactorkit.native-maven-move-class-authority/v1",
+        "sourceRevision": "3782b1109aa8874ab887d6031d5bfa86bf5e9ab8",
+        "status": "PASSED"
+      },
+      "nativeReceiptSha256": "bbf71ffd3aff8b7539f028ecb52faf421207047ee0fc3fb2e2f43d72ec2828cc",
+      "status": "PASSED"
+    },
+    "macos-aarch64": {
+      "artifactId": 9044424715,
+      "artifactName": "packaged-maven-move-class-authority-reports-macos-aarch64",
+      "artifactSize": 1011269,
+      "jobUrl": "https://github.com/mgiustiniani/refactorkit/actions/runs/31336067318/job/93301999424",
+      "matrixManifestSha256": "cd17a74f25d2d1d3c499cd31f80ef049ac4fa5f85d929656e93daa52930f711e",
+      "nativeReceipt": {
+        "baselineSha256": "dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6",
+        "ci": {
+          "repository": "mgiustiniani/refactorkit",
+          "runAttempt": "1",
+          "runId": "31336067318"
+        },
+        "completeMatrix": {
+          "path": "matrix-manifest.json",
+          "sha256": "cd17a74f25d2d1d3c499cd31f80ef049ac4fa5f85d929656e93daa52930f711e",
+          "totals": {
+            "hooks": 62,
+            "requirements": 13,
+            "scenarios": 31,
+            "steps": 436
+          }
+        },
+        "featureSha256": "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696",
+        "host": {
+          "machine": "arm64",
+          "system": "Darwin"
+        },
+        "jdk": {
+          "embeddedReleaseSha256": "3123a9179115c408914ebfbd95e267119f8deaaadcb3947910f1e757ba0e81c2",
+          "embeddedVersionOutput": [
+            "openjdk version \"21.0.11\" 2026-04-21 LTS",
+            "OpenJDK Runtime Environment Temurin-21.0.11+10 (build 21.0.11+10-LTS)",
+            "OpenJDK 64-Bit Server VM Temurin-21.0.11+10 (build 21.0.11+10-LTS, mixed mode)"
+          ],
+          "setupJavaIdentity": "temurin/21.0.11+10.0.LTS"
+        },
+        "platform": "macos-aarch64",
+        "publicCli": {
+          "cucumber": {
+            "path": "packaged-maven-move-class-authority.json",
+            "results": 16,
+            "scenarios": 1,
+            "sha256": "9ff0df238a8b17027d2f70f3caf48180511ae33f34e33f849c01fdc3c2bb8c95",
+            "status": "PASSED"
+          },
+          "junit": {
+            "errors": 0,
+            "executed": 1,
+            "failures": 0,
+            "files": [
+              {
+                "path": "TEST-Examples-1.xml",
+                "sha256": "eaf4cd68362774cbdc7210b494c16aaa3ab3465be58a3c3d163db47327371712"
+              },
+              {
+                "path": "TEST-Examples-2.xml",
+                "sha256": "b2cbbe3ea9a72c8a01c93ae2c28966e11511a190341b31fdbfa3ace773f6fe94"
+              },
+              {
+                "path": "TEST-Post-preview-authority-lease-validation-under-workspace-lock.xml",
+                "sha256": "5923c1ab32a76b8c8551caf9c6f9a554185849a715d36e883b9c848ac075e5e3"
+              },
+              {
+                "path": "TEST-Preview-time-authority-evaluation-before-workspace-lock.xml",
+                "sha256": "911b813446c9bd271c60796629f2dff5868327ea194fdc5470b137dce8cda4a0"
+              },
+              {
+                "path": "TEST-feature_classpath_java-maven-move-class-apply-authority.feature.xml",
+                "sha256": "c3bde2e2ee0f384048d5f0bde759c694658a4b437e87614674588afbc90ee5ce"
+              }
+            ],
+            "skipped": 30,
+            "tests": 31
+          }
+        },
+        "schema": "refactorkit.native-maven-move-class-authority/v1",
+        "sourceRevision": "3782b1109aa8874ab887d6031d5bfa86bf5e9ab8",
+        "status": "PASSED"
+      },
+      "nativeReceiptSha256": "cefa367f703061f12730c9e59bd4fa5cd4f6f956eeadbae9379298c08a00c957",
+      "status": "PASSED"
+    },
+    "macos-x86_64": {
+      "artifactId": 9044452525,
+      "artifactName": "packaged-maven-move-class-authority-reports-macos-x86_64",
+      "artifactSize": 1011545,
+      "jobUrl": "https://github.com/mgiustiniani/refactorkit/actions/runs/31336067318/job/93301999432",
+      "matrixManifestSha256": "dfadf78f27928ac61a27c027cd63d000ee3d5aeba2f9c21eca1aa123087b0451",
+      "nativeReceipt": {
+        "baselineSha256": "dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6",
+        "ci": {
+          "repository": "mgiustiniani/refactorkit",
+          "runAttempt": "1",
+          "runId": "31336067318"
+        },
+        "completeMatrix": {
+          "path": "matrix-manifest.json",
+          "sha256": "dfadf78f27928ac61a27c027cd63d000ee3d5aeba2f9c21eca1aa123087b0451",
+          "totals": {
+            "hooks": 62,
+            "requirements": 13,
+            "scenarios": 31,
+            "steps": 436
+          }
+        },
+        "featureSha256": "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696",
+        "host": {
+          "machine": "x86_64",
+          "system": "Darwin"
+        },
+        "jdk": {
+          "embeddedReleaseSha256": "3123a9179115c408914ebfbd95e267119f8deaaadcb3947910f1e757ba0e81c2",
+          "embeddedVersionOutput": [
+            "openjdk version \"21.0.11\" 2026-04-21 LTS",
+            "OpenJDK Runtime Environment Temurin-21.0.11+10 (build 21.0.11+10-LTS)",
+            "OpenJDK 64-Bit Server VM Temurin-21.0.11+10 (build 21.0.11+10-LTS, mixed mode)"
+          ],
+          "setupJavaIdentity": "temurin/21.0.11+10.0.LTS"
+        },
+        "platform": "macos-x86_64",
+        "publicCli": {
+          "cucumber": {
+            "path": "packaged-maven-move-class-authority.json",
+            "results": 16,
+            "scenarios": 1,
+            "sha256": "46bfee211c9d85429c6d324f146e5fce3d6758c47d37836342f2d16e0cb42988",
+            "status": "PASSED"
+          },
+          "junit": {
+            "errors": 0,
+            "executed": 1,
+            "failures": 0,
+            "files": [
+              {
+                "path": "TEST-Examples-1.xml",
+                "sha256": "a4376d32c5b095a4293bd86f0397fd877fc2d9f996ab537ade6ee0ca3b06e3e3"
+              },
+              {
+                "path": "TEST-Examples-2.xml",
+                "sha256": "72a19c60db93c5acb0c9cada7bf8db93b5b166a80c6a9b2ca8ffee865ad42003"
+              },
+              {
+                "path": "TEST-Post-preview-authority-lease-validation-under-workspace-lock.xml",
+                "sha256": "694406bdcc91563fafc2d4d916edccb34cab23df732981d40ce8ed352c485190"
+              },
+              {
+                "path": "TEST-Preview-time-authority-evaluation-before-workspace-lock.xml",
+                "sha256": "195c6a23e3dfb0bce789c64302b27eff76dd558004272966d7613a14ed29b0db"
+              },
+              {
+                "path": "TEST-feature_classpath_java-maven-move-class-apply-authority.feature.xml",
+                "sha256": "6f1f738975ef89f778977aeec666e153dd825d3c3100d59d3fdfa39ea13ea050"
+              }
+            ],
+            "skipped": 30,
+            "tests": 31
+          }
+        },
+        "schema": "refactorkit.native-maven-move-class-authority/v1",
+        "sourceRevision": "3782b1109aa8874ab887d6031d5bfa86bf5e9ab8",
+        "status": "PASSED"
+      },
+      "nativeReceiptSha256": "1fa4e2f736916a958aa3fff38e72e06881ac86564a2c6740fe2b1f0b013a96e0",
+      "status": "PASSED"
+    },
+    "windows-x86_64": {
+      "artifactId": 9044440514,
+      "artifactName": "packaged-maven-move-class-authority-reports-windows-x86_64",
+      "artifactSize": 1010726,
+      "jobUrl": "https://github.com/mgiustiniani/refactorkit/actions/runs/31336067318/job/93301999428",
+      "matrixManifestSha256": "e6332f75f547b057daf69decaf8bd4125e708f3a3134362cf86f3c9cc0a1d95d",
+      "nativeReceipt": {
+        "baselineSha256": "dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6",
+        "ci": {
+          "repository": "mgiustiniani/refactorkit",
+          "runAttempt": "1",
+          "runId": "31336067318"
+        },
+        "completeMatrix": {
+          "path": "matrix-manifest.json",
+          "sha256": "e6332f75f547b057daf69decaf8bd4125e708f3a3134362cf86f3c9cc0a1d95d",
+          "totals": {
+            "hooks": 62,
+            "requirements": 13,
+            "scenarios": 31,
+            "steps": 436
+          }
+        },
+        "featureSha256": "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696",
+        "host": {
+          "machine": "AMD64",
+          "system": "Windows"
+        },
+        "jdk": {
+          "embeddedReleaseSha256": "0e8450203e85f2a283cece051e7394ba04b5df4bbd1e583a91a9aa9fd9978f30",
+          "embeddedVersionOutput": [
+            "openjdk version \"21.0.11\" 2026-04-21 LTS",
+            "OpenJDK Runtime Environment Temurin-21.0.11+10 (build 21.0.11+10-LTS)",
+            "OpenJDK 64-Bit Server VM Temurin-21.0.11+10 (build 21.0.11+10-LTS, mixed mode)"
+          ],
+          "setupJavaIdentity": "temurin/21.0.11+10.0.LTS"
+        },
+        "platform": "windows-x86_64",
+        "publicCli": {
+          "cucumber": {
+            "path": "packaged-maven-move-class-authority.json",
+            "results": 16,
+            "scenarios": 1,
+            "sha256": "0962f8a50e17b560bfd6720b7b93da5b5dff544a396f901031d2634a35bd904f",
+            "status": "PASSED"
+          },
+          "junit": {
+            "errors": 0,
+            "executed": 1,
+            "failures": 0,
+            "files": [
+              {
+                "path": "TEST-Examples-1.xml",
+                "sha256": "106546fb2f967ddc18a831f4b8debd1cf135aed05d88bc9e2acd4ca8c087a493"
+              },
+              {
+                "path": "TEST-Examples-2.xml",
+                "sha256": "bde9880dd4793deb4b87c98dbdb4dc73f5b6b3fc9da384ce3f1f562ae6d9145e"
+              },
+              {
+                "path": "TEST-feature_classpath_java-maven-move-class-apply-authority.feature.xml",
+                "sha256": "e572fc8c73b429997196343376dc1f942fdde01c609fcaff47993100961f016f"
+              },
+              {
+                "path": "TEST-Post-preview-authority-lease-validation-under-workspace-lock.xml",
+                "sha256": "c8ea8db9730ac5a399230f27ed56380153d68d04be38411ac6d065e0f2f218e3"
+              },
+              {
+                "path": "TEST-Preview-time-authority-evaluation-before-workspace-lock.xml",
+                "sha256": "3cec9f2151d18db5c087ca292613abb8c2b29f557d686d38a1e44442862625fc"
+              }
+            ],
+            "skipped": 30,
+            "tests": 31
+          }
+        },
+        "schema": "refactorkit.native-maven-move-class-authority/v1",
+        "sourceRevision": "3782b1109aa8874ab887d6031d5bfa86bf5e9ab8",
+        "status": "PASSED"
+      },
+      "nativeReceiptSha256": "90cf059620aeb66f236e68fc044bfbe153989d2aa0602d9cc99ac25f86a84556",
+      "status": "PASSED"
+    }
+  },
+  "runId": "31336067318",
+  "schema": "refactorkit.native-maven-move-class-authority-aggregate/v1",
+  "sourceRevision": "3782b1109aa8874ab887d6031d5bfa86bf5e9ab8",
+  "status": "PASSED"
+}

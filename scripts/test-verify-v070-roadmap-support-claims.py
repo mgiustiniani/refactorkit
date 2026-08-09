@@ -48,7 +48,9 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         result, receipt = self._run()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("PASSED", receipt["status"])
-        self.assertEqual(4, receipt["configuredUnobservedNativeRows"])
+        self.assertEqual(4, receipt["nativeRows"])
+        self.assertEqual("PASS_REVIEW_PENDING", receipt["nativeEvidenceState"])
+        self.assertTrue(receipt["nativeParentRowsOpen"])
         self.assertEqual(3, receipt["exactTemurin2111Pins"])
 
     def test_checked_roadmap_row_without_projection_update_fails(self) -> None:
@@ -68,15 +70,14 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
     def test_premature_native_promotion_fails(self) -> None:
         path = self.root / "docs/releases/v0.7.0-support-matrix.md"
         text = path.read_text(encoding="utf-8").replace(
-            "| `CONFIGURED_UNOBSERVED` |",
+            "| `PASS_REVIEW_PENDING` |",
             "| `PASSED` |",
-            1,
         )
         path.write_text(text, encoding="utf-8")
         result, receipt = self._run()
         self.assertNotEqual(0, result.returncode)
         self.assertIn(
-            "Maven move-class native ledger must contain exactly four CONFIGURED_UNOBSERVED rows, found 3",
+            "native rows cannot be PASSED while either P0 native parent row is open",
             receipt["failures"],
         )
 

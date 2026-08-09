@@ -431,19 +431,20 @@ for Kotlin rather than clean, and the wider configured SpotBugs baseline remains
 non-blocking. No C4 update is justified because no participant, deployable
 boundary, durable state, protocol, or relationship changed.
 
-== Planned Edit-exact Operation-authority Lease Admission
+== Implemented Edit-exact Operation-authority Lease Admission
 
 Status: implementation-informed and `@implemented-and-validated` under immutable
 baseline `REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
 `dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
 Independent revision-bound review returned `PASS`; post-promotion focused and
-packaged-matrix evidence passed. Four-host native promotion remains separate.
+packaged-matrix evidence passed. Exact four-host run `31336067318` also passed
+both packaged modes; native promotion remains independent-review pending.
 
 Core's existing `OperationAuthorityLease` remains the language-neutral
-under-lock admission value. The planned additive contract gives it explicit
+under-lock admission value. The additive contract gives it explicit
 complete-versus-truncated evidence state and a canonical normalized
 `WorkspaceEdit` SHA-256. Java's existing Maven move-class authority evaluator
-must populate both only after candidate-total JDT selection, target-name lookup,
+populates both only after candidate-total JDT selection, target-name lookup,
 diagnostic identity, and staged semantic edit construction succeed. Under the
 workspace lock, `PatchEngine` compares the retained edit identity with the
 actual normalized plan and refuses incomplete or mismatched authority before
@@ -454,4 +455,5 @@ pre-WAL admission sequence.
 This is a refinement of the existing Core/Java in-process relationship and ADR
 0002 authority boundary. It introduces no actor, container, protocol, durable
 store, event, second journal, or C4 relationship; no ADR or C4 change is
-required. Packaged/native qualification remains separately open.
+required. Exact packaged/native evidence exists for the bounded contract and
+remains promotion-review pending; general authority stays open.

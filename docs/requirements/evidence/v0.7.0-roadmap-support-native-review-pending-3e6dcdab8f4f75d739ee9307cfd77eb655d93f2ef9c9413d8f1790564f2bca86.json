@@ -1,0 +1,39 @@
+{
+  "exactTemurin2111Pins": 3,
+  "failures": [],
+  "nativeEvidenceState": "PASS_REVIEW_PENDING",
+  "nativeParentRowsOpen": true,
+  "nativeRows": 4,
+  "nativeWorkflowTokensVerified": [
+    "always-upload",
+    "complete-matrix-task",
+    "dedicated-job",
+    "exact-head-checkout",
+    "public-cli-task",
+    "revision-bound-finalizer"
+  ],
+  "openRoadmapRowsVerified": [
+    "kotlin-depth",
+    "kotlin-identity",
+    "kotlin-support",
+    "maven-module-depth",
+    "maven-module-native",
+    "maven-module-ownership",
+    "release-evidence",
+    "release-sbom",
+    "typescript-advanced"
+  ],
+  "schemaVersion": 1,
+  "status": "PASSED",
+  "supportBoundariesVerified": [
+    "generic-native-boundary",
+    "kotlin-boundary",
+    "module-boundary",
+    "move-class-native-boundary",
+    "projection-boundary",
+    "recipe-boundary",
+    "sbom-boundary",
+    "snapshot",
+    "typescript-boundary"
+  ]
+}
