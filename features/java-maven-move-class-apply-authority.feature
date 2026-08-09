@@ -6,8 +6,8 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
 
   This executable backlog covers ARC42 RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007.
   LEXICAL_FALLBACK is always review-only and can never acquire managed-write authority.
-  Declared status: 12 of 12 requirement definitions and 22 of 22 expanded cases carry
-  implemented-and-validated status; no requirement definition or expanded case remains absent.
+  Declared status: 12 of 13 requirement definitions and 22 of 31 expanded cases carry
+  implemented-and-validated status. REQ-JAVA-MAVEN-MOVE-AUTH-013 and its nine cases remain absent.
 
   Background:
     Given the declared workspace root is the permanent fixture "testdata/acceptance/java-maven-move-class-authority-20-modules"
@@ -396,3 +396,24 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
       | required imported BOM                       | change the one fixture-owned imported BOM after its content hash is bound                                | DRIFTED              |
       | dependency-management/mediation declaration | change the required declaration that supplies the mediated selected version after hash binding           | DRIFTED              |
       | relocation/model parse evidence             | remove parsed-model proof that the selected leaf has no relocation while descriptor bytes remain present | MISSING              |
+
+  # Under-lock completion of the managed-write admission row; no packaged/native claim.
+  @REQ-JAVA-MAVEN-MOVE-AUTH-013 @functional-requirement @non-functional-requirement @absent
+  Scenario Outline: Incomplete or stale managed-write authority refuses before WAL
+    Given a fresh isolated REQ-013 case starts from an eligible candidate-total Maven move-class semantic preview
+    When approved managed apply evaluates the isolated condition "<condition>" while holding the workspace lock
+    Then managed apply is refused with primary blocker "<blocker>" before any write-ahead log
+    And the exact deliberate external condition is preserved and every other non-engine path and byte remains unchanged
+    And no managed target edit, destination, transaction, rollback claim, recovery record, or engine residue other than the workspace lock exists
+
+    Examples:
+      | condition                                   | blocker                                  |
+      | incomplete semantic evidence                | authorityLease.evidenceIncomplete        |
+      | mixed lexical edit                          | authorityLease.workspaceEditMismatch     |
+      | missing required source evidence            | authorityLease.evidenceMissing           |
+      | unreadable required source path             | authorityLease.evidenceUnreadable        |
+      | drifted required source bytes               | authorityLease.evidenceDrift             |
+      | missing required classpath evidence         | authorityLease.evidenceMissing           |
+      | drifted classpath/source-root evidence      | authorityLease.evidenceDrift             |
+      | affected-file conflict                      | snapshot.scopeChanged                    |
+      | staged diagnostic regression                | diagnostics.regression                   |

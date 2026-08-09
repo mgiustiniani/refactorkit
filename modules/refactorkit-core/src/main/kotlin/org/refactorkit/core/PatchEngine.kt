@@ -332,6 +332,30 @@ class PatchEngine(
             Diagnostic.Severity.ERROR,
             code = "authorityLease.snapshotMismatch",
         ))
+        if (lease.evidenceCompleteness != OperationAuthorityEvidenceCompleteness.COMPLETE ||
+            lease.workspaceEditSha256 == null
+        ) return listOf(Diagnostic(
+            "Operation-authority lease evidence is incomplete and cannot authorize managed write",
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.evidenceIncomplete",
+            details = DiagnosticDetails(mapOf(
+                "authorityLayer" to "LEASE_COMPLETENESS",
+                "expectedCompleteness" to OperationAuthorityEvidenceCompleteness.COMPLETE.name,
+                "observedCompleteness" to lease.evidenceCompleteness.name,
+                "workspaceEditIdentity" to if (lease.workspaceEditSha256 == null) "MISSING" else "PRESENT",
+            )),
+        ))
+        val observedWorkspaceEditSha256 = WorkspaceEditIdentity.sha256(plan.workspaceEdit)
+        if (lease.workspaceEditSha256 != observedWorkspaceEditSha256) return listOf(Diagnostic(
+            "Operation-authority lease does not match the normalized workspace edit selected at preview",
+            Diagnostic.Severity.ERROR,
+            code = "authorityLease.workspaceEditMismatch",
+            details = DiagnosticDetails(mapOf(
+                "authorityLayer" to "EDIT_IDENTITY",
+                "expectedWorkspaceEditSha256" to lease.workspaceEditSha256,
+                "observedWorkspaceEditSha256" to observedWorkspaceEditSha256,
+            )),
+        ))
 
         // Non-managed source evidence is the narrowest freshness boundary and must win
         // diagnostic precedence over the broader engine-owned snapshot drift check.

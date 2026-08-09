@@ -352,6 +352,12 @@ REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-001 mitigates only the exact authority-loss
 |Record scan success and semantic unavailability separately. The direct source-inspection fallback is authorized here only because no Java source changed and the task is documentation reconciliation; it must not justify Kotlin semantic refactoring or release qualification. Require a complete supported Kotlin build model/JVM target before using self-hosted definition/reference evidence as an admission gate.
 |implementation-informed tooling/release risk; open and needs-review, with no claim that source-built scan success qualifies Kotlin semantic navigation
 
+|R-048
+|An operation-authority lease could be complete for one semantic preview yet authorize a widened or reordered `WorkspaceEdit`, or could silently omit/truncate semantic evidence, because Core revalidated operation/snapshot/file/classpath facts but did not bind canonical edit identity or completeness.
+|A mixed lexical edit could cross the managed-write boundary under semantic evidence, or an incomplete candidate set could reach WAL, invalidating preview approval and rollback provenance even if filesystem freshness checks passed.
+|Keep completeness and normalized edit identity as immutable Core lease fields; calculate the path-component/type/order/range/text-sensitive SHA-256 in Core; require Java move-class and Maven-module-rename planners to populate it; compare it under the workspace lock before file/classpath evidence, diagnostics, and WAL. Retain nine isolated REQ-013 refusal cases, Core identity tests, package-classpath attestation, and per-requirement embedded-runtime receipts. Do not promote before independent review or native receipts.
+|mitigated in candidate production and local source-built/packaged evidence; `@absent` pending independent review and four-host native qualification
+
 |TD-DIST-001
 |The macOS and Windows runtime archives are checksum-verifiable and attested but remain unsigned: there is no Apple Developer ID/notarization or Windows Authenticode signature.
 |Gatekeeper, SmartScreen, or enterprise endpoint policy may display publisher/security warnings even when archive checksum, SBOM, and provenance verification succeed. This affects warning-free installation and publisher identity, not RefactorKit patch correctness or transaction safety.

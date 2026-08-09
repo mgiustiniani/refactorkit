@@ -20,6 +20,7 @@ import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SymbolId
 import org.refactorkit.core.Workspace
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditIdentity
 import org.refactorkit.java.ExistingJavaRefactoringPreviewPlannerInvoker
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaRefactoringPreviewCommand
@@ -687,7 +688,7 @@ class JavaRefactoringPreviewCommandSteps {
         requiresUserApproval = true,
         summary = "distinct summary for $name",
         affectedFiles = linkedSetOf(Path.of("z-$name.java"), Path.of("a-$name.java")),
-        workspaceEdit = WorkspaceEdit(listOf(FileEdit.Create(Path.of("created-$name.java"), "// $name\n"))),
+        workspaceEdit = sentinelWorkspaceEdit(name),
         diagnosticsBefore = listOf(
             Diagnostic("before-second-$name", Diagnostic.Severity.WARNING, code = "before-2"),
             Diagnostic("before-first-$name", Diagnostic.Severity.INFO, code = "before-1"),
@@ -705,9 +706,13 @@ class JavaRefactoringPreviewCommandSteps {
             operation = "sentinel-$route",
             snapshotHash = snapshot.hash,
             evidenceHash = "a".repeat(64),
+            workspaceEditSha256 = WorkspaceEditIdentity.sha256(sentinelWorkspaceEdit(name)),
             attributes = mapOf("plan" to name),
         ),
     )
+
+    private fun sentinelWorkspaceEdit(name: String): WorkspaceEdit =
+        WorkspaceEdit(listOf(FileEdit.Create(Path.of("created-$name.java"), "// $name\n")))
 
     private fun createGenericFixture() {
         val root = temporaryWorkspace("generic")

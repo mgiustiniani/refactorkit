@@ -46,6 +46,7 @@ import org.refactorkit.core.TransactionJournalRecord
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.Workspace
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditIdentity
 import org.refactorkit.core.WorkspaceEditSimulator
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
@@ -1507,6 +1508,7 @@ class AuthoritativeDiagnosticsEvaluationSteps {
             operation = operation,
             snapshotHash = s0.hash,
             evidenceHash = sha256("$operation\u0000${s0.hash}".toByteArray()),
+            workspaceEditSha256 = WorkspaceEditIdentity.sha256(edit),
             requiredFileEvidence = immutableList(leaseEvidence),
             attributes = immutableMap(mapOf("semanticFields" to "modules,classpathEvidence,buildModels")),
         )

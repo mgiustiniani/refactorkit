@@ -350,20 +350,29 @@ class OperationAuthorityFileEvidence(
     }
 }
 
+enum class OperationAuthorityEvidenceCompleteness {
+    COMPLETE,
+    TRUNCATED,
+}
+
 /**
  * Immutable, operation-specific evidence that must still match the supplied
  * snapshot when a managed preview reaches the under-lock write boundary.
  *
  * The language planner owns the semantic meaning of [kind], [evidenceHash],
- * and [attributes]. Core only enforces that the lease belongs to this exact
- * operation/snapshot and that every required classpath or non-managed file
- * evidence record is revalidated under the workspace lock.
+ * and [attributes]. Core enforces that the lease is complete, belongs to this
+ * exact operation/snapshot and normalized workspace edit, and that every
+ * required classpath or non-managed file evidence record is revalidated under
+ * the workspace lock.
  */
 class OperationAuthorityLease(
     val kind: String,
     val operation: String,
     val snapshotHash: String,
     val evidenceHash: String,
+    val evidenceCompleteness: OperationAuthorityEvidenceCompleteness =
+        OperationAuthorityEvidenceCompleteness.COMPLETE,
+    val workspaceEditSha256: String? = null,
     requiredClasspathEvidence: Collection<ClasspathEvidence> = emptyList(),
     requiredFileEvidence: Collection<OperationAuthorityFileEvidence> = emptyList(),
     attributes: Map<String, String> = emptyMap(),
@@ -386,6 +395,9 @@ class OperationAuthorityLease(
         require(operation.isNotBlank()) { "operation-authority lease operation must not be blank" }
         require(SHA256.matches(snapshotHash)) { "operation-authority snapshot hash must be SHA-256" }
         require(SHA256.matches(evidenceHash)) { "operation-authority evidence hash must be SHA-256" }
+        require(workspaceEditSha256 == null || SHA256.matches(workspaceEditSha256)) {
+            "operation-authority workspace-edit identity must be SHA-256 when present"
+        }
         require(requiredClasspathEvidenceValues.distinctBy { it.path.normalize() to it.kind }.size ==
             requiredClasspathEvidenceValues.size
         ) { "operation-authority classpath evidence keys must be unique" }
@@ -399,7 +411,9 @@ class OperationAuthorityLease(
 
     override fun equals(other: Any?): Boolean = other is OperationAuthorityLease &&
         kind == other.kind && operation == other.operation && snapshotHash == other.snapshotHash &&
-        evidenceHash == other.evidenceHash && requiredClasspathEvidenceValues == other.requiredClasspathEvidenceValues &&
+        evidenceHash == other.evidenceHash && evidenceCompleteness == other.evidenceCompleteness &&
+        workspaceEditSha256 == other.workspaceEditSha256 &&
+        requiredClasspathEvidenceValues == other.requiredClasspathEvidenceValues &&
         requiredFileEvidenceValues == other.requiredFileEvidenceValues && attributeValues == other.attributeValues
 
     override fun hashCode(): Int {
@@ -407,6 +421,8 @@ class OperationAuthorityLease(
         result = 31 * result + operation.hashCode()
         result = 31 * result + snapshotHash.hashCode()
         result = 31 * result + evidenceHash.hashCode()
+        result = 31 * result + evidenceCompleteness.hashCode()
+        result = 31 * result + workspaceEditSha256.hashCode()
         result = 31 * result + requiredClasspathEvidenceValues.hashCode()
         result = 31 * result + requiredFileEvidenceValues.hashCode()
         result = 31 * result + attributeValues.hashCode()
@@ -415,6 +431,7 @@ class OperationAuthorityLease(
 
     override fun toString(): String = "OperationAuthorityLease(kind=$kind, operation=$operation, " +
         "snapshotHash=$snapshotHash, evidenceHash=$evidenceHash, " +
+        "evidenceCompleteness=$evidenceCompleteness, workspaceEditSha256=$workspaceEditSha256, " +
         "requiredClasspathEvidence=$requiredClasspathEvidenceValues, " +
         "requiredFileEvidence=$requiredFileEvidenceValues, attributes=$attributeValues)"
 

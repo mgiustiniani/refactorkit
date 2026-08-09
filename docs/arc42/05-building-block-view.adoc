@@ -430,3 +430,26 @@ copied unmodifiable list and deep mutation probes passed. PMD was `NO-SOURCE`
 for Kotlin rather than clean, and the wider configured SpotBugs baseline remains
 non-blocking. No C4 update is justified because no participant, deployable
 boundary, durable state, protocol, or relationship changed.
+
+== Planned Edit-exact Operation-authority Lease Admission
+
+Status: confirmed and `@absent` under immutable baseline
+`REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
+`dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
+
+Core's existing `OperationAuthorityLease` remains the language-neutral
+under-lock admission value. The planned additive contract gives it explicit
+complete-versus-truncated evidence state and a canonical normalized
+`WorkspaceEdit` SHA-256. Java's existing Maven move-class authority evaluator
+must populate both only after candidate-total JDT selection, target-name lookup,
+diagnostic identity, and staged semantic edit construction succeed. Under the
+workspace lock, `PatchEngine` compares the retained edit identity with the
+actual normalized plan and refuses incomplete or mismatched authority before
+`PREPARED` or any WAL byte. Existing required file/classpath revalidation,
+affected-file/snapshot validation, and staged diagnostics remain in the same
+pre-WAL admission sequence.
+
+This is a refinement of the existing Core/Java in-process relationship and ADR
+0002 authority boundary. It introduces no actor, container, protocol, durable
+store, event, second journal, or C4 relationship; no ADR or C4 change is
+required. Packaged/native qualification remains separately open.

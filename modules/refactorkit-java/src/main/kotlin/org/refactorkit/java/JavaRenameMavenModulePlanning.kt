@@ -15,6 +15,7 @@ import org.refactorkit.core.SourceRange
 import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditIdentity
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaRenameMavenModuleContract.AMBIGUOUS_ORIGIN
 import org.refactorkit.java.JavaRenameMavenModuleContract.ARTIFACT_ID
@@ -231,6 +232,7 @@ internal object JavaRenameMavenModulePlanning {
             operation = OPERATION,
             snapshotHash = snapshot.hash,
             evidenceHash = evidenceHash,
+            workspaceEditSha256 = WorkspaceEditIdentity.sha256(normalizedEdit),
             requiredClasspathEvidence = snapshot.classpathEvidence,
             requiredFileEvidence = requiredFiles,
             attributes = leaseAttributes,

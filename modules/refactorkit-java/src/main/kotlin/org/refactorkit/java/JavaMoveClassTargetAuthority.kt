@@ -18,6 +18,7 @@ import org.refactorkit.core.SourceRange
 import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditIdentity
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Path
@@ -470,6 +471,7 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
             operation = "moveClass",
             snapshotHash = prepared.snapshot.hash,
             evidenceHash = evidenceHash,
+            workspaceEditSha256 = WorkspaceEditIdentity.sha256(workspaceEdit),
             requiredClasspathEvidence = requiredEvidence,
             requiredFileEvidence = requiredCandidateFileEvidence,
             attributes = buildMap {

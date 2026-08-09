@@ -832,6 +832,37 @@ Status: confirmed safety sequence; current generic relabeling is negative eviden
 
 These sequences add no runtime participant or relationship; they refine messages and admission inside existing interactions. No dynamic C4 work was delegated.
 
+== Planned Runtime Scenario: Under-lock Maven Move-class Admission
+
+Status: confirmed and `@absent` under
+`REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
+`dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|The existing Java planner returns an otherwise eligible binding-clean Maven `moveClass` preview whose immutable lease says evidence is complete and binds the exact canonical normalized `WorkspaceEdit` identity plus required file and classpath evidence.
+
+|2
+|`PatchEngine` acquires the one-writer lock, captures the engine-owned current snapshot and tracked-file identities, and normalizes the submitted edit. It has not created `PREPARED`, a transaction record, or any WAL byte.
+
+|3
+|Core refuses a truncated lease or edit-identity mismatch, then revalidates required source/file and classpath presence/absence evidence, affected-file conflicts, and current snapshot scope. The operation-owned gate evaluates exact staged diagnostics before WAL.
+
+|4
+|Any incomplete evidence, mixed lexical edit, missing/unreadable/drifted input, affected-file conflict, or staged diagnostic regression returns typed refusal. The deliberately external state is preserved, every other non-engine fact remains exact, no managed target edit or transaction exists, and only the lock file may remain after an under-lock refusal.
+
+|5
+|Only a complete, edit-exact, current, conflict-free, diagnostics-clean candidate may continue into the existing `PREPARED -> APPLYING -> APPLIED` lifecycle and normal rollback contract.
+|===
+
+The scenario uses existing Core, Java, filesystem, diagnostics-gate, and
+transaction participants. It changes no runtime topology, protocol lifecycle,
+or authority owner; ADRs 0002 and 0012 already govern it and no dynamic C4 view
+is required.
+
 == Runtime Diagrams
 
 No runtime/dynamic C4 diagrams were added in this baseline. This remains an actionable documentation gap if scenario visualization becomes necessary; the diagnostics and bounded implemented guidance flow are documented textually until a dynamic view adds enduring value.

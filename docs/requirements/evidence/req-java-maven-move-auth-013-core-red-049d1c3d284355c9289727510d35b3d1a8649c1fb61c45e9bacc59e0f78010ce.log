@@ -1,0 +1,42 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:refactorkit-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:processResources NO-SOURCE
+> Task :modules:refactorkit-core:processTestResources NO-SOURCE
+> Task :modules:refactorkit-core:compileKotlin
+> Task :modules:refactorkit-core:compileJava NO-SOURCE
+> Task :modules:refactorkit-core:classes UP-TO-DATE
+> Task :modules:refactorkit-core:jar
+> Task :modules:refactorkit-core:compileTestKotlin
+> Task :modules:refactorkit-core:compileTestJava NO-SOURCE
+> Task :modules:refactorkit-core:testClasses UP-TO-DATE
+
+> Task :modules:refactorkit-core:test FAILED
+
+OperationAuthorityLeaseTest > underLockApplyRejectsWorkspaceEditAddedAfterSemanticPreview() FAILED
+    org.opentest4j.AssertionFailedError at OperationAuthorityLeaseTest.kt:27
+
+OperationAuthorityLeaseTest > underLockApplyRejectsTruncatedSemanticEvidence() FAILED
+    org.opentest4j.AssertionFailedError at OperationAuthorityLeaseTest.kt:39
+
+3 tests completed, 2 failed
+
+[Incubating] Problems report is available at: file:///home/paperboy/workspace/refactorkit-p0/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':modules:refactorkit-core:test'.
+> There were failing tests. See the report at: file:///home/paperboy/workspace/refactorkit-p0/modules/refactorkit-core/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 14s
+4 actionable tasks: 4 executed

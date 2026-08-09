@@ -23,11 +23,11 @@ jobs:
         shell: bash
         run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
-      - name: Set up JDK 21 build runtime
+      - name: Set up exact JDK 21 build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '21.0.11+9'
           cache: gradle
 
       - name: Set up Python for packaged daemon smoke
@@ -59,6 +59,7 @@ jobs:
         run: |
           python3 scripts/test-verify-runtime-archive.py
           python3 scripts/test-smoke-packaged-kill-recovery.py
+          python3 scripts/test-finalize-packaged-maven-move-class-authority-matrix.py
 
       - name: Validate architecture documentation
         run: |
@@ -72,9 +73,13 @@ jobs:
       - name: Package self-contained CLI
         run: ./gradlew packageCliRuntime distCliRuntimeZip
 
-      - name: Run packaged Maven move-class authority validation
+      - name: Run public-CLI packaged Maven move-class authority validation
         timeout-minutes: 20
         run: ./gradlew :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest
+
+      - name: Run complete packaged Maven move-class authority matrix
+        timeout-minutes: 40
+        run: ./gradlew :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest --no-daemon
 
       - name: Upload packaged Maven move-class authority reports (linux-x86_64)
         if: always()
@@ -82,9 +87,10 @@ jobs:
         with:
           name: packaged-maven-move-class-authority-reports-linux-x86_64
           path: |
-            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority.json
-            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthorityTest/TEST-*.xml
-            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthorityTest/**
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority*.json
+            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthority*/TEST-*.xml
+            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthority*/**
+            modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority/matrix-manifest.json
           if-no-files-found: warn
 
       - name: Verify CLI runtime distribution
@@ -176,11 +182,11 @@ jobs:
         shell: bash
         run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
-      - name: Set up JDK 21 build runtime
+      - name: Set up exact JDK 21 build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '21.0.11+9'
           cache: gradle
 
       - name: Set up Python for packaged daemon smoke
@@ -214,9 +220,13 @@ jobs:
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
 
-      - name: Run native packaged Maven move-class authority validation
+      - name: Run native public-CLI packaged Maven move-class authority validation
         timeout-minutes: 20
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --no-daemon
+
+      - name: Run native complete packaged Maven move-class authority matrix
+        timeout-minutes: 40
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest --no-daemon
 
       - name: Upload packaged Maven move-class authority reports (${{ matrix.platform }})
         if: always()
@@ -224,9 +234,10 @@ jobs:
         with:
           name: packaged-maven-move-class-authority-reports-${{ matrix.platform }}
           path: |
-            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority.json
-            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthorityTest/TEST-*.xml
-            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthorityTest/**
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority*.json
+            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthority*/TEST-*.xml
+            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthority*/**
+            modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority/matrix-manifest.json
           if-no-files-found: warn
 
       - name: Native packaged build-model acceptance

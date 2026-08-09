@@ -30,6 +30,7 @@ dependencies {
     implementation(project(":modules:refactorkit-testkit"))
     runtimeOnly(project(":modules:refactorkit-mcp"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    runtimeOnly(project(":modules:refactorkit-lsp"))
     testImplementation(project(":modules:refactorkit-lsp"))
     testImplementation(project(":modules:refactorkit-mcp"))
     testImplementation(kotlin("test"))
@@ -260,7 +261,7 @@ val packagedMavenMoveClassAuthorityCucumberJson = layout.buildDirectory.file(
 
 tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
     group = "verification"
-    description = "Run packaged-process Cucumber validation for Maven move-class authority."
+    description = "Run public-CLI packaged-process Cucumber validation for Maven move-class authority."
     dependsOn("refactorkitRuntimeDist")
     inputs.dir(packageDir)
         .withPropertyName("packagedRuntime")
@@ -276,6 +277,11 @@ tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
     useJUnitPlatform()
     maxParallelForks = 1
     forkEvery = 0
+    filter {
+        includeTestsMatching(
+            "org.refactorkit.cli.packagedmavenmoveauthority.PackagedJavaMavenMoveClassAuthorityCucumberTest",
+        )
+    }
 
     doFirst {
         systemProperty("refactorkit.packaged.root", packagedMavenMoveClassAuthorityPackageRoot.get())
@@ -288,6 +294,133 @@ tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
         html.required.set(true)
         html.outputLocation.set(layout.buildDirectory.dir("reports/tests/packagedMavenMoveClassAuthorityTest"))
     }
+}
+
+val packagedMavenMoveClassAuthorityMatrixSpecs = listOf(
+    Triple("Req001", "req-001", "org.refactorkit.cli.mavenmoveauthority.JavaMavenMoveClassAvailableAuthorityCucumberTest"),
+    Triple("Req002", "req-002", "org.refactorkit.cli.mavenmoveobserverauthority.JavaMavenMoveClassObserverAuthorityCucumberTest"),
+    Triple("Req003", "req-003", "org.refactorkit.cli.acceptance.JavaMavenMoveClassGuidanceAuthorityCucumberTest"),
+    Triple("Req004", "req-004", "org.refactorkit.cli.req004lexicalreview.JavaMavenMoveClassLexicalFallbackReviewCucumberTest"),
+    Triple("Req005006", "req-005-006", "org.refactorkit.cli.acceptance.JavaMavenMoveClassApplyAuthorityCucumberTest"),
+    Triple("Req007", "req-007", "org.refactorkit.cli.acceptance.JavaMavenMoveClassOfflineMissingAuthorityCucumberTest"),
+    Triple("Req008", "req-008", "org.refactorkit.cli.req008authority.JavaMavenMoveClassAuthorityFailureCucumberTest"),
+    Triple("Req009", "req-009", "org.refactorkit.cli.acceptance.JavaMavenMoveClassExplicitTransitiveScopeAuthorityCucumberTest"),
+    Triple("Req010", "req-010", "org.refactorkit.cli.acceptance.JavaMavenMoveClassDescriptorPruningAuthorityCucumberTest"),
+    Triple("Req011", "req-011", "org.refactorkit.cli.acceptance.JavaMavenMoveClassOrdinaryMissingLeafAuthorityCucumberTest"),
+    Triple("Req012", "req-012", "org.refactorkit.cli.acceptance.JavaMavenMoveClassSelectedDescriptorAuthorityCucumberTest"),
+    Triple("Req013", "req-013", "org.refactorkit.cli.req013authority.JavaMavenMoveClassUnderLockAuthorityCucumberTest"),
+)
+
+val packagedMavenMoveClassAuthorityPackagedLibraries = providers.provider {
+    fileTree(packageDir.get().dir("lib").asFile) { include("*.jar") }
+        .files.sortedBy(File::getName)
+}
+val packagedMavenMoveClassAuthorityExternalTestLibraries = providers.provider {
+    val repositoryModules = rootProject.layout.projectDirectory.dir("modules").asFile.toPath()
+        .toAbsolutePath().normalize()
+    configurations.testRuntimeClasspath.get().files.filterNot { file ->
+        file.toPath().toAbsolutePath().normalize().startsWith(repositoryModules)
+    }.sortedBy(File::getAbsolutePath)
+}
+val configurePackagedMavenMoveClassAuthorityWorker: Test.(String) -> Unit = { reportName ->
+    dependsOn("refactorkitRuntimeDist", "testClasses", packagedMavenMoveClassAuthorityTestSourceSet.classesTaskName)
+    inputs.dir(packageDir)
+        .withPropertyName("packagedRuntime")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(packagedMavenMoveClassAuthorityFixture)
+        .withPropertyName("mavenMoveClassAuthorityFixture")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    testClassesDirs = sourceSets.test.get().output.classesDirs +
+        packagedMavenMoveClassAuthorityTestSourceSet.output.classesDirs
+    classpath = files(
+        packagedMavenMoveClassAuthorityPackagedLibraries,
+        sourceSets.test.get().output,
+        packagedMavenMoveClassAuthorityTestSourceSet.output,
+        packagedMavenMoveClassAuthorityExternalTestLibraries,
+    )
+    executable = packageDir.get().file(
+        if (org.gradle.internal.os.OperatingSystem.current().isWindows) "runtime/bin/java.exe" else "runtime/bin/java",
+    ).asFile.absolutePath
+    environment.remove("JAVA_HOME")
+    environment.remove("JAVA_TOOL_OPTIONS")
+    environment.remove("JDK_JAVA_OPTIONS")
+    environment.remove("_JAVA_OPTIONS")
+    systemProperty("refactorkit.packaged.root", packagedMavenMoveClassAuthorityPackageRoot.get())
+    systemProperty("refactorkit.repository.root", packagedMavenMoveClassAuthorityRepositoryRoot.get())
+    useJUnitPlatform()
+    maxParallelForks = 1
+    forkEvery = 0
+    reports {
+        junitXml.required.set(true)
+        junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/$reportName"))
+        html.required.set(true)
+        html.outputLocation.set(layout.buildDirectory.dir("reports/tests/$reportName"))
+    }
+}
+
+/** Each requirement group receives a separate embedded-runtime worker and JSON receipt. */
+val packagedMavenMoveClassAuthorityMatrixTasks = packagedMavenMoveClassAuthorityMatrixSpecs.map {
+        (taskSuffix, reportSlug, runner) ->
+    val taskName = "packagedMavenMoveClassAuthority${taskSuffix}MatrixTest"
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Run packaged Maven move-class $reportSlug acceptance in an isolated worker."
+        configurePackagedMavenMoveClassAuthorityWorker(taskName)
+        val cucumberJson = layout.buildDirectory.file(
+            "reports/cucumber/packaged-maven-move-class-authority-$reportSlug.json",
+        )
+        outputs.file(cucumberJson).withPropertyName("cucumberJsonReport")
+        systemProperty("cucumber.plugin", "json:${cucumberJson.get().asFile.absolutePath}")
+        filter { includeTestsMatching(runner) }
+    }
+}
+
+val packagedMavenMoveClassAuthorityClasspathAttestationTest = tasks.register<Test>(
+    "packagedMavenMoveClassAuthorityClasspathAttestationTest",
+) {
+    group = "verification"
+    description = "Attest packaged production code sources and embedded Java for the authority matrix."
+    configurePackagedMavenMoveClassAuthorityWorker(name)
+    filter {
+        includeTestsMatching(
+            "org.refactorkit.cli.packagedmavenmoveauthority.PackagedProductionClasspathAttestationTest",
+        )
+    }
+}
+
+val packagedMavenMoveClassAuthorityMatrixManifest = layout.buildDirectory.file(
+    "qualification/packaged-maven-move-class-authority/matrix-manifest.json",
+)
+tasks.register<Exec>("packagedMavenMoveClassAuthorityMatrixTest") {
+    group = "verification"
+    description = "Run and fail-closed reconcile all packaged Maven move-class authority requirement groups."
+    dependsOn(packagedMavenMoveClassAuthorityMatrixTasks)
+    dependsOn(packagedMavenMoveClassAuthorityClasspathAttestationTest)
+    inputs.file(rootProject.file("scripts/finalize-packaged-maven-move-class-authority-matrix.py"))
+    inputs.file(rootProject.file("features/java-maven-move-class-apply-authority.feature"))
+    inputs.file(rootProject.file("docs/requirements/req-java-maven-move-auth-013-baseline.md"))
+    inputs.dir(packageDir.map { it.dir("lib") })
+    inputs.file(packageDir.map { it.file("runtime/release") })
+    packagedMavenMoveClassAuthorityMatrixSpecs.forEach { (taskSuffix, reportSlug, _) ->
+        inputs.file(layout.buildDirectory.file(
+            "reports/cucumber/packaged-maven-move-class-authority-$reportSlug.json",
+        ))
+        inputs.dir(layout.buildDirectory.dir(
+            "test-results/packagedMavenMoveClassAuthority${taskSuffix}MatrixTest",
+        ))
+    }
+    inputs.dir(layout.buildDirectory.dir(
+        "test-results/packagedMavenMoveClassAuthorityClasspathAttestationTest",
+    ))
+    outputs.file(packagedMavenMoveClassAuthorityMatrixManifest)
+    executable = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "python" else "python3"
+    args(
+        rootProject.file("scripts/finalize-packaged-maven-move-class-authority-matrix.py").absolutePath,
+        "--repository-root", rootProject.projectDir.absolutePath,
+        "--package-root", packageDir.get().asFile.absolutePath,
+        "--build-root", layout.buildDirectory.get().asFile.absolutePath,
+        "--output", packagedMavenMoveClassAuthorityMatrixManifest.get().asFile.absolutePath,
+    )
 }
 
 tasks.register<Exec>("smokePackagedCli") {

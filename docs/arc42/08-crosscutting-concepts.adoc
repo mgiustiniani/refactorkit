@@ -1172,6 +1172,34 @@ Approved future IDs remain strictly deferred: RESULT-002 applied transaction cor
 
 ADRs 0002 and 0004 already cover the complete additive boundary. ADR 0004 owns CLI parsing, protocol-specific projection, explicit compatibility/version policy, and deterministic unsupported-version outcomes while requiring delegation to shared Java/core behavior; ADR 0002 preserves internal plan and managed mutation authority. Closed default-v2/legacy-v1 selection plus atomic truthfulness changes no write ownership, journal semantics, lifecycle, persistence, or topology. No new ADR/body, chapter 9, C4 element, relationship, deployment view, or runtime participant is justified. Reassess only if a later slice changes authority, persistence, lifecycle, cross-surface ownership, participants, relationships, or topology.
 
+== Complete and Edit-exact Operation-authority Leases
+
+Status: confirmed requirement and `@absent` implementation under sealed baseline
+`REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
+`dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
+
+An authority lease is not merely a collection of filesystem fingerprints. Before
+managed write it must also state that semantic evidence is complete rather than
+truncated and commit to the canonical normalized `WorkspaceEdit` selected by
+the owning semantic planner. The edit digest is language-neutral,
+path-separator-independent, `FileEdit` order/type sensitive, and exact-range/
+replacement sensitive; it excludes correlation, prose, diagnostics, approval,
+time, and transaction metadata.
+
+Core validates completeness and edit identity under the workspace lock before
+WAL, alongside required non-managed file/classpath evidence, current snapshot,
+affected-file preconditions, and exact staged diagnostics. This prevents a
+retained semantic plan from being widened with a lexical edit after preview.
+The Java planner continues to own semantic selection and Core does not infer Java
+bindings. Refusal preserves externally introduced drift, changes no other
+non-engine state, creates no transaction, and permits only expected lock-file
+residue.
+
+This strengthens accepted ADR 0002 without changing its decision, persistence,
+or authority allocation. ADR 0012 already owns authoritative Java diagnostics.
+No actor, system, container, store, protocol, relationship, or deployment node
+changes, so no new ADR or C4 modification is justified.
+
 == Agent and MCP Safety
 
 MCP exposes deterministic tools, resources, and prompts. File resources are scoped to the scanned workspace snapshot and arbitrary filesystem access is refused. Agent workflow expects project scan, focused context, preview, inspection, apply, diagnostics, and rollback.
