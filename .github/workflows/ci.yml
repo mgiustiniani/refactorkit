@@ -55,8 +55,10 @@ jobs:
       - name: Run golden tests
         run: ./refactorkit test-golden
 
-      - name: Test packaging verification scripts
+      - name: Test policy and packaging verification scripts
         run: |
+          python3 scripts/test-verify-v070-roadmap-support-claims.py
+          python3 scripts/verify-v070-roadmap-support-claims.py
           python3 scripts/test-verify-runtime-archive.py
           python3 scripts/test-smoke-packaged-kill-recovery.py
           python3 scripts/test-finalize-packaged-maven-move-class-authority-matrix.py

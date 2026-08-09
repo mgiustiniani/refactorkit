@@ -1174,9 +1174,11 @@ ADRs 0002 and 0004 already cover the complete additive boundary. ADR 0004 owns C
 
 == Complete and Edit-exact Operation-authority Leases
 
-Status: confirmed requirement and `@absent` implementation under sealed baseline
-`REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
+Status: implementation-informed and `@implemented-and-validated` under sealed
+baseline `REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
 `dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
+Independent revision-bound review returned `PASS`; status-only promotion and the
+post-promotion source/package-matrix rerun passed. Native rows remain separate.
 
 An authority lease is not merely a collection of filesystem fingerprints. Before
 managed write it must also state that semantic evidence is complete rather than

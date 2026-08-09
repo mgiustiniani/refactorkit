@@ -834,9 +834,11 @@ These sequences add no runtime participant or relationship; they refine messages
 
 == Planned Runtime Scenario: Under-lock Maven Move-class Admission
 
-Status: confirmed and `@absent` under
+Status: implementation-informed and `@implemented-and-validated` under
 `REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
 `dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
+Independent review returned `PASS`, and post-promotion evidence passed all nine
+cases; native-host qualification remains separate.
 
 [cols="1,3",options="header"]
 |===

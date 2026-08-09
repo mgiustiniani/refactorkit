@@ -720,7 +720,7 @@ This architecture integration summarizes the reviewed requirement without replac
 |bounded reporting evidence implemented for twelve definitions expanding to 22 cases; general/packaged/runtime/native contracts remain P0
 |===
 
-Thirteen bounded Gherkin definitions expand to 31 cases: the original twelve definitions/22 cases remain implemented-and-validated, while REQ-013 and its nine cases remain `@absent` pending independent review. REQ-008 contributes four pre-lock/no-residue guidance cases, one pre-lock/no-residue active-reactor-POM structural refusal, and one lock-held/pre-WAL required-file-evidence refusal. Candidate REQ-013 adds complete/edit-exact lease admission and nine independent lock-held pre-WAL refusal cases. All evidence remains fixture/request/surface bounded. The exact Magrathea `a48e3c06` request remains separately CLI/Linux/JDK-21-qualified; four-host native/general authority remains open.
+Thirteen bounded Gherkin definitions expand to 31 implemented-and-validated cases. REQ-008 contributes four pre-lock/no-residue guidance cases, one pre-lock/no-residue active-reactor-POM structural refusal, and one lock-held/pre-WAL required-file-evidence refusal. REQ-013 adds complete/edit-exact lease admission and nine independent lock-held pre-WAL refusal cases after independent `PASS`, status-only promotion, and post-promotion rerun. All evidence remains fixture/request/surface bounded. The exact Magrathea `a48e3c06` request remains separately CLI/Linux/JDK-21-qualified; four-host native/general authority remains open.
 
 === Bounded Target-Authority Acceptance
 
@@ -792,7 +792,7 @@ Thirteen bounded Gherkin definitions expand to 31 cases: the original twelve def
 |Under-lock Maven move-class authority remains complete and edit-exact before WAL. An otherwise eligible REQ-007 preview carries Core-owned `COMPLETE` evidence state and the SHA-256 of its canonical normalized `WorkspaceEdit`. Core's path-component/type/order/range/text-sensitive identity is independent of plan ID, prose, approval, diagnostics, time, and transaction data. `PatchEngine` refuses `TRUNCATED` evidence, missing edit identity, or mismatch while holding the one-writer lock, then retains existing file/classpath/snapshot/conflict and exact staged-diagnostic admission. Nine fresh fixture cases independently cover incomplete evidence, one mixed lexical edit, missing/unreadable/drifted required source, missing/drifted classpath evidence, affected-file conflict, and staged diagnostic regression. Every refusal precedes WAL, creates no transaction/destination/managed edit, preserves the deliberate external mutation and all other non-engine state, and permits only the lock file as engine residue.
 |Functional and non-functional. Typed refusal is functional; complete/edit-exact authority, lock-held ordering, pre-WAL non-mutation, exact preservation, deterministic identity, and diagnostic integrity are safety constraints.
 |Sealed baseline `REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256 `dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`; Core `OperationAuthorityLease`, `WorkspaceEditIdentity`, and `PatchEngine`; Java move-class/module-rename lease producers; `JavaMavenMoveClassUnderLockAuthorityCucumberTest`; R-048; ADRs 0002 and 0012 unchanged.
-|Explicit outline-level `@absent`; nine inherited cases. Meaningful Core RED log SHA-256 `049d1c3d284355c9289727510d35b3d1a8649c1fb61c45e9bacc59e0f78010ce` failed both missing enforcement checks. Current focused Core plus embedded-runtime package-matrix GREEN log SHA-256 `51ca999ccbf8fd2bda42f41f6835862cbeb665c810b4011e3918fd1060bd62ac`; REQ-013 package Cucumber JSON SHA-256 `1e8d017f3d135b22ca8487c65a1e0da7828793eaa3f86b029cc9fdd55a8deb5f`; local fail-closed 13-ID/31-case matrix manifest SHA-256 `4f119762fd9f2dc397d390099b39c9f85b132ead694f61f7f1308fb1d631073c`. Independent review and four-host native receipts remain required before promotion.
+|Explicit outline-level `@implemented-and-validated`; nine inherited cases. Meaningful Core RED SHA-256 `049d1c3d284355c9289727510d35b3d1a8649c1fb61c45e9bacc59e0f78010ce` failed both missing enforcement checks. Independent review SHA-256 `aa19e70487e62a53884b74d268ad0331f7e60a20ec42f5410a593c97610e1316` returned `PASS` for revision `bb0f688c1982a78b22d400844051f861dfaf9184`; the status-only promotion produced feature SHA-256 `3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696`. Post-promotion focused log / REQ-013 Cucumber JSON / complete matrix manifest SHA-256 are `7c7830f0e5da3bb635ef25744ceb57156700a332d0035d4d2c56d8b54e85aaad` / `316d255d711cfbfc779c9f81e74b1a23f421d64f3c6d758cd1903b6035139193` / `b3d5853b85c225a29cc548e66f2e51981cb8a55b80e886d38b871012cc663bac`. The exact pre-promotion candidate whole-tree gate passed 87/87 tasks with 1,235 discovered, 860 executed, 375 skipped/tag-filtered, and zero failures/errors (log SHA-256 `d6e3c8ff7c33eb9187b9e593d30aedc4156db1a1268cc4a4652a6a6bbe796ae5`). Native receipts remain separate.
 |===
 
 === Implemented Local Packaged-process Validation of Existing REQ-001
@@ -838,9 +838,10 @@ No row may be promoted before native CI executes the exact committed tree and pu
 
 The reviewed LLM Wiki research remains recommendation history. Earlier delegated ADR/C4 reviews found existing decisions and topology sufficient; implementation added evidence plumbing only, so no ADR or Structurizr artifact changed.
 
-=== Candidate Complete Packaged Maven Move-class Matrix
+=== Implemented Complete Packaged Maven Move-class Matrix
 
-Status: local implementation evidence only; independent review and four-host post-commit CI remain open.
+Status: local implemented-and-validated evidence after independent `PASS` and
+post-promotion rerun; four-host post-commit CI remains open.
 
 The additive `packagedMavenMoveClassAuthorityMatrixTest` retains the separately
 qualified public-CLI REQ-001 child-process mode and adds twelve isolated Test
@@ -855,12 +856,12 @@ Each runner owns one requirement tag group and one Cucumber JSON/JUnit family,
 so receipt files cannot overwrite one another. The fail-closed finalizer rejects
 missing, wrong-count, non-passing, or malformed receipts and always writes a
 `PASSED` or `FAILED` manifest. Its three focused tests cover success, missing
-receipt, and failed step. Local Linux/JDK-21 execution passed the attestation and
+receipt, and failed step. Post-promotion local Linux/JDK-21 execution passed the attestation and
 all 13 requirement IDs/31 cases in separate embedded-runtime workers: 436
 scenario-step results and 62 hooks. Manifest SHA-256 is
-`4f119762fd9f2dc397d390099b39c9f85b132ead694f61f7f1308fb1d631073c`;
+`b3d5853b85c225a29cc548e66f2e51981cb8a55b80e886d38b871012cc663bac`;
 feature SHA-256 in that manifest is
-`03a14110e5722243812b2e14ccda38f2071fe8e972cceb6096ecf6cdcd5ee9d6`.
+`3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696`.
 The exact CI matrix is pinned to Temurin `21.0.11+9` and uploads all receipts with
 `if: always()`. Until those jobs execute and are reviewed, Linux x86-64,
 Windows x86-64, macOS x86-64, and macOS arm64 remain

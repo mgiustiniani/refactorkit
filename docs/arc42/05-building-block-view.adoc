@@ -433,9 +433,11 @@ boundary, durable state, protocol, or relationship changed.
 
 == Planned Edit-exact Operation-authority Lease Admission
 
-Status: confirmed and `@absent` under immutable baseline
-`REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
+Status: implementation-informed and `@implemented-and-validated` under immutable
+baseline `REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
 `dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
+Independent revision-bound review returned `PASS`; post-promotion focused and
+packaged-matrix evidence passed. Four-host native promotion remains separate.
 
 Core's existing `OperationAuthorityLease` remains the language-neutral
 under-lock admission value. The planned additive contract gives it explicit

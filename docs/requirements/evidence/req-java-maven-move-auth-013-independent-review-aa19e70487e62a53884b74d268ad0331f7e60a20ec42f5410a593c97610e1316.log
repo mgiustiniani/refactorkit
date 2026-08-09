@@ -1,0 +1,48 @@
+verdict: PASS
+baselineId: REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001
+baselineSha256: dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6
+reviewedRevision: bb0f688c1982a78b22d400844051f861dfaf9184 (tree 1530eaf070cfd0438269f1dc7bf882509993c4db; diff 289b2ed2c0e6aac36e9b3522e47f6b99f7bcc4d0..bb0f688c1982a78b22d400844051f861dfaf9184)
+reviewedScope: REQ-JAVA-MAVEN-MOVE-AUTH-013 and packaged-production Maven move-class authority-matrix implementation
+requirementMatrix:
+  - requirement: REQ-JAVA-MAVEN-MOVE-AUTH-013/LEASE-CONTRACT
+    acceptanceCriteria: Baseline §3 and claims 1-3; immutable completeness, canonical exact edit identity, and Java producer population
+    implementationEvidence: modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/{Models.kt,WorkspaceEditIdentity.kt}; modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/{JavaMoveClassTargetAuthority.kt,JavaRenameMavenModulePlanning.kt}
+    verificationEvidence: Fresh Core suite passed 121/121; source inspection confirmed component-framed normalized paths, edit type/order/range/text binding, metadata exclusion, defensive collections, and both production lease producers
+    status: SATISFIED
+  - requirement: REQ-JAVA-MAVEN-MOVE-AUTH-013/UNDER-LOCK-MATRIX
+    acceptanceCriteria: Baseline §§4-6; one @absent nine-row outline, typed lock-held pre-WAL refusals, exact staged diagnostics, preservation, and lock-only residue
+    implementationEvidence: features/java-maven-move-class-apply-authority.feature; modules/refactorkit-cli/src/test/kotlin/org/refactorkit/cli/req013authority/JavaMavenMoveClassUnderLockAuthoritySteps.kt; PatchEngine.validateOperationAuthorityLease
+    verificationEvidence: Fresh source-built REQ-013 run passed 9/9; fresh packaged REQ-013 run passed 9/9; complete fresh packaged matrix contained 31 scenarios and 653 passed background/scenario/hook results with no nonpassing result
+    status: SATISFIED
+  - requirement: REQ-JAVA-MAVEN-MOVE-AUTH-013/EVIDENCE
+    acceptanceCriteria: Baseline §7 and claim 6; meaningful RED, focused regressions, exact hashes, and clean candidate boundary
+    implementationEvidence: Committed RED/GREEN logs, Cucumber JSON, and local matrix manifest under docs/requirements/evidence
+    verificationEvidence: Evidence hashes matched filenames; RED compiled and failed both named enforcement assertions; fresh focused verification passed; supplied whole-tree log SHA-256 d6e3c8ff7c33eb9187b9e593d30aedc4156db1a1268cc4a4652a6a6bbe796ae5 contains BUILD SUCCESSFUL and 87/87 executed tasks
+    status: SATISFIED
+  - requirement: PACKAGED-PRODUCTION-AUTHORITY-MATRIX
+    acceptanceCriteria: Claims 7-8; embedded package runtime/JARs, isolated workers and reports, fail-closed reconciliation, retained public-CLI REQ-001 mode, and no new LSP command/protocol
+    implementationEvidence: modules/refactorkit-cli/build.gradle.kts; PackagedProductionClasspathAttestationTest.kt; scripts/finalize-packaged-maven-move-class-authority-matrix.py; .github/workflows/ci.yml
+    verificationEvidence: Fresh full matrix passed 13 IDs/31 cases with manifest SHA-256 4dee44fbd8ab47746216f1e1bf576927777b3bde076921c35fe092291cad038b; classpath/runtime attestation passed; finalizer tests passed 3/3; separate packaged public-CLI REQ-001 task passed 1/1; only runtimeOnly LSP packaging changed, with no LSP source or protocol diff
+    status: SATISFIED
+  - requirement: REQ-JAVA-MAVEN-MOVE-AUTH-013/STATUS-AND-REGRESSION
+    acceptanceCriteria: Baseline §§1-2,8-9 and claims 9-10; honest status, no P0/J1 promotion, and preserved Maven module-rename/whole-tree behavior
+    implementationEvidence: Feature remains @absent; all four support-matrix rows remain CONFIGURED_UNOBSERVED; v0.7.0-plan.md and J1 paths are unchanged
+    verificationEvidence: Worktree remained clean; focused Maven module-rename Cucumber runner passed; exact-revision whole-tree gate passed; diff contains no checkbox or J1 change
+    status: SATISFIED
+blockingFindings: []
+nonBlockingFindings: []
+unverifiedClaims:
+  - Linux x86_64 post-commit native CI execution of both packaged modes remains CONFIGURED_UNOBSERVED.
+  - Windows x86_64 post-commit native CI execution of both packaged modes remains CONFIGURED_UNOBSERVED.
+  - macOS x86_64 post-commit native CI execution of both packaged modes remains CONFIGURED_UNOBSERVED.
+  - macOS arm64 post-commit native CI execution of both packaged modes remains CONFIGURED_UNOBSERVED.
+  - The status-only promotion and mandatory post-promotion rerun have not yet occurred.
+commandsRun:
+  - "git revision/tree/status, boundary diff, diff --check, and SHA-256 inspections: exit 0; final status CLEAN"
+  - "python3 scripts/test-finalize-packaged-maven-move-class-authority-matrix.py: exit 0, 3/3 passed"
+  - "JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon --rerun-tasks :modules:refactorkit-core:test :modules:refactorkit-cli:test --tests 'org.refactorkit.cli.req013authority.JavaMavenMoveClassUnderLockAuthorityCucumberTest': exit 0"
+  - "JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon --rerun-tasks :modules:refactorkit-java:test --tests 'org.refactorkit.java.mavenmodulerename.JavaMavenModuleRenameCucumberTest': exit 0"
+  - "JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon --rerun-tasks :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest: exit 0"
+  - "JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon --rerun-tasks :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest: exit 0"
+  - "Ambient-JDK task listing probe: exit 1 because JDK 25 was correctly rejected; all evidentiary Gradle runs used JDK 21 and passed"
+requiredNextAction: Status-only REQ-013 promotion is authorized, followed by its required post-promotion rerun and candidate push for native CI. No P0 checkbox closure, native-host/support claim, or J1 work is authorized.
