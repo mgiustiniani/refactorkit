@@ -224,13 +224,14 @@ For example:
 
 ### Source-built command discovery
 
-Use the qualified source-built CLI route to discover the bounded Java command catalogue:
+Use the source-built CLI route to discover the bounded Java command catalogue. The default is exact v2; exact v1 remains explicitly selectable:
 
 ```bash
 ./gradlew :modules:refactorkit-cli:run --args="commands --json"
+./gradlew :modules:refactorkit-cli:run --args="commands --json --schema-version 1"
 ```
 
-The public command is `refactorkit commands --json`. It emits one deterministic closed `refactorkit.cli-command-catalog/v1` document with exactly the top-level fields `schema`, `schemaVersion`, and `commands`; every entry has exactly `name`, `operation`, `aliases`, `modes`, `mutationAuthority`, `jsonSupport`, `stability`, and `requiredArguments`. The qualified catalogue contains only `java create-module`, `java move-across-maven-modules`, and `java rename-module`. `jsonSupport: "catalog-only"` does not claim operation-result JSON. Current evidence is limited to the source-built local Linux/JDK-21/current-CPU path; the installed launcher was not invoked, so installed, packaged, release, or wider-platform parity is not implied. See the [executable requirements appendix](docs/arc42/appendix-requirements.adoc).
+Public help is `refactorkit commands --json [--schema-version 1]`. Both closed documents contain only `java create-module`, `java move-across-maven-modules`, and `java rename-module`. V1 keeps all entries `catalog-only`; v2 reports only rename as `preview-only`, bounded to successful `java rename-module ... --json` preview. CATALOG-001, CATALOG-002, and RESULT-001 are `@implemented-and-validated` within their bounded source-built evidence. RESULT-001's final post-re-promotion run passed its scenario and all 30 steps. The installed launcher was not invoked, so installed, packaged, release, and wider-platform parity are not implied. See the [executable requirements appendix](docs/arc42/appendix-requirements.adoc).
 
 ### Project inspection
 

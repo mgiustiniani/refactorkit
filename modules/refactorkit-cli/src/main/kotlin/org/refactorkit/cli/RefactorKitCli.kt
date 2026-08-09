@@ -1008,6 +1008,11 @@ class RefactorKitCli(
     }
 
     private fun cmdJavaRenameModule(args: List<String>): Int {
+        val outputSelection = CliRenameModulePreviewProtocol.select(args)
+        if (outputSelection is CliRenameModuleOutputSelection.Rejected) {
+            System.err.println(outputSelection.message)
+            return 2
+        }
         val parsed = parseOptions(args)
         val oldModuleDir = parsed.options["old-module-dir"] ?: run { System.err.println("rename-module requires --old-module-dir"); return 2 }
         val newModuleDir = parsed.options["new-module-dir"] ?: run { System.err.println("rename-module requires --new-module-dir"); return 2 }
@@ -1015,6 +1020,19 @@ class RefactorKitCli(
         val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
         val snapshot = scanFrom(root, parsed.flags) ?: return 1
         val plan = JavaRenameMavenModulePlanner().preview(snapshot, oldModuleDir, newModuleDir, newArtifactId)
+        if (outputSelection is CliRenameModuleOutputSelection.JsonPreview) {
+            if (plan.status == PatchStatus.REFUSED) {
+                System.err.println("rename-module JSON output is qualified only for a successful preview")
+                return 1
+            }
+            return try {
+                println(CliRenameModulePreviewProtocol.render(plan, outputSelection.requestId))
+                0
+            } catch (failure: IllegalArgumentException) {
+                System.err.println("rename-module JSON preview unavailable: ${failure.message}")
+                1
+            }
+        }
         println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) {
             plan.refusalCode?.let { System.err.println("Refusal code: $it") }
@@ -1103,53 +1121,14 @@ class RefactorKitCli(
     }
 
     private fun cmdCommands(args: List<String>): Int {
-        if (args != listOf("--json")) {
-            System.err.println("Usage: refactorkit commands --json")
+        val version = try {
+            CliCommandCatalogueProjection.select(args)
+        } catch (failure: IllegalArgumentException) {
+            System.err.println(failure.message)
             return 2
         }
-        val catalogue = buildJsonObject {
-            put("schema", "refactorkit.cli-command-catalog/v1")
-            put("schemaVersion", 1)
-            put("commands", buildJsonArray {
-                add(commandCatalogueEntry(
-                    "java create-module",
-                    "java.createMavenModule",
-                    listOf("--module-name", "--parent-pom"),
-                ))
-                add(commandCatalogueEntry(
-                    "java move-across-maven-modules",
-                    "java.moveAcrossMavenModules",
-                    listOf("--from", "--to"),
-                ))
-                add(commandCatalogueEntry(
-                    "java rename-module",
-                    "java.renameMavenModule",
-                    listOf("--old-module-dir", "--new-module-dir"),
-                ))
-            })
-        }
-        println(Json.Default.encodeToString(catalogue))
+        println(CliCommandCatalogueProjection.render(version))
         return 0
-    }
-
-    private fun commandCatalogueEntry(
-        name: String,
-        operation: String,
-        requiredArguments: List<String>,
-    ): JsonObject = buildJsonObject {
-        put("name", name)
-        put("operation", operation)
-        put("aliases", buildJsonArray {})
-        put("modes", buildJsonArray {
-            add(JsonPrimitive("preview"))
-            add(JsonPrimitive("apply"))
-        })
-        put("mutationAuthority", "refactorkit-managed")
-        put("jsonSupport", "catalog-only")
-        put("stability", "experimental")
-        put("requiredArguments", buildJsonArray {
-            requiredArguments.forEach { add(JsonPrimitive(it)) }
-        })
     }
 
     // ── outline ───────────────────────────────────────────────────────────────
@@ -1267,7 +1246,7 @@ class RefactorKitCli(
           refactorkit --help
           refactorkit --version
           refactorkit capabilities
-          refactorkit commands --json
+          refactorkit commands --json [--schema-version 1]
           refactorkit scan              <path>
           refactorkit index             [<path>] [--json]
           refactorkit intelligence search [<path>] [--kind workspace-symbols|document-symbols|completion|hover|signature-help] [--query <text>] [--language <id>] [--file <relative-path>] [--limit <n>] [--json]

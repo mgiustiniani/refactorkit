@@ -16,9 +16,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.refactorkit.cli.RefactorKitCli
+import org.refactorkit.cli.testharness.GuardedChildJvm
 import org.refactorkit.core.RefactorKitVersion
-import java.io.ByteArrayOutputStream
-import java.io.PrintStream
 import java.net.URI
 import java.nio.file.FileVisitResult
 import java.nio.file.FileVisitResult.CONTINUE
@@ -29,7 +28,7 @@ import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermission
 import java.security.MessageDigest
-import java.security.Permission
+import java.util.Base64
 import java.util.UUID
 import kotlin.io.path.exists
 import kotlin.test.assertContentEquals
@@ -75,9 +74,10 @@ class JavaCliCommandCatalogSteps {
     private val catalogInvocations = mutableListOf<Invocation>()
     private val allInvocations = mutableListOf<Invocation>()
     private val routeProbes = linkedMapOf<String, Invocation>()
-    private val observedSecurityManagers = mutableListOf<BoundarySecurityManager>()
+    private val boundaryViolationReports = mutableListOf<List<String>>()
     private var semanticSessionAttempts = 0
     private var failClosedCliCount = 0
+    private var guardedProcessInvocations = 0
     private var parserOptionGrammarVerified = false
     private var routeContractVerified = false
     private var boundaryManifestsVerified = false
@@ -87,10 +87,11 @@ class JavaCliCommandCatalogSteps {
     private lateinit var expectedCatalogueBytes: ByteArray
 
     @After
-    @Suppress("DEPRECATION")
-    fun restoreSecurityManagerIfNeeded() {
-        if (System.getSecurityManager() != null) {
-            System.setSecurityManager(null)
+    fun verifyBoundaries() {
+        if (::repositoryManifestBefore.isInitialized) {
+            assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
+            assertEquals(installationManifestBefore, captureManifest(installedRoot, excludeRepositoryBuildState = false))
+            assertFalse(repositoryRoot.resolve(".refactorkit").exists())
         }
     }
 
@@ -124,27 +125,28 @@ class JavaCliCommandCatalogSteps {
     }
 
     @Given("the installed RefactorKit executable is guarded by an invocation tripwire and is neither selected nor invoked")
-    @Suppress("DEPRECATION")
     fun guardInstalledExecutable() {
         assertTrue(installedExecutable.exists(), "installed executable required for the non-selection tripwire")
         assertFalse(sourceBuiltCodeLocation.startsWith(installedRoot))
 
-        val selfTest = BoundarySecurityManager(repositoryRoot, installedRoot)
+        val selfTest = CatalogV1BoundarySecurityManager(repositoryRoot, installedRoot)
         val refusal = assertFailsWith<SecurityException> {
             selfTest.checkExec(installedExecutable.toString())
         }
         assertTrue(refusal.message.orEmpty().contains("process execution"))
         assertEquals(listOf("exec:${installedExecutable.toAbsolutePath().normalize()}"), selfTest.violations)
 
-        val original = System.getSecurityManager()
-        val installProbe = BoundarySecurityManager(repositoryRoot, installedRoot)
-        System.setSecurityManager(installProbe)
-        try {
-            assertEquals(installProbe, System.getSecurityManager())
-        } finally {
-            System.setSecurityManager(original)
-        }
-        assertTrue(installProbe.violations.isEmpty())
+        val childProbe = launchGuardedHarness(PROBE_MODE, emptyList())
+        assertEquals(true, childProbe.getValue("securityManagerInstalled").jsonPrimitive.booleanOrNull)
+        assertEquals(
+            listOf(
+                "exec:${installedExecutable.toAbsolutePath().normalize()}",
+                "read:${installedExecutable.toAbsolutePath().normalize()}",
+                "write:${installedExecutable.toAbsolutePath().normalize()}",
+                "delete:${installedExecutable.toAbsolutePath().normalize()}",
+            ),
+            childProbe.getValue("violations").jsonArray.map { it.jsonPrimitive.content },
+        )
     }
 
     @Given("the v1 command-catalogue contract admits exactly these fields in this order:")
@@ -170,7 +172,7 @@ class JavaCliCommandCatalogSteps {
         assertTrue(scannerField.trySetAccessible())
         assertNull(scannerField.get(cli), "scanner reflection tripwire was not armed")
 
-        val selfTest = BoundarySecurityManager(repositoryRoot, installedRoot)
+        val selfTest = CatalogV1BoundarySecurityManager(repositoryRoot, installedRoot)
         val sourcePath = repositoryRoot.resolve("modules/refactorkit-cli/src/main/kotlin")
         assertFailsWith<SecurityException> { selfTest.checkRead(sourcePath.toString()) }
         assertFailsWith<SecurityException> { selfTest.checkWrite(repositoryRoot.resolve("tripwire-write").toString()) }
@@ -254,7 +256,7 @@ class JavaCliCommandCatalogSteps {
 
     @When("the source-built public parser invokes {string} twice with separately captured stdout and stderr bytes")
     fun invokeCommandCatalogueTwice(commandLine: String) {
-        assertEquals("refactorkit commands --json", commandLine)
+        assertEquals("refactorkit commands --json --schema-version 1", commandLine)
         val arguments = commandLine.split(' ').drop(1)
         catalogInvocations += guardedInvoke(arguments)
         catalogInvocations += guardedInvoke(arguments)
@@ -283,7 +285,7 @@ class JavaCliCommandCatalogSteps {
         assertEquals(EXPECTED_ROUTES.map(PublicRoute::name), routeProbes.keys.toList())
         assertTrue(parserOptionGrammarVerified)
         assertEquals(0, semanticSessionAttempts)
-        assertTrue(observedSecurityManagers.all { it.violations.isEmpty() })
+        assertTrue(boundaryViolationReports.all { it.isEmpty() })
         assertTrue(allInvocations.none { it.arguments.any { argument -> argument == "--apply" } })
 
         assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
@@ -298,12 +300,12 @@ class JavaCliCommandCatalogSteps {
         assertEquals(
             0,
             catalogInvocations[0].exitCode,
-            "first source-built 'commands --json' invocation must be accepted; stderr=${catalogInvocations[0].stderrText()}",
+            "first source-built explicit-v1 catalogue invocation must be accepted; stderr=${catalogInvocations[0].stderrText()}",
         )
         assertEquals(
             0,
             catalogInvocations[1].exitCode,
-            "second source-built 'commands --json' invocation must be accepted; stderr=${catalogInvocations[1].stderrText()}",
+            "second source-built explicit-v1 catalogue invocation must be accepted; stderr=${catalogInvocations[1].stderrText()}",
         )
     }
 
@@ -362,13 +364,13 @@ class JavaCliCommandCatalogSteps {
         assertEquals(names.sorted(), names)
         assertEquals(EXPECTED_ROUTES.map(PublicRoute::name), names)
         assertTrue(commands.all { it.getValue("aliases").jsonArray.isEmpty() })
-        assertTrue(observedSecurityManagers.all { it.violations.isEmpty() }, "catalogue must not inspect repository sources")
+        assertTrue(boundaryViolationReports.all { it.isEmpty() }, "catalogue must not inspect repository sources")
         assertTrue(boundaryManifestsVerified)
     }
 
     @Then("top-level help exposes {string} and exactly these truthful requirement-owned Java usage lines:")
     fun helpExposesExactRequirementOwnedLines(commandLine: String, table: DataTable) {
-        assertEquals("refactorkit commands --json", commandLine)
+        assertEquals("refactorkit commands --json [--schema-version 1]", commandLine)
         val helpLines = helpInvocation.stdoutText().lineSequence().map(String::trim).toList()
         assertEquals(1, helpLines.count { it == commandLine })
         table.asMaps().forEach { row ->
@@ -454,7 +456,8 @@ class JavaCliCommandCatalogSteps {
         assertTrue(boundaryManifestsVerified)
         assertEquals(0, semanticSessionAttempts)
         assertTrue(failClosedCliCount >= allInvocations.size)
-        assertTrue(observedSecurityManagers.all { it.violations.isEmpty() })
+        assertEquals(allInvocations.size, guardedProcessInvocations)
+        assertTrue(boundaryViolationReports.all { it.isEmpty() })
         assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
         assertEquals(installationManifestBefore, captureManifest(installedRoot, excludeRepositoryBuildState = false))
         assertFalse(repositoryRoot.resolve(".refactorkit").exists())
@@ -486,39 +489,53 @@ class JavaCliCommandCatalogSteps {
         return cli
     }
 
-    @Suppress("DEPRECATION")
     private fun guardedInvoke(arguments: List<String>): Invocation {
-        val cli = newFailClosedCli()
-        val manager = BoundarySecurityManager(repositoryRoot, installedRoot)
-        val stdout = ByteArrayOutputStream()
-        val stderr = ByteArrayOutputStream()
-        val originalOut = System.out
-        val originalErr = System.err
-        val originalSecurityManager = System.getSecurityManager()
+        val response = launchGuardedHarness(INVOKE_MODE, arguments)
+        val violations = response.getValue("violations").jsonArray.map { it.jsonPrimitive.content }
+        assertTrue(violations.isEmpty(), response.toString())
+        assertEquals(true, response.getValue("scannerTripwireArmed").jsonPrimitive.booleanOrNull)
+        val childSemanticSessionAttempts = response.getValue("semanticSessionAttempts").jsonPrimitive.intOrNull
+        assertEquals(0, childSemanticSessionAttempts)
 
-        System.setSecurityManager(manager)
-        val exitCode = try {
-            System.setOut(PrintStream(stdout, true, Charsets.UTF_8.name()))
-            System.setErr(PrintStream(stderr, true, Charsets.UTF_8.name()))
-            cli.run(arguments)
-        } finally {
-            System.out.flush()
-            System.err.flush()
-            System.setOut(originalOut)
-            System.setErr(originalErr)
-            System.setSecurityManager(originalSecurityManager)
-        }
-
-        assertTrue(manager.violations.isEmpty(), manager.violations.joinToString())
         val invocation = Invocation(
             arguments = arguments.toList(),
-            exitCode = exitCode,
-            stdout = stdout.toByteArray().copyOf(),
-            stderr = stderr.toByteArray().copyOf(),
+            exitCode = assertNotNull(response.getValue("cliExitCode").jsonPrimitive.intOrNull),
+            stdout = Base64.getDecoder().decode(response.getValue("stdoutBase64").jsonPrimitive.content),
+            stderr = Base64.getDecoder().decode(response.getValue("stderrBase64").jsonPrimitive.content),
         )
-        observedSecurityManagers += manager
+        semanticSessionAttempts += assertNotNull(childSemanticSessionAttempts)
+        boundaryViolationReports += violations
+        guardedProcessInvocations++
+        failClosedCliCount++
         allInvocations += invocation
         return invocation
+    }
+
+    private fun launchGuardedHarness(mode: String, arguments: List<String>): JsonObject {
+        val javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java").toAbsolutePath().normalize()
+        assertFalse(javaExecutable.startsWith(installedRoot), "guard harness must not select the installed runtime")
+        val child = GuardedChildJvm.launch(
+            workingDirectory = repositoryRoot,
+            mainClass = JavaCliCommandCatalogProcessHarness::class.java,
+            arguments = listOf(mode, repositoryRoot.toString(), installedRoot.toString()) + arguments,
+            requiredClasses = listOf(RefactorKitCli::class.java),
+            timeoutSeconds = PROCESS_TIMEOUT_SECONDS,
+        )
+        assertEquals(0, child.exitCode, "guard harness failed: ${child.stderr.toString(Charsets.UTF_8)}")
+        GuardedChildJvm.assertOnlySecurityManagerDeprecationNotice(
+            child.stderr,
+            JavaCliCommandCatalogProcessHarness::class.java,
+        )
+        val response = Json.parseToJsonElement(child.stdout.toString(Charsets.UTF_8)).jsonObject
+        assertEquals(HARNESS_PROTOCOL, response.getValue("protocol").jsonPrimitive.content)
+        assertEquals(mode, response.getValue("mode").jsonPrimitive.content)
+        assertEquals(21, response.getValue("runtimeFeature").jsonPrimitive.intOrNull)
+        assertEquals(true, response.getValue("securityManagerInstalled").jsonPrimitive.booleanOrNull)
+        assertTrue(
+            Base64.getDecoder().decode(response.getValue("managerDiagnosticsBase64").jsonPrimitive.content).isEmpty(),
+            "guard manager emitted unexpected in-process diagnostics",
+        )
+        return response
     }
 
     private fun assertParsed(
@@ -656,56 +673,6 @@ class JavaCliCommandCatalogSteps {
     private fun Invocation.stdoutText(): String = stdout.toString(Charsets.UTF_8)
     private fun Invocation.stderrText(): String = stderr.toString(Charsets.UTF_8)
 
-    @Suppress("DEPRECATION")
-    private class BoundarySecurityManager(
-        private val repositoryRoot: Path,
-        private val installedRoot: Path,
-    ) : SecurityManager() {
-        val violations = mutableListOf<String>()
-
-        override fun checkPermission(permission: Permission?) = Unit
-        override fun checkPermission(permission: Permission?, context: Any?) = Unit
-
-        override fun checkRead(file: String?) {
-            val path = normalized(file) ?: return
-            if (path.startsWith(installedRoot) ||
-                (path.startsWith(repositoryRoot) && !isBuildInfrastructure(path))
-            ) {
-                block("read", path, "workspace or installed-runtime read")
-            }
-        }
-
-        override fun checkWrite(file: String?) {
-            block("write", normalized(file), "filesystem write")
-        }
-
-        override fun checkDelete(file: String?) {
-            block("delete", normalized(file), "filesystem delete")
-        }
-
-        override fun checkExec(command: String?) {
-            val normalized = normalized(command)
-            val display = normalized?.toString() ?: command.orEmpty()
-            violations += "exec:$display"
-            throw SecurityException("process execution is forbidden during source-built catalogue discovery: $display")
-        }
-
-        private fun isBuildInfrastructure(path: Path): Boolean {
-            val relative = repositoryRoot.relativize(path)
-            return relative.any { segment -> segment.toString() in setOf("build", ".gradle") }
-        }
-
-        private fun normalized(raw: String?): Path? = raw?.let { value ->
-            runCatching { Path.of(value).toAbsolutePath().normalize() }.getOrNull()
-        }
-
-        private fun block(kind: String, path: Path?, description: String): Nothing {
-            val display = path?.toString().orEmpty()
-            violations += "$kind:$display"
-            throw SecurityException("$description is forbidden during source-built catalogue discovery: $display")
-        }
-    }
-
     private companion object {
         const val CATALOGUE_SCHEMA = "refactorkit.cli-command-catalog/v1"
         const val CAPABILITIES_FIXTURE =
@@ -714,6 +681,10 @@ class JavaCliCommandCatalogSteps {
             "org/refactorkit/cli/reqjavaclicatalog001/help-pre-slice-06fd4878c8fd.txt"
         const val PINNED_CAPABILITIES_SHA256 = "dec4087fa8b7ba038a5b9a82728ec724054ee6fd28456eb9ec637fd7d0d0d1c3"
         const val PINNED_HELP_SHA256 = "06fd4878c8fd717a9515d6dd8572f182cff2067239c3bcc870fa3e184aafee61"
+        const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v1-guard/v1"
+        const val PROBE_MODE = "probe"
+        const val INVOKE_MODE = "invoke"
+        const val PROCESS_TIMEOUT_SECONDS = 30L
 
         val TOP_LEVEL_FIELD_NAMES = listOf("schema", "schemaVersion", "commands")
         val ENTRY_FIELD_NAMES = listOf(
@@ -749,7 +720,7 @@ class JavaCliCommandCatalogSteps {
         const val LEGACY_MOVE_USAGE =
             "refactorkit java move-across-maven-modules --from <root> --to <root> --dependency-pom <pom> --source-group-id <id> --source-artifact-id <id> --source-version <v> --destination-group-id <id> --destination-artifact-id <id> --destination-version <v> [--root <path>] [--apply]"
         val REQUIREMENT_OWNED_HELP_LINES = setOf(
-            "refactorkit commands --json",
+            "refactorkit commands --json [--schema-version 1]",
             "refactorkit java create-module --module-name <name> --parent-pom <pom> [--root <path>] [--apply]",
             EXPECTED_MOVE_USAGE,
             "refactorkit java rename-module --old-module-dir <dir> --new-module-dir <dir> [--new-artifact-id <id>] [--root <path>] [--apply]",

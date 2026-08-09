@@ -1,0 +1,232 @@
+Operation: java.renameMavenModule
+Status: PREVIEW
+Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).
+Evidence: JDT_BINDING
+
+Warnings:
+- Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.
+- The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.
+
+Affected files:
+- catalog-domain/pom.xml
+- catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-model/pom.xml
+- catalog-model/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-pricing/pom.xml
+- pom.xml
+
+Patch:
+--- a/catalog-model/pom.xml
++++ b/catalog-model/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+-  <artifactId>catalog-model</artifactId>
++  <artifactId>catalog-domain</artifactId>
+ </project>
+ 
+--- a/pom.xml
++++ b/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+ 
+   <groupId>com.acme.refactorkit.fixture</groupId>
+   <artifactId>java-maven-move-class-authority-reactor</artifactId>
+   <version>1.0.0</version>
+   <packaging>pom</packaging>
+ 
+   <properties>
+     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+     <maven.compiler.release>8</maven.compiler.release>
+   </properties>
+ 
+   <dependencyManagement>
+     <dependencies>
+       <dependency>
+         <groupId>ch.qos.reload4j</groupId>
+         <artifactId>reload4j</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-api-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.projectlombok</groupId>
+         <artifactId>lombok</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-context-support</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+     </dependencies>
+   </dependencyManagement>
+ 
+   <modules>
+     <module>catalog-common</module>
+     <module>catalog-generated-support</module>
+     <module>catalog-inventory</module>
+     <module>catalog-shipping</module>
+     <module>catalog-search</module>
+     <module>catalog-recommendations</module>
+     <module>catalog-admin</module>
+     <module>catalog-batch</module>
+     <module>customer-model</module>
+     <module>customer-notifications</module>
+     <module>order-model</module>
+     <module>order-processing</module>
+     <module>payment-contract</module>
+     <module>reporting-core</module>
+     <module>reporting-unrelated</module>
+-    <module>catalog-model</module>
++    <module>catalog-domain</module>
+     <module>catalog-pricing</module>
+     <module>catalog-storefront</module>
+     <module>catalog-acceptance</module>
+     <module>catalog-decoy</module>
+   </modules>
+ </project>
+ 
+--- a/catalog-pricing/pom.xml
++++ b/catalog-pricing/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+   <artifactId>catalog-pricing</artifactId>
+   <dependencies>
+     <dependency>
+       <groupId>com.acme.refactorkit.fixture</groupId>
+-      <artifactId>catalog-model</artifactId>
++      <artifactId>catalog-domain</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+       <groupId>com.acme.fixture.external</groupId>
+       <artifactId>catalog-price-contract</artifactId>
+       <version>1.0.0</version>
+       <scope>system</scope>
+       <systemPath>${project.basedir}/../fixture-libs/catalog-price-contract-1.0.0.jar</systemPath>
+     </dependency>
+   </dependencies>
+ 
+   <profiles>
+     <profile>
+       <id>req-java-maven-move-auth-009</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>field-scope-parent</artifactId>
+           <version>1.0.0</version>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>descriptor-pruning-parent</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+           <exclusions>
+             <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-context-support</artifactId>
+             </exclusion>
+           </exclusions>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010-alternate-path</id>
+       <dependencies>
+         <dependency>
+           <groupId>org.springframework</groupId>
+           <artifactId>spring-context-support</artifactId>
+           <version>1.0.0-refactorkit-fixture</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-011</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-012-management</id>
+       <dependencyManagement>
+         <dependencies>
+           <dependency>
+             <groupId>com.acme.fixture.authority</groupId>
+             <artifactId>ordinary-missing-management-bom</artifactId>
+             <version>1.0.0</version>
+             <type>pom</type>
+             <scope>import</scope>
+           </dependency>
+         </dependencies>
+       </dependencyManagement>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+   </profiles>
+ </project>
+ 
+rename catalog-model/pom.xml -> catalog-domain/pom.xml
+rename catalog-model/src/main/java/com/acme/catalog/legacy/Product.java -> catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+
+Use --apply to apply this change.

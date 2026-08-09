@@ -1,0 +1,113 @@
+COMMAND: env JAVA_HOME=/usr/lib/jvm/java-21-openjdk PATH=/usr/lib/jvm/java-21-openjdk/bin:$PATH JAVA_TOOL_OPTIONS=-Djava.security.manager=allow ./gradlew :modules:refactorkit-cli:test --tests org.refactorkit.cli.reqjavaclicatalog002.JavaCliCommandCatalogV2CucumberTest --no-daemon --console=plain
+Picked up JAVA_TOOL_OPTIONS: -Djava.security.manager=allow
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:refactorkit-cli:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-core:compileJava NO-SOURCE
+> Task :modules:refactorkit-core:processResources NO-SOURCE
+> Task :modules:refactorkit-core:classes UP-TO-DATE
+> Task :modules:refactorkit-core:jar UP-TO-DATE
+> Task :modules:refactorkit-daemon:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-java:compileJava NO-SOURCE
+> Task :modules:refactorkit-java:processResources NO-SOURCE
+> Task :modules:refactorkit-java:classes UP-TO-DATE
+> Task :modules:refactorkit-java:jar UP-TO-DATE
+> Task :modules:refactorkit-jvm:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-kotlin:compileJava UP-TO-DATE
+> Task :modules:refactorkit-kotlin:processResources NO-SOURCE
+> Task :modules:refactorkit-kotlin:classes UP-TO-DATE
+> Task :modules:refactorkit-kotlin:jar UP-TO-DATE
+> Task :modules:refactorkit-jvm:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-jvm:compileJava NO-SOURCE
+> Task :modules:refactorkit-jvm:processResources NO-SOURCE
+> Task :modules:refactorkit-jvm:classes UP-TO-DATE
+> Task :modules:refactorkit-jvm:jar UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-tree-sitter:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:compileJava NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:processResources NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:classes UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:jar UP-TO-DATE
+> Task :modules:refactorkit-typescript:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-typescript:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-typescript:compileJava NO-SOURCE
+> Task :modules:refactorkit-typescript:processResources UP-TO-DATE
+> Task :modules:refactorkit-typescript:classes UP-TO-DATE
+> Task :modules:refactorkit-typescript:jar UP-TO-DATE
+> Task :modules:refactorkit-web-importer:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-web-importer:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-web-importer:compileJava NO-SOURCE
+> Task :modules:refactorkit-web-importer:processResources NO-SOURCE
+> Task :modules:refactorkit-web-importer:classes UP-TO-DATE
+> Task :modules:refactorkit-web-importer:jar UP-TO-DATE
+> Task :modules:refactorkit-daemon:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-daemon:compileJava NO-SOURCE
+> Task :modules:refactorkit-daemon:processResources NO-SOURCE
+> Task :modules:refactorkit-daemon:classes UP-TO-DATE
+> Task :modules:refactorkit-daemon:jar UP-TO-DATE
+> Task :modules:refactorkit-testkit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-testkit:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-testkit:compileJava NO-SOURCE
+> Task :modules:refactorkit-testkit:processResources NO-SOURCE
+> Task :modules:refactorkit-testkit:classes UP-TO-DATE
+> Task :modules:refactorkit-testkit:jar UP-TO-DATE
+> Task :modules:refactorkit-cli:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-cli:compileJava UP-TO-DATE
+> Task :modules:refactorkit-cli:processResources NO-SOURCE
+> Task :modules:refactorkit-cli:classes UP-TO-DATE
+> Task :modules:refactorkit-cli:jar UP-TO-DATE
+> Task :modules:refactorkit-lsp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-lsp:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-lsp:compileJava NO-SOURCE
+> Task :modules:refactorkit-lsp:processResources NO-SOURCE
+> Task :modules:refactorkit-lsp:classes UP-TO-DATE
+> Task :modules:refactorkit-lsp:jar UP-TO-DATE
+> Task :modules:refactorkit-mcp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-mcp:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-mcp:compileJava NO-SOURCE
+> Task :modules:refactorkit-mcp:processResources NO-SOURCE
+> Task :modules:refactorkit-mcp:classes UP-TO-DATE
+> Task :modules:refactorkit-mcp:jar UP-TO-DATE
+> Task :modules:refactorkit-cli:compileTestKotlin UP-TO-DATE
+> Task :modules:refactorkit-cli:compileTestJava UP-TO-DATE
+> Task :modules:refactorkit-cli:processTestResources UP-TO-DATE
+> Task :modules:refactorkit-cli:testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.reqjavaclicatalog002.JavaCliCommandCatalogV2Steps (file:<workspace>/modules/refactorkit-cli/build/classes/kotlin/test/)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.reqjavaclicatalog002.JavaCliCommandCatalogV2Steps
+WARNING: System::setSecurityManager will be removed in a future release
+
+> Task :modules:refactorkit-cli:test FAILED
+Picked up JAVA_TOOL_OPTIONS: -Djava.security.manager=allow
+
+JavaCliCommandCatalogV2CucumberTest > Discover the exact public Java CLI command catalogue without entering a workspace lifecycle > Default discovery reports exact catalogue v2 while explicit selection preserves exact v1 FAILED
+    org.opentest4j.AssertionFailedError at JUnitSupport.kt:56
+
+2 tests completed, 1 failed, 1 skipped
+
+[Incubating] Problems report is available at: file://<workspace>/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':modules:refactorkit-cli:test'.
+> There were failing tests. See the report at: file://<workspace>/modules/refactorkit-cli/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 5s
+31 actionable tasks: 1 executed, 30 up-to-date
+EXIT_CODE: 1

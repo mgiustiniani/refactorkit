@@ -1,0 +1,134 @@
+RESULT001 FINAL POST-PROMOTION VERIFICATION
+SCOPE=FINAL RESULT001 POST-REPROMOTION VERIFICATION ONLY
+PRE_EVIDENCE_SYNTHETIC_TREE=1757af274e9a56f70f1d3f9bbdc025cadc0a3454
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+JAVA_TOOL_OPTIONS=UNSET
+JDK_JAVA_OPTIONS=UNSET
+FEATURE_STATUS=@implemented-and-validated
+FEATURE_SHA256=5956f93a681562f6922a9101daa8c153c9a3b8d1f7fdc260bd0070d5faf48ea5
+STATUS_NEUTRAL_CANONICAL_SHA256=b6f62831bf38c2fdaadbd02abc024abd16c8818a812678c76a1eb146642e4ed9
+STATUS_NEUTRAL_FEATURE_INTEGRITY=PASS
+STATUS_NEUTRAL_REQUIREMENT_TAG_LINES=1
+STATUS_NEUTRAL_EFFECTIVE_STATUS_COUNT=1
+STATUS_NEUTRAL_UNKNOWN_STATUS_COUNT=0
+STEPS_SHA256=3407b8edf7658d3d5db9917e2b351b4a98afcb4ea2fa8aefe5804ec91d3bc0a4
+PRODUCTION_REFACTORKIT_CLI_SHA256=db6067bf3235191957203474da95f03c4399f4de47661af9a3dcb3ef65720246
+PRODUCTION_CLI_PROTOCOL_PROJECTION_SHA256=ac65359ed95dd09efaa6820b05a7c7d0c18a3b4495cc3e4f738f76d19149b50d
+CUCUMBER_JSON_SHA256=2e10af7f91c7fdf57f5501672dce98869baf26258b86129a35b5b4cec451f21a
+CUCUMBER_RESULT=scenarios=1 steps=30 passed=30 failed=0 skipped=0 undefined=0 pending=0 ambiguous=0
+S0_SNAPSHOT_SHA256=cc3605955c2cb98e7db5bea38c1b8a8841862c0739e32e12fa76b36baf601c3c
+EXPECTED_PLAN_SHA256=c633677315270ed9028ed10f1c1fa5c3e37079c693c710d17874545fae875e22
+HUMAN_STDOUT_SHA256=b353a04f51595e749cbb7a0c7a4e5a63c355bd8182f555e6c01acdb8971a1c4c
+HUMAN_STDERR_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+HUMAN_EXIT_RESOURCE_SHA256=9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa
+HUMAN_BASELINE_BUNDLE_SHA256=2c38357f125f5d20b1ea9b840d2a8eff12e64337a5fe8655afa10cb5777fb31b
+HUMAN_PINS=PASS_STEPS_15_AND_27
+INDEPENDENT_PLAN_DIGEST=PASS_STEPS_9_THROUGH_13_AND_18_THROUGH_25
+NONMUTATION=PASS_STEP_29_AND_AFTER_HOOK
+INSTALL_INVOCATION_LOOKUP_MUTATION_TRIPWIRES=PASS_STEPS_6_14_29_AND_AFTER_HOOK
+HISTORICAL_FAILURE_EVIDENCE=PRESERVED
+CATALOG001_002_PRIOR_POST_PROMOTION_EVIDENCE=NOT_RERUN_SCOPE_UNCHANGED
+--- RAW FOCUSED COMMAND LOG ---
+RESULT001 FINAL POST-PROMOTION FOCUSED CUCUMBER
+START_UTC=2026-08-09T02:13:51Z
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+JAVA_TOOL_OPTIONS=UNSET
+JDK_JAVA_OPTIONS=UNSET
+COMMAND=./gradlew --no-daemon --no-build-cache --no-problems-report --console=plain :modules:refactorkit-cli:cleanTest :modules:refactorkit-cli:test --tests org.refactorkit.cli.reqjavacliresult001.JavaCliOperationResultCucumberTest
+--- JAVA VERSION ---
+openjdk version "21.0.11" 2026-04-21
+OpenJDK Runtime Environment (build 21.0.11+10)
+OpenJDK 64-Bit Server VM (build 21.0.11+10, mixed mode, sharing)
+--- OUTPUT ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:refactorkit-cli:cleanTest
+> Task :modules:refactorkit-cli:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-core:compileJava NO-SOURCE
+> Task :modules:refactorkit-core:processResources NO-SOURCE
+> Task :modules:refactorkit-core:classes UP-TO-DATE
+> Task :modules:refactorkit-core:jar UP-TO-DATE
+> Task :modules:refactorkit-daemon:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-java:compileJava NO-SOURCE
+> Task :modules:refactorkit-java:processResources NO-SOURCE
+> Task :modules:refactorkit-java:classes UP-TO-DATE
+> Task :modules:refactorkit-java:jar UP-TO-DATE
+> Task :modules:refactorkit-jvm:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-kotlin:compileJava UP-TO-DATE
+> Task :modules:refactorkit-kotlin:processResources NO-SOURCE
+> Task :modules:refactorkit-kotlin:classes UP-TO-DATE
+> Task :modules:refactorkit-kotlin:jar UP-TO-DATE
+> Task :modules:refactorkit-jvm:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-jvm:compileJava NO-SOURCE
+> Task :modules:refactorkit-jvm:processResources NO-SOURCE
+> Task :modules:refactorkit-jvm:classes UP-TO-DATE
+> Task :modules:refactorkit-jvm:jar UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-tree-sitter:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:compileJava NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:processResources NO-SOURCE
+> Task :modules:refactorkit-tree-sitter:classes UP-TO-DATE
+> Task :modules:refactorkit-tree-sitter:jar UP-TO-DATE
+> Task :modules:refactorkit-typescript:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-typescript:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-typescript:compileJava NO-SOURCE
+> Task :modules:refactorkit-typescript:processResources UP-TO-DATE
+> Task :modules:refactorkit-typescript:classes UP-TO-DATE
+> Task :modules:refactorkit-typescript:jar UP-TO-DATE
+> Task :modules:refactorkit-web-importer:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-web-importer:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-web-importer:compileJava NO-SOURCE
+> Task :modules:refactorkit-web-importer:processResources NO-SOURCE
+> Task :modules:refactorkit-web-importer:classes UP-TO-DATE
+> Task :modules:refactorkit-web-importer:jar UP-TO-DATE
+> Task :modules:refactorkit-daemon:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-daemon:compileJava NO-SOURCE
+> Task :modules:refactorkit-daemon:processResources NO-SOURCE
+> Task :modules:refactorkit-daemon:classes UP-TO-DATE
+> Task :modules:refactorkit-daemon:jar UP-TO-DATE
+> Task :modules:refactorkit-testkit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-testkit:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-testkit:compileJava NO-SOURCE
+> Task :modules:refactorkit-testkit:processResources NO-SOURCE
+> Task :modules:refactorkit-testkit:classes UP-TO-DATE
+> Task :modules:refactorkit-testkit:jar UP-TO-DATE
+> Task :modules:refactorkit-cli:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-cli:compileJava UP-TO-DATE
+> Task :modules:refactorkit-cli:processResources NO-SOURCE
+> Task :modules:refactorkit-cli:classes UP-TO-DATE
+> Task :modules:refactorkit-cli:jar UP-TO-DATE
+> Task :modules:refactorkit-lsp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-lsp:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-lsp:compileJava NO-SOURCE
+> Task :modules:refactorkit-lsp:processResources NO-SOURCE
+> Task :modules:refactorkit-lsp:classes UP-TO-DATE
+> Task :modules:refactorkit-lsp:jar UP-TO-DATE
+> Task :modules:refactorkit-mcp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-mcp:compileKotlin UP-TO-DATE
+> Task :modules:refactorkit-mcp:compileJava NO-SOURCE
+> Task :modules:refactorkit-mcp:processResources NO-SOURCE
+> Task :modules:refactorkit-mcp:classes UP-TO-DATE
+> Task :modules:refactorkit-mcp:jar UP-TO-DATE
+> Task :modules:refactorkit-cli:compileTestKotlin UP-TO-DATE
+> Task :modules:refactorkit-cli:compileTestJava UP-TO-DATE
+> Task :modules:refactorkit-cli:processTestResources UP-TO-DATE
+> Task :modules:refactorkit-cli:testClasses UP-TO-DATE
+> Task :modules:refactorkit-cli:test
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 10s
+32 actionable tasks: 2 executed, 30 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.6.1/userguide/configuration_cache_enabling.html
+GRADLE_EXIT=0
+END_UTC=2026-08-09T02:14:01Z

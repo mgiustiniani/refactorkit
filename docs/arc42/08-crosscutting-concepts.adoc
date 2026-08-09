@@ -321,7 +321,7 @@ There is no persistence classification to add: the output is an in-memory immuta
 
 == `v0.7.x` Completion Authority
 
-Status: confirmed program architecture; remaining implementation is planned or otherwise open unless a separately cited bounded row is already qualified. The normative satellite is link:../requirements/v0.7.x-completion-contract.md[`docs/requirements/v0.7.x-completion-contract.md`]. The requirements appendix separates non-Gherkin completion rows from the current 38-definition/83-case Gherkin inventory. All 38 definitions/83 cases are now declared implemented-and-validated after the independent REQ-JAVA-CLI-CATALOG-001 `PASS`, status-only promotion, and post-promotion verification; each remains limited to its separately bounded evidence.
+Status: confirmed program architecture; remaining implementation is planned or otherwise open unless a separately cited bounded row is already qualified. The normative satellite is link:../requirements/v0.7.x-completion-contract.md[`docs/requirements/v0.7.x-completion-contract.md`]. The requirements appendix separates non-Gherkin completion rows from the current 40-definition/85-case Gherkin inventory. All 40 definitions/85 cases are declared `@implemented-and-validated` within separately bounded evidence. CATALOG-001 and CATALOG-002 retain their bounded post-promotion evidence; RESULT-001 has final post-re-promotion 30/30 source-built evidence while installed/package/platform qualification remains open.
 
 The cross-cutting invariant is that operation authority survives every translation and composition boundary. A surface, recipe, generic operation label, confidence value, approval, source-file presence, or another operation's acceptance cannot manufacture semantic or release authority.
 
@@ -990,13 +990,13 @@ For stable API `1.0`, documented core patch, CLI, and daemon fields, methods, er
 
 Status: implementation-informed baseline; API `1.0` freeze planned.
 
-== Implementation-informed CLI Command Catalogue
+== Versioned Java CLI Command Catalogues
 
-Status: implemented-and-validated for the bounded source-built current working tree after independent requirements-quality `PASS` for AC-CATALOG-001 through `012`. Baseline receipt `REQ-JAVA-CLI-CATALOG-001-BASELINE-001` at `docs/requirements/req-java-cli-catalog-001-baseline.md` has SHA-256 `56485baf0ab096ad994e18f2fa29650bbf4bf2c2098d027ccd426c8a360d0009` against base snapshot `0dd70f7a8bcf5b136a6641a38d98a6e4d51da194`; the sole status substitution changed historical pre-promotion feature SHA-256 `f366c2ebd6690ce50e71729e96d12e4e26f2bc6111714ef7608aca1935c56a2a` to promoted SHA-256 `01e1cd700279c605b0dc3b47e40ca275730dec187d3f5eab2f379ae9a45ed790`. The only production change remains `modules/refactorkit-cli/src/main/kotlin/org/refactorkit/cli/RefactorKitCli.kt`, SHA-256 `f8335da5f74ae529d06109425ffb7e5510b5b058b57aa11c624902fe6a1ec5dd`. Meaningful RED log/JSON SHA-256 `ad7d1106386360fd279899abcfd6ba0a6342f0bfd104d4f12b5ed08d3bfff742` / `acd03079b4ff0df72bf7a0bcc728cc8c65808b44eb2b07db545c2fd46e2580a9` record eight passed, one failed at the missing `commands` route, and thirteen skipped steps. Immutable post-promotion log `docs/requirements/evidence/req-java-cli-catalog-001-post-promotion-verification-7bed3ef7c64f74c52ce831507eb650751a1a021aa5e8f62d1c53d0a104b22c98.log` and Cucumber JSON SHA-256 `41ad5b1bfd0c9ffb7fff95f2014f1658109f7aa2256e2875446e3499ab39897c` record JDK 21 `BUILD SUCCESSFUL`, one scenario and 22/22 passed steps with zero other statuses, and `RefactorKitCliTest` 12/12.
+Status: implementation-informed for the bounded source-built catalogue family. Exact explicit-v1 compatibility, truthful help, default closed v2, and successful RESULT-001 preview coexist in one atomic Kotlin CLI implementation: `RefactorKitCli.kt` SHA-256 `db6067bf3235191957203474da95f03c4399f4de47661af9a3dcb3ef65720246` plus `CliProtocolProjection.kt` SHA-256 `ac65359ed95dd09efaa6820b05a7c7d0c18a3b4495cc3e4f738f76d19149b50d`. CATALOG-001 initial/approved-change SHA-256 are `56485baf0ab096ad994e18f2fa29650bbf4bf2c2098d027ccd426c8a360d0009` / `9fee5e4230e9e00ef267ddf48b72ab133d3469cb8c9b2fa8cf5aa42e9af2024e`; CATALOG-002 baseline SHA-256 is `df91e509e82c1a516f226887030702a78d0c41288ccdfe14b241942ef6fd2fea`; current promoted feature SHA-256 is `f02fc091db83e8b96909e4c596bda9702204c62f2874fdf1a0fd45a01e3970cf`. Test-only `GuardedChildJvm.kt` SHA-256 `081b01d28686118aaa4ab7e94b1e3f8e17b8b9c31b5d6a59b79c7ad99305bdc5` centralizes child startup. The standard JDK 21 parent explicitly unsets `JAVA_TOOL_OPTIONS` and `JDK_JAVA_OPTIONS`; every bounded child self-supplies `-Djava.security.manager=allow`, removes both inherited variables, and validates only the expected SecurityManager deprecation notice. CATALOG-001 process-harness/steps SHA-256 remain `693b79305620851ec0d35a66b76f48951e328567a741ecd29ca6753d16991fbe` / `eb4026a2448fbe1f83cc9b3959b7f7c1f911cfc7eaeaed46a10f2504125ace4b`; CATALOG-002 process-harness/steps remain `1ffe05b9e5c6418b3a206d4e113ea4e9ab5f72ae37f63d4046d5cac95406679e` / `d719adb927698dec637df43c7a626a60cdcdd22149686d5f3c4dc0e68af4e19d`. Current mode-`0444` post-promotion CATALOG-001 link:../requirements/evidence/req-java-cli-catalog-001-post-promotion-focused-5f31ba5a9162fb4673af2cffce95e1d32bc3da8648726aa23ecde3f1766e71e7.log[log] / link:../requirements/evidence/req-java-cli-catalog-001-post-promotion-cucumber-1c8397c4e697558c58e997286505594016cdbc827a9df1446b2c07ef4c49ba63.json[Cucumber JSON] passed one scenario/22 steps; CATALOG-002 link:../requirements/evidence/req-java-cli-catalog-002-post-promotion-focused-b561b3ebf0e32d7dca84081af0e48bca21dd57d8b392e99af18b4f99dcfd7e21.log[log] / link:../requirements/evidence/req-java-cli-catalog-002-post-promotion-cucumber-96f1e3825fc933baae06b76981a135a0aee7d79b6498382c43a36aca6fbb7464.json[Cucumber JSON] passed one scenario/31 steps. Both catalogue requirements are `@implemented-and-validated`. Earlier environment-dependent and pre-promotion pairs remain immutable historical receipts; installed/package/platform/release qualification remains open.
 
-The CLI distribution surface owns a transient immutable protocol document returned only by the source-built public route `refactorkit commands --json`. The document is constructed from a fixed authorized route registry for one invocation, rendered, consumed, and discarded. Its consistency boundary is one complete catalogue. A catalogue entry is an immutable protocol document; route name, semantic operation identity, aliases, modes, mutation-authority classification, JSON-support classification, stability, and required arguments are value types. None is an aggregate, entity, repository, event, projection, write authority, or retained lifecycle object.
+The CLI distribution surface owns a transient immutable catalogue family and a closed version-selection ACL. Each document is constructed from the same fixed authorized route registry for one invocation, rendered, consumed, and discarded. Its consistency boundary is one complete versioned catalogue. A catalogue version, entry, route name, semantic operation identity, aliases, modes, mutation-authority classification, JSON-support classification, stability, and required arguments are immutable protocol values. None is an aggregate, entity, repository, event, write authority, or retained lifecycle object.
 
-The closed v1 representation is:
+The exact legacy v1 representation is unchanged:
 
 [source,json]
 ----
@@ -1038,17 +1038,139 @@ The closed v1 representation is:
 }
 ----
 
-Top-level fields are exactly `schema`, integer `schemaVersion`, and `commands`. Entry fields are exactly `name`, `operation`, `aliases`, `modes`, `mutationAuthority`, `jsonSupport`, `stability`, and `requiredArguments`; closed-contract validation rejects unknown fields. `commands` is ordered lexicographically by byte-exact route `name`. The mode order is lifecycle order, not lexical order. Names and semantic operations are nonblank and unique. Current aliases are empty, and recipe names or semantic operations are not CLI aliases.
+The exact default v2 representation is a separate closed document:
+
+[source,json]
+----
+{
+  "schema": "refactorkit.cli-command-catalog/v2",
+  "schemaVersion": 2,
+  "commands": [
+    {
+      "name": "java create-module",
+      "operation": "java.createMavenModule",
+      "aliases": [],
+      "modes": ["preview", "apply"],
+      "mutationAuthority": "refactorkit-managed",
+      "jsonSupport": "catalog-only",
+      "stability": "experimental",
+      "requiredArguments": ["--module-name", "--parent-pom"]
+    },
+    {
+      "name": "java move-across-maven-modules",
+      "operation": "java.moveAcrossMavenModules",
+      "aliases": [],
+      "modes": ["preview", "apply"],
+      "mutationAuthority": "refactorkit-managed",
+      "jsonSupport": "catalog-only",
+      "stability": "experimental",
+      "requiredArguments": ["--from", "--to"]
+    },
+    {
+      "name": "java rename-module",
+      "operation": "java.renameMavenModule",
+      "aliases": [],
+      "modes": ["preview", "apply"],
+      "mutationAuthority": "refactorkit-managed",
+      "jsonSupport": "preview-only",
+      "stability": "experimental",
+      "requiredArguments": ["--old-module-dir", "--new-module-dir"]
+    }
+  ]
+}
+----
+
+Both contracts have exactly the top-level fields `schema`, integer `schemaVersion`, and `commands`; entry fields are exactly `name`, `operation`, `aliases`, `modes`, `mutationAuthority`, `jsonSupport`, `stability`, and `requiredArguments`. Closed validators reject unknown fields and reject either document under the other schema identity. Commands remain lexicographically ordered by byte-exact route name; modes retain lifecycle order. V2 differs from v1 only in schema identity/version and rename-module `jsonSupport=preview-only`. Create-module and move-across remain `catalog-only`. Names and semantic operations are nonblank and unique; aliases remain empty.
 
 The CLI route identity is the exact token path after the executable name. It remains distinct from the Java planner/plan operation identity: `java create-module` maps to `java.createMavenModule`, `java move-across-maven-modules` maps to `java.moveAcrossMavenModules`, and `java rename-module` maps to `java.renameMavenModule`. The CLI acts as an anti-corruption layer from argv route/option vocabulary to semantic operation identity. Catalogue presence does not invoke an operation or prove semantic completion.
 
-`requiredArguments` reports only unconditional parser requirements in parser validation/consumption order. In particular, move-across reports only `--from` and `--to`; `--dependency-pom` is optional, and dependency rewrite coordinates become conditionally required only when that option is selected. Workspace/root selection remains optional because `--root`, the first positional root, and default `.` are alternatives. Top-level help, public parser reachability, and catalogue membership must agree for all three routes.
+`requiredArguments` reports only unconditional parser requirements in parser validation/consumption order. In particular, move-across reports only `--from` and `--to`; `--dependency-pom` is optional, and dependency rewrite coordinates become conditionally required only when that option is selected. Workspace/root selection remains optional because `--root`, the first positional root, and default `.` are alternatives.
 
-With `--json`, stdout must contain exactly one UTF-8 JSON object followed by one LF; stderr must be empty; and logs, stack traces, progress text, ANSI sequences, and human prose are forbidden. Discovery must not open or scan a workspace and must create no preview, plan, lock, `.refactorkit` directory, WAL, transaction, edit, installation change, or other state. `mutationAuthority=refactorkit-managed` describes who owns an explicitly requested later apply; it grants no write authority to discovery. `jsonSupport=catalog-only` advertises only catalogue discovery and explicitly does not claim a `refactorkit.cli-result/v1` operation-result envelope. `stability=experimental` does not promote support.
+Version negotiation is intentionally closed: omitted selector means exact v2; exact `--schema-version 1` means exact legacy v1; no other explicit value is admitted. Malformed, duplicate, missing-value, or unsupported selectors must refuse without silently falling back or returning another schema. This fail-closed parser condition defines neither a `refactorkit.cli-result/v1` error envelope nor an exact exit code; those behaviors remain outside the slice. Top-level help advertises exactly `refactorkit commands --json [--schema-version 1]`, and help, parser reachability, selected schema, and catalogue membership must agree.
+
+Each successful discovery writes exactly one compact UTF-8 JSON object followed by one LF to stdout and leaves stderr empty; logs, stack traces, progress text, ANSI sequences, and human prose are forbidden. Discovery/version selection must not open or scan a workspace and must create no preview, plan, lock, `.refactorkit` directory, WAL, transaction, edit, installation change, or other state. `mutationAuthority=refactorkit-managed` describes who owns a separately requested apply and grants no authority to discovery. V1 `catalog-only` continues to make no operation-result claim. V2 `preview-only` is a bounded truth claim for successful RESULT-001 preview only; it grants no apply/refusal/error/limits support or write authority. `stability=experimental` does not promote support.
 
 Existing `refactorkit capabilities` remains the separate language-adapter capability schema implemented by `LanguageCapabilityProtocol`; it gains no CLI distribution fields and remains byte-identical at SHA-256 `dec4087fa8b7ba038a5b9a82728ec724054ee6fd28456eb9ec637fd7d0d0d1c3`. During GREEN validation, a hidden test-oracle defect was corrected honestly: the expected top-level capabilities keys now include the pre-existing `vocabulary` key (`schemaVersion`, `adapters`, `vocabulary`). Capabilities production bytes were already identical and no production change was made for this oracle correction. The CLI catalogue must not be merged into the language capability or `docs/java-capabilities.md` support matrix.
 
-Later `refactorkit.cli-result/v1`, isolated `installDist` parity, installed-runtime promotion or overwrite, fresh SURFACE-002 qualification, non-Java inventory, and any wider host/platform/release claim remain excluded. The installed executable was guarded, neither invoked nor modified, and its observed launcher SHA-256 remains `fa9cd72b54f269d76053da247665cb931ff39631d1ac38c7b55aaa0c9dcadef3`; that observation is not acceptance evidence. Qualification is limited to source-built `0.7.0-SNAPSHOT` on local Linux, JDK 21, and the current CPU architecture. The existing CLI container and ADRs 0002/0004 already own the read/write and integration boundaries; no persistent mechanism, ADR change, C4 element, or C4 relationship is introduced.
+The historical v1 `jsonSupport=catalog-only` semantics and evidence are not rewritten by this evolution. CATALOG-001 compatibility, CATALOG-002 default v2, and RESULT-001 successful preview remain separate requirements on one atomic production boundary. CATALOG-001 and CATALOG-002 are `@implemented-and-validated` with passing post-promotion evidence. RESULT-001 is now `@implemented-and-validated` within the same bounded source-built contract: the first joint post-promotion run exposed only a stale full-feature test pin before preview execution, the corrected status-neutral integrity check passed 30/30 against the same production, and final post-re-promotion verification passed 30/30 after status re-promotion. This bounded status does not broaden the v2 claim beyond the passing source-built preview.
+
+Installed/package parity, installed-runtime promotion or overwrite, fresh SURFACE-002 qualification, apply/refusal/error/limits result support, other commands/languages, and any wider host/platform/release claim remain excluded. The existing joint post-promotion SURFACE-002 regression log SHA-256 `41fa14a94a3d32e3434d87d91856bf4bb906de8603a47c4b24687bbe33ebbe5b` passed but is regression-only, not fresh qualification; prior regression receipt `a345ade4a1053204c98490699773a5c8fc26344d2b433d5e1829a709f9dd7ec9` remains historical. The existing CLI container and ADRs 0002/0004 already own protocol evolution and read/write boundaries; no persistence mechanism, C4 element, or relationship is introduced.
+
+== Java CLI Preview-result Protocol
+
+Status: implementation-informed and `@implemented-and-validated` for only the bounded source-built `REQ-JAVA-CLI-RESULT-001` contract. The immutable initial/decomposition/atomic-correction SHA-256 values are `8f29946c5dcb0128075764fbcd2756156d61edfad4d0fffe2f49afa526c68957` / `7c8555ba5c3f393f1809136a38e86da9419234962864513bd4515001557c250c` / `40a0183ec29584724a98e2357738078e7caa8d8356c90a7c0e4cd9930ff3e73e`; current promoted feature SHA-256 is `5956f93a681562f6922a9101daa8c153c9a3b8d1f7fdc260bd0070d5faf48ea5`; status-neutral canonical SHA-256 is `b6f62831bf38c2fdaadbd02abc024abd16c8818a812678c76a1eb146642e4ed9`. Meaningful RED log/JSON SHA-256 `896524674ae4745bce1dcd869dcef19de0f79b5fa46e5d06bfda88f802791a78` / `94c6e89a3879634ed2679a307ccd4f6cab942f90c428c792efd097d8edc7e5b9` record legacy human output. Immutable post-promotion failure log/JSON SHA-256 `fcd32c7eb2736ba5c2d9faa65109b18f1f900886d04bf382af2c74b28eeeaa49` / `95770ab372b1c97052da80dea6d72b043da3276255d8eb6cbf63ad255105e554` record the old full-feature pin rejecting status-only drift before preview execution. RESULT-001 process-harness/steps SHA-256 are now `4d38ab55b7e006da0bd1d49aaea79796a5724acccb6c9149d07a644cb6b9b398` / `3407b8edf7658d3d5db9917e2b351b4a98afcb4ea2fa8aefe5804ec91d3bc0a4`. The corrected integrity check requires exactly one REQ tag line and one allowed status token, canonicalizes only that token to `@absent`, requires the full canonical SHA-256 above, and rejects every other drift. All 30 Gherkin steps and tripwires remain unchanged; assertion calls increased. The corrected pre-final-promotion mode-`0444` log/JSON SHA-256 `63d8d62f22317d09579abf6381a08a01c85f894e31db183c98aa52f222f3feb6` / `4996f117788f1fa53195f0822d25a92e0848e322a4e9da11723f6df36130e4ca` passed one scenario/30 steps and remains immutable superseded evidence. Final mode-`0444` post-re-promotion link:../requirements/evidence/req-java-cli-result-001-final-post-promotion-focused-6ab958c33d541b79c08b2eef354a2bddfdb298d60040364f4d5c935915d14c3d.log[log] / link:../requirements/evidence/req-java-cli-result-001-final-post-promotion-cucumber-2e10af7f91c7fdf57f5501672dce98869baf26258b86129a35b5b4cec451f21a.json[Cucumber JSON] passed one scenario and 30/30 steps against the same atomic production hashes as the catalogues, using the shared explicitly scrubbed parent/guarded-child launcher. Supporting mode-`0444` link:../requirements/evidence/req-java-cli-result-001-final-post-promotion-unit-testclasses-5ff927b32797f4acf60693a562b900e21d958d1b6a9166d9de91b1c52aded264.log[`testClasses`/unit log] records fresh `testClasses` PASS and CLI unit regression 12/12. Earlier GREEN pairs remain immutable historical evidence. Human stdout/stderr/bundle pins remain `b353a04f51595e749cbb7a0c7a4e5a63c355bd8182f555e6c01acdb8971a1c4c` / `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / `2c38357f125f5d20b1ea9b840d2a8eff12e64337a5fe8655afa10cb5777fb31b`; installation remained unchanged and uninvoked.
+
+=== Classification, Ownership, and ACL
+
+The CLI Distribution Surface owns one invocation-scoped result document and its nested plan, change, diagnostic, and location documents. They are immutable protocol values: no stable entity identity, repository, aggregate lifecycle, domain event, durable projection, audit store, or persistence mechanism is introduced. The result's consistency boundary is one complete compact UTF-8 JSON object followed by one LF.
+
+The CLI is the anti-corruption layer on both sides. Inbound, the exact public route `java rename-module` and its argv options become the existing semantic operation `java.renameMavenModule`. Outbound, the exact internal `PatchPlan` and validation diagnostics are deliberately projected instead of serialized. Internal `PlanId`, `WorkspaceEdit`, raw ranges/replacement/source bytes, warning and summary prose, confidence, risk, authority leases, journal records, absolute roots, and host metadata do not cross the boundary. The canonical plan digest is correlation for complete content, never a pending-plan handle, approval, apply token, authorization, transaction identity, or independent semantic evidence.
+
+The implemented values remain transient: construct, validate, render once, consume, and discard. Existing schema-v8 transaction journal data is neither read nor rewritten for preview. There is no result repository, current-state store, event store, audit-evidence store, outbox, immutable document store, or event-sourcing decision.
+
+=== Exact RESULT-001 Envelope
+
+The contract identity is `refactorkit.cli-result/v1`; v1 intentionally has no top-level `schema` or `error` member. The exact producer field order is:
+
+[source,json]
+----
+{
+  "schemaVersion": 1,
+  "command": "java.renameMavenModule",
+  "requestId": "case-001",
+  "outcome": "preview",
+  "plan": {
+    "sha256": "<64 lowercase hexadecimal characters>",
+    "snapshotSha256": "<64 lowercase hexadecimal characters>",
+    "requiresApproval": true,
+    "changeCount": 5,
+    "changes": [
+      {"kind":"modify","path":"catalog-model/pom.xml","previousPath":null},
+      {"kind":"modify","path":"pom.xml","previousPath":null},
+      {"kind":"modify","path":"catalog-pricing/pom.xml","previousPath":null},
+      {"kind":"move","path":"catalog-domain/pom.xml","previousPath":"catalog-model/pom.xml"},
+      {"kind":"move","path":"catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","previousPath":"catalog-model/src/main/java/com/acme/catalog/legacy/Product.java"}
+    ]
+  },
+  "transaction": null,
+  "diagnostics": [],
+  "truncated": false
+}
+----
+
+Top-level fields are exactly `schemaVersion`, `command`, `requestId`, `outcome`, `plan`, `transaction`, `diagnostics`, and `truncated`, in that order. For this slice their exact values/invariants are integer `1`, exact command identity, valid opaque correlation, exact `preview`, non-null canonical plan, null transaction, empty diagnostics for the qualified fixture, and boolean `false`. Consumer semantic equality does not rely on object-member order, but the producer uses this order to make fixed-correlation bytes deterministic.
+
+The qualified route accepts optional `--request-id`. A caller value is 1..128 ASCII bytes and must match `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`; it is preserved byte-for-byte without trimming, case-folding, Unicode normalization, or aliasing. When absent, the invocation generates exactly one `request-<lowercase canonical UUIDv4>` value. That generated correlation is the only approved nondeterministic field in this preview slice. Invalid/duplicate/missing-value usage-result behavior belongs to deferred RESULT-004 and is not an executable current-slice claim.
+
+The reserved closed diagnostic document has exactly ordered fields `kind`, `severity`, `code`, `category`, `evidence`, `subject`, `precision`, and `location`; a non-null location has exactly ordered fields `path`, `startLine`, `startCharacter`, `endLine`, and `endCharacter`. RESULT-001 emits no instance for its qualified fixture. Populated validation/refusal/error mappings, redaction, bounds, and any `truncated=true` result belong to RESULT-003, `004`, `005`, or `006` and must remain unimplemented now. Transaction fields likewise belong to RESULT-002.
+
+=== Canonical Plan Projection and Digest
+
+The plan has exactly ordered fields `sha256`, `snapshotSha256`, `requiresApproval`, `changeCount`, and `changes`. The current command requires `requiresApproval=true`. `snapshotSha256` is the exact internal plan snapshot hash. `changeCount` is the complete normalized top-level edit-entry count; the qualified fixture has five. The visible `changes` list preserves complete normalized `WorkspaceEdit` application order and is not lexically resorted.
+
+Each change has exactly ordered fields `kind`, `path`, and `previousPath`. The only admitted current kinds are `modify` and `move`: a modify has a safe normalized workspace-relative `/` path and null `previousPath`; a move has its destination in `path` and non-null source in `previousPath`. The qualified projection therefore reports three modifications followed by the POM and source-tree moves shown above. It does not expose text ranges or replacement bytes.
+
+`plan.sha256` is SHA-256 over the complete normalized edit, not over the bounded visible summary and not over an internal plan ID. The canonical byte stream is fixed as follows:
+
+. Every string is UTF-8 preceded by its unsigned 32-bit big-endian byte length.
+. Frame, in order, the literal `refactorkit.cli-result/plan-sha256/v1`, the literal `java.renameMavenModule`, and the actual `snapshotSha256` value.
+. Append byte `0x01` for required approval and the complete edit count as unsigned 32-bit big-endian.
+. For each complete normalized edit in application order:
+** modify: append kind byte `0x01`, the framed canonical path, the unsigned 32-bit text-edit count, then every non-overlapping text edit sorted by `(startLine,startCharacter,endLine,endCharacter)`; encode all four zero-based coordinates as unsigned 32-bit big-endian and frame the exact replacement UTF-8 bytes;
+** move: append kind byte `0x02`, the framed canonical source path, then the framed canonical destination path.
+. Exclude random `PlanId`, summaries, warnings, confidence/risk, diagnostics, authority objects, timestamps, request correlation, and projection state.
+
+The digest therefore commits to every complete text range and replacement byte hidden by the safe change projection. For the same exact snapshot/request/edit it is repeatable across independent plan creation even when internal random plan IDs differ.
+
+=== Output, Mutation, and Qualification Boundaries
+
+For the qualified source-built `0.7.0-SNAPSHOT` local Linux/JDK-21/current-CPU fixture, `java rename-module ... --json` preview must exit 0, write exactly one compact JSON object plus one LF to stdout, and leave stderr empty. No logger output, progress text, stack trace, ANSI sequence, or human prose may contaminate either stream. With a fixed caller request ID, repeated identical invocations produce byte-identical output.
+
+Preview may scan and plan through the already qualified module-rename dependencies, but it performs no managed workspace write, `.refactorkit` creation, workspace-lock acquisition, WAL creation/read/update, transaction creation, rollback operation/claim, installed-executable invocation, `installDist` parity check, or promotion/overwrite under `~/.local/share/refactorkit`. Calling the same command without `--json` preserves the existing human-oriented preview output and exit semantics. Current guards also reject JSON apply plus invalid or misplaced request-ID usage before workspace scanning or mutation; those observations grant no RESULT-002 apply or RESULT-004 usage/error-envelope qualification.
+
+Approved future IDs remain strictly deferred: RESULT-002 applied transaction correlation; RESULT-003 application refusal; RESULT-004 usage and expected operational error; RESULT-005 unexpected internal error; and RESULT-006 schema closure, limits, redaction, and truncation. They must not appear as implemented, tested-complete, or promoted in RESULT-001. This slice also grants no fresh SURFACE-002 authority/apply/refusal/rollback qualification, no other Java command or language support, no package/install/native/other-host behavior, and no release or support-matrix claim.
+
+ADRs 0002 and 0004 already cover the complete additive boundary. ADR 0004 owns CLI parsing, protocol-specific projection, explicit compatibility/version policy, and deterministic unsupported-version outcomes while requiring delegation to shared Java/core behavior; ADR 0002 preserves internal plan and managed mutation authority. Closed default-v2/legacy-v1 selection plus atomic truthfulness changes no write ownership, journal semantics, lifecycle, persistence, or topology. No new ADR/body, chapter 9, C4 element, relationship, deployment view, or runtime participant is justified. Reassess only if a later slice changes authority, persistence, lifecycle, cross-surface ownership, participants, relationships, or topology.
 
 == Agent and MCP Safety
 
