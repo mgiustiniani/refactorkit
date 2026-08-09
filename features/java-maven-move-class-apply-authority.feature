@@ -6,8 +6,8 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
 
   This executable backlog covers ARC42 RPK-JAVA-MOVE-001 through RPK-JAVA-MOVE-007.
   LEXICAL_FALLBACK is always review-only and can never acquire managed-write authority.
-  Declared status: 12 of 13 requirement definitions and 22 of 31 expanded cases carry
-  implemented-and-validated status. REQ-JAVA-MAVEN-MOVE-AUTH-013 and its nine cases remain absent.
+  Declared status: 13 of 13 requirement definitions and 31 of 31 expanded cases carry
+  implemented-and-validated status; no requirement definition or expanded case remains absent.
 
   Background:
     Given the declared workspace root is the permanent fixture "testdata/acceptance/java-maven-move-class-authority-20-modules"
@@ -398,7 +398,7 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
       | relocation/model parse evidence             | remove parsed-model proof that the selected leaf has no relocation while descriptor bytes remain present | MISSING              |
 
   # Under-lock completion of the managed-write admission row; no packaged/native claim.
-  @REQ-JAVA-MAVEN-MOVE-AUTH-013 @functional-requirement @non-functional-requirement @absent
+  @REQ-JAVA-MAVEN-MOVE-AUTH-013 @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario Outline: Incomplete or stale managed-write authority refuses before WAL
     Given a fresh isolated REQ-013 case starts from an eligible candidate-total Maven move-class semantic preview
     When approved managed apply evaluates the isolated condition "<condition>" while holding the workspace lock
