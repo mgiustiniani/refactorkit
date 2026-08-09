@@ -49,8 +49,8 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("PASSED", receipt["status"])
         self.assertEqual(4, receipt["nativeRows"])
-        self.assertEqual("PASS_REVIEW_PENDING", receipt["nativeEvidenceState"])
-        self.assertTrue(receipt["nativeParentRowsOpen"])
+        self.assertEqual("PASSED", receipt["nativeEvidenceState"])
+        self.assertFalse(receipt["nativeParentRowsOpen"])
         self.assertEqual(3, receipt["exactTemurin2111Pins"])
 
     def test_checked_roadmap_row_without_projection_update_fails(self) -> None:
@@ -67,11 +67,11 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
             receipt["failures"],
         )
 
-    def test_premature_native_promotion_fails(self) -> None:
-        path = self.root / "docs/releases/v0.7.0-support-matrix.md"
+    def test_passed_native_rows_with_open_parent_fail(self) -> None:
+        path = self.root / "docs/releases/v0.7.0-plan.md"
         text = path.read_text(encoding="utf-8").replace(
-            "| `PASS_REVIEW_PENDING` |",
-            "| `PASSED` |",
+            "- [x] Prove semantic preview, one-transaction apply, exact post-apply diagnostics,",
+            "- [ ] Prove semantic preview, one-transaction apply, exact post-apply diagnostics,",
         )
         path.write_text(text, encoding="utf-8")
         result, receipt = self._run()

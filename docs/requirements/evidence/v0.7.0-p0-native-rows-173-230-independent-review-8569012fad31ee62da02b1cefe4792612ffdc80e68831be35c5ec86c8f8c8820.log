@@ -1,0 +1,34 @@
+verdict: PASS
+baselineId: V070-P0-NATIVE-ROWS-173-230-REVIEW-001
+baselineSha256: 442af5964112894bcb9ac8f11d81cd8fb8d7bdf6b8cade43a31043b2c4630a2f
+reviewedRevision: 01da5b33d2168cdeab12b378c0ba447b1e4d7429; production subject 3782b1109aa8874ab887d6031d5bfa86bf5e9ab8; range 5996b6a33bfa3d7a826edbb1cfbf9030e26d0b6b..01da5b33d2168cdeab12b378c0ba447b1e4d7429
+reviewedScope: P0-NATIVE-BEHAVIOR-173, P0-REMAINING-AUTHORITY-SHAPES-230
+requirementMatrix:
+  - requirement: P0-NATIVE-BEHAVIOR-173
+    acceptanceCriteria: P0-173-AC1 through P0-173-AC7
+    implementationEvidence: .github/workflows/ci.yml; PackagedJavaMavenMoveClassAuthoritySteps.kt; PackagedProcessHarness.kt; features/java-maven-move-class-apply-authority.feature; permanent 20-module fixture
+    verificationEvidence: GitHub run 31336067318 at exact revision 3782b110...; four dedicated jobs passed packaging, public REQ-001, complete matrix, finalization, and upload; downloaded receipt hashes bbf71ffd..., 90cf0596..., 1fa4e2f..., cefa367f...; public artifacts independently confirmed semantic preview, exact five-path closure, pre-WAL lock refusal, one transaction, zero staged/post-apply diagnostics, and byte/path/inventory/snapshot rollback restoration. Windows evidence explicitly exercised the open-lock-safe path and Windows Java tripwires.
+    status: SATISFIED
+  - requirement: P0-REMAINING-AUTHORITY-SHAPES-230
+    acceptanceCriteria: P0-230-AC1 through P0-230-AC6
+    implementationEvidence: modules/refactorkit-cli/build.gradle.kts matrix workers; PackagedProductionClasspathAttestationTest.kt; finalize-packaged-maven-move-class-authority-matrix.py; finalize-native-maven-move-class-authority.py
+    verificationEvidence: all four downloaded artifact sets independently parsed as 13 distinct requirement tags, 31 passing scenarios, 436 passing steps, and 62 passing hooks; public mode was exactly 31 discovered/1 executed/30 skipped with zero failures/errors; separate receipt families and embedded-runtime/package-lib attestation passed. Fresh Linux JDK 21.0.11+10 rerun executed all 53 tasks successfully and produced PASSED matrix SHA-256 86371227e6bc6ea80df006bd656241f011f6beb865e6841088df5c3296f7cc42.
+    status: SATISFIED
+blockingFindings: []
+nonBlockingFindings: []
+unverifiedClaims:
+  - Green whole-repository cross-platform CI is not authorized; run 31336067318 had overallWorkflowConclusion=failure while the four dedicated jobs succeeded.
+  - General Maven authority, new Gherkin cases, Maven module-rename/J1, K1/K2/K5/T5/J1/I1 closure, release publication/archive/SBOM/signing, installed-runtime promotion, numerical child-JVM coverage, crash/restart, and concurrency qualification remain excluded.
+commandsRun:
+  - "sha256sum /tmp/p0-rows-173-230-native-independent-review-handoff.md; exit 0"
+  - "git revision/status/diff and stated-artifact hash checks; exit 0; tracked worktree clean"
+  - "gh run view 31336067318 --repo mgiustiniani/refactorkit --json ...; exit 0"
+  - "gh api repos/mgiustiniani/refactorkit/actions/runs/31336067318/artifacts; exit 0"
+  - "gh run download 31336067318 for all four native artifacts into /tmp/refactorkit-native-review-hINMS1; exit 0"
+  - "Independent Python parsing and SHA-256 verification of all downloaded Cucumber, JUnit, matrix, attestation, and native receipts; exit 0"
+  - "python3 scripts/test-finalize-native-maven-move-class-authority.py; exit 0, 3 tests passed"
+  - "python3 scripts/test-finalize-packaged-maven-move-class-authority-matrix.py; exit 0, 3 tests passed"
+  - "python3 scripts/test-verify-v070-roadmap-support-claims.py; exit 0, 6 tests passed"
+  - "Initial JDK 21 Gradle rerun attempt; exit 1 due full /tmp tmpfs before subject tests"
+  - "JAVA_HOME=/usr/lib/jvm/java-21-openjdk JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=<external-temp> ./gradlew :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest --no-daemon --rerun-tasks; exit 0, BUILD SUCCESSFUL, 53 tasks executed"
+requiredNextAction: Authorized: the coordinator may make a follow-up status-only commit changing exactly the four native support rows from PASS_REVIEW_PENDING to PASSED and checking only P0 rows 173 and 230. Every explicit exclusion above must remain intact; rerun the roadmap-support claim verifier after that status change.

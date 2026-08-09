@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed for local runtime/package facts, the published `v0.3.0` deployment, and exact revision-bound Maven move-class run `31336067318`. Four hosts passed public REQ-001 plus the complete production-JAR matrix; all operation rows are `PASS_REVIEW_PENDING`. Stable release/archive/SBOM/publication verification remains planned.
+Status: implementation-informed for local runtime/package facts, the published `v0.3.0` deployment, and exact revision-bound Maven move-class run `31336067318`. Four hosts passed public REQ-001 plus the complete production-JAR matrix; all operation rows are `PASSED`. Stable release/archive/SBOM/publication verification remains planned.
 
 == Deployment Overview
 
@@ -58,7 +58,7 @@ Official final local Linux `amd64` execution observed the real launcher and cano
 
 The separately reported source-built whole-tree gate passed on the same JDK in 6m43s with 1045 standard tests discovered, 817 executed, 228 skipped/tag-filtered, zero failures/errors, 140 XML files, and 82 tasks executed (log SHA-256 `89438b03d5228f8ff8173b82a5dc587a36b0907d476dd2adffceff54bca874ef`); those totals intentionally exclude the dedicated packaged task. Targeted custom-source-set PMD/SpotBugs tasks passed (log SHA-256 `2cf542051224e2e81f81b5f7ec8132a59ef04258ff2902346076ab39b25c0ff2`). Static classification remains intentionally non-zero: 99 reviewed/non-blocking findings in packaged test/deployment glue/harness (57 NP, 14 MS, 12 BC, 6 AT, 9 RCN, 1 UrF), mostly Kotlin `lateinit`/generated-representation and conservative single-thread-harness concurrency warnings. No production source was added or modified by this slice; the wider static baseline remains non-blocking, and neither aggregate static cleanliness nor numerical/child-JVM coverage is claimed.
 
-The historical local observation did not promote the release ledger. Exact run `31336067318` subsequently passed public REQ-001 and the complete 13-ID/31-case production-JAR matrix on Linux x86-64, Windows x86-64, macOS x86-64, and macOS arm64; all four operation rows remain `PASS_REVIEW_PENDING` until independent review. Aggregate SHA-256 is `8047b8c93e25175b2efd1af74e6be734317ac4cb734ebe7ac5f465a8c74dbfdc`. This operation-specific evidence does not promote release archives or another operation. Ordinary `test`/`check` remain package-independent.
+The historical local observation did not promote the release ledger. Exact run `31336067318` subsequently passed public REQ-001 and the complete 13-ID/31-case production-JAR matrix on Linux x86-64, Windows x86-64, macOS x86-64, and macOS arm64; all four operation rows are `PASSED` after independent review. Aggregate SHA-256 is `8047b8c93e25175b2efd1af74e6be734317ac4cb734ebe7ac5f465a8c74dbfdc`. This operation-specific evidence does not promote release archives or another operation. Ordinary `test`/`check` remain package-independent.
 
 The historical local evidence is bounded to REQ-001; the complete matrix separately covers REQ-002 through REQ-013 and their exercised integration/library contracts. Neither qualifies release archives, checksums, SBOMs, attestations, signing, downloaded assets, Magrathea/general populations, crash/concurrency, or numerical child-JVM coverage. CLI apply replans within its child process; the runner makes no cross-process plan-ID claim. External protocol and product semantics are unchanged.
 
@@ -66,7 +66,7 @@ The earlier delegated C4 review remains applicable: the existing Automation/CI-t
 
 == `v0.7.x` Completion and Release-evidence Gate
 
-Status: local production admission and Linux packaging-scaffold cause corrected; the Maven move-class dedicated post-commit matrix passed four hosts and awaits promotion review, while broad CI, deployment, and release qualification remain planned or open.
+Status: local production admission and Linux packaging-scaffold cause corrected; the Maven move-class dedicated post-commit matrix and promotion review passed four hosts, while broad CI, deployment, and release qualification remain planned or open.
 
 At the 2026-08-02 EARLY review, local `HEAD` and `origin/main` both identified the clean pushed production baseline as `2b5aa7234cc385214acb6958834763288aefc527`. GitHub Actions CI run `30746237578`, run number 371/attempt 1 for that exact SHA, completed at `2026-08-02T12:12:47Z` with conclusion `failure`. Its Linux `build` job failed **Verify CLI runtime distribution**; Windows x86_64 and macOS x86_64 failed **Build and test**; macOS arm64 succeeded. Later run `30749086970` for commit `743c145da9ccf0ae082d3e7136d84655ad96c05a`, run number 372/attempt 1, also concluded `failure` after its Linux `build` job failed the same distribution-verification step. The platform-job observations remain separate: the root archive-task defect does not explain or qualify Windows/macOS behavior, and none of these outcomes is release evidence.
 

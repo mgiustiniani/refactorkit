@@ -36,7 +36,7 @@ Status: implementation-informed from CLI, Java adapter, patch engine, testkit do
 
 == Implemented Runtime Scenario: Local Packaged-process REQ-001 Qualification
 
-Status: implementation-informed locally and observed in exact revision-bound run `31336067318`. This is a second validation mode for existing `REQ-JAVA-MAVEN-MOVE-AUTH-001`, not a new requirement or case; the complete matrix separately executes all 13 IDs/31 cases against production package JARs. Linux x86-64, Windows x86-64, macOS x86-64, and macOS arm64 passed both modes and emitted fail-closed receipts. Every row remains `PASS_REVIEW_PENDING` until independent promotion review; no green whole-repository CI claim is made.
+Status: implementation-informed locally and observed in exact revision-bound run `31336067318`. This is a second validation mode for existing `REQ-JAVA-MAVEN-MOVE-AUTH-001`, not a new requirement or case; the complete matrix separately executes all 13 IDs/31 cases against production package JARs. Linux x86-64, Windows x86-64, macOS x86-64, and macOS arm64 passed both modes and emitted fail-closed receipts. Every bounded native row is `PASSED` after independent promotion review; no green whole-repository CI claim is made.
 
 [cols="1,3",options="header"]
 |===
@@ -839,7 +839,7 @@ Status: implementation-informed and `@implemented-and-validated` under
 `dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
 Independent review returned `PASS`, and post-promotion evidence passed all nine
 cases. Exact run `31336067318` passed the complete matrix on all four native
-hosts; promotion remains independent-review pending.
+hosts; independent promotion review returned `PASS`.
 
 [cols="1,3",options="header"]
 |===

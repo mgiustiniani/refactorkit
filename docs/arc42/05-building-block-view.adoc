@@ -438,7 +438,7 @@ baseline `REQ-JAVA-MAVEN-MOVE-AUTH-013-BASELINE-001` SHA-256
 `dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6`.
 Independent revision-bound review returned `PASS`; post-promotion focused and
 packaged-matrix evidence passed. Exact four-host run `31336067318` also passed
-both packaged modes; native promotion remains independent-review pending.
+both packaged modes; independent native promotion review returned `PASS`.
 
 Core's existing `OperationAuthorityLease` remains the language-neutral
 under-lock admission value. The additive contract gives it explicit
@@ -456,4 +456,4 @@ This is a refinement of the existing Core/Java in-process relationship and ADR
 0002 authority boundary. It introduces no actor, container, protocol, durable
 store, event, second journal, or C4 relationship; no ADR or C4 change is
 required. Exact packaged/native evidence exists for the bounded contract and
-remains promotion-review pending; general authority stays open.
+passed independent promotion review; general authority stays open.

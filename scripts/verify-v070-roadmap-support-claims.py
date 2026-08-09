@@ -30,7 +30,7 @@ REQUIRED_SUPPORT_CLAIMS = {
     "module-boundary": "Packaged/native/cross-platform module rename or move and general Maven-module authority remain unqualified.",
     "recipe-boundary": "Recipe evidence is operation-specific; no generic or advanced migration-recipe authority is claimed.",
     "sbom-boundary": "SBOM workflow wiring is configured, but final SPDX assets, attestations, publication, and downloaded-asset verification remain unqualified.",
-    "move-class-native-boundary": "Native evidence state is explicit and uniform; no row is qualified before independent review.",
+    "move-class-native-boundary": "Native evidence state is explicit and uniform; no row was qualified before independent review.",
 }
 
 REQUIRED_NATIVE_WORKFLOW_TOKENS = {
