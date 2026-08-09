@@ -63,10 +63,10 @@ class NativeMavenMoveClassFinalizerTest(unittest.TestCase):
         junit = self.build / "test-results/packagedMavenMoveClassAuthorityTest"
         junit.mkdir(parents=True)
         cases = '<testcase name="selected"/>' + "".join(
-            f'<testcase name="skipped-{index}"><skipped/></testcase>' for index in range(21)
+            f'<testcase name="skipped-{index}"><skipped/></testcase>' for index in range(30)
         )
         (junit / "TEST-fixture.xml").write_text(
-            f'<testsuite tests="22" skipped="21" failures="0" errors="0">{cases}</testsuite>',
+            f'<testsuite tests="31" skipped="30" failures="0" errors="0">{cases}</testsuite>',
             encoding="utf-8",
         )
 

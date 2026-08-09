@@ -1,0 +1,54 @@
+{
+  "conclusion": "failure",
+  "headSha": "b84ec726bd0dc88b7048a5a6e4f1b5eec950866a",
+  "jobs": [
+    {
+      "conclusion": "failure",
+      "name": "Maven move-class authority (linux-x86_64)",
+      "steps": {
+        "Finalize revision-bound native qualification receipt": "failure",
+        "Package exact self-contained runtime": "success",
+        "Run complete packaged Maven move-class authority matrix": "success",
+        "Run public-CLI packaged Maven move-class authority": "success",
+        "Upload Maven move-class native qualification (linux-x86_64)": "success"
+      }
+    },
+    {
+      "conclusion": "failure",
+      "name": "Maven move-class authority (macos-x86_64)",
+      "steps": {
+        "Finalize revision-bound native qualification receipt": "failure",
+        "Package exact self-contained runtime": "success",
+        "Run complete packaged Maven move-class authority matrix": "success",
+        "Run public-CLI packaged Maven move-class authority": "success",
+        "Upload Maven move-class native qualification (macos-x86_64)": "success"
+      }
+    },
+    {
+      "conclusion": "failure",
+      "name": "Maven move-class authority (macos-aarch64)",
+      "steps": {
+        "Finalize revision-bound native qualification receipt": "failure",
+        "Package exact self-contained runtime": "success",
+        "Run complete packaged Maven move-class authority matrix": "success",
+        "Run public-CLI packaged Maven move-class authority": "success",
+        "Upload Maven move-class native qualification (macos-aarch64)": "success"
+      }
+    },
+    {
+      "conclusion": "failure",
+      "name": "Maven move-class authority (windows-x86_64)",
+      "steps": {
+        "Finalize revision-bound native qualification receipt": "failure",
+        "Package exact self-contained runtime": "success",
+        "Run complete packaged Maven move-class authority matrix": "skipped",
+        "Run public-CLI packaged Maven move-class authority": "failure",
+        "Upload Maven move-class native qualification (windows-x86_64)": "success"
+      }
+    }
+  ],
+  "runId": 31335192160,
+  "schema": "refactorkit.native-move-class-red/v1",
+  "status": "completed",
+  "url": "https://github.com/mgiustiniani/refactorkit/actions/runs/31335192160"
+}

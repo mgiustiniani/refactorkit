@@ -876,7 +876,18 @@ all operation-specific tasks; topology summary/metadata SHA-256 are
 The operation now owns a dedicated four-host job. Its success path checks out the
 exact source revision, packages it, passes public-CLI REQ-001 and the 13-ID/
 31-case production matrix, then emits a fail-closed revision/host/JDK/report-
-hash receipt. Until those dedicated jobs execute and are reviewed, Linux x86-64,
+hash receipt. First dedicated run `31335192160` supplied meaningful behavior
+RED: Linux and both macOS hosts passed both production modes before the
+finalizer rejected stale 22-case totals, while Windows refused a harness hash
+read of the deliberately open lock file (summary / Windows Cucumber SHA-256
+`f085cd6aa545e2e0f6cda334c698ca9379b2b83901011b12fbb5e5ec6a734e7c` /
+`3cb199ca50d33d07938d6e5037b023ca5db07c2227a7332135312e9cf2e74157`).
+The correction expects 31/one/30 and skips engine metadata during non-engine
+manifest hashing while enumerating exact engine paths without reading the lock.
+Local public/matrix reruns passed (log SHA-256
+`19ce0f51e5deb9cd64f088d803fd128b3b12d56db80cb22ae2fba59b4546255b` /
+`05bb711946f3b25c2b71a3a385da3b3f1a5ab7da0b198aac6aea38a2788dda8e`).
+Until the corrected dedicated jobs execute and are reviewed, Linux x86-64,
 Windows x86-64, macOS x86-64, and macOS arm64 remain
 `CONFIGURED_UNOBSERVED`; this local matrix is not a native support promotion.
 

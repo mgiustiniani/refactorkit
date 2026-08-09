@@ -468,7 +468,14 @@ class PackagedJavaMavenMoveClassAuthoritySteps {
                     renderedPreviewPortion(assertNotNull(canonicalPreview), PREVIEW_TERMINAL),
                     observation.normalizedStdout,
                 )
-                assertEquals(baseline, captureTreeManifest(workspaceRoot, rejectUnsafeEntries = true).withoutEngineMetadata())
+                assertEquals(
+                    baseline,
+                    captureTreeManifest(
+                        workspaceRoot,
+                        rejectUnsafeEntries = true,
+                        excludedRootRelativeDirectory = ENGINE_DIRECTORY,
+                    ),
+                )
                 assertFalse(Files.exists(engineRoot.resolve("transactions"), LinkOption.NOFOLLOW_LINKS))
                 assertEquals(setOf("$ENGINE_DIRECTORY/workspace.lock"), engineMetadataFiles())
             }
@@ -850,8 +857,29 @@ class PackagedJavaMavenMoveClassAuthoritySteps {
         assertFalse(Files.exists(log.logDir.resolve(".quarantine"), LinkOption.NOFOLLOW_LINKS))
     }
 
-    private fun engineMetadataFiles(): Set<String> = captureTreeManifest(workspaceRoot, rejectUnsafeEntries = true)
-        .filePaths.filterTo(linkedSetOf()) { it == ENGINE_DIRECTORY || it.startsWith("$ENGINE_DIRECTORY/") }
+    private fun engineMetadataFiles(): Set<String> {
+        val engineRoot = workspaceRoot.resolve(ENGINE_DIRECTORY)
+        if (!Files.exists(engineRoot, LinkOption.NOFOLLOW_LINKS)) return emptySet()
+        val paths = linkedSetOf<String>()
+        Files.walkFileTree(engineRoot, object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(
+                directory: Path,
+                attributes: BasicFileAttributes,
+            ): FileVisitResult {
+                assertTrue(attributes.isDirectory && !attributes.isSymbolicLink, "Engine metadata contains an unsafe directory")
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+                assertTrue(attributes.isRegularFile && !attributes.isSymbolicLink, "Engine metadata contains a link or special file")
+                paths += relativePath(workspaceRoot, file)
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun visitFileFailed(file: Path, failure: IOException): FileVisitResult = throw failure
+        })
+        return paths
+    }
 
     private fun assertPomDependency(module: String, artifactId: String, expectedScope: String?) {
         val document = parseXml(workspaceRoot.resolve(module).resolve("pom.xml"))
@@ -957,7 +985,11 @@ class PackagedJavaMavenMoveClassAuthoritySteps {
         })
     }
 
-    private fun captureTreeManifest(root: Path, rejectUnsafeEntries: Boolean): TreeManifest {
+    private fun captureTreeManifest(
+        root: Path,
+        rejectUnsafeEntries: Boolean,
+        excludedRootRelativeDirectory: String? = null,
+    ): TreeManifest {
         assertTrue(Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS), "Manifest root is not a directory")
         assertFalse(Files.isSymbolicLink(root), "Manifest root is a symbolic link")
         val entries = linkedMapOf<String, ManifestEntry>()
@@ -967,7 +999,9 @@ class PackagedJavaMavenMoveClassAuthoritySteps {
                     assertTrue(attributes.isDirectory && !attributes.isSymbolicLink, "Manifest contains an unsafe directory")
                 }
                 if (directory != root) {
-                    entries[relativePath(root, directory)] = ManifestEntry("directory", 0, null)
+                    val relative = relativePath(root, directory)
+                    if (relative == excludedRootRelativeDirectory) return FileVisitResult.SKIP_SUBTREE
+                    entries[relative] = ManifestEntry("directory", 0, null)
                 }
                 return FileVisitResult.CONTINUE
             }

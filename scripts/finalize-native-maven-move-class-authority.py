@@ -70,7 +70,7 @@ def junit_summary(directory: Path) -> dict[str, object]:
             totals[field] += int(root.attrib.get(field, "0"))
         hashes.append({"path": path.name, "sha256": sha256(path)})
     executed = totals["tests"] - totals["skipped"]
-    if totals != {"tests": 22, "skipped": 21, "failures": 0, "errors": 0} or executed != 1:
+    if totals != {"tests": 31, "skipped": 30, "failures": 0, "errors": 0} or executed != 1:
         raise ValueError(f"unexpected public-CLI JUnit totals: {totals}, executed={executed}")
     return {**totals, "executed": executed, "files": hashes}
 

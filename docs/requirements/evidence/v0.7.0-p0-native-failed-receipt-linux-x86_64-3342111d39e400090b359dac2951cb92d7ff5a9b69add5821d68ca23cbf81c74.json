@@ -1,0 +1,7 @@
+{
+  "failure": "ValueError: unexpected public-CLI JUnit totals: {'tests': 31, 'skipped': 30, 'failures': 0, 'errors': 0}, executed=1",
+  "platform": "linux-x86_64",
+  "schema": "refactorkit.native-maven-move-class-authority/v1",
+  "sourceRevision": "b84ec726bd0dc88b7048a5a6e4f1b5eec950866a",
+  "status": "FAILED"
+}

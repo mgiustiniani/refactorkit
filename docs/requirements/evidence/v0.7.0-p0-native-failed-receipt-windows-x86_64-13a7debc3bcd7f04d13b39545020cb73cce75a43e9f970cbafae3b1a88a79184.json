@@ -1,0 +1,7 @@
+{
+  "failure": "ValueError: public-CLI Cucumber receipt is missing or non-passing",
+  "platform": "windows-x86_64",
+  "schema": "refactorkit.native-maven-move-class-authority/v1",
+  "sourceRevision": "b84ec726bd0dc88b7048a5a6e4f1b5eec950866a",
+  "status": "FAILED"
+}
