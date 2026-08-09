@@ -17,12 +17,18 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.root = Path(self.temporary.name)
         releases = self.root / "docs/releases"
         releases.mkdir(parents=True)
+        workflows = self.root / ".github/workflows"
+        workflows.mkdir(parents=True)
         repository = Path(__file__).resolve().parents[1]
         for name in ("v0.7.0-plan.md", "v0.7.0-support-matrix.md"):
             (releases / name).write_text(
                 (repository / "docs/releases" / name).read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+        (workflows / "ci.yml").write_text(
+            (repository / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -43,6 +49,7 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("PASSED", receipt["status"])
         self.assertEqual(4, receipt["configuredUnobservedNativeRows"])
+        self.assertEqual(2, receipt["exactTemurin2111Pins"])
 
     def test_checked_roadmap_row_without_projection_update_fails(self) -> None:
         path = self.root / "docs/releases/v0.7.0-plan.md"
@@ -83,6 +90,22 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         result, receipt = self._run()
         self.assertNotEqual(0, result.returncode)
         self.assertIn("support boundary is missing: typescript-boundary", receipt["failures"])
+
+    def test_unavailable_or_unpinned_jdk_fails(self) -> None:
+        path = self.root / ".github/workflows/ci.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            "java-version: '21.0.11+10.0.LTS'",
+            "java-version: '21.0.11+9'",
+            1,
+        )
+        path.write_text(text, encoding="utf-8")
+        result, receipt = self._run()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(
+            "CI must pin build and native jobs to exactly two setup-java 21.0.11+10.0.LTS entries, found 1",
+            receipt["failures"],
+        )
+        self.assertIn("CI contains unavailable setup-java version 21.0.11+9", receipt["failures"])
 
 
 if __name__ == "__main__":

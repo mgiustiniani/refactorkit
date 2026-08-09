@@ -1,0 +1,104 @@
+build	Set up exact JDK 21 build runtime	﻿2026-08-09T20:24:11.5907071Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5908424Z ##[group]Run actions/setup-java@v4
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5908685Z with:
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5908876Z   distribution: temurin
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5909097Z   java-version: 21.0.11+9
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5909312Z   cache: gradle
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5909510Z   java-package: jdk
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5909719Z   check-latest: false
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5909941Z   server-id: github
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5910145Z   server-username: GITHUB_ACTOR
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5910393Z   server-password: GITHUB_TOKEN
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5910643Z   overwrite-settings: true
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5910867Z   job-status: success
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5913584Z   token: ***
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5913779Z env:
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5914325Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9/x64
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5914835Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9/x64
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5915357Z   REFACTORKIT_JAVA_25_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9/x64
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.5915767Z ##[endgroup]
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.7603736Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.7606671Z ##[group]Installed distributions
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.7655864Z Trying to resolve the latest version from remote
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.7758438Z (node:2296) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:11.7759428Z (Use `node --trace-deprecation ...` to show where the warning was created)
+build	Set up exact JDK 21 build runtime	2026-08-09T20:24:12.1279562Z ##[error]Could not find satisfied version for SemVer '21.0.11+9'. 
+build	Set up exact JDK 21 build runtime	Available versions: 26.0.2+10, 26.0.1+8, 26.0.0+35, 25.0.4+7.0.LTS, 25.0.3+9.0.LTS, 25.0.2+10.0.LTS, 25.0.1+8.0.LTS, 25.0.0+36.0.LTS, 24.0.2+12, 24.0.1+9, 24.0.0+36, 23.0.2+7, 23.0.1+11, 23.0.0+37, 22.0.2+9, 22.0.1+8, 22.0.0+36, 21.0.12+8.0.LTS, 21.0.11+10.0.LTS, 21.0.10+7.0.LTS, 21.0.9+10.0.LTS, 21.0.8+9.0.LTS, 21.0.7+6.0.LTS, 21.0.6+7.0.LTS, 21.0.5+11.0.LTS, 21.0.4+7.0.LTS, 21.0.3+9.0.LTS, 21.0.2+13.0.LTS, 21.0.1+12.0.LTS, 21.0.0+35.0.LTS, 20.0.2+9, 20.0.1+9, 20.0.0+36, 19.0.2+7, 19.0.1+10, 19.0.0+36, 18.0.2+101, 18.0.2+9, 18.0.1+10, 18.0.0+36, 17.0.20+8, 17.0.19+10, 17.0.18+8, 17.0.17+10, 17.0.16+8, 17.0.15+6, 17.0.14+7, 17.0.13+11, 17.0.12+7, 17.0.11+9, 17.0.10+7, 17.0.9+9, 17.0.8+101, 17.0.8+7, 17.0.7+7, 17.0.6+10, 17.0.5+8, 17.0.4+101, 17.0.4+8, 17.0.3+7, 17.0.2+8, 17.0.1+12, 17.0.0+35, 16.0.2+7, 11.0.32+9, 11.0.31+11, 11.0.30+7, 11.0.29+7, 11.0.28+6, 11.0.27+6, 11.0.26+4, 11.0.25+9, 11.0.24+8, 11.0.23+9, 11.0.22+7, 11.0.21+9, 11.0.20+101, 11.0.20+8, 11.0.19+7, 11.0.18+10, 11.0.17+8, 11.0.16+101, 11.0.16+8, 11.0.15+10, 11.0.14+101, 11.0.14+9, 11.0.13+8, 11.0.12+7, 8.0.502+7, 8.0.492+9, 8.0.482+8, 8.0.472+8, 8.0.462+8, 8.0.452+9, 8.0.442+6, 8.0.432+6, 8.0.422+5, 8.0.412+8, 8.0.402+6, 8.0.392+8, 8.0.382+5, 8.0.372+7, 8.0.362+9, 8.0.352+8, 8.0.345+1, 8.0.342+7, 8.0.332+9, 8.0.322+6, 8.0.312+7, 8.0.302+8
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	﻿2026-08-09T20:24:06.1469540Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1472440Z ##[group]Run actions/setup-java@v4
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1472940Z with:
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1473310Z   distribution: temurin
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1474180Z   java-version: 21.0.11+9
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1474610Z   cache: gradle
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1475010Z   java-package: jdk
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1475420Z   check-latest: false
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1475850Z   server-id: github
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1476290Z   server-username: GITHUB_ACTOR
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1476790Z   server-password: GITHUB_TOKEN
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1477300Z   overwrite-settings: true
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1477760Z   job-status: success
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1482700Z   token: ***
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1483060Z env:
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1483890Z   JAVA_HOME: /Users/runner/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9.0/x64/Contents/Home
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1485290Z   JAVA_HOME_25_X64: /Users/runner/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9.0/x64/Contents/Home
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1486800Z   REFACTORKIT_JAVA_25_HOME: /Users/runner/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9.0/x64/Contents/Home
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1487860Z ##[endgroup]
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.4495220Z (node:7581) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.4503020Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.4509000Z (Use `node --trace-deprecation ...` to show where the warning was created)
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.4510570Z ##[group]Installed distributions
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.4599950Z Trying to resolve the latest version from remote
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:07.8358720Z ##[error]Could not find satisfied version for SemVer '21.0.11+9'. 
+Runtime (macos-x86_64)	Set up exact JDK 21 build runtime	Available versions: 26.0.2+10, 26.0.1+8, 26.0.0+35, 25.0.4+7.0.LTS, 25.0.3+9.0.LTS, 25.0.2+10.0.LTS, 25.0.1+8.0.LTS, 25.0.0+36.0.LTS, 24.0.2+12, 24.0.1+9, 24.0.0+36, 23.0.2+7, 23.0.1+11, 23.0.0+37, 22.0.2+9, 22.0.1+8, 22.0.0+36, 21.0.12+8.0.LTS, 21.0.11+10.0.LTS, 21.0.10+7.0.LTS, 21.0.9+10.0.LTS, 21.0.8+9.0.LTS, 21.0.7+6.0.LTS, 21.0.6+7.0.LTS, 21.0.5+11.0.LTS, 21.0.4+7.0.LTS, 21.0.3+9.0.LTS, 21.0.2+13.0.LTS, 21.0.1+12.0.LTS, 21.0.0+35.0.LTS, 20.0.2+9, 20.0.1+9, 20.0.0+36, 19.0.2+7, 19.0.1+10, 19.0.0+36, 18.0.2+101, 18.0.2+9, 18.0.1+10, 18.0.0+36, 17.0.20+8, 17.0.19+10, 17.0.18+8, 17.0.17+10, 17.0.16+8, 17.0.15+6, 17.0.14+7, 17.0.13+11, 17.0.12+7, 17.0.11+9, 17.0.10+7, 17.0.9+9, 17.0.8+101, 17.0.8+7, 17.0.7+7, 17.0.6+10, 17.0.5+8, 17.0.4+101, 17.0.4+8, 17.0.3+7, 17.0.2+8, 17.0.1+12, 17.0.0+35, 16.0.2+7, 11.0.32+9, 11.0.31+11, 11.0.30+7, 11.0.29+7, 11.0.28+6, 11.0.27+6, 11.0.26+4, 11.0.25+9, 11.0.24+8, 11.0.23+9, 11.0.22+7, 11.0.21+9, 11.0.20+101, 11.0.20+8, 11.0.19+7, 11.0.18+10, 11.0.17+8, 11.0.16+101, 11.0.16+8, 11.0.15+10, 11.0.14+101, 11.0.14+9, 11.0.13+8, 11.0.12+7, 8.0.502+7, 8.0.492+9, 8.0.482+8, 8.0.472+8, 8.0.462+8, 8.0.452+9, 8.0.442+6, 8.0.432+6, 8.0.422+5.1, 8.0.422+5, 8.0.412+8, 8.0.402+6, 8.0.392+8, 8.0.382+5, 8.0.372+7, 8.0.362+9, 8.0.352+8, 8.0.345+1, 8.0.332+9, 8.0.322+6, 8.0.312+7, 8.0.302+8
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	﻿2026-08-09T20:24:03.2696670Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2697820Z ##[group]Run actions/setup-java@v4
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2698280Z with:
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2698510Z   distribution: temurin
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2698750Z   java-version: 21.0.11+9
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2699000Z   cache: gradle
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2699220Z   java-package: jdk
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2699470Z   check-latest: false
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2699710Z   server-id: github
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2699960Z   server-username: GITHUB_ACTOR
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2700240Z   server-password: GITHUB_TOKEN
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2700710Z   overwrite-settings: true
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2700970Z   job-status: success
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2702970Z   token: ***
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2703200Z env:
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2703670Z   JAVA_HOME: /Users/runner/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9.0/arm64/Contents/Home
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2704380Z   JAVA_HOME_25_ARM64: /Users/runner/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9.0/arm64/Contents/Home
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2705160Z   REFACTORKIT_JAVA_25_HOME: /Users/runner/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.3-9.0/arm64/Contents/Home
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.2705690Z ##[endgroup]
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.3927060Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.3967310Z ##[group]Installed distributions
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.3970160Z Trying to resolve the latest version from remote
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.4094940Z (node:1631) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:03.4097950Z (Use `node --trace-deprecation ...` to show where the warning was created)
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:04.6116010Z ##[error]Could not find satisfied version for SemVer '21.0.11+9'. 
+Runtime (macos-aarch64)	Set up exact JDK 21 build runtime	Available versions: 26.0.2+10, 26.0.1+8, 26.0.0+35, 25.0.4+7.0.LTS, 25.0.3+9.0.LTS, 25.0.2+10.0.LTS, 25.0.1+8.0.LTS, 25.0.0+36.0.LTS, 24.0.2+12, 24.0.1+9, 24.0.0+36, 23.0.2+7, 23.0.1+11, 23.0.0+37, 22.0.2+9, 22.0.1+8, 22.0.0+36, 21.0.12+8.0.LTS, 21.0.11+10.0.LTS, 21.0.10+7.0.LTS, 21.0.9+10.0.LTS, 21.0.8+9.0.LTS, 21.0.7+6.0.LTS, 21.0.6+7.0.LTS, 21.0.5+11.0.LTS, 21.0.4+7.0.LTS, 21.0.3+9.0.LTS, 21.0.2+13.0.LTS, 21.0.1+12.0.LTS, 21.0.0+35.0.LTS, 20.0.2+9, 20.0.1+9, 20.0.0+36, 19.0.2+7, 19.0.1+10, 19.0.0+36, 18.0.2+101, 18.0.2+9, 18.0.1+10, 18.0.0+36, 17.0.20+8, 17.0.19+10, 17.0.18+8, 17.0.17+10, 17.0.16+8, 17.0.15+6, 17.0.14+7, 17.0.13+11, 17.0.12+7, 17.0.11+9, 17.0.10+7, 17.0.9+9, 17.0.8+101, 17.0.8+7, 17.0.7+7, 17.0.6+10, 17.0.5+8, 17.0.4+101, 17.0.4+8, 17.0.3+7, 17.0.2+8, 17.0.1+12, 17.0.0+35, 11.0.32+9, 11.0.31+11, 11.0.30+7, 11.0.29+7, 11.0.28+6, 11.0.27+6, 11.0.26+4, 11.0.25+9, 11.0.24+8, 11.0.23+9, 11.0.22+7.1, 11.0.22+7, 11.0.21+9, 11.0.20+101, 11.0.20+8, 11.0.19+7, 11.0.18+10, 11.0.17+8, 11.0.16+101, 11.0.16+8, 11.0.15+10
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	﻿2026-08-09T20:24:06.1083190Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1084747Z ##[group]Run actions/setup-java@v4
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1084982Z with:
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1085140Z   distribution: temurin
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1085337Z   java-version: 21.0.11+9
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1085527Z   cache: gradle
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1085698Z   java-package: jdk
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1085885Z   check-latest: false
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1086065Z   server-id: github
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1086249Z   server-username: GITHUB_ACTOR
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1086469Z   server-password: GITHUB_TOKEN
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1086682Z   overwrite-settings: true
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1086881Z   job-status: success
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1089568Z   token: ***
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1089763Z env:
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1090055Z   JAVA_HOME: C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\25.0.4-7.0\x64
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1090582Z   JAVA_HOME_25_X64: C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\25.0.4-7.0\x64
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1091126Z   REFACTORKIT_JAVA_25_HOME: C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\25.0.4-7.0\x64
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.1091539Z ##[endgroup]
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.3117982Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.3120086Z ##[group]Installed distributions
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.3186075Z Trying to resolve the latest version from remote
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.3357173Z (node:2432) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.3357917Z (Use `node --trace-deprecation ...` to show where the warning was created)
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	2026-08-09T20:24:06.8829352Z ##[error]Could not find satisfied version for SemVer '21.0.11+9'. 
+Runtime (windows-x86_64)	Set up exact JDK 21 build runtime	Available versions: 26.0.2+10, 26.0.1+8, 26.0.0+35, 25.0.4+7.0.LTS, 25.0.3+9.0.LTS, 25.0.2+10.0.LTS, 25.0.1+8.0.LTS, 25.0.0+36.0.LTS, 24.0.2+12, 24.0.1+9, 24.0.0+36, 23.0.2+7, 23.0.1+11, 23.0.0+37, 22.0.2+9, 22.0.1+8, 22.0.0+36, 21.0.12+8.0.LTS, 21.0.11+10.0.LTS, 21.0.10+7.0.LTS, 21.0.9+10.0.LTS, 21.0.8+9.0.LTS, 21.0.7+6.0.LTS, 21.0.6+7.0.LTS, 21.0.5+11.0.LTS, 21.0.4+7.0.LTS, 21.0.3+9.0.LTS, 21.0.2+13.0.LTS, 21.0.1+12.1.LTS, 21.0.0+35.0.LTS, 20.0.2+9, 20.0.1+9, 20.0.0+36, 19.0.2+7, 19.0.1+10, 19.0.0+36, 18.0.2+101, 18.0.2+9, 18.0.1+10, 18.0.0+36, 17.0.20+8, 17.0.19+10, 17.0.18+8, 17.0.17+10, 17.0.16+8, 17.0.15+6, 17.0.14+7, 17.0.13+11, 17.0.12+7, 17.0.11+9, 17.0.10+7, 17.0.9+9.1, 17.0.8+101, 17.0.8+7, 17.0.7+7, 17.0.6+10, 17.0.5+8, 17.0.4+101, 17.0.4+8, 17.0.3+7, 17.0.2+8, 17.0.1+12, 17.0.0+35, 16.0.2+7, 11.0.32+9, 11.0.31+11, 11.0.30+7, 11.0.29+7, 11.0.28+6, 11.0.27+6, 11.0.26+4, 11.0.25+9, 11.0.24+8, 11.0.23+9, 11.0.22+7, 11.0.21+9, 11.0.20+101, 11.0.20+8, 11.0.19+7, 11.0.18+10, 11.0.17+8, 11.0.16+101, 11.0.16+8, 11.0.15+10, 11.0.14+101, 11.0.14+9, 11.0.13+8, 11.0.12+7, 8.0.502+7, 8.0.492+9, 8.0.482+8, 8.0.472+8, 8.0.462+8, 8.0.452+9, 8.0.442+6, 8.0.432+6, 8.0.422+5, 8.0.412+8, 8.0.402+6, 8.0.392+8, 8.0.382+5, 8.0.372+7, 8.0.362+9, 8.0.352+8, 8.0.345+1, 8.0.342+7.1, 8.0.342+7, 8.0.332+9, 8.0.322+6, 8.0.312+7, 8.0.302+8, 8.0.302+8

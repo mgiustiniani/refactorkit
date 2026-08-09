@@ -797,7 +797,7 @@ Thirteen bounded Gherkin definitions expand to 31 implemented-and-validated case
 
 === Implemented Local Packaged-process Validation of Existing REQ-001
 
-Status: implementation-informed for one official final OpenJDK 21.0.11 local execution on Linux `amd64` against the mutable, uncommitted tree, with independent review receipts retained separately. Native CI wiring and `if: always()` report uploads are implemented but unexecuted. Linux x86-64 CI, Windows x86-64, macOS x86-64, and macOS arm64 remain `CONFIGURED_UNOBSERVED` until exact post-commit CI receipts are reviewed; Windows/macOS behavior is configured and statically reviewed only.
+Status: implementation-informed for one official final OpenJDK 21.0.11 local execution on Linux `amd64` against the mutable, uncommitted tree, with independent review receipts retained separately. Native CI wiring and `if: always()` report uploads are implemented. Initial run `31334149989` failed during setup-java resolution before subject execution because identity `21.0.11+9` was unavailable. Linux x86-64 CI, Windows x86-64, macOS x86-64, and macOS arm64 remain `CONFIGURED_UNOBSERVED` until exact post-commit CI receipts are reviewed; Windows/macOS behavior is configured and statically reviewed only.
 
 This is not a thirteenth Maven requirement or a twenty-third case. The dedicated `packagedMavenMoveClassAuthorityTest` source set/task reuses `features/java-maven-move-class-apply-authority.feature`, selects the repository-unique `@REQ-JAVA-MAVEN-MOVE-AUTH-001` pickle, uses packaged-only glue, and emits dedicated Cucumber JSON and JUnit XML. It depends on `refactorkitRuntimeDist`, uses one fork, and is explicitly invoked after packaging. Normal `test` and `check` remain packaging-independent. No external protocol or product semantic changed.
 
@@ -862,8 +862,14 @@ scenario-step results and 62 hooks. Manifest SHA-256 is
 `b3d5853b85c225a29cc548e66f2e51981cb8a55b80e886d38b871012cc663bac`;
 feature SHA-256 in that manifest is
 `3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696`.
-The exact CI matrix is pinned to Temurin `21.0.11+9` and uploads all receipts with
-`if: always()`. Until those jobs execute and are reviewed, Linux x86-64,
+The exact CI matrix is pinned to the setup-java catalogue identity Temurin
+`21.0.11+10.0.LTS` and uploads all receipts with `if: always()`. Initial run
+`31334149989` provided meaningful infrastructure RED before subject execution:
+setup-java rejected unavailable identity `21.0.11+9` on all four hosts
+(log/metadata SHA-256
+`f569c4d2e233b5486dcc47cf61e882f1884198ba34731188e0242e11321a3f92` /
+`cddd9dc308dcb8a8d45698102d7143df9de0306cbab325d86ae6878c0bf339e0`).
+Until the corrected jobs execute and are reviewed, Linux x86-64,
 Windows x86-64, macOS x86-64, and macOS arm64 remain
 `CONFIGURED_UNOBSERVED`; this local matrix is not a native support promotion.
 

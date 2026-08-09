@@ -45,8 +45,10 @@ PROHIBITED_SUPPORT_CLAIMS = (
 def verify(repository_root: Path) -> dict[str, object]:
     plan_path = repository_root / "docs/releases/v0.7.0-plan.md"
     support_path = repository_root / "docs/releases/v0.7.0-support-matrix.md"
+    workflow_path = repository_root / ".github/workflows/ci.yml"
     plan = plan_path.read_text(encoding="utf-8")
     support = support_path.read_text(encoding="utf-8")
+    workflow = workflow_path.read_text(encoding="utf-8")
     failures: list[str] = []
 
     for name, row in OPEN_PLAN_ROWS.items():
@@ -68,12 +70,22 @@ def verify(repository_root: Path) -> dict[str, object]:
             f"CONFIGURED_UNOBSERVED rows, found {native_state_count}"
         )
 
+    exact_jdk_count = workflow.count("java-version: '21.0.11+10.0.LTS'")
+    if exact_jdk_count != 2:
+        failures.append(
+            "CI must pin build and native jobs to exactly two setup-java "
+            f"21.0.11+10.0.LTS entries, found {exact_jdk_count}"
+        )
+    if "java-version: '21.0.11+9'" in workflow:
+        failures.append("CI contains unavailable setup-java version 21.0.11+9")
+
     result: dict[str, object] = {
         "schemaVersion": 1,
         "status": "PASSED" if not failures else "FAILED",
         "openRoadmapRowsVerified": sorted(OPEN_PLAN_ROWS),
         "supportBoundariesVerified": sorted(REQUIRED_SUPPORT_CLAIMS),
         "configuredUnobservedNativeRows": native_state_count,
+        "exactTemurin2111Pins": exact_jdk_count,
         "failures": failures,
     }
     return result
