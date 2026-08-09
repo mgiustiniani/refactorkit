@@ -869,7 +869,14 @@ setup-java rejected unavailable identity `21.0.11+9` on all four hosts
 (log/metadata SHA-256
 `f569c4d2e233b5486dcc47cf61e882f1884198ba34731188e0242e11321a3f92` /
 `cddd9dc308dcb8a8d45698102d7143df9de0306cbab325d86ae6878c0bf339e0`).
-Until the corrected jobs execute and are reviewed, Linux x86-64,
+Run `31334391495` then reached the exact JDK but broad build failures prevented
+all operation-specific tasks; topology summary/metadata SHA-256 are
+`df354924dfef5c338ba995986b1ba3bbfc857f829cf4e1092f3b9d8d6f8dff7a` /
+`12002180afde3beef0bb02a7fbf576c4c66bce089912e6ca55f879e12b48ff6d`.
+The operation now owns a dedicated four-host job. Its success path checks out the
+exact source revision, packages it, passes public-CLI REQ-001 and the 13-ID/
+31-case production matrix, then emits a fail-closed revision/host/JDK/report-
+hash receipt. Until those dedicated jobs execute and are reviewed, Linux x86-64,
 Windows x86-64, macOS x86-64, and macOS arm64 remain
 `CONFIGURED_UNOBSERVED`; this local matrix is not a native support promotion.
 

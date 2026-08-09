@@ -32,6 +32,15 @@ REQUIRED_SUPPORT_CLAIMS = {
     "move-class-native-boundary": "All four Maven move-class native rows remain `CONFIGURED_UNOBSERVED`.",
 }
 
+REQUIRED_NATIVE_WORKFLOW_TOKENS = {
+    "dedicated-job": "maven-move-class-native:",
+    "exact-head-checkout": "ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+    "public-cli-task": ":modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest",
+    "complete-matrix-task": ":modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest",
+    "revision-bound-finalizer": "scripts/finalize-native-maven-move-class-authority.py",
+    "always-upload": "Upload Maven move-class native qualification (${{ matrix.platform }})",
+}
+
 PROHIBITED_SUPPORT_CLAIMS = (
     "REQ-013 is still `@absent`",
     "candidate REQ-013",
@@ -63,6 +72,10 @@ def verify(repository_root: Path) -> dict[str, object]:
         if claim in support:
             failures.append(f"support projection contains prohibited claim: {claim}")
 
+    for name, token in REQUIRED_NATIVE_WORKFLOW_TOKENS.items():
+        if token not in workflow:
+            failures.append(f"dedicated native workflow token is missing: {name}")
+
     native_state_count = support.count("| `CONFIGURED_UNOBSERVED` |")
     if native_state_count != 4:
         failures.append(
@@ -71,10 +84,10 @@ def verify(repository_root: Path) -> dict[str, object]:
         )
 
     exact_jdk_count = workflow.count("java-version: '21.0.11+10.0.LTS'")
-    if exact_jdk_count != 2:
+    if exact_jdk_count != 3:
         failures.append(
-            "CI must pin build and native jobs to exactly two setup-java "
-            f"21.0.11+10.0.LTS entries, found {exact_jdk_count}"
+            "CI must pin build, dedicated authority, and runtime jobs to exactly "
+            f"three setup-java 21.0.11+10.0.LTS entries, found {exact_jdk_count}"
         )
     if "java-version: '21.0.11+9'" in workflow:
         failures.append("CI contains unavailable setup-java version 21.0.11+9")
@@ -84,6 +97,7 @@ def verify(repository_root: Path) -> dict[str, object]:
         "status": "PASSED" if not failures else "FAILED",
         "openRoadmapRowsVerified": sorted(OPEN_PLAN_ROWS),
         "supportBoundariesVerified": sorted(REQUIRED_SUPPORT_CLAIMS),
+        "nativeWorkflowTokensVerified": sorted(REQUIRED_NATIVE_WORKFLOW_TOKENS),
         "configuredUnobservedNativeRows": native_state_count,
         "exactTemurin2111Pins": exact_jdk_count,
         "failures": failures,

@@ -1,0 +1,38 @@
+{
+  "conclusion": "failure",
+  "headSha": "abfcf844695d64c01115c49ddc8641c6302e446d",
+  "jobs": [
+    {
+      "conclusion": "failure",
+      "failedSteps": [
+        "Build and test"
+      ],
+      "name": "Runtime (macos-x86_64)"
+    },
+    {
+      "conclusion": "failure",
+      "failedSteps": [
+        "Build and test"
+      ],
+      "name": "Runtime (macos-aarch64)"
+    },
+    {
+      "conclusion": "failure",
+      "failedSteps": [
+        "Build and test"
+      ],
+      "name": "Runtime (windows-x86_64)"
+    },
+    {
+      "conclusion": "failure",
+      "failedSteps": [
+        "Build and test"
+      ],
+      "name": "build"
+    }
+  ],
+  "runId": 31334391495,
+  "schema": "refactorkit.native-ci-topology-red/v1",
+  "status": "completed",
+  "url": "https://github.com/mgiustiniani/refactorkit/actions/runs/31334391495"
+}

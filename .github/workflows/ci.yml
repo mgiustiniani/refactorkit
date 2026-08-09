@@ -75,26 +75,6 @@ jobs:
       - name: Package self-contained CLI
         run: ./gradlew packageCliRuntime distCliRuntimeZip
 
-      - name: Run public-CLI packaged Maven move-class authority validation
-        timeout-minutes: 20
-        run: ./gradlew :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest
-
-      - name: Run complete packaged Maven move-class authority matrix
-        timeout-minutes: 40
-        run: ./gradlew :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest --no-daemon
-
-      - name: Upload packaged Maven move-class authority reports (linux-x86_64)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: packaged-maven-move-class-authority-reports-linux-x86_64
-          path: |
-            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority*.json
-            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthority*/TEST-*.xml
-            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthority*/**
-            modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority/matrix-manifest.json
-          if-no-files-found: warn
-
       - name: Verify CLI runtime distribution
         run: |
           sha256sum modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip \
@@ -153,6 +133,105 @@ jobs:
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.spdx.json
           if-no-files-found: error
+
+  maven-move-class-native:
+    name: Maven move-class authority (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            gradle: ./gradlew
+          - os: windows-2022
+            platform: windows-x86_64
+            gradle: ./gradlew.bat
+          - os: macos-15-intel
+            platform: macos-x86_64
+            gradle: ./gradlew
+          - os: macos-15
+            platform: macos-aarch64
+            gradle: ./gradlew
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up JDK 25 qualification input
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Record JDK 25 qualification home
+        shell: bash
+        run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up exact JDK 21 build runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.11+10.0.LTS'
+          cache: gradle
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Test native receipt finalizer
+        shell: python
+        run: |
+          import subprocess, sys
+          subprocess.run([sys.executable, "scripts/test-finalize-native-maven-move-class-authority.py"], check=True)
+
+      - name: Package exact self-contained runtime
+        timeout-minutes: 20
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip --no-daemon
+
+      - name: Run public-CLI packaged Maven move-class authority
+        timeout-minutes: 20
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --no-daemon
+
+      - name: Run complete packaged Maven move-class authority matrix
+        timeout-minutes: 40
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest --no-daemon
+
+      - name: Finalize revision-bound native qualification receipt
+        if: always()
+        shell: python
+        env:
+          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          QUALIFICATION_PLATFORM: ${{ matrix.platform }}
+        run: |
+          import os, pathlib, subprocess, sys
+          output = pathlib.Path("modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority") / f"native-{os.environ['QUALIFICATION_PLATFORM']}.json"
+          subprocess.run([
+              sys.executable,
+              "scripts/finalize-native-maven-move-class-authority.py",
+              "--repository-root", ".",
+              "--build-root", "modules/refactorkit-cli/build",
+              "--platform", os.environ["QUALIFICATION_PLATFORM"],
+              "--expected-revision", os.environ["SOURCE_REVISION"],
+              "--output", str(output),
+          ], check=True)
+
+      - name: Upload Maven move-class native qualification (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-move-class-authority-reports-${{ matrix.platform }}
+          path: |
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority*.json
+            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthority*/TEST-*.xml
+            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthority*/**
+            modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority/*.json
+          if-no-files-found: warn
 
   cross-platform-runtime:
     name: Runtime (${{ matrix.platform }})
@@ -221,26 +300,6 @@ jobs:
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
-
-      - name: Run native public-CLI packaged Maven move-class authority validation
-        timeout-minutes: 20
-        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --no-daemon
-
-      - name: Run native complete packaged Maven move-class authority matrix
-        timeout-minutes: 40
-        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest --no-daemon
-
-      - name: Upload packaged Maven move-class authority reports (${{ matrix.platform }})
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: packaged-maven-move-class-authority-reports-${{ matrix.platform }}
-          path: |
-            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority*.json
-            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthority*/TEST-*.xml
-            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthority*/**
-            modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority/matrix-manifest.json
-          if-no-files-found: warn
 
       - name: Native packaged build-model acceptance
         shell: python

@@ -49,7 +49,7 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("PASSED", receipt["status"])
         self.assertEqual(4, receipt["configuredUnobservedNativeRows"])
-        self.assertEqual(2, receipt["exactTemurin2111Pins"])
+        self.assertEqual(3, receipt["exactTemurin2111Pins"])
 
     def test_checked_roadmap_row_without_projection_update_fails(self) -> None:
         path = self.root / "docs/releases/v0.7.0-plan.md"
@@ -91,6 +91,20 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("support boundary is missing: typescript-boundary", receipt["failures"])
 
+    def test_missing_dedicated_native_finalizer_fails(self) -> None:
+        path = self.root / ".github/workflows/ci.yml"
+        text = path.read_text(encoding="utf-8").replace(
+            "scripts/finalize-native-maven-move-class-authority.py",
+            "scripts/missing-native-finalizer.py",
+        )
+        path.write_text(text, encoding="utf-8")
+        result, receipt = self._run()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(
+            "dedicated native workflow token is missing: revision-bound-finalizer",
+            receipt["failures"],
+        )
+
     def test_unavailable_or_unpinned_jdk_fails(self) -> None:
         path = self.root / ".github/workflows/ci.yml"
         text = path.read_text(encoding="utf-8").replace(
@@ -102,7 +116,7 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         result, receipt = self._run()
         self.assertNotEqual(0, result.returncode)
         self.assertIn(
-            "CI must pin build and native jobs to exactly two setup-java 21.0.11+10.0.LTS entries, found 1",
+            "CI must pin build, dedicated authority, and runtime jobs to exactly three setup-java 21.0.11+10.0.LTS entries, found 2",
             receipt["failures"],
         )
         self.assertIn("CI contains unavailable setup-java version 21.0.11+9", receipt["failures"])
