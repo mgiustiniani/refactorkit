@@ -29,12 +29,16 @@ import org.refactorkit.kotlin.KotlinDeclarationVisibility
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.jar.JarFile
 
-/** Bounded K5 row for moving one public top-level Kotlin/JVM type inside one source set. */
+/** Bounded K5 whole-file type/function package move with fail-closed standalone companion refusal. */
 class KotlinJvmMoveDeclarationPlanner(
-    private val kotlin: KotlinLanguageAdapter,
+    kotlin: KotlinLanguageAdapter,
     private val java: JdtJavaSemanticAnalyzer = JdtJavaSemanticAnalyzer(),
 ) {
+    private val compilerSymbols = kotlin::compilerSymbols
+    private val compilerDiagnostics = kotlin::compilerDiagnostics
+    private val compilerDiagnosticsWithOutput = kotlin::compilerDiagnosticsWithOutput
     fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = when (val evidence = analyzeMixed(snapshot)) {
         is MixedEvidence.Available -> evidence.kotlin.diagnostics + javaDiagnostics(evidence.java)
         is MixedEvidence.Refused -> listOf(failure(evidence.code, evidence.message))
@@ -53,7 +57,7 @@ class KotlinJvmMoveDeclarationPlanner(
             snapshot, "kotlin.moveExternalConsumerApprovalRequired",
             "Public Kotlin/JVM move requires explicit acceptance of unknown external-consumer risk",
         )
-        val catalogue = when (val result = kotlin.compilerSymbols(snapshot)) {
+        val catalogue = when (val result = compilerSymbols(snapshot)) {
             is KotlinCompilerSymbolsResult.Available -> result
             is KotlinCompilerSymbolsResult.Refused -> return refused(
                 snapshot, result.reason.code ?: "kotlin.moveEvidenceUnavailable", result.reason.message,
@@ -66,40 +70,114 @@ class KotlinJvmMoveDeclarationPlanner(
             ?: return refused(snapshot, "kotlin.moveTargetMissing", "Kotlin move target is absent from the compiler catalogue")
         val declaration = catalogue.declarations[target.id]
             ?: return refused(snapshot, "kotlin.moveIdentityUnavailable", "Kotlin move target lacks JVM identity evidence")
-        // Companion objects are OBJECT kind with '$Companion' in JVM identity
-        val isCompanion = target.kind == Symbol.Kind.OBJECT && '\$' in declaration.jvmIdentity
-        if (!isCompanion && (target.kind !in TYPE_KINDS || declaration.visibility != KotlinDeclarationVisibility.PUBLIC ||
-            declaration.jvmIdentity != declaration.jvmOwner || declaration.jvmDescriptor.isNotEmpty() ||
-            '\$' in declaration.jvmIdentity)) return refused(
+        val source = snapshot.file(target.location.path) ?: return refused(
+            snapshot, "kotlin.moveDeclarationFileMissing", "Kotlin declaration file is absent from the snapshot",
+        )
+        val sourceFileName = source.path.fileName?.toString() ?: return refused(
+            snapshot, "kotlin.moveDeclarationFileMissing", "Kotlin declaration path has no source filename",
+        )
+        if (target.kind == Symbol.Kind.OBJECT && declaration.isCompanion) return refused(
+            snapshot, "kotlin.moveCompanionStandaloneUnsupported",
+            "A companion object cannot be moved independently of its enclosing top-level declaration",
+        )
+        val isTopLevelType = target.kind in TYPE_KINDS &&
+            declaration.visibility == KotlinDeclarationVisibility.PUBLIC &&
+            declaration.jvmIdentity == declaration.jvmOwner && declaration.jvmDescriptor.isEmpty() &&
+            '\$' !in declaration.jvmIdentity
+        val isTopLevelFunctionIdentity = target.kind == Symbol.Kind.FUNCTION && declaration.isTopLevelFunction &&
+            declaration.visibility == KotlinDeclarationVisibility.PUBLIC && declaration.jvmOwner.isNotBlank() &&
+            declaration.jvmName == target.name && declaration.jvmDescriptor.startsWith("(") &&
+            declaration.jvmIdentity == "${declaration.jvmOwner}#${declaration.jvmName}${declaration.jvmDescriptor}"
+        if (isTopLevelFunctionIdentity && !declaration.isMovePlainFunction) return refused(
+            snapshot, "kotlin.moveFunctionShapeUnsupported",
+            "Top-level function move excludes extension, suspend, default, generic, context, annotation, and modifier-dependent shapes",
+        )
+        val isTopLevelFunction = isTopLevelFunctionIdentity && declaration.isMovePlainFunction
+        if (!isTopLevelType && !isTopLevelFunction) return refused(
             snapshot, "kotlin.moveDeclarationUnsupported",
-            "Initial Kotlin move supports one public top-level JVM type or companion object",
+            "Kotlin move supports qualified public top-level JVM types and one bounded top-level function shape",
         )
-        if (isCompanion && declaration.visibility == KotlinDeclarationVisibility.PRIVATE) return refused(
-            snapshot, "kotlin.moveCompanionPrivate",
-            "Companion object move requires non-private visibility",
-        )
-        val oldPackage = declaration.jvmIdentity.substringBeforeLast('.', "")
+        val oldPackage = if (isTopLevelType) declaration.jvmIdentity.substringBeforeLast('.', "")
+        else declaration.jvmOwner.substringBeforeLast('.', "")
         if (oldPackage.isEmpty()) return refused(
             snapshot, "kotlin.moveDefaultPackageUnsupported", "Initial Kotlin move does not support the default package",
         )
         if (oldPackage == targetPackage) return refused(
             snapshot, "kotlin.moveNoChange", "Kotlin move source and target packages are identical",
         )
-        val source = snapshot.file(target.location.path) ?: return refused(
-            snapshot, "kotlin.moveDeclarationFileMissing", "Kotlin declaration file is absent from the snapshot",
+        if (isTopLevelFunction && !boundedTopLevelFunction(source, target, declaration, oldPackage)) return refused(
+            snapshot, "kotlin.moveFunctionShapeUnsupported",
+            "Top-level function move requires one plain public file-facade function without extension, suspend, default, overload, or JVM-name adaptation",
         )
-        val fileDeclarations = supportedFileDeclarations(catalogue, source, target, oldPackage)
+        if (isTopLevelFunction && catalogue.index.symbols.count { symbol ->
+                val evidence = catalogue.declarations[symbol.id]
+                symbol.kind == Symbol.Kind.FUNCTION && symbol.name == target.name &&
+                    evidence != null && evidence.isTopLevelFunction &&
+                    evidence.jvmOwner.substringBeforeLast('.', "") == oldPackage
+            } != 1) return refused(
+            snapshot, "kotlin.moveFunctionShapeUnsupported",
+            "Top-level function move does not support same-package overload families across one or more files",
+        )
+        val fileDeclarations = supportedFileDeclarations(catalogue, source, target, declaration)
             ?: return refused(
                 snapshot, "kotlin.moveFileShapeUnsupported",
                 "Kotlin move requires one public target plus only compiler-proven private top-level helpers",
             )
-        val publicTypes = fileDeclarations.filter {
+        if (isTopLevelFunction && fileDeclarations.count {
+                it.symbol.kind == Symbol.Kind.FUNCTION && it.symbol.name == target.name
+            } != 1) return refused(
+            snapshot, "kotlin.moveFunctionShapeUnsupported",
+            "Top-level function move does not support overload families, including private same-name siblings",
+        )
+        if (isTopLevelFunction && catalogue.index.symbols.any { symbol ->
+                val evidence = catalogue.declarations[symbol.id]
+                symbol.kind == Symbol.Kind.FUNCTION && symbol.name == target.name &&
+                    evidence != null && evidence.isTopLevelFunction &&
+                    evidence.jvmOwner.substringBeforeLast('.', "") == targetPackage
+            }) return refused(
+            snapshot, "kotlin.moveDestinationOverloadUnsupported",
+            "Top-level function move would create a same-name overload family in the destination package",
+        )
+        val allFileDeclarations = catalogue.index.symbols
+            .filter { it.location.path.normalize() == source.path.normalize() }
+            .map { symbol -> symbol to (catalogue.declarations[symbol.id] ?: return refused(
+                snapshot, "kotlin.moveIdentityUnavailable",
+                "Kotlin move source file has a declaration without exact JVM identity evidence",
+            )) }
+        if (allFileDeclarations.isEmpty() ||
+            allFileDeclarations.any { !it.second.jvmIdentity.startsWith("$oldPackage.") }) return refused(
+            snapshot, "kotlin.moveFileShapeUnsupported",
+            "Kotlin move requires package-qualified JVM identity for every declaration in the source file",
+        )
+        val movedTypeIdentities = allFileDeclarations.filter { it.first.kind in TYPE_KINDS }
+            .associate { (_, evidence) ->
+                evidence.jvmIdentity to "$targetPackage.${evidence.jvmIdentity.removePrefix("$oldPackage.")}"
+            }
+        val movedFileIdentities = allFileDeclarations.associate { (_, evidence) ->
+            val oldIdentity = evidence.jvmIdentity
+            val ownerRelocated = "$targetPackage.${oldIdentity.removePrefix("$oldPackage.")}"
+            oldIdentity to movedTypeIdentities.entries.fold(ownerRelocated) { relocated, (oldType, newType) ->
+                relocated.replace(
+                    "L${oldType.replace('.', '/')};",
+                    "L${newType.replace('.', '/')};",
+                )
+            }
+        }
+        val publicDeclarations = fileDeclarations.filter {
             it.evidence.visibility == KotlinDeclarationVisibility.PUBLIC
         }
-        val movedIdentities = publicTypes.associate { declarationInFile ->
-            declarationInFile.evidence.jvmIdentity to "$targetPackage.${declarationInFile.symbol.name}"
+        val movedIdentities = publicDeclarations.associate { declarationInFile ->
+            val oldIdentity = declarationInFile.evidence.jvmIdentity
+            oldIdentity to movedFileIdentities.getValue(oldIdentity)
         }
-        if (dynamicRisk(snapshot, publicTypes.map { it.symbol.name }.toSet())) return refused(
+        val movedSourceIdentities = publicDeclarations.associate { declarationInFile ->
+            declarationInFile.evidence.jvmIdentity to if (isTopLevelFunction) {
+                "$targetPackage.${declarationInFile.symbol.name}"
+            } else {
+                movedIdentities.getValue(declarationInFile.evidence.jvmIdentity)
+            }
+        }
+        if (dynamicRisk(snapshot, publicDeclarations.map { it.symbol.name }.toSet())) return refused(
             snapshot, "kotlin.moveDynamicOrFrameworkReference",
             "Quoted reflection, serialization or framework evidence prevents the bounded Kotlin move row",
         )
@@ -110,16 +188,20 @@ class KotlinJvmMoveDeclarationPlanner(
             snapshot, "kotlin.moveSourceOwnershipUnavailable",
             "Kotlin move requires one authoritative non-generated source-root path",
         )
-        val destination = ownedRoots.single().resolve(targetPackage.replace('.', '/')).resolve(source.path.fileName).normalize()
+        val destination = ownedRoots.single().resolve(targetPackage.replace('.', '/')).resolve(sourceFileName).normalize()
         val newIdentity = movedIdentities.getValue(declaration.jvmIdentity)
         if (destination == source.path.normalize() || snapshot.files.any { it.path.normalize() == destination } ||
             Files.exists(snapshot.workspace.root.resolve(destination)) ||
             catalogue.declarations.values.any {
-                it.jvmIdentity in movedIdentities.values && it.jvmIdentity !in movedIdentities.keys
+                it.jvmIdentity in movedFileIdentities.values && it.jvmIdentity !in movedFileIdentities.keys
             }) return refused(
             snapshot, "kotlin.moveDestinationConflict", "Kotlin move destination already exists",
         )
 
+        val sourcePackageEdit = packageEdit(source, oldPackage, targetPackage)
+            ?: return refused(
+                snapshot, "kotlin.movePackageDeclarationInvalid", "Kotlin package declaration is not exact",
+            )
         val before = when (val evidence = analyzeMixed(snapshot)) {
             is MixedEvidence.Available -> evidence
             is MixedEvidence.Refused -> return refused(snapshot, evidence.code, evidence.message)
@@ -129,8 +211,60 @@ class KotlinJvmMoveDeclarationPlanner(
             snapshot, "kotlin.moveBaselineIncomplete", "Kotlin move requires complete clean K2/JDT evidence",
             before.kotlin.diagnostics + javaDiagnostics(before.java),
         )
-        val publicById = publicTypes.associateBy { it.symbol.id }
-        val javaUses = before.java.bindingUses.filter { it.symbolQualifiedName in movedIdentities.keys }
+        if (isTopLevelFunction) when (destinationFacadeEvidence(
+            snapshot, "$targetPackage.${declaration.jvmOwner.substringAfterLast('.')}",
+        )) {
+            DestinationFacadeEvidence.ABSENT -> Unit
+            DestinationFacadeEvidence.PRESENT -> return refused(
+                snapshot, "kotlin.moveDestinationConflict",
+                "Top-level function move would collide with a dependency JVM file facade",
+            )
+            DestinationFacadeEvidence.UNAVAILABLE -> return refused(
+                snapshot, "kotlin.moveDestinationEvidenceUnavailable",
+                "Top-level function move cannot prove dependency-facade absence in the destination package",
+            )
+        }
+        if (isTopLevelFunction) when (destinationCallableEvidence(snapshot, source, targetPackage, target.name)) {
+            DestinationCallableEvidence.ABSENT -> Unit
+            DestinationCallableEvidence.PRESENT -> return refused(
+                snapshot, "kotlin.moveDestinationOverloadUnsupported",
+                "Top-level function move would collide with a dependency callable in the destination package",
+            )
+            DestinationCallableEvidence.UNAVAILABLE -> return refused(
+                snapshot, "kotlin.moveDestinationEvidenceUnavailable",
+                "Top-level function move cannot prove dependency-callable absence in the destination package",
+            )
+        }
+        val expectedOutboundBindings = if (isTopLevelFunction) {
+            outboundBindings(
+                before.kotlin, source.path, movedFileIdentities,
+                BindingProjection(source.content, sourcePackageEdit),
+            )
+                ?: return refused(
+                    snapshot, "kotlin.moveOutboundEvidenceIncomplete",
+                    "Top-level function move requires exact outbound K2 binding evidence for the moved file",
+                )
+        } else emptyMap()
+        val publicById = publicDeclarations.associateBy { it.symbol.id }
+        val exactJavaCallableBindingUses = before.java.bindingUses.filter { use ->
+            use.jvmIdentity?.let { identity ->
+                "${identity.ownerBinaryName}#${identity.memberName}${identity.descriptor}"
+            } == declaration.jvmIdentity
+        }
+        val exactJavaCallableReferences = before.java.references.filter { reference ->
+            reference.jvmIdentity?.let { identity ->
+                "${identity.ownerBinaryName}#${identity.memberName}${identity.descriptor}"
+            } == declaration.jvmIdentity
+        }
+        if (isTopLevelFunction && (exactJavaCallableBindingUses.isNotEmpty() || exactJavaCallableReferences.isNotEmpty())) {
+            return refused(
+                snapshot, "kotlin.moveFunctionJavaConsumerUnsupported",
+                "The bounded top-level function move does not support Java consumers",
+            )
+        }
+        val javaUses = if (isTopLevelFunction) emptyList() else before.java.bindingUses.filter {
+            it.symbolQualifiedName in movedIdentities.keys
+        }
         val consumerUses = catalogue.usages.filter {
             it.targetId in publicById.keys && it.location.path.normalize() != source.path.normalize()
         }.map { usage ->
@@ -143,31 +277,46 @@ class KotlinJvmMoveDeclarationPlanner(
         if (consumerPaths.any { path -> snapshot.owningBuildSourceRoots(path).any { it.generated } }) return refused(
             snapshot, "kotlin.moveGeneratedReference", "Kotlin move consumer belongs to generated source",
         )
+        if (isTopLevelFunction && consumerPaths.any { path ->
+                val roots = snapshot.owningBuildSourceRoots(path)
+                roots.isEmpty() || roots.map { it.root.normalize() }.distinct().size != 1 ||
+                    roots.any { it.generated || it.modelStatus != BuildModelStatus.AVAILABLE }
+            }) return refused(
+            snapshot, "kotlin.moveFunctionConsumerOwnershipUnavailable",
+            "Top-level function move requires one authoritative non-generated source root for every consumer",
+        )
 
         val edits = mutableListOf<FileEdit>()
-        edits += FileEdit.Modify(source.path, listOf(packageEdit(source, oldPackage, targetPackage)
-            ?: return refused(snapshot, "kotlin.movePackageDeclarationInvalid", "Kotlin package declaration is not exact")))
+        edits += FileEdit.Modify(source.path, listOf(sourcePackageEdit))
         for (path in consumerPaths.sortedBy { it.toString() }) {
             val consumer = snapshot.file(path) ?: return refused(
                 snapshot, "kotlin.moveReferenceFileMissing", "Kotlin move consumer is absent from the snapshot",
             )
             val pathUses = usesByPath[path].orEmpty()
-            val consumerEdits = if (publicTypes.size == 1) {
-                consumerEdits(
+            val consumerEdits = when {
+                isTopLevelFunction -> topLevelFunctionConsumerEdits(
+                    consumer, pathUses,
+                    "$oldPackage.${target.name}", movedSourceIdentities.getValue(declaration.jvmIdentity), target.name,
+                )
+                publicDeclarations.size == 1 -> consumerEdits(
                     consumer, pathUses.map { it.location }, oldPackage,
                     declaration.jvmIdentity, newIdentity, target.name,
                 )
-            } else {
-                publicSiblingConsumerEdits(
+                else -> publicSiblingConsumerEdits(
                     consumer, pathUses, movedIdentities, oldPackage,
                 )
             } ?: return refused(
                 snapshot,
-                if (publicTypes.size == 1) "kotlin.moveImportShapeUnsupported"
-                else "kotlin.movePublicSiblingImportUnsupported",
-                if (publicTypes.size == 1)
-                    "Kotlin move requires an exact import, same-package use, or fully-qualified compiler-proven target"
-                else "Additional public file types require exact explicit/aliased, package-star, same-package, or fully-qualified consumers",
+                when {
+                    isTopLevelFunction -> "kotlin.moveFunctionConsumerShapeUnsupported"
+                    publicDeclarations.size == 1 -> "kotlin.moveImportShapeUnsupported"
+                    else -> "kotlin.movePublicSiblingImportUnsupported"
+                },
+                when {
+                    isTopLevelFunction -> "Top-level function move requires one exact explicit Kotlin callable import and compiler-proven uses"
+                    publicDeclarations.size == 1 -> "Kotlin move requires an exact import, same-package use, or fully-qualified compiler-proven target"
+                    else -> "Additional public file types require exact explicit/aliased, package-star, same-package, or fully-qualified consumers"
+                },
             )
             edits += FileEdit.Modify(path, consumerEdits)
         }
@@ -188,33 +337,58 @@ class KotlinJvmMoveDeclarationPlanner(
             snapshot, "kotlin.moveDiagnosticsRegression",
             "Kotlin move introduces ${introduced.size} compiler error(s)", introduced,
         )
+        val stagedOutboundBindings = if (isTopLevelFunction) {
+            outboundBindings(after.kotlin, destination)
+                ?: return refused(
+                    snapshot, "kotlin.moveOutboundEvidenceIncomplete",
+                    "Staged top-level function move lacks exact outbound K2 binding evidence",
+                )
+        } else emptyMap()
+        if (stagedOutboundBindings != expectedOutboundBindings) return refused(
+            snapshot, "kotlin.moveOutboundBindingChanged",
+            "Staged top-level function move changes an outbound semantic binding",
+        )
         val stagedDeclaration = after.kotlin.declarations.entries.singleOrNull { it.value.jvmIdentity == newIdentity }
         val stagedPublicIds = after.kotlin.declarations.filterValues {
             it.jvmIdentity in movedIdentities.values
         }.keys
-        val oldDescriptorPackage = "L${oldPackage.replace('.', '/')}"
-        val targetDescriptorPackage = "L${targetPackage.replace('.', '/')}"
-        val expectedMovedIdentities = fileDeclarations.map { declarationInFile ->
-            "$targetPackage.${declarationInFile.evidence.jvmIdentity.removePrefix("$oldPackage.")}".replace(
-                oldDescriptorPackage, targetDescriptorPackage,
-            )
-        }.toSet()
+        val expectedMovedIdentities = movedFileIdentities.values.toSet()
         val stagedIdentities = after.kotlin.declarations.values.map { it.jvmIdentity }.toSet()
         val stagedKotlinUseCount = after.kotlin.usages.count {
             it.targetId in stagedPublicIds && it.location.path.normalize() != destination
         }
         val expectedKotlinUseCount = consumerUses.count { it.location.path.toString().endsWith(".kt") }
         val stagedJavaUseCount = after.java.bindingUses.count { it.symbolQualifiedName in movedIdentities.values }
-        if (stagedDeclaration == null || stagedPublicIds.size != publicTypes.size ||
-            !stagedIdentities.containsAll(expectedMovedIdentities) ||
-            stagedKotlinUseCount < expectedKotlinUseCount || stagedJavaUseCount < javaUses.size) return refused(
+        val stagedFunctionHasJavaConsumer = isTopLevelFunction && (
+            after.java.bindingUses.any { use ->
+                use.jvmIdentity?.let { identity ->
+                    "${identity.ownerBinaryName}#${identity.memberName}${identity.descriptor}"
+                } == newIdentity
+            } || after.java.references.any { reference ->
+                reference.jvmIdentity?.let { identity ->
+                    "${identity.ownerBinaryName}#${identity.memberName}${identity.descriptor}"
+                } == newIdentity
+            }
+        )
+        val kotlinUsesComplete = if (isTopLevelFunction) {
+            stagedKotlinUseCount == expectedKotlinUseCount
+        } else {
+            stagedKotlinUseCount >= expectedKotlinUseCount
+        }
+        if (stagedDeclaration == null || stagedPublicIds.size != publicDeclarations.size ||
+            !stagedIdentities.containsAll(expectedMovedIdentities) || !kotlinUsesComplete ||
+            stagedFunctionHasJavaConsumer || stagedJavaUseCount < javaUses.size) return refused(
             snapshot, "kotlin.movePostImageIdentityMissing",
             "Staged K2/JDT evidence does not resolve every moved JVM identity use",
         )
         return PatchPlan(
             operation = "moveDeclaration", status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash,
             confidence = 0.91, requiresUserApproval = true,
-            summary = "Move ${publicTypes.size} public Kotlin type(s) led by '${target.name}' from '$oldPackage' to '$targetPackage' across ${consumerPaths.size} compiler-proven consumer file(s).",
+            summary = if (isTopLevelFunction) {
+                "Move public top-level Kotlin function '${target.name}' from '$oldPackage' to '$targetPackage' across ${consumerPaths.size} exact-import consumer file(s)."
+            } else {
+                "Move ${publicDeclarations.size} public Kotlin type(s) led by '${target.name}' from '$oldPackage' to '$targetPackage' across ${consumerPaths.size} compiler-proven consumer file(s)."
+            },
             affectedFiles = workspaceEdit.affectedFiles(), workspaceEdit = workspaceEdit,
             diagnosticsBefore = before.kotlin.diagnostics + javaDiagnostics(before.java),
             diagnosticsAfterPreview = after.kotlin.diagnostics + javaDiagnostics(after.java),
@@ -225,7 +399,7 @@ class KotlinJvmMoveDeclarationPlanner(
 
     private fun analyzeMixed(snapshot: ProjectSnapshot): MixedEvidence {
         var javaEvidence: JdtJavaSemanticAnalysisResult? = null
-        val kotlinResult = kotlin.compilerDiagnosticsWithOutput(snapshot) { output ->
+        val kotlinResult = compilerDiagnosticsWithOutput(snapshot) { output ->
             javaEvidence = java.analyze(snapshot, additionalClasspathEntries = listOf(output))
         }
         return when (kotlinResult) {
@@ -243,7 +417,10 @@ class KotlinJvmMoveDeclarationPlanner(
     }
 
     private fun packageEdit(source: SourceFile, oldPackage: String, targetPackage: String): TextEdit? {
-        val match = Regex("(?m)^package\\s+(${Regex.escape(oldPackage)})\\s*$").find(source.content) ?: return null
+        val terminator = if (source.languageId == "kotlin") "(?:[ \\t]*;|[ \\t]*$)" else "[ \\t]*;[ \\t]*$"
+        val match = Regex(
+            "(?m)^[ \\t]*package[ \\t]+(${Regex.escape(oldPackage)})$terminator",
+        ).findAll(source.content).toList().singleOrNull() ?: return null
         val range = match.groups[1]!!.range
         return offsetEdit(source.content, range.first, range.last + 1, targetPackage)
     }
@@ -285,6 +462,36 @@ class KotlinJvmMoveDeclarationPlanner(
         val imports = oldIdentities.map { movedIdentities.getValue(it) }.sorted()
             .joinToString(separator = newline, postfix = newline) { "import $it$semicolon" }
         return listOf(offsetEdit(source.content, insertionOffset, insertionOffset, imports))
+    }
+
+    private fun topLevelFunctionConsumerEdits(
+        source: SourceFile,
+        uses: List<ConsumerUse>,
+        oldSourceIdentity: String,
+        newSourceIdentity: String,
+        simpleName: String,
+    ): List<TextEdit>? {
+        if (source.languageId != "kotlin" || uses.isEmpty()) return null
+        if (Regex("::\\s*${Regex.escape(simpleName)}\\b").containsMatchIn(source.content)) return null
+        val oldPackage = oldSourceIdentity.substringBeforeLast('.')
+        if (Regex("(?m)^[ \\t]*import[ \\t]+${Regex.escape(oldPackage)}\\.\\*[ \\t]*;?[ \\t]*$")
+                .containsMatchIn(source.content)) return null
+        val imports = Regex(
+            "(?m)^[ \\t]*import[ \\t]+(${Regex.escape(oldSourceIdentity)})[ \\t]*;?[ \\t]*$",
+        ).findAll(source.content).toList()
+        if (imports.size != 1) return null
+        val importRange = imports.single().groups[1]!!.range
+        if (occurrenceOffsets(source.content, oldSourceIdentity) != listOf(importRange.first)) return null
+        val edit = offsetEdit(source.content, importRange.first, importRange.last + 1, newSourceIdentity)
+        if (uses.any { use ->
+                val start = runCatching { TextEdits.offsetOf(source.content, use.location.range.start) }.getOrNull()
+                    ?: return@any true
+                val end = runCatching { TextEdits.offsetOf(source.content, use.location.range.end) }.getOrNull()
+                    ?: return@any true
+                start !in 0..end || end > source.content.length ||
+                    source.content.substring(start, end) != simpleName
+            }) return null
+        return listOf(edit)
     }
 
     private fun exactImportEdit(source: SourceFile, oldIdentity: String, newIdentity: String): TextEdit? {
@@ -408,11 +615,106 @@ class KotlinJvmMoveDeclarationPlanner(
     private fun exactPackage(source: SourceFile): String? = packageLine(source)?.groups?.get(1)?.value
 
     private fun packageLine(source: SourceFile): MatchResult? {
-        val terminator = if (source.languageId == "java") "\\s*;" else ""
+        val terminator = if (source.languageId == "java") "[ \\t]*;" else "[ \\t]*;?"
         val matches = Regex(
-            "(?m)^[ \\t]*package\\s+([A-Za-z_][A-Za-z0-9_.]*)$terminator[ \\t]*$",
+            "(?m)^[ \\t]*package[ \\t]+([A-Za-z_][A-Za-z0-9_.]*)$terminator[ \\t]*$",
         ).findAll(source.content).toList()
         return matches.singleOrNull()
+    }
+
+    private fun destinationFacadeEvidence(
+        snapshot: ProjectSnapshot,
+        jvmOwner: String,
+    ): DestinationFacadeEvidence = runCatching {
+        val classEntry = "${jvmOwner.replace('.', '/')}.class"
+        val model = snapshot.buildModels.singleOrNull { it.providerId == "kotlin-jvm-projection-v1" }
+            ?: return DestinationFacadeEvidence.UNAVAILABLE
+        val entries = model.modules.flatMap { it.sourceSets }.flatMap { it.classpathEntries }.distinct()
+        for (configured in entries) {
+            val path = if (configured.isAbsolute) configured.normalize()
+                else snapshot.workspace.root.resolve(configured).normalize()
+            if (Files.isSymbolicLink(path) || !Files.isRegularFile(path) ||
+                !path.fileName.toString().endsWith(".jar", ignoreCase = true)) {
+                return DestinationFacadeEvidence.UNAVAILABLE
+            }
+            JarFile(path.toFile(), false).use { jar ->
+                if (jar.getJarEntry(classEntry) != null || jar.entries().asSequence().any { entry ->
+                        !entry.isDirectory && entry.name.startsWith("META-INF/versions/") &&
+                            entry.name.endsWith("/$classEntry")
+                    }) return DestinationFacadeEvidence.PRESENT
+            }
+        }
+        DestinationFacadeEvidence.ABSENT
+    }.getOrElse { DestinationFacadeEvidence.UNAVAILABLE }
+
+    private fun destinationCallableEvidence(
+        snapshot: ProjectSnapshot,
+        source: SourceFile,
+        targetPackage: String,
+        callableName: String,
+    ): DestinationCallableEvidence {
+        val parent = source.path.parent ?: return DestinationCallableEvidence.UNAVAILABLE
+        val occupied = snapshot.trackedFiles.map { it.path.normalize() }.toSet()
+        val probePath = (0..16).asSequence()
+            .map { suffix ->
+                val marker = if (suffix == 0) "" else "_$suffix"
+                parent.resolve("__RefactorKitDestinationProbe$marker.kt").normalize()
+            }
+            .firstOrNull { it !in occupied } ?: return DestinationCallableEvidence.UNAVAILABLE
+        val probe = SourceFile(
+            probePath,
+            "package __refactorkit_destination_probe\nimport $targetPackage.$callableName\n",
+            "kotlin",
+        )
+        val unresolvedNames = (targetPackage.split('.') + callableName).toSet()
+        return when (val result = compilerDiagnostics(snapshot.copy(files = snapshot.files + probe))) {
+            is KotlinCompilerDiagnosticsResult.Available -> {
+                val errors = result.diagnostics.filter { it.severity == Diagnostic.Severity.ERROR }
+                val absent = errors.size == 1 && errors.single().let { diagnostic ->
+                    diagnostic.location?.path?.normalize() == probePath && unresolvedNames.any { unresolved ->
+                        diagnostic.message == "Unresolved reference '$unresolved'."
+                    }
+                }
+                when {
+                    errors.isEmpty() -> DestinationCallableEvidence.PRESENT
+                    absent -> DestinationCallableEvidence.ABSENT
+                    else -> DestinationCallableEvidence.UNAVAILABLE
+                }
+            }
+            is KotlinCompilerDiagnosticsResult.Error,
+            is KotlinCompilerDiagnosticsResult.Refused -> DestinationCallableEvidence.UNAVAILABLE
+        }
+    }
+
+    private fun outboundBindings(
+        result: KotlinCompilerDiagnosticsResult.Available,
+        path: Path,
+        relocation: Map<String, String> = emptyMap(),
+        projection: BindingProjection? = null,
+    ): Map<String, Int>? {
+        val normalizedPath = path.normalize()
+        val bindings = mutableListOf<String>()
+        for (usage in result.usages.filter { it.location.path.normalize() == normalizedPath }) {
+            val identity = result.declarations[usage.targetId]?.jvmIdentity ?: return null
+            val location = bindingLocation(usage.location, projection) ?: return null
+            bindings += "$location:source:${relocation[identity] ?: identity}"
+        }
+        result.externalTypeUsages.filter { it.location.path.normalize() == normalizedPath }.forEach { usage ->
+            if (usage.jvmBinaryName.isBlank()) return null
+            val location = bindingLocation(usage.location, projection) ?: return null
+            bindings += "$location:external-type:${usage.jvmBinaryName}"
+        }
+        result.externalCallableUsages.filter { it.location.path.normalize() == normalizedPath }.forEach { usage ->
+            if (usage.jvmOwner.isBlank() || usage.callableName.isBlank() || usage.jvmDescriptor.isBlank()) return null
+            val location = bindingLocation(usage.location, projection) ?: return null
+            bindings += "$location:external-callable:${usage.jvmOwner}#${usage.callableName}${usage.jvmDescriptor}"
+        }
+        return bindings.groupingBy { it }.eachCount()
+    }
+
+    private fun bindingLocation(location: SourceLocation, projection: BindingProjection?): String? {
+        val range = if (projection == null) location.range else projection.project(location.range) ?: return null
+        return with(range) { "${start.line}:${start.character}-${end.line}:${end.character}" }
     }
 
     private fun dynamicRisk(snapshot: ProjectSnapshot, simpleNames: Set<String>): Boolean {
@@ -426,33 +728,41 @@ class KotlinJvmMoveDeclarationPlanner(
         }
     }
 
+    private fun boundedTopLevelFunction(
+        source: SourceFile,
+        target: Symbol,
+        evidence: KotlinCompilerDeclarationEvidence,
+        oldPackage: String,
+    ): Boolean {
+        val fileName = source.path.fileName?.toString() ?: return false
+        if (source.languageId != "kotlin" || !fileName.endsWith(".kt")) return false
+        if (evidence.jvmOwner.substringBeforeLast('.', "") != oldPackage ||
+            evidence.jvmOwner.substringAfterLast('.').isBlank() || '$' in evidence.jvmOwner ||
+            evidence.jvmName != target.name || evidence.jvmDescriptor.isBlank() ||
+            !evidence.jvmDescriptor.startsWith("(")) return false
+        return evidence.isTopLevelFunction && evidence.isMovePlainFunction
+    }
+
     private fun supportedFileDeclarations(
         catalogue: KotlinCompilerSymbolsResult.Available,
         source: SourceFile,
         target: Symbol,
-        oldPackage: String,
+        targetEvidence: KotlinCompilerDeclarationEvidence,
     ): List<FileDeclaration>? {
-        val facadeOwner = "$oldPackage.${source.path.fileName.toString().removeSuffix(".kt")}Kt"
         val semantic = catalogue.index.symbols.filter { it.location.path.normalize() == source.path.normalize() }
             .mapNotNull { symbol ->
                 val evidence = catalogue.declarations[symbol.id] ?: return@mapNotNull null
-                val topLevel = when (symbol.kind) {
-                    in TYPE_KINDS -> evidence.jvmIdentity == evidence.jvmOwner && '$' !in evidence.jvmIdentity
-                    Symbol.Kind.FUNCTION, Symbol.Kind.PROPERTY -> evidence.jvmOwner == facadeOwner
-                    else -> false
-                }
-                if (topLevel) symbol to evidence else null
+                if (evidence.isTopLevelDeclaration) symbol to evidence else null
             }
-        if (semantic.none { it.first.id == target.id } ||
+        val targetIsFunction = target.kind == Symbol.Kind.FUNCTION
+        if (targetEvidence.sourceTopLevelDeclarationCount <= 0 ||
+            semantic.size != targetEvidence.sourceTopLevelDeclarationCount ||
+            semantic.none { it.first.id == target.id } ||
             semantic.filterNot { it.first.id == target.id }.any { (symbol, evidence) ->
                 evidence.visibility != KotlinDeclarationVisibility.PRIVATE &&
-                    !(evidence.visibility == KotlinDeclarationVisibility.PUBLIC && symbol.kind in TYPE_KINDS)
+                    !(targetIsFunction.not() && evidence.visibility == KotlinDeclarationVisibility.PUBLIC &&
+                        symbol.kind in TYPE_KINDS)
             }) return null
-        val lexicalNames = Regex(
-            "(?m)^(?:(?:public|internal|private|protected|open|abstract|sealed|data|value|enum|annotation)\\s+)*" +
-                "(?:class|interface|object|fun|val|var|typealias)\\s+([A-Za-z_][A-Za-z0-9_]*)",
-        ).findAll(source.content).mapNotNull { it.groups[1]?.value }.sorted().toList()
-        if (lexicalNames != semantic.map { it.first.name }.sorted()) return null
         return semantic.map { FileDeclaration(it.first, it.second) }
     }
 
@@ -497,6 +807,27 @@ class KotlinJvmMoveDeclarationPlanner(
         riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = code,
     )
 
+    private class BindingProjection(
+        private val beforeContent: String,
+        private val edit: TextEdit,
+    ) {
+        private val editStart = TextEdits.offsetOf(beforeContent, edit.range.start)
+        private val editEnd = TextEdits.offsetOf(beforeContent, edit.range.end)
+        private val delta = edit.newText.length - (editEnd - editStart)
+        private val afterContent = TextEdits.apply(beforeContent, listOf(edit))
+
+        fun project(range: SourceRange): SourceRange? = runCatching {
+            val start = TextEdits.offsetOf(beforeContent, range.start)
+            val end = TextEdits.offsetOf(beforeContent, range.end)
+            val projected = when {
+                end <= editStart -> start to end
+                start >= editEnd -> start + delta to end + delta
+                else -> return null
+            }
+            TextEdits.rangeForOffset(afterContent, projected.first, projected.second - projected.first)
+        }.getOrNull()
+    }
+
     private data class FileDeclaration(
         val symbol: Symbol,
         val evidence: KotlinCompilerDeclarationEvidence,
@@ -506,6 +837,9 @@ class KotlinJvmMoveDeclarationPlanner(
         val oldIdentity: String,
         val location: SourceLocation,
     )
+
+    private enum class DestinationCallableEvidence { ABSENT, PRESENT, UNAVAILABLE }
+    private enum class DestinationFacadeEvidence { ABSENT, PRESENT, UNAVAILABLE }
 
     private sealed interface MixedEvidence {
         data class Available(

@@ -1,0 +1,63 @@
+verdict: FAIL
+baselineId: K5-MOVE-NEXT-001
+baselineSha256: 21e0670cfb407f0a19ca6a98968375b3586ad2643effe99fc184f0c02bc07980
+reviewedRevision: bbaf93df170935c3af9ae4d45afa4f2af88dc213 plus working-tree candidate manifest SHA-256 68af137044ad3f3e666ee7818995dadacde86c1006d722310ff89cdd53e9780c
+reviewedScope: REQ-KOTLIN-MOVE-FUNCTION-001, REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+
+requirementMatrix:
+  - requirement: REQ-KOTLIN-MOVE-FUNCTION-001
+    acceptanceCriteria: bounded whole-file public top-level function move; prohibited shapes refuse; exact Kotlin imports; clean K2/JDT evidence; token-only edits; PatchEngine apply/WAL/rollback
+    implementationEvidence: modules/refactorkit-jvm/src/main/kotlin/org/refactorkit/jvm/KotlinJvmMoveDeclarationPlanner.kt; daemon/MCP/CLI managed routes
+    verificationEvidence: focused 7 planner cases passed; packaged smoke passed; three independent external fixture probes exposed boundary defects
+    status: CONTRADICTED
+  - requirement: REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+    acceptanceCriteria: exact PSI companion evidence; stable refusal; ordinary nested object distinguished; no edit, plan, transaction, or write
+    implementationEvidence: KotlinCompilerSymbolExtractor.java:174; KotlinCompilerBridgeMain.java:154; KotlinCompilerDiagnostics.kt:612-616; KotlinJvmMoveDeclarationPlanner.kt:74-77
+    verificationEvidence: focused compiler-PSI and planner tests passed; packaged daemon/MCP refusal smoke passed without source or transaction changes
+    status: SATISFIED
+
+blockingFindings:
+  - id: K5-FUNCTION-BOUNDARY-001
+    severity: BLOCKER
+    owner: Kotlin/JVM planner and test owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:549-552 requires the literal lexical form `public fun`. A compiler-proven implicitly public function (`fun portableFunction...`) was refused by the packaged CLI. The baseline requires semantic PUBLIC visibility, not an explicit modifier.
+  - id: K5-FUNCTION-FACADE-002
+    severity: HIGH
+    owner: Kotlin/JVM planner and test owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:545 and 573 constructs the facade as `<literal filename>Kt`. A valid plain function in `move.kt` has compiler owner `MoveKt` and was refused by the packaged CLI. The baseline contains no uppercase-filename restriction.
+  - id: K5-FUNCTION-OVERLOAD-003
+    severity: BLOCKER
+    owner: Kotlin/JVM planner and test owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:584-590 permits private sibling declarations without rejecting a same-name overload. An independent fixture containing private `portableFunction(Int)` plus public `portableFunction(String)` produced PREVIEW, contradicting the explicit exclusion of overloaded selected functions.
+  - id: K5-APPLY-DIAGNOSTICS-004
+    severity: HIGH
+    owner: managed apply routing owner
+    evidence: ManagedApplyDiagnosticsGateSelector.kt:86-103 selects the move planner’s K2+JDT diagnostics only when a `.java` file is affected. This function shape refuses Java consumers and edits only Kotlin files, so CLI/daemon/MCP apply selects generic K2 diagnostics instead of the required operation diagnostics. DaemonSession.kt:1737-1743 likewise uses K2-only post-apply diagnostics.
+  - id: K5-FINALIZER-CLAIM-005
+    severity: HIGH
+    owner: release qualification tooling owner
+    evidence: v0.7.0-k5-move-next-acceptance.md:79 claims the finalizer rejects synthetic merge revisions. finalize-native-k5-move-next.py:115-125 only validates SHA syntax and equality with HEAD; it performs no parent/source-head check. The workflow itself correctly checks out and passes `${{ github.event.pull_request.head.sha || github.sha }}`, but the stated finalizer behavior is absent.
+
+nonBlockingFindings:
+  - id: K5-STATUS-001
+    severity: LOW
+    owner: workflow coordinator
+    evidence: No roadmap row or support-status file was modified; promotion remains correctly pending.
+
+unverifiedClaims:
+  - Four-host native qualification remains pending by design.
+  - Whole-tree `check goldenTest`, original packaged Kotlin smoke, installed-runtime parity, final SBOM, and whole-CI status were not established in this review.
+  - Earlier full 30-case Kotlin compiler test, full planner suite, PMD, and SpotBugs claims were not independently rerun; focused tests and packaged behavior were rerun.
+
+commandsRun:
+  - `sha256sum` baseline, checksum, and RED logs — exit 0; hashes matched the handoff.
+  - Focused Gradle oracle with `JAVA_HOME=/usr/lib/jvm/java-21-openjdk` and clean test outputs — exit 0; 8 tests, 0 skipped/failures/errors. Report SHA-256: Kotlin 35aef3416753cccbbd454e688c02afcefd373d0932393cebedcb4f80865eccfe; JVM fa79b50937d51537e55a9816de64cb1d3c1b310b1f859400a70495e7f6fac3c7.
+  - `python3 scripts/test-finalize-native-k5-move-next.py` — exit 0; 10 passed.
+  - `JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon packageCliRuntime` — exit 0.
+  - `JAVA_HOME=/usr/lib/jvm/java-21-openjdk python3 scripts/smoke-packaged-k5-move-next.py --jdk-home /usr/lib/jvm/java-21-openjdk` — exit 0 with exact terminal marker.
+  - `/tmp/review_k5_private_overload.py` SHA-256 ea7a5ffe3942dcf757d0328909038e32abd1553f5695c6465c0546d323e374c1 — exit 0; prohibited overload returned PREVIEW.
+  - Implicit-public and lowercase-file external probes — exit 1 because the CLI refused both compiler-clean in-scope fixtures.
+  - `git diff --check` and Python syntax compilation — exit 0.
+  - Initial focused Gradle attempt under inherited JDK 25 — exit 1 due repository-required JDK 21; corrected rerun passed.
+
+requiredNextAction: Return to the Kotlin/JVM planner, managed-routing, and release-tooling owners. Add requirement tests for implicit public visibility, lowercase/default facade naming, and private same-name overload refusal; correct apply diagnostics routing and the synthetic-merge claim/check; rerun focused and packaged evidence, then request a fresh independent pre-native review. Do not start native qualification or promote roadmap rows.

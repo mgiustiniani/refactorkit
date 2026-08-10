@@ -87,7 +87,7 @@ object ManagedApplyDiagnosticsGateSelector {
                 Objects.requireNonNull(it.fileName).toString().endsWith(".java")
             }
             when {
-                javaAffected && plan.operation == "moveDeclaration" ->
+                plan.operation == "moveDeclaration" ->
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
                         providerFunctions.kotlinJvmMoveDeclaration(kotlinAdapter, candidate)
                     }

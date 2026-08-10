@@ -224,7 +224,30 @@ fully-qualified K2/JDT-bound identities, then moves the file within one
 authoritative source set. Kotlin and Java consumer sets are independently
 optional; zero-consumer public types rely on staged K2 declaration identity and
 explicit external-consumer-risk acceptance. Both rename directions and the bounded package-move row passed the native matrix,
-including CRLF-normalized Windows evidence. Descriptor-exact overloads and
+including CRLF-normalized Windows evidence.
+
+A requirement-sealed K5 candidate adds one narrower top-level-function whole-file
+shape: one plain compiler-PSI-proven top-level, compiler-public (explicit or
+implicit) function using the exact compiler-reported file facade regardless of
+source-filename casing; public members remain refused. It permits only private
+helpers and unaliased explicit Kotlin callable imports. File completeness uses
+compiler-PSI top-level membership/count evidence rather than declaration-format
+regexes. It refuses exact Java callable consumers and same-name overload
+families in both source and destination packages. Location-bound exact outbound
+K2 identities must remain unchanged except for helpers moved with the file, so
+a cleanly compiling destination shadow cannot silently rebind behavior.
+Kotlin-only move
+apply and daemon post-apply diagnostics use the operation-owned mixed K2/JDT
+provider rather than the generic K2 fallback. It
+returns `kotlin.moveCompanionStandaloneUnsupported` only for an approved
+compiler-PSI-proven companion selection (not an ordinary nested object), without
+creating an edit or transaction. This candidate is
+not a promoted support claim until its dedicated four-host receipts and
+independent review pass; aliases, stars, implicit/qualified uses, callable
+references, overloads, extensions, suspend/default/`@JvmName`/multifile forms,
+and declaration splitting remain refused.
+
+Descriptor-exact overloads and
 constructor properties are now read-only catalogue evidence; delegated/computed
 properties, broader moves, unqualified signature/extract/inline shapes,
 multiplatform, Android, compiler-plugin semantics and framework boundaries remain

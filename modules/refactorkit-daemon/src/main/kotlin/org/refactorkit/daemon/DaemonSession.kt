@@ -1715,17 +1715,18 @@ class DaemonSession(
         }
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val currentSnap = scanWorkspace(root)
+        val applyDiagnosticsGate = ManagedApplyDiagnosticsGateSelector.select(
+            plan = plan,
+            languageId = pending.languageId,
+            javaAdapter = adapter,
+            kotlinAdapter = kotlinAdapter,
+            externalGateResolver = { languageId -> requireSemanticAdapter(languageId).diagnosticsGate() },
+        )
         return when (val result = PatchEngine(root).apply(
             plan,
             currentSnap,
             ApplyAuthorization.explicit("daemon-json-rpc"),
-            ManagedApplyDiagnosticsGateSelector.select(
-                plan = plan,
-                languageId = pending.languageId,
-                javaAdapter = adapter,
-                kotlinAdapter = kotlinAdapter,
-                externalGateResolver = { languageId -> requireSemanticAdapter(languageId).diagnosticsGate() },
-            ),
+            applyDiagnosticsGate,
         )) {
             is ApplyResult.Applied -> {
                 val refreshed = WorkspaceRefreshCoordinator.refresh(requireSnapshot()) {
@@ -1734,13 +1735,7 @@ class DaemonSession(
                 val diagnostics = boundedDiagnostics(
                     when (pending.languageId) {
                         "java" -> adapter.diagnostics(refreshed)
-                        "kotlin" -> if (plan.affectedFiles.any { it.fileName.toString().endsWith(".java") }) {
-                            when {
-                                plan.operation == "moveDeclaration" -> KotlinJvmMoveDeclarationPlanner(kotlinAdapter).diagnostics(refreshed)
-                                plan.evidence == RefactoringEvidence.JDT_BINDING -> JavaKotlinPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
-                                else -> KotlinJavaPublicTypeRenamePlanner(kotlinAdapter).diagnostics(refreshed)
-                            }
-                        } else kotlinAdapter.compilerDiagnostics(refreshed).diagnostics
+                        "kotlin" -> applyDiagnosticsGate.provider?.invoke(refreshed).orEmpty()
                         else -> emptyList()
                     },
                 )

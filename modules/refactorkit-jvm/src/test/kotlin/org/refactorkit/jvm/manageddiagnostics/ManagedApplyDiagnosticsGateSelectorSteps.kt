@@ -652,7 +652,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             ),
             mapOf(
                 "order" to "3",
-                "exact predicate" to "languageId == \"kotlin\" and javaAffected and operation == \"moveDeclaration\"",
+                "exact predicate" to "languageId == \"kotlin\" and operation == \"moveDeclaration\"",
                 "gate ID rule" to "kotlin-k2-java-jdt",
                 "lazy provider or result" to "KotlinJvmMoveDeclarationPlanner(currentKotlinAdapter).diagnostics(candidate)",
             ),
@@ -670,7 +670,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             ),
             mapOf(
                 "order" to "6",
-                "exact predicate" to "languageId == \"kotlin\" and not javaAffected",
+                "exact predicate" to "languageId == \"kotlin\" and not javaAffected after moveDeclaration is excluded",
                 "gate ID rule" to "kotlin-k2",
                 "lazy provider or result" to "currentKotlinAdapter.compilerDiagnostics(candidate).diagnostics",
             ),
@@ -821,8 +821,8 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             BuiltInRouteFixture(
                 ROUTE_KOTLIN_K2,
                 "kotlin",
-                "moveDeclaration",
-                RefactoringEvidence.JDT_BINDING,
+                "renameSymbol",
+                RefactoringEvidence.NATIVE_AST,
                 listOf("src/main/kotlin/Foo.kt"),
             ),
         )

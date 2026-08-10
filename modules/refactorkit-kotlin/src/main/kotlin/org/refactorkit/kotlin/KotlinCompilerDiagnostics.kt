@@ -81,6 +81,11 @@ data class KotlinCompilerDeclarationEvidence(
     val jvmOwner: String = "",
     val jvmName: String = "",
     val jvmDescriptor: String = "",
+    val isCompanion: Boolean = false,
+    val isTopLevelFunction: Boolean = false,
+    val isMovePlainFunction: Boolean = false,
+    val isTopLevelDeclaration: Boolean = false,
+    val sourceTopLevelDeclarationCount: Int = 0,
 )
 
 private class CompiledOutputConsumerException(cause: Throwable) : RuntimeException(cause)
@@ -608,6 +613,28 @@ class KotlinCompilerDiagnostics private constructor(
             val visibility = value.string("visibility")?.let {
                 runCatching { KotlinDeclarationVisibility.valueOf(it) }.getOrNull()
             } ?: error("Kotlin compiler symbol visibility is invalid")
+            val isCompanion = value.boolean("companion")
+                ?: error("Kotlin compiler companion evidence is missing")
+            check(!isCompanion || (kind == Symbol.Kind.OBJECT && '$' in identity)) {
+                "Kotlin compiler companion evidence is invalid"
+            }
+            val isTopLevelFunction = value.boolean("topLevelFunction")
+                ?: error("Kotlin compiler top-level-function evidence is missing")
+            check(!isTopLevelFunction || (kind == Symbol.Kind.FUNCTION && '$' !in owner)) {
+                "Kotlin compiler top-level-function evidence is invalid"
+            }
+            val isMovePlainFunction = value.boolean("movePlainFunction")
+                ?: error("Kotlin compiler move-plain-function evidence is missing")
+            val isTopLevelDeclaration = value.boolean("topLevelDeclaration")
+                ?: error("Kotlin compiler top-level-declaration evidence is missing")
+            val sourceTopLevelDeclarationCount = value.int("sourceTopLevelDeclarationCount")
+                ?.takeIf { it in 0..MAX_SYMBOLS }
+                ?: error("Kotlin compiler source declaration count is invalid")
+            check((!isTopLevelDeclaration || sourceTopLevelDeclarationCount > 0) &&
+                (!isTopLevelFunction || isTopLevelDeclaration) &&
+                (!isMovePlainFunction || isTopLevelFunction)) {
+                "Kotlin compiler declaration-shape evidence is invalid"
+            }
             val selectionText = value.string("selectionText")?.takeIf { it.length in 1..MAX_SYMBOL_NAME_CHARS }
                 ?: error("Kotlin compiler symbol selection text is invalid")
             check(selectionText == name ||
@@ -643,6 +670,11 @@ class KotlinCompilerDiagnostics private constructor(
                     jvmOwner = owner,
                     jvmName = jvmName,
                     jvmDescriptor = descriptor,
+                    isCompanion = isCompanion,
+                    isTopLevelFunction = isTopLevelFunction,
+                    isMovePlainFunction = isMovePlainFunction,
+                    isTopLevelDeclaration = isTopLevelDeclaration,
+                    sourceTopLevelDeclarationCount = sourceTopLevelDeclarationCount,
                 )) == null) {
                 "Kotlin compiler symbol identity is duplicated"
             }
@@ -712,7 +744,9 @@ class KotlinCompilerDiagnostics private constructor(
                 throw SymbolPayloadException("kotlin.compilerUsageTargetInvalid")
             }
             val selectionText = value.string("selectionText")?.takeIf {
-                it.length in 1..MAX_SYMBOL_NAME_CHARS && JVM_NAME.matches(it)
+                it.length in 1..MAX_SYMBOL_NAME_CHARS && it.none { character ->
+                    character == '\u0000' || character == '\r' || character == '\n'
+                }
             } ?: throw SymbolPayloadException("kotlin.compilerUsageSelectionInvalid")
             val rawPath = value.string("path")
                 ?: throw SymbolPayloadException("kotlin.compilerUsagePathInvalid")
@@ -1147,7 +1181,7 @@ class KotlinCompilerDiagnostics private constructor(
         )
         private val JVM_FIELD_DESCRIPTOR = Regex("\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;)")
         private val SYMBOL_FIELDS = setOf(
-            "identity", "name", "kind", "path", "owner", "jvmName", "descriptor", "selectionText", "visibility", "startOffset", "endOffset",
+            "identity", "name", "kind", "path", "owner", "jvmName", "descriptor", "selectionText", "visibility", "companion", "topLevelFunction", "movePlainFunction", "topLevelDeclaration", "sourceTopLevelDeclarationCount", "startOffset", "endOffset",
         )
         private val USAGE_FIELDS = setOf(
             "path", "targetIdentity", "selectionText", "startOffset", "endOffset",

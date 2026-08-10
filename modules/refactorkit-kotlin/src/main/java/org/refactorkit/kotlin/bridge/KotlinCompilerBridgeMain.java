@@ -151,7 +151,12 @@ public final class KotlinCompilerBridgeMain {
                 .append("\",\"descriptor\":\"").append(escape(symbol.descriptor()))
                 .append("\",\"selectionText\":\"").append(escape(symbol.selectionText()))
                 .append("\",\"visibility\":\"").append(escape(symbol.visibility()))
-                .append("\",\"startOffset\":").append(symbol.startOffset())
+                .append("\",\"companion\":").append(symbol.isCompanion())
+                .append(",\"topLevelFunction\":").append(symbol.isTopLevelFunction())
+                .append(",\"movePlainFunction\":").append(symbol.isMovePlainFunction())
+                .append(",\"topLevelDeclaration\":").append(symbol.isTopLevelDeclaration())
+                .append(",\"sourceTopLevelDeclarationCount\":").append(symbol.sourceTopLevelDeclarationCount())
+                .append(",\"startOffset\":").append(symbol.startOffset())
                 .append(",\"endOffset\":").append(symbol.endOffset()).append('}');
         }
         json.append("],\"usagesComplete\":true,\"usages\":[");

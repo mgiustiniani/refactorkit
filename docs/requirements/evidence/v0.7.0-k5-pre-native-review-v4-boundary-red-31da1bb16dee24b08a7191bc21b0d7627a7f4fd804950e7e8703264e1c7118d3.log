@@ -1,0 +1,2 @@
+{"exit": 0, "probe": "destination-overload", "refusalCode": null, "status": "PREVIEW", "stderr": "", "summary": "Move public top-level Kotlin function 'portable' from 'review.api' to 'review.api.v2' across 1 exact-import consumer file(s)."}
+{"exit": 0, "probe": "dependency-substitution", "refusalCode": null, "status": "PREVIEW", "stderr": "", "summary": "Move public top-level Kotlin function 'portable' from 'review.api' to 'review.api.v2' across 1 exact-import consumer file(s)."}

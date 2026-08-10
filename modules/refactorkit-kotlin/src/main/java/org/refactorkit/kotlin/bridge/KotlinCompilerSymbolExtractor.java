@@ -170,7 +170,12 @@ final class KotlinCompilerSymbolExtractor {
                 identifier.getText(),
                 visibility(type),
                 identifier.getTextRange().getStartOffset(),
-                identifier.getTextRange().getEndOffset()
+                identifier.getTextRange().getEndOffset(),
+                type instanceof KtObjectDeclaration && ((KtObjectDeclaration) type).isCompanion(),
+                false,
+                false,
+                isTopLevelDeclaration(type),
+                sourceTopLevelDeclarationCount(type)
             ));
             if (type instanceof KtClass) {
                 KtPrimaryConstructor primary = ((KtClass) type).getPrimaryConstructor();
@@ -222,7 +227,9 @@ final class KotlinCompilerSymbolExtractor {
         String declaredVisibility = visibility(function);
         result.add(new ExtractedSymbol(
             identity, name, "FUNCTION", source.toString(), owner, jvmName, descriptor, identifier.getText(),
-            declaredVisibility, identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
+            declaredVisibility, identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset(),
+            false, function.getParent() instanceof KtFile, isMovePlainFunction(function),
+            isTopLevelDeclaration(function), sourceTopLevelDeclarationCount(function)
         ));
         List<KtTypeParameter> typeParameters = function.getTypeParameters();
         for (int index = 0; index < typeParameters.size(); index++) {
@@ -399,7 +406,8 @@ final class KotlinCompilerSymbolExtractor {
         if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
         result.add(new ExtractedSymbol(
             identity, name, "PROPERTY", source.toString(), owner, name, descriptor, identifier.getText(),
-            visibility(property), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
+            visibility(property), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset(),
+            false, false, false, isTopLevelDeclaration(property), sourceTopLevelDeclarationCount(property)
         ));
     }
 
@@ -501,6 +509,29 @@ final class KotlinCompilerSymbolExtractor {
         return "PUBLIC";
     }
 
+    private static boolean isTopLevelDeclaration(KtDeclaration declaration) {
+        return declaration.getParent() instanceof KtFile;
+    }
+
+    private static int sourceTopLevelDeclarationCount(KtDeclaration declaration) {
+        return declaration.getContainingKtFile().getDeclarations().size();
+    }
+
+    private static boolean isMovePlainFunction(KtNamedFunction function) {
+        if (!(function.getParent() instanceof KtFile) || function.getReceiverTypeReference() != null ||
+            !function.getContextReceivers().isEmpty() || !function.getTypeParameters().isEmpty() ||
+            !function.getAnnotationEntries().isEmpty() ||
+            !function.getContainingKtFile().getAnnotationEntries().isEmpty()) {
+            return false;
+        }
+        for (KtParameter parameter : function.getValueParameters()) {
+            if (parameter.hasDefaultValue() || !parameter.getAnnotationEntries().isEmpty() ||
+                parameter.getModifierList() != null) return false;
+        }
+        String modifiers = function.getModifierList() == null ? "" : function.getModifierList().getText().trim();
+        return modifiers.isEmpty() || "public".equals(modifiers);
+    }
+
     private static String kind(KtClassOrObject type) {
         if (!(type instanceof KtClass)) return "OBJECT";
         KtClass klass = (KtClass) type;
@@ -522,6 +553,11 @@ final class KotlinCompilerSymbolExtractor {
         private final String visibility;
         private final int startOffset;
         private final int endOffset;
+        private final boolean companion;
+        private final boolean topLevelFunction;
+        private final boolean movePlainFunction;
+        private final boolean topLevelDeclaration;
+        private final int sourceTopLevelDeclarationCount;
 
         ExtractedSymbol(
             String identity,
@@ -536,6 +572,50 @@ final class KotlinCompilerSymbolExtractor {
             int startOffset,
             int endOffset
         ) {
+            this(
+                identity, name, kind, path, owner, jvmName, descriptor, selectionText,
+                visibility, startOffset, endOffset, false, false, false, false, 0
+            );
+        }
+
+        ExtractedSymbol(
+            String identity,
+            String name,
+            String kind,
+            String path,
+            String owner,
+            String jvmName,
+            String descriptor,
+            String selectionText,
+            String visibility,
+            int startOffset,
+            int endOffset,
+            boolean companion
+        ) {
+            this(
+                identity, name, kind, path, owner, jvmName, descriptor, selectionText,
+                visibility, startOffset, endOffset, companion, false, false, false, 0
+            );
+        }
+
+        ExtractedSymbol(
+            String identity,
+            String name,
+            String kind,
+            String path,
+            String owner,
+            String jvmName,
+            String descriptor,
+            String selectionText,
+            String visibility,
+            int startOffset,
+            int endOffset,
+            boolean companion,
+            boolean topLevelFunction,
+            boolean movePlainFunction,
+            boolean topLevelDeclaration,
+            int sourceTopLevelDeclarationCount
+        ) {
             this.identity = identity;
             this.name = name;
             this.kind = kind;
@@ -547,6 +627,11 @@ final class KotlinCompilerSymbolExtractor {
             this.visibility = visibility;
             this.startOffset = startOffset;
             this.endOffset = endOffset;
+            this.companion = companion;
+            this.topLevelFunction = topLevelFunction;
+            this.movePlainFunction = movePlainFunction;
+            this.topLevelDeclaration = topLevelDeclaration;
+            this.sourceTopLevelDeclarationCount = sourceTopLevelDeclarationCount;
         }
 
         String identity() { return identity; }
@@ -560,6 +645,11 @@ final class KotlinCompilerSymbolExtractor {
         String visibility() { return visibility; }
         int startOffset() { return startOffset; }
         int endOffset() { return endOffset; }
+        boolean isCompanion() { return companion; }
+        boolean isTopLevelFunction() { return topLevelFunction; }
+        boolean isMovePlainFunction() { return movePlainFunction; }
+        boolean isTopLevelDeclaration() { return topLevelDeclaration; }
+        int sourceTopLevelDeclarationCount() { return sourceTopLevelDeclarationCount; }
     }
 
     private static final class JvmField {

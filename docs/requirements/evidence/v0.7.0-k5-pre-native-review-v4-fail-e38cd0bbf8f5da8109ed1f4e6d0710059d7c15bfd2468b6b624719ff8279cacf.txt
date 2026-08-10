@@ -1,0 +1,61 @@
+verdict: FAIL
+baselineId: K5-MOVE-NEXT-001-R3
+baselineSha256: a78db967566b7d7f3920f8653b910fe079d696ec50bcac455757454b8b2e149b
+reviewedRevision: bbaf93df170935c3af9ae4d45afa4f2af88dc213 plus current working-tree candidate (13 modified tracked, 17 untracked files)
+reviewedScope: REQ-KOTLIN-MOVE-FUNCTION-001, REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001, managed diagnostics compatibility change, and three gated roadmap rows
+
+requirementMatrix:
+  - requirement: REQ-KOTLIN-MOVE-FUNCTION-001
+    acceptanceCriteria: one non-overloaded compiler-proven public top-level function; exact semantic closure; bounded consumers; preview/apply/WAL/rollback; byte preservation
+    implementationEvidence: KotlinCompilerSymbolExtractor.java; KotlinCompilerDiagnostics.kt; KotlinJvmMoveDeclarationPlanner.kt
+    verificationEvidence: fresh 14-test oracle and packaged smoke passed; independent probe `/tmp/k5_review_v4_probes.py` SHA-256 `e2b515b1854c61ba98820f3cb2277fe64d127f33079436e4b535269217a5bc9c` exposed two unsafe previews
+    status: CONTRADICTED
+  - requirement: REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+    acceptanceCriteria: exact companion PSI evidence; stable refusal; no edit, pending plan, WAL, transaction, or mutation
+    implementationEvidence: KotlinCompilerSymbolExtractor.java; KotlinJvmMoveDeclarationPlanner.kt:76-80
+    verificationEvidence: focused test and packaged daemon/MCP refusal smoke passed
+    status: SATISFIED
+  - requirement: MANAGED-APPLY-DIAGNOSTICS-K5-COMPATIBILITY
+    acceptanceCriteria: Kotlin move uses lazy operation diagnostics regardless of Java files; non-move retains K2; daemon reuses selected provider
+    implementationEvidence: ManagedApplyDiagnosticsGateSelector.kt; DaemonSession.kt:1718-1738
+    verificationEvidence: route tests passed 2/2; corrected Cucumber invocation passed 12 scenarios
+    status: SATISFIED
+  - requirement: ROADMAP-K5-THREE-ROWS-STATUS-GATE
+    acceptanceCriteria: no promotion before native qualification and post-native review
+    implementationEvidence: no diff in docs/releases/v0.7.0-plan.md
+    verificationEvidence: diff and checkbox inspection
+    status: SATISFIED
+
+blockingFindings:
+  - id: K5-R4-F001
+    severity: HIGH
+    owner: Kotlin/JVM implementation owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:110-118 checks same-name functions only in the source package, while lines 161-165 check only exact destination JVM identity. A source `portable(String)` moved into a destination package already containing `portable(Int)` returned PREVIEW, creating the excluded overload family. Probe log SHA-256: `31da1bb16dee24b08a7191bc21b0d7627a7f4fd804950e7e8703264e1c7118d3`.
+  - id: K5-R4-F002
+    severity: HIGH
+    owner: Kotlin/JVM implementation owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:271-306 validates moved identities and inbound consumer counts but not compiler-proven outbound bindings from the moved file. A function calling source-package `dependency(String)` previewed successfully when the destination package contained a different same-signature `dependency(String)`; changing only the package token silently rebinds the call and changes behavior.
+
+nonBlockingFindings:
+  - id: K5-R4-N001
+    severity: MEDIUM
+    owner: Kotlin/JVM test and qualification owner
+    evidence: The focused/native oracle covers source-package cross-file overloads but neither destination-package overload creation nor destination semantic substitution, so the native gate would miss both defects.
+
+unverifiedClaims:
+  - Four-host native qualification remains pending as intended.
+  - Whole-tree CI, broad packaged Kotlin/static regressions, installed-runtime parity, final SBOM, promotion, and release status were not verified.
+  - Revision-bound native receipts cannot exist until the candidate is committed.
+
+commandsRun:
+  - Requirement and feature `sha256sum` — exit 0; both matched.
+  - Exact 14-test focused Gradle oracle under OpenJDK 21.0.11+10 with `--rerun-tasks` — exit 0; zero skips/failures/errors.
+  - Corrected managed-selector Cucumber command — exit 0; 12 scenarios passed.
+  - `python3 scripts/test-finalize-native-k5-move-next.py` — exit 0; 12 tests passed.
+  - `./gradlew --no-daemon packageCliRuntime` — exit 0.
+  - `python3 scripts/smoke-packaged-k5-move-next.py` — exit 0; exact terminal marker observed.
+  - Prior reviewer probe — corrected formatting cases previewed and source-package cross-file overload refused.
+  - New destination-overload/dependency-substitution probe — exit 0; both unsafe cases returned PREVIEW.
+  - `git diff --check bbaf93df170935c3af9ae4d45afa4f2af88dc213` — exit 0.
+
+requiredNextAction: Correct destination overload detection and preserve or fail closed on outbound semantic bindings from the moved file. Add both cases to the focused/native oracle, rerun bounded evidence, and request another independent pre-native review.

@@ -1,0 +1,25 @@
+=== implicit-public ===
+function_symbols [{'id': 'kotlin-jvm-callable-v1:2bc676331e036548a27ed9783436faee8c94829d091a1ca5cc43ed6f4297b509', 'name': 'portableFunction', 'kind': 'function', 'file': 'src/main/kotlin/review/api/Move.kt', 'startLine': 1, 'startCharacter': 4, 'endLine': 1, 'endCharacter': 20}]
+Traceback (most recent call last):
+  File "/tmp/review_k5_implicit_public.py", line 17, in <module>
+    plan=shared.run(cli,w,jdk,compiler,cp,'review-preview','move-declaration',['--symbol',public['id'],'--to-package','review.api.v2','--accept-external-consumer-risk'])
+  File "/home/paperboy/workspace/refactorkit-p0/scripts/smoke-packaged-kotlin.py", line 75, in run
+    raise AssertionError(f"Kotlin diagnostics exited {result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}")
+AssertionError: Kotlin diagnostics exited 1
+stdout=
+stderr=Kotlin semantic command failed: Top-level function move requires one plain public file-facade function without extension, suspend, default, overload, or JVM-name adaptation
+
+=== lowercase-facade ===
+function_symbols [{'id': 'kotlin-jvm-callable-v1:2bc676331e036548a27ed9783436faee8c94829d091a1ca5cc43ed6f4297b509', 'name': 'portableFunction', 'kind': 'function', 'file': 'src/main/kotlin/review/api/move.kt', 'startLine': 1, 'startCharacter': 11, 'endLine': 1, 'endCharacter': 27}]
+Traceback (most recent call last):
+  File "/tmp/review_k5_lowercase.py", line 17, in <module>
+    plan=shared.run(cli,w,jdk,compiler,cp,'review-preview','move-declaration',['--symbol',public['id'],'--to-package','review.api.v2','--accept-external-consumer-risk'])
+  File "/home/paperboy/workspace/refactorkit-p0/scripts/smoke-packaged-kotlin.py", line 75, in run
+    raise AssertionError(f"Kotlin diagnostics exited {result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}")
+AssertionError: Kotlin diagnostics exited 1
+stdout=
+stderr=Kotlin semantic command failed: Top-level function move requires one plain public file-facade function without extension, suspend, default, overload, or JVM-name adaptation
+
+=== private-overload ===
+function_symbols [{'id': 'kotlin-jvm-callable-v1:2bc676331e036548a27ed9783436faee8c94829d091a1ca5cc43ed6f4297b509', 'name': 'portableFunction', 'kind': 'function', 'file': 'src/main/kotlin/review/api/Move.kt', 'startLine': 2, 'startCharacter': 11, 'endLine': 2, 'endCharacter': 27}, {'id': 'kotlin-jvm-callable-v1:5e3fd1be3a73afef815d6bd907ab8c417ea4497b93f397935b58a456cc8ad90a', 'name': 'portableFunction', 'kind': 'function', 'file': 'src/main/kotlin/review/api/Move.kt', 'startLine': 1, 'startCharacter': 12, 'endLine': 1, 'endCharacter': 28}]
+status PREVIEW refusalCode None summary Move public top-level Kotlin function 'portableFunction' from 'review.api' to 'review.api.v2' across 1 exact-import consumer file(s).

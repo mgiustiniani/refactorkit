@@ -1,0 +1,38 @@
+leading-indent exit 1 stdout  stderr Kotlin semantic command failed: Kotlin move requires one public target plus only compiler-proven private top-level helpers
+comment-format exit 1 stdout  stderr Kotlin semantic command failed: Kotlin move requires one public target plus only compiler-proven private top-level helpers
+cross-file-overload exit 0 stdout {
+    "planId": "plan-455439b2-ff58-4b24-89b4-e2beeea3ce50",
+    "operation": "moveDeclaration",
+    "status": "PREVIEW",
+    "summary": "Move public top-level Kotlin function 'portable' from 'review.api' to 'review.api.v2' across 0 exact-import consumer file(s).",
+    "confidence": 0.91,
+    "riskLevel": "HIGH",
+    "evidence": "NATIVE_AST",
+    "affectedFiles": [
+        "src/main/kotlin/review/api/Move.kt",
+        "src/main/kotlin/review/api/v2/Move.kt"
+    ],
+    "structuredDiff": [
+        {
+            "type": "modifyFile",
+            "path": "src/main/kotlin/review/api/Move.kt"
+        },
+        {
+            "type": "renameFile",
+            "path": "src/main/kotlin/review/api/Move.kt",
+            "newPath": "src/main/kotlin/review/api/v2/Move.kt"
+        }
+    ],
+    "warnings": [
+        "Public JVM package move: unknown external consumers were explicitly accepted for this preview."
+    ],
+    "diagnosticsAfterPreview": [],
+    "snapshot": {
+        "hash": "182171d6f6e1fa59b3b51dfe9dfc3015a3e257750d6b95fdf362dd7fea4acb62",
+        "validatedOnApply": true
+    },
+    "provider": {
+        "name": "refactorkit-java",
+        "version": "0.7.0-SNAPSHOT"
+    }
+} stderr 

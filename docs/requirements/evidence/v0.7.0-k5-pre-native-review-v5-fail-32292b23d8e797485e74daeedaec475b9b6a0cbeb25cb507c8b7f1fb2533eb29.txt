@@ -1,0 +1,64 @@
+verdict: FAIL
+baselineId: K5-MOVE-NEXT-001-R4
+baselineSha256: 52dd7de86022e2d86e143c453fe2c445c2718149a6393d5ba462bbceb2642a0f
+reviewedRevision: bbaf93df170935c3af9ae4d45afa4f2af88dc213 plus 33-file working-tree candidate manifest SHA-256 cf180d5f2cb1c8f44e4c9d3b99cc55843b8a036f2527c21918043afb0e1535bf
+reviewedScope: REQ-KOTLIN-MOVE-FUNCTION-001, REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001, managed diagnostics compatibility change, and three deferred K5 roadmap rows
+
+requirementMatrix:
+  - requirement: REQ-KOTLIN-MOVE-FUNCTION-001
+    acceptanceCriteria: bounded whole-file function move; exact consumers; destination collision closure; exact outbound bindings; token-only edits; apply/rollback
+    implementationEvidence: modules/refactorkit-jvm/src/main/kotlin/org/refactorkit/jvm/KotlinJvmMoveDeclarationPlanner.kt; KotlinCompilerSymbolExtractor.java
+    verificationEvidence: focused 13-case planner oracle passed; two independent boundary probes failed
+    status: CONTRADICTED
+  - requirement: REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+    acceptanceCriteria: stable companion-only refusal with no edit or affected file
+    implementationEvidence: KotlinJvmMoveDeclarationPlanner.kt companion PSI branch
+    verificationEvidence: focused standaloneCompanionMoveHasStableRefusalAndNoEdits passed
+    status: SATISFIED
+  - requirement: MANAGED-DIAGNOSTICS-K5
+    acceptanceCriteria: Kotlin moveDeclaration selects lazy operation-owned K2/JDT diagnostics; non-move retains generic K2
+    implementationEvidence: ManagedApplyDiagnosticsGateSelector.kt; DaemonSession.kt
+    verificationEvidence: two focused route tests and 12 Cucumber cases passed
+    status: SATISFIED
+  - requirement: ROADMAP-K5-THREE-ROWS
+    acceptanceCriteria: no premature promotion before native and post-native gates
+    implementationEvidence: docs/releases/v0.7.0-plan.md unchanged
+    verificationEvidence: git diff confirms all three rows remain unchecked
+    status: SATISFIED
+
+blockingFindings:
+  - id: K5-R5-001
+    severity: BLOCKER
+    owner: Kotlin move implementation agent
+    evidence: An external dependency contained exact top-level `dep.source.helper(String)` and `dep.target.helper(String)` implementations with observably different behavior. Moving a function from `dep.source` to `dep.target` silently changed its unqualified outbound binding, yet the planner returned PREVIEW with clean diagnostics. Probe XML `/tmp/k5-external-substitution-probe.xml`, SHA-256 `24580296965d3ae9dd8ba417575408c3060be94500a77cabc61d6e76a345bfef`; dependency JAR SHA-256 `83f2cbf27c579a4f4a87238674ebfc071933597779dd949bfb2ba8cc3cefcfd5`. `KotlinCompilerUsageExtractor` records external named functions only when `CallableId.classId` is non-null, omitting package-level external callables.
+  - id: K5-R5-002
+    severity: HIGH
+    owner: Kotlin move implementation agent
+    evidence: A valid bounded function whose signature used an explicitly imported same-package `Shared` type retained that exact type binding after staging, but the planner refused it as `kotlin.moveOutboundBindingChanged`. `movedFileIdentities` textually replaces every `L<old-package>` descriptor prefix, incorrectly projecting non-moved types. Probe XML `/tmp/k5-descriptor-probe.xml`, SHA-256 `eb596021ce8f796a47dc60b774cd5cbae973a3eab9280ee43046584cab265322`.
+  - id: K5-R5-003
+    severity: HIGH
+    owner: native-finalizer agent
+    evidence: The finalizer checks `git status --porcelain --untracked-files=no`. An untracked production source at `modules/refactorkit-jvm/src/main/kotlin/reviewer/UntrackedBypass.kt` was added to its synthetic qualification repository; finalization still exited 0 and emitted status PASSED. This permits source influencing tests/package artifacts without revision or subject-file binding.
+
+nonBlockingFindings:
+  - id: K5-R5-DOC-001
+    severity: LOW
+    owner: documentation agent
+    evidence: docs/requirements/managed-apply-diagnostics-gate-selector-k5-change.md still names superseded governing requirement SHA-256 `a78db...` rather than final `52dd7d...`.
+
+unverifiedClaims:
+  - Four-host native qualification remains pending, as expected.
+  - Installed-runtime parity, broad Kotlin support, whole-CI, final-SBOM, and release claims remain unverified/out of scope.
+  - Packaged K5 smoke was inspected but not independently rerun in this review.
+
+commandsRun:
+  - `JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon --rerun-tasks <exact 16 focused tests>` — exit 0; 16/16 passed.
+  - `... KotlinJavaPublicTypeRenamePlannerTest.publicKotlinTypeMove*` — exit 0; 18/18 passed.
+  - `... ManagedApplyDiagnosticsGateSelectorCucumberTest` — exit 0; 12 cases passed.
+  - `python3 scripts/test-finalize-native-k5-move-next.py` — exit 0; 12/12 passed.
+  - External-callable substitution probe — exit 1 because expected refusal received PREVIEW.
+  - Retained-descriptor probe — exit 1 because expected PREVIEW received REFUSED.
+  - Untracked finalizer-bypass probe — exit 0 and emitted PASSED.
+  - `git diff --check bbaf93df170935c3af9ae4d45afa4f2af88dc213` — exit 0.
+
+requiredNextAction: Coordinator must delegate fixes for complete external package-level callable binding capture/comparison, declaration-identity projection based on actual carried declarations rather than package-prefix replacement, and finalizer rejection/binding of untracked source inputs. Correct the stale requirement hash, add exact regressions, then request a fresh independent pre-native review.

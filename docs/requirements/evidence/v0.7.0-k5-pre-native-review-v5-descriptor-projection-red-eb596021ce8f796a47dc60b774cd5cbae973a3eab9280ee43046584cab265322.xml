@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-08-10T11:42:58.516Z" hostname="cachyos-x8664" time="4.833">
+  <properties/>
+  <testcase name="reviewerProbeFunctionWithExplicitlyImportedSamePackageTypeRetainsDescriptorIdentity()" classname="org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest" time="4.828">
+    <failure message="org.opentest4j.AssertionFailedError: PatchPlan(id=PlanId(value=plan-bb5987e2-094e-4263-afbb-ec969ecc75e8), operation=moveDeclaration, status=REFUSED, snapshotHash=44717e63682dd45fd8e3f4e6cb93938ef68c0176a3fe975324ecb7c395e6d053, confidence=0.0, requiresUserApproval=false, summary=Staged top-level function move changes an outbound semantic binding, affectedFiles=[], workspaceEdit=WorkspaceEdit(edits=[]), diagnosticsBefore=[], diagnosticsAfterPreview=[], warnings=[Staged top-level function move changes an outbound semantic binding], riskLevel=HIGH, evidence=NATIVE_AST, refusalCode=kotlin.moveOutboundBindingChanged, authorityLease=null) ==&gt; expected: &lt;PREVIEW&gt; but was: &lt;REFUSED&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: PatchPlan(id=PlanId(value=plan-bb5987e2-094e-4263-afbb-ec969ecc75e8), operation=moveDeclaration, status=REFUSED, snapshotHash=44717e63682dd45fd8e3f4e6cb93938ef68c0176a3fe975324ecb7c395e6d053, confidence=0.0, requiresUserApproval=false, summary=Staged top-level function move changes an outbound semantic binding, affectedFiles=[], workspaceEdit=WorkspaceEdit(edits=[]), diagnosticsBefore=[], diagnosticsAfterPreview=[], warnings=[Staged top-level function move changes an outbound semantic binding], riskLevel=HIGH, evidence=NATIVE_AST, refusalCode=kotlin.moveOutboundBindingChanged, authorityLease=null) ==&gt; expected: &lt;PREVIEW&gt; but was: &lt;REFUSED&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1156)
+	at kotlin.test.junit5.JUnit5Asserter.assertEquals(JUnitSupport.kt:32)
+	at kotlin.test.AssertionsKt__AssertionsKt.assertEquals(Assertions.kt:63)
+	at kotlin.test.AssertionsKt.assertEquals(Unknown Source)
+	at org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.reviewerProbeFunctionWithExplicitlyImportedSamePackageTypeRetainsDescriptorIdentity(KotlinJavaPublicTypeRenamePlannerTest.kt:1260)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

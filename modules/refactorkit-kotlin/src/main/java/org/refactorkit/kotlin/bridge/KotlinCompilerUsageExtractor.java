@@ -24,6 +24,8 @@ import org.jetbrains.kotlin.config.LanguageVersion;
 import org.jetbrains.kotlin.config.LanguageVersionSettingsImpl;
 import org.jetbrains.kotlin.fir.FirElement;
 import org.jetbrains.kotlin.fir.declarations.FirFunction;
+import org.jetbrains.kotlin.fir.declarations.FirProperty;
+import org.jetbrains.kotlin.fir.declarations.FirReceiverParameter;
 import org.jetbrains.kotlin.fir.declarations.FirResolvedImport;
 import org.jetbrains.kotlin.fir.declarations.FirTypeParameter;
 import org.jetbrains.kotlin.fir.expressions.FirResolvedQualifier;
@@ -46,6 +48,10 @@ import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
 import org.jetbrains.kotlin.name.ClassId;
 import org.jetbrains.kotlin.name.FqName;
 import org.jetbrains.kotlin.name.Name;
+import org.jetbrains.kotlin.load.java.JvmAbi;
+import org.jetbrains.kotlin.load.kotlin.JvmPackagePartSource;
+import org.jetbrains.kotlin.resolve.jvm.JvmClassName;
+import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedContainerSource;
 import org.jetbrains.kotlin.psi.KtBlockExpression;
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression;
 import org.jetbrains.kotlin.psi.KtClass;
@@ -59,8 +65,9 @@ import org.jetbrains.kotlin.psi.KtNameReferenceExpression;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.KtNullableType;
 import org.jetbrains.kotlin.psi.KtObjectDeclaration;
-import org.jetbrains.kotlin.psi.KtProperty;
+import org.jetbrains.kotlin.psi.KtOperationReferenceExpression;
 import org.jetbrains.kotlin.psi.KtParameter;
+import org.jetbrains.kotlin.psi.KtProperty;
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression;
 import org.jetbrains.kotlin.psi.KtTypeReference;
 import org.jetbrains.kotlin.psi.KtTypeParameter;
@@ -221,7 +228,7 @@ final class KotlinCompilerUsageExtractor {
         KtSourceElement targetSource = reference.getResolvedSymbol().getSource();
         if (!(usageSource instanceof KtPsiSourceElement)) return;
         PsiElement usagePsi = ((KtPsiSourceElement) usageSource).getPsi();
-        if (!(usagePsi instanceof KtNameReferenceExpression)) return;
+        if (!(usagePsi instanceof KtSimpleNameExpression)) return;
         if (!(targetSource instanceof KtPsiSourceElement)) {
             if (reference.getResolvedSymbol() instanceof FirConstructorSymbol) {
                 ClassId classId = ((FirConstructorSymbol) reference.getResolvedSymbol()).getCallableId().getClassId();
@@ -245,13 +252,33 @@ final class KotlinCompilerUsageExtractor {
                 }
             } else if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol) {
                 FirNamedFunctionSymbol function = (FirNamedFunctionSymbol) reference.getResolvedSymbol();
-                ClassId classId = function.getCallableId().getClassId();
-                if (classId != null && !classId.isLocal() && usagePsi.getText().equals(function.getName().asString())) {
+                String owner = externalCallableOwner(
+                    function.getCallableId().getClassId(), function.getFir().getContainerSource()
+                );
+                if (owner != null && (usagePsi.getText().equals(function.getName().asString()) ||
+                    usagePsi instanceof KtOperationReferenceExpression)) {
                     addExternalCallableUsage(
                         usagePsi,
-                        binaryName(classId),
+                        owner,
                         function.getName().asString(),
                         jvmDescriptor(function.getFir(), function.getName().asString()),
+                        identities,
+                        usages
+                    );
+                }
+            } else if (reference.getResolvedSymbol() instanceof FirPropertySymbol) {
+                FirPropertySymbol property = (FirPropertySymbol) reference.getResolvedSymbol();
+                String owner = externalCallableOwner(
+                    property.getCallableId().getClassId(), property.getFir().getContainerSource()
+                );
+                String propertyName = property.getName().asString();
+                String getterName = JvmAbi.getterName(propertyName);
+                if (owner != null && usagePsi.getText().equals(propertyName) && property.getFir().getGetter() != null) {
+                    addExternalCallableUsage(
+                        usagePsi,
+                        owner,
+                        getterName,
+                        propertyGetterDescriptor(property.getFir()),
                         identities,
                         usages
                     );
@@ -312,7 +339,7 @@ final class KotlinCompilerUsageExtractor {
             !targets.containsKey(declarationTargetKey(targetPath, targetOffset, "PARAMETER")) &&
             !targets.containsKey(declarationTargetKey(targetPath, targetOffset, "PROPERTY"))) return;
         if (target == null) throw failure("kotlin.usageTargetMissing");
-        PsiElement usageIdentifier = ((KtNameReferenceExpression) usagePsi).getReferencedNameElement();
+        PsiElement usageIdentifier = ((KtSimpleNameExpression) usagePsi).getReferencedNameElement();
         if (usageIdentifier == null) throw failure("kotlin.usageLocationUnavailable");
         String resolvedSourceName = "CONSTRUCTOR".equals(target.kind())
             ? target.name() : reference.getName().asString();
@@ -532,6 +559,15 @@ final class KotlinCompilerUsageExtractor {
         usages.add(new ExtractedUsage(path.toString(), targetIdentity, identifier.getText(), start, end));
     }
 
+    private static String externalCallableOwner(ClassId classId, DeserializedContainerSource container) {
+        if (classId != null) return classId.isLocal() ? null : binaryName(classId);
+        if (!(container instanceof JvmPackagePartSource)) return null;
+        JvmPackagePartSource packagePart = (JvmPackagePartSource) container;
+        JvmClassName owner = packagePart.getFacadeClassName();
+        if (owner == null) owner = packagePart.getClassName();
+        return owner.getInternalName().replace('/', '.');
+    }
+
     private static void addExternalCallableUsage(
         PsiElement identifier,
         String jvmOwner,
@@ -551,6 +587,27 @@ final class KotlinCompilerUsageExtractor {
         usages.add(new ExtractedUsage(path.toString(), targetIdentity, identifier.getText(), start, end));
     }
 
+    private static String propertyGetterDescriptor(FirProperty property) {
+        StringBuilder descriptor = new StringBuilder("(");
+        property.getContextReceivers().forEach(receiver ->
+            descriptor.append(jvmTypeDescriptor(receiver.getTypeRef()))
+        );
+        FirReceiverParameter extensionReceiver = property.getReceiverParameter();
+        if (extensionReceiver != null) descriptor.append(jvmTypeDescriptor(extensionReceiver.getTypeRef()));
+        return descriptor.append(')').append(jvmTypeDescriptor(property.getReturnTypeRef())).toString();
+    }
+
+    private static String jvmTypeDescriptor(FirTypeRef typeRef) {
+        if (!(typeRef instanceof FirResolvedTypeRef)) throw failure("kotlin.usageCallableDescriptorUnavailable");
+        Function1<FirTypeRef, ConeKotlinType> resolver = candidate ->
+            candidate instanceof FirResolvedTypeRef ? ((FirResolvedTypeRef) candidate).getType() : null;
+        String descriptor = SignatureUtilsKt.computeJvmDescriptorRepresentation(
+            ((FirResolvedTypeRef) typeRef).getType(), resolver
+        );
+        if (descriptor == null || descriptor.isEmpty()) throw failure("kotlin.usageCallableDescriptorUnavailable");
+        return descriptor.replace('.', '$');
+    }
+
     private static String jvmDescriptor(FirFunction function, String jvmName) {
         Function1<FirTypeRef, ConeKotlinType> resolver = typeRef ->
             typeRef instanceof FirResolvedTypeRef ? ((FirResolvedTypeRef) typeRef).getType() : null;
@@ -559,7 +616,15 @@ final class KotlinCompilerUsageExtractor {
         if (signature == null || !signature.startsWith(jvmName + "(")) {
             throw failure("kotlin.usageCallableDescriptorUnavailable");
         }
-        return signature.substring(jvmName.length());
+        String descriptor = signature.substring(jvmName.length());
+        StringBuilder leadingReceivers = new StringBuilder();
+        function.getContextReceivers().forEach(receiver ->
+            leadingReceivers.append(jvmTypeDescriptor(receiver.getTypeRef()))
+        );
+        FirReceiverParameter extensionReceiver = function.getReceiverParameter();
+        if (extensionReceiver != null) leadingReceivers.append(jvmTypeDescriptor(extensionReceiver.getTypeRef()));
+        return leadingReceivers.length() == 0 ? descriptor :
+            "(" + leadingReceivers + descriptor.substring(1);
     }
 
     private static KtConstructor<?> sourceConstructor(PsiElement source) {

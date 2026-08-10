@@ -138,6 +138,25 @@ class KotlinCompilerDiagnosticsTest {
             result.index.symbols.sortedBy { it.name }.associate { it.name to it.kind },
         )
         assertEquals(result.index.symbols.size, result.index.symbols.map { it.id }.distinct().size)
+        val companion = result.index.symbols.single { it.name == "Companion" }
+        val nestedRegistry = result.index.symbols.single { it.name == "NestedRegistry" }
+        val topLevel = result.index.symbols.single { it.name == "topLevel" }
+        val member = result.index.symbols.single { it.name == "member" }
+        assertTrue(result.declarations.getValue(companion.id).isCompanion)
+        assertTrue(!result.declarations.getValue(nestedRegistry.id).isCompanion)
+        assertEquals(1, result.declarations.values.count { it.isCompanion })
+        assertTrue(result.declarations.getValue(topLevel.id).isTopLevelFunction)
+        assertTrue(result.declarations.getValue(topLevel.id).isMovePlainFunction)
+        assertTrue(result.declarations.getValue(topLevel.id).isTopLevelDeclaration)
+        assertTrue(result.declarations.getValue(topLevel.id).sourceTopLevelDeclarationCount > 0)
+        assertTrue(!result.declarations.getValue(member.id).isTopLevelFunction)
+        assertTrue(!result.declarations.getValue(member.id).isMovePlainFunction)
+        assertTrue(!result.declarations.getValue(member.id).isTopLevelDeclaration)
+        listOf("defaultCall", "extensionCall", "genericCall", "suspendCall").forEach { name ->
+            val excluded = result.index.symbols.single { it.name == name }
+            assertTrue(result.declarations.getValue(excluded.id).isTopLevelFunction)
+            assertTrue(!result.declarations.getValue(excluded.id).isMovePlainFunction)
+        }
         val namesById = result.index.symbols.associate { it.id to it.name }
         val functionIds = result.index.symbols.filter { it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION }
             .mapTo(mutableSetOf()) { it.id }

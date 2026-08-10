@@ -1,0 +1,58 @@
+verdict: FAIL
+baselineId: K5-MOVE-NEXT-001-R1
+baselineSha256: a78db967566b7d7f3920f8653b910fe079d696ec50bcac455757454b8b2e149b
+reviewedRevision: bbaf93df170935c3af9ae4d45afa4f2af88dc213 plus 26-file working-tree candidate manifest SHA-256 a204d03314f9e5150184d3644bba2a9146c994f61eed72fb1d49a9fea2a73ae2
+reviewedScope: REQ-KOTLIN-MOVE-FUNCTION-001, REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001, managed-apply diagnostics K5 compatibility change, three named eventual roadmap rows
+
+requirementMatrix:
+  - requirement: REQ-KOTLIN-MOVE-FUNCTION-001
+    acceptanceCriteria: one compiler-proven public top-level function; member/local and other excluded shapes refuse; exact imports and identities; token-only move; managed apply and rollback
+    implementationEvidence: modules/refactorkit-jvm/src/main/kotlin/org/refactorkit/jvm/KotlinJvmMoveDeclarationPlanner.kt
+    verificationEvidence: focused eight-case planner oracle passed; packaged smoke passed; corrected boundary probes passed; independent member-function probe incorrectly returned PREVIEW
+    status: CONTRADICTED
+  - requirement: REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+    acceptanceCriteria: PSI-proven companion receives stable refusal; ordinary nested object distinguished; no edit, plan, transaction, or mutation
+    implementationEvidence: KotlinCompilerSymbolExtractor.java:170-176; KotlinCompilerDiagnostics.kt:609-653; KotlinJvmMoveDeclarationPlanner.kt:77-80
+    verificationEvidence: focused compiler/planner tests and packaged daemon/MCP refusal smoke passed
+    status: SATISFIED
+  - requirement: managed-apply diagnostics K5 compatibility change
+    acceptanceCriteria: every exact Kotlin moveDeclaration uses lazy operation-owned K2+JDT diagnostics; non-move Kotlin-only route remains K2; daemon reuses selected provider
+    implementationEvidence: ManagedApplyDiagnosticsGateSelector.kt:85-103; DaemonSession.kt:1718-1739; existing MCP selector call
+    verificationEvidence: two focused route tests passed; updated Cucumber runner passed 12 cases/100 expanded steps
+    status: SATISFIED
+  - requirement: roadmap and non-claim boundary
+    acceptanceCriteria: no premature promotion; only three named rows may eventually close
+    implementationEvidence: v0.7.0-k5-move-next-acceptance.md; v0.7.0-support-matrix.md
+    verificationEvidence: no diff in docs/releases/v0.7.0-plan.md; native and promotion status remains pending
+    status: SATISFIED
+
+blockingFindings:
+  - id: K5-FUNCTION-TOPLEVEL-006
+    severity: BLOCKER
+    owner: Kotlin/JVM planner and test owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:85-89 treats any PUBLIC function with a valid JVM owner as a top-level candidate. Lines 106-107 then assign that selected owner as the supposed file-facade owner, making the owner check at lines 590-593 tautological. `/tmp/review_k5_member_probe.py` used compiler-clean `private class HiddenHost { public fun selected(...) }`; selecting the member returned PREVIEW and proposed moving the containing file. REQ-KOTLIN-MOVE-FUNCTION-001 explicitly excludes member functions.
+
+nonBlockingFindings:
+  - id: K5-STATUS-001
+    severity: LOW
+    owner: workflow coordinator
+    evidence: roadmap checkboxes and promotion claims remain unchanged and pending.
+
+unverifiedClaims:
+  - Four-host native qualification remains pending by design.
+  - Whole-tree `check goldenTest`, broad packaged Kotlin smoke, static-analysis suites, installed-runtime parity, final SBOM, and whole-CI status were not established in this review.
+  - Native receipts cannot yet substantiate any promotion claim.
+
+commandsRun:
+  - Git boundary/status/hash inspection and 26-file candidate-manifest calculation — exit 0.
+  - Baseline/checksum/feature SHA-256 verification — exit 0; expected hashes matched.
+  - Focused 11-test Gradle oracle under OpenJDK 21 — exit 0; 1 compiler, 8 planner, and 2 route tests passed with zero skips/failures/errors.
+  - ManagedApplyDiagnosticsGateSelectorCucumberTest — exit 0; 12 cases, zero skips/failures/errors.
+  - `python3 scripts/test-finalize-native-k5-move-next.py` — exit 0; 12 tests passed.
+  - `./gradlew packageCliRuntime` and packaged K5 smoke — exit 0 with exact terminal marker.
+  - Corrected implicit-public and lowercase-filename probes — exit 0; both returned PREVIEW.
+  - Private same-name overload probe — expected refusal with exact overload-family message.
+  - `/tmp/review_k5_member_probe.py` SHA-256 47fae3e93b779b1673e9642fc72d42657d2af0ac536f46efe055d4b7a183cefa — exit 0; prohibited member selection returned PREVIEW.
+  - `git diff --check` and Python syntax compilation — exit 0.
+
+requiredNextAction: Return to the Kotlin/JVM planner and test owner. Require explicit compiler/PSI evidence that the selected callable is top-level rather than accepting its owner as its own facade proof; add regression coverage for a public member inside a private top-level container. Rerun focused and packaged evidence, then request another independent pre-native review before native qualification.

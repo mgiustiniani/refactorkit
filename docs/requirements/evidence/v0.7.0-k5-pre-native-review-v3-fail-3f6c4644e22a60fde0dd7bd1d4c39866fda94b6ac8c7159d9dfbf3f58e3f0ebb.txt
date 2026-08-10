@@ -1,0 +1,60 @@
+verdict: FAIL
+baselineId: K5-MOVE-NEXT-001-R2
+baselineSha256: a78db967566b7d7f3920f8653b910fe079d696ec50bcac455757454b8b2e149b
+reviewedRevision: bbaf93df170935c3af9ae4d45afa4f2af88dc213 plus current working-tree candidate (13 modified, 15 untracked files)
+reviewedScope: REQ-KOTLIN-MOVE-FUNCTION-001, REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001, managed diagnostics compatibility change, and three candidate roadmap rows
+
+requirementMatrix:
+  - requirement: REQ-KOTLIN-MOVE-FUNCTION-001
+    acceptanceCriteria: compiler-proven plain public top-level function; excluded overloads; exact consumers; preview/apply/WAL/rollback; byte preservation
+    implementationEvidence: KotlinCompilerSymbolExtractor.java; KotlinCompilerDiagnostics.kt; KotlinJvmMoveDeclarationPlanner.kt
+    verificationEvidence: fresh 12-test focused oracle passed; packaged smoke passed; independent probe /tmp/k5_review_probes.py SHA-256 358f1fe782aa37f520521d16ddf4928bbdfd2a56e496fb442070fba8127926d6 exposed two contradictions
+    status: CONTRADICTED
+  - requirement: REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+    acceptanceCriteria: exact PSI companion evidence; stable refusal; no edit, plan, WAL, transaction, or mutation; nested non-companion distinction
+    implementationEvidence: KotlinCompilerSymbolExtractor.java:170-174; KotlinJvmMoveDeclarationPlanner.kt:76-80
+    verificationEvidence: focused unit test and packaged daemon/MCP refusal smoke passed
+    status: SATISFIED
+  - requirement: MANAGED-APPLY-DIAGNOSTICS-K5-COMPATIBILITY
+    acceptanceCriteria: Kotlin move selects lazy operation diagnostics regardless of Java files; non-move retains K2; daemon reuses selected provider
+    implementationEvidence: ManagedApplyDiagnosticsGateSelector.kt; DaemonSession.kt:1718-1738
+    verificationEvidence: route tests passed 2/2; Cucumber passed 12/12 cases; packaged daemon/MCP apply passed
+    status: SATISFIED
+  - requirement: ROADMAP-K5-THREE-ROWS-STATUS-GATE
+    acceptanceCriteria: no pre-native roadmap promotion
+    implementationEvidence: no diff in docs/releases/v0.7.0-plan.md; candidate-only wording in acceptance/support documents
+    verificationEvidence: git diff inspection
+    status: SATISFIED
+
+blockingFindings:
+  - id: K5-R3-F001
+    severity: HIGH
+    owner: Kotlin/JVM implementation owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:593-597 still compares compiler declarations against a column-zero lexical regex. Valid compiler-proven plain functions with leading indentation or `public /* retained */ fun` were refused as `kotlin.moveFileShapeUnsupported`. Function eligibility therefore remains formatting-dependent, contrary to the bounded semantic shape.
+  - id: K5-R3-F002
+    severity: HIGH
+    owner: Kotlin/JVM implementation owner
+    evidence: KotlinJvmMoveDeclarationPlanner.kt:120-125 checks same-name functions only within the selected source file. An independently compiled project containing public `portable(String)` in Move.kt and public `portable(Int)` in Other.kt returned PREVIEW with edits. REQ-KOTLIN-MOVE-FUNCTION-001 explicitly excludes overloaded functions.
+
+nonBlockingFindings:
+  - id: K5-R3-N001
+    severity: MEDIUM
+    owner: Kotlin/JVM test owner
+    evidence: The focused test and finalizer oracle contain neither formatting-independent declaration cases nor a cross-file overload case, so the native gate would not detect these defects.
+
+unverifiedClaims:
+  - Four-host native qualification has not run and remains pending as intended.
+  - Whole-tree CI, broad packaged Kotlin/static regressions, installed-runtime parity, promotion, and final release status were not verified.
+  - The candidate remains an uncommitted working tree and cannot yet produce a revision-bound native receipt.
+
+commandsRun:
+  - `sha256sum` requirement and selector feature — exit 0; hashes matched.
+  - Exact focused Gradle oracle under OpenJDK 21.0.11+10 with `--rerun-tasks` — exit 0; 12 tests, zero skips/failures/errors.
+  - ManagedApplyDiagnosticsGateSelector Cucumber test with `--rerun-tasks` — exit 0; 12 cases passed.
+  - `python3 scripts/test-finalize-native-k5-move-next.py` — exit 0; 12 tests passed.
+  - `python3 scripts/smoke-packaged-k5-move-next.py` — exit 0; terminal acceptance marker observed.
+  - Existing `publicKotlinTypeMove*` regression tests — exit 0; 18 tests passed.
+  - `python3 /tmp/k5_review_probes.py` — exit 0; two valid formatted functions refused and cross-file overload previewed.
+  - `git diff --check` — exit 0.
+
+requiredNextAction: Correct both semantic-boundary defects without another formatting heuristic, add regression cases to the focused/native oracle, rerun bounded local and packaged evidence, then request a fresh independent pre-native review. Do not begin native promotion qualification yet.
