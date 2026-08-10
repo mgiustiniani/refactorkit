@@ -13,6 +13,8 @@ import org.jetbrains.kotlin.fileClasses.JvmFileClassUtil;
 import org.jetbrains.kotlin.lexer.KtTokens;
 import org.jetbrains.kotlin.name.ClassId;
 import org.jetbrains.kotlin.name.Name;
+import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil;
+import org.jetbrains.kotlin.psi.KtCallableReferenceExpression;
 import org.jetbrains.kotlin.psi.KtClass;
 import org.jetbrains.kotlin.psi.KtClassOrObject;
 import org.jetbrains.kotlin.psi.KtConstructor;
@@ -174,6 +176,7 @@ final class KotlinCompilerSymbolExtractor {
                 type instanceof KtObjectDeclaration && ((KtObjectDeclaration) type).isCompanion(),
                 false,
                 false,
+                false,
                 isTopLevelDeclaration(type),
                 sourceTopLevelDeclarationCount(type)
             ));
@@ -229,6 +232,7 @@ final class KotlinCompilerSymbolExtractor {
             identity, name, "FUNCTION", source.toString(), owner, jvmName, descriptor, identifier.getText(),
             declaredVisibility, identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset(),
             false, function.getParent() instanceof KtFile, isMovePlainFunction(function),
+            PsiTreeUtil.findChildOfType(function, KtCallableReferenceExpression.class) != null,
             isTopLevelDeclaration(function), sourceTopLevelDeclarationCount(function)
         ));
         List<KtTypeParameter> typeParameters = function.getTypeParameters();
@@ -407,7 +411,7 @@ final class KotlinCompilerSymbolExtractor {
         result.add(new ExtractedSymbol(
             identity, name, "PROPERTY", source.toString(), owner, name, descriptor, identifier.getText(),
             visibility(property), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset(),
-            false, false, false, isTopLevelDeclaration(property), sourceTopLevelDeclarationCount(property)
+            false, false, false, false, isTopLevelDeclaration(property), sourceTopLevelDeclarationCount(property)
         ));
     }
 
@@ -556,6 +560,7 @@ final class KotlinCompilerSymbolExtractor {
         private final boolean companion;
         private final boolean topLevelFunction;
         private final boolean movePlainFunction;
+        private final boolean containsCallableReference;
         private final boolean topLevelDeclaration;
         private final int sourceTopLevelDeclarationCount;
 
@@ -574,7 +579,7 @@ final class KotlinCompilerSymbolExtractor {
         ) {
             this(
                 identity, name, kind, path, owner, jvmName, descriptor, selectionText,
-                visibility, startOffset, endOffset, false, false, false, false, 0
+                visibility, startOffset, endOffset, false, false, false, false, false, 0
             );
         }
 
@@ -594,7 +599,7 @@ final class KotlinCompilerSymbolExtractor {
         ) {
             this(
                 identity, name, kind, path, owner, jvmName, descriptor, selectionText,
-                visibility, startOffset, endOffset, companion, false, false, false, 0
+                visibility, startOffset, endOffset, companion, false, false, false, false, 0
             );
         }
 
@@ -613,6 +618,7 @@ final class KotlinCompilerSymbolExtractor {
             boolean companion,
             boolean topLevelFunction,
             boolean movePlainFunction,
+            boolean containsCallableReference,
             boolean topLevelDeclaration,
             int sourceTopLevelDeclarationCount
         ) {
@@ -630,6 +636,7 @@ final class KotlinCompilerSymbolExtractor {
             this.companion = companion;
             this.topLevelFunction = topLevelFunction;
             this.movePlainFunction = movePlainFunction;
+            this.containsCallableReference = containsCallableReference;
             this.topLevelDeclaration = topLevelDeclaration;
             this.sourceTopLevelDeclarationCount = sourceTopLevelDeclarationCount;
         }
@@ -648,6 +655,7 @@ final class KotlinCompilerSymbolExtractor {
         boolean isCompanion() { return companion; }
         boolean isTopLevelFunction() { return topLevelFunction; }
         boolean isMovePlainFunction() { return movePlainFunction; }
+        boolean containsCallableReference() { return containsCallableReference; }
         boolean isTopLevelDeclaration() { return topLevelDeclaration; }
         int sourceTopLevelDeclarationCount() { return sourceTopLevelDeclarationCount; }
     }

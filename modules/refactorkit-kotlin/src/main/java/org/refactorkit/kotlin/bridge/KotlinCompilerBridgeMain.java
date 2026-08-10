@@ -154,6 +154,7 @@ public final class KotlinCompilerBridgeMain {
                 .append("\",\"companion\":").append(symbol.isCompanion())
                 .append(",\"topLevelFunction\":").append(symbol.isTopLevelFunction())
                 .append(",\"movePlainFunction\":").append(symbol.isMovePlainFunction())
+                .append(",\"containsCallableReference\":").append(symbol.containsCallableReference())
                 .append(",\"topLevelDeclaration\":").append(symbol.isTopLevelDeclaration())
                 .append(",\"sourceTopLevelDeclarationCount\":").append(symbol.sourceTopLevelDeclarationCount())
                 .append(",\"startOffset\":").append(symbol.startOffset())

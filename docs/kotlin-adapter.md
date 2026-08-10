@@ -235,7 +235,10 @@ compiler-PSI top-level membership/count evidence rather than declaration-format
 regexes. It refuses exact Java callable consumers and same-name overload
 families in both source and destination packages. Location-bound exact outbound
 K2 identities must remain unchanged except for helpers moved with the file, so
-a cleanly compiling destination shadow cannot silently rebind behavior.
+a cleanly compiling destination shadow cannot silently rebind behavior. Because
+source callable references are intentionally absent from bounded usage evidence,
+compiler PSI exposes their presence and the move refuses them with
+`kotlin.moveFunctionCallableReferenceUnsupported` before planning.
 Kotlin-only move
 apply and daemon post-apply diagnostics use the operation-owned mixed K2/JDT
 provider rather than the generic K2 fallback. It

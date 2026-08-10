@@ -84,6 +84,7 @@ data class KotlinCompilerDeclarationEvidence(
     val isCompanion: Boolean = false,
     val isTopLevelFunction: Boolean = false,
     val isMovePlainFunction: Boolean = false,
+    val containsCallableReference: Boolean = false,
     val isTopLevelDeclaration: Boolean = false,
     val sourceTopLevelDeclarationCount: Int = 0,
 )
@@ -625,6 +626,8 @@ class KotlinCompilerDiagnostics private constructor(
             }
             val isMovePlainFunction = value.boolean("movePlainFunction")
                 ?: error("Kotlin compiler move-plain-function evidence is missing")
+            val containsCallableReference = value.boolean("containsCallableReference")
+                ?: error("Kotlin compiler callable-reference evidence is missing")
             val isTopLevelDeclaration = value.boolean("topLevelDeclaration")
                 ?: error("Kotlin compiler top-level-declaration evidence is missing")
             val sourceTopLevelDeclarationCount = value.int("sourceTopLevelDeclarationCount")
@@ -673,6 +676,7 @@ class KotlinCompilerDiagnostics private constructor(
                     isCompanion = isCompanion,
                     isTopLevelFunction = isTopLevelFunction,
                     isMovePlainFunction = isMovePlainFunction,
+                    containsCallableReference = containsCallableReference,
                     isTopLevelDeclaration = isTopLevelDeclaration,
                     sourceTopLevelDeclarationCount = sourceTopLevelDeclarationCount,
                 )) == null) {
@@ -1181,7 +1185,7 @@ class KotlinCompilerDiagnostics private constructor(
         )
         private val JVM_FIELD_DESCRIPTOR = Regex("\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;)")
         private val SYMBOL_FIELDS = setOf(
-            "identity", "name", "kind", "path", "owner", "jvmName", "descriptor", "selectionText", "visibility", "companion", "topLevelFunction", "movePlainFunction", "topLevelDeclaration", "sourceTopLevelDeclarationCount", "startOffset", "endOffset",
+            "identity", "name", "kind", "path", "owner", "jvmName", "descriptor", "selectionText", "visibility", "companion", "topLevelFunction", "movePlainFunction", "containsCallableReference", "topLevelDeclaration", "sourceTopLevelDeclarationCount", "startOffset", "endOffset",
         )
         private val USAGE_FIELDS = setOf(
             "path", "targetIdentity", "selectionText", "startOffset", "endOffset",

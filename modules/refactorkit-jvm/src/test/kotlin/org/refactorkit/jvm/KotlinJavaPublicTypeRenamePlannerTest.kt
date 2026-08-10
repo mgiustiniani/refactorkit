@@ -498,6 +498,39 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicTopLevelKotlinFunctionMoveRefusesOutboundCallableReference() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").writeText(
+            "package fixture.api\nfun publicGreeting(): () -> String = ::dependency\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/api/Dependency.kt").writeText(
+            "package fixture.api\nfun dependency(): String = \"source\"\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/api/v2/Dependency.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.api.v2\nfun dependency(): String = \"target\"\n")
+        }
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.consumer\nimport fixture.api.publicGreeting\n" +
+                "fun greeting(): String = publicGreeting()()\n",
+        )
+        fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = catalogue.index.symbols.single { it.name == "publicGreeting" }
+        assertTrue(catalogue.declarations.getValue(target.id).containsCallableReference)
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.moveFunctionCallableReferenceUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun publicTopLevelKotlinFunctionMoveRefusesExternalPackageFunctionBindingSubstitution() {
         val fixture = moveFixture()
         val dependencyJar = compileExternalPackageFunctions(fixture.toolchain)

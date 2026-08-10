@@ -92,6 +92,10 @@ class KotlinJvmMoveDeclarationPlanner(
             snapshot, "kotlin.moveFunctionShapeUnsupported",
             "Top-level function move excludes extension, suspend, default, generic, context, annotation, and modifier-dependent shapes",
         )
+        if (isTopLevelFunctionIdentity && declaration.containsCallableReference) return refused(
+            snapshot, "kotlin.moveFunctionCallableReferenceUnsupported",
+            "Top-level function move requires compiler-PSI proof that the moved declaration contains no callable reference",
+        )
         val isTopLevelFunction = isTopLevelFunctionIdentity && declaration.isMovePlainFunction
         if (!isTopLevelType && !isTopLevelFunction) return refused(
             snapshot, "kotlin.moveDeclarationUnsupported",
