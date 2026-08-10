@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import json
 import os
@@ -102,6 +103,14 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="refactorkit-kotlin-qualification-") as temporary:
         workspace = Path(temporary) / "workspace"
         shutil.copytree(repository / "samples" / "kotlin-maven-simple", workspace)
+        greeting_source = workspace / "src/main/kotlin/org/refactorkit/samples/Greeting.kt"
+        greeting_source.write_text(
+            greeting_source.read_text(encoding="utf-8") +
+            "\nclass ConstructorFixture(val text: String) {\n" +
+            "    constructor(count: Int) : this(count.toString())\n" +
+            "}\n",
+            encoding="utf-8",
+        )
         before = tree_hash(workspace)
         source_before = tree_hash(workspace / "src")
         clean = run(cli, workspace, jdk, compiler, classpath, "native-kotlin-clean")
@@ -119,35 +128,47 @@ def main() -> int:
         symbol_rows = symbols.get("symbols", [])
         if symbols.get("status") != "ready" or symbols.get("backend") != "kotlin-compiler-jvm-declarations-k2-v1":
             raise AssertionError(f"Kotlin compiler symbols failed: {symbols}")
-        expected_kinds = {
-            "Greeting": "class",
-            "GreetingConsumer": "class",
-            "GreetingPort": "interface",
-            "GreetingMode": "enum",
-            "GreetingMarker": "annotation",
-            "GreetingRegistry": "object",
-            "GreetingDataRegistry": "object",
-            "GreetingOwner": "class",
-            "InternalGreeting": "class",
-            "Companion": "object",
-            "NestedRegistry": "object",
-            "anonymous": "property",
-            "name": "parameter",
-            "normalizer": "property",
-            "value": "parameter",
-            "topLevelGreeting": "function",
-            "render": "function",
-            "greet": "function",
-            "lookup": "function",
-            "internalGreeting": "function",
-        }
-        actual_kinds = {item.get("name"): item.get("kind") for item in symbol_rows}
+        expected_kinds = Counter([
+            ("Greeting", "class"),
+            ("GreetingConsumer", "class"),
+            ("GreetingPort", "interface"),
+            ("GreetingMode", "enum"),
+            ("GreetingMarker", "annotation"),
+            ("GreetingRegistry", "object"),
+            ("GreetingDataRegistry", "object"),
+            ("GreetingOwner", "class"),
+            ("InternalGreeting", "class"),
+            ("Companion", "object"),
+            ("NestedRegistry", "object"),
+            ("ConstructorFixture", "class"),
+            ("GreetingConsumer", "constructor"),
+            ("ConstructorFixture", "constructor"),
+            ("ConstructorFixture", "constructor"),
+            ("anonymous", "property"),
+            ("normalizer", "property"),
+            ("greeting", "property"),
+            ("text", "property"),
+            ("name", "parameter"),
+            ("name", "parameter"),
+            ("name", "parameter"),
+            ("value", "parameter"),
+            ("text", "parameter"),
+            ("count", "parameter"),
+            ("greeting", "parameter"),
+            ("topLevelGreeting", "function"),
+            ("render", "function"),
+            ("greet", "function"),
+            ("lookup", "function"),
+            ("internalGreeting", "function"),
+        ])
+        actual_kinds = Counter((item.get("name"), item.get("kind")) for item in symbol_rows)
         if actual_kinds != expected_kinds:
-            raise AssertionError(f"Kotlin JVM type kinds are incomplete: {symbols}")
+            raise AssertionError(f"Kotlin JVM declaration kinds are incomplete: expected={expected_kinds}, actual={actual_kinds}, payload={symbols}")
         for item in symbol_rows:
             expected_prefix = {
-                "function": "kotlin-jvm-callable-v1:", "property": "kotlin-jvm-property-v1:",
-                "parameter": "kotlin-jvm-parameter-v1:", "type-parameter": "kotlin-jvm-type-parameter-v1:",
+                "function": "kotlin-jvm-callable-v1:", "constructor": "kotlin-jvm-constructor-v1:",
+                "property": "kotlin-jvm-property-v1:", "parameter": "kotlin-jvm-parameter-v1:",
+                "type-parameter": "kotlin-jvm-type-parameter-v1:",
             }.get(item.get("kind"), "kotlin-jvm-type-v1:")
             if not item.get("id", "").startswith(expected_prefix):
                 raise AssertionError(f"Kotlin JVM declaration identity is invalid: {item}")
@@ -163,6 +184,15 @@ def main() -> int:
         )
         if definition.get("status") != "ready" or definition.get("symbols") != [render]:
             raise AssertionError(f"Kotlin opaque function definition lookup failed: {definition}")
+        constructors = [item for item in symbol_rows if item.get("kind") == "constructor"]
+        if len(constructors) != 3 or any(not item.get("id", "").startswith("kotlin-jvm-constructor-v1:") for item in constructors):
+            raise AssertionError(f"Kotlin constructor identities are incomplete: {constructors}")
+        constructor_definition = run(
+            cli, workspace, jdk, compiler, classpath, "native-kotlin-constructor-definition", "definition",
+            ["--symbol", constructors[0]["id"]],
+        )
+        if constructor_definition.get("status") != "ready" or constructor_definition.get("symbols") != [constructors[0]]:
+            raise AssertionError(f"Kotlin opaque constructor definition lookup failed: {constructor_definition}")
         cli_usage_definition = run(
             cli, workspace, jdk, compiler, classpath, "native-kotlin-cli-usage-definition", "definition",
             ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt", "--line", "5", "--character", "45"],
@@ -943,7 +973,7 @@ def main() -> int:
         if tree_hash(workspace) != broken_before:
             raise AssertionError("broken Kotlin diagnostics modified workspace sources")
 
-    print("Packaged Kotlin acceptance passed: K2 reads, private rename, bidirectional public type/member rename, shared Java/Kotlin add-parameter, and public Kotlin package move apply/rollback.")
+    print("Packaged Kotlin acceptance passed: descriptor-exact K2 declaration/constructor reads, private rename, bidirectional public type/member rename, shared Java/Kotlin add-parameter, and public Kotlin package move apply/rollback.")
     return 0
 
 

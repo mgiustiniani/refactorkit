@@ -14,9 +14,9 @@ class JdtJavaAnalysisCacheTest {
     @Test
     fun cachesExactSnapshotsAndEvictsLeastRecentlyUsedEntry() {
         val analyses = AtomicInteger()
-        val cache = JdtJavaAnalysisCache(maxEntries = 2) { _, _ ->
+        val cache = JdtJavaAnalysisCache(maxEntries = 2) { snapshot, _ ->
             analyses.incrementAndGet()
-            JdtJavaSemanticAnalysisResult(emptyList())
+            JdtJavaSemanticAnalysisResult(emptyList(), snapshotHash = snapshot.hash)
         }
         val first = snapshot("class First {}")
         val second = snapshot("class Second {}")
@@ -32,6 +32,43 @@ class JdtJavaAnalysisCacheTest {
         assertEquals(1, cache.status().hits)
         assertEquals(4, cache.status().misses)
         assertEquals(2, cache.status().entries)
+    }
+
+    @Test
+    fun reusesNormalizedJdtStateAcrossUnrelatedLanguageSnapshotChanges() {
+        val analyses = AtomicInteger()
+        val cache = JdtJavaAnalysisCache { snapshot, _ ->
+            analyses.incrementAndGet()
+            JdtJavaSemanticAnalysisResult(emptyList(), snapshotHash = snapshot.hash)
+        }
+        val javaOnly = snapshot("class Stable {}")
+        val withKotlinEdit = javaOnly.copy(files = javaOnly.files + SourceFile(
+            Path.of("src/main/kotlin/Other.kt"), "class Other", "kotlin",
+        ))
+
+        val first = cache.get(javaOnly)
+        val reused = cache.get(withKotlinEdit)
+
+        assertEquals(1, analyses.get())
+        assertEquals(first.analysis.symbols, reused.analysis.symbols)
+        assertFailsWith<UnsupportedOperationException> {
+            (first.analysis.symbols as MutableList).clear()
+        }
+        assertEquals(withKotlinEdit.hash, reused.snapshotHash)
+        assertEquals(withKotlinEdit.hash, reused.analysis.snapshotHash)
+        assertEquals(first.semanticInputHash, reused.semanticInputHash)
+        assertEquals(1, cache.status().crossSnapshotHits)
+    }
+
+    @Test
+    fun refusesProviderResultAttestedToAnotherSnapshot() {
+        val snapshot = snapshot("class Current {}")
+        val cache = JdtJavaAnalysisCache { _, _ ->
+            JdtJavaSemanticAnalysisResult(emptyList(), snapshotHash = "0".repeat(64))
+        }
+
+        assertFailsWith<JdtJavaAnalysisAttestationException> { cache.get(snapshot) }
+        assertEquals(0, cache.status().entries)
     }
 
     @Test

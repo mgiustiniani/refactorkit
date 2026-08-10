@@ -511,6 +511,11 @@ class KotlinCompilerDiagnosticsTest {
             private class PrivateType
             internal class InternalType
             class PublicType
+            open class Boundary {
+                protected class ProtectedType
+                protected fun protectedCall(value: String): String = value
+                protected val protectedValue: String = "value"
+            }
         """.trimIndent() + "\n")
         val toolchain = toolchain(root)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
@@ -523,6 +528,12 @@ class KotlinCompilerDiagnosticsTest {
         assertEquals(KotlinDeclarationVisibility.PRIVATE, result.declarations.getValue(symbols.getValue("PrivateType").id).visibility)
         assertEquals(KotlinDeclarationVisibility.INTERNAL, result.declarations.getValue(symbols.getValue("InternalType").id).visibility)
         assertEquals(KotlinDeclarationVisibility.PUBLIC, result.declarations.getValue(symbols.getValue("PublicType").id).visibility)
+        listOf("ProtectedType", "protectedCall", "protectedValue").forEach { name ->
+            assertEquals(
+                KotlinDeclarationVisibility.PROTECTED,
+                result.declarations.getValue(symbols.getValue(name).id).visibility,
+            )
+        }
     }
 
     @Test
@@ -601,32 +612,89 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
-    fun jvmRenamedFunctionRefusesWithoutSourceToBinaryGuessing() {
+    fun jvmRenamedFunctionUsesCompilerValidatedLiteralBinaryName() {
         val root = project("@kotlin.jvm.JvmName(\"binaryName\")\nfun sourceName(): String = \"value\"\n")
         val toolchain = toolchain(root)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
 
-        val result = assertIs<KotlinCompilerSymbolsResult.Refused>(
-            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
-        )
+        val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
+        val symbol = result.index.symbols.single { it.name == "sourceName" }
+        val evidence = result.declarations.getValue(symbol.id)
 
-        assertEquals("kotlin.symbolCallableEvidenceMissing", result.reason.code)
+        assertEquals("binaryName", evidence.jvmName)
+        assertEquals("fixture.BrokenKt#binaryName()Ljava/lang/String;", evidence.jvmIdentity)
+        assertTrue(symbol.id.value.matches(Regex("kotlin-jvm-callable-v1:[0-9a-f]{64}")))
     }
 
     @Test
-    fun overloadedFunctionNameRefusesWithoutGuessingJvmDescriptor() {
+    fun overloadedAndJvmRenamedFunctionsUseExactFirToJvmSignatures() {
         val root = project("""
             fun calculate(value: Int): String = value.toString()
             fun calculate(value: String): String = value
+            @kotlin.jvm.JvmName("binaryName")
+            fun sourceName(value: Long): Long = value
+            fun invokeAll(): String = calculate(1) + calculate("two") + sourceName(3).toString()
         """.trimIndent() + "\n")
         val toolchain = toolchain(root)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
 
-        val result = assertIs<KotlinCompilerSymbolsResult.Refused>(
-            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
-        )
+        val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
+        val functions = result.index.symbols.filter { it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION }
+        val identities = functions.associate { symbol ->
+            symbol.name to result.declarations.getValue(symbol.id).jvmIdentity
+        }
 
-        assertEquals("kotlin.symbolCallableEvidenceAmbiguous", result.reason.code)
+        assertEquals(2, functions.count { it.name == "calculate" })
+        assertTrue(result.declarations.values.any { it.jvmIdentity == "fixture.BrokenKt#calculate(I)Ljava/lang/String;" })
+        assertTrue(result.declarations.values.any {
+            it.jvmIdentity == "fixture.BrokenKt#calculate(Ljava/lang/String;)Ljava/lang/String;"
+        })
+        assertEquals("fixture.BrokenKt#binaryName(J)J", identities.getValue("sourceName"))
+        assertEquals(3, result.usages.count { usage ->
+            functions.singleOrNull { it.id == usage.targetId }?.name in setOf("calculate", "sourceName")
+        })
+    }
+
+    @Test
+    fun sourceDeclaredConstructorsUseOwnerAndExactJvmDescriptorIdentity() {
+        val root = project("""
+            class Service(val name: String) {
+                constructor(count: Int) : this(count.toString())
+            }
+            fun create(): Service = Service(1)
+            fun read(service: Service): String = service.name
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+
+        val analyzed = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(analyzed, analyzed.toString())
+        val constructors = result.index.symbols.filter { it.kind == org.refactorkit.core.Symbol.Kind.CONSTRUCTOR }
+
+        assertEquals(2, constructors.size)
+        assertEquals(setOf("Service"), constructors.mapTo(linkedSetOf()) { it.name })
+        assertEquals(
+            setOf(
+                "fixture.Service#<init>(Ljava/lang/String;)V",
+                "fixture.Service#<init>(I)V",
+            ),
+            constructors.mapTo(linkedSetOf()) { result.declarations.getValue(it.id).jvmIdentity },
+        )
+        assertTrue(constructors.all { it.id.value.matches(Regex("kotlin-jvm-constructor-v1:[0-9a-f]{64}")) })
+        val nameDeclarations = result.index.symbols.filter { it.name == "name" }
+        assertEquals(
+            setOf(org.refactorkit.core.Symbol.Kind.PARAMETER, org.refactorkit.core.Symbol.Kind.PROPERTY),
+            nameDeclarations.mapTo(linkedSetOf()) { it.kind },
+        )
+        val nameProperty = nameDeclarations.single { it.kind == org.refactorkit.core.Symbol.Kind.PROPERTY }
+        assertEquals("fixture.Service#property:name:Ljava/lang/String;", result.declarations.getValue(nameProperty.id).jvmIdentity)
+        assertTrue(result.usages.any { it.targetId == nameProperty.id })
+        val integerConstructor = constructors.single {
+            result.declarations.getValue(it.id).jvmDescriptor == "(I)V"
+        }
+        assertTrue(result.usages.any { it.targetId == integerConstructor.id })
     }
 
     @Test

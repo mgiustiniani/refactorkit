@@ -1,6 +1,8 @@
 package org.refactorkit.java
 
 import org.refactorkit.core.BuildDependency
+import org.refactorkit.core.BuildLanguageEvidence
+import org.refactorkit.core.BuildLanguageFacet
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModelDiagnostic
 import org.refactorkit.core.BuildModelDiscoveryPolicy
@@ -266,6 +268,7 @@ private object JavaModuleBuildModelProjector {
                     runtimeClasspathEntries = module.mainRuntimeClasspathEntries,
                     moduleDependencies = mainDependencies,
                     attributes = jvmSourceSetAttributes(module, sourceLevel, test = false),
+                    languageFacets = languageFacets(module, sourceLevel),
                 ),
                 BuildSourceSet(
                     id = "test",
@@ -277,6 +280,7 @@ private object JavaModuleBuildModelProjector {
                     runtimeClasspathEntries = module.testClasspathEntries,
                     moduleDependencies = testDependencies,
                     attributes = jvmSourceSetAttributes(module, sourceLevel, test = true),
+                    languageFacets = languageFacets(module, sourceLevel),
                 ),
             ),
             attributes = module.languageSettings,
@@ -290,6 +294,41 @@ private object JavaModuleBuildModelProjector {
         fallback: DependencyScope,
     ): DependencyScope = module.languageSettings["java.moduleDependency.$sourceSet.$dependency.scope"]
         ?.uppercase()?.let { runCatching { DependencyScope.valueOf(it) }.getOrNull() } ?: fallback
+
+    private fun languageFacets(module: Module, sourceLevel: String): List<BuildLanguageFacet> = buildList {
+        add(BuildLanguageFacet(
+            languageId = "java",
+            platformId = "jvm",
+            compilerId = "eclipse-jdt",
+            sourceVersion = sourceLevel,
+            targetVersion = sourceLevel,
+            targetRuntimeVersion = sourceLevel,
+            evidence = if (module.languageSettings["java.sourceLevelEvidence"] == "declared" ||
+                module.languageSettings["java.sourceLevel.status"] == "available") {
+                BuildLanguageEvidence.DECLARED
+            } else BuildLanguageEvidence.DERIVED,
+        ))
+        val kotlinPlatform = module.languageSettings["kotlin.platform"]
+        if (kotlinPlatform != null || module.sourceRoots.any { "/kotlin" in "/${it.toString().replace('\\', '/')}/" }) {
+            add(BuildLanguageFacet(
+                languageId = "kotlin",
+                platformId = kotlinPlatform ?: "unproven",
+                compilerId = "kotlin-build-plugin",
+                targetVersion = module.languageSettings["kotlin.jvmTarget"],
+                targetRuntimeVersion = module.languageSettings["kotlin.targetJdk"] ?: sourceLevel.takeIf {
+                    module.languageSettings["java.sourceLevelEvidence"] == "declared" ||
+                        module.languageSettings["java.sourceLevel.status"] == "available"
+                },
+                compilerPluginIds = module.languageSettings["kotlin.compilerPlugins"]
+                    ?.split(',')?.filter(String::isNotBlank).orEmpty(),
+                evidence = when (kotlinPlatform) {
+                    "jvm" -> BuildLanguageEvidence.DECLARED
+                    "unsupported" -> BuildLanguageEvidence.UNSUPPORTED
+                    else -> BuildLanguageEvidence.PARTIAL
+                },
+            ))
+        }
+    }
 
     private fun jvmSourceSetAttributes(module: Module, sourceLevel: String, test: Boolean): Map<String, String> = buildMap {
         put("java.sourceLevel", sourceLevel)

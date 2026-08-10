@@ -37,6 +37,8 @@ import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.WorkspaceRefreshCoordinator
+import org.refactorkit.core.WorkspaceRefreshResult
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
@@ -787,9 +789,18 @@ class LspSession {
     private fun refreshSnapshotFromUri(uri: String) {
         try {
             val path = Paths.get(URI(uri))
-            val refreshed = overlayOpenDocuments(scanner.scan(path))
-            if (snapshot?.hash != refreshed.hash) moveClassDispatcher.clearLexicalReviewAudit()
-            snapshot = refreshed
+            val current = snapshot
+            if (current == null) {
+                snapshot = overlayOpenDocuments(scanner.scan(path))
+            } else when (val refresh = WorkspaceRefreshCoordinator.refresh(current) {
+                overlayOpenDocuments(scanner.scan(path))
+            }) {
+                is WorkspaceRefreshResult.Unchanged -> snapshot = refresh.snapshot
+                is WorkspaceRefreshResult.Changed -> {
+                    moveClassDispatcher.clearLexicalReviewAudit()
+                    snapshot = refresh.snapshot
+                }
+            }
             publishDiagnostics()
         } catch (e: Exception) {
             System.err.println("RefactorKit LSP: failed to scan workspace: ${e.message}")

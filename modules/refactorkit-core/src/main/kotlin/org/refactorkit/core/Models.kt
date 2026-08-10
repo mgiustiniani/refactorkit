@@ -169,6 +169,12 @@ data class ProjectSnapshot(
                         sourceSet.moduleDependencies.sortedWith(compareBy<BuildDependency> { it.targetModuleId }.thenBy { it.scope.name }).forEach { dependency ->
                             digest.update("sourceSetDependency\u0000${dependency.targetModuleId}\u0000${dependency.scope}\u0000".toByteArray(Charsets.UTF_8))
                         }
+                        sourceSet.languageFacets.sortedBy(BuildLanguageFacet::languageId).forEach { facet ->
+                            digest.update("sourceSetLanguageFacet\u0000${facet.languageId}\u0000${facet.platformId}\u0000${facet.compilerId}\u0000${facet.sourceVersion}\u0000${facet.targetVersion}\u0000${facet.targetRuntimeVersion}\u0000${facet.evidence}\u0000".toByteArray(Charsets.UTF_8))
+                            facet.compilerPluginIds.sorted().forEach { plugin ->
+                                digest.update("sourceSetLanguagePlugin\u0000${facet.languageId}\u0000$plugin\u0000".toByteArray(Charsets.UTF_8))
+                            }
+                        }
                         sourceSet.attributes.toSortedMap().forEach { (key, value) ->
                             digest.update("sourceSetAttribute\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
                         }

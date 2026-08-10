@@ -69,6 +69,7 @@ data class KotlinCompilerExternalCallableUsage(
     val jvmOwner: String,
     val callableName: String,
     val location: SourceLocation,
+    val jvmDescriptor: String = "",
 )
 
 enum class KotlinDeclarationVisibility { PUBLIC, INTERNAL, PROTECTED, PRIVATE }
@@ -78,6 +79,7 @@ data class KotlinCompilerDeclarationEvidence(
     val visibility: KotlinDeclarationVisibility,
     val jvmIdentity: String = "",
     val jvmOwner: String = "",
+    val jvmName: String = "",
     val jvmDescriptor: String = "",
 )
 
@@ -175,6 +177,17 @@ class KotlinCompilerDiagnostics private constructor(
         snapshot: ProjectSnapshot,
         additionalClasspath: List<Path>,
     ): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, additionalClasspath, null)
+
+    /**
+     * Retains compiler output only for the duration of one consumer while also binding
+     * separately compiled JVM dependencies. This is the shared-JVM evidence seam;
+     * neither path may escape the callback.
+     */
+    fun analyzeWithAdditionalClasspathAndCompiledOutput(
+        snapshot: ProjectSnapshot,
+        additionalClasspath: List<Path>,
+        consumer: (Path) -> Unit,
+    ): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, additionalClasspath, consumer)
 
     private fun analyzeInternal(
         snapshot: ProjectSnapshot,
@@ -318,9 +331,10 @@ class KotlinCompilerDiagnostics private constructor(
     fun analyzeSymbols(snapshot: ProjectSnapshot): KotlinCompilerSymbolsResult = when (val result = analyze(snapshot)) {
         is KotlinCompilerDiagnosticsResult.Available -> {
             val attestation = result.attestation.copy(backend = SYMBOL_BACKEND)
+            val symbols = result.symbols
             when {
-                result.symbols != null -> KotlinCompilerSymbolsResult.Available(
-                    result.symbols, attestation, result.usages, result.externalTypeUsages,
+                symbols != null -> KotlinCompilerSymbolsResult.Available(
+                    symbols, attestation, result.usages, result.externalTypeUsages,
                     result.externalCallableUsages, result.declarations,
                 )
                 result.symbolFailure?.code == "kotlin.compilerSymbolsInvalid" ->
@@ -545,34 +559,51 @@ class KotlinCompilerDiagnostics private constructor(
             val owner = value.string("owner")?.takeIf {
                 it.length in 1..MAX_SYMBOL_IDENTITY_CHARS && SYMBOL_IDENTITY.matches(it)
             } ?: error("Kotlin compiler symbol owner is invalid")
+            val jvmName = value.string("jvmName")?.takeIf { it.length <= MAX_SYMBOL_NAME_CHARS }
+                ?: error("Kotlin compiler symbol JVM name is invalid")
             val descriptor = value.string("descriptor")?.takeIf { it.length <= MAX_JVM_DESCRIPTOR_CHARS }
                 ?: error("Kotlin compiler symbol descriptor is invalid")
-            val id = if (kind == Symbol.Kind.FUNCTION) {
-                check(JVM_METHOD_DESCRIPTOR.matches(descriptor) && identity == "$owner#$name$descriptor") {
-                    "Kotlin compiler callable identity is invalid"
+            val id = when (kind) {
+                Symbol.Kind.FUNCTION -> {
+                    check(JVM_NAME.matches(jvmName) && JVM_METHOD_DESCRIPTOR.matches(descriptor) &&
+                        identity == "$owner#$jvmName$descriptor") {
+                        "Kotlin compiler callable identity is invalid"
+                    }
+                    SymbolId("kotlin-jvm-callable-v1:${sha256("kotlin-jvm-callable-v1\u0000$owner\u0000$jvmName\u0000$descriptor")}")
                 }
-                SymbolId("kotlin-jvm-callable-v1:${sha256("kotlin-jvm-callable-v1\u0000$owner\u0000$name\u0000$descriptor")}")
-            } else if (kind == Symbol.Kind.PROPERTY) {
-                check(JVM_FIELD_DESCRIPTOR.matches(descriptor) && identity == "$owner#property:$name:$descriptor") {
-                    "Kotlin compiler property identity is invalid"
+                Symbol.Kind.CONSTRUCTOR -> {
+                    check(jvmName == "<init>" && JVM_METHOD_DESCRIPTOR.matches(descriptor) &&
+                        descriptor.endsWith("V") && identity == "$owner#<init>$descriptor") {
+                        "Kotlin compiler constructor identity is invalid"
+                    }
+                    SymbolId("kotlin-jvm-constructor-v1:${sha256("kotlin-jvm-constructor-v1\u0000$owner\u0000$descriptor")}")
                 }
-                SymbolId("kotlin-jvm-property-v1:${sha256("kotlin-jvm-property-v1\u0000$owner\u0000$name\u0000$descriptor")}")
-            } else if (kind in setOf(Symbol.Kind.PARAMETER, Symbol.Kind.TYPE_PARAMETER)) {
-                val methodDescriptor = descriptor.substringBeforeLast('@', "")
-                val ordinal = descriptor.substringAfterLast('@', "").toIntOrNull()
-                val family = if (kind == Symbol.Kind.PARAMETER) "parameter" else "type-parameter"
-                val callableName = identity.substringAfter("#$family:", "").substringBefore('(')
-                check(JVM_METHOD_DESCRIPTOR.matches(methodDescriptor) && ordinal != null && ordinal >= 0 &&
-                    JVM_NAME.matches(callableName) && identity == "$owner#$family:$callableName$descriptor") {
-                    "Kotlin compiler $family identity is invalid"
+                Symbol.Kind.PROPERTY -> {
+                    check(jvmName == name && JVM_FIELD_DESCRIPTOR.matches(descriptor) &&
+                        identity == "$owner#property:$name:$descriptor") {
+                        "Kotlin compiler property identity is invalid"
+                    }
+                    SymbolId("kotlin-jvm-property-v1:${sha256("kotlin-jvm-property-v1\u0000$owner\u0000$name\u0000$descriptor")}")
                 }
-                SymbolId("kotlin-jvm-$family-v1:${sha256("kotlin-jvm-$family-v1\u0000$owner\u0000$callableName\u0000$descriptor")}")
-            } else {
-                check(descriptor.isEmpty() && identity == owner && SYMBOL_IDENTITY.matches(identity) &&
-                    identity.substringAfterLast('.').substringAfterLast('$') == name) {
-                    "Kotlin compiler type identity is invalid"
+                Symbol.Kind.PARAMETER, Symbol.Kind.TYPE_PARAMETER -> {
+                    val methodDescriptor = descriptor.substringBeforeLast('@', "")
+                    val ordinal = descriptor.substringAfterLast('@', "").toIntOrNull()
+                    val family = if (kind == Symbol.Kind.PARAMETER) "parameter" else "type-parameter"
+                    check(JVM_METHOD_DESCRIPTOR.matches(methodDescriptor) && ordinal != null && ordinal >= 0 &&
+                        (JVM_NAME.matches(jvmName) || jvmName == "<init>") &&
+                        identity == "$owner#$family:$jvmName$descriptor") {
+                        "Kotlin compiler $family identity is invalid"
+                    }
+                    SymbolId("kotlin-jvm-$family-v1:${sha256("kotlin-jvm-$family-v1\u0000$owner\u0000$jvmName\u0000$descriptor")}")
                 }
-                SymbolId("kotlin-jvm-type-v1:${sha256("kotlin-jvm-type-v1\u0000$identity")}")
+                else -> {
+                    check(jvmName.isEmpty() && descriptor.isEmpty() && identity == owner &&
+                        SYMBOL_IDENTITY.matches(identity) &&
+                        identity.substringAfterLast('.').substringAfterLast('$') == name) {
+                        "Kotlin compiler type identity is invalid"
+                    }
+                    SymbolId("kotlin-jvm-type-v1:${sha256("kotlin-jvm-type-v1\u0000$identity")}")
+                }
             }
             val visibility = value.string("visibility")?.let {
                 runCatching { KotlinDeclarationVisibility.valueOf(it) }.getOrNull()
@@ -580,7 +611,8 @@ class KotlinCompilerDiagnostics private constructor(
             val selectionText = value.string("selectionText")?.takeIf { it.length in 1..MAX_SYMBOL_NAME_CHARS }
                 ?: error("Kotlin compiler symbol selection text is invalid")
             check(selectionText == name ||
-                (kind == Symbol.Kind.OBJECT && name == "Companion" && selectionText == "object")) {
+                (kind == Symbol.Kind.OBJECT && name == "Companion" && selectionText == "object") ||
+                (kind == Symbol.Kind.CONSTRUCTOR && selectionText in setOf("constructor", "("))) {
                 "Kotlin compiler symbol selection does not match its identity"
             }
             val rawPath = value.string("path") ?: error("Kotlin compiler symbol path is missing")
@@ -609,6 +641,7 @@ class KotlinCompilerDiagnostics private constructor(
                     visibility = visibility,
                     jvmIdentity = identity,
                     jvmOwner = owner,
+                    jvmName = jvmName,
                     jvmDescriptor = descriptor,
                 )) == null) {
                 "Kotlin compiler symbol identity is duplicated"
@@ -654,7 +687,8 @@ class KotlinCompilerDiagnostics private constructor(
                 ?: throw SymbolPayloadException("kotlin.compilerUsageFieldsInvalid")
             if (value.keys != USAGE_FIELDS) throw SymbolPayloadException("kotlin.compilerUsageFieldsInvalid")
             val targetIdentity = value.string("targetIdentity")?.takeIf {
-                it.length in 1..(MAX_SYMBOL_IDENTITY_CHARS + EXTERNAL_JVM_CALLABLE_PREFIX.length + MAX_SYMBOL_NAME_CHARS)
+                it.length in 1..(MAX_SYMBOL_IDENTITY_CHARS + EXTERNAL_JVM_CALLABLE_PREFIX.length +
+                    MAX_SYMBOL_NAME_CHARS + MAX_JVM_DESCRIPTOR_CHARS)
             } ?: throw SymbolPayloadException("kotlin.compilerUsageTargetEncodingInvalid")
             val targetId = identityIds[targetIdentity]
             val externalTypeIdentity = targetIdentity.removePrefix(EXTERNAL_JVM_TYPE_PREFIX).takeIf {
@@ -665,8 +699,14 @@ class KotlinCompilerDiagnostics private constructor(
                 targetId == null && targetIdentity.startsWith(EXTERNAL_JVM_CALLABLE_PREFIX)
             }?.let { identity ->
                 val owner = identity.substringBeforeLast('#', "")
-                val name = identity.substringAfterLast('#', "")
-                (owner to name).takeIf { SYMBOL_IDENTITY.matches(owner) && JVM_NAME.matches(name) }
+                val callable = identity.substringAfterLast('#', "")
+                val descriptorStart = callable.indexOf('(')
+                val name = callable.take(descriptorStart.coerceAtLeast(0))
+                val descriptor = if (descriptorStart < 0) "" else callable.substring(descriptorStart)
+                Triple(owner, name, descriptor).takeIf {
+                    SYMBOL_IDENTITY.matches(owner) && (JVM_NAME.matches(name) || name == "<init>") &&
+                        JVM_METHOD_DESCRIPTOR.matches(descriptor)
+                }
             }
             if (targetId == null && externalTypeIdentity == null && externalCallableIdentity == null) {
                 throw SymbolPayloadException("kotlin.compilerUsageTargetInvalid")
@@ -704,7 +744,9 @@ class KotlinCompilerDiagnostics private constructor(
                 source.content.substring(start, end) != selectionText) {
                 throw SymbolPayloadException("kotlin.compilerUsageRangeInvalid")
             }
-            val targetKey = targetId?.value ?: externalTypeIdentity ?: externalCallableIdentity!!.let { "${it.first}#${it.second}" }
+            val targetKey = targetId?.value ?: externalTypeIdentity ?: externalCallableIdentity!!.let {
+                "${it.first}#${it.second}${it.third}"
+            }
             if (!unique.add("$relative\u0000$start\u0000$end\u0000$targetKey")) {
                 throw SymbolPayloadException("kotlin.compilerUsageDuplicate")
             }
@@ -713,7 +755,10 @@ class KotlinCompilerDiagnostics private constructor(
                 targetId != null -> internal += KotlinCompilerResolvedUsage(targetId, location)
                 externalTypeIdentity != null -> externalTypes += KotlinCompilerExternalTypeUsage(externalTypeIdentity, location)
                 else -> externalCallables += KotlinCompilerExternalCallableUsage(
-                    externalCallableIdentity!!.first, externalCallableIdentity.second, location,
+                    externalCallableIdentity!!.first,
+                    externalCallableIdentity.second,
+                    location,
+                    externalCallableIdentity.third,
                 )
             }
         }
@@ -723,7 +768,7 @@ class KotlinCompilerDiagnostics private constructor(
             externalTypes.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
                 { it.location.range.start.character }, { it.jvmBinaryName })),
             externalCallables.sortedWith(compareBy({ it.location.path.toString() }, { it.location.range.start.line },
-                { it.location.range.start.character }, { it.jvmOwner }, { it.callableName })),
+                { it.location.range.start.character }, { it.jvmOwner }, { it.callableName }, { it.jvmDescriptor })),
         )
     }
 
@@ -740,8 +785,13 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.symbolLocationUnavailable" -> "Kotlin declaration lacks an exact compiler PSI location"
                 "kotlin.symbolDeclarationKindUnsupported" ->
                     "Kotlin symbol indexing accepts bounded JVM declarations only"
-                "kotlin.symbolCallableEvidenceMissing" ->
-                    "Kotlin function lacks an exact generated JVM method"
+                "kotlin.symbolCallableEvidenceMissing",
+                "kotlin.symbolCallableSignatureMissing" ->
+                    "Kotlin function lacks an exact FIR-to-JVM signature"
+                "kotlin.symbolCallableOwnerMismatch" ->
+                    "Kotlin callable FIR owner disagrees with compiler PSI ownership"
+                "kotlin.symbolCallableBinaryMismatch" ->
+                    "Kotlin callable FIR signature lacks the exact generated JVM method"
                 "kotlin.symbolCallableEvidenceAmbiguous" ->
                     "Kotlin overloaded or bridged function name has ambiguous JVM evidence"
                 "kotlin.symbolCallableEvidenceLimitExceeded" ->
@@ -758,6 +808,8 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.usageAliasCollision" -> "Kotlin resolved import alias has conflicting compiler targets"
                 "kotlin.usagePathInvalid" -> "Kotlin usage path is invalid"
                 "kotlin.usageLimitExceeded" -> "Kotlin usage result exceeded the bounded limit"
+                "kotlin.usageCallableDescriptorUnavailable" ->
+                    "Kotlin external callable usage lacks an exact JVM descriptor"
                 "kotlin.usageExtractionFailed" -> "Kotlin compiler usage extraction failed"
                 "kotlin.compilerUsageTargetInvalid" -> "Kotlin compiler usage target payload is invalid"
                 "kotlin.compilerUsagePathInvalid" -> "Kotlin compiler usage path payload is invalid"
@@ -1095,7 +1147,7 @@ class KotlinCompilerDiagnostics private constructor(
         )
         private val JVM_FIELD_DESCRIPTOR = Regex("\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;)")
         private val SYMBOL_FIELDS = setOf(
-            "identity", "name", "kind", "path", "owner", "descriptor", "selectionText", "visibility", "startOffset", "endOffset",
+            "identity", "name", "kind", "path", "owner", "jvmName", "descriptor", "selectionText", "visibility", "startOffset", "endOffset",
         )
         private val USAGE_FIELDS = setOf(
             "path", "targetIdentity", "selectionText", "startOffset", "endOffset",
@@ -1107,6 +1159,7 @@ class KotlinCompilerDiagnostics private constructor(
             Symbol.Kind.ENUM,
             Symbol.Kind.ANNOTATION,
             Symbol.Kind.FUNCTION,
+            Symbol.Kind.CONSTRUCTOR,
             Symbol.Kind.PROPERTY,
             Symbol.Kind.PARAMETER,
             Symbol.Kind.TYPE_PARAMETER,
@@ -1121,6 +1174,10 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.symbolLocationUnavailable",
             "kotlin.symbolDeclarationKindUnsupported",
             "kotlin.symbolCallableEvidenceMissing",
+            "kotlin.symbolCallableSignatureMissing",
+            "kotlin.symbolCallableOwnerMismatch",
+            "kotlin.symbolCallableBinaryMismatch",
+            "kotlin.symbolCallableFirResolutionFailed",
             "kotlin.symbolCallableEvidenceAmbiguous",
             "kotlin.symbolCallableEvidenceLimitExceeded",
             "kotlin.symbolDescriptorLimitExceeded",
@@ -1136,6 +1193,7 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.usagePathInvalid",
             "kotlin.usageLimitExceeded",
             "kotlin.usageExtractionFailed",
+            "kotlin.usageCallableDescriptorUnavailable",
             "kotlin.compilerUsageTargetInvalid",
             "kotlin.compilerUsagePathInvalid",
             "kotlin.compilerUsageRangeInvalid",

@@ -21,6 +21,12 @@ BuildModelProvider
            generatedSourceRoots
            outputDirectories
            classpathEntries
+           runtimeClasspathEntries
+           languageFacets[]
+             languageId / platformId / compilerId
+             sourceVersion / targetVersion / targetRuntimeVersion
+             compilerPluginIds
+             evidence: DECLARED | DERIVED | PARTIAL | UNSUPPORTED
            scoped moduleDependencies
        BuildModelDiagnostic[]
 ```
@@ -41,7 +47,11 @@ they never mutate workspace files or bypass `PatchEngine`.
 Source/generated/output paths are normalized workspace-relative metadata and
 reject absolute/traversal paths. External classpath entries may remain absolute
 because local dependency artifacts live outside the workspace. Module dependency
-edges must resolve to a module in the same model.
+edges must resolve to a module in the same model. Language facets are additive,
+bounded to 32 unique language IDs per source set, deeply detached, and included
+in the project snapshot hash. They are the shared contract for JVM, Multiplatform,
+Android, generated and compiler-plugin evidence; unsupported evidence is not a
+license to silently project a JVM source set.
 
 ## Snapshot and compatibility
 
@@ -69,8 +79,9 @@ application port whose one invocation returns one transient immutable
 `AuthoritativeDiagnosticsEvaluation`: one authoritative `ProjectSnapshot` plus
 the diagnostics produced for that exact candidate. The value deep-detaches every
 caller-owned outer and nested collection reachable through `ProjectSnapshot`,
-each `Module`, `BuildModel`, `BuildModule`, and `BuildSourceSet`, the diagnostics
-list, and every `DiagnosticDetails.fields` map. Mutation through caller aliases or
+each `Module`, `BuildModel`, `BuildModule`, `BuildSourceSet`, nested
+`BuildLanguageFacet.compilerPluginIds`, the diagnostics list, and every
+`DiagnosticDetails.fields` map. Mutation through caller aliases or
 exposed views cannot change the construction-time value, and a fresh canonical
 hash recomputed from the complete exposed snapshot remains equal to its retained
 snapshot hash.
@@ -139,7 +150,10 @@ now has explicit `BuildModelProvider` implementations and provider identities:
 - `java-conventional-v1`: conventional Java/Kotlin JVM source/output layout
   without an effective ecosystem model;
 - `kotlin-jvm-projection-v1`: non-executable Kotlin-only source ownership view
-  over those JVM models, bound to explicit compiler toolchain provenance.
+  over those JVM models, bound to explicit compiler toolchain provenance and
+  preserving compile/runtime classpaths plus typed language-facet evidence;
+- `typescript-config-declarative-v1`: TypeScript/JavaScript configuration evidence projected
+  through the same language-neutral facet contract without adding JS types to core.
 
 The scanner projects proven compatibility `Module` facts through these providers.
 Core exact and longest-prefix ownership queries preserve provider, module,

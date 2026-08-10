@@ -1,5 +1,6 @@
 package org.refactorkit.kotlin.bridge;
 
+import kotlin.jvm.functions.Function1;
 import org.jetbrains.kotlin.KtPsiSourceElement;
 import org.jetbrains.kotlin.KtSourceElement;
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys;
@@ -22,33 +23,42 @@ import org.jetbrains.kotlin.config.JvmTarget;
 import org.jetbrains.kotlin.config.LanguageVersion;
 import org.jetbrains.kotlin.config.LanguageVersionSettingsImpl;
 import org.jetbrains.kotlin.fir.FirElement;
+import org.jetbrains.kotlin.fir.declarations.FirFunction;
 import org.jetbrains.kotlin.fir.declarations.FirResolvedImport;
 import org.jetbrains.kotlin.fir.declarations.FirTypeParameter;
 import org.jetbrains.kotlin.fir.expressions.FirResolvedQualifier;
 import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
+import org.jetbrains.kotlin.fir.scopes.jvm.SignatureUtilsKt;
 import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
+import org.jetbrains.kotlin.fir.types.ConeKotlinType;
 import org.jetbrains.kotlin.fir.types.ConeTypeParameterType;
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
+import org.jetbrains.kotlin.fir.types.FirTypeRef;
+import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol;
+import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol;
+import org.jetbrains.kotlin.fir.symbols.impl.FirValueParameterSymbol;
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
 import org.jetbrains.kotlin.name.ClassId;
+import org.jetbrains.kotlin.name.FqName;
 import org.jetbrains.kotlin.name.Name;
 import org.jetbrains.kotlin.psi.KtBlockExpression;
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression;
+import org.jetbrains.kotlin.psi.KtClass;
 import org.jetbrains.kotlin.psi.KtClassOrObject;
 import org.jetbrains.kotlin.psi.KtConstructor;
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression;
+import org.jetbrains.kotlin.psi.KtEnumEntry;
 import org.jetbrains.kotlin.psi.KtFile;
 import org.jetbrains.kotlin.psi.KtImportDirective;
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.KtNullableType;
 import org.jetbrains.kotlin.psi.KtObjectDeclaration;
-import org.jetbrains.kotlin.psi.KtOperationReferenceExpression;
 import org.jetbrains.kotlin.psi.KtProperty;
 import org.jetbrains.kotlin.psi.KtParameter;
 import org.jetbrains.kotlin.psi.KtSimpleNameExpression;
@@ -85,7 +95,7 @@ final class KotlinCompilerUsageExtractor {
         final Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeTargets =
             new HashMap<String, KotlinCompilerSymbolExtractor.ExtractedSymbol>();
         for (KotlinCompilerSymbolExtractor.ExtractedSymbol symbol : symbols) {
-            String key = declarationKey(Paths.get(symbol.path()), symbol.startOffset());
+            String key = declarationTargetKey(Paths.get(symbol.path()), symbol.startOffset(), symbol.kind());
             if (declarationTargets.put(key, symbol) != null) throw failure("kotlin.usageTargetCollision");
             if (!"FUNCTION".equals(symbol.kind()) && typeTargets.put(symbol.identity(), symbol) != null) {
                 throw failure("kotlin.usageTargetCollision");
@@ -211,7 +221,7 @@ final class KotlinCompilerUsageExtractor {
         KtSourceElement targetSource = reference.getResolvedSymbol().getSource();
         if (!(usageSource instanceof KtPsiSourceElement)) return;
         PsiElement usagePsi = ((KtPsiSourceElement) usageSource).getPsi();
-        if (!(usagePsi instanceof KtNameReferenceExpression) || usagePsi instanceof KtOperationReferenceExpression) return;
+        if (!(usagePsi instanceof KtNameReferenceExpression)) return;
         if (!(targetSource instanceof KtPsiSourceElement)) {
             if (reference.getResolvedSymbol() instanceof FirConstructorSymbol) {
                 ClassId classId = ((FirConstructorSymbol) reference.getResolvedSymbol()).getCallableId().getClassId();
@@ -223,6 +233,14 @@ final class KotlinCompilerUsageExtractor {
                     if (usagePsi.getText().equals(simpleName) ||
                         matchesAliasIdentity(usagePsi, externalTypeIdentity(binaryIdentity), importAliases)) {
                         addExternalUsage(usagePsi, binaryIdentity, identities, usages);
+                    addExternalCallableUsage(
+                        usagePsi,
+                        binaryIdentity,
+                        "<init>",
+                        jvmDescriptor(((FirConstructorSymbol) reference.getResolvedSymbol()).getFir(), "<init>"),
+                        identities,
+                        usages
+                    );
                     }
                 }
             } else if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol) {
@@ -230,7 +248,12 @@ final class KotlinCompilerUsageExtractor {
                 ClassId classId = function.getCallableId().getClassId();
                 if (classId != null && !classId.isLocal() && usagePsi.getText().equals(function.getName().asString())) {
                     addExternalCallableUsage(
-                        usagePsi, binaryName(classId), function.getName().asString(), identities, usages
+                        usagePsi,
+                        binaryName(classId),
+                        function.getName().asString(),
+                        jvmDescriptor(function.getFir(), function.getName().asString()),
+                        identities,
+                        usages
                     );
                 }
             }
@@ -241,37 +264,59 @@ final class KotlinCompilerUsageExtractor {
             parent(usagePsi, KtImportDirective.class) != null) return;
         PsiElement targetIdentifier;
         KtFile targetFile;
-        if (targetPsi instanceof KtNamedFunction) {
+        String targetKind;
+        KtConstructor<?> sourceConstructor = reference.getResolvedSymbol() instanceof FirConstructorSymbol
+            ? sourceConstructor(targetPsi) : null;
+        if (sourceConstructor != null) {
+            targetIdentifier = constructorIdentifier(sourceConstructor);
+            targetFile = sourceConstructor.getContainingKtFile();
+            targetKind = "CONSTRUCTOR";
+        } else if (targetPsi instanceof KtNamedFunction) {
             KtNamedFunction function = (KtNamedFunction) targetPsi;
             if (parent(function, KtBlockExpression.class) != null) return;
             targetIdentifier = function.getNameIdentifier();
             targetFile = function.getContainingKtFile();
+            targetKind = "FUNCTION";
         } else if (targetPsi instanceof KtProperty) {
             KtProperty property = (KtProperty) targetPsi;
             if (property.isLocal()) return;
             targetIdentifier = property.getNameIdentifier();
             targetFile = property.getContainingKtFile();
+            targetKind = "PROPERTY";
         } else if (targetPsi instanceof KtParameter) {
             KtParameter parameter = (KtParameter) targetPsi;
             targetIdentifier = parameter.getNameIdentifier();
             targetFile = parameter.getContainingKtFile();
-            if (targetIdentifier == null || !targets.containsKey(declarationKey(
-                canonicalPath(targetFile), targetIdentifier.getTextRange().getStartOffset()
-            ))) return;
+            if (reference.getResolvedSymbol() instanceof FirPropertySymbol) {
+                targetKind = "PROPERTY";
+            } else if (reference.getResolvedSymbol() instanceof FirValueParameterSymbol) {
+                targetKind = "PARAMETER";
+            } else {
+                return;
+            }
         } else {
             KtClassOrObject type = targetType(targetPsi);
-            if (type == null || type.getClassId() == null || type.getClassId().isLocal()) return;
+            ClassId targetClassId = type == null ? null : type.getClassId();
+            if (type == null || type instanceof KtEnumEntry || targetClassId == null || targetClassId.isLocal()) return;
             targetIdentifier = typeIdentifier(type);
             targetFile = type.getContainingKtFile();
+            targetKind = typeKind(type);
         }
         if (targetIdentifier == null) throw failure("kotlin.usageTargetLocationUnavailable");
-        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(
-            declarationKey(canonicalPath(targetFile), targetIdentifier.getTextRange().getStartOffset())
-        );
+        Path targetPath = canonicalPath(targetFile);
+        int targetOffset = targetIdentifier.getTextRange().getStartOffset();
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(declarationTargetKey(
+            targetPath, targetOffset, targetKind
+        ));
+        if (target == null && targetPsi instanceof KtParameter &&
+            !targets.containsKey(declarationTargetKey(targetPath, targetOffset, "PARAMETER")) &&
+            !targets.containsKey(declarationTargetKey(targetPath, targetOffset, "PROPERTY"))) return;
         if (target == null) throw failure("kotlin.usageTargetMissing");
         PsiElement usageIdentifier = ((KtNameReferenceExpression) usagePsi).getReferencedNameElement();
         if (usageIdentifier == null) throw failure("kotlin.usageLocationUnavailable");
-        if (!usageIdentifier.getText().equals(reference.getName().asString()) ||
+        String resolvedSourceName = "CONSTRUCTOR".equals(target.kind())
+            ? target.name() : reference.getName().asString();
+        if (!usageIdentifier.getText().equals(resolvedSourceName) ||
             !matchesTargetName(usageIdentifier, target, importAliases)) return;
         addUsage(usageIdentifier, target, identities, usages);
     }
@@ -281,15 +326,16 @@ final class KotlinCompilerUsageExtractor {
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
         Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters
     ) {
-        if (!(parameter.getSource() instanceof KtPsiSourceElement)) return;
-        PsiElement psi = ((KtPsiSourceElement) parameter.getSource()).getPsi();
-        if (psi == null) return;
+        KtSourceElement parameterSource = parameter.getSource();
+        if (!(parameterSource instanceof KtPsiSourceElement)) return;
+        PsiElement psi = ((KtPsiSourceElement) parameterSource).getPsi();
         KtTypeParameter declaration = psi instanceof KtTypeParameter ?
             (KtTypeParameter) psi : parent(psi, KtTypeParameter.class);
-        if (declaration == null || declaration.getNameIdentifier() == null) return;
-        PsiElement identifier = declaration.getNameIdentifier();
-        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(declarationKey(
-            canonicalPath(declaration.getContainingKtFile()), identifier.getTextRange().getStartOffset()
+        PsiElement identifier = declaration == null ? null : declaration.getNameIdentifier();
+        if (declaration == null || identifier == null) return;
+        KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(declarationTargetKey(
+            canonicalPath(declaration.getContainingKtFile()), identifier.getTextRange().getStartOffset(),
+            "TYPE_PARAMETER"
         ));
         if (target != null && "TYPE_PARAMETER".equals(target.kind())) typeParameters.put(parameter.getSymbol(), target);
     }
@@ -302,7 +348,8 @@ final class KotlinCompilerUsageExtractor {
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
-        if (!(typeRef.getSource() instanceof KtPsiSourceElement)) return;
+        KtSourceElement source = typeRef.getSource();
+        if (!(source instanceof KtPsiSourceElement)) return;
         KotlinCompilerSymbolExtractor.ExtractedSymbol target;
         String externalIdentity = null;
         if (typeRef.getType() instanceof ConeClassLikeType) {
@@ -314,8 +361,7 @@ final class KotlinCompilerUsageExtractor {
             target = typeParameters.get(((ConeTypeParameterType) typeRef.getType()).getLookupTag()
                 .getTypeParameterSymbol());
         } else return;
-        PsiElement typePsi = ((KtPsiSourceElement) typeRef.getSource()).getPsi();
-        if (typePsi == null) return;
+        PsiElement typePsi = ((KtPsiSourceElement) source).getPsi();
         PsiElement identifier = typeIdentifier(typePsi);
         if (identifier == null) return;
         if (target != null) {
@@ -336,24 +382,29 @@ final class KotlinCompilerUsageExtractor {
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
-        if (!(qualifier.getSource() instanceof KtPsiSourceElement) || qualifier.getClassId() == null ||
-            qualifier.getClassId().isLocal()) return;
-        PsiElement psi = ((KtPsiSourceElement) qualifier.getSource()).getPsi();
-        if (psi == null) return;
+        KtSourceElement qualifierSource = qualifier.getSource();
+        ClassId qualifierClassId = qualifier.getClassId();
+        if (!(qualifierSource instanceof KtPsiSourceElement) || qualifierClassId == null ||
+            qualifierClassId.isLocal()) return;
+        PsiElement psi = ((KtPsiSourceElement) qualifierSource).getPsi();
         PsiElement identifier = typeIdentifier(psi);
         if (identifier == null) return;
-        if (qualifier.getSymbol().getSource() instanceof KtPsiSourceElement) {
-            KtClassOrObject type = targetType(((KtPsiSourceElement) qualifier.getSymbol().getSource()).getPsi());
+        FirClassLikeSymbol<?> symbol = qualifier.getSymbol();
+        if (symbol == null) return;
+        KtSourceElement symbolSource = symbol.getSource();
+        if (symbolSource instanceof KtPsiSourceElement) {
+            KtClassOrObject type = targetType(((KtPsiSourceElement) symbolSource).getPsi());
             if (type == null) return;
             PsiElement targetIdentifier = typeIdentifier(type);
             if (targetIdentifier == null) throw failure("kotlin.usageTargetLocationUnavailable");
-            KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(
-                declarationKey(canonicalPath(type.getContainingKtFile()), targetIdentifier.getTextRange().getStartOffset())
-            );
+            KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(declarationTargetKey(
+                canonicalPath(type.getContainingKtFile()), targetIdentifier.getTextRange().getStartOffset(),
+                typeKind(type)
+            ));
             if (target == null) throw failure("kotlin.usageTargetMissing");
             if (matchesTargetName(identifier, target, importAliases)) addUsage(identifier, target, identities, usages);
         } else {
-            String binaryIdentity = binaryName(qualifier.getClassId());
+            String binaryIdentity = binaryName(qualifierClassId);
             String simpleName = binaryIdentity.substring(
                 Math.max(binaryIdentity.lastIndexOf('.'), binaryIdentity.lastIndexOf('$')) + 1
             );
@@ -370,20 +421,21 @@ final class KotlinCompilerUsageExtractor {
         Map<String, String> importAliases
     ) {
         Name alias = resolvedImport.getAliasName();
-        if (resolvedImport.isAllUnder() || alias == null || resolvedImport.getImportedFqName() == null ||
-            !(resolvedImport.getSource() instanceof KtPsiSourceElement)) return;
+        KtSourceElement importSource = resolvedImport.getSource();
+        FqName importedFqName = resolvedImport.getImportedFqName();
+        if (resolvedImport.isAllUnder() || alias == null || importedFqName == null ||
+            !(importSource instanceof KtPsiSourceElement)) return;
         Name importedName = resolvedImport.getImportedName();
         if (importedName == null) return;
         ClassId parent = resolvedImport.getResolvedParentClassId();
-        ClassId classId = parent == null ? ClassId.topLevel(resolvedImport.getImportedFqName()) :
+        ClassId classId = parent == null ? ClassId.topLevel(importedFqName) :
             parent.createNestedClassId(importedName);
         String binaryIdentity = binaryName(classId);
         KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryIdentity);
         String targetIdentity = target == null ? externalTypeIdentity(binaryIdentity) : target.identity();
-        PsiElement source = ((KtPsiSourceElement) resolvedImport.getSource()).getPsi();
-        if (source == null) throw failure("kotlin.usageSourceUnavailable");
-        KtImportDirective directive = source instanceof KtImportDirective ?
-            (KtImportDirective) source : parent(source, KtImportDirective.class);
+        PsiElement sourcePsi = ((KtPsiSourceElement) importSource).getPsi();
+        KtImportDirective directive = sourcePsi instanceof KtImportDirective ?
+            (KtImportDirective) sourcePsi : parent(sourcePsi, KtImportDirective.class);
         if (directive == null || !alias.asString().equals(directive.getAliasName())) {
             throw failure("kotlin.usageAliasLocationUnavailable");
         }
@@ -398,16 +450,17 @@ final class KotlinCompilerUsageExtractor {
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
-        if (resolvedImport.isAllUnder() || !(resolvedImport.getSource() instanceof KtPsiSourceElement)) return;
+        KtSourceElement importSource = resolvedImport.getSource();
+        if (resolvedImport.isAllUnder() || !(importSource instanceof KtPsiSourceElement)) return;
         Name importedName = resolvedImport.getImportedName();
-        if (importedName == null || resolvedImport.getImportedFqName() == null) return;
+        FqName importedFqName = resolvedImport.getImportedFqName();
+        if (importedName == null || importedFqName == null) return;
         ClassId parent = resolvedImport.getResolvedParentClassId();
-        ClassId classId = parent == null ? ClassId.topLevel(resolvedImport.getImportedFqName()) :
+        ClassId classId = parent == null ? ClassId.topLevel(importedFqName) :
             parent.createNestedClassId(importedName);
         String binaryIdentity = binaryName(classId);
         KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(binaryIdentity);
-        PsiElement importPsi = ((KtPsiSourceElement) resolvedImport.getSource()).getPsi();
-        if (importPsi == null) return;
+        PsiElement importPsi = ((KtPsiSourceElement) importSource).getPsi();
         PsiElement identifier = typeIdentifier(importPsi);
         if (identifier == null) return;
         if (target != null) {
@@ -483,6 +536,7 @@ final class KotlinCompilerUsageExtractor {
         PsiElement identifier,
         String jvmOwner,
         String callableName,
+        String jvmDescriptor,
         Set<String> identities,
         List<ExtractedUsage> usages
     ) {
@@ -490,11 +544,46 @@ final class KotlinCompilerUsageExtractor {
         Path path = canonicalPath((KtFile) identifier.getContainingFile());
         int start = identifier.getTextRange().getStartOffset();
         int end = identifier.getTextRange().getEndOffset();
-        String targetIdentity = "external-jvm-callable-v1:" + jvmOwner + "#" + callableName;
+        String targetIdentity = "external-jvm-callable-v1:" + jvmOwner + "#" + callableName + jvmDescriptor;
         String identity = path + "\u0000" + start + "\u0000" + end + "\u0000" + targetIdentity;
         if (!identities.add(identity)) return;
         if (usages.size() >= MAX_USAGES) throw failure("kotlin.usageLimitExceeded");
         usages.add(new ExtractedUsage(path.toString(), targetIdentity, identifier.getText(), start, end));
+    }
+
+    private static String jvmDescriptor(FirFunction function, String jvmName) {
+        Function1<FirTypeRef, ConeKotlinType> resolver = typeRef ->
+            typeRef instanceof FirResolvedTypeRef ? ((FirResolvedTypeRef) typeRef).getType() : null;
+        String signature = SignatureUtilsKt.computeJvmDescriptor(function, jvmName, true, resolver);
+        if (signature != null) signature = signature.replace('.', '$');
+        if (signature == null || !signature.startsWith(jvmName + "(")) {
+            throw failure("kotlin.usageCallableDescriptorUnavailable");
+        }
+        return signature.substring(jvmName.length());
+    }
+
+    private static KtConstructor<?> sourceConstructor(PsiElement source) {
+        KtConstructor<?> constructor = source instanceof KtConstructor
+            ? (KtConstructor<?>) source : parent(source, KtConstructor.class);
+        if (constructor != null) return constructor;
+        KtClass klass = source instanceof KtClass ? (KtClass) source : parent(source, KtClass.class);
+        return klass == null ? null : klass.getPrimaryConstructor();
+    }
+
+    private static PsiElement constructorIdentifier(KtConstructor<?> constructor) {
+        PsiElement keyword = constructor.getConstructorKeyword();
+        if (keyword != null) return keyword;
+        return constructor.getValueParameterList() == null
+            ? null : constructor.getValueParameterList().getLeftParenthesis();
+    }
+
+    private static String typeKind(KtClassOrObject type) {
+        if (!(type instanceof KtClass)) return "OBJECT";
+        KtClass klass = (KtClass) type;
+        if (klass.isAnnotation()) return "ANNOTATION";
+        if (klass.isInterface()) return "INTERFACE";
+        if (klass.isEnum()) return "ENUM";
+        return "CLASS";
     }
 
     private static KtClassOrObject targetType(PsiElement target) {
@@ -560,6 +649,10 @@ final class KotlinCompilerUsageExtractor {
         } catch (Exception problem) {
             throw failure("kotlin.usagePathInvalid");
         }
+    }
+
+    private static String declarationTargetKey(Path path, int startOffset, String kind) {
+        return declarationKey(path, startOffset) + "\u0000" + kind;
     }
 
     private static <T extends PsiElement> T parent(PsiElement start, Class<T> type) {

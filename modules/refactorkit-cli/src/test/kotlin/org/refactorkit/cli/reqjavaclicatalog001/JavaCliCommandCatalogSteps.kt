@@ -415,7 +415,7 @@ class JavaCliCommandCatalogSteps {
         assertEquals(0, semanticSessionAttempts)
     }
 
-    @Then("{string} remains byte-for-byte compatible with its pinned pre-slice output and valid only as the existing language-capability schema")
+    @Then("{string} matches its approved additive K1\\/K2 refusal evolution and remains valid only as the existing language-capability schema")
     fun capabilitiesRemainPinned(commandLine: String) {
         assertEquals("refactorkit capabilities", commandLine)
         assertEquals(PINNED_CAPABILITIES_SHA256, sha256(pinnedCapabilities))
@@ -424,9 +424,19 @@ class JavaCliCommandCatalogSteps {
         val capabilities = Json.parseToJsonElement(capabilitiesInvocation.stdoutText()).jsonObject
         assertEquals(listOf("schemaVersion", "adapters", "vocabulary"), capabilities.keys.toList())
         assertEquals(1, capabilities.getValue("schemaVersion").jsonPrimitive.intOrNull)
-        assertEquals(listOf("java", "javascript", "kotlin", "typescript"), capabilities.getValue("adapters").jsonArray.map {
+        val adapters = capabilities.getValue("adapters").jsonArray
+        assertEquals(listOf("java", "javascript", "kotlin", "typescript"), adapters.map {
             it.jsonObject.getValue("languageId").jsonPrimitive.content
         })
+        val kotlinCapabilities = adapters.single {
+            it.jsonObject.getValue("languageId").jsonPrimitive.content == "kotlin"
+        }.jsonObject.getValue("capabilities").jsonArray.map { it.jsonObject }
+        setOf("android", "compilerPluginSemantics", "generatedCodeMutation").forEach { operation ->
+            val row = kotlinCapabilities.single { it.getValue("operation").jsonPrimitive.content == operation }
+            assertEquals("refused", row.getValue("stability").jsonPrimitive.content)
+            assertEquals("none", row.getValue("evidence").jsonPrimitive.content)
+            assertEquals("none", row.getValue("mutationAuthority").jsonPrimitive.content)
+        }
     }
 
     @Then("the capabilities output contains none of {string}, {string}, {string}, {string}, {string}, {string}, {string}, or {string} as command-catalogue fields")
@@ -676,10 +686,10 @@ class JavaCliCommandCatalogSteps {
     private companion object {
         const val CATALOGUE_SCHEMA = "refactorkit.cli-command-catalog/v1"
         const val CAPABILITIES_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-pre-slice-dec4087fa8b7.json"
+            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-k1-k2-approved-872120125a3a.json"
         const val HELP_FIXTURE =
             "org/refactorkit/cli/reqjavaclicatalog001/help-pre-slice-06fd4878c8fd.txt"
-        const val PINNED_CAPABILITIES_SHA256 = "dec4087fa8b7ba038a5b9a82728ec724054ee6fd28456eb9ec637fd7d0d0d1c3"
+        const val PINNED_CAPABILITIES_SHA256 = "872120125a3a84e5304635adcecfb1c65a11485a51fb13b7d831687b63dc666e"
         const val PINNED_HELP_SHA256 = "06fd4878c8fd717a9515d6dd8572f182cff2067239c3bcc870fa3e184aafee61"
         const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v1-guard/v1"
         const val PROBE_MODE = "probe"

@@ -1,6 +1,8 @@
 package org.refactorkit.java
 
 import org.refactorkit.core.BuildDependency
+import org.refactorkit.core.BuildLanguageEvidence
+import org.refactorkit.core.BuildLanguageFacet
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModelDiagnostic
 import org.refactorkit.core.BuildModelStatus
@@ -138,7 +140,18 @@ internal class GradleDeclarativeModelBuilder {
         val declaredSourceLevel = detectDeclaredSourceLevel(text)
         val sourceLevel = declaredSourceLevel ?: 8
         val kotlinJvm = KOTLIN_JVM_PLUGIN.containsMatchIn(text)
-        val unsupportedKotlinPlatform = KOTLIN_UNSUPPORTED_PLATFORM_PLUGIN.containsMatchIn(text)
+        val kotlinPlatform = when {
+            KOTLIN_ANDROID_PLUGIN.containsMatchIn(text) -> "android"
+            KOTLIN_MULTIPLATFORM_PLUGIN.containsMatchIn(text) -> "multiplatform"
+            kotlinJvm -> "jvm"
+            else -> "unproven"
+        }
+        val unsupportedKotlinPlatform = kotlinPlatform in setOf("android", "multiplatform")
+        val kotlinCompilerPlugins = buildList {
+            if (KOTLIN_KAPT_PLUGIN.containsMatchIn(text)) add("kapt")
+            if (KOTLIN_KSP_PLUGIN.containsMatchIn(text)) add("ksp")
+            if (KOTLIN_SERIALIZATION_PLUGIN.containsMatchIn(text)) add("serialization")
+        }
         if (unsupportedKotlinPlatform) diagnostics += BuildModelDiagnostic(
             "kotlin.platformUnsupported",
             "Gradle module '$id' declares a Kotlin platform outside the bounded Kotlin/JVM model",
@@ -184,9 +197,34 @@ internal class GradleDeclarativeModelBuilder {
                     put("java.sourceLevel", sourceLevel.toString())
                     put("java.sourceLevelEvidence", if (declaredSourceLevel == null) "default" else "declared")
                     put("visibility", if (kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST)) "test" else "main")
-                    if (kotlinJvm) put("kotlin.platform", "jvm")
+                    put("kotlin.platform", kotlinPlatform)
                     kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
                     kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }
+                },
+                languageFacets = buildList {
+                    add(BuildLanguageFacet(
+                        languageId = "java",
+                        platformId = "jvm",
+                        compilerId = "gradle-java-declarative",
+                        sourceVersion = sourceLevel.toString(),
+                        targetVersion = sourceLevel.toString(),
+                        targetRuntimeVersion = sourceLevel.toString(),
+                        evidence = if (declaredSourceLevel == null) BuildLanguageEvidence.DERIVED
+                        else BuildLanguageEvidence.DECLARED,
+                    ))
+                    if (roots.any { "/kotlin" in "/${it.toString().replace('\\', '/')}/" }) add(BuildLanguageFacet(
+                        languageId = "kotlin",
+                        platformId = kotlinPlatform,
+                        compilerId = "gradle-kotlin-plugin",
+                        targetVersion = kotlinJvmTarget,
+                        targetRuntimeVersion = kotlinTargetJdk,
+                        compilerPluginIds = kotlinCompilerPlugins,
+                        evidence = when {
+                            unsupportedKotlinPlatform || kotlinCompilerPlugins.isNotEmpty() -> BuildLanguageEvidence.UNSUPPORTED
+                            kotlinJvm -> BuildLanguageEvidence.DECLARED
+                            else -> BuildLanguageEvidence.PARTIAL
+                        },
+                    ))
                 },
             )
         }
@@ -206,11 +244,7 @@ internal class GradleDeclarativeModelBuilder {
                     },
                     "java.sourceLevel" to sourceLevel.toString(),
                     "java.sourceLevelEvidence" to if (declaredSourceLevel == null) "default" else "declared",
-                    "kotlin.platform" to when {
-                        kotlinJvm -> "jvm"
-                        unsupportedKotlinPlatform -> "unsupported"
-                        else -> "unconfigured"
-                    },
+                    "kotlin.platform" to kotlinPlatform,
                 ),
             ),
             diagnostics,
@@ -296,8 +330,16 @@ internal class GradleDeclarativeModelBuilder {
         private val KOTLIN_JVM_PLUGIN = Regex(
             "kotlin\\s*\\(\\s*[\"']jvm[\"']\\s*\\)|(?:id\\s*\\(?\\s*[\"']org\\.jetbrains\\.kotlin\\.jvm[\"'])",
         )
-        private val KOTLIN_UNSUPPORTED_PLATFORM_PLUGIN = Regex(
-            "kotlin\\s*\\(\\s*[\"'](?:multiplatform|android)[\"']\\s*\\)|(?:id\\s*\\(?\\s*[\"']org\\.jetbrains\\.kotlin\\.(?:multiplatform|android)[\"'])",
+        private val KOTLIN_MULTIPLATFORM_PLUGIN = Regex(
+            "kotlin\\s*\\(\\s*[\"']multiplatform[\"']\\s*\\)|(?:id\\s*\\(?\\s*[\"']org\\.jetbrains\\.kotlin\\.multiplatform[\"'])",
+        )
+        private val KOTLIN_ANDROID_PLUGIN = Regex(
+            "kotlin\\s*\\(\\s*[\"']android[\"']\\s*\\)|(?:id\\s*\\(?\\s*[\"']org\\.jetbrains\\.kotlin\\.android[\"'])",
+        )
+        private val KOTLIN_KAPT_PLUGIN = Regex("kotlin\\s*\\(\\s*[\"']kapt[\"']|org\\.jetbrains\\.kotlin\\.kapt")
+        private val KOTLIN_KSP_PLUGIN = Regex("com\\.google\\.devtools\\.ksp")
+        private val KOTLIN_SERIALIZATION_PLUGIN = Regex(
+            "kotlin\\s*\\(\\s*[\"']plugin\\.serialization[\"']|org\\.jetbrains\\.kotlin\\.plugin\\.serialization",
         )
         private val KOTLIN_JVM_TARGET_PATTERNS = listOf(
             Regex("JvmTarget\\.JVM_(?:1_)?(\\d+)"),

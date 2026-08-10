@@ -1,0 +1,86 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:refactorkit-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:processResources NO-SOURCE
+> Task :modules:refactorkit-core:processTestResources NO-SOURCE
+> Task :modules:refactorkit-core:compileKotlin
+> Task :modules:refactorkit-core:compileJava NO-SOURCE
+> Task :modules:refactorkit-core:classes UP-TO-DATE
+> Task :modules:refactorkit-core:jar
+
+> Task :modules:refactorkit-core:compileTestKotlin FAILED
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:74:13 No parameter with name 'languageFacets' found.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:74:30 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:75:17 Unresolved reference 'BuildLanguageFacet'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:75:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:82:32 Unresolved reference 'BuildLanguageEvidence'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:84:17 Unresolved reference 'BuildLanguageFacet'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:88:32 Unresolved reference 'BuildLanguageEvidence'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:93:64 Unresolved reference 'languageFacets'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:93:83 Unresolved reference 'languageId'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:93:85 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:95:28 No parameter with name 'languageFacets' found.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:95:45 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:96:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:96:27 Unresolved reference 'languageFacets'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:97:27 Unresolved reference 'languageFacets'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:97:50 Unresolved reference 'copy'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:101:13 Unresolved reference 'BuildLanguageFacet'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:105:28 Unresolved reference 'BuildLanguageEvidence'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:109:28 No parameter with name 'languageFacets' found.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:109:53 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:109:57 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:110:17 Unresolved reference 'BuildLanguageFacet'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:110:78 Unresolved reference 'BuildLanguageEvidence'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:158:32 No parameter with name 'languageFacets' found.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:158:49 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:158:56 Unresolved reference 'BuildLanguageFacet'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/BuildModelsTest.kt:163:32 Unresolved reference 'BuildLanguageEvidence'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:17:22 Unresolved reference 'WorkspaceRefreshCoordinator'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:17:89 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:17:92 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:21:25 Inapplicable candidate(s): fun <reified T> assertIs(value: Any?, message: String? = ...): T
+    [R|Contract description]
+     <
+        Returns(WILDCARD) -> value is T
+    >
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:21:34 Unresolved reference 'WorkspaceRefreshResult'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:22:39 Unresolved reference 'snapshot'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:32:22 Unresolved reference 'WorkspaceRefreshCoordinator'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:35:14 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:35:31 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:42:23 Inapplicable candidate(s): fun <reified T> assertIs(value: Any?, message: String? = ...): T
+    [R|Contract description]
+     <
+        Returns(WILDCARD) -> value is T
+    >
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:42:32 Unresolved reference 'WorkspaceRefreshResult'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:44:44 Unresolved reference 'previousSnapshotHash'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:45:34 Unresolved reference 'snapshot'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:46:48 Unresolved reference 'preparedState'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:55:13 Unresolved reference 'WorkspaceRefreshCoordinator'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-core/src/test/kotlin/org/refactorkit/core/WorkspaceRefreshCoordinatorTest.kt:65:13 Unresolved reference 'WorkspaceRefreshCoordinator'.
+
+[Incubating] Problems report is available at: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':modules:refactorkit-core:compileTestKotlin' (registered by plugin 'org.jetbrains.kotlin.jvm').
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 13s
+3 actionable tasks: 3 executed

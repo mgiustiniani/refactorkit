@@ -216,6 +216,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = canonicalBindingKey,
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                     recovered = raw.recovered,
+                    jvmIdentity = target.jvmIdentity,
                 )
             }
         }
@@ -232,6 +233,7 @@ class JdtJavaSemanticAnalyzer {
                     isImport = raw.isImport,
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                     recovered = raw.recovered,
+                    jvmIdentity = raw.jvmIdentity,
                 )
             }
         }
@@ -255,6 +257,7 @@ class JdtJavaSemanticAnalyzer {
             methods = methods,
             invocations = invocations,
             methodReferences = methodReferences,
+            snapshotHash = snapshot.hash,
         )
     }
 
@@ -429,6 +432,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = binding?.key,
                     bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
+                    jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
                 )
                 symbols += typeSymbol
@@ -455,6 +459,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = binding?.key,
                     bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
+                    jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
                 )
                 symbols += annotationSymbol
@@ -480,6 +485,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = binding?.key,
                     bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
+                    jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
                 )
                 symbols += enumSymbol
@@ -505,6 +511,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = binding?.key,
                     bindingRecovered = binding?.isRecovered == true,
                     memberSignature = null,
+                    jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
                 )
                 symbols += recordSymbol
@@ -534,6 +541,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = binding?.key,
                     bindingRecovered = binding?.isRecovered == true,
                     memberSignature = signature,
+                    jvmIdentity = jvmIdentity(binding),
                     hoverSignature = "${node.type} ${node.name.identifier}()",
                     documentation = node.javadoc?.toString(),
                 )
@@ -558,6 +566,7 @@ class JdtJavaSemanticAnalyzer {
                     bindingKey = binding?.key,
                     bindingRecovered = binding?.isRecovered == true,
                     memberSignature = signature,
+                    jvmIdentity = jvmIdentity(binding),
                     hoverSignature = methodHoverSignature(node, binding),
                     documentation = node.javadoc?.toString(),
                 )
@@ -671,6 +680,7 @@ class JdtJavaSemanticAnalyzer {
                         bindingKey = binding?.key,
                         bindingRecovered = binding?.isRecovered == true,
                         memberSignature = null,
+                        jvmIdentity = jvmIdentity(binding),
                         hoverSignature = "${node.type} ${fragment.name.identifier}",
                         documentation = node.javadoc?.toString(),
                     )
@@ -692,6 +702,7 @@ class JdtJavaSemanticAnalyzer {
                     symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = true,
                     recovered = binding?.isRecovered == true,
+                    jvmIdentity = jvmIdentity(binding),
                 )
                 return false
             }
@@ -712,6 +723,7 @@ class JdtJavaSemanticAnalyzer {
                     symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = false,
                     recovered = binding.isRecovered,
+                    jvmIdentity = jvmIdentity(binding),
                 )
                 return true
             }
@@ -748,6 +760,7 @@ class JdtJavaSemanticAnalyzer {
                     symbolQualifiedName = bindingQualifiedName(binding),
                     isImport = false,
                     recovered = binding?.isRecovered == true,
+                    jvmIdentity = jvmIdentity(binding),
                 )
                 return true
             }
@@ -789,6 +802,59 @@ class JdtJavaSemanticAnalyzer {
             variable.declaringClass?.qualifiedName?.takeIf(String::isNotBlank)?.let { "$it#${variable.name}" }
         }
         else -> null
+    }
+
+    private fun jvmIdentity(binding: IBinding?): JdtJavaJvmIdentity? = when (binding) {
+        is ITypeBinding -> binding.typeDeclaration.jvmBinaryName()?.let { binaryName ->
+            JdtJavaJvmIdentity(
+                kind = JdtJavaJvmIdentityKind.TYPE,
+                ownerBinaryName = binaryName,
+                memberName = "",
+                descriptor = "L${binaryName.replace('.', '/')};",
+            )
+        }
+        is IMethodBinding -> binding.methodDeclaration.let { method ->
+            val owner = method.declaringClass?.typeDeclaration?.jvmBinaryName() ?: return@let null
+            val parameters = method.parameterTypes.map { it.jvmDescriptor() ?: return@let null }.joinToString("")
+            val result = if (method.isConstructor) "V" else method.returnType?.jvmDescriptor() ?: return@let null
+            JdtJavaJvmIdentity(
+                kind = JdtJavaJvmIdentityKind.CALLABLE,
+                ownerBinaryName = owner,
+                memberName = if (method.isConstructor) "<init>" else method.name,
+                descriptor = "($parameters)$result",
+            )
+        }
+        is IVariableBinding -> binding.variableDeclaration.let { variable ->
+            val owner = variable.declaringClass?.typeDeclaration?.jvmBinaryName() ?: return@let null
+            val descriptor = variable.type?.jvmDescriptor() ?: return@let null
+            JdtJavaJvmIdentity(JdtJavaJvmIdentityKind.FIELD, owner, variable.name, descriptor)
+        }
+        else -> null
+    }
+
+    private fun ITypeBinding.jvmBinaryName(): String? =
+        binaryName?.takeIf(String::isNotBlank) ?: qualifiedName.takeIf(String::isNotBlank)
+
+    private fun ITypeBinding.jvmDescriptor(): String? {
+        if (isArray) {
+            val element = elementType?.jvmDescriptor() ?: return null
+            return "[".repeat(dimensions) + element
+        }
+        if (isPrimitive) return when (name) {
+            "boolean" -> "Z"
+            "byte" -> "B"
+            "char" -> "C"
+            "short" -> "S"
+            "int" -> "I"
+            "long" -> "J"
+            "float" -> "F"
+            "double" -> "D"
+            "void" -> "V"
+            else -> null
+        }
+        val erased = erasure ?: this
+        val binaryName = erased.jvmBinaryName() ?: return null
+        return "L${binaryName.replace('.', '/')};"
     }
 
     private fun buildOverrideRelations(
@@ -1026,6 +1092,7 @@ class JdtJavaSemanticAnalyzer {
         memberSignature: String?,
         hoverSignature: String? = null,
         documentation: String? = null,
+        jvmIdentity: JdtJavaJvmIdentity? = null,
     ): JdtJavaSemanticSymbol {
         val qualifiedName = bindingQualifiedName
             ?.takeIf { it.isNotBlank() }
@@ -1054,6 +1121,7 @@ class JdtJavaSemanticAnalyzer {
                 JdtJavaSemanticEvidence.JDT_BINDING
             },
             recovered = bindingRecovered,
+            jvmIdentity = jvmIdentity,
         )
     }
 
@@ -1171,8 +1239,19 @@ class JdtJavaSemanticAnalyzer {
         val symbolQualifiedName: String?,
         val isImport: Boolean,
         val recovered: Boolean,
+        val jvmIdentity: JdtJavaJvmIdentity? = null,
     )
 }
+
+enum class JdtJavaJvmIdentityKind { TYPE, CALLABLE, FIELD }
+
+/** JVM-level identity projected from one exact JDT binding without exposing JDT handles. */
+data class JdtJavaJvmIdentity(
+    val kind: JdtJavaJvmIdentityKind,
+    val ownerBinaryName: String,
+    val memberName: String,
+    val descriptor: String,
+)
 
 sealed interface JdtAuthoritativeJavaAnalysisResolution {
     data class Available(
@@ -1183,17 +1262,63 @@ sealed interface JdtAuthoritativeJavaAnalysisResolution {
     data class Refused(val code: String, val message: String) : JdtAuthoritativeJavaAnalysisResolution
 }
 
-data class JdtJavaSemanticAnalysisResult(
-    val symbols: List<JdtJavaSemanticSymbol>,
-    val references: List<JdtJavaSemanticReference> = emptyList(),
-    val warnings: List<JdtJavaSemanticWarning> = emptyList(),
-    val overrideRelations: List<JdtJavaSemanticOverrideRelation> = emptyList(),
-    val bindingUses: List<JdtJavaSemanticBindingUse> = emptyList(),
-    val parameters: List<JdtJavaSemanticParameter> = emptyList(),
-    val methods: List<JdtJavaSemanticMethod> = emptyList(),
-    val invocations: List<JdtJavaSemanticInvocation> = emptyList(),
-    val methodReferences: List<JdtJavaSemanticMethodReference> = emptyList(),
-)
+class JdtJavaSemanticAnalysisResult(
+    symbols: List<JdtJavaSemanticSymbol>,
+    references: List<JdtJavaSemanticReference> = emptyList(),
+    warnings: List<JdtJavaSemanticWarning> = emptyList(),
+    overrideRelations: List<JdtJavaSemanticOverrideRelation> = emptyList(),
+    bindingUses: List<JdtJavaSemanticBindingUse> = emptyList(),
+    parameters: List<JdtJavaSemanticParameter> = emptyList(),
+    methods: List<JdtJavaSemanticMethod> = emptyList(),
+    invocations: List<JdtJavaSemanticInvocation> = emptyList(),
+    methodReferences: List<JdtJavaSemanticMethodReference> = emptyList(),
+    val snapshotHash: String = "",
+) {
+    private val symbolState = detachedSemanticList(symbols)
+    private val referenceState = detachedSemanticList(references)
+    private val warningState = detachedSemanticList(warnings)
+    private val overrideRelationState = detachedSemanticList(overrideRelations)
+    private val bindingUseState = detachedSemanticList(bindingUses)
+    private val parameterState = detachedSemanticList(parameters)
+    private val methodState = detachedSemanticList(methods)
+    private val invocationState = detachedSemanticList(invocations.map { invocation ->
+        JdtJavaSemanticInvocation(
+            methodQualifiedName = invocation.methodQualifiedName,
+            methodBindingKey = invocation.methodBindingKey,
+            path = invocation.path,
+            nameRange = invocation.nameRange,
+            argumentListRange = invocation.argumentListRange,
+            argumentRanges = invocation.argumentRanges,
+            evidence = invocation.evidence,
+        )
+    })
+    private val methodReferenceState = detachedSemanticList(methodReferences)
+
+    val symbols: List<JdtJavaSemanticSymbol> get() = detachedSemanticList(symbolState)
+    val references: List<JdtJavaSemanticReference> get() = detachedSemanticList(referenceState)
+    val warnings: List<JdtJavaSemanticWarning> get() = detachedSemanticList(warningState)
+    val overrideRelations: List<JdtJavaSemanticOverrideRelation> get() = detachedSemanticList(overrideRelationState)
+    val bindingUses: List<JdtJavaSemanticBindingUse> get() = detachedSemanticList(bindingUseState)
+    val parameters: List<JdtJavaSemanticParameter> get() = detachedSemanticList(parameterState)
+    val methods: List<JdtJavaSemanticMethod> get() = detachedSemanticList(methodState)
+    val invocations: List<JdtJavaSemanticInvocation> get() = detachedSemanticList(invocationState)
+    val methodReferences: List<JdtJavaSemanticMethodReference> get() = detachedSemanticList(methodReferenceState)
+
+    fun copy(snapshotHash: String = this.snapshotHash): JdtJavaSemanticAnalysisResult =
+        JdtJavaSemanticAnalysisResult(
+            symbolState, referenceState, warningState, overrideRelationState, bindingUseState, parameterState,
+            methodState, invocationState, methodReferenceState, snapshotHash,
+        )
+
+    override fun toString(): String = "JdtJavaSemanticAnalysisResult(" +
+        "symbols=${symbolState.size}, references=${referenceState.size}, warnings=${warningState.size}, " +
+        "overrideRelations=${overrideRelationState.size}, bindingUses=${bindingUseState.size}, " +
+        "parameters=${parameterState.size}, methods=${methodState.size}, invocations=${invocationState.size}, " +
+        "methodReferences=${methodReferenceState.size}, snapshotHash=$snapshotHash)"
+}
+
+private fun <T> detachedSemanticList(source: Collection<T>): List<T> =
+    java.util.Collections.unmodifiableList(java.util.ArrayList(source))
 
 data class JdtJavaSemanticMethod(
     val qualifiedName: String,
@@ -1206,15 +1331,18 @@ data class JdtJavaSemanticMethod(
     val evidence: JdtJavaSemanticEvidence,
 )
 
-data class JdtJavaSemanticInvocation(
+class JdtJavaSemanticInvocation(
     val methodQualifiedName: String,
     val methodBindingKey: String,
     val path: Path,
     val nameRange: SourceRange,
     val argumentListRange: SourceRange,
-    val argumentRanges: List<SourceRange>,
+    argumentRanges: List<SourceRange>,
     val evidence: JdtJavaSemanticEvidence,
-)
+) {
+    private val argumentRangeState = detachedSemanticList(argumentRanges)
+    val argumentRanges: List<SourceRange> get() = detachedSemanticList(argumentRangeState)
+}
 
 data class JdtJavaSemanticMethodReference(
     val methodQualifiedName: String,
@@ -1255,6 +1383,7 @@ data class JdtJavaSemanticSymbol(
     val bindingKey: String?,
     val evidence: JdtJavaSemanticEvidence,
     val recovered: Boolean = false,
+    val jvmIdentity: JdtJavaJvmIdentity? = null,
 )
 
 data class JdtJavaSemanticReference(
@@ -1268,6 +1397,7 @@ data class JdtJavaSemanticReference(
     val bindingKey: String?,
     val evidence: JdtJavaSemanticEvidence,
     val recovered: Boolean = false,
+    val jvmIdentity: JdtJavaJvmIdentity? = null,
 )
 
 data class JdtJavaSemanticBindingUse(
@@ -1280,6 +1410,7 @@ data class JdtJavaSemanticBindingUse(
     val isImport: Boolean,
     val evidence: JdtJavaSemanticEvidence,
     val recovered: Boolean = false,
+    val jvmIdentity: JdtJavaJvmIdentity? = null,
 ) {
     /** API 0.2 compatibility constructor retained while qualified binary identity is additive. */
     constructor(

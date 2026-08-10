@@ -47,7 +47,23 @@ class KotlinJvmBuildModelTest {
         assertEquals("21", main.attributes["kotlin.jvmTarget"])
         assertEquals("21", main.attributes["kotlin.targetJdk"])
         assertEquals("21", main.attributes["analysisJdk"])
+        assertEquals(
+            org.refactorkit.core.BuildLanguageFacet(
+                languageId = "kotlin",
+                platformId = "jvm",
+                compilerId = "kotlin-compiler-embeddable-k2",
+                sourceVersion = "2.0.21",
+                targetVersion = "21",
+                targetRuntimeVersion = "21",
+                evidence = org.refactorkit.core.BuildLanguageEvidence.DECLARED,
+            ),
+            main.languageFacets.single { it.languageId == "kotlin" },
+        )
         assertTrue(Path.of("target/classes") in main.outputDirectories)
+        val baseMain = base.buildModels.single { it.providerId == "maven-effective-v1" }
+            .modules.single().sourceSets.single { it.kind == SourceSetKind.MAIN }
+        assertEquals(baseMain.classpathEntries, main.classpathEntries)
+        assertEquals(baseMain.runtimeClasspathEntries, main.runtimeClasspathEntries)
         assertEquals("a".repeat(64), model.attributes["toolchainProjectionHash"])
         assertEquals(64, model.attributes.getValue("projectionHash").length)
         assertNotEquals(base.hash, attached.hash)
@@ -183,6 +199,49 @@ class KotlinJvmBuildModelTest {
         assertTrue(model.modules.isEmpty())
         assertEquals(64, model.attributes.getValue("projectionHash").length)
         assertTrue(model.diagnostics.any { it.code == "kotlin.buildSourceSetLimit" })
+    }
+
+    @Test
+    fun androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases() {
+        val androidRoot = Files.createTempDirectory("refactorkit-kotlin-android-model")
+        androidRoot.resolve("build.gradle.kts").writeText("""
+            plugins { kotlin("android") version "2.0.21" }
+        """.trimIndent())
+        source(androidRoot, "src/main/kotlin/fixture/AndroidValue.kt", "package fixture\nclass AndroidValue\n")
+
+        val android = KotlinJvmBuildModelProjector().project(
+            JavaProjectScanner().scan(androidRoot), toolchain("2".repeat(64)),
+        )
+
+        assertEquals(BuildModelStatus.EXECUTION_REFUSED, android.status)
+        assertTrue(android.diagnostics.any { it.code == "kotlin.platformUnsupported" })
+        assertEquals("android", android.modules.single().sourceSets.single().languageFacets.single().platformId)
+        assertEquals(
+            org.refactorkit.core.BuildLanguageEvidence.UNSUPPORTED,
+            android.modules.single().sourceSets.single().languageFacets.single().evidence,
+        )
+
+        val pluginRoot = Files.createTempDirectory("refactorkit-kotlin-plugin-model")
+        pluginRoot.resolve("build.gradle.kts").writeText("""
+            plugins {
+              kotlin("jvm") version "2.0.21"
+              kotlin("plugin.serialization") version "2.0.21"
+            }
+            kotlin { jvmToolchain(21) }
+            kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_21) } }
+        """.trimIndent())
+        source(pluginRoot, "src/main/kotlin/fixture/PluginValue.kt", "package fixture\nclass PluginValue\n")
+
+        val plugin = KotlinJvmBuildModelProjector().project(
+            JavaProjectScanner().scan(pluginRoot), toolchain("3".repeat(64)),
+        )
+
+        assertEquals(BuildModelStatus.EXECUTION_REFUSED, plugin.status)
+        assertTrue(plugin.diagnostics.any { it.code == "kotlin.compilerPluginsUnsupported" })
+        assertEquals(
+            listOf("serialization"),
+            plugin.modules.single().sourceSets.single().languageFacets.single().compilerPluginIds,
+        )
     }
 
     @Test

@@ -102,10 +102,10 @@ def verify(repository_root: Path) -> dict[str, object]:
         failures.append("closed P0 native parent rows require all four native rows to be PASSED")
 
     exact_jdk_count = workflow.count("java-version: '21.0.11+10.0.LTS'")
-    if exact_jdk_count != 3:
+    if exact_jdk_count != 4:
         failures.append(
-            "CI must pin build, dedicated authority, and runtime jobs to exactly "
-            f"three setup-java 21.0.11+10.0.LTS entries, found {exact_jdk_count}"
+            "CI must pin build, dedicated authority, runtime, and K1/K2 foundation jobs to exactly "
+            f"four setup-java 21.0.11+10.0.LTS entries, found {exact_jdk_count}"
         )
     if "java-version: '21.0.11+9'" in workflow:
         failures.append("CI contains unavailable setup-java version 21.0.11+9")

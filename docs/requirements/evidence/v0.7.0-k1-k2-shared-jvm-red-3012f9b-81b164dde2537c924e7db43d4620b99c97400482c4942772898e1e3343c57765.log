@@ -1,0 +1,146 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :modules:refactorkit-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-core:processResources NO-SOURCE
+> Task :modules:refactorkit-java:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-java:processResources NO-SOURCE
+> Task :modules:refactorkit-jvm:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-kotlin:processResources NO-SOURCE
+> Task :modules:refactorkit-jvm:processResources NO-SOURCE
+> Task :modules:refactorkit-testkit:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-web-importer:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :modules:refactorkit-web-importer:processResources NO-SOURCE
+> Task :modules:refactorkit-testkit:processResources NO-SOURCE
+> Task :modules:refactorkit-jvm:processTestResources
+> Task :modules:refactorkit-core:compileKotlin
+> Task :modules:refactorkit-core:compileJava NO-SOURCE
+> Task :modules:refactorkit-core:classes UP-TO-DATE
+> Task :modules:refactorkit-core:jar
+> Task :modules:refactorkit-kotlin:compileKotlin
+
+> Task :modules:refactorkit-kotlin:compileJava
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+Note: /tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-kotlin/src/main/java/org/refactorkit/kotlin/bridge/KotlinCompilerSymbolExtractor.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+3 warnings
+
+> Task :modules:refactorkit-kotlin:classes
+> Task :modules:refactorkit-kotlin:jar
+
+> Task :modules:refactorkit-java:compileKotlin
+w: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:13:8 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1380:86 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1383:71 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1386:56 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt:1389:69 'interface ModelSource : Any, Source' is deprecated. Deprecated in Java.
+w: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenPomDependencyEditor.kt:183:52 Condition is always 'true'.
+
+> Task :modules:refactorkit-java:compileJava NO-SOURCE
+> Task :modules:refactorkit-java:classes UP-TO-DATE
+> Task :modules:refactorkit-java:jar
+> Task :modules:refactorkit-web-importer:compileKotlin
+> Task :modules:refactorkit-web-importer:compileJava NO-SOURCE
+> Task :modules:refactorkit-web-importer:classes UP-TO-DATE
+> Task :modules:refactorkit-web-importer:jar
+> Task :modules:refactorkit-testkit:compileKotlin
+> Task :modules:refactorkit-testkit:compileJava NO-SOURCE
+> Task :modules:refactorkit-testkit:classes UP-TO-DATE
+> Task :modules:refactorkit-testkit:jar
+> Task :modules:refactorkit-jvm:compileKotlin
+> Task :modules:refactorkit-jvm:compileJava NO-SOURCE
+> Task :modules:refactorkit-jvm:classes UP-TO-DATE
+> Task :modules:refactorkit-jvm:jar
+
+> Task :modules:refactorkit-jvm:compileTestKotlin FAILED
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:64:65 Unresolved reference 'analyzeWithAdditionalClasspathAndCompiledOutput'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:67:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:85:25 Inapplicable candidate(s): fun <reified T> assertIs(value: Any?, message: String? = ...): T
+    [R|Contract description]
+     <
+        Returns(WILDCARD) -> value is T
+    >
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:85:34 Unresolved reference 'SharedJvmIdentityProjection'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:86:13 Unresolved reference 'SharedJvmIdentityProjector'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:87:11 Unresolved reference 'index'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:92:9 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:92:78 Unresolved reference 'id'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:92:80 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:92:97 Overload resolution ambiguity between candidates:
+fun <T> Array<out T>.distinct(): List<T>
+fun BooleanArray.distinct(): List<Boolean>
+fun ByteArray.distinct(): List<Byte>
+fun CharArray.distinct(): List<Char>
+fun DoubleArray.distinct(): List<Double>
+fun FloatArray.distinct(): List<Float>
+fun IntArray.distinct(): List<Int>
+fun LongArray.distinct(): List<Long>
+fun ShortArray.distinct(): List<Short>
+fun <T> Iterable<T>.distinct(): List<T>
+fun <T> Sequence<T>.distinct(): Sequence<T>
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:92:108 Unresolved reference 'size'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:94:13 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:94:40 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:94:55 Unresolved reference 'SharedJvmIdentity'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:95:17 Unresolved reference 'SharedJvmIdentityKind'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:102:13 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:102:42 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:103:17 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:103:32 Unresolved reference 'SharedJvmIdentity'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:104:21 Unresolved reference 'SharedJvmIdentityKind'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:111:13 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:111:48 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:112:17 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:112:54 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:115:13 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:115:46 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:116:17 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:116:55 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:119:45 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:119:72 Unresolved reference 'identity'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:119:84 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:119:98 Unresolved reference 'languageId'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:119:112 Unresolved reference 'it'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:144:23 Inapplicable candidate(s): fun <reified T> assertIs(value: Any?, message: String? = ...): T
+    [R|Contract description]
+     <
+        Returns(WILDCARD) -> value is T
+    >
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:144:32 Unresolved reference 'SharedJvmIdentityProjection'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:145:13 Unresolved reference 'SharedJvmIdentityProjector'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:148:9 Type inference failed. The value of the type parameter 'T' should be mentioned in input types (argument types, receiver type, or expected type). Try to specify it explicitly.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:150:25 Inapplicable candidate(s): fun <reified T> assertIs(value: Any?, message: String? = ...): T
+    [R|Contract description]
+     <
+        Returns(WILDCARD) -> value is T
+    >
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:150:34 Unresolved reference 'SharedJvmIdentityProjection'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:151:13 Unresolved reference 'SharedJvmIdentityProjector'.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:153:60 No parameter with name 'snapshotHash' found.
+e: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/SharedJvmIdentityIndexTest.kt:157:9 Type inference failed. The value of the type parameter 'T' should be mentioned in input types (argument types, receiver type, or expected type). Try to specify it explicitly.
+
+[Incubating] Problems report is available at: file:///tmp/refactorkit-v070-k1-k2-red-3012f9b/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':modules:refactorkit-jvm:compileTestKotlin' (registered by plugin 'org.jetbrains.kotlin.jvm').
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 20s
+15 actionable tasks: 15 executed

@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "release": "0.7.0-SNAPSHOT",
+  "status": "active-qualification",
+  "toolchains": [
+    {
+      "provider": "kotlin-compiler-explicit-v1",
+      "backend": "kotlin-compiler-embeddable-k2",
+      "kotlinVersion": "2.0.21",
+      "jdkMajor": 21,
+      "state": "candidate-bounded",
+      "boundary": "Exact hash-attested caller-supplied compiler distribution and JDK; no PATH, running-VM, workspace-local, or version-range substitution."
+    }
+  ],
+  "buildModels": [
+    {
+      "provider": "maven-effective-v1",
+      "ecosystem": "maven",
+      "state": "candidate-bounded",
+      "boundary": "Literal/effective plugin-free offline Kotlin/JVM roots, jvmTarget, target JDK, classpath, outputs, and reactor edges; no lifecycle, plugin, settings-credential, or default-network execution.",
+      "versionBoundary": "Maven modelVersion 4.0.0 descriptors; no Maven executable distribution is invoked or qualified."
+    },
+    {
+      "provider": "gradle-declarative-v1",
+      "ecosystem": "gradle",
+      "state": "declarative-partial",
+      "boundary": "Literal bounded metadata only; no settings/build script, task, plugin, Tooling API, or dependency-resolution execution.",
+      "versionBoundary": "Gradle executable versions are not inferred or qualified because settings/build scripts and Tooling API are never executed."
+    }
+  ],
+  "capabilityBoundaries": [
+    {
+      "shape": "kotlin-jvm",
+      "state": "operation-specific-candidate",
+      "mutationAuthority": "proposal-only",
+      "boundary": "Only separately qualified compiler-backed rows; no general Kotlin managed-support claim."
+    },
+    {
+      "shape": "kotlin-multiplatform",
+      "state": "refused",
+      "mutationAuthority": "none"
+    },
+    {
+      "shape": "android",
+      "state": "refused",
+      "mutationAuthority": "none"
+    },
+    {
+      "shape": "compiler-plugins-kapt-ksp",
+      "state": "refused",
+      "mutationAuthority": "none"
+    },
+    {
+      "shape": "generated-code-mutation",
+      "state": "refused",
+      "mutationAuthority": "none"
+    },
+    {
+      "shape": "expect-actual",
+      "state": "refused",
+      "mutationAuthority": "none"
+    },
+    {
+      "shape": "scripts-kts",
+      "state": "refused",
+      "mutationAuthority": "none"
+    }
+  ],
+  "licenseBoundary": {
+    "state": "published-dependency-boundary",
+    "components": [
+      {
+        "component": "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.21",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "caller-supplied-toolchain"
+      },
+      {
+        "component": "org.jetbrains.kotlin:kotlin-stdlib:2.0.21",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "packaged-and-caller-supplied"
+      },
+      {
+        "component": "org.jetbrains.kotlin:kotlin-script-runtime:2.0.21",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "caller-supplied-toolchain"
+      },
+      {
+        "component": "org.jetbrains.kotlin:kotlin-reflect:1.6.10",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "caller-supplied-toolchain"
+      },
+      {
+        "component": "org.jetbrains.kotlin:kotlin-daemon-embeddable:2.0.21",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "caller-supplied-toolchain"
+      },
+      {
+        "component": "org.jetbrains.intellij.deps:trove4j:1.0.20200330",
+        "spdxLicense": "LGPL-2.1-only",
+        "distribution": "caller-supplied-toolchain"
+      },
+      {
+        "component": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.6.4",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "caller-supplied-toolchain"
+      },
+      {
+        "component": "org.jetbrains:annotations:13.0",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "caller-supplied-toolchain"
+      },
+      {
+        "component": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "packaged-runtime"
+      },
+      {
+        "component": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
+        "spdxLicense": "Apache-2.0",
+        "distribution": "packaged-runtime"
+      }
+    ],
+    "boundary": "Direct/transitive Kotlin adapter runtime and qualified caller-supplied compiler-classpath declarations only; this is not the final repository dependency inventory or release SBOM, legal advice, or an attestation of caller-supplied toolchain assets."
+  },
+  "sbomBoundary": {
+    "state": "configured-unpublished",
+    "format": "SPDX-JSON",
+    "boundary": "Workflow generation/attestation wiring exists; final clean-tag SBOM assets, subject digests, signatures, publication, and independent downloaded-asset verification remain I1 release gates."
+  },
+  "nonClaims": [
+    "No general Kotlin managed-support claim.",
+    "No Kotlin Multiplatform or Android semantic authority.",
+    "No compiler-plugin, kapt, KSP, expect/actual, generated-code mutation, or script authority.",
+    "No Gradle execution-derived effective model.",
+    "No final release SBOM, signing, publication, or downloaded-asset verification claim."
+  ]
+}

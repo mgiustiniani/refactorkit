@@ -3,6 +3,8 @@ package org.refactorkit.kotlin
 import org.refactorkit.core.BuildDependency
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModelDiagnostic
+import org.refactorkit.core.BuildLanguageEvidence
+import org.refactorkit.core.BuildLanguageFacet
 import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.BuildModule
 import org.refactorkit.core.BuildSourceSet
@@ -86,19 +88,25 @@ class KotlinJvmBuildModelProjector {
                     val roots = sourceSet.sourceRoots.filter { root -> kotlinFiles.any { it.path.normalize().startsWith(root.normalize()) } }
                     if (roots.isEmpty()) return@mapNotNull null
                     val generated = sourceSet.generatedSourceRoots.filter { it in roots }
-                    val platform = sourceSet.attributes["kotlin.platform"] ?: module.attributes["kotlin.platform"]
-                    val jvmTarget = sourceSet.attributes["kotlin.jvmTarget"] ?: module.attributes["kotlin.jvmTarget"]
+                    val kotlinFacet = sourceSet.languageFacets.singleOrNull { it.languageId == "kotlin" }
+                    val platform = kotlinFacet?.platformId
+                        ?: sourceSet.attributes["kotlin.platform"]
+                        ?: module.attributes["kotlin.platform"]
+                    val jvmTarget = kotlinFacet?.targetVersion
+                        ?: sourceSet.attributes["kotlin.jvmTarget"]
+                        ?: module.attributes["kotlin.jvmTarget"]
                     val sourceLevelProven = sourceSet.attributes["java.sourceLevelEvidence"] == "declared" ||
                         module.attributes["java.sourceLevelEvidence"] == "declared" ||
                         sourceSet.attributes["java.sourceLevel.status"] == "available" ||
                         module.attributes["java.sourceLevel.status"] == "available"
-                    val targetJdk = sourceSet.attributes["kotlin.targetJdk"]
+                    val targetJdk = kotlinFacet?.targetRuntimeVersion
+                        ?: sourceSet.attributes["kotlin.targetJdk"]
                         ?: module.attributes["kotlin.targetJdk"]
                         ?: sourceSet.attributes["java.sourceLevel"]?.takeIf { sourceLevelProven }
                         ?: module.attributes["java.sourceLevel"]?.takeIf { sourceLevelProven }
                     when (platform) {
                         "jvm" -> Unit
-                        "unsupported" -> {
+                        "unsupported", "multiplatform", "android", "js", "native", "common" -> {
                             diagnostics += diagnostic(
                                 "kotlin.platformUnsupported",
                                 "Kotlin source set belongs to an unsupported non-JVM or mixed platform",
@@ -115,6 +123,15 @@ class KotlinJvmBuildModelProjector {
                             )
                             strongestStatus = combineStatus(strongestStatus, BuildModelStatus.PARTIAL)
                         }
+                    }
+                    val compilerPlugins = kotlinFacet?.compilerPluginIds.orEmpty()
+                    if (compilerPlugins.isNotEmpty()) {
+                        diagnostics += diagnostic(
+                            "kotlin.compilerPluginsUnsupported",
+                            "Kotlin compiler-plugin execution remains outside the bounded semantic model: ${compilerPlugins.joinToString()}",
+                            projectedIds.getValue(module.id),
+                        )
+                        strongestStatus = BuildModelStatus.EXECUTION_REFUSED
                     }
                     if (jvmTarget == null) {
                         diagnostics += diagnostic(
@@ -141,6 +158,7 @@ class KotlinJvmBuildModelProjector {
                         generatedSourceRoots = generated,
                         outputDirectories = sourceSet.outputDirectories,
                         classpathEntries = sourceSet.classpathEntries,
+                        runtimeClasspathEntries = sourceSet.runtimeClasspathEntries,
                         moduleDependencies = sourceSet.moduleDependencies.mapNotNull { dependency ->
                             projectedIds[dependency.targetModuleId]?.let { target ->
                                 BuildDependency(target, dependency.scope)
@@ -156,6 +174,22 @@ class KotlinJvmBuildModelProjector {
                             jvmTarget?.let { put("kotlin.jvmTarget", it) }
                             targetJdk?.let { put("kotlin.targetJdk", it) }
                         },
+                        languageFacets = listOf(BuildLanguageFacet(
+                            languageId = "kotlin",
+                            platformId = platform ?: "unproven",
+                            compilerId = "kotlin-compiler-embeddable-k2",
+                            sourceVersion = toolchain.provenance.kotlinVersion,
+                            targetVersion = jvmTarget,
+                            targetRuntimeVersion = targetJdk,
+                            compilerPluginIds = compilerPlugins,
+                            evidence = when {
+                                platform in setOf("unsupported", "multiplatform", "android", "js", "native", "common") ||
+                                    compilerPlugins.isNotEmpty() -> BuildLanguageEvidence.UNSUPPORTED
+                                kotlinFacet != null && kotlinFacet.evidence == BuildLanguageEvidence.DECLARED -> BuildLanguageEvidence.DECLARED
+                                platform == "jvm" && jvmTarget != null && targetJdk != null -> BuildLanguageEvidence.DERIVED
+                                else -> BuildLanguageEvidence.PARTIAL
+                            },
+                        )),
                     )
                 }
                 projectedForModel += BuildModule(
@@ -255,8 +289,14 @@ class KotlinJvmBuildModelProjector {
                 sourceSet.generatedSourceRoots.sortedBy(Path::toString).forEach(::add)
                 sourceSet.outputDirectories.sortedBy(Path::toString).forEach(::add)
                 sourceSet.classpathEntries.sortedBy(Path::toString).forEach(::add)
+                sourceSet.runtimeClasspathEntries.sortedBy(Path::toString).forEach(::add)
                 sourceSet.moduleDependencies.sortedBy { it.targetModuleId }.forEach { dependency ->
                     add(dependency.targetModuleId); add(dependency.scope)
+                }
+                sourceSet.languageFacets.sortedBy(BuildLanguageFacet::languageId).forEach { facet ->
+                    add(facet.languageId); add(facet.platformId); add(facet.compilerId); add(facet.sourceVersion)
+                    add(facet.targetVersion); add(facet.targetRuntimeVersion); add(facet.evidence)
+                    facet.compilerPluginIds.sorted().forEach(::add)
                 }
                 sourceSet.attributes.toSortedMap().forEach { (key, value) -> add(key); add(value) }
             }

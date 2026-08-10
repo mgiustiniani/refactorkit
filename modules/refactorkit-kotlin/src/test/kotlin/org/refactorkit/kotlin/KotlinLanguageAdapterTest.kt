@@ -59,6 +59,16 @@ class KotlinLanguageAdapterTest {
         val mutationOperations = setOf("renameSymbol", "organizeImports", "companionObject", "dataClass")
         assertTrue(descriptor.capabilities.filter { it.operation !in mutationOperations }
             .all { it.mutationAuthority == MutationAuthority.NONE })
+        assertEquals(
+            setOf("android", "compilerPluginSemantics", "expectActual", "generatedCodeMutation", "multiplatform"),
+            descriptor.capabilities.filter { it.operation in setOf(
+                "android", "compilerPluginSemantics", "expectActual", "generatedCodeMutation", "multiplatform",
+            ) }.onEach { capability ->
+                assertEquals(CapabilityStability.REFUSED, capability.stability)
+                assertEquals(SemanticEvidenceKind.NONE, capability.evidence)
+                assertEquals(MutationAuthority.NONE, capability.mutationAuthority)
+            }.mapTo(sortedSetOf()) { it.operation },
+        )
         assertEquals(setOf("kts"), descriptor.capabilities.single { it.operation == "scriptSemantics" }.extensions)
         assertTrue(descriptor.capabilities.filter { it.operation != "scriptSemantics" }.all {
             it.extensions == setOf("kt")

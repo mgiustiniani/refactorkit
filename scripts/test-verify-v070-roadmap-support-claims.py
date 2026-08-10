@@ -51,7 +51,7 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.assertEqual(4, receipt["nativeRows"])
         self.assertEqual("PASSED", receipt["nativeEvidenceState"])
         self.assertFalse(receipt["nativeParentRowsOpen"])
-        self.assertEqual(3, receipt["exactTemurin2111Pins"])
+        self.assertEqual(4, receipt["exactTemurin2111Pins"])
 
     def test_checked_roadmap_row_without_projection_update_fails(self) -> None:
         path = self.root / "docs/releases/v0.7.0-plan.md"
@@ -117,7 +117,7 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         result, receipt = self._run()
         self.assertNotEqual(0, result.returncode)
         self.assertIn(
-            "CI must pin build, dedicated authority, and runtime jobs to exactly three setup-java 21.0.11+10.0.LTS entries, found 2",
+            "CI must pin build, dedicated authority, runtime, and K1/K2 foundation jobs to exactly four setup-java 21.0.11+10.0.LTS entries, found 3",
             receipt["failures"],
         )
         self.assertIn("CI contains unavailable setup-java version 21.0.11+9", receipt["failures"])

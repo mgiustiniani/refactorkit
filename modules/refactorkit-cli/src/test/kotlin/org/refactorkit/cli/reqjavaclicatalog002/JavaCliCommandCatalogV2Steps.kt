@@ -415,7 +415,7 @@ class JavaCliCommandCatalogV2Steps {
         assertTrue(allInvocations.any { it.arguments == listOf("commands", "--json", "--schema-version", "1") })
     }
 
-    @Then("{string} remains byte-for-byte compatible with its pinned pre-evolution output and valid only as the existing language-capability schema")
+    @Then("{string} matches its approved additive K1\\/K2 refusal evolution and remains valid only as the existing language-capability schema")
     fun capabilitiesRemainPinned(commandLine: String) {
         assertEquals("refactorkit capabilities", commandLine)
         assertEquals(PINNED_CAPABILITIES_SHA256, sha256(pinnedCapabilities))
@@ -424,6 +424,15 @@ class JavaCliCommandCatalogV2Steps {
         val capabilities = parse(capabilitiesInvocation.stdout)
         assertEquals(listOf("schemaVersion", "adapters", "vocabulary"), capabilities.keys.toList())
         assertEquals(1, capabilities.getValue("schemaVersion").jsonPrimitive.intOrNull)
+        val kotlinCapabilities = capabilities.getValue("adapters").jsonArray.single {
+            it.jsonObject.getValue("languageId").jsonPrimitive.content == "kotlin"
+        }.jsonObject.getValue("capabilities").jsonArray.map { it.jsonObject }
+        setOf("android", "compilerPluginSemantics", "generatedCodeMutation").forEach { operation ->
+            val row = kotlinCapabilities.single { it.getValue("operation").jsonPrimitive.content == operation }
+            assertEquals("refused", row.getValue("stability").jsonPrimitive.content)
+            assertEquals("none", row.getValue("evidence").jsonPrimitive.content)
+            assertEquals("none", row.getValue("mutationAuthority").jsonPrimitive.content)
+        }
     }
 
     @Then("the capabilities output contains none of {string}, {string}, {string}, {string}, {string}, {string}, {string}, or {string} as command-catalogue fields")
@@ -729,10 +738,10 @@ class JavaCliCommandCatalogV2Steps {
         const val V2_ORACLE_FIXTURE =
             "org/refactorkit/cli/reqjavaclicatalog002/catalog-v2-oracle-6aaffe8c0c71.json"
         const val CAPABILITIES_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-pre-slice-dec4087fa8b7.json"
+            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-k1-k2-approved-872120125a3a.json"
         const val V1_ORACLE_SHA256 = "4790e142d491d0fc3fd44dfa94c65c67997bc3ffaf0133691c0afebd9ee683cb"
         const val V2_ORACLE_SHA256 = "6aaffe8c0c718685510e745abc740c1896b02050a3eff7c19146f61c7abe109d"
-        const val PINNED_CAPABILITIES_SHA256 = "dec4087fa8b7ba038a5b9a82728ec724054ee6fd28456eb9ec637fd7d0d0d1c3"
+        const val PINNED_CAPABILITIES_SHA256 = "872120125a3a84e5304635adcecfb1c65a11485a51fb13b7d831687b63dc666e"
         const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v2-guard/v1"
         const val PROBE_MODE = "probe"
         const val INVOKE_MODE = "invoke"

@@ -66,6 +66,61 @@ class BuildModelsTest {
     }
 
     @Test
+    fun languageNeutralSourceSetFacetsValidateMultipleEcosystemsWithoutJavaOrMavenFields() {
+        val sourceSet = BuildSourceSet(
+            id = "shared",
+            kind = SourceSetKind.CUSTOM,
+            sourceRoots = listOf(Path.of("src/shared")),
+            languageFacets = listOf(
+                BuildLanguageFacet(
+                    languageId = "kotlin",
+                    platformId = "jvm",
+                    compilerId = "kotlin-compiler-embeddable-k2",
+                    sourceVersion = "2.0.21",
+                    targetVersion = "21",
+                    targetRuntimeVersion = "21",
+                    evidence = BuildLanguageEvidence.DECLARED,
+                ),
+                BuildLanguageFacet(
+                    languageId = "typescript",
+                    platformId = "ecmascript",
+                    compilerId = "typescript",
+                    evidence = BuildLanguageEvidence.DECLARED,
+                ),
+            ),
+        )
+
+        assertEquals(listOf("kotlin", "typescript"), sourceSet.languageFacets.map { it.languageId })
+        val mutablePlugins = mutableListOf("serialization", "all-open")
+        val detachedFacet = BuildLanguageFacet(
+            "kotlin", "jvm", compilerPluginIds = mutablePlugins, evidence = BuildLanguageEvidence.UNSUPPORTED,
+        )
+        mutablePlugins += "no-arg"
+        assertEquals(listOf("serialization", "all-open"), detachedFacet.compilerPluginIds)
+        (detachedFacet.compilerPluginIds as MutableList).add("sam-with-receiver")
+        assertEquals(listOf("serialization", "all-open"), detachedFacet.compilerPluginIds)
+        assertFailsWith<IllegalArgumentException> {
+            sourceSet.copy(languageFacets = listOf(
+                sourceSet.languageFacets.first(),
+                sourceSet.languageFacets.first().copy(platformId = "multiplatform"),
+            ))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            BuildLanguageFacet(
+                languageId = "kotlin",
+                platformId = "jvm",
+                compilerPluginIds = listOf("unsafe plugin"),
+                evidence = BuildLanguageEvidence.UNSUPPORTED,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            sourceSet.copy(languageFacets = (0..32).map { index ->
+                BuildLanguageFacet("language-$index", "platform", evidence = BuildLanguageEvidence.PARTIAL)
+            })
+        }
+    }
+
+    @Test
     fun buildModelChangesAreSnapshotHashBound() {
         val root = Files.createTempDirectory("refactorkit-build-model-hash")
         val source = SourceFile(Path.of("src/main/java/example/App.java"), "package example; class App {}\n", "java")
@@ -105,5 +160,21 @@ class BuildModelsTest {
             Workspace(root), listOf(module), listOf(source), buildModels = listOf(runtimeChangedModel),
         )
         assertNotEquals(initial.hash, runtimeChanged.hash)
+
+        val languageFacetChangedModel = initialModel.copy(modules = initialModel.modules.map { buildModule ->
+            buildModule.copy(sourceSets = buildModule.sourceSets.map { sourceSet ->
+                sourceSet.copy(languageFacets = listOf(BuildLanguageFacet(
+                    languageId = "kotlin",
+                    platformId = "jvm",
+                    compilerId = "kotlin-compiler-embeddable-k2",
+                    targetVersion = "21",
+                    evidence = BuildLanguageEvidence.DECLARED,
+                )))
+            })
+        })
+        val languageFacetChanged = ProjectSnapshot(
+            Workspace(root), listOf(module), listOf(source), buildModels = listOf(languageFacetChangedModel),
+        )
+        assertNotEquals(initial.hash, languageFacetChanged.hash)
     }
 }

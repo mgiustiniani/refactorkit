@@ -9,6 +9,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -203,6 +204,57 @@ class JdtJavaSemanticAnalyzerTest {
     }
 
     @Test
+    fun projectsExactJvmTypeCallableFieldAndReferenceIdentitiesWithoutJdtHandles() {
+        val root = Files.createTempDirectory("rk-jdt-jvm-identity")
+        root.resolve("src/main/java/com/acme/Api.java").apply {
+            Files.createDirectories(parent)
+            writeText(
+                "package com.acme; public class Api { public String value; " +
+                    "public Api(int count) {} public String call(String[] names, long count) { return value; } }\n",
+            )
+        }
+        root.resolve("src/main/java/com/acme/Use.java").apply {
+            Files.createDirectories(parent)
+            writeText(
+                "package com.acme; class Use { String run() { Api api = new Api(1); " +
+                    "api.value = api.call(new String[0], 2L); return api.value; } }\n",
+            )
+        }
+
+        val result = JdtJavaSemanticAnalyzer().analyze(JavaProjectScanner().scan(root))
+        val identities = result.symbols.mapNotNull { it.jvmIdentity }
+
+        assertTrue(identities.contains(JdtJavaJvmIdentity(
+            JdtJavaJvmIdentityKind.TYPE, "com.acme.Api", "", "Lcom/acme/Api;",
+        )))
+        assertTrue(identities.contains(JdtJavaJvmIdentity(
+            JdtJavaJvmIdentityKind.CALLABLE, "com.acme.Api", "<init>", "(I)V",
+        )))
+        assertTrue(identities.contains(JdtJavaJvmIdentity(
+            JdtJavaJvmIdentityKind.CALLABLE,
+            "com.acme.Api",
+            "call",
+            "([Ljava/lang/String;J)Ljava/lang/String;",
+        )))
+        assertTrue(identities.contains(JdtJavaJvmIdentity(
+            JdtJavaJvmIdentityKind.FIELD, "com.acme.Api", "value", "Ljava/lang/String;",
+        )))
+        assertTrue(result.bindingUses.any {
+            it.simpleName == "call" && it.jvmIdentity == JdtJavaJvmIdentity(
+                JdtJavaJvmIdentityKind.CALLABLE,
+                "com.acme.Api",
+                "call",
+                "([Ljava/lang/String;J)Ljava/lang/String;",
+            )
+        })
+        assertTrue(result.bindingUses.filter { it.simpleName == "value" }.all {
+            it.jvmIdentity == JdtJavaJvmIdentity(
+                JdtJavaJvmIdentityKind.FIELD, "com.acme.Api", "value", "Ljava/lang/String;",
+            )
+        })
+    }
+
+    @Test
     fun publishesExactMethodParameterBindingEvidence() {
         val root = Files.createTempDirectory("rk-jdt-parameter-test")
         root.resolve("src/main/java/com/acme/User.java").apply {
@@ -255,6 +307,8 @@ class JdtJavaSemanticAnalyzerTest {
                 org.refactorkit.core.TextEdits.offsetOf(source, range.end),
             )
         })
+        assertFailsWith<UnsupportedOperationException> { (result.invocations as MutableList).clear() }
+        assertFailsWith<UnsupportedOperationException> { (invocation.argumentRanges as MutableList).clear() }
     }
 
     @Test

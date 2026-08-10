@@ -4,6 +4,29 @@
 
 Status: implementation-informed for documented flows; no C4 dynamic diagrams yet.
 
+== Candidate Runtime Scenario: Shared JVM identity and saved-workspace refresh
+
+Status: implementation candidate pending the dedicated K1/K2 four-host receipt and independent review.
+
+[cols="1,3",options="header"]
+|===
+|Step |Interaction
+
+|1
+|A long-lived daemon or MCP Kotlin semantic session receives an exact saved `ProjectSnapshot`. The adapter's bounded session returns a detached normalized K2 result only when its attestation names that exact snapshot; diagnostics and symbol reads reuse the same result. JDT uses a separate normalized Java semantic-input key and may reuse its immutable payload across an unrelated-language-only snapshot change while rebinding explicit snapshot attestations.
+
+|2
+|For mixed Java/Kotlin reads, the caller supplies same-snapshot non-recovered JDT and exact K2 evidence to `SharedJvmIdentityProjector`. It joins only exact JVM type/method/constructor/field tuples and emits deterministic cross-language references. Missing, stale, colliding, invalid-path or oversized evidence refuses; no JDT/FIR/PSI handle or mutation authority crosses the boundary.
+
+|3
+|On a saved-workspace rescan, daemon, LSP or MCP calls `WorkspaceRefreshCoordinator` with its current snapshot and surface-owned scanner. The coordinator validates the normalized root and compares hashes. Unchanged scans return the exact current instance; changed scans invoke the supplied preparation callback exactly once before returning the next snapshot.
+
+|4
+|The surface remains responsible for storing the result, watcher state, index reconciliation, semantic-session closure, pending-plan/audit policy, diagnostics, protocol output and apply/rollback lifecycle. The coordinator performs no filesystem/process/write/lock/WAL action and is not a general managed-apply invoker.
+|===
+
+No dynamic C4 participant, process boundary, deployment node or durable store is added: these are in-process C3/code-scale responsibilities inside existing core/adapters/surfaces.
+
 == Runtime Scenario: Safe Java Refactoring through CLI
 
 [cols="1,3",options="header"]

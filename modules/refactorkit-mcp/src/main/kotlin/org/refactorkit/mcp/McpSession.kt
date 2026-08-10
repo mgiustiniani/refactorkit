@@ -39,6 +39,7 @@ import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.RollbackPreflightDecision
 import org.refactorkit.core.RollbackPreflightGuard
 import org.refactorkit.core.TransactionLog
+import org.refactorkit.core.WorkspaceRefreshCoordinator
 import org.refactorkit.core.WorkspaceSnapshotComposer
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaChangeSignaturePlanner
@@ -508,7 +509,7 @@ class McpSession(
 
     private fun toolKotlinDefinition(args: JsonObject): String {
         val symbol = args.string("symbol") ?: missing("symbol")
-        if (!Regex("kotlin-jvm-(?:type|callable|property|parameter|type-parameter)-v1:[0-9a-f]{64}").matches(symbol)) {
+        if (!Regex("kotlin-jvm-(?:type|callable|constructor|property|parameter|type-parameter)-v1:[0-9a-f]{64}").matches(symbol)) {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM declaration ID")
         }
         return toolKotlinSymbolRead(args, org.refactorkit.core.SymbolId(symbol))
@@ -1050,7 +1051,7 @@ class McpSession(
             is ApplyResult.Applied -> {
                 pendingPlans.remove(planId)
                 // Refresh snapshot and close sessions bound to the pre-apply image.
-                snapshot = scanWorkspace(root)
+                refreshStoredSnapshot(root)
                 closeSemanticAdapters()
                 moveClassDispatcher.clearLexicalReviewAudit()
                 "Applied successfully.\nTransaction ID: ${result.transaction.id.value}\nTo rollback: use tool rollback_refactoring with transactionId=${result.transaction.id.value}"
@@ -1083,7 +1084,7 @@ class McpSession(
                 error("Allow rollback preflight guard unexpectedly rejected")
             is ManagedRollbackOutcome.RollbackCallJournalFailed -> throw outcome.failure
             is ManagedRollbackOutcome.RolledBack -> {
-                snapshot = scanWorkspace(root)
+                refreshStoredSnapshot(root)
                 moveClassDispatcher.clearLexicalReviewAudit()
                 "${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId."
             }
@@ -1397,6 +1398,12 @@ class McpSession(
             val marker = if (idx == line) ">" else " "
             "$marker ${idx + 1}: ${lines[idx]}"
         }
+    }
+
+    private fun refreshStoredSnapshot(root: Path) {
+        val current = snapshot
+        snapshot = if (current == null) scanWorkspace(root)
+        else WorkspaceRefreshCoordinator.refresh(current) { scanWorkspace(root) }.snapshot
     }
 
     private fun scanWorkspace(root: Path): ProjectSnapshot {

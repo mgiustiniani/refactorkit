@@ -77,6 +77,75 @@ enum class DependencyScope {
     CUSTOM,
 }
 
+enum class BuildLanguageEvidence {
+    DECLARED,
+    DERIVED,
+    PARTIAL,
+    UNSUPPORTED,
+}
+
+/** Typed, defensively detached language projection inside a language-neutral build source set. */
+class BuildLanguageFacet(
+    val languageId: String,
+    val platformId: String,
+    val compilerId: String? = null,
+    val sourceVersion: String? = null,
+    val targetVersion: String? = null,
+    val targetRuntimeVersion: String? = null,
+    compilerPluginIds: List<String> = emptyList(),
+    val evidence: BuildLanguageEvidence,
+) {
+    private val compilerPluginIdsValue = compilerPluginIds.toList()
+    val compilerPluginIds: List<String> get() = compilerPluginIdsValue.toList()
+
+    init {
+        require(ID.matches(languageId)) { "build language ID is invalid" }
+        require(ID.matches(platformId)) { "build language platform ID is invalid" }
+        require(compilerId == null || ID.matches(compilerId)) { "build language compiler ID is invalid" }
+        require(listOfNotNull(sourceVersion, targetVersion, targetRuntimeVersion).all {
+            it.isNotBlank() && it.length <= 128 && '\u0000' !in it
+        }) { "build language version evidence is invalid" }
+        require(compilerPluginIdsValue.size <= 64 &&
+            compilerPluginIdsValue.distinct().size == compilerPluginIdsValue.size &&
+            compilerPluginIdsValue.all(ID::matches)) { "build language compiler-plugin evidence is invalid" }
+    }
+
+    fun copy(
+        languageId: String = this.languageId,
+        platformId: String = this.platformId,
+        compilerId: String? = this.compilerId,
+        sourceVersion: String? = this.sourceVersion,
+        targetVersion: String? = this.targetVersion,
+        targetRuntimeVersion: String? = this.targetRuntimeVersion,
+        compilerPluginIds: List<String> = this.compilerPluginIdsValue,
+        evidence: BuildLanguageEvidence = this.evidence,
+    ): BuildLanguageFacet = BuildLanguageFacet(
+        languageId, platformId, compilerId, sourceVersion, targetVersion, targetRuntimeVersion,
+        compilerPluginIds, evidence,
+    )
+
+    override fun equals(other: Any?): Boolean = other is BuildLanguageFacet &&
+        languageId == other.languageId && platformId == other.platformId && compilerId == other.compilerId &&
+        sourceVersion == other.sourceVersion && targetVersion == other.targetVersion &&
+        targetRuntimeVersion == other.targetRuntimeVersion &&
+        compilerPluginIdsValue == other.compilerPluginIdsValue && evidence == other.evidence
+
+    override fun hashCode(): Int = listOf(
+        languageId, platformId, compilerId, sourceVersion, targetVersion, targetRuntimeVersion,
+        compilerPluginIdsValue, evidence,
+    ).hashCode()
+
+    override fun toString(): String = "BuildLanguageFacet(" +
+        "languageId=$languageId, platformId=$platformId, compilerId=$compilerId, " +
+        "sourceVersion=$sourceVersion, targetVersion=$targetVersion, " +
+        "targetRuntimeVersion=$targetRuntimeVersion, compilerPluginIds=$compilerPluginIdsValue, " +
+        "evidence=$evidence)"
+
+    companion object {
+        private val ID = Regex("[A-Za-z][A-Za-z0-9._-]{0,127}")
+    }
+}
+
 data class BuildModelDiagnostic(
     val code: String,
     val message: String,
@@ -99,6 +168,7 @@ data class BuildSourceSet(
     val runtimeClasspathEntries: List<Path> = emptyList(),
     val moduleDependencies: List<BuildDependency> = emptyList(),
     val attributes: Map<String, String> = emptyMap(),
+    val languageFacets: List<BuildLanguageFacet> = emptyList(),
 ) {
     init {
         require(id.isNotBlank()) { "source-set ID must not be blank" }
@@ -107,6 +177,10 @@ data class BuildSourceSet(
         }
         require(generatedSourceRoots.all { it in sourceRoots }) {
             "generated roots must also be declared source roots"
+        }
+        require(languageFacets.size <= 32) { "language facet count exceeds the bounded source-set limit" }
+        require(languageFacets.map(BuildLanguageFacet::languageId).distinct().size == languageFacets.size) {
+            "language facets must have unique language IDs within a source set"
         }
     }
 }

@@ -1,6 +1,8 @@
 package org.refactorkit.typescript
 
 import org.refactorkit.core.BuildDependency
+import org.refactorkit.core.BuildLanguageEvidence
+import org.refactorkit.core.BuildLanguageFacet
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModelDiagnostic
 import org.refactorkit.core.BuildModelProvider
@@ -79,6 +81,20 @@ class TypeScriptBuildModelProvider(
                         "packageExportsDeclared" to project.packageExportsDeclared.toString(),
                         "packageTypesDeclared" to project.packageTypesDeclared.toString(),
                     ),
+                    languageFacets = buildList {
+                        add(BuildLanguageFacet(
+                            languageId = "typescript",
+                            platformId = "ecmascript",
+                            compilerId = "typescript",
+                            evidence = BuildLanguageEvidence.DECLARED,
+                        ))
+                        if (project.compilerOptions.allowJs == true) add(BuildLanguageFacet(
+                            languageId = "javascript",
+                            platformId = "ecmascript",
+                            compilerId = "typescript",
+                            evidence = BuildLanguageEvidence.DECLARED,
+                        ))
+                    },
                 )),
                 attributes = sortedMapOf(
                     "backend" to "declarative-jsonc",

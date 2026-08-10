@@ -42,6 +42,7 @@ import org.refactorkit.core.WorkspaceEdit
 class KotlinLanguageAdapter(
     private val compilerDiagnostics: KotlinCompilerDiagnostics? = null,
 ) : LanguageAdapter {
+    private val compilerSession = compilerDiagnostics?.let(::KotlinCompilerAnalysisSession)
     override fun languageId(): String = KotlinAdapterRegistration.LANGUAGE_ID
 
     override fun parse(file: SourceFile): ParseResult = ParseResult(
@@ -60,7 +61,7 @@ class KotlinLanguageAdapter(
         is KotlinCompilerSymbolsResult.Refused, is KotlinCompilerSymbolsResult.Error -> SymbolIndex(emptyList())
     }
 
-    fun compilerSymbols(project: ProjectSnapshot): KotlinCompilerSymbolsResult = compilerDiagnostics?.analyzeSymbols(project)
+    fun compilerSymbols(project: ProjectSnapshot): KotlinCompilerSymbolsResult = compilerSession?.symbols(project)
         ?: KotlinCompilerSymbolsResult.Refused(
             compilerNotConfigured(),
             unconfiguredAttestation(project, KotlinCompilerDiagnostics.SYMBOL_BACKEND),
@@ -81,7 +82,7 @@ class KotlinLanguageAdapter(
     override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> = when {
         project.files.none { it.languageId == languageId() } -> emptyList()
         compilerDiagnostics == null -> listOf(compilerNotConfigured())
-        else -> compilerDiagnostics.analyze(project).diagnostics
+        else -> requireNotNull(compilerSession).analyze(project).diagnostics
     }
 
     fun compilerDiagnosticsWithAdditionalClasspath(
@@ -102,11 +103,28 @@ class KotlinLanguageAdapter(
             unconfiguredAttestation(project, KotlinCompilerDiagnostics.BACKEND),
         )
 
-    fun compilerDiagnostics(project: ProjectSnapshot): KotlinCompilerDiagnosticsResult = compilerDiagnostics?.analyze(project)
+    fun compilerDiagnosticsWithAdditionalClasspathAndOutput(
+        project: ProjectSnapshot,
+        additionalClasspath: List<java.nio.file.Path>,
+        consumer: (java.nio.file.Path) -> Unit,
+    ): KotlinCompilerDiagnosticsResult = compilerDiagnostics?.analyzeWithAdditionalClasspathAndCompiledOutput(
+        project, additionalClasspath, consumer,
+    ) ?: KotlinCompilerDiagnosticsResult.Refused(
+        compilerNotConfigured(),
+        unconfiguredAttestation(project, KotlinCompilerDiagnostics.BACKEND),
+    )
+
+    fun compilerDiagnostics(project: ProjectSnapshot): KotlinCompilerDiagnosticsResult = compilerSession?.analyze(project)
         ?: KotlinCompilerDiagnosticsResult.Refused(
             compilerNotConfigured(),
             unconfiguredAttestation(project, KotlinCompilerDiagnostics.BACKEND),
         )
+
+    fun semanticSessionStatus(): KotlinCompilerAnalysisSessionStatus? = compilerSession?.status()
+
+    fun clearSemanticCache() {
+        compilerSession?.clear()
+    }
 
     private fun unconfiguredAttestation(project: ProjectSnapshot, backend: String) = KotlinCompilerDiagnosticsAttestation(
         backend = backend,
@@ -211,6 +229,30 @@ object KotlinAdapterRegistration {
 
     // Capability matrices for Kotlin language shapes
     private val kotlinShapeMatrices = listOf(
+        LanguageCapability(
+            operation = "android",
+            stability = CapabilityStability.REFUSED,
+            evidence = SemanticEvidenceKind.NONE,
+            mutationAuthority = MutationAuthority.NONE,
+            backend = BACKEND,
+            extensions = setOf("kt"),
+        ),
+        LanguageCapability(
+            operation = "compilerPluginSemantics",
+            stability = CapabilityStability.REFUSED,
+            evidence = SemanticEvidenceKind.NONE,
+            mutationAuthority = MutationAuthority.NONE,
+            backend = BACKEND,
+            extensions = setOf("kt"),
+        ),
+        LanguageCapability(
+            operation = "generatedCodeMutation",
+            stability = CapabilityStability.REFUSED,
+            evidence = SemanticEvidenceKind.NONE,
+            mutationAuthority = MutationAuthority.NONE,
+            backend = BACKEND,
+            extensions = setOf("kt"),
+        ),
         LanguageCapability(
             operation = "extensionReceiver",
             stability = CapabilityStability.REFUSED,

@@ -1,8 +1,9 @@
 # Kotlin/JVM semantic toolchain boundary
 
 Status: explicit declarative discovery and bounded external K2 diagnostics plus
-declared-type symbol navigation are implemented for `0.7.0-SNAPSHOT`. These
-reads have experimental compiler authority; mutation authority remains absent.
+descriptor-exact declaration navigation are implemented for `0.7.0-SNAPSHOT`.
+K1/K2 promotion remains pending four-host receipt and review. Reads are
+experimental compiler authority; mutation authority remains operation-specific.
 
 ## Provider selection
 
@@ -17,13 +18,16 @@ The first qualified discovery row is intentionally narrow:
 
 | JDK | Kotlin compiler artifact | Discovery status | Semantic authority |
 |---|---|---|---|
-| 21 | `kotlin-compiler-embeddable` 2.0.21, `kotlin-stdlib` 2.0.21, annotations 13.0 | qualified declarative identity/evidence | experimental read-only diagnostics and class/object/interface/enum/annotation/function search/definition |
+| 21.0.11 | exact hash-attested Kotlin 2.0.21 compiler classpath listed in `docs/releases/v0.7.0-kotlin-support.json` | qualified bounded declarative identity/evidence | experimental diagnostics plus type/function/constructor/property/parameter/type-parameter search, definition and bounded references |
 
 This selects the Kotlin K2 compiler boundary. Compiler-backed diagnostics use
 `kotlin-compiler-diagnostics-k2-v1`; compiler-proven declaration symbols use
-`kotlin-compiler-jvm-declarations-k2-v1`. It includes the first bounded
-non-overloaded function identity row. Anonymous objects, properties, ambiguous
-callables, references and refactorings are not claimed.
+`kotlin-compiler-jvm-declarations-k2-v1`. It includes descriptor-exact overloads, literal `@JvmName`, extension/suspend/
+nested normalization, source constructors and direct/constructor-property,
+parameter and type-parameter identities. Anonymous/local declarations,
+computed/delegated properties, callable references and unsupported lowered shapes
+remain excluded or refused; read evidence does not automatically qualify a
+refactoring.
 
 ## Explicit inputs
 
@@ -106,11 +110,13 @@ semantic toolchain.
 
 RefactorKit does not bundle, download or install the Kotlin compiler distribution.
 The caller supplies the explicitly pinned external JARs, which remain outside the
-RefactorKit runtime archive and its packaged SPDX SBOM. Kotlin compiler artifacts
-are distributed by JetBrains under Apache-2.0; consumers remain responsible for
-the provenance, checksums and license inventory of their supplied toolchain.
-RefactorKit records content hashes but never treats an external path as a packaged
-component.
+RefactorKit runtime archive. The machine-readable support projection publishes
+ten direct/transitive Kotlin adapter/toolchain component and SPDX-license rows,
+including the `LGPL-2.1-only` caller-supplied `trove4j` boundary and packaged
+serialization dependencies. That declaration is not the final repository
+inventory, release SBOM or legal advice. Consumers remain responsible for the
+provenance and license compliance of caller-supplied assets. RefactorKit records
+content hashes but never treats an external path as a packaged component.
 
 ## Build-model integration
 
@@ -123,6 +129,6 @@ Gradle and conventional JVM source-set evidence inside `ProjectSnapshot`.
 The diagnostics worker lifecycle, limits, clean environment, immutable overlay,
 argument allowlist, XML hardening, attestation and refusal cases are documented in
 [`kotlin-adapter.md`](kotlin-adapter.md). Semantic execution requires the exact
-attested matching stdlib and qualified annotations runtime before launch. The next
-identity gate covers properties, constructors and broader callable shapes on the
-same exact compiler/build projection.
+attested matching compiler classpath before launch. The same exact compiler/build
+projection now backs descriptor-complete K2 identity; K5 mutation shapes and
+unsupported platform/plugin/generated/script cases retain separate gates.

@@ -97,6 +97,18 @@ private fun deeplyDetachedBuildSourceSet(source: BuildSourceSet): BuildSourceSet
         BuildDependency(it.targetModuleId, it.scope)
     }),
     attributes = immutableMap(source.attributes),
+    languageFacets = immutableList(source.languageFacets.map { facet ->
+        BuildLanguageFacet(
+            languageId = facet.languageId,
+            platformId = facet.platformId,
+            compilerId = facet.compilerId,
+            sourceVersion = facet.sourceVersion,
+            targetVersion = facet.targetVersion,
+            targetRuntimeVersion = facet.targetRuntimeVersion,
+            compilerPluginIds = immutableList(facet.compilerPluginIds),
+            evidence = facet.evidence,
+        )
+    }),
 )
 
 private fun deeplyDetachedDiagnostic(source: Diagnostic): Diagnostic = Diagnostic(

@@ -43,6 +43,8 @@ import org.refactorkit.core.WorkspaceSnapshotComposer
 import org.refactorkit.core.WorkspaceIndex
 import org.refactorkit.core.WorkspaceIndexCompleteness
 import org.refactorkit.core.WorkspaceIndexSession
+import org.refactorkit.core.WorkspaceRefreshCoordinator
+import org.refactorkit.core.WorkspaceRefreshResult
 import org.refactorkit.core.WorkspaceSymbolContribution
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RefactoringApplyIdentity
@@ -347,8 +349,10 @@ class DaemonSession(
         if (!force) return WorkspaceRefreshOutcome(
             "unchanged", workspaceIndex.snapshot()?.generation ?: 0,
         )
-        val next = try {
-            scanWorkspace(root)
+        val refresh = try {
+            WorkspaceRefreshCoordinator.refresh(current, { scanWorkspace(root) }) { _, next ->
+                workspaceIndex.reconcile(next)
+            }
         } catch (problem: Exception) {
             savedWorkspaceWatcher?.markDirty()
             return WorkspaceRefreshOutcome(
@@ -357,11 +361,13 @@ class DaemonSession(
             ).also { lastWorkspaceRefresh = it }
         }
         workspaceRefreshCount++
-        if (next.hash == current.hash) return WorkspaceRefreshOutcome(
+        if (refresh is WorkspaceRefreshResult.Unchanged) return WorkspaceRefreshOutcome(
             "unchanged", workspaceIndex.snapshot()?.generation ?: 0,
         ).also { lastWorkspaceRefresh = it }
 
-        val reconciliation = workspaceIndex.reconcile(next)
+        val changed = refresh as WorkspaceRefreshResult.Changed
+        val next = changed.snapshot
+        val reconciliation = changed.preparedState
         snapshot = next
         moveClassDispatcher.clearLexicalReviewAudit()
         val stoppedLanguages = semanticAdapters.keys.toSortedSet()
@@ -1722,7 +1728,9 @@ class DaemonSession(
             ),
         )) {
             is ApplyResult.Applied -> {
-                val refreshed = scanWorkspace(root)
+                val refreshed = WorkspaceRefreshCoordinator.refresh(requireSnapshot()) {
+                    scanWorkspace(root)
+                }.snapshot
                 val diagnostics = boundedDiagnostics(
                     when (pending.languageId) {
                         "java" -> adapter.diagnostics(refreshed)
@@ -1837,7 +1845,9 @@ class DaemonSession(
                 error("Allow rollback preflight guard unexpectedly rejected")
             is ManagedRollbackOutcome.RollbackCallJournalFailed -> throw outcome.failure
             is ManagedRollbackOutcome.RolledBack -> {
-                val refreshed = scanWorkspace(root)
+                val refreshed = WorkspaceRefreshCoordinator.refresh(requireSnapshot()) {
+                    scanWorkspace(root)
+                }.snapshot
                 val diagnostics = boundedDiagnostics(adapter.diagnostics(refreshed))
                 snapshot = refreshed
                 openWorkspaceIndex(refreshed)
@@ -2213,7 +2223,7 @@ class DaemonSession(
 
     private fun kotlinDefinition(params: JsonObject?): JsonElement {
         val symbol = params?.string("symbol") ?: missing("symbol")
-        if (!Regex("kotlin-jvm-(?:type|callable|property|parameter|type-parameter)-v1:[0-9a-f]{64}").matches(symbol)) {
+        if (!Regex("kotlin-jvm-(?:type|callable|constructor|property|parameter|type-parameter)-v1:[0-9a-f]{64}").matches(symbol)) {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin definition requires a valid opaque JVM declaration ID")
         }
         return kotlinSymbolRead(params, SymbolId(symbol))

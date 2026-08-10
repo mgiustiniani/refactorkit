@@ -81,8 +81,13 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         assertTrue(usages.size >= 2, "expected exact K2 uses of Java binary identity, got $usages")
         assertTrue(available.attestation.ephemeralClasspathHash.matches(Regex("[0-9a-f]{64}")))
         assertTrue(available.externalCallableUsages.any {
-            it.jvmOwner == "fixture.PublicAccount" && it.callableName == "label"
-        }, "expected exact K2 Java-method call evidence: ${available.externalCallableUsages}")
+            it.jvmOwner == "fixture.PublicAccount" && it.callableName == "label" &&
+                it.jvmDescriptor == "(Ljava/lang/String;)Ljava/lang/String;"
+        }, "expected descriptor-bearing K2 Java-method call evidence: ${available.externalCallableUsages}")
+        assertTrue(available.externalCallableUsages.any {
+            it.jvmOwner == "fixture.PublicAccount" && it.callableName == "<init>" &&
+                it.jvmDescriptor == "()V"
+        }, "expected descriptor-bearing K2 Java-constructor call evidence: ${available.externalCallableUsages}")
     }
 
     @Test

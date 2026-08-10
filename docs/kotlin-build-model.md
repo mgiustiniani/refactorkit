@@ -1,8 +1,9 @@
 # Kotlin/JVM build-model projection
 
 Status: bounded non-executable projection implemented for `0.7.0-SNAPSHOT` and
-consumed by experimental compiler diagnostics. Symbol and mutation authority
-remain refused.
+consumed by experimental compiler diagnostics/declaration reads. K1/K2 foundation
+promotion remains pending four-host receipt and review; mutation authority stays
+operation-specific.
 
 ## Provider
 
@@ -23,15 +24,18 @@ For every bounded source set containing a `.kt` source, the projection records:
 - base provider, model status, module and source-set identity;
 - exact workspace-relative Kotlin source and generated-source roots;
 - main, test, integration-test, or custom source-set kind;
-- compile classpath and scoped module dependency edges;
+- separate compile/runtime classpaths and scoped module dependency edges;
 - Java and Kotlin output directories;
 - declared Kotlin JVM bytecode target;
 - declared target JDK/release and the qualified analysis JDK;
-- generated-source mutation refusal and script-semantics refusal.
+- generated-source mutation refusal and script-semantics refusal;
+- one typed `BuildLanguageFacet` carrying JVM/platform/compiler/source/target/
+  runtime/plugin evidence as `DECLARED`, `DERIVED`, `PARTIAL`, or `UNSUPPORTED`.
 
 Java-only dependency modules remain as source-set-empty graph nodes so a Kotlin
 module edge never points to an unknown module. This preserves mixed-JVM graph
-identity without claiming Java/Kotlin symbol interoperability yet.
+identity independently from the separately attested shared Java/Kotlin JVM
+identity projector.
 
 The model contains no toolchain paths. It exposes the toolchain provider,
 backend, Kotlin/compiler version, and toolchain projection hash. Its own
@@ -57,9 +61,11 @@ The Gradle declarative provider recognizes literal Kotlin JVM plugin identity,
 `jvmTarget` declarations. Gradle remains `PARTIAL` because scripts, plugins,
 tasks, convention logic, and the Tooling API are never executed.
 
-Kotlin Multiplatform and Android plugin identities produce
-`kotlin.platformUnsupported`; they do not inherit Kotlin/JVM authority.
-Unproven plugin identity or targets remain typed `PARTIAL` evidence.
+Kotlin Multiplatform and Android plugin identities produce typed unsupported
+facets and `kotlin.platformUnsupported`; they do not inherit Kotlin/JVM authority.
+Compiler-plugin identities likewise force `EXECUTION_REFUSED` because K2 sessions
+do not execute kapt, KSP, serialization or other plugin semantics. Unproven
+plugin identity or targets remain typed `PARTIAL` evidence.
 
 ## Generated sources and scripts
 
@@ -85,9 +91,11 @@ compiler-plugin loading.
 `kotlin-compiler-jvm-declarations-k2-v1` require an `AVAILABLE` projection, revalidate
 its toolchain and classpath evidence, and report the exact build and toolchain
 projection hashes. Scripts and partial/unsupported models refuse before compiler
-launch. The symbol row currently covers successfully compiled classes,
-interfaces, enum classes, annotation classes and named/companion objects with JVM
-binary and compiler PSI evidence plus a bounded non-overloaded function row with
-generated owner/method descriptor evidence. The next gate adds property,
-constructor and broader callable identity, usage-location definition, references and
-conservative mixed Java/Kotlin identity.
+launch. The candidate symbol row covers successfully compiled classes, interfaces, enum
+classes, annotation classes, named/companion objects, descriptor-exact overloaded
+and literal-`@JvmName` functions, source constructors, direct and constructor
+properties, value parameters and type parameters. FIR/PSI and exact generated
+class-file evidence are both required. The shared JVM module can join exact JDT
+and K2 type/method/constructor/field tuples for bounded cross-language references.
+Neither read row by itself grants rename/move/change-signature authority; K5 and
+unsupported platform/plugin/generated/script shapes retain separate gates.

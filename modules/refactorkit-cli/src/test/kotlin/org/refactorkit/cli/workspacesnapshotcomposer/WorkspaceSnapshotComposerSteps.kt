@@ -698,13 +698,17 @@ class WorkspaceSnapshotComposerSteps {
 
         assertEquals(5, Regex("\\bscanWorkspace\\(").findAll(mcpSource).count())
         assertTrue(functionText(mcpSource, "toolProjectScan").contains("scanWorkspace(path)"))
-        assertEquals(2, Regex("\\bscanWorkspace\\(root\\)").findAll(functionText(mcpSource, "toolApplyRefactoring")).count())
-        assertTrue(functionText(mcpSource, "toolRollbackRefactoring").contains("scanWorkspace(root)"))
+        assertEquals(1, Regex("\\bscanWorkspace\\(root\\)").findAll(functionText(mcpSource, "toolApplyRefactoring")).count())
+        assertTrue(functionText(mcpSource, "toolApplyRefactoring").contains("refreshStoredSnapshot(root)"))
+        assertTrue(functionText(mcpSource, "toolRollbackRefactoring").contains("refreshStoredSnapshot(root)"))
+        val mcpRefresh = functionText(mcpSource, "refreshStoredSnapshot")
+        assertEquals(2, Regex("\\bscanWorkspace\\(root\\)").findAll(mcpRefresh).count())
+        assertTrue(mcpRefresh.contains("WorkspaceRefreshCoordinator.refresh"))
 
         val daemonApply = functionText(daemonSource, "refactorApply")
         assertTrue(daemonApply.indexOf("val refreshed = scanWorkspace(root)") < daemonApply.indexOf("closeSemanticAdapters()"))
         val mcpApply = functionText(mcpSource, "toolApplyRefactoring")
-        assertTrue(mcpApply.indexOf("snapshot = scanWorkspace(root)") < mcpApply.indexOf("closeSemanticAdapters()"))
+        assertTrue(mcpApply.indexOf("refreshStoredSnapshot(root)") < mcpApply.indexOf("closeSemanticAdapters()"))
     }
 
     @Then("each surface retains these policies outside composition:")

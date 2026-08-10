@@ -57,8 +57,12 @@ public final class KotlinCompilerBridgeMain {
             String symbolPayload = "\"symbolsComplete\":false,\"symbolFailure\":\"kotlin.symbolCompilationFailed\"";
             if ("OK".equals(exitName)) {
                 try {
+                    java.util.Map<String, KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature> signatures =
+                        KotlinCompilerCallableSignatureExtractor.extract(
+                            inputs.sources, inputs.jdkHome, inputs.classpath, inputs.jvmTarget
+                        );
                     java.util.List<KotlinCompilerSymbolExtractor.ExtractedSymbol> symbols =
-                        KotlinCompilerSymbolExtractor.extract(inputs.sources, inputs.outputDirectory);
+                        KotlinCompilerSymbolExtractor.extract(inputs.sources, inputs.outputDirectory, signatures);
                     symbolPayload = renderSymbols(
                         symbols,
                         KotlinCompilerUsageExtractor.extract(
@@ -143,6 +147,7 @@ public final class KotlinCompilerBridgeMain {
                 .append("\",\"kind\":\"").append(escape(symbol.kind()))
                 .append("\",\"path\":\"").append(escape(symbol.path()))
                 .append("\",\"owner\":\"").append(escape(symbol.owner()))
+                .append("\",\"jvmName\":\"").append(escape(symbol.jvmName()))
                 .append("\",\"descriptor\":\"").append(escape(symbol.descriptor()))
                 .append("\",\"selectionText\":\"").append(escape(symbol.selectionText()))
                 .append("\",\"visibility\":\"").append(escape(symbol.visibility()))

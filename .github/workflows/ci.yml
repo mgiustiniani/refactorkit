@@ -59,6 +59,9 @@ jobs:
         run: |
           python3 scripts/test-verify-v070-roadmap-support-claims.py
           python3 scripts/verify-v070-roadmap-support-claims.py
+          python3 scripts/test-verify-v070-kotlin-support.py
+          python3 scripts/verify-v070-kotlin-support.py
+          python3 scripts/test-finalize-native-k1-k2-shared-foundations.py
           python3 scripts/test-verify-runtime-archive.py
           python3 scripts/test-smoke-packaged-kill-recovery.py
           python3 scripts/test-finalize-packaged-maven-move-class-authority-matrix.py
@@ -389,4 +392,98 @@ jobs:
           path: |
             modules/refactorkit-cli/build/distributions/refactorkit-runtime-${{ matrix.platform }}.zip
             modules/refactorkit-cli/build/distributions/refactorkit-runtime-${{ matrix.platform }}.zip.sha256
+          if-no-files-found: error
+
+  k1-k2-shared-foundations-native:
+    name: K1 K2 shared JVM foundations (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+            gradle: ./gradlew
+          - os: windows-2025
+            platform: windows-x86_64
+            gradle: ./gradlew.bat
+          - os: macos-15-intel
+            platform: macos-x86_64
+            gradle: ./gradlew
+          - os: macos-15
+            platform: macos-aarch64
+            gradle: ./gradlew
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout exact subject revision
+        uses: actions/checkout@v4
+
+      - name: Set up exact JDK 21 qualification runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.11+10.0.LTS'
+          cache: gradle
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Verify bounded Kotlin support projection
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          subprocess.run([sys.executable, "scripts/test-verify-v070-kotlin-support.py"], check=True)
+          result = subprocess.run([sys.executable, "scripts/verify-v070-kotlin-support.py"], text=True, capture_output=True)
+          pathlib.Path("build/qualification/k1-k2-shared").mkdir(parents=True, exist_ok=True)
+          pathlib.Path("build/qualification/k1-k2-shared/support-reconciliation.json").write_text(result.stdout)
+          print(result.stdout)
+          print(result.stderr, file=sys.stderr)
+          result.check_returncode()
+
+      - name: Run focused K1 K2 and shared-foundation suites
+        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-core:test --tests org.refactorkit.core.BuildModelsTest --tests org.refactorkit.core.WorkspaceRefreshCoordinatorTest :modules:refactorkit-java:test --tests org.refactorkit.java.JdtJavaAnalysisCacheTest --tests org.refactorkit.java.JdtJavaSemanticAnalyzerTest :modules:refactorkit-kotlin:test --tests org.refactorkit.kotlin.KotlinCompilerAnalysisSessionTest --tests org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest --tests org.refactorkit.kotlin.KotlinJvmBuildModelTest --tests org.refactorkit.kotlin.KotlinLanguageAdapterTest :modules:refactorkit-jvm:test --tests org.refactorkit.jvm.SharedJvmIdentityIndexTest :modules:refactorkit-daemon:test --tests org.refactorkit.daemon.WorkspaceIndexDaemonTest --tests org.refactorkit.daemon.DaemonSessionTest :modules:refactorkit-mcp:test --tests org.refactorkit.mcp.McpSessionTest :modules:refactorkit-lsp:test --tests org.refactorkit.lsp.LspSessionTest :modules:refactorkit-typescript:test --tests org.refactorkit.typescript.TypeScriptBuildModelProviderTest
+
+      - name: Package exact subject
+        run: ${{ matrix.gradle }} --no-daemon packageCliRuntime
+
+      - name: Run packaged descriptor-exact Kotlin smoke
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          result = subprocess.run([sys.executable, "scripts/smoke-packaged-kotlin.py"], text=True, capture_output=True)
+          log = result.stdout + result.stderr
+          path = pathlib.Path("build/qualification/k1-k2-shared/packaged-kotlin-smoke.log")
+          path.write_text(log)
+          print(result.stdout)
+          print(result.stderr, file=sys.stderr)
+          result.check_returncode()
+
+      - name: Finalize fail-closed native receipt
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          output = pathlib.Path("build/qualification/k1-k2-shared/native-${{ matrix.platform }}.json")
+          subprocess.run([
+              sys.executable, "scripts/finalize-native-k1-k2-shared-foundations.py",
+              "--platform", "${{ matrix.platform }}",
+              "--revision", "${{ github.sha }}",
+              "--support-receipt", "build/qualification/k1-k2-shared/support-reconciliation.json",
+              "--smoke-log", "build/qualification/k1-k2-shared/packaged-kotlin-smoke.log",
+              "--report-root", "modules",
+              "--package-root", "modules/refactorkit-cli/build/package/refactorkit",
+              "--output", str(output),
+          ], check=True)
+
+      - name: Upload qualification receipt and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k1-k2-shared-foundations-${{ matrix.platform }}
+          path: |
+            build/qualification/k1-k2-shared/**
+            modules/*/build/test-results/test/TEST-*.xml
           if-no-files-found: error

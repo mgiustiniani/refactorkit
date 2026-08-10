@@ -15,14 +15,15 @@ import org.jetbrains.kotlin.name.ClassId;
 import org.jetbrains.kotlin.name.Name;
 import org.jetbrains.kotlin.psi.KtClass;
 import org.jetbrains.kotlin.psi.KtClassOrObject;
+import org.jetbrains.kotlin.psi.KtConstructor;
 import org.jetbrains.kotlin.psi.KtDeclaration;
-import org.jetbrains.kotlin.psi.KtDeclarationContainer;
 import org.jetbrains.kotlin.psi.KtEnumEntry;
 import org.jetbrains.kotlin.psi.KtFile;
 import org.jetbrains.kotlin.psi.KtObjectDeclaration;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.KtProperty;
 import org.jetbrains.kotlin.psi.KtParameter;
+import org.jetbrains.kotlin.psi.KtPrimaryConstructor;
 import org.jetbrains.kotlin.psi.KtTypeParameter;
 import org.jetbrains.org.objectweb.asm.ClassReader;
 import org.jetbrains.org.objectweb.asm.ClassVisitor;
@@ -54,7 +55,11 @@ final class KotlinCompilerSymbolExtractor {
 
     private KotlinCompilerSymbolExtractor() {}
 
-    static List<ExtractedSymbol> extract(List<Path> sources, Path outputDirectory) {
+    static List<ExtractedSymbol> extract(
+        List<Path> sources,
+        Path outputDirectory,
+        Map<String, KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature> signatures
+    ) {
         Disposable disposable = Disposer.newDisposable("refactorkit-kotlin-symbols");
         try {
             CompilerConfiguration configuration = new CompilerConfiguration();
@@ -84,7 +89,10 @@ final class KotlinCompilerSymbolExtractor {
                         break;
                     }
                 }
-                collect(file.getDeclarations(), path, outputDirectory, fileOwner, identities, methods, fields, result);
+                collect(
+                    file.getDeclarations(), path, outputDirectory, fileOwner, signatures,
+                    identities, methods, fields, result
+                );
             }
             result.sort(Comparator.comparing(ExtractedSymbol::identity));
             return result;
@@ -102,6 +110,7 @@ final class KotlinCompilerSymbolExtractor {
         Path source,
         Path outputDirectory,
         String callableOwner,
+        Map<String, KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature> signatures,
         Set<String> identities,
         Map<String, List<JvmMethod>> methods,
         Map<String, List<JvmField>> fields,
@@ -110,13 +119,21 @@ final class KotlinCompilerSymbolExtractor {
         for (KtDeclaration declaration : declarations) {
             if (declaration instanceof KtNamedFunction) {
                 collectFunction(
-                    (KtNamedFunction) declaration, source, outputDirectory, callableOwner, identities, methods, result
+                    (KtNamedFunction) declaration, source, outputDirectory, callableOwner, signatures,
+                    identities, methods, result
                 );
                 continue;
             }
             if (declaration instanceof KtProperty) {
                 collectProperty(
                     (KtProperty) declaration, source, outputDirectory, callableOwner, identities, fields, result
+                );
+                continue;
+            }
+            if (declaration instanceof KtConstructor) {
+                collectConstructor(
+                    (KtConstructor<?>) declaration, source, outputDirectory, signatures,
+                    identities, methods, result
                 );
                 continue;
             }
@@ -149,17 +166,27 @@ final class KotlinCompilerSymbolExtractor {
                 source.toString(),
                 identity,
                 "",
+                "",
                 identifier.getText(),
                 visibility(type),
                 identifier.getTextRange().getStartOffset(),
                 identifier.getTextRange().getEndOffset()
             ));
-            if (type instanceof KtDeclarationContainer) {
-                collect(
-                    ((KtDeclarationContainer) type).getDeclarations(), source, outputDirectory, identity,
-                    identities, methods, fields, result
-                );
+            if (type instanceof KtClass) {
+                KtPrimaryConstructor primary = ((KtClass) type).getPrimaryConstructor();
+                if (primary != null) {
+                    collectConstructor(
+                        primary, source, outputDirectory, signatures, identities, methods, result
+                    );
+                    collectConstructorProperties(
+                        primary, source, outputDirectory, identity, identities, fields, result
+                    );
+                }
             }
+            collect(
+                type.getDeclarations(), source, outputDirectory, identity, signatures,
+                identities, methods, fields, result
+            );
         }
     }
 
@@ -167,37 +194,34 @@ final class KotlinCompilerSymbolExtractor {
         KtNamedFunction function,
         Path source,
         Path outputDirectory,
-        String owner,
+        String expectedOwner,
+        Map<String, KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature> signatures,
         Set<String> identities,
         Map<String, List<JvmMethod>> methods,
         List<ExtractedSymbol> result
     ) {
         String name = function.getName();
-        if (owner == null) throw new SymbolExtractionException("kotlin.symbolCallableEvidenceMissing");
         org.jetbrains.kotlin.com.intellij.psi.PsiElement identifier = function.getNameIdentifier();
         if (name == null || identifier == null) throw new SymbolExtractionException("kotlin.symbolLocationUnavailable");
-        if (!JVM_SEGMENT.matcher(name).matches() || name.length() > 512 || owner.length() > 2048) {
-            throw new SymbolExtractionException("kotlin.symbolJvmNameUnsupported");
+        KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature signature = signatures.get(
+            KotlinCompilerCallableSignatureExtractor.declarationKey(source, identifier.getTextRange().getStartOffset())
+        );
+        if (signature == null || !"FUNCTION".equals(signature.kind()) || !name.equals(signature.sourceName())) {
+            throw new SymbolExtractionException("kotlin.symbolCallableSignatureMissing");
         }
-        List<JvmMethod> ownerMethods = methods.get(owner);
-        if (ownerMethods == null) {
-            ownerMethods = readMethods(outputDirectory, owner);
-            methods.put(owner, ownerMethods);
+        if (expectedOwner == null || !expectedOwner.equals(signature.owner())) {
+            throw new SymbolExtractionException("kotlin.symbolCallableOwnerMismatch");
         }
-        List<JvmMethod> matches = new ArrayList<JvmMethod>();
-        for (JvmMethod method : ownerMethods) if (method.name.equals(name)) matches.add(method);
-        if (matches.isEmpty()) throw new SymbolExtractionException("kotlin.symbolCallableEvidenceMissing");
-        if (matches.size() != 1) throw new SymbolExtractionException("kotlin.symbolCallableEvidenceAmbiguous");
-        String descriptor = matches.get(0).descriptor;
-        if (descriptor.length() > MAX_DESCRIPTOR_CHARS) {
-            throw new SymbolExtractionException("kotlin.symbolDescriptorLimitExceeded");
-        }
-        String identity = owner + "#" + name + descriptor;
+        JvmMethod verifiedMethod = verifyJvmMethod(outputDirectory, signature, methods);
+        String owner = signature.owner();
+        String jvmName = verifiedMethod.name;
+        String descriptor = verifiedMethod.descriptor;
+        String identity = owner + "#" + jvmName + descriptor;
         if (!identities.add(identity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
         if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
         String declaredVisibility = visibility(function);
         result.add(new ExtractedSymbol(
-            identity, name, "FUNCTION", source.toString(), owner, descriptor, identifier.getText(),
+            identity, name, "FUNCTION", source.toString(), owner, jvmName, descriptor, identifier.getText(),
             declaredVisibility, identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
         ));
         List<KtTypeParameter> typeParameters = function.getTypeParameters();
@@ -207,31 +231,145 @@ final class KotlinCompilerSymbolExtractor {
             org.jetbrains.kotlin.com.intellij.psi.PsiElement parameterIdentifier = parameter.getNameIdentifier();
             if (parameterName == null || parameterIdentifier == null || !JVM_SEGMENT.matcher(parameterName).matches()) continue;
             String parameterDescriptor = descriptor + "@" + index;
-            String parameterIdentity = owner + "#type-parameter:" + name + parameterDescriptor;
+            String parameterIdentity = owner + "#type-parameter:" + jvmName + parameterDescriptor;
             if (!identities.add(parameterIdentity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
             if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
             result.add(new ExtractedSymbol(
-                parameterIdentity, parameterName, "TYPE_PARAMETER", source.toString(), owner, parameterDescriptor,
-                parameterIdentifier.getText(), declaredVisibility,
+                parameterIdentity, parameterName, "TYPE_PARAMETER", source.toString(), owner, jvmName,
+                parameterDescriptor, parameterIdentifier.getText(), declaredVisibility,
                 parameterIdentifier.getTextRange().getStartOffset(), parameterIdentifier.getTextRange().getEndOffset()
             ));
         }
-        List<KtParameter> parameters = function.getValueParameters();
+        collectParameters(
+            function.getValueParameters(), source, owner, jvmName, descriptor, declaredVisibility, identities, result
+        );
+    }
+
+    private static void collectConstructor(
+        KtConstructor<?> constructor,
+        Path source,
+        Path outputDirectory,
+        Map<String, KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature> signatures,
+        Set<String> identities,
+        Map<String, List<JvmMethod>> methods,
+        List<ExtractedSymbol> result
+    ) {
+        KtClassOrObject type = constructor.getContainingClassOrObject();
+        String name = type.getName();
+        org.jetbrains.kotlin.com.intellij.psi.PsiElement identifier = constructor.getConstructorKeyword();
+        if (identifier == null && constructor.getValueParameterList() != null) {
+            identifier = constructor.getValueParameterList().getLeftParenthesis();
+        }
+        if (name == null || identifier == null) throw new SymbolExtractionException("kotlin.symbolLocationUnavailable");
+        KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature signature = signatures.get(
+            KotlinCompilerCallableSignatureExtractor.declarationKey(source, identifier.getTextRange().getStartOffset())
+        );
+        if (signature == null || !"CONSTRUCTOR".equals(signature.kind()) || !name.equals(signature.sourceName()) ||
+            !"<init>".equals(signature.jvmName())) {
+            throw new SymbolExtractionException("kotlin.symbolCallableEvidenceMissing");
+        }
+        JvmMethod verifiedMethod = verifyJvmMethod(outputDirectory, signature, methods);
+        String owner = signature.owner();
+        String descriptor = verifiedMethod.descriptor;
+        String identity = owner + "#<init>" + descriptor;
+        if (!identities.add(identity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
+        if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
+        String declaredVisibility = visibility(constructor);
+        result.add(new ExtractedSymbol(
+            identity, name, "CONSTRUCTOR", source.toString(), owner, "<init>", descriptor, identifier.getText(),
+            declaredVisibility, identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
+        ));
+        collectParameters(
+            constructor.getValueParameters(), source, owner, "<init>", descriptor,
+            declaredVisibility, identities, result
+        );
+    }
+
+    private static void collectParameters(
+        List<KtParameter> parameters,
+        Path source,
+        String owner,
+        String jvmName,
+        String descriptor,
+        String declaredVisibility,
+        Set<String> identities,
+        List<ExtractedSymbol> result
+    ) {
         for (int index = 0; index < parameters.size(); index++) {
             KtParameter parameter = parameters.get(index);
             String parameterName = parameter.getName();
             org.jetbrains.kotlin.com.intellij.psi.PsiElement parameterIdentifier = parameter.getNameIdentifier();
             if (parameterName == null || parameterIdentifier == null || !JVM_SEGMENT.matcher(parameterName).matches()) continue;
             String parameterDescriptor = descriptor + "@" + index;
-            String parameterIdentity = owner + "#parameter:" + name + parameterDescriptor;
+            String parameterIdentity = owner + "#parameter:" + jvmName + parameterDescriptor;
             if (!identities.add(parameterIdentity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
             if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
             result.add(new ExtractedSymbol(
-                parameterIdentity, parameterName, "PARAMETER", source.toString(), owner, parameterDescriptor,
-                parameterIdentifier.getText(), declaredVisibility,
+                parameterIdentity, parameterName, "PARAMETER", source.toString(), owner, jvmName,
+                parameterDescriptor, parameterIdentifier.getText(), declaredVisibility,
                 parameterIdentifier.getTextRange().getStartOffset(), parameterIdentifier.getTextRange().getEndOffset()
             ));
         }
+    }
+
+    private static void collectConstructorProperties(
+        KtPrimaryConstructor constructor,
+        Path source,
+        Path outputDirectory,
+        String owner,
+        Set<String> identities,
+        Map<String, List<JvmField>> fields,
+        List<ExtractedSymbol> result
+    ) {
+        List<JvmField> ownerFields = fields.get(owner);
+        if (ownerFields == null) {
+            ownerFields = readFields(outputDirectory, owner);
+            fields.put(owner, ownerFields);
+        }
+        for (KtParameter parameter : constructor.getValueParameters()) {
+            if (!parameter.hasValOrVar()) continue;
+            String name = parameter.getName();
+            org.jetbrains.kotlin.com.intellij.psi.PsiElement identifier = parameter.getNameIdentifier();
+            if (name == null || identifier == null || !JVM_SEGMENT.matcher(name).matches()) {
+                throw new SymbolExtractionException("kotlin.symbolLocationUnavailable");
+            }
+            List<JvmField> matches = new ArrayList<JvmField>();
+            for (JvmField field : ownerFields) if (field.name.equals(name)) matches.add(field);
+            if (matches.size() != 1) {
+                throw new SymbolExtractionException(
+                    matches.isEmpty() ? "kotlin.symbolPropertyBinaryMismatch" : "kotlin.symbolPropertyEvidenceAmbiguous"
+                );
+            }
+            String descriptor = matches.get(0).descriptor;
+            String identity = owner + "#property:" + name + ":" + descriptor;
+            if (!identities.add(identity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
+            if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
+            result.add(new ExtractedSymbol(
+                identity, name, "PROPERTY", source.toString(), owner, name, descriptor, identifier.getText(),
+                visibility(parameter), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
+            ));
+        }
+    }
+
+    private static JvmMethod verifyJvmMethod(
+        Path outputDirectory,
+        KotlinCompilerCallableSignatureExtractor.ExtractedCallableSignature signature,
+        Map<String, List<JvmMethod>> methods
+    ) {
+        List<JvmMethod> ownerMethods = methods.get(signature.owner());
+        if (ownerMethods == null) {
+            ownerMethods = readMethods(outputDirectory, signature.owner());
+            methods.put(signature.owner(), ownerMethods);
+        }
+        List<JvmMethod> exact = new ArrayList<JvmMethod>();
+        for (JvmMethod method : ownerMethods) {
+            if (method.name.equals(signature.jvmName()) && method.descriptor.equals(signature.descriptor())) {
+                exact.add(method);
+            }
+        }
+        if (exact.size() == 1) return exact.get(0);
+        if (exact.size() > 1) throw new SymbolExtractionException("kotlin.symbolCallableEvidenceAmbiguous");
+        throw new SymbolExtractionException("kotlin.symbolCallableBinaryMismatch");
     }
 
     private static void collectProperty(
@@ -260,7 +398,7 @@ final class KotlinCompilerSymbolExtractor {
         if (!identities.add(identity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
         if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
         result.add(new ExtractedSymbol(
-            identity, name, "PROPERTY", source.toString(), owner, descriptor, identifier.getText(),
+            identity, name, "PROPERTY", source.toString(), owner, name, descriptor, identifier.getText(),
             visibility(property), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset()
         ));
     }
@@ -312,7 +450,7 @@ final class KotlinCompilerSymbolExtractor {
                 public MethodVisitor visitMethod(
                     int access, String name, String descriptor, String signature, String[] exceptions
                 ) {
-                    if (!"<init>".equals(name) && !"<clinit>".equals(name) &&
+                    if (!"<clinit>".equals(name) &&
                         (access & (Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE)) == 0) {
                         if (methods.size() >= MAX_METHODS_PER_OWNER) {
                             throw new SymbolExtractionException("kotlin.symbolCallableEvidenceLimitExceeded");
@@ -378,6 +516,7 @@ final class KotlinCompilerSymbolExtractor {
         private final String kind;
         private final String path;
         private final String owner;
+        private final String jvmName;
         private final String descriptor;
         private final String selectionText;
         private final String visibility;
@@ -390,6 +529,7 @@ final class KotlinCompilerSymbolExtractor {
             String kind,
             String path,
             String owner,
+            String jvmName,
             String descriptor,
             String selectionText,
             String visibility,
@@ -401,6 +541,7 @@ final class KotlinCompilerSymbolExtractor {
             this.kind = kind;
             this.path = path;
             this.owner = owner;
+            this.jvmName = jvmName;
             this.descriptor = descriptor;
             this.selectionText = selectionText;
             this.visibility = visibility;
@@ -413,6 +554,7 @@ final class KotlinCompilerSymbolExtractor {
         String kind() { return kind; }
         String path() { return path; }
         String owner() { return owner; }
+        String jvmName() { return jvmName; }
         String descriptor() { return descriptor; }
         String selectionText() { return selectionText; }
         String visibility() { return visibility; }

@@ -103,37 +103,43 @@ Except for implicit `Companion` selecting `object`, the selection equals the
 symbol name. Worker paths are remapped from
 the immutable overlay and must identify a source in the attested snapshot.
 
-The same worker also publishes a first bounded function row. It derives the
-Kotlin file-facade or containing-type JVM owner through compiler APIs, reads the
-generated owner class with bounded ASM, and accepts a source function only when
-exactly one non-synthetic/non-bridge JVM method has the same name. Its public ID
-is `kotlin-jvm-callable-v1:<sha256>` over owner binary name, JVM method name and
-method descriptor. Top-level and direct class/interface/enum/object member
-functions are supported. Extension receivers, suspend lowering, erased generic
-signatures and default arguments are accepted only through that same primary-method
-evidence. Overloads, bridge ambiguity, `@JvmName`, local functions, constructors,
-accessors and synthetic/default helpers refuse or remain excluded rather than
-being guessed.
+The worker also publishes descriptor-exact callable, constructor, property,
+value-parameter and type-parameter rows. A K2 FIR pass computes the source
+callable's JVM owner, binary name and descriptor; the worker then requires one
+exact non-synthetic/non-bridge method in the bounded generated owner class.
+`kotlin-jvm-callable-v1:<sha256>` therefore distinguishes overloads and honors a
+compiler-accepted literal `@JvmName`. Extension receivers, suspend lowering,
+erased generics, nested binary names and default-argument primary methods are
+normalized before exact class-file comparison. Every source-declared primary or
+secondary constructor uses `kotlin-jvm-constructor-v1:<sha256>` over owner and
+exact `<init>` descriptor. Direct backing-field properties, function/constructor
+parameters and function type parameters use their separate descriptor-bearing
+ID families. A primary-constructor `val`/`var` has both parameter and property
+identities at the same PSI name; FIR symbol kind selects resolved uses without
+position-based guessing.
 
 The whole symbol read refuses rather than returning a partial declaration index
 when the snapshot does not compile, a JVM name/descriptor is unsupported,
-identity collides, binary or callable evidence is missing/ambiguous, or any
-result/location limit is exceeded. Enum entries, delegated/constructor properties,
-type aliases, local classes/functions and anonymous object expressions are outside the catalogue and
-are not presented as indexed symbols. Definition
-accepts only an opaque ID returned by this backend and resolves it against a newly
-attested copy of the same saved snapshot. Named/data/nested objects expose exact
-name ranges. An implicit companion has compiler identity/name `Companion` and an
-exact range over its `object` keyword because no source identifier exists.
-The worker also builds one atomic, bounded K2 FIR projection for direct function
-call names and source type usages. Real-PSI resolved references/types/qualifiers/
-imports must map exactly to an existing callable or type symbol; fake sources,
-locals, operators, unsupported/delegated properties, aliases and callable references are excluded. API
-`0.2` daemon `intelligence.query`, CLI and MCP expose saved-snapshot definition
-from those ranges and explicitly partial references under exact lease/snapshot/
-generation authority. Type aliases, overloaded or renamed JVM callables,
-cross-language callers and complete references remain refused; the type-usage row
-is not qualified until packaged/native acceptance passes.
+identity collides, exact binary evidence is missing/ambiguous, provider evidence
+is stale, or any result/location limit is exceeded. Enum entries, computed or
+delegated properties without direct field evidence, type aliases, local
+classes/functions, lambda/local parameters and anonymous object expressions are
+outside the catalogue. Synthetic/default/bridge helpers are never published as
+source declarations. Definition accepts only an opaque ID returned by this
+backend and resolves it against the same attested saved snapshot. Named/data/
+nested objects expose exact name ranges; implicit `Companion` selects its
+`object` keyword.
+
+The worker builds one atomic, bounded K2 FIR projection for direct function and
+constructor calls plus source type, property, value-parameter and type-parameter
+uses. Real-PSI resolved references/types/qualifiers/imports must map exactly to a
+catalogued declaration. Fake sources, locals, operators, delegated shapes and
+callable references remain excluded. API `0.2` daemon `intelligence.query`, CLI
+and MCP expose saved-snapshot definition and bounded references under exact
+lease/snapshot/generation authority. The shared JVM module can additionally join
+descriptor-exact JDT and K2 type/method/constructor/field identities for proven
+Java-to-Kotlin and Kotlin-to-Java references; it exposes no compiler handle and
+confers no mutation authority by itself.
 
 ## Integration surfaces
 
@@ -218,7 +224,8 @@ fully-qualified K2/JDT-bound identities, then moves the file within one
 authoritative source set. Kotlin and Java consumer sets are independently
 optional; zero-consumer public types rely on staged K2 declaration identity and
 explicit external-consumer-risk acceptance. Both rename directions and the bounded package-move row passed the native matrix,
-including CRLF-normalized Windows evidence. Overloads, delegated/constructor
-properties, broader moves, signature/extract/inline operations, multiplatform,
-Android and framework boundaries remain pending or explicitly refused. No partial read result inherits
-mutation authority.
+including CRLF-normalized Windows evidence. Descriptor-exact overloads and
+constructor properties are now read-only catalogue evidence; delegated/computed
+properties, broader moves, unqualified signature/extract/inline shapes,
+multiplatform, Android, compiler-plugin semantics and framework boundaries remain
+pending or explicitly refused. No partial read result inherits mutation authority.
