@@ -15,6 +15,7 @@ internal data class ManagedApplyDiagnosticsProviderFunctions(
     val javaMavenOwnership: (JavaLanguageAdapter, ProjectSnapshot) -> List<Diagnostic>,
     val javaJdt: (JavaLanguageAdapter, ProjectSnapshot) -> List<Diagnostic>,
     val kotlinJvmMoveDeclaration: (KotlinLanguageAdapter, ProjectSnapshot) -> List<Diagnostic>,
+    val kotlinJvmChangeSignature: (KotlinLanguageAdapter, ProjectSnapshot) -> List<Diagnostic>,
     val javaKotlinPublicTypeRename: (KotlinLanguageAdapter, ProjectSnapshot) -> List<Diagnostic>,
     val kotlinJavaPublicTypeRename: (KotlinLanguageAdapter, ProjectSnapshot) -> List<Diagnostic>,
     val kotlinK2: (KotlinLanguageAdapter, ProjectSnapshot) -> List<Diagnostic>,
@@ -47,6 +48,9 @@ object ManagedApplyDiagnosticsGateSelector {
             javaJdt = { currentAdapter, candidate -> currentAdapter.diagnostics(candidate) },
             kotlinJvmMoveDeclaration = { currentAdapter, candidate ->
                 KotlinJvmMoveDeclarationPlanner(currentAdapter).diagnostics(candidate)
+            },
+            kotlinJvmChangeSignature = { currentAdapter, candidate ->
+                KotlinJvmChangeSignaturePlanner(currentAdapter).diagnostics(candidate)
             },
             javaKotlinPublicTypeRename = { currentAdapter, candidate ->
                 JavaKotlinPublicTypeRenamePlanner(currentAdapter).diagnostics(candidate)
@@ -90,6 +94,10 @@ object ManagedApplyDiagnosticsGateSelector {
                 plan.operation == "moveDeclaration" ->
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->
                         providerFunctions.kotlinJvmMoveDeclaration(kotlinAdapter, candidate)
+                    }
+                plan.operation == org.refactorkit.kotlin.KotlinChangeSignaturePlanner.OPERATION ->
+                    DiagnosticsGate.enabled("kotlin-k2-java-jdt-change-signature") { candidate ->
+                        providerFunctions.kotlinJvmChangeSignature(kotlinAdapter, candidate)
                     }
                 javaAffected && plan.evidence == RefactoringEvidence.JDT_BINDING ->
                     DiagnosticsGate.enabled("kotlin-k2-java-jdt") { candidate ->

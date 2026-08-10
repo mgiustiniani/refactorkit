@@ -55,6 +55,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             javaMavenOwnership = javaProvider(ROUTE_JAVA_MAVEN_OWNERSHIP),
             javaJdt = javaProvider(ROUTE_JAVA_JDT),
             kotlinJvmMoveDeclaration = kotlinProvider(ROUTE_KOTLIN_JVM_MOVE),
+            kotlinJvmChangeSignature = kotlinProvider(ROUTE_KOTLIN_JVM_CHANGE_SIGNATURE),
             javaKotlinPublicTypeRename = kotlinProvider(ROUTE_JAVA_KOTLIN_RENAME),
             kotlinJavaPublicTypeRename = kotlinProvider(ROUTE_KOTLIN_JAVA_RENAME),
             kotlinK2 = kotlinProvider(ROUTE_KOTLIN_K2),
@@ -611,6 +612,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
         const val ROUTE_JAVA_MAVEN_OWNERSHIP = "java-maven-ownership-provider"
         const val ROUTE_JAVA_JDT = "java-jdt-provider"
         const val ROUTE_KOTLIN_JVM_MOVE = "kotlin-jvm-move-provider"
+        const val ROUTE_KOTLIN_JVM_CHANGE_SIGNATURE = "kotlin-jvm-change-signature-provider"
         const val ROUTE_JAVA_KOTLIN_RENAME = "java-kotlin-public-type-rename-provider"
         const val ROUTE_KOTLIN_JAVA_RENAME = "kotlin-java-public-type-rename-provider"
         const val ROUTE_KOTLIN_K2 = "kotlin-k2-provider"

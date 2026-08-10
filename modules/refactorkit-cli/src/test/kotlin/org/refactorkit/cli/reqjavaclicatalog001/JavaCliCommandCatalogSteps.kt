@@ -415,7 +415,7 @@ class JavaCliCommandCatalogSteps {
         assertEquals(0, semanticSessionAttempts)
     }
 
-    @Then("{string} matches its approved additive K1\\/K2 refusal evolution and remains valid only as the existing language-capability schema")
+    @Then("{string} matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema")
     fun capabilitiesRemainPinned(commandLine: String) {
         assertEquals("refactorkit capabilities", commandLine)
         assertEquals(PINNED_CAPABILITIES_SHA256, sha256(pinnedCapabilities))
@@ -686,11 +686,11 @@ class JavaCliCommandCatalogSteps {
     private companion object {
         const val CATALOGUE_SCHEMA = "refactorkit.cli-command-catalog/v1"
         const val CAPABILITIES_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-k1-k2-approved-872120125a3a.json"
+            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-k5-candidate-a8cc8f03c496.json"
         const val HELP_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/help-pre-slice-06fd4878c8fd.txt"
-        const val PINNED_CAPABILITIES_SHA256 = "872120125a3a84e5304635adcecfb1c65a11485a51fb13b7d831687b63dc666e"
-        const val PINNED_HELP_SHA256 = "06fd4878c8fd717a9515d6dd8572f182cff2067239c3bcc870fa3e184aafee61"
+            "org/refactorkit/cli/reqjavaclicatalog001/help-k5-candidate-56d503763b94.txt"
+        const val PINNED_CAPABILITIES_SHA256 = "a8cc8f03c496d7b48edb307e52e83358fbc34aa53205a68687b17e3cbb9325e3"
+        const val PINNED_HELP_SHA256 = "56d503763b94b513cdfe370a117a48786a7b669312bb30f911e3308591fe5a54"
         const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v1-guard/v1"
         const val PROBE_MODE = "probe"
         const val INVOKE_MODE = "invoke"

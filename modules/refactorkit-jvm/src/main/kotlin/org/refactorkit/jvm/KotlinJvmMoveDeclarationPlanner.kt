@@ -127,6 +127,12 @@ class KotlinJvmMoveDeclarationPlanner(
                 snapshot, "kotlin.moveFileShapeUnsupported",
                 "Kotlin move requires one public target plus only compiler-proven private top-level helpers",
             )
+        if (fileDeclarations.any { it.evidence.containsCallableReference }) return refused(
+            snapshot,
+            if (isTopLevelFunction) "kotlin.moveFunctionCallableReferenceUnsupported"
+            else "kotlin.moveCallableReferenceUnsupported",
+            "Kotlin move requires compiler-PSI proof that every moved top-level declaration contains no callable reference",
+        )
         if (isTopLevelFunction && fileDeclarations.count {
                 it.symbol.kind == Symbol.Kind.FUNCTION && it.symbol.name == target.name
             } != 1) return refused(

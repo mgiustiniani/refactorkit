@@ -531,6 +531,41 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicTopLevelKotlinFunctionMoveRefusesCallableReferenceInPrivateHelper() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").writeText(
+            "package fixture.api\nprivate fun helper(): () -> String = ::dependency\n" +
+                "fun publicGreeting(): String = helper()()\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/api/Dependency.kt").writeText(
+            "package fixture.api\nfun dependency(): String = \"source\"\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/api/v2/Dependency.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.api.v2\nfun dependency(): String = \"target\"\n")
+        }
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.consumer\nimport fixture.api.publicGreeting\n" +
+                "fun greeting(): String = publicGreeting()\n",
+        )
+        fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = catalogue.index.symbols.single { it.name == "publicGreeting" }
+        val helper = catalogue.index.symbols.single { it.name == "helper" }
+        assertTrue(catalogue.declarations.getValue(helper.id).containsCallableReference)
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.moveFunctionCallableReferenceUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun publicTopLevelKotlinFunctionMoveRefusesExternalPackageFunctionBindingSubstitution() {
         val fixture = moveFixture()
         val dependencyJar = compileExternalPackageFunctions(fixture.toolchain)
@@ -1410,11 +1445,122 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         assertTrue(fixture.root.resolve("src/main/java/fixture/Caller.java").toFile().readText().contains("PublicGreeting"))
     }
 
+    @Test
+    fun kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller() {
+        val fixture = changeSignatureFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(fixture.snapshot))
+        val target = catalogue.index.symbols.single { symbol ->
+            symbol.name == "render" && catalogue.declarations.getValue(symbol.id).let {
+                it.jvmOwner == "fixture.Formatter" && it.jvmDescriptor == "(Ljava/lang/String;)Ljava/lang/String;"
+            }
+        }
+        val planner = KotlinJvmChangeSignaturePlanner(adapter)
+
+        val plan = planner.previewRenameParameter(
+            fixture.snapshot, target.id, "value", "text", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertEquals(setOf(Path.of("src/main/kotlin/fixture/Api.kt")), plan.affectedFiles)
+        assertTrue(plan.warnings.any { it.contains("Java binding") }, plan.warnings.toString())
+        val beforeKotlin = fixture.root.resolve("src/main/kotlin/fixture/Api.kt").readBytes()
+        val beforeJava = fixture.root.resolve("src/main/java/fixture/Caller.java").readBytes()
+        val applied = assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).apply(
+            plan,
+            fixture.snapshot,
+            ApplyAuthorization.explicit("kotlin-change-signature-test"),
+            DiagnosticsGate.enabled("kotlin-k2-java-jdt", planner::diagnostics),
+        ))
+        val changed = fixture.root.resolve("src/main/kotlin/fixture/Api.kt").readText()
+        assertTrue("fun render(text: String = \"default\"): String" in changed, changed)
+        assertTrue("override fun render(text: String): String = text" in changed, changed)
+        assertTrue("override fun render(text: String): String = super.render(text)" in changed, changed)
+        assertTrue("formatter.render(text = \"kotlin\")" in changed, changed)
+        assertTrue("child.render(text = \"child\")" in changed, changed)
+        assertTrue("fun render(value: Int): String = value.toString()" in changed, changed)
+        assertTrue("other.render(value = \"other\")" in changed, changed)
+        assertTrue("fun render(value: String): String = value" in changed, changed)
+        assertTrue("formatter.render(value = 1)" in changed, changed)
+        assertTrue(beforeJava.contentEquals(fixture.root.resolve("src/main/java/fixture/Caller.java").readBytes()))
+        assertIs<ApplyResult.Applied>(PatchEngine(fixture.root).rollback(applied.transaction))
+        assertTrue(beforeKotlin.contentEquals(fixture.root.resolve("src/main/kotlin/fixture/Api.kt").readBytes()))
+        assertTrue(beforeJava.contentEquals(fixture.root.resolve("src/main/java/fixture/Caller.java").readBytes()))
+    }
+
+    @Test
+    fun publicKotlinParameterRenameRequiresExternalConsumerApproval() {
+        val fixture = changeSignatureFixture()
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(fixture.snapshot))
+        val target = catalogue.index.symbols.single { symbol ->
+            symbol.name == "render" && catalogue.declarations.getValue(symbol.id).let {
+                it.jvmOwner == "fixture.Formatter" && it.jvmDescriptor == "(Ljava/lang/String;)Ljava/lang/String;"
+            }
+        }
+
+        val plan = KotlinJvmChangeSignaturePlanner(adapter).previewRenameParameter(
+            fixture.snapshot, target.id, "value", "text",
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.changeSignatureExternalConsumerApprovalRequired", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
     private data class Fixture(
         val root: Path,
         val snapshot: org.refactorkit.core.ProjectSnapshot,
         val toolchain: KotlinSemanticToolchain,
     )
+
+    private fun changeSignatureFixture(): Fixture {
+        val root = temporaryDirectory("rk-jvm-kotlin-change-signature")
+        root.resolve("pom.xml").writeText("""
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>fixture</groupId><artifactId>mixed</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <build><plugins><plugin>
+                <groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-maven-plugin</artifactId><version>2.0.21</version>
+                <configuration><jvmTarget>21</jvmTarget><jdkToolchain><version>21</version></jdkToolchain></configuration>
+              </plugin></plugins></build>
+            </project>
+        """.trimIndent())
+        root.resolve("src/main/kotlin/fixture/Api.kt").apply {
+            parent.createDirectories()
+            writeText("""
+                package fixture
+                interface Contract {
+                    fun render(value: String = "default"): String
+                }
+                open class Formatter : Contract {
+                    override fun render(value: String): String = value
+                    fun render(value: Int): String = value.toString()
+                }
+                class Child : Formatter() {
+                    override fun render(value: String): String = super.render(value)
+                }
+                class Other {
+                    fun render(value: String): String = value
+                }
+                fun kotlinCalls(formatter: Formatter, child: Child, other: Other): String =
+                    formatter.render(value = "kotlin") + child.render(value = "child") +
+                        other.render(value = "other") + formatter.render(value = 1)
+            """.trimIndent() + "\n")
+        }
+        root.resolve("src/main/java/fixture/Caller.java").apply {
+            parent.createDirectories()
+            writeText("""
+                package fixture;
+                class Caller {
+                    String call(Formatter formatter) { return formatter.render("java"); }
+                }
+            """.trimIndent() + "\n")
+        }
+        val toolchain = toolchain(root)
+        return Fixture(root, KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain), toolchain)
+    }
 
     private fun moveFixture(): Fixture {
         val root = temporaryDirectory("rk-jvm-public-move")

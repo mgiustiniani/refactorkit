@@ -28,7 +28,10 @@ import org.jetbrains.kotlin.fir.declarations.FirProperty;
 import org.jetbrains.kotlin.fir.declarations.FirReceiverParameter;
 import org.jetbrains.kotlin.fir.declarations.FirResolvedImport;
 import org.jetbrains.kotlin.fir.declarations.FirTypeParameter;
+import org.jetbrains.kotlin.fir.expressions.FirFunctionCall;
+import org.jetbrains.kotlin.fir.expressions.FirNamedArgumentExpression;
 import org.jetbrains.kotlin.fir.expressions.FirResolvedQualifier;
+import org.jetbrains.kotlin.fir.expressions.impl.FirResolvedArgumentList;
 import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
 import org.jetbrains.kotlin.fir.scopes.jvm.SignatureUtilsKt;
@@ -72,6 +75,7 @@ import org.jetbrains.kotlin.psi.KtSimpleNameExpression;
 import org.jetbrains.kotlin.psi.KtTypeReference;
 import org.jetbrains.kotlin.psi.KtTypeParameter;
 import org.jetbrains.kotlin.psi.KtUserType;
+import org.jetbrains.kotlin.psi.KtValueArgument;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -184,6 +188,10 @@ final class KotlinCompilerUsageExtractor {
                     collectNamedReference(reference, declarationTargets, importAliases, identities, usages);
                     reference.acceptChildren(this);
                 }
+                @Override public void visitFunctionCall(FirFunctionCall call) {
+                    collectNamedArguments(call, declarationTargets, identities, usages);
+                    call.acceptChildren(this);
+                }
                 @Override public void visitTypeParameter(FirTypeParameter parameter) {
                     collectTypeParameter(parameter, declarationTargets, typeParameters);
                     parameter.acceptChildren(this);
@@ -214,6 +222,49 @@ final class KotlinCompilerUsageExtractor {
             throw failure("kotlin.usageExtractionFailed");
         } finally {
             Disposer.dispose(disposable);
+        }
+    }
+
+    private static void collectNamedArguments(
+        FirFunctionCall call,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (!(call.getArgumentList() instanceof FirResolvedArgumentList)) return;
+        FirResolvedArgumentList arguments = (FirResolvedArgumentList) call.getArgumentList();
+        for (org.jetbrains.kotlin.fir.expressions.FirExpression original :
+                arguments.getOriginalArgumentList().getArguments()) {
+            if (!(original instanceof FirNamedArgumentExpression)) continue;
+            FirNamedArgumentExpression argument = (FirNamedArgumentExpression) original;
+            org.jetbrains.kotlin.fir.declarations.FirValueParameter mapped = arguments.getMapping().get(argument);
+            if (mapped == null) mapped = arguments.getMapping().get(argument.getExpression());
+            if (mapped == null) throw failure("kotlin.usageNamedArgumentMappingUnavailable");
+            KtSourceElement parameterSource = mapped.getSource();
+            KtSourceElement argumentSource = argument.getSource();
+            if (!(parameterSource instanceof KtPsiSourceElement) || !(argumentSource instanceof KtPsiSourceElement)) {
+                continue;
+            }
+            PsiElement parameterPsi = ((KtPsiSourceElement) parameterSource).getPsi();
+            KtParameter parameter = parameterPsi instanceof KtParameter
+                ? (KtParameter) parameterPsi : parent(parameterPsi, KtParameter.class);
+            PsiElement parameterIdentifier = parameter == null ? null : parameter.getNameIdentifier();
+            if (parameter == null || parameterIdentifier == null) continue;
+            KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(declarationTargetKey(
+                canonicalPath(parameter.getContainingKtFile()), parameterIdentifier.getTextRange().getStartOffset(),
+                "PARAMETER"
+            ));
+            if (target == null) continue;
+            PsiElement argumentPsi = ((KtPsiSourceElement) argumentSource).getPsi();
+            KtValueArgument valueArgument = argumentPsi instanceof KtValueArgument
+                ? (KtValueArgument) argumentPsi : parent(argumentPsi, KtValueArgument.class);
+            org.jetbrains.kotlin.psi.ValueArgumentName argumentName = valueArgument == null
+                ? null : valueArgument.getArgumentName();
+            PsiElement label = argumentName == null ? null : argumentName.getReferenceExpression().getReferencedNameElement();
+            if (label == null || !label.getText().equals(target.name())) {
+                throw failure("kotlin.usageNamedArgumentLocationUnavailable");
+            }
+            addUsage(label, target, identities, usages);
         }
     }
 

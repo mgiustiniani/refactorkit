@@ -372,6 +372,128 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun organizeImportsUsesCounterfactualK2EvidenceForExternalCallables() {
+        val root = project(
+            "import java.util.Collections.singletonList\r\n" +
+                "import java.util.Collections.unmodifiableList\r\n" +
+                "import kotlin.math.absoluteValue\r\n" +
+                "fun values(): List<String> = unmodifiableList(listOf(\"value\"))\r\n",
+        )
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val beforeBytes = source.readBytes()
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val planner = KotlinOrganizeImportsPlanner(KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)))
+
+        val plan = planner.preview(snapshot, root.relativize(source))
+
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        val applied = assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(root).apply(
+                plan, snapshot, org.refactorkit.core.ApplyAuthorization.explicit("kotlin-callable-import-test"),
+                org.refactorkit.core.DiagnosticsGate.enabled("kotlin-k2", planner::diagnostics),
+            ),
+        )
+        assertEquals(
+            "package fixture\n" +
+                "import java.util.Collections.unmodifiableList\r\n" +
+                "fun values(): List<String> = unmodifiableList(listOf(\"value\"))\r\n",
+            source.readText(),
+        )
+        assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(root).rollback(applied.transaction),
+        )
+        assertTrue(beforeBytes.contentEquals(source.readBytes()))
+    }
+
+    @Test
+    fun organizeImportsRefusesCompilingCallableBindingSubstitution() {
+        val root = project(
+            "import java.util.Collections.emptyList\n" +
+                "import java.util.UUID\n" +
+                "fun values(): List<String> = emptyList()\n",
+        )
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val planner = KotlinOrganizeImportsPlanner(KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)))
+
+        val plan = planner.preview(snapshot, root.relativize(source))
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.organizeImportsBindingSubstitution", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+        assertTrue(source.readText().contains("import java.util.Collections.emptyList"))
+    }
+
+    @Test
+    fun organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables() {
+        val root = project(
+            "import fixture.library.render\n" +
+                "import java.time.Instant\n" +
+                "import kotlin.math.abs\n" +
+                "fun value(): String = render(Instant.EPOCH, listOf(abs(-1).toString()))\n",
+        )
+        root.resolve("src/main/kotlin/fixture/library/Library.kt").apply {
+            parent.createDirectories()
+            writeText(
+                "package fixture.library\n" +
+                    "fun render(value: java.time.Instant, items: List<String>): String = value.toString() + items.size\n",
+            )
+        }
+        root.resolve(".editorconfig").writeText(
+            "root = true\n" +
+                "[*.kt]\n" +
+                "ij_kotlin_imports_layout = kotlin.**,java.**,*\n",
+        )
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val planner = KotlinOrganizeImportsPlanner(KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)))
+
+        val plan = planner.preview(snapshot, root.relativize(source))
+
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, plan.status, plan.toString())
+        val edit = plan.workspaceEdit.edits.single() as org.refactorkit.core.FileEdit.Modify
+        val formatted = org.refactorkit.core.TextEdits.apply(source.readText(), edit.textEdits)
+        assertTrue(
+            formatted.contains(
+                "import kotlin.math.abs\n\n" +
+                    "import java.time.Instant\n\n" +
+                    "import fixture.library.render\n",
+            ),
+            formatted,
+        )
+        assertTrue(plan.warnings.any { it.contains(".editorconfig") }, plan.warnings.toString())
+    }
+
+    @Test
+    fun organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits() {
+        val root = project(
+            "import java.time.Instant\n" +
+                "import java.util.UUID\n" +
+                "fun value(): Instant = Instant.EPOCH\n",
+        )
+        val style = root.resolve(".editorconfig")
+        style.writeText("[*.kt]\nij_kotlin_imports_layout = unsupported-token\n")
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val planner = KotlinOrganizeImportsPlanner(KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)))
+
+        val unsupported = planner.preview(snapshot, root.relativize(source))
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, unsupported.status)
+        assertEquals("kotlin.organizeImportsStyleUnsupported", unsupported.refusalCode)
+        assertTrue(unsupported.workspaceEdit.edits.isEmpty())
+
+        style.writeText("[*.kt]\nij_kotlin_imports_layout = java.**,*\n")
+        val stale = planner.preview(snapshot, root.relativize(source))
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, stale.status)
+        assertEquals("kotlin.organizeImportsStyleStale", stale.refusalCode)
+        assertTrue(stale.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun privateTypeRenamePreviewUsesCompleteK2TokensAndStagedCompilerDiagnostics() {
         val root = project("""
             private class Secret
@@ -436,6 +558,91 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods() {
+        val root = project(
+            "interface Port { fun render(value: String): String }\n" +
+                "open class Base : Port { override fun render(value: String): String = value }\n" +
+                "class Child : Base() { override fun render(value: String): String = super.render(value) }\n" +
+                "class Unrelated { fun render(value: String): String = value }\n",
+        )
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+        val parameters = result.index.symbols.filter {
+            it.kind == org.refactorkit.core.Symbol.Kind.PARAMETER && it.name == "value"
+        }
+        assertEquals(4, parameters.size)
+        val byOwner = parameters.associateBy { result.declarations.getValue(it.id).jvmOwner }
+        val family = result.declarations.getValue(byOwner.getValue("fixture.Port").id).overrideFamilyId
+        assertTrue(family.matches(Regex("kotlin-override-family-v1:[0-9a-f]{64}")))
+        listOf("fixture.Port", "fixture.Base", "fixture.Child").forEach { owner ->
+            val evidence = result.declarations.getValue(byOwner.getValue(owner).id)
+            assertEquals(family, evidence.overrideFamilyId)
+            assertTrue(evidence.isHierarchyMember)
+        }
+        val unrelated = result.declarations.getValue(byOwner.getValue("fixture.Unrelated").id)
+        assertTrue(unrelated.overrideFamilyId != family)
+        assertTrue(!unrelated.isHierarchyMember)
+    }
+
+    @Test
+    fun namedArgumentsResolveToExactOverloadParameterSymbols() {
+        val root = project(
+            "fun render(value: String = \"default\"): String = value\n" +
+                "fun render(value: Int): String = value.toString()\n" +
+                "fun call(): String = render(value = \"named\") + render(value = 2)\n",
+        )
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(
+            KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot),
+        )
+        val parameters = result.index.symbols.filter {
+            it.kind == org.refactorkit.core.Symbol.Kind.PARAMETER && it.name == "value"
+        }
+        assertEquals(2, parameters.size)
+        val selectionsByDescriptor = parameters.associate { parameter ->
+            val evidence = result.declarations.getValue(parameter.id)
+            evidence.jvmDescriptor.substringBeforeLast('@') to result.usages.filter { it.targetId == parameter.id }
+                .map { usage ->
+                    val source = snapshot.files.single { it.path == usage.location.path }.content
+                    val start = org.refactorkit.core.TextEdits.offsetOf(source, usage.location.range.start)
+                    val end = org.refactorkit.core.TextEdits.offsetOf(source, usage.location.range.end)
+                    source.substring(start, end)
+                }
+        }
+        assertEquals(listOf("value", "value"), selectionsByDescriptor.getValue("(Ljava/lang/String;)Ljava/lang/String;"))
+        assertEquals(listOf("value", "value"), selectionsByDescriptor.getValue("(I)Ljava/lang/String;"))
+    }
+
+    @Test
+    fun changeSignatureRefusesCompilerProvenExternalOverrideBoundary() {
+        val root = project("""
+            class ExternalImpl : java.util.function.Function<String, String> {
+                override fun apply(value: String): String = value
+            }
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = catalogue.index.symbols.single {
+            it.name == "apply" && it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION
+        }
+        assertTrue(catalogue.declarations.getValue(target.id).hasExternalHierarchyBoundary)
+
+        val plan = KotlinChangeSignaturePlanner(adapter).previewRenameParameter(
+            snapshot, target.id, "value", "text", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status)
+        assertEquals("kotlin.changeSignatureExternalHierarchyUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun privateFunctionParameterRenameUsesOwnerDescriptorOrdinalIdentity() {
         val root = project("private fun format(value: Int): String = value.toString()\n")
         val toolchain = toolchain(root)
@@ -471,6 +678,121 @@ class KotlinCompilerDiagnosticsTest {
         assertEquals(3, plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
             .flatMap { it.textEdits }.size)
         assertTrue(plan.diagnosticsAfterPreview.none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR })
+    }
+
+    @Test
+    fun compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly() {
+        val root = project("""
+            import kotlin.jvm.JvmInline
+            import kotlin.jvm.JvmName
+            data class DataShape(val value: Int)
+            sealed class SealedShape
+            @JvmInline value class ValueShape(val value: Int)
+            suspend fun suspendedShape(): Int = 1
+            fun String.extensionShape(): Int = 2
+            @JvmName("binaryNamedShape") fun sourceNamedShape(): Int = 3
+        """.trimIndent() + "\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val symbolResult = KotlinCompilerDiagnostics(toolchain).analyzeSymbols(snapshot)
+        val result = assertIs<KotlinCompilerSymbolsResult.Available>(symbolResult, symbolResult.toString())
+        fun evidence(name: String, kind: org.refactorkit.core.Symbol.Kind): KotlinCompilerDeclarationEvidence {
+            val symbol = result.index.symbols.single { it.name == name && it.kind == kind }
+            return result.declarations.getValue(symbol.id)
+        }
+
+        assertTrue(evidence("DataShape", org.refactorkit.core.Symbol.Kind.CLASS).isDataClass)
+        assertTrue(evidence("SealedShape", org.refactorkit.core.Symbol.Kind.CLASS).isSealedClass)
+        assertTrue(evidence("ValueShape", org.refactorkit.core.Symbol.Kind.CLASS).isValueClass)
+        assertTrue(evidence("suspendedShape", org.refactorkit.core.Symbol.Kind.FUNCTION).isSuspendFunction)
+        assertTrue(evidence("extensionShape", org.refactorkit.core.Symbol.Kind.FUNCTION).hasExtensionReceiver)
+        assertTrue(evidence("sourceNamedShape", org.refactorkit.core.Symbol.Kind.FUNCTION).hasJvmNameEffect)
+        assertEquals("binaryNamedShape", evidence("sourceNamedShape", org.refactorkit.core.Symbol.Kind.FUNCTION).jvmName)
+
+        val delegatedRoot = project("private val delegatedShape by lazy { 1 }\n")
+        val delegatedToolchain = toolchain(delegatedRoot)
+        val delegatedSnapshot = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(delegatedRoot), delegatedToolchain,
+        )
+        val delegated = assertIs<KotlinCompilerSymbolsResult.Refused>(
+            KotlinCompilerDiagnostics(delegatedToolchain).analyzeSymbols(delegatedSnapshot),
+        )
+        assertEquals("kotlin.symbolDelegatedPropertyUnsupported", delegated.reason.code)
+    }
+
+    @Test
+    fun boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback() {
+        val extractRoot = project("fun answer(): Int = 40 + 2\nfun call(): Int = answer()\n")
+        val extractToolchain = toolchain(extractRoot)
+        val extractSnapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(extractRoot), extractToolchain)
+        val extractAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(extractToolchain))
+        val extractSource = extractRoot.resolve("src/main/kotlin/fixture/Broken.kt")
+        val extractBefore = extractSource.readBytes()
+
+        val extract = KotlinExtractMethodPlanner(extractAdapter).preview(
+            extractSnapshot, Path.of("src/main/kotlin/fixture/Broken.kt"), 2, 2, "fortyTwo",
+        )
+
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, extract.status, extract.toString())
+        val extractApplied = assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(extractRoot).apply(
+                extract, extractSnapshot, org.refactorkit.core.ApplyAuthorization.explicit("kotlin-extract-test"),
+                org.refactorkit.core.DiagnosticsGate.enabled("kotlin-k2", extractAdapter::diagnostics),
+            ),
+        )
+        assertTrue("fun answer(): Int = fortyTwo()" in extractSource.readText())
+        assertTrue("private fun fortyTwo() = 40 + 2" in extractSource.readText())
+        assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(extractRoot).rollback(extractApplied.transaction),
+        )
+        assertTrue(extractBefore.contentEquals(extractSource.readBytes()))
+
+        val inlineRoot = project("private fun fortyTwo() = 40 + 2\nfun call(): Int = fortyTwo()\n")
+        val inlineToolchain = toolchain(inlineRoot)
+        val inlineSnapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(inlineRoot), inlineToolchain)
+        val inlineAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(inlineToolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(inlineAdapter.compilerSymbols(inlineSnapshot))
+        val helper = catalogue.index.symbols.single { it.name == "fortyTwo" }
+        val inlineSource = inlineRoot.resolve("src/main/kotlin/fixture/Broken.kt")
+        val inlineBefore = inlineSource.readBytes()
+
+        val inline = KotlinInlineMethodPlanner(inlineAdapter).preview(inlineSnapshot, helper.id)
+
+        assertEquals(org.refactorkit.core.PatchStatus.PREVIEW, inline.status, inline.toString())
+        val inlineApplied = assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(inlineRoot).apply(
+                inline, inlineSnapshot, org.refactorkit.core.ApplyAuthorization.explicit("kotlin-inline-test"),
+                org.refactorkit.core.DiagnosticsGate.enabled("kotlin-k2", inlineAdapter::diagnostics),
+            ),
+        )
+        assertTrue("private fun fortyTwo" !in inlineSource.readText())
+        assertTrue("fun call(): Int = (40 + 2)" in inlineSource.readText())
+        assertIs<org.refactorkit.core.ApplyResult.Applied>(
+            org.refactorkit.core.PatchEngine(inlineRoot).rollback(inlineApplied.transaction),
+        )
+        assertTrue(inlineBefore.contentEquals(inlineSource.readBytes()))
+    }
+
+    @Test
+    fun extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits() {
+        val root = project("private fun helper(value: Int): Int = value + 1\nfun call(): Int = helper(1) + helper(2)\n")
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val helper = catalogue.index.symbols.single { it.name == "helper" }
+
+        val extract = KotlinExtractMethodPlanner(adapter).preview(
+            snapshot, Path.of("src/main/kotlin/fixture/Broken.kt"), 2, 2, "extracted",
+        )
+        val inline = KotlinInlineMethodPlanner(adapter).preview(snapshot, helper.id)
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, extract.status)
+        assertEquals("kotlin.extractSelectionUnsupported", extract.refusalCode)
+        assertTrue(extract.workspaceEdit.edits.isEmpty())
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, inline.status)
+        assertEquals("kotlin.inlineShapeUnsupported", inline.refusalCode)
+        assertTrue(inline.workspaceEdit.edits.isEmpty())
     }
 
     @Test

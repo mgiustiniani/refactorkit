@@ -8,17 +8,15 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourceRange
-import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
-import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import java.nio.file.Path
 
 /**
- * Bounded Kotlin extract method using K2 compiler evidence.
- * Extracts a selected range of statements/expressions into a new private method.
+ * Extracts one compiler-PSI-proven, top-level, zero-argument integer expression body.
+ * The deliberately narrow shape has no inputs, writes, jumps, receivers, or inferred free variables.
  */
 class KotlinExtractMethodPlanner(
     private val kotlin: KotlinLanguageAdapter,
@@ -30,133 +28,101 @@ class KotlinExtractMethodPlanner(
         endLine: Int,
         methodName: String,
     ): PatchPlan {
-        val source = snapshot.files.singleOrNull { it.path.normalize() == filePath.normalize() }
+        val normalized = filePath.normalize()
+        val source = snapshot.files.singleOrNull { it.path.normalize() == normalized }
             ?: return refused(snapshot, "kotlin.extractFileMissing", "File not found: $filePath")
         if (source.languageId != "kotlin") return refused(
             snapshot, "kotlin.extractUnsupported", "Kotlin extract requires one saved .kt file",
         )
-        if (!isValidKotlinIdentifier(methodName)) return refused(
-            snapshot, "kotlin.extractInvalidName", "Invalid Kotlin method name: $methodName",
+        if (!IDENTIFIER.matches(methodName) || methodName in KEYWORDS) return refused(
+            snapshot, "kotlin.extractInvalidName", "Invalid Kotlin helper name: $methodName",
+        )
+        if (startLine < 1 || endLine < startLine) return refused(
+            snapshot, "kotlin.extractInvalidRange", "Kotlin extract uses a non-empty one-based line range",
         )
 
-        val before = when (val result = kotlin.compilerDiagnostics(snapshot)) {
-            is KotlinCompilerDiagnosticsResult.Available -> result
-            is KotlinCompilerDiagnosticsResult.Refused -> return refused(
-                snapshot, "kotlin.extractEvidenceUnavailable", result.reason.message,
-            )
-            is KotlinCompilerDiagnosticsResult.Error -> return refused(
-                snapshot, "kotlin.extractEvidenceUnavailable", result.failure.message,
-            )
+        val before = available(snapshot, "kotlin.extract") ?: return refused(
+            snapshot, "kotlin.extractEvidenceUnavailable",
+            "Kotlin extract requires complete error-free K2 declaration and usage evidence",
+        )
+        val candidates = before.symbols.symbols.mapNotNull { symbol ->
+            val evidence = before.declarations[symbol.id] ?: return@mapNotNull null
+            val body = evidence.bodyRange ?: return@mapNotNull null
+            if (symbol.location.path.normalize() == normalized && evidence.isSimpleIntegerExpressionBody &&
+                body.start.line + 1 == startLine && body.end.line + 1 == endLine) {
+                symbol to evidence
+            } else null
         }
-        if (before.symbolFailure != null || before.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) return refused(
-            snapshot, "kotlin.extractBaselineIncomplete",
-            "Kotlin extract requires complete error-free K2 evidence", before.diagnostics,
+        if (candidates.size != 1) return refused(
+            snapshot, "kotlin.extractSelectionUnsupported",
+            "Kotlin extract accepts exactly one K2-proven top-level zero-argument integer expression body",
         )
-
-        val content = source.content
-        val lines = content.lineSequence().toList()
-        if (startLine < 1 || endLine > lines.size || startLine > endLine) return refused(
-            snapshot, "kotlin.extractInvalidRange",
-            "Extract range $startLine-$endLine is outside the file (${lines.size} lines)",
+        if (before.symbols.symbols.any { it.name == methodName }) return refused(
+            snapshot, "kotlin.extractNameConflict", "A Kotlin declaration already uses helper name '$methodName'",
         )
-
-        // Find the enclosing function/block
-        val extractStart = content.linesOffset(startLine)
-        val extractEnd = content.linesOffset(endLine)
-        val extractedCode = content.substring(extractStart, extractEnd)
-
-        // Check for return statements that would need refactoring
-        val hasReturn = Regex("""\breturn\b""").find(extractedCode) != null
-        if (hasReturn) return refused(
-            snapshot, "kotlin.extractReturnUnsupported",
-            "Extract method does not yet support code with return statements",
+        val (target, evidence) = candidates.single()
+        val bodyRange = requireNotNull(evidence.bodyRange)
+        val declarationRange = evidence.declarationRange ?: return refused(
+            snapshot, "kotlin.extractRangeUnavailable", "K2 omitted the exact enclosing declaration range",
         )
-
-        // Determine visibility and enclosing class
-        val classRegex = Regex("""(?m)^\s*(?:public|internal|private|protected)?\s*(?:class|object|fun)\s+(\w+)""")
-        val classMatch = classRegex.find(content) ?: return refused(
-            snapshot, "kotlin.extractNoEnclosingClass",
-            "No enclosing class or function found for extraction",
+        val bodyStart = TextEdits.offsetOf(source.content, bodyRange.start)
+        val bodyEnd = TextEdits.offsetOf(source.content, bodyRange.end)
+        val declarationEnd = TextEdits.offsetOf(source.content, declarationRange.end)
+        if (bodyStart !in 0 until bodyEnd || bodyEnd > source.content.length ||
+            declarationEnd !in bodyEnd..source.content.length) return refused(
+            snapshot, "kotlin.extractRangeUnavailable", "K2 returned an invalid extraction range",
         )
-
-        // Build the extracted method
-        val visibility = "private"
-        val returnType = "Unit"
-        val extractedMethod = buildString {
-            append("\n")
-            append("    $visibility fun $methodName(): $returnType {\n")
-            append("        ")
-            append(extractedCode.trimEnd().replace("\n", "\n        "))
-            append("\n    }\n")
-        }
-
-        // Insert the extracted method before the enclosing class end
-        val classEnd = content.lastIndexOf('}')
-        if (classEnd < 0) return refused(snapshot, "kotlin.extractNoClassEnd",
-            "Cannot locate enclosing class closing brace")
-
-        val edits = mutableListOf<TextEdit>()
-
-        // Replace selected code with call to extracted method
-        val startPos = TextEdits.positionForOffset(content, extractStart)
-        val endPos = TextEdits.positionForOffset(content, extractEnd)
-        edits.add(TextEdit(
-            SourceRange(startPos, endPos),
-            "$methodName()",
-        ))
-
-        // Insert extracted method before closing brace
-        val classEndLine = TextEdits.positionForOffset(content, classEnd).line
-        val classEndCol = classEnd - content.substring(0, classEnd).lastIndexOf('\n') - 1
-        edits.add(TextEdit(
-            SourceRange(SourcePosition(classEndLine, classEndCol), SourcePosition(classEndLine, classEndCol)),
-            extractedMethod,
-        ))
-
-        val workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(source.path, edits)))
+        val expression = source.content.substring(bodyStart, bodyEnd)
+        val newline = if ("\r\n" in source.content) "\r\n" else "\n"
+        val helper = "$newline${newline}private fun $methodName() = $expression"
+        val workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(source.path, listOf(
+            TextEdit(bodyRange, "$methodName()"),
+            TextEdit(SourceRange(declarationRange.end, declarationRange.end), helper),
+        ))))
         val staged = runCatching { WorkspaceEditSimulator.apply(snapshot, workspaceEdit) }.getOrElse {
-            return refused(snapshot, "kotlin.extractPreviewInvalid", it.message ?: "Invalid preview")
+            return refused(snapshot, "kotlin.extractPreviewInvalid", it.message ?: "Invalid Kotlin extract preview")
         }
-        val after = when (val result = kotlin.compilerDiagnostics(staged)) {
-            is KotlinCompilerDiagnosticsResult.Available -> result
-            is KotlinCompilerDiagnosticsResult.Refused -> return refused(
-                snapshot, "kotlin.extractStagedEvidenceUnavailable", result.reason.message,
-            )
-            is KotlinCompilerDiagnosticsResult.Error -> return refused(
-                snapshot, "kotlin.extractStagedEvidenceUnavailable", result.failure.message,
-            )
-        }
-        if (after.symbolFailure != null || after.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) return refused(
-            snapshot, "kotlin.extractDiagnosticsRegression",
-            "Extract method introduces compiler diagnostics", after.diagnostics,
+        val after = available(staged, "kotlin.extractStaged") ?: return refused(
+            snapshot, "kotlin.extractStagedEvidenceUnavailable",
+            "K2 did not return complete error-free evidence for the extracted post-image",
         )
-
+        val targetAfter = after.declarations.values.singleOrNull { it.jvmIdentity == evidence.jvmIdentity }
+        val helperAfter = after.symbols.symbols.singleOrNull { symbol ->
+            symbol.name == methodName && symbol.location.path.normalize() == normalized &&
+                after.declarations[symbol.id]?.isSimpleIntegerExpressionBody == true
+        }
+        if (targetAfter == null || helperAfter == null) return refused(
+            snapshot, "kotlin.extractPostImageIdentityMissing",
+            "K2 did not prove the unchanged target and new bounded helper identities",
+        )
         return PatchPlan(
-            operation = "extractMethod",
+            operation = OPERATION,
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 0.9,
+            confidence = 0.99,
             requiresUserApproval = true,
-            summary = "Extract method '$methodName' in ${filePath.fileName}",
-            affectedFiles = setOf(filePath),
+            summary = "Extract integer expression from '${target.name}' into private top-level '$methodName'.",
+            affectedFiles = workspaceEdit.affectedFiles(),
             workspaceEdit = workspaceEdit,
             diagnosticsBefore = before.diagnostics,
             diagnosticsAfterPreview = after.diagnostics,
             warnings = listOf(
-                "Kotlin extract method creates a private method. Verify call site and variable references.",
+                "Bounded extraction accepts only a compiler-PSI-proven zero-input integer expression body.",
             ),
-            riskLevel = RiskLevel.MEDIUM,
+            riskLevel = RiskLevel.LOW,
             evidence = RefactoringEvidence.NATIVE_AST,
         )
     }
 
-    private fun isValidKotlinIdentifier(name: String): Boolean = name.isNotBlank() &&
-        name.all { it.isLetterOrDigit() || it == '_' } &&
-        name[0].isLetter() || name[0] == '_'
-
-    private fun String.linesOffset(line: Int): Int {
-        val lines = this.lineSequence().toList()
-        return lines.take(line - 1).sumOf { it.length + 1 }
+    private fun available(snapshot: ProjectSnapshot, @Suppress("UNUSED_PARAMETER") prefix: String): Evidence? = when (
+        val result = kotlin.compilerDiagnostics(snapshot)
+    ) {
+        is KotlinCompilerDiagnosticsResult.Available -> if (
+            result.symbolFailure == null && result.symbols != null &&
+            result.diagnostics.none { it.severity == Diagnostic.Severity.ERROR }
+        ) Evidence(result.symbols, result.declarations, result.diagnostics) else null
+        is KotlinCompilerDiagnosticsResult.Refused -> null
+        is KotlinCompilerDiagnosticsResult.Error -> null
     }
 
     private fun refused(
@@ -165,7 +131,7 @@ class KotlinExtractMethodPlanner(
         message: String,
         diagnostics: List<Diagnostic> = emptyList(),
     ) = PatchPlan(
-        operation = "extractMethod",
+        operation = OPERATION,
         status = PatchStatus.REFUSED,
         snapshotHash = snapshot.hash,
         confidence = 0.0,
@@ -179,4 +145,20 @@ class KotlinExtractMethodPlanner(
         evidence = RefactoringEvidence.NATIVE_AST,
         refusalCode = code,
     )
+
+    private data class Evidence(
+        val symbols: org.refactorkit.core.SymbolIndex,
+        val declarations: Map<org.refactorkit.core.SymbolId, KotlinCompilerDeclarationEvidence>,
+        val diagnostics: List<Diagnostic>,
+    )
+
+    companion object {
+        const val OPERATION = "extractMethod"
+        private val IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]{0,511}")
+        private val KEYWORDS = setOf(
+            "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in",
+            "interface", "is", "null", "object", "package", "return", "super", "this", "throw", "true",
+            "try", "typealias", "typeof", "val", "var", "when", "while",
+        )
+    }
 }

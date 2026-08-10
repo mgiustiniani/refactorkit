@@ -797,8 +797,8 @@ class RefactorKitCli(
 
     private fun cmdKotlin(args: List<String>): Int {
         val operation = args.firstOrNull()
-        if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename", "move-declaration", "organize-imports", "change-signature")) {
-            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, rename, move-declaration, organize-imports, or change-signature")
+        if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename", "move-declaration", "organize-imports", "change-signature", "extract-method", "inline-method")) {
+            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, rename, move-declaration, organize-imports, change-signature, extract-method, or inline-method")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
@@ -816,8 +816,28 @@ class RefactorKitCli(
             System.err.println("Kotlin organize-imports requires --file")
             return 2
         }
-        if (operation == "change-signature" && listOf("symbol", "type", "name", "default").any { parsed.options[it] == null }) {
-            System.err.println("Kotlin shared change-signature requires --symbol, --type, --name, and --default")
+        if (operation == "extract-method" &&
+            listOf("file", "start-line", "end-line", "method-name").any { parsed.options[it] == null }) {
+            System.err.println("Kotlin extract-method requires --file, --start-line, --end-line, and --method-name")
+            return 2
+        }
+        if (operation == "inline-method" && parsed.options["symbol"] == null) {
+            System.err.println("Kotlin inline-method requires --symbol")
+            return 2
+        }
+        val kotlinSignatureMode = parsed.options["operation"] ?: "rename-parameter"
+        if (operation == "change-signature" && kotlinSignatureMode !in setOf("rename-parameter", "add-parameter")) {
+            System.err.println("Kotlin change-signature --operation must be rename-parameter or add-parameter")
+            return 2
+        }
+        if (operation == "change-signature" && kotlinSignatureMode == "rename-parameter" &&
+            listOf("symbol", "old-name", "new-name").any { parsed.options[it] == null }) {
+            System.err.println("Kotlin parameter rename requires --symbol, --old-name, and --new-name")
+            return 2
+        }
+        if (operation == "change-signature" && kotlinSignatureMode == "add-parameter" &&
+            listOf("symbol", "type", "name", "default").any { parsed.options[it] == null }) {
+            System.err.println("Kotlin shared add-parameter requires --symbol, --type, --name, and --default")
             return 2
         }
         if (positionNavigation && listOf("file", "line", "character").any { parsed.options[it] == null }) {
@@ -848,14 +868,20 @@ class RefactorKitCli(
                 put("compilerClasspath", buildJsonArray { compilerClasspath.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
                 put("allowWorkspaceLocalToolchain", "allow-workspace-local-toolchain" in parsed.flags)
             }).jsonObject
-            val result = if (operation in setOf("rename", "move-declaration", "organize-imports", "change-signature")) {
+            val result = if (operation in setOf(
+                    "rename", "move-declaration", "organize-imports", "change-signature", "extract-method", "inline-method",
+                )) {
                 val index = session.dispatch("index.status", null).jsonObject
                 val generation = index.getValue("generation").jsonPrimitive.content.toLong()
                 val preview = session.dispatch("refactor.preview", buildJsonObject {
                     put("operation", when (operation) {
                         "rename" -> "renameSymbol"
                         "move-declaration" -> "moveDeclaration"
-                        "change-signature" -> "changeSignature.addParameter"
+                        "change-signature" -> if (kotlinSignatureMode == "add-parameter") {
+                            "changeSignature.addParameter"
+                        } else "changeSignature.renameParameter"
+                        "extract-method" -> "extractMethod"
+                        "inline-method" -> "inlineMethod"
                         else -> "organizeImports"
                     }); put("languageId", "kotlin")
                     parsed.options["symbol"]?.let { put("symbol", it) }
@@ -866,9 +892,18 @@ class RefactorKitCli(
                         when (operation) {
                             "rename" -> put("newName", parsed.options.getValue("to"))
                             "move-declaration" -> put("targetPackage", parsed.options.getValue("to-package"))
-                            "change-signature" -> {
+                            "extract-method" -> {
+                                put("file", parsed.options.getValue("file"))
+                                put("startLine", parsed.options.getValue("start-line"))
+                                put("endLine", parsed.options.getValue("end-line"))
+                                put("methodName", parsed.options.getValue("method-name"))
+                            }
+                            "change-signature" -> if (kotlinSignatureMode == "add-parameter") {
                                 put("type", parsed.options.getValue("type")); put("name", parsed.options.getValue("name"))
                                 put("default", parsed.options.getValue("default")); put("includeKotlinCallers", true)
+                            } else {
+                                put("oldName", parsed.options.getValue("old-name"))
+                                put("newName", parsed.options.getValue("new-name"))
                             }
                             else -> put("file", parsed.options.getValue("file"))
                         }
@@ -1285,7 +1320,10 @@ class RefactorKitCli(
           refactorkit kotlin rename <root> --symbol <jvm-symbol-id> --to <new-name> [--accept-external-consumer-risk] [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin move-declaration <root> --symbol <jvm-symbol-id> --to-package <package> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin organize-imports <root> --file <relative.kt> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
-          refactorkit kotlin change-signature <root> --symbol <java-jvm-method-id> --type <javaType> --name <parameter> --default <expr> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin change-signature <root> --symbol <kotlin-jvm-callable-id> --old-name <parameter> --new-name <parameter> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin change-signature <root> --operation add-parameter --symbol <java-jvm-method-id> --type <javaType> --name <parameter> --default <expr> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin extract-method <root> --file <path.kt> --start-line <one-based> --end-line <one-based> --method-name <name> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit kotlin inline-method <root> --symbol <kotlin-jvm-callable-id> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]

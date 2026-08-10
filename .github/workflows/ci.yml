@@ -536,7 +536,7 @@ jobs:
         uses: gradle/actions/wrapper-validation@v4
 
       - name: Run exact K5 move-next tests
-        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.successfulK2CompilationReturnsDurableJvmTypeSymbolsWithExactPsiRanges' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicTopLevelKotlinFunctionMove*' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.standaloneCompanionMoveHasStableRefusalAndNoEdits' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest'
+        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.successfulK2CompilationReturnsDurableJvmTypeSymbolsWithExactPsiRanges' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicTopLevelKotlinFunctionMove*' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.standaloneCompanionMoveHasStableRefusalAndNoEdits' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinOnlyMoveUsesLazyOperationDiagnosticsRatherThanGenericK2' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinOnlyNonMoveRetainsLazyGenericK2Fallback'
 
       - name: Package exact subject
         run: ${{ matrix.gradle }} --no-daemon packageCliRuntime

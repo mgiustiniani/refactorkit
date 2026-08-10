@@ -177,7 +177,9 @@ class DaemonSessionTest {
         })
         val knownKotlinOps = setOf(
             "diagnostics", "workspaceSymbols", "documentSymbols", "definition",
-            "renameSymbol", "organizeImports", "companionObject", "dataClass",
+            "renameSymbol", "organizeImports", "changeSignature.renameParameter", "extractMethod", "inlineMethod",
+            "companionObject", "dataClass", "sealedClass", "valueClass", "extensionReceiver", "suspendFunction",
+            "jvmNameEffect", "delegatedProperty",
         )
         assertTrue(kotlinCapabilities.filter {
             it["operation"]!!.jsonPrimitive.content !in knownKotlinOps

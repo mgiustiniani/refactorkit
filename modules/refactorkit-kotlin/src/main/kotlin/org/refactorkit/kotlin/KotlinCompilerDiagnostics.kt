@@ -85,8 +85,21 @@ data class KotlinCompilerDeclarationEvidence(
     val isTopLevelFunction: Boolean = false,
     val isMovePlainFunction: Boolean = false,
     val containsCallableReference: Boolean = false,
+    val overrideFamilyId: String = "",
+    val isHierarchyMember: Boolean = false,
     val isTopLevelDeclaration: Boolean = false,
     val sourceTopLevelDeclarationCount: Int = 0,
+    val declarationRange: SourceRange? = null,
+    val bodyRange: SourceRange? = null,
+    val isSimpleIntegerExpressionBody: Boolean = false,
+    val hasExtensionReceiver: Boolean = false,
+    val isSuspendFunction: Boolean = false,
+    val isDataClass: Boolean = false,
+    val isSealedClass: Boolean = false,
+    val isValueClass: Boolean = false,
+    val isDelegatedProperty: Boolean = false,
+    val hasJvmNameEffect: Boolean = false,
+    val hasExternalHierarchyBoundary: Boolean = false,
 )
 
 private class CompiledOutputConsumerException(cause: Throwable) : RuntimeException(cause)
@@ -628,6 +641,18 @@ class KotlinCompilerDiagnostics private constructor(
                 ?: error("Kotlin compiler move-plain-function evidence is missing")
             val containsCallableReference = value.boolean("containsCallableReference")
                 ?: error("Kotlin compiler callable-reference evidence is missing")
+            val overrideFamilyId = value.string("overrideFamilyId")
+                ?.takeIf { it.isEmpty() || KOTLIN_OVERRIDE_FAMILY.matches(it) }
+                ?: error("Kotlin compiler override-family evidence is invalid")
+            val isHierarchyMember = value.boolean("hierarchyMember")
+                ?: error("Kotlin compiler hierarchy evidence is missing")
+            check(kind != Symbol.Kind.FUNCTION &&
+                !(kind == Symbol.Kind.PARAMETER && jvmName != "<init>") || overrideFamilyId.isNotEmpty()) {
+                "Kotlin compiler callable override-family evidence is missing"
+            }
+            check(!isHierarchyMember || kind in setOf(Symbol.Kind.FUNCTION, Symbol.Kind.PARAMETER)) {
+                "Kotlin compiler hierarchy evidence is invalid"
+            }
             val isTopLevelDeclaration = value.boolean("topLevelDeclaration")
                 ?: error("Kotlin compiler top-level-declaration evidence is missing")
             val sourceTopLevelDeclarationCount = value.int("sourceTopLevelDeclarationCount")
@@ -658,12 +683,69 @@ class KotlinCompilerDiagnostics private constructor(
             val source = sourcePaths[relative] ?: error("Kotlin compiler symbol source is outside snapshot")
             val compilerStart = value.int("startOffset") ?: error("Kotlin compiler symbol start is invalid")
             val compilerEnd = value.int("endOffset") ?: error("Kotlin compiler symbol end is invalid")
+            val compilerDeclarationStart = value.int("declarationStartOffset")
+                ?: error("Kotlin compiler declaration start is invalid")
+            val compilerDeclarationEnd = value.int("declarationEndOffset")
+                ?: error("Kotlin compiler declaration end is invalid")
+            val compilerBodyStart = value.int("bodyStartOffset")
+                ?: error("Kotlin compiler body start is invalid")
+            val compilerBodyEnd = value.int("bodyEndOffset")
+                ?: error("Kotlin compiler body end is invalid")
+            val simpleIntegerExpressionBody = value.boolean("simpleIntegerExpressionBody")
+                ?: error("Kotlin compiler simple-expression evidence is missing")
+            val hasExtensionReceiver = value.boolean("extensionReceiver")
+                ?: error("Kotlin compiler extension-receiver evidence is missing")
+            val isSuspendFunction = value.boolean("suspendFunction")
+                ?: error("Kotlin compiler suspend evidence is missing")
+            val isDataClass = value.boolean("dataClass")
+                ?: error("Kotlin compiler data-class evidence is missing")
+            val isSealedClass = value.boolean("sealedClass")
+                ?: error("Kotlin compiler sealed-class evidence is missing")
+            val isValueClass = value.boolean("valueClass")
+                ?: error("Kotlin compiler value-class evidence is missing")
+            val isDelegatedProperty = value.boolean("delegatedProperty")
+                ?: error("Kotlin compiler delegated-property evidence is missing")
+            val hasJvmNameEffect = value.boolean("jvmNameEffect")
+                ?: error("Kotlin compiler JVM-name evidence is missing")
+            val hasExternalHierarchyBoundary = value.boolean("externalHierarchyBoundary")
+                ?: error("Kotlin compiler external-hierarchy evidence is missing")
+            check((!hasExtensionReceiver || kind in setOf(Symbol.Kind.FUNCTION, Symbol.Kind.PROPERTY)) &&
+                (!isSuspendFunction || kind == Symbol.Kind.FUNCTION) &&
+                (!(isDataClass || isSealedClass || isValueClass) || kind == Symbol.Kind.CLASS) &&
+                (!isDelegatedProperty || kind == Symbol.Kind.PROPERTY) &&
+                (!hasJvmNameEffect || (kind == Symbol.Kind.FUNCTION && jvmName != name)) &&
+                (!hasExternalHierarchyBoundary || (kind == Symbol.Kind.FUNCTION && isHierarchyMember))) {
+                "Kotlin compiler advanced-shape evidence is invalid"
+            }
             val offsetMapper = offsetMappers.getOrPut(relative) { CompilerOffsetMapper(source.content) }
             val start = offsetMapper.sourceOffset(compilerStart) ?: error("Kotlin compiler symbol start is invalid")
             val end = offsetMapper.sourceOffset(compilerEnd) ?: error("Kotlin compiler symbol end is invalid")
+            val declarationStart = offsetMapper.sourceOffset(compilerDeclarationStart)
+                ?: error("Kotlin compiler declaration start is invalid")
+            val declarationEnd = offsetMapper.sourceOffset(compilerDeclarationEnd)
+                ?: error("Kotlin compiler declaration end is invalid")
+            val bodyOffsets = if (compilerBodyStart == -1 && compilerBodyEnd == -1) null else {
+                val bodyStart = offsetMapper.sourceOffset(compilerBodyStart)
+                    ?: error("Kotlin compiler body start is invalid")
+                val bodyEnd = offsetMapper.sourceOffset(compilerBodyEnd)
+                    ?: error("Kotlin compiler body end is invalid")
+                bodyStart to bodyEnd
+            }
             check(start >= 0 && end > start && end <= source.content.length &&
-                source.content.substring(start, end) == selectionText) {
+                source.content.substring(start, end) == selectionText &&
+                declarationStart in 0..start && declarationEnd in end..source.content.length &&
+                declarationEnd > declarationStart && bodyOffsets?.let { (bodyStart, bodyEnd) ->
+                    bodyStart >= declarationStart && bodyEnd <= declarationEnd && bodyEnd > bodyStart
+                } != false &&
+                (!simpleIntegerExpressionBody || (kind == Symbol.Kind.FUNCTION && isTopLevelFunction &&
+                    bodyOffsets != null && !source.content.substring(bodyOffsets.first, bodyOffsets.second).contains('\n')))) {
                 "Kotlin compiler symbol range is invalid"
+            }
+            val declarationRange = SourceRange(
+                position(source.content, declarationStart), position(source.content, declarationEnd),
+            )
+            val bodyRange = bodyOffsets?.let { (bodyStart, bodyEnd) ->
+                SourceRange(position(source.content, bodyStart), position(source.content, bodyEnd))
             }
             check(ids.add(id) && identityIds.put(identity, id) == null &&
                 declarations.put(id, KotlinCompilerDeclarationEvidence(
@@ -677,8 +759,21 @@ class KotlinCompilerDiagnostics private constructor(
                     isTopLevelFunction = isTopLevelFunction,
                     isMovePlainFunction = isMovePlainFunction,
                     containsCallableReference = containsCallableReference,
+                    overrideFamilyId = overrideFamilyId,
+                    isHierarchyMember = isHierarchyMember,
                     isTopLevelDeclaration = isTopLevelDeclaration,
                     sourceTopLevelDeclarationCount = sourceTopLevelDeclarationCount,
+                    declarationRange = declarationRange,
+                    bodyRange = bodyRange,
+                    isSimpleIntegerExpressionBody = simpleIntegerExpressionBody,
+                    hasExtensionReceiver = hasExtensionReceiver,
+                    isSuspendFunction = isSuspendFunction,
+                    isDataClass = isDataClass,
+                    isSealedClass = isSealedClass,
+                    isValueClass = isValueClass,
+                    isDelegatedProperty = isDelegatedProperty,
+                    hasJvmNameEffect = hasJvmNameEffect,
+                    hasExternalHierarchyBoundary = hasExternalHierarchyBoundary,
                 )) == null) {
                 "Kotlin compiler symbol identity is duplicated"
             }
@@ -836,12 +931,18 @@ class KotlinCompilerDiagnostics private constructor(
                     "Kotlin callable-owner method evidence exceeds the bounded limit"
                 "kotlin.symbolDescriptorLimitExceeded" ->
                     "Kotlin callable JVM descriptor exceeds the bounded limit"
+                "kotlin.symbolDelegatedPropertyUnsupported" ->
+                    "Kotlin delegated properties are detected but remain outside the bounded symbol catalogue"
                 "kotlin.usageTargetCollision" -> "Kotlin usage target identity is duplicated"
                 "kotlin.usageJvmTargetInvalid" -> "Kotlin usage JVM target is invalid"
                 "kotlin.usageFirResolutionFailed" -> "Kotlin FIR usage resolution failed"
                 "kotlin.usageTargetLocationUnavailable" -> "Kotlin usage target lacks an exact source location"
                 "kotlin.usageTargetMissing" -> "Kotlin usage target is absent from the proven declaration catalogue"
                 "kotlin.usageLocationUnavailable" -> "Kotlin usage lacks an exact source range"
+                "kotlin.usageNamedArgumentLocationUnavailable" ->
+                    "Kotlin named argument lacks an exact compiler-mapped parameter label"
+                "kotlin.usageNamedArgumentMappingUnavailable" ->
+                    "Kotlin named argument lacks an exact FIR argument-to-parameter mapping"
                 "kotlin.usageAliasLocationUnavailable" -> "Kotlin resolved import alias lacks an exact source location"
                 "kotlin.usageAliasCollision" -> "Kotlin resolved import alias has conflicting compiler targets"
                 "kotlin.usagePathInvalid" -> "Kotlin usage path is invalid"
@@ -1184,8 +1285,9 @@ class KotlinCompilerDiagnostics private constructor(
             "\\((?:\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))*\\)(?:V|\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;))",
         )
         private val JVM_FIELD_DESCRIPTOR = Regex("\\[*(?:[BCDFIJSZ]|L[A-Za-z0-9_$/]+;)")
+        private val KOTLIN_OVERRIDE_FAMILY = Regex("kotlin-override-family-v1:[0-9a-f]{64}")
         private val SYMBOL_FIELDS = setOf(
-            "identity", "name", "kind", "path", "owner", "jvmName", "descriptor", "selectionText", "visibility", "companion", "topLevelFunction", "movePlainFunction", "containsCallableReference", "topLevelDeclaration", "sourceTopLevelDeclarationCount", "startOffset", "endOffset",
+            "identity", "name", "kind", "path", "owner", "jvmName", "descriptor", "selectionText", "visibility", "companion", "topLevelFunction", "movePlainFunction", "containsCallableReference", "overrideFamilyId", "hierarchyMember", "topLevelDeclaration", "sourceTopLevelDeclarationCount", "declarationStartOffset", "declarationEndOffset", "bodyStartOffset", "bodyEndOffset", "simpleIntegerExpressionBody", "extensionReceiver", "suspendFunction", "dataClass", "sealedClass", "valueClass", "delegatedProperty", "jvmNameEffect", "externalHierarchyBoundary", "startOffset", "endOffset",
         )
         private val USAGE_FIELDS = setOf(
             "path", "targetIdentity", "selectionText", "startOffset", "endOffset",
@@ -1219,6 +1321,7 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.symbolCallableEvidenceAmbiguous",
             "kotlin.symbolCallableEvidenceLimitExceeded",
             "kotlin.symbolDescriptorLimitExceeded",
+            "kotlin.symbolDelegatedPropertyUnsupported",
             "kotlin.symbolExtractionFailed",
             "kotlin.usageTargetCollision",
             "kotlin.usageJvmTargetInvalid",
@@ -1226,6 +1329,8 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.usageTargetLocationUnavailable",
             "kotlin.usageTargetMissing",
             "kotlin.usageLocationUnavailable",
+            "kotlin.usageNamedArgumentLocationUnavailable",
+            "kotlin.usageNamedArgumentMappingUnavailable",
             "kotlin.usageAliasLocationUnavailable",
             "kotlin.usageAliasCollision",
             "kotlin.usagePathInvalid",

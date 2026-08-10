@@ -45,24 +45,48 @@ class KotlinLanguageAdapterTest {
         })
         val knownOperations = setOf(
             "diagnostics", "workspaceSymbols", "documentSymbols", "definition",
-            "renameSymbol", "organizeImports", "companionObject", "dataClass",
+            "renameSymbol", "organizeImports", "changeSignature.renameParameter", "extractMethod", "inlineMethod",
+            "companionObject", "dataClass", "sealedClass", "valueClass", "extensionReceiver", "suspendFunction",
+            "jvmNameEffect", "delegatedProperty",
         )
         assertTrue(descriptor.capabilities.filter {
             it.operation !in knownOperations
         }.all { it.stability == CapabilityStability.REFUSED && it.evidence == SemanticEvidenceKind.NONE })
-        val mutations = descriptor.capabilities.filter { it.operation in setOf("renameSymbol", "organizeImports") }
+        val mutations = descriptor.capabilities.filter {
+            it.operation in setOf(
+                "renameSymbol", "organizeImports", "changeSignature.renameParameter", "extractMethod", "inlineMethod",
+            )
+        }
         assertTrue(mutations.all {
             it.stability == CapabilityStability.EXPERIMENTAL &&
                 it.evidence == SemanticEvidenceKind.COMPILER &&
                 it.mutationAuthority == MutationAuthority.PROPOSAL_ONLY
         })
-        val mutationOperations = setOf("renameSymbol", "organizeImports", "companionObject", "dataClass")
+        val mutationOperations = setOf(
+            "renameSymbol", "organizeImports", "changeSignature.renameParameter", "extractMethod", "inlineMethod",
+        )
         assertTrue(descriptor.capabilities.filter { it.operation !in mutationOperations }
             .all { it.mutationAuthority == MutationAuthority.NONE })
+        val modeledShapes = descriptor.capabilities.filter { it.operation in setOf(
+            "companionObject", "dataClass", "sealedClass", "valueClass", "extensionReceiver", "suspendFunction",
+            "jvmNameEffect",
+        ) }
+        assertTrue(modeledShapes.all {
+            it.stability == CapabilityStability.EXPERIMENTAL &&
+                it.evidence == SemanticEvidenceKind.COMPILER && it.mutationAuthority == MutationAuthority.NONE
+        })
+        val delegated = descriptor.capabilities.single { it.operation == "delegatedProperty" }
+        assertEquals(CapabilityStability.REFUSED, delegated.stability)
+        assertEquals(SemanticEvidenceKind.COMPILER, delegated.evidence)
+        assertEquals(MutationAuthority.NONE, delegated.mutationAuthority)
         assertEquals(
-            setOf("android", "compilerPluginSemantics", "expectActual", "generatedCodeMutation", "multiplatform"),
+            setOf(
+                "android", "compilerPluginSemantics", "expectActual", "frameworkAwareSemantics",
+                "generatedCodeMutation", "multiplatform",
+            ),
             descriptor.capabilities.filter { it.operation in setOf(
-                "android", "compilerPluginSemantics", "expectActual", "generatedCodeMutation", "multiplatform",
+                "android", "compilerPluginSemantics", "expectActual", "frameworkAwareSemantics",
+                "generatedCodeMutation", "multiplatform",
             ) }.onEach { capability ->
                 assertEquals(CapabilityStability.REFUSED, capability.stability)
                 assertEquals(SemanticEvidenceKind.NONE, capability.evidence)
@@ -94,7 +118,12 @@ class KotlinLanguageAdapterTest {
             adapter.diagnostics(snapshot).map { it.code },
         )
         val refactorings = adapter.availableRefactorings(CodeSelection(location))
-        assertTrue(refactorings.any { it.id == "changeSignature" }, "Expected changeSignature in available refactorings")
+        assertTrue(
+            refactorings.map { it.id }.containsAll(
+                setOf("changeSignature.renameParameter", "extractMethod", "inlineMethod"),
+            ),
+            "Expected exact compiler-backed Kotlin refactorings",
+        )
 
         val plan = adapter.applyRefactoring(RefactoringRequest(
             operation = "renameSymbol",

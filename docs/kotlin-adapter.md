@@ -237,8 +237,9 @@ families in both source and destination packages. Location-bound exact outbound
 K2 identities must remain unchanged except for helpers moved with the file, so
 a cleanly compiling destination shadow cannot silently rebind behavior. Because
 source callable references are intentionally absent from bounded usage evidence,
-compiler PSI exposes their presence and the move refuses them with
-`kotlin.moveFunctionCallableReferenceUnsupported` before planning.
+compiler PSI exposes their presence on every admitted top-level declaration and
+the move refuses a reference in either the selected function or any private
+helper with `kotlin.moveFunctionCallableReferenceUnsupported` before planning.
 Kotlin-only move
 apply and daemon post-apply diagnostics use the operation-owned mixed K2/JDT
 provider rather than the generic K2 fallback. It
@@ -250,8 +251,19 @@ independent review pass; aliases, stars, implicit/qualified uses, callable
 references, overloads, extensions, suspend/default/`@JvmName`/multifile forms,
 and declaration splitting remain refused.
 
-Descriptor-exact overloads and
-constructor properties are now read-only catalogue evidence; delegated/computed
-properties, broader moves, unqualified signature/extract/inline shapes,
-multiplatform, Android, compiler-plugin semantics and framework boundaries remain
-pending or explicitly refused. No partial read result inherits mutation authority.
+A subsequent unpromoted K5 candidate adds three narrowly bounded families:
+
+- counterfactual-K2 callable/type import removal plus snapshot-bound
+  `.editorconfig`/`gradle.properties` import grouping;
+- exact parameter-name change across a compiler-proven source override family,
+  named arguments, defaults and unchanged positional Java/JVM bindings; and
+- extraction/inlining of only a top-level zero-input integer expression body,
+  using exact compiler declaration/body/use ranges.
+
+It also publishes read-only compiler facts for extension receivers, suspend
+functions, companion/data/sealed/value classes and exact JVM-name effects.
+Delegated properties return stable `kotlin.symbolDelegatedPropertyUnsupported`.
+Android, Multiplatform/`expect`/`actual`, generated/plugin and framework-aware
+semantics remain distinct typed refusal capabilities. None of these candidate
+rows is promoted until its packaged native gate and independent review pass.
+No partial read result inherits mutation authority.

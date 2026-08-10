@@ -27,9 +27,12 @@ import org.jetbrains.kotlin.fir.FirElement;
 import org.jetbrains.kotlin.fir.declarations.FirConstructor;
 import org.jetbrains.kotlin.fir.declarations.FirFunction;
 import org.jetbrains.kotlin.fir.declarations.FirReceiverParameter;
+import org.jetbrains.kotlin.fir.declarations.FirRegularClass;
 import org.jetbrains.kotlin.fir.declarations.FirSimpleFunction;
 import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
+import org.jetbrains.kotlin.fir.scopes.FirOverrideChecker;
+import org.jetbrains.kotlin.fir.scopes.FirOverrideCheckerKt;
 import org.jetbrains.kotlin.fir.scopes.jvm.SignatureUtilsKt;
 import org.jetbrains.kotlin.fir.types.ConeKotlinType;
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
@@ -45,13 +48,16 @@ import org.jetbrains.kotlin.psi.KtExpression;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.ValueArgument;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.regex.Pattern;
 
 /** Exact K2 FIR-to-JVM callable signatures keyed by compiler PSI declaration locations. */
@@ -97,6 +103,8 @@ final class KotlinCompilerCallableSignatureExtractor {
 
             final Map<String, ExtractedCallableSignature> signatures =
                 new LinkedHashMap<String, ExtractedCallableSignature>();
+            final List<FirSimpleFunction> sourceFunctions = new ArrayList<FirSimpleFunction>();
+            final Map<ClassId, List<ClassId>> classSupertypes = new HashMap<ClassId, List<ClassId>>();
             FirVisitorVoid visitor = new FirVisitorVoid() {
                 @Override public void visitElement(FirElement element) { element.acceptChildren(this); }
                 @Override public Object visitElement(FirElement element, Object ignored) {
@@ -105,16 +113,24 @@ final class KotlinCompilerCallableSignatureExtractor {
                 }
                 @Override public void visitSimpleFunction(FirSimpleFunction function) {
                     collectFunction(function, signatures);
+                    if (sourceDeclaration(function.getSource(), KtNamedFunction.class) != null) {
+                        sourceFunctions.add(function);
+                    }
                     function.acceptChildren(this);
                 }
                 @Override public void visitConstructor(FirConstructor constructor) {
                     collectConstructor(constructor, signatures);
                     constructor.acceptChildren(this);
                 }
+                @Override public void visitRegularClass(FirRegularClass declaration) {
+                    collectClassSupertypes(declaration, classSupertypes);
+                    declaration.acceptChildren(this);
+                }
             };
             for (ModuleCompilerAnalyzedOutput output : result.getOutputs()) {
                 for (org.jetbrains.kotlin.fir.declarations.FirFile file : output.getFir()) file.accept(visitor);
             }
+            bindOverrideFamilies(sourceFunctions, classSupertypes, signatures);
             return Collections.unmodifiableMap(signatures);
         } catch (KotlinCompilerSymbolExtractor.SymbolExtractionException failure) {
             throw failure;
@@ -151,6 +167,150 @@ final class KotlinCompilerCallableSignatureExtractor {
         JvmContentRootsKt.addJvmClasspathRoots(configuration, classpathFiles);
         JvmContentRootsKt.configureJdkClasspathRoots(configuration);
         return configuration;
+    }
+
+    private static void collectClassSupertypes(
+        FirRegularClass declaration,
+        Map<ClassId, List<ClassId>> classSupertypes
+    ) {
+        ClassId classId = declaration.getSymbol().getClassId();
+        if (classId == null || classId.isLocal()) return;
+        List<ClassId> parents = new ArrayList<ClassId>();
+        for (FirTypeRef reference : declaration.getSuperTypeRefs()) {
+            if (!(reference instanceof FirResolvedTypeRef) ||
+                !(((FirResolvedTypeRef) reference).getType() instanceof org.jetbrains.kotlin.fir.types.ConeClassLikeType)) {
+                continue;
+            }
+            ClassId parent = ((org.jetbrains.kotlin.fir.types.ConeClassLikeType)
+                ((FirResolvedTypeRef) reference).getType()).getLookupTag().getClassId();
+            if (parent != null && !parent.isLocal()) parents.add(parent);
+        }
+        classSupertypes.put(classId, Collections.unmodifiableList(parents));
+    }
+
+    private static boolean hasExternalAncestor(
+        ClassId child,
+        Map<ClassId, List<ClassId>> classSupertypes,
+        java.util.Set<ClassId> visited
+    ) {
+        if (!visited.add(child)) return false;
+        for (ClassId parent : classSupertypes.getOrDefault(child, Collections.<ClassId>emptyList())) {
+            String identity = parent.asSingleFqName().asString();
+            if ("kotlin.Any".equals(identity) || "java.lang.Object".equals(identity)) continue;
+            if (!classSupertypes.containsKey(parent) ||
+                hasExternalAncestor(parent, classSupertypes, visited)) return true;
+        }
+        return false;
+    }
+
+    private static boolean inherits(
+        ClassId child,
+        ClassId expectedParent,
+        Map<ClassId, List<ClassId>> classSupertypes,
+        java.util.Set<ClassId> visited
+    ) {
+        if (!visited.add(child)) return false;
+        for (ClassId parent : classSupertypes.getOrDefault(child, Collections.<ClassId>emptyList())) {
+            if (parent.equals(expectedParent) || inherits(parent, expectedParent, classSupertypes, visited)) return true;
+        }
+        return false;
+    }
+
+    private static void bindOverrideFamilies(
+        List<FirSimpleFunction> functions,
+        Map<ClassId, List<ClassId>> classSupertypes,
+        Map<String, ExtractedCallableSignature> signatures
+    ) {
+        List<FirSimpleFunction> catalogued = new ArrayList<FirSimpleFunction>();
+        List<String> keys = new ArrayList<String>();
+        for (FirSimpleFunction function : functions) {
+            KtNamedFunction declaration = sourceDeclaration(function.getSource(), KtNamedFunction.class);
+            if (declaration == null || declaration.getNameIdentifier() == null) continue;
+            String key = declarationKey(
+                canonicalPath(declaration.getContainingKtFile()),
+                declaration.getNameIdentifier().getTextRange().getStartOffset()
+            );
+            if (signatures.containsKey(key)) {
+                catalogued.add(function);
+                keys.add(key);
+            }
+        }
+        if (catalogued.isEmpty()) return;
+        int[] parent = new int[catalogued.size()];
+        for (int index = 0; index < parent.length; index++) parent[index] = index;
+        FirOverrideChecker checker = FirOverrideCheckerKt.getFirOverrideChecker(
+            catalogued.get(0).getModuleData().getSession()
+        );
+        for (int left = 0; left < catalogued.size(); left++) {
+            for (int right = left + 1; right < catalogued.size(); right++) {
+                FirSimpleFunction first = catalogued.get(left);
+                FirSimpleFunction second = catalogued.get(right);
+                if (!first.getName().equals(second.getName())) continue;
+                ClassId firstOwner = first.getSymbol().getCallableId().getClassId();
+                ClassId secondOwner = second.getSymbol().getCallableId().getClassId();
+                if (firstOwner == null || secondOwner == null ||
+                    (!inherits(firstOwner, secondOwner, classSupertypes, new java.util.HashSet<ClassId>()) &&
+                        !inherits(secondOwner, firstOwner, classSupertypes, new java.util.HashSet<ClassId>()))) continue;
+                if (checker.isOverriddenFunction(first, second) || checker.isOverriddenFunction(second, first)) {
+                    union(parent, left, right);
+                }
+            }
+        }
+        Map<Integer, List<Integer>> groups = new HashMap<Integer, List<Integer>>();
+        for (int index = 0; index < parent.length; index++) {
+            int root = find(parent, index);
+            groups.computeIfAbsent(root, ignored -> new ArrayList<Integer>()).add(index);
+        }
+        for (List<Integer> group : groups.values()) {
+            List<String> identities = new ArrayList<String>();
+            for (int index : group) identities.add(signatures.get(keys.get(index)).jvmIdentity());
+            Collections.sort(identities);
+            String familyId = "kotlin-override-family-v1:" + sha256(String.join("\u0000", identities));
+            boolean family = group.size() > 1;
+            boolean externalBoundary = false;
+            for (int index : group) {
+                FirSimpleFunction function = catalogued.get(index);
+                ClassId owner = function.getSymbol().getCallableId().getClassId();
+                if (function.getStatus().isOverride() && owner != null &&
+                    hasExternalAncestor(owner, classSupertypes, new java.util.HashSet<ClassId>())) {
+                    externalBoundary = true;
+                }
+            }
+            for (int index : group) {
+                FirSimpleFunction function = catalogued.get(index);
+                signatures.get(keys.get(index)).bindOverrideFamily(
+                    familyId, family || function.getStatus().isOverride(), externalBoundary
+                );
+            }
+        }
+    }
+
+    private static int find(int[] parent, int value) {
+        int root = value;
+        while (parent[root] != root) root = parent[root];
+        while (parent[value] != value) {
+            int next = parent[value];
+            parent[value] = root;
+            value = next;
+        }
+        return root;
+    }
+
+    private static void union(int[] parent, int left, int right) {
+        int first = find(parent, left);
+        int second = find(parent, right);
+        if (first != second) parent[second] = first;
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(64);
+            for (byte item : digest) result.append(String.format(java.util.Locale.ROOT, "%02x", item & 0xff));
+            return result.toString();
+        } catch (Exception failure) {
+            throw failure("kotlin.symbolOverrideEvidenceUnavailable");
+        }
     }
 
     private static void collectFunction(
@@ -363,6 +523,9 @@ final class KotlinCompilerCallableSignatureExtractor {
         private final String descriptor;
         private final String sourceName;
         private final String kind;
+        private String overrideFamilyId = "";
+        private boolean hierarchyMember;
+        private boolean externalHierarchyBoundary;
 
         private ExtractedCallableSignature(
             String owner,
@@ -383,13 +546,24 @@ final class KotlinCompilerCallableSignatureExtractor {
         String descriptor() { return descriptor; }
         String sourceName() { return sourceName; }
         String kind() { return kind; }
+        String overrideFamilyId() { return overrideFamilyId; }
+        boolean isHierarchyMember() { return hierarchyMember; }
+        boolean hasExternalHierarchyBoundary() { return externalHierarchyBoundary; }
+        String jvmIdentity() { return owner + "#" + jvmName + descriptor; }
+        void bindOverrideFamily(String familyId, boolean member, boolean externalBoundary) {
+            this.overrideFamilyId = familyId;
+            this.hierarchyMember = member;
+            this.externalHierarchyBoundary = externalBoundary;
+        }
 
         @Override public boolean equals(Object other) {
             if (this == other) return true;
             if (!(other instanceof ExtractedCallableSignature)) return false;
             ExtractedCallableSignature value = (ExtractedCallableSignature) other;
             return owner.equals(value.owner) && jvmName.equals(value.jvmName) && descriptor.equals(value.descriptor) &&
-                sourceName.equals(value.sourceName) && kind.equals(value.kind);
+                sourceName.equals(value.sourceName) && kind.equals(value.kind) &&
+                overrideFamilyId.equals(value.overrideFamilyId) && hierarchyMember == value.hierarchyMember &&
+                externalHierarchyBoundary == value.externalHierarchyBoundary;
         }
 
         @Override public int hashCode() {
@@ -398,6 +572,9 @@ final class KotlinCompilerCallableSignatureExtractor {
             result = 31 * result + descriptor.hashCode();
             result = 31 * result + sourceName.hashCode();
             result = 31 * result + kind.hashCode();
+            result = 31 * result + overrideFamilyId.hashCode();
+            result = 31 * result + Boolean.hashCode(hierarchyMember);
+            result = 31 * result + Boolean.hashCode(externalHierarchyBoundary);
             return result;
         }
     }

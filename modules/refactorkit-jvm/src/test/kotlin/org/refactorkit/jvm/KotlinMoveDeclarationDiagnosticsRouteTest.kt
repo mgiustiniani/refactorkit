@@ -32,6 +32,24 @@ class KotlinMoveDeclarationDiagnosticsRouteTest {
     }
 
     @Test
+    fun kotlinChangeSignatureUsesLazyMixedOperationDiagnostics() {
+        val calls = linkedMapOf<String, Int>()
+        val gate = ManagedApplyDiagnosticsGateSelector.select(
+            plan = plan(org.refactorkit.kotlin.KotlinChangeSignaturePlanner.OPERATION),
+            languageId = "kotlin",
+            javaAdapter = JavaLanguageAdapter(),
+            kotlinAdapter = KotlinLanguageAdapter(),
+            externalGateResolver = { error("external resolver must remain unused") },
+            providerFunctions = providers(calls),
+        )
+
+        assertEquals("kotlin-k2-java-jdt-change-signature", gate.id)
+        assertEquals(emptyMap(), calls)
+        assertEquals(emptyList(), requireNotNull(gate.provider).invoke(snapshot()))
+        assertEquals(mapOf("change-signature" to 1), calls)
+    }
+
+    @Test
     fun kotlinOnlyNonMoveRetainsLazyGenericK2Fallback() {
         val calls = linkedMapOf<String, Int>()
         val gate = ManagedApplyDiagnosticsGateSelector.select(
@@ -53,6 +71,7 @@ class KotlinMoveDeclarationDiagnosticsRouteTest {
         javaMavenOwnership = { _, _ -> record(calls, "java-maven") },
         javaJdt = { _, _ -> record(calls, "java-jdt") },
         kotlinJvmMoveDeclaration = { _, _ -> record(calls, "move") },
+        kotlinJvmChangeSignature = { _, _ -> record(calls, "change-signature") },
         javaKotlinPublicTypeRename = { _, _ -> record(calls, "java-kotlin") },
         kotlinJavaPublicTypeRename = { _, _ -> record(calls, "kotlin-java") },
         kotlinK2 = { _, _ -> record(calls, "k2") },

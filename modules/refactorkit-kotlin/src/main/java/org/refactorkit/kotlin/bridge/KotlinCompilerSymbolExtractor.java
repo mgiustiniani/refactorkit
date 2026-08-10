@@ -54,6 +54,7 @@ final class KotlinCompilerSymbolExtractor {
     private static final Pattern JVM_BINARY_NAME = Pattern.compile(
         "[A-Za-z_][A-Za-z0-9_]*(?:[.$][A-Za-z_][A-Za-z0-9_]*)*"
     );
+    private static final Pattern SIMPLE_INTEGER_EXPRESSION = Pattern.compile("[0-9_()+\\-*/% ]{1,256}");
 
     private KotlinCompilerSymbolExtractor() {}
 
@@ -176,16 +177,27 @@ final class KotlinCompilerSymbolExtractor {
                 type instanceof KtObjectDeclaration && ((KtObjectDeclaration) type).isCompanion(),
                 false,
                 false,
+                PsiTreeUtil.findChildOfType(type, KtCallableReferenceExpression.class) != null,
+                "",
                 false,
                 isTopLevelDeclaration(type),
-                sourceTopLevelDeclarationCount(type)
+                sourceTopLevelDeclarationCount(type),
+                type.getTextRange().getStartOffset(), type.getTextRange().getEndOffset(), -1, -1, false,
+                false, false,
+                type instanceof KtClass && ((KtClass) type).hasModifier(KtTokens.DATA_KEYWORD),
+                type.hasModifier(KtTokens.SEALED_KEYWORD),
+                type instanceof KtClass && ((KtClass) type).hasModifier(KtTokens.VALUE_KEYWORD),
+                false, false, false
             ));
             if (type instanceof KtClass) {
-                KtPrimaryConstructor primary = ((KtClass) type).getPrimaryConstructor();
+                KtClass klass = (KtClass) type;
+                KtPrimaryConstructor primary = klass.getPrimaryConstructor();
                 if (primary != null) {
-                    collectConstructor(
-                        primary, source, outputDirectory, signatures, identities, methods, result
-                    );
+                    if (!klass.hasModifier(KtTokens.VALUE_KEYWORD)) {
+                        collectConstructor(
+                            primary, source, outputDirectory, signatures, identities, methods, result
+                        );
+                    }
                     collectConstructorProperties(
                         primary, source, outputDirectory, identity, identities, fields, result
                     );
@@ -228,12 +240,24 @@ final class KotlinCompilerSymbolExtractor {
         if (!identities.add(identity)) throw new SymbolExtractionException("kotlin.symbolIdentityCollision");
         if (result.size() >= MAX_SYMBOLS) throw new SymbolExtractionException("kotlin.symbolLimitExceeded");
         String declaredVisibility = visibility(function);
+        org.jetbrains.kotlin.psi.KtExpression body = function.getBodyExpression();
+        boolean simpleIntegerExpressionBody = function.getParent() instanceof KtFile &&
+            function.getValueParameters().isEmpty() && function.getTypeParameters().isEmpty() &&
+            function.getReceiverTypeReference() == null && function.getAnnotationEntries().isEmpty() &&
+            !function.hasModifier(KtTokens.SUSPEND_KEYWORD) && !function.hasBlockBody() && body != null &&
+            SIMPLE_INTEGER_EXPRESSION.matcher(body.getText()).matches();
         result.add(new ExtractedSymbol(
             identity, name, "FUNCTION", source.toString(), owner, jvmName, descriptor, identifier.getText(),
             declaredVisibility, identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset(),
             false, function.getParent() instanceof KtFile, isMovePlainFunction(function),
             PsiTreeUtil.findChildOfType(function, KtCallableReferenceExpression.class) != null,
-            isTopLevelDeclaration(function), sourceTopLevelDeclarationCount(function)
+            signature.overrideFamilyId(), signature.isHierarchyMember(),
+            isTopLevelDeclaration(function), sourceTopLevelDeclarationCount(function),
+            function.getTextRange().getStartOffset(), function.getTextRange().getEndOffset(),
+            body == null ? -1 : body.getTextRange().getStartOffset(),
+            body == null ? -1 : body.getTextRange().getEndOffset(), simpleIntegerExpressionBody,
+            function.getReceiverTypeReference() != null, function.hasModifier(KtTokens.SUSPEND_KEYWORD),
+            false, false, false, false, !jvmName.equals(name), signature.hasExternalHierarchyBoundary()
         ));
         List<KtTypeParameter> typeParameters = function.getTypeParameters();
         for (int index = 0; index < typeParameters.size(); index++) {
@@ -252,7 +276,8 @@ final class KotlinCompilerSymbolExtractor {
             ));
         }
         collectParameters(
-            function.getValueParameters(), source, owner, jvmName, descriptor, declaredVisibility, identities, result
+            function.getValueParameters(), source, owner, jvmName, descriptor, declaredVisibility,
+            signature.overrideFamilyId(), signature.isHierarchyMember(), identities, result
         );
     }
 
@@ -292,7 +317,7 @@ final class KotlinCompilerSymbolExtractor {
         ));
         collectParameters(
             constructor.getValueParameters(), source, owner, "<init>", descriptor,
-            declaredVisibility, identities, result
+            declaredVisibility, "", false, identities, result
         );
     }
 
@@ -303,6 +328,8 @@ final class KotlinCompilerSymbolExtractor {
         String jvmName,
         String descriptor,
         String declaredVisibility,
+        String overrideFamilyId,
+        boolean hierarchyMember,
         Set<String> identities,
         List<ExtractedSymbol> result
     ) {
@@ -318,7 +345,8 @@ final class KotlinCompilerSymbolExtractor {
             result.add(new ExtractedSymbol(
                 parameterIdentity, parameterName, "PARAMETER", source.toString(), owner, jvmName,
                 parameterDescriptor, parameterIdentifier.getText(), declaredVisibility,
-                parameterIdentifier.getTextRange().getStartOffset(), parameterIdentifier.getTextRange().getEndOffset()
+                parameterIdentifier.getTextRange().getStartOffset(), parameterIdentifier.getTextRange().getEndOffset(),
+                false, false, false, false, overrideFamilyId, hierarchyMember, false, 0
             ));
         }
     }
@@ -393,6 +421,9 @@ final class KotlinCompilerSymbolExtractor {
         List<ExtractedSymbol> result
     ) {
         if (owner == null || property.isLocal()) return;
+        if (property.hasDelegate()) {
+            throw new SymbolExtractionException("kotlin.symbolDelegatedPropertyUnsupported");
+        }
         String name = property.getName();
         org.jetbrains.kotlin.com.intellij.psi.PsiElement identifier = property.getNameIdentifier();
         if (name == null || identifier == null || !JVM_SEGMENT.matcher(name).matches()) return;
@@ -411,7 +442,12 @@ final class KotlinCompilerSymbolExtractor {
         result.add(new ExtractedSymbol(
             identity, name, "PROPERTY", source.toString(), owner, name, descriptor, identifier.getText(),
             visibility(property), identifier.getTextRange().getStartOffset(), identifier.getTextRange().getEndOffset(),
-            false, false, false, false, isTopLevelDeclaration(property), sourceTopLevelDeclarationCount(property)
+            false, false, false,
+            PsiTreeUtil.findChildOfType(property, KtCallableReferenceExpression.class) != null, "", false,
+            isTopLevelDeclaration(property), sourceTopLevelDeclarationCount(property),
+            property.getTextRange().getStartOffset(), property.getTextRange().getEndOffset(), -1, -1, false,
+            property.getReceiverTypeReference() != null, false, false, false, false,
+            property.hasDelegate(), false, false
         ));
     }
 
@@ -561,8 +597,23 @@ final class KotlinCompilerSymbolExtractor {
         private final boolean topLevelFunction;
         private final boolean movePlainFunction;
         private final boolean containsCallableReference;
+        private final String overrideFamilyId;
+        private final boolean hierarchyMember;
         private final boolean topLevelDeclaration;
         private final int sourceTopLevelDeclarationCount;
+        private final int declarationStartOffset;
+        private final int declarationEndOffset;
+        private final int bodyStartOffset;
+        private final int bodyEndOffset;
+        private final boolean simpleIntegerExpressionBody;
+        private final boolean extensionReceiver;
+        private final boolean suspendFunction;
+        private final boolean dataClass;
+        private final boolean sealedClass;
+        private final boolean valueClass;
+        private final boolean delegatedProperty;
+        private final boolean jvmNameEffect;
+        private final boolean externalHierarchyBoundary;
 
         ExtractedSymbol(
             String identity,
@@ -579,7 +630,8 @@ final class KotlinCompilerSymbolExtractor {
         ) {
             this(
                 identity, name, kind, path, owner, jvmName, descriptor, selectionText,
-                visibility, startOffset, endOffset, false, false, false, false, false, 0
+                visibility, startOffset, endOffset, false, false, false, false, "", false, false, 0,
+                startOffset, endOffset, -1, -1, false
             );
         }
 
@@ -599,7 +651,8 @@ final class KotlinCompilerSymbolExtractor {
         ) {
             this(
                 identity, name, kind, path, owner, jvmName, descriptor, selectionText,
-                visibility, startOffset, endOffset, companion, false, false, false, false, 0
+                visibility, startOffset, endOffset, companion, false, false, false, "", false, false, 0,
+                startOffset, endOffset, -1, -1, false
             );
         }
 
@@ -619,8 +672,88 @@ final class KotlinCompilerSymbolExtractor {
             boolean topLevelFunction,
             boolean movePlainFunction,
             boolean containsCallableReference,
+            String overrideFamilyId,
+            boolean hierarchyMember,
             boolean topLevelDeclaration,
             int sourceTopLevelDeclarationCount
+        ) {
+            this(
+                identity, name, kind, path, owner, jvmName, descriptor, selectionText, visibility,
+                startOffset, endOffset, companion, topLevelFunction, movePlainFunction,
+                containsCallableReference, overrideFamilyId, hierarchyMember, topLevelDeclaration,
+                sourceTopLevelDeclarationCount, startOffset, endOffset, -1, -1, false
+            );
+        }
+
+        ExtractedSymbol(
+            String identity,
+            String name,
+            String kind,
+            String path,
+            String owner,
+            String jvmName,
+            String descriptor,
+            String selectionText,
+            String visibility,
+            int startOffset,
+            int endOffset,
+            boolean companion,
+            boolean topLevelFunction,
+            boolean movePlainFunction,
+            boolean containsCallableReference,
+            String overrideFamilyId,
+            boolean hierarchyMember,
+            boolean topLevelDeclaration,
+            int sourceTopLevelDeclarationCount,
+            int declarationStartOffset,
+            int declarationEndOffset,
+            int bodyStartOffset,
+            int bodyEndOffset,
+            boolean simpleIntegerExpressionBody
+        ) {
+            this(
+                identity, name, kind, path, owner, jvmName, descriptor, selectionText, visibility,
+                startOffset, endOffset, companion, topLevelFunction, movePlainFunction,
+                containsCallableReference, overrideFamilyId, hierarchyMember, topLevelDeclaration,
+                sourceTopLevelDeclarationCount, declarationStartOffset, declarationEndOffset,
+                bodyStartOffset, bodyEndOffset, simpleIntegerExpressionBody,
+                false, false, false, false, false, false, false, false
+            );
+        }
+
+        ExtractedSymbol(
+            String identity,
+            String name,
+            String kind,
+            String path,
+            String owner,
+            String jvmName,
+            String descriptor,
+            String selectionText,
+            String visibility,
+            int startOffset,
+            int endOffset,
+            boolean companion,
+            boolean topLevelFunction,
+            boolean movePlainFunction,
+            boolean containsCallableReference,
+            String overrideFamilyId,
+            boolean hierarchyMember,
+            boolean topLevelDeclaration,
+            int sourceTopLevelDeclarationCount,
+            int declarationStartOffset,
+            int declarationEndOffset,
+            int bodyStartOffset,
+            int bodyEndOffset,
+            boolean simpleIntegerExpressionBody,
+            boolean extensionReceiver,
+            boolean suspendFunction,
+            boolean dataClass,
+            boolean sealedClass,
+            boolean valueClass,
+            boolean delegatedProperty,
+            boolean jvmNameEffect,
+            boolean externalHierarchyBoundary
         ) {
             this.identity = identity;
             this.name = name;
@@ -637,8 +770,23 @@ final class KotlinCompilerSymbolExtractor {
             this.topLevelFunction = topLevelFunction;
             this.movePlainFunction = movePlainFunction;
             this.containsCallableReference = containsCallableReference;
+            this.overrideFamilyId = overrideFamilyId;
+            this.hierarchyMember = hierarchyMember;
             this.topLevelDeclaration = topLevelDeclaration;
             this.sourceTopLevelDeclarationCount = sourceTopLevelDeclarationCount;
+            this.declarationStartOffset = declarationStartOffset;
+            this.declarationEndOffset = declarationEndOffset;
+            this.bodyStartOffset = bodyStartOffset;
+            this.bodyEndOffset = bodyEndOffset;
+            this.simpleIntegerExpressionBody = simpleIntegerExpressionBody;
+            this.extensionReceiver = extensionReceiver;
+            this.suspendFunction = suspendFunction;
+            this.dataClass = dataClass;
+            this.sealedClass = sealedClass;
+            this.valueClass = valueClass;
+            this.delegatedProperty = delegatedProperty;
+            this.jvmNameEffect = jvmNameEffect;
+            this.externalHierarchyBoundary = externalHierarchyBoundary;
         }
 
         String identity() { return identity; }
@@ -656,8 +804,23 @@ final class KotlinCompilerSymbolExtractor {
         boolean isTopLevelFunction() { return topLevelFunction; }
         boolean isMovePlainFunction() { return movePlainFunction; }
         boolean containsCallableReference() { return containsCallableReference; }
+        String overrideFamilyId() { return overrideFamilyId; }
+        boolean isHierarchyMember() { return hierarchyMember; }
         boolean isTopLevelDeclaration() { return topLevelDeclaration; }
         int sourceTopLevelDeclarationCount() { return sourceTopLevelDeclarationCount; }
+        int declarationStartOffset() { return declarationStartOffset; }
+        int declarationEndOffset() { return declarationEndOffset; }
+        int bodyStartOffset() { return bodyStartOffset; }
+        int bodyEndOffset() { return bodyEndOffset; }
+        boolean isSimpleIntegerExpressionBody() { return simpleIntegerExpressionBody; }
+        boolean hasExtensionReceiver() { return extensionReceiver; }
+        boolean isSuspendFunction() { return suspendFunction; }
+        boolean isDataClass() { return dataClass; }
+        boolean isSealedClass() { return sealedClass; }
+        boolean isValueClass() { return valueClass; }
+        boolean isDelegatedProperty() { return delegatedProperty; }
+        boolean hasJvmNameEffect() { return jvmNameEffect; }
+        boolean hasExternalHierarchyBoundary() { return externalHierarchyBoundary; }
     }
 
     private static final class JvmField {

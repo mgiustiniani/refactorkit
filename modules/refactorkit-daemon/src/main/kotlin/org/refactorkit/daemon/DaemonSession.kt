@@ -81,10 +81,13 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.kotlin.KotlinExtractMethodPlanner
+import org.refactorkit.kotlin.KotlinInlineMethodPlanner
 import org.refactorkit.kotlin.KotlinOrganizeImportsPlanner
 import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
 import org.refactorkit.jvm.ManagedApplyDiagnosticsGateSelector
 import org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlanner
+import org.refactorkit.jvm.KotlinJvmChangeSignaturePlanner
 import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
 import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
 import org.refactorkit.kotlin.KotlinSemanticToolchain
@@ -1531,12 +1534,44 @@ class DaemonSession(
                 val startLine = args["startLine"]?.toIntOrNull() ?: missing("arguments.startLine")
                 val endLine = args["endLine"]?.toIntOrNull() ?: missing("arguments.endLine")
                 val methodName = args["methodName"] ?: missing("arguments.methodName")
-                JavaExtractMethodPlanner().preview(snap, Paths.get(file), startLine, endLine, methodName)
+                if (requestedLanguage == "kotlin") {
+                    requireKotlinMutationAuthority(p, snap, "extract")
+                    KotlinExtractMethodPlanner(kotlinAdapter).preview(
+                        snap, Paths.get(file), startLine, endLine, methodName,
+                    )
+                } else JavaExtractMethodPlanner().preview(snap, Paths.get(file), startLine, endLine, methodName)
+            }
+            "inlineMethod" -> {
+                if (requestedLanguage != "kotlin") missing("languageId=kotlin")
+                requireKotlinMutationAuthority(p, snap, "inline")
+                KotlinInlineMethodPlanner(kotlinAdapter).preview(
+                    snap, SymbolId(symbol ?: missing("symbol")),
+                )
             }
             "changeSignature.renameParameter", "renameParameter" -> {
                 val oldName = args["oldName"] ?: args["oldParameterName"] ?: missing("arguments.oldName")
                 val newName = args["newName"] ?: args["newParameterName"] ?: missing("arguments.newName")
-                JavaChangeSignaturePlanner(adapter).previewRenameParameter(
+                if (requestedLanguage == "kotlin") {
+                    val lease = p.string("semanticLease") ?: missing("semanticLease")
+                    val expected = p.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                    val generation = p.string("expectedIndexGeneration")?.toLongOrNull()
+                        ?: missing("expectedIndexGeneration")
+                    val currentGeneration = workspaceIndex.snapshot()?.generation
+                        ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin workspace index is unavailable")
+                    if (lease != kotlinSemanticLease) throw JsonRpcException(
+                        JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.changeSignatureSessionStale",
+                    )
+                    if (expected != snap.hash || generation != currentGeneration) throw JsonRpcException(
+                        JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.changeSignatureAuthorityStale",
+                    )
+                    KotlinJvmChangeSignaturePlanner(kotlinAdapter).previewRenameParameter(
+                        snap,
+                        SymbolId(symbol ?: missing("symbol")),
+                        oldName,
+                        newName,
+                        acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                    )
+                } else JavaChangeSignaturePlanner(adapter).previewRenameParameter(
                     snap, symbol ?: missing("symbol"), oldName, newName,
                     acceptExternalConsumerRisk = args["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
                 )
@@ -2426,6 +2461,25 @@ class DaemonSession(
         return semanticAdapters[languageId] ?: throw JsonRpcException(
             JsonRpcErrorCodes.INVALID_PARAMS,
             "Semantic adapter for $languageId is not started; call typescript.semantic.start",
+        )
+    }
+
+    private fun requireKotlinMutationAuthority(
+        params: JsonObject,
+        current: ProjectSnapshot,
+        operation: String,
+    ) {
+        val lease = params.string("semanticLease") ?: missing("semanticLease")
+        val expected = params.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+        val generation = params.string("expectedIndexGeneration")?.toLongOrNull()
+            ?: missing("expectedIndexGeneration")
+        val currentGeneration = workspaceIndex.snapshot()?.generation
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Kotlin workspace index is unavailable")
+        if (lease != kotlinSemanticLease) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.${operation}SessionStale",
+        )
+        if (expected != current.hash || generation != currentGeneration) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "kotlin.${operation}AuthorityStale",
         )
     }
 

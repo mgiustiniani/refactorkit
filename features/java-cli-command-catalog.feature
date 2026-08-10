@@ -50,7 +50,7 @@ Ability: Discover the exact public Java CLI command catalogue without entering a
     And help, exact catalogue membership, and actual public-parser reachability agree for those three routes
     And help does not claim dependency rewrite coordinates are unconditionally required for "java move-across-maven-modules"
     And every existing human-oriented parser and command behavior remains compatible, with no requirement-owned change outside the additive truthful top-level help lines
-    And "refactorkit capabilities" matches its approved additive K1/K2 refusal evolution and remains valid only as the existing language-capability schema
+    And "refactorkit capabilities" matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema
     And the capabilities output contains none of "commands", "operation", "aliases", "modes", "mutationAuthority", "jsonSupport", "stability", or "requiredArguments" as command-catalogue fields
     And no invocation opens or scans a workspace, creates a preview or plan, acquires a workspace lock, creates a WAL or transaction, edits a file, mutates an installation, or invokes the installed executable
     And this scenario does not qualify any of these explicitly excluded future or external surfaces:
@@ -105,7 +105,7 @@ Ability: Discover the exact public Java CLI command catalogue without entering a
       | v2        | replace the rename entry's "jsonSupport" with unknown value "unknown" |
     And neither exact document is accepted by the other version's validator or under the other schema identity
     And top-level help exposes exactly "refactorkit commands --json [--schema-version 1]" as the machine-readable catalogue discovery route and agrees with the public parser
-    And "refactorkit capabilities" matches its approved additive K1/K2 refusal evolution and remains valid only as the existing language-capability schema
+    And "refactorkit capabilities" matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema
     And the capabilities output contains none of "commands", "operation", "aliases", "modes", "mutationAuthority", "jsonSupport", "stability", or "requiredArguments" as command-catalogue fields
     And the explicit-v1 compatibility, default-v2 catalogue, and separately owned successful preview are qualified from the same source-built revision before any one is promoted, and none is promoted alone
     And no catalogue, selector, help, or capabilities invocation opens or scans a workspace, creates a preview or plan, acquires a workspace lock, creates a WAL or transaction, edits a file, mutates an installation, or invokes the installed executable

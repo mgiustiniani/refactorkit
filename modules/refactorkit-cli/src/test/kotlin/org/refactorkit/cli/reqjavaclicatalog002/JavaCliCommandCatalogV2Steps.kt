@@ -415,7 +415,7 @@ class JavaCliCommandCatalogV2Steps {
         assertTrue(allInvocations.any { it.arguments == listOf("commands", "--json", "--schema-version", "1") })
     }
 
-    @Then("{string} matches its approved additive K1\\/K2 refusal evolution and remains valid only as the existing language-capability schema")
+    @Then("{string} matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema")
     fun capabilitiesRemainPinned(commandLine: String) {
         assertEquals("refactorkit capabilities", commandLine)
         assertEquals(PINNED_CAPABILITIES_SHA256, sha256(pinnedCapabilities))
@@ -738,10 +738,10 @@ class JavaCliCommandCatalogV2Steps {
         const val V2_ORACLE_FIXTURE =
             "org/refactorkit/cli/reqjavaclicatalog002/catalog-v2-oracle-6aaffe8c0c71.json"
         const val CAPABILITIES_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-k1-k2-approved-872120125a3a.json"
+            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-k5-candidate-a8cc8f03c496.json"
         const val V1_ORACLE_SHA256 = "4790e142d491d0fc3fd44dfa94c65c67997bc3ffaf0133691c0afebd9ee683cb"
         const val V2_ORACLE_SHA256 = "6aaffe8c0c718685510e745abc740c1896b02050a3eff7c19146f61c7abe109d"
-        const val PINNED_CAPABILITIES_SHA256 = "872120125a3a84e5304635adcecfb1c65a11485a51fb13b7d831687b63dc666e"
+        const val PINNED_CAPABILITIES_SHA256 = "a8cc8f03c496d7b48edb307e52e83358fbc34aa53205a68687b17e3cbb9325e3"
         const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v2-guard/v1"
         const val PROBE_MODE = "probe"
         const val INVOKE_MODE = "invoke"

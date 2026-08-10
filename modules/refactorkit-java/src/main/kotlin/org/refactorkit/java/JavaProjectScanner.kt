@@ -655,8 +655,11 @@ class JavaProjectScanner(
     )
     private fun localJarDirectories(root: Path): List<Path> = listOf(root.resolve("lib"), root.resolve("libs"))
     private fun buildDescriptorFiles(root: Path): List<Path> = listOf(root.resolve("pom.xml"), root.resolve("build.gradle"), root.resolve("build.gradle.kts"))
-    private fun formatterConfigurationFiles(root: Path): List<Path> = listOf(root.resolve(".settings/org.eclipse.jdt.core.prefs"))
-        .filter { it.exists() && Files.isRegularFile(it) }
+    private fun formatterConfigurationFiles(root: Path): List<Path> = listOf(
+        root.resolve(".settings/org.eclipse.jdt.core.prefs"),
+        root.resolve(".editorconfig"),
+        root.resolve("gradle.properties"),
+    ).filter { it.exists() && Files.isRegularFile(it) }
 
     private fun findBuildFiles(root: Path, name: String): List<Path> = Files.walk(root).use { stream ->
         stream.filter { Files.isRegularFile(it) && it.fileName.toString() == name && !isIgnoredDirectory(root, it) }

@@ -137,22 +137,34 @@ class KotlinLanguageAdapter(
     )
 
     override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = listOf(
-        RefactoringDescriptor("changeSignature", "Change Kotlin method signature (parameter rename)", RiskLevel.MEDIUM),
+        RefactoringDescriptor(
+            KotlinChangeSignaturePlanner.OPERATION,
+            "Rename one compiler-proven Kotlin parameter across its exact override family",
+            RiskLevel.MEDIUM,
+        ),
         RefactoringDescriptor("extractMethod", "Extract Kotlin method/function", RiskLevel.MEDIUM),
         RefactoringDescriptor("inlineMethod", "Inline Kotlin method/function call", RiskLevel.MEDIUM),
     )
 
     override fun applyRefactoring(request: RefactoringRequest): PatchPlan {
-        if (request.operation == "changeSignature") {
+        if (request.operation in setOf(
+                "changeSignature", KotlinChangeSignaturePlanner.OPERATION, "renameParameter",
+            )) {
             val oldName = request.arguments["oldName"] ?: request.arguments["oldParameterName"]
-                ?: return PatchPlan(operation = "changeSignature", status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "changeSignature requires oldName", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("changeSignature requires oldName"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.changeSignatureOldNameMissing")
+                ?: return PatchPlan(operation = KotlinChangeSignaturePlanner.OPERATION, status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "changeSignature requires oldName", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("changeSignature requires oldName"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.changeSignatureOldNameMissing")
             val newName = request.arguments["newName"] ?: request.arguments["newParameterName"]
-                ?: return PatchPlan(operation = "changeSignature", status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "changeSignature requires newName", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("changeSignature requires newName"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.changeSignatureNewNameMissing")
+                ?: return PatchPlan(operation = KotlinChangeSignaturePlanner.OPERATION, status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "changeSignature requires newName", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("changeSignature requires newName"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.changeSignatureNewNameMissing")
             val symbol = request.symbolId?.value ?: request.arguments["symbol"]
-                ?: return PatchPlan(operation = "changeSignature", status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "changeSignature requires symbol", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("changeSignature requires symbol"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.changeSignatureSymbolMissing")
-            return KotlinChangeSignaturePlanner(this).previewRenameParameter(request.snapshot, symbol, oldName, newName)
+                ?: return PatchPlan(operation = KotlinChangeSignaturePlanner.OPERATION, status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "changeSignature requires symbol", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("changeSignature requires symbol"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.changeSignatureSymbolMissing")
+            return KotlinChangeSignaturePlanner(this).previewRenameParameter(
+                request.snapshot,
+                symbol,
+                oldName,
+                newName,
+                request.arguments["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+            )
         }
-        if (request.operation == "extractMethod") {
+        if (request.operation == KotlinExtractMethodPlanner.OPERATION) {
             val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
                 ?: return PatchPlan(operation = "extractMethod", status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "extractMethod requires file", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("extractMethod requires file"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.extractFileMissing")
             val startLine = request.arguments["startLine"]?.toIntOrNull() ?: request.selection?.location?.range?.start?.line?.plus(1)
@@ -161,6 +173,11 @@ class KotlinLanguageAdapter(
                 ?: return PatchPlan(operation = "extractMethod", status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "extractMethod requires endLine", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("extractMethod requires endLine"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.extractEndMissing")
             val methodName = request.arguments["methodName"] ?: "extracted"
             return KotlinExtractMethodPlanner(this).preview(request.snapshot, Path.of(file), startLine, endLine, methodName)
+        }
+        if (request.operation == KotlinInlineMethodPlanner.OPERATION) {
+            val symbol = request.symbolId ?: request.arguments["symbol"]?.let(::SymbolId)
+                ?: return PatchPlan(operation = KotlinInlineMethodPlanner.OPERATION, status = PatchStatus.REFUSED, snapshotHash = request.snapshot.hash, confidence = 0.0, requiresUserApproval = false, summary = "inlineMethod requires symbol", affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(), warnings = listOf("inlineMethod requires symbol"), riskLevel = RiskLevel.HIGH, evidence = RefactoringEvidence.NATIVE_AST, refusalCode = "kotlin.inlineSymbolMissing")
+            return KotlinInlineMethodPlanner(this).preview(request.snapshot, symbol)
         }
         val message = BACKEND_UNAVAILABLE_MESSAGE
         return PatchPlan(
@@ -213,12 +230,13 @@ object KotlinAdapterRegistration {
 
     private val kotlinSourceOperations = listOf(
         "changeSignature",
+        "changeSignature.renameParameter",
         "definition",
         "diagnostics",
         "documentSymbols",
-        "extract",
+        "extractMethod",
         "formatFile",
-        "inline",
+        "inlineMethod",
         "moveSymbol",
         "organizeImports",
         "parse",
@@ -246,6 +264,14 @@ object KotlinAdapterRegistration {
             extensions = setOf("kt"),
         ),
         LanguageCapability(
+            operation = "frameworkAwareSemantics",
+            stability = CapabilityStability.REFUSED,
+            evidence = SemanticEvidenceKind.NONE,
+            mutationAuthority = MutationAuthority.NONE,
+            backend = BACKEND,
+            extensions = setOf("kt"),
+        ),
+        LanguageCapability(
             operation = "generatedCodeMutation",
             stability = CapabilityStability.REFUSED,
             evidence = SemanticEvidenceKind.NONE,
@@ -255,18 +281,18 @@ object KotlinAdapterRegistration {
         ),
         LanguageCapability(
             operation = "extensionReceiver",
-            stability = CapabilityStability.REFUSED,
-            evidence = SemanticEvidenceKind.NONE,
+            stability = CapabilityStability.EXPERIMENTAL,
+            evidence = SemanticEvidenceKind.COMPILER,
             mutationAuthority = MutationAuthority.NONE,
-            backend = BACKEND,
+            backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
             extensions = setOf("kt"),
         ),
         LanguageCapability(
             operation = "suspendFunction",
-            stability = CapabilityStability.REFUSED,
-            evidence = SemanticEvidenceKind.NONE,
+            stability = CapabilityStability.EXPERIMENTAL,
+            evidence = SemanticEvidenceKind.COMPILER,
             mutationAuthority = MutationAuthority.NONE,
-            backend = BACKEND,
+            backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
             extensions = setOf("kt"),
         ),
         LanguageCapability(
@@ -289,7 +315,7 @@ object KotlinAdapterRegistration {
             operation = "companionObject",
             stability = CapabilityStability.EXPERIMENTAL,
             evidence = SemanticEvidenceKind.COMPILER,
-            mutationAuthority = MutationAuthority.PROPOSAL_ONLY,
+            mutationAuthority = MutationAuthority.NONE,
             backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
             runtime = LanguageAdapterRuntime(
                 executionMode = AdapterExecutionMode.EXTERNAL_PROCESS,
@@ -308,17 +334,17 @@ object KotlinAdapterRegistration {
         ),
         LanguageCapability(
             operation = "sealedClass",
-            stability = CapabilityStability.REFUSED,
-            evidence = SemanticEvidenceKind.NONE,
+            stability = CapabilityStability.EXPERIMENTAL,
+            evidence = SemanticEvidenceKind.COMPILER,
             mutationAuthority = MutationAuthority.NONE,
-            backend = BACKEND,
+            backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
             extensions = setOf("kt"),
         ),
         LanguageCapability(
             operation = "dataClass",
             stability = CapabilityStability.EXPERIMENTAL,
             evidence = SemanticEvidenceKind.COMPILER,
-            mutationAuthority = MutationAuthority.PROPOSAL_ONLY,
+            mutationAuthority = MutationAuthority.NONE,
             backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
             runtime = LanguageAdapterRuntime(
                 executionMode = AdapterExecutionMode.EXTERNAL_PROCESS,
@@ -337,10 +363,26 @@ object KotlinAdapterRegistration {
         ),
         LanguageCapability(
             operation = "valueClass",
-            stability = CapabilityStability.REFUSED,
-            evidence = SemanticEvidenceKind.NONE,
+            stability = CapabilityStability.EXPERIMENTAL,
+            evidence = SemanticEvidenceKind.COMPILER,
             mutationAuthority = MutationAuthority.NONE,
-            backend = BACKEND,
+            backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
+            extensions = setOf("kt"),
+        ),
+        LanguageCapability(
+            operation = "jvmNameEffect",
+            stability = CapabilityStability.EXPERIMENTAL,
+            evidence = SemanticEvidenceKind.COMPILER,
+            mutationAuthority = MutationAuthority.NONE,
+            backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
+            extensions = setOf("kt"),
+        ),
+        LanguageCapability(
+            operation = "delegatedProperty",
+            stability = CapabilityStability.REFUSED,
+            evidence = SemanticEvidenceKind.COMPILER,
+            mutationAuthority = MutationAuthority.NONE,
+            backend = KotlinCompilerDiagnostics.SYMBOL_BACKEND,
             extensions = setOf("kt"),
         ),
     )
@@ -355,7 +397,7 @@ object KotlinAdapterRegistration {
                 when (operation) {
                     "diagnostics" -> diagnosticsCapability()
                     "workspaceSymbols", "documentSymbols", "definition" -> symbolCapability(operation)
-                    "renameSymbol", "organizeImports" -> mutationCapability(operation)
+                    "renameSymbol", "organizeImports", "changeSignature.renameParameter", "extractMethod", "inlineMethod" -> mutationCapability(operation)
                     else -> refused(operation, setOf("kt"))
                 }
             } + refused("scriptSemantics", setOf("kts"))

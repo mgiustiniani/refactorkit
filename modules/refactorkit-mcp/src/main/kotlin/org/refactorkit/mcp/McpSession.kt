@@ -66,8 +66,11 @@ import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
+import org.refactorkit.kotlin.KotlinExtractMethodPlanner
+import org.refactorkit.kotlin.KotlinInlineMethodPlanner
 import org.refactorkit.kotlin.KotlinOrganizeImportsPlanner
 import org.refactorkit.jvm.JavaKotlinPublicTypeRenamePlanner
+import org.refactorkit.jvm.KotlinJvmChangeSignaturePlanner
 import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
 import org.refactorkit.jvm.ManagedApplyDiagnosticsGateSelector
 import org.refactorkit.jvm.KotlinManagedDeclarationRenamePlanner
@@ -268,7 +271,7 @@ class McpSession(
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete",
                     "symbol" to "string: fully-qualified symbol name",
                     "languageId" to "string: java | kotlin | typescript | javascript (default java)",
                     "expectedSnapshotHash" to "string: required for Kotlin rename",
@@ -765,6 +768,8 @@ class McpSession(
             "- renameClass: rename to a new simple name\n" +
             "- renameMember: rename a method or field\n" +
             "- extractMethod: extract selected Java lines into a private void method\n" +
+            "- extractMethod: bounded Java or Kotlin expression extraction\n" +
+            "- inlineMethod: bounded Kotlin private helper inline\n" +
             "- changeSignature.renameParameter: rename a method parameter\n" +
             "- changeSignature.changeParameterType: change one JDT-bound method parameter type\n" +
             "- changeSignature.addParameter: add a method parameter with a default call-site expression\n" +
@@ -861,20 +866,54 @@ class McpSession(
                 val command = JavaRefactoringPreviewCommand.RenameMember(target, newName)
                 JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
             }
-            "extractMethod" -> JavaExtractMethodPlanner().preview(
-                snap,
-                Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")),
-                opArgs["startLine"]?.toIntOrNull() ?: missing("arguments.startLine"),
-                opArgs["endLine"]?.toIntOrNull() ?: missing("arguments.endLine"),
-                opArgs["methodName"] ?: missing("arguments.methodName"),
-            )
-            "changeSignature.renameParameter", "renameParameter" -> JavaChangeSignaturePlanner(adapter).previewRenameParameter(
-                snap,
-                symbol ?: missing("symbol"),
-                opArgs["oldName"] ?: opArgs["oldParameterName"] ?: missing("arguments.oldName"),
-                opArgs["newName"] ?: opArgs["newParameterName"] ?: missing("arguments.newName"),
-                acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
-            )
+            "extractMethod" -> {
+                val file = Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file"))
+                val startLine = opArgs["startLine"]?.toIntOrNull() ?: missing("arguments.startLine")
+                val endLine = opArgs["endLine"]?.toIntOrNull() ?: missing("arguments.endLine")
+                val methodName = opArgs["methodName"] ?: missing("arguments.methodName")
+                if (languageId == "kotlin") {
+                    if (!validKotlinMutationAuthority(args, snap)) return PreviewToolResult.Text(
+                        "Refused [kotlin.extractAuthorityStale]: Kotlin extract authority is stale.",
+                    )
+                    KotlinExtractMethodPlanner(kotlinAdapter).preview(snap, file, startLine, endLine, methodName)
+                } else JavaExtractMethodPlanner().preview(snap, file, startLine, endLine, methodName)
+            }
+            "inlineMethod" -> {
+                if (languageId != "kotlin") missing("languageId=kotlin")
+                if (!validKotlinMutationAuthority(args, snap)) return PreviewToolResult.Text(
+                    "Refused [kotlin.inlineAuthorityStale]: Kotlin inline authority is stale.",
+                )
+                KotlinInlineMethodPlanner(kotlinAdapter).preview(
+                    snap, org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
+                )
+            }
+            "changeSignature.renameParameter", "renameParameter" -> {
+                val target = symbol ?: missing("symbol")
+                val oldName = opArgs["oldName"] ?: opArgs["oldParameterName"] ?: missing("arguments.oldName")
+                val newName = opArgs["newName"] ?: opArgs["newParameterName"] ?: missing("arguments.newName")
+                if (languageId == "kotlin") {
+                    val lease = args.string("semanticLease") ?: missing("semanticLease")
+                    val expected = args.string("expectedSnapshotHash") ?: missing("expectedSnapshotHash")
+                    if (lease != kotlinSemanticLease || expected != snap.hash) {
+                        return PreviewToolResult.Text(
+                            "Refused [kotlin.changeSignatureAuthorityStale]: Kotlin change-signature authority is stale.",
+                        )
+                    }
+                    KotlinJvmChangeSignaturePlanner(kotlinAdapter).previewRenameParameter(
+                        snap,
+                        org.refactorkit.core.SymbolId(target),
+                        oldName,
+                        newName,
+                        acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                    )
+                } else JavaChangeSignaturePlanner(adapter).previewRenameParameter(
+                    snap,
+                    target,
+                    oldName,
+                    newName,
+                    acceptExternalConsumerRisk = opArgs["acceptExternalConsumerRisk"]?.toBooleanStrictOrNull() ?: false,
+                )
+            }
             "changeSignature.changeParameterType", "changeParameterType" -> JavaChangeSignaturePlanner(adapter).previewChangeParameterType(
                 snap,
                 symbol ?: missing("symbol"),
@@ -1433,6 +1472,10 @@ class McpSession(
             JsonRpcErrorCodes.INVALID_PARAMS,
             "Semantic adapter for $languageId is not started; call typescript_semantic_start",
         )
+
+    private fun validKotlinMutationAuthority(params: JsonObject, current: ProjectSnapshot): Boolean =
+        params.string("semanticLease") == kotlinSemanticLease &&
+            params.string("expectedSnapshotHash") == current.hash
 
     private fun requireSnapshot(): ProjectSnapshot =
         snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open. Call project_scan first.")
