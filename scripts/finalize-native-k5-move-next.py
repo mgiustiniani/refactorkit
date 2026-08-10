@@ -7,7 +7,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePath
 import platform as host_platform
 import re
 import subprocess
@@ -77,6 +77,7 @@ SUBJECT_FILES = {
     Path("docs/requirements/evidence/v0.7.0-k5-pre-native-review-v4-boundary-red-31da1bb16dee24b08a7191bc21b0d7627a7f4fd804950e7e8703264e1c7118d3.log"),
     Path("docs/requirements/evidence/v0.7.0-k5-pre-native-review-v5-fail-32292b23d8e797485e74daeedaec475b9b6a0cbeb25cb507c8b7f1fb2533eb29.txt"),
     Path("docs/requirements/evidence/v0.7.0-k5-native-shallow-checkout-red-run-31394432715-692d355d9d9a2bc586e7c264c0db93f697ecc08f2cbf278658b1114e9c0b64f2.json"),
+    Path("docs/requirements/evidence/v0.7.0-k5-native-windows-checksum-red-run-31396325413-b7e0d2f0d2d469a7e575c4d109f6751b8a5c2918f03a5e68e430fca8a832a44b.json"),
     Path("docs/requirements/evidence/v0.7.0-k5-pre-native-review-v5-external-callable-red-24580296965d3ae9dd8ba417575408c3060be94500a77cabc61d6e76a345bfef.xml"),
     Path("docs/requirements/evidence/v0.7.0-k5-pre-native-review-v5-descriptor-projection-red-eb596021ce8f796a47dc60b774cd5cbae973a3eab9280ee43046584cab265322.xml"),
     Path("modules/refactorkit-kotlin/src/main/java/org/refactorkit/kotlin/bridge/KotlinCompilerBridgeMain.java"),
@@ -139,6 +140,14 @@ def parse_count(root: ET.Element, field: str, report: Path) -> int:
     return value
 
 
+def valid_checksum_record(fields: list[str], requirement: PurePath = REQUIREMENT) -> bool:
+    return (
+        len(fields) == 2
+        and fields[0] == REQUIREMENT_SHA256
+        and fields[1] == requirement.as_posix()
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", required=True)
@@ -190,7 +199,7 @@ def main() -> int:
     if sha256(requirement) != REQUIREMENT_SHA256:
         raise ValueError("K5 move-next requirement differs from its reviewed immutable baseline")
     checksum_fields = checksum_file.read_text(encoding="utf-8").strip().split()
-    if len(checksum_fields) != 2 or checksum_fields[0] != REQUIREMENT_SHA256 or checksum_fields[1] != str(REQUIREMENT):
+    if not valid_checksum_record(checksum_fields):
         raise ValueError("K5 move-next requirement checksum record is invalid")
     diagnostics_feature = repository / DIAGNOSTICS_FEATURE
     if not diagnostics_feature.is_file() or sha256(diagnostics_feature) != DIAGNOSTICS_FEATURE_SHA256:

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "status": "PARTIAL_NATIVE_FAILURE",
+  "classification": "MEANINGFUL_WINDOWS_FINALIZER_RED",
+  "runId": 31396325413,
+  "runUrl": "https://github.com/mgiustiniani/refactorkit/actions/runs/31396325413",
+  "revision": "46f617a29cb27cb10db1f8062a867dee3327d465",
+  "platforms": {
+    "linux-x86_64": {
+      "jobId": 93480020313,
+      "conclusion": "success",
+      "logSha256": "8b6816b17ffa6200d2060d057b19fa30c4be9cf6e3b7a2ceecb3213bb5d28f66"
+    },
+    "windows-x86_64": {
+      "jobId": 93480020298,
+      "conclusion": "failure",
+      "logSha256": "55945d84145047ea891e8b01713155501199800bdd48e2978bb6c019874a5655",
+      "failure": "K5 move-next requirement checksum record is invalid"
+    },
+    "macos-x86_64": {
+      "jobId": 93480020307,
+      "conclusion": "success",
+      "logSha256": "c5e55fcbcbac2b8821fbba278bdf289f1936d9b0870f95fbe48af16266d75c09"
+    },
+    "macos-aarch64": {
+      "jobId": 93480020514,
+      "conclusion": "success",
+      "logSha256": "57152cc70226a5542f77ad974ef748de89cd10353754b6ae55ce5629319ce2b7"
+    }
+  },
+  "windowsSuccessfulSteps": [
+    "checkout exact subject revision with parent history",
+    "set up exact JDK 21 qualification runtime",
+    "validate Gradle wrapper",
+    "run exact K5 move-next tests",
+    "package exact subject",
+    "run packaged K5 move-next smoke",
+    "upload qualification reports"
+  ],
+  "rootCause": "The checksum sidecar stores a repository-relative POSIX path, but the finalizer compared it with str(REQUIREMENT), which renders backslashes on Windows.",
+  "promotionEffect": "NONE",
+  "requiredCorrection": "Compare the checksum path with REQUIREMENT.as_posix(), add a platform-neutral regression, and rerun all four hosts on one corrected immutable revision."
+}

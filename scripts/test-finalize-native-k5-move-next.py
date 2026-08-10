@@ -4,7 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import shutil
 import subprocess
 import tempfile
@@ -127,6 +127,14 @@ class NativeK5MoveNextFinalizerTest(unittest.TestCase):
         )
         self.assertEqual(sorted(MODULE.REQUIRED_SUITES), sorted(receipt["junit"]["suites"]))
         self.assertEqual(MODULE.REQUIREMENT_SHA256, receipt["requirement"]["sha256"])
+
+    def test_checksum_record_path_is_repository_posix_on_windows(self) -> None:
+        windows_requirement = PureWindowsPath(
+            "docs\\requirements\\kotlin-jvm-move-top-level-function-and-companion-refusal.md"
+        )
+        fields = [MODULE.REQUIREMENT_SHA256, windows_requirement.as_posix()]
+        self.assertTrue(MODULE.valid_checksum_record(fields, windows_requirement))
+        self.assertFalse(MODULE.valid_checksum_record([MODULE.REQUIREMENT_SHA256, str(windows_requirement)]))
 
     def test_native_workflow_fetches_candidate_parent_for_topology_check(self) -> None:
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
