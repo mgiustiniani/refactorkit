@@ -106,6 +106,40 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
             receipt["failures"],
         )
 
+    def test_k1_native_checkout_must_bind_pull_request_source_head(self) -> None:
+        path = self.root / ".github/workflows/ci.yml"
+        text = path.read_text(encoding="utf-8")
+        prefix, block = text.split("  k1-k2-shared-foundations-native:", 1)
+        block = block.replace(
+            "ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+            "ref: ${{ github.sha }}",
+            1,
+        )
+        path.write_text(prefix + "  k1-k2-shared-foundations-native:" + block, encoding="utf-8")
+        result, receipt = self._run()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(
+            "dedicated K1/K2 native workflow token is missing: exact-source-head-checkout",
+            receipt["failures"],
+        )
+
+    def test_k1_native_receipt_must_bind_same_source_head(self) -> None:
+        path = self.root / ".github/workflows/ci.yml"
+        text = path.read_text(encoding="utf-8")
+        prefix, block = text.split("  k1-k2-shared-foundations-native:", 1)
+        block = block.replace(
+            '"--revision", "${{ github.event.pull_request.head.sha || github.sha }}"',
+            '"--revision", "${{ github.sha }}"',
+            1,
+        )
+        path.write_text(prefix + "  k1-k2-shared-foundations-native:" + block, encoding="utf-8")
+        result, receipt = self._run()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(
+            "dedicated K1/K2 native workflow token is missing: exact-source-head-receipt",
+            receipt["failures"],
+        )
+
     def test_unavailable_or_unpinned_jdk_fails(self) -> None:
         path = self.root / ".github/workflows/ci.yml"
         text = path.read_text(encoding="utf-8").replace(

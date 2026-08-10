@@ -42,6 +42,18 @@ REQUIRED_NATIVE_WORKFLOW_TOKENS = {
     "always-upload": "Upload Maven move-class native qualification (${{ matrix.platform }})",
 }
 
+K1_NATIVE_JOB_MARKER = "  k1-k2-shared-foundations-native:"
+REQUIRED_K1_NATIVE_WORKFLOW_TOKENS = {
+    "exact-source-head-checkout": "ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+    "exact-source-head-receipt": '"--revision", "${{ github.event.pull_request.head.sha || github.sha }}"',
+    "linux-host": "platform: linux-x86_64",
+    "windows-host": "platform: windows-x86_64",
+    "macos-intel-host": "platform: macos-x86_64",
+    "macos-arm-host": "platform: macos-aarch64",
+    "revision-bound-finalizer": "scripts/finalize-native-k1-k2-shared-foundations.py",
+    "always-upload": "if: always()",
+}
+
 PROHIBITED_SUPPORT_CLAIMS = (
     "REQ-013 is still `@absent`",
     "candidate REQ-013",
@@ -76,6 +88,15 @@ def verify(repository_root: Path) -> dict[str, object]:
     for name, token in REQUIRED_NATIVE_WORKFLOW_TOKENS.items():
         if token not in workflow:
             failures.append(f"dedicated native workflow token is missing: {name}")
+
+    k1_native_workflow = ""
+    if K1_NATIVE_JOB_MARKER not in workflow:
+        failures.append("dedicated K1/K2 native workflow job is missing")
+    else:
+        k1_native_workflow = workflow.split(K1_NATIVE_JOB_MARKER, 1)[1]
+        for name, token in REQUIRED_K1_NATIVE_WORKFLOW_TOKENS.items():
+            if token not in k1_native_workflow:
+                failures.append(f"dedicated K1/K2 native workflow token is missing: {name}")
 
     native_states = re.findall(
         r"^\| (?:Linux|Windows|macOS) \| [^|]+ \| public-CLI REQ-001 plus "
@@ -116,6 +137,7 @@ def verify(repository_root: Path) -> dict[str, object]:
         "openRoadmapRowsVerified": sorted(OPEN_PLAN_ROWS),
         "supportBoundariesVerified": sorted(REQUIRED_SUPPORT_CLAIMS),
         "nativeWorkflowTokensVerified": sorted(REQUIRED_NATIVE_WORKFLOW_TOKENS),
+        "k1NativeWorkflowTokensVerified": sorted(REQUIRED_K1_NATIVE_WORKFLOW_TOKENS),
         "nativeRows": len(native_states),
         "nativeEvidenceState": native_state,
         "nativeParentRowsOpen": native_parent_rows_open,

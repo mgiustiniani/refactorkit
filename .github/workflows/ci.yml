@@ -416,6 +416,8 @@ jobs:
     steps:
       - name: Checkout exact subject revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up exact JDK 21 qualification runtime
         uses: actions/setup-java@v4
@@ -470,7 +472,7 @@ jobs:
           subprocess.run([
               sys.executable, "scripts/finalize-native-k1-k2-shared-foundations.py",
               "--platform", "${{ matrix.platform }}",
-              "--revision", "${{ github.sha }}",
+              "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
               "--support-receipt", "build/qualification/k1-k2-shared/support-reconciliation.json",
               "--smoke-log", "build/qualification/k1-k2-shared/packaged-kotlin-smoke.log",
               "--report-root", "modules",
