@@ -17,44 +17,51 @@ Any content change requires an explicit non-weakening approved-change record, ne
 
 ## Exact source oracle
 
-Native qualification executes exactly eighteen tests with zero skip, failure, error, duplicate, missing case or unrelated report.
+Native qualification executes exactly twenty-two tests with zero skip, failure, error, duplicate, missing case or unrelated report.
 
-`org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest` (twelve):
+`org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest` (sixteen):
 
 1. `organizeImportsRefusesCommentAttachedToImportBlock()`
 2. `organizeImportsRemovesCompilerProvenUnusedTypeAndSortsCrLfBlock()`
 3. `organizeImportsUsesCounterfactualK2EvidenceForExternalCallables()`
 4. `organizeImportsRefusesCompilingCallableBindingSubstitution()`
-5. `organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()`
-6. `organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()`
-7. `overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()`
-8. `namedArgumentsResolveToExactOverloadParameterSymbols()`
-9. `changeSignatureRefusesCompilerProvenExternalOverrideBoundary()`
-10. `compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly()`
-11. `boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback()`
-12. `extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits()`
+5. `organizeImportsRefusesUnmodeledExternalJavaFieldRatherThanRemovingUsedImport()`
+6. `organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()`
+7. `organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()`
+8. `overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()`
+9. `namedArgumentsResolveToExactOverloadParameterSymbols()`
+10. `changeSignatureRefusesCompilerProvenExternalOverrideBoundary()`
+11. `changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings()`
+12. `compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly()`
+13. `boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback()`
+14. `extractRefusesWhenInsertedCallDoesNotBindToNewHelper()`
+15. `extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits()`
+16. `extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits()`
 
 `org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest` (two):
 
-13. `kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller()`
-14. `publicKotlinParameterRenameRequiresExternalConsumerApproval()`
+17. `kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller()`
+18. `publicKotlinParameterRenameRequiresExternalConsumerApproval()`
 
 `org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest` (one):
 
-15. `kotlinChangeSignatureUsesLazyMixedOperationDiagnostics()`
+19. `kotlinChangeSignatureUsesLazyMixedOperationDiagnostics()`
 
 `org.refactorkit.kotlin.KotlinLanguageAdapterTest` (one):
 
-16. `descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly()`
+20. `descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly()`
 
 `org.refactorkit.kotlin.KotlinJvmBuildModelTest` (two):
 
-17. `androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases()`
-18. `unsupportedKotlinPlatformFailsClosed()`
+21. `androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases()`
+22. `unsupportedKotlinPlatformFailsClosed()`
 
 ## Packaged and native gate
 
-`scripts/smoke-packaged-k5-completion.py` must run from the exact packaged subject and end with one exact terminal marker. It proves:
+`scripts/smoke-packaged-k5-completion.py` and the pre-existing
+`scripts/smoke-packaged-kotlin.py` must run from the exact packaged subject and
+each end with one exact terminal marker. The latter binds operation-less legacy
+add-parameter CLI compatibility. Together they prove:
 
 - compiler-clean advanced-shape catalogue execution;
 - read-only CLI preview for callable imports, parameter rename, extract and inline;

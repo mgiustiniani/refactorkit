@@ -949,6 +949,8 @@ class KotlinCompilerDiagnostics private constructor(
                 "kotlin.usageLimitExceeded" -> "Kotlin usage result exceeded the bounded limit"
                 "kotlin.usageCallableDescriptorUnavailable" ->
                     "Kotlin external callable usage lacks an exact JVM descriptor"
+                "kotlin.usageExternalFieldUnsupported" ->
+                    "Kotlin external Java field usage lacks exact modeled JVM field identity"
                 "kotlin.usageExtractionFailed" -> "Kotlin compiler usage extraction failed"
                 "kotlin.compilerUsageTargetInvalid" -> "Kotlin compiler usage target payload is invalid"
                 "kotlin.compilerUsagePathInvalid" -> "Kotlin compiler usage path payload is invalid"
@@ -1337,6 +1339,7 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.usageLimitExceeded",
             "kotlin.usageExtractionFailed",
             "kotlin.usageCallableDescriptorUnavailable",
+            "kotlin.usageExternalFieldUnsupported",
             "kotlin.compilerUsageTargetInvalid",
             "kotlin.compilerUsagePathInvalid",
             "kotlin.compilerUsageRangeInvalid",

@@ -628,7 +628,7 @@ jobs:
           runpy.run_path("scripts/test-finalize-native-k5-completion.py", run_name="__main__")
 
       - name: Run exact K5 completion tests
-        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.organizeImports*' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.namedArgumentsResolveToExactOverloadParameterSymbols' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.changeSignatureRefusesCompilerProvenExternalOverrideBoundary' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits' --tests 'org.refactorkit.kotlin.KotlinLanguageAdapterTest.descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.unsupportedKotlinPlatformFailsClosed' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicKotlinParameterRenameRequiresExternalConsumerApproval' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinChangeSignatureUsesLazyMixedOperationDiagnostics'
+        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.organizeImports*' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.namedArgumentsResolveToExactOverloadParameterSymbols' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.changeSignatureRefusesCompilerProvenExternalOverrideBoundary' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractRefusesWhenInsertedCallDoesNotBindToNewHelper' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits' --tests 'org.refactorkit.kotlin.KotlinLanguageAdapterTest.descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.unsupportedKotlinPlatformFailsClosed' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicKotlinParameterRenameRequiresExternalConsumerApproval' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinChangeSignatureUsesLazyMixedOperationDiagnostics'
 
       - name: Package exact subject
         run: ${{ matrix.gradle }} --no-daemon packageCliRuntime
@@ -646,6 +646,19 @@ jobs:
           print(result.stderr, file=sys.stderr)
           result.check_returncode()
 
+      - name: Run packaged Kotlin compatibility smoke
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          result = subprocess.run([sys.executable, "scripts/smoke-packaged-kotlin.py"], text=True, capture_output=True)
+          log = result.stdout + result.stderr
+          path = pathlib.Path("build/qualification/k5-completion/packaged-compatibility-smoke.log")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(log)
+          print(result.stdout)
+          print(result.stderr, file=sys.stderr)
+          result.check_returncode()
+
       - name: Finalize fail-closed native receipt
         shell: python
         run: |
@@ -656,6 +669,7 @@ jobs:
               "--platform", "${{ matrix.platform }}",
               "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
               "--smoke-log", "build/qualification/k5-completion/packaged-smoke.log",
+              "--compatibility-smoke-log", "build/qualification/k5-completion/packaged-compatibility-smoke.log",
               "--report-root", "modules",
               "--package-root", "modules/refactorkit-cli/build/package/refactorkit",
               "--output", str(output),

@@ -21,10 +21,10 @@ SPEC.loader.exec_module(FINALIZER)
 
 
 class K5CompletionFinalizerContractTest(unittest.TestCase):
-    def test_exact_oracle_has_eighteen_unique_cases_in_five_suites(self) -> None:
+    def test_exact_oracle_has_twenty_two_unique_cases_in_five_suites(self) -> None:
         self.assertEqual(5, len(FINALIZER.REQUIRED_SUITES))
         cases = [case for suite in FINALIZER.REQUIRED_SUITES.values() for case in suite]
-        self.assertEqual(18, len(cases))
+        self.assertEqual(22, len(cases))
         self.assertEqual(len(cases), len(set(cases)))
 
     def test_exact_platform_matrix_is_closed(self) -> None:
@@ -48,11 +48,25 @@ class K5CompletionFinalizerContractTest(unittest.TestCase):
     def test_checksum_sidecar_is_exact(self) -> None:
         sidecar = ROOT / FINALIZER.REQUIREMENT.with_suffix(FINALIZER.REQUIREMENT.suffix + ".sha256")
         self.assertTrue(FINALIZER.valid_checksum_record(sidecar.read_text().strip().split()))
+        self.assertIn("shared Java/Kotlin add-parameter", FINALIZER.COMPATIBILITY_SMOKE_MARKER)
 
     def test_every_subject_file_exists_and_includes_finalizer_contract(self) -> None:
         self.assertIn(Path("scripts/finalize-native-k5-completion.py"), FINALIZER.SUBJECT_FILES)
         self.assertIn(Path("scripts/test-finalize-native-k5-completion.py"), FINALIZER.SUBJECT_FILES)
         self.assertFalse([path for path in FINALIZER.SUBJECT_FILES if not (ROOT / path).is_file()])
+
+    def test_both_packaged_markers_are_terminal_unique_and_failure_free(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            log = Path(temporary) / "smoke.log"
+            for marker in (FINALIZER.SMOKE_MARKER, FINALIZER.COMPATIBILITY_SMOKE_MARKER):
+                log.write_text("progress\n" + marker + "\n")
+                FINALIZER.validate_smoke(log, marker, "test smoke")
+                log.write_text(marker + "\nextra\n" + marker + "\n")
+                with self.assertRaisesRegex(ValueError, "terminal exact marker"):
+                    FINALIZER.validate_smoke(log, marker, "test smoke")
+                log.write_text("Traceback\n" + marker + "\n")
+                with self.assertRaisesRegex(ValueError, "failure evidence"):
+                    FINALIZER.validate_smoke(log, marker, "test smoke")
 
     def test_parse_count_rejects_invalid_and_negative_values(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -264,6 +264,14 @@ A subsequent unpromoted K5 candidate adds three narrowly bounded families:
 - extraction/inlining of only a top-level zero-input integer expression body,
   using exact compiler declaration/body/use ranges.
 
+Counterfactual import removal treats a raw external Java field as incomplete
+usage authority (`kotlin.usageExternalFieldUnsupported`) until exact JVM field
+identity is modeled; it never removes such a used import. Parameter rename
+refuses a proposed identifier already present in an affected source rather than
+attempting incomplete capture analysis. Extract requires the replacement call's
+K2 target to be the newly created private helper, and both extract and inline
+require one authoritative non-generated source root.
+
 It also publishes read-only compiler facts for extension receivers, suspend
 functions, companion/data/sealed/value classes and exact JVM-name effects.
 Delegated properties return stable `kotlin.symbolDelegatedPropertyUnsupported`.

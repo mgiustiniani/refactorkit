@@ -1,5 +1,6 @@
 package org.refactorkit.kotlin
 
+import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
@@ -13,6 +14,7 @@ import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.owningBuildSourceRoots
 
 /** Inline one private top-level zero-argument integer-expression helper at its only direct call. */
 class KotlinInlineMethodPlanner(
@@ -47,6 +49,12 @@ class KotlinInlineMethodPlanner(
         )
         val source = snapshot.files.singleOrNull { it.path.normalize() == target.location.path.normalize() }
             ?: return refused(snapshot, "kotlin.inlineFileMissing", "Kotlin inline source file is absent")
+        val ownership = snapshot.owningBuildSourceRoots(source.path)
+        if (ownership.isEmpty() || ownership.map { it.root.normalize() }.distinct().size != 1 ||
+            ownership.any { it.generated || it.modelStatus != BuildModelStatus.AVAILABLE }) return refused(
+            snapshot, "kotlin.inlineSourceOwnershipUnavailable",
+            "Kotlin inline requires one authoritative non-generated source root",
+        )
         val bodyRange = declaration.bodyRange
             ?: return refused(snapshot, "kotlin.inlineRangeUnavailable", "K2 omitted the helper expression range")
         val declarationRange = declaration.declarationRange

@@ -135,9 +135,19 @@ class KotlinChangeSignaturePlanner(
             "New Kotlin parameter name conflicts with another parameter in the exact family", operation,
         )
         val familyById = familyParameters.associateBy { it.id }
+        val familyUsages = catalogue.usages.filter { it.targetId in familyById }
+        val affectedPaths = (familyParameters.map { it.location.path.normalize() } +
+            familyUsages.map { it.location.path.normalize() }).toSet()
+        val newNameToken = Regex("(?<![A-Za-z0-9_])${Regex.escape(newParameterName)}(?![A-Za-z0-9_])")
+        if (snapshot.files.any { source ->
+                source.path.normalize() in affectedPaths && newNameToken.containsMatchIn(source.content)
+            }) return refused(
+            snapshot, "kotlin.changeSignatureParameterConflict",
+            "New Kotlin parameter name already occurs in an affected source and could capture a binding", operation,
+        )
         val locations = buildList {
             familyParameters.forEach { add(it.location to it.name) }
-            catalogue.usages.filter { it.targetId in familyById }.forEach { usage ->
+            familyUsages.forEach { usage ->
                 add(usage.location to familyById.getValue(usage.targetId).name)
             }
         }.distinctBy { it.first }

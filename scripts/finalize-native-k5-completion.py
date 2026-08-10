@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 REQUIREMENT = Path("docs/requirements/kotlin-k5-bounded-completion.md")
-REQUIREMENT_SHA256 = "e09f270c9e4daffd578b04e7444cad6ec9658af722734867a2ad01f2f6b44f42"
+REQUIREMENT_SHA256 = "c7563bbfa0737d27d69aa9cda8ae6249f6886b298b81d6a1330e981fd788ed4a"
 BOUND_REQUIREMENTS = {
     Path("docs/requirements/kotlin-jvm-organize-imports-callables-formatting.md"):
         "0d28daa17f8d1a92097503125b405775d1ff2ff73361e1674b57643bec3c9a6e",
@@ -31,19 +31,28 @@ SMOKE_MARKER = (
     "Packaged K5 completion acceptance passed: callable imports, parameter rename, "
     "bounded extract/inline, advanced-shape inventory, and refusal matrices."
 )
+COMPATIBILITY_SMOKE_MARKER = (
+    "Packaged Kotlin acceptance passed: descriptor-exact K2 declaration/constructor reads, private rename, "
+    "bidirectional public type/member rename, shared Java/Kotlin add-parameter, and public Kotlin package "
+    "move apply/rollback."
+)
 REQUIRED_SUITES = {
     "org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest": {
         "organizeImportsRefusesCommentAttachedToImportBlock()",
         "organizeImportsRemovesCompilerProvenUnusedTypeAndSortsCrLfBlock()",
         "organizeImportsUsesCounterfactualK2EvidenceForExternalCallables()",
         "organizeImportsRefusesCompilingCallableBindingSubstitution()",
+        "organizeImportsRefusesUnmodeledExternalJavaFieldRatherThanRemovingUsedImport()",
         "organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()",
         "organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()",
         "overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()",
         "namedArgumentsResolveToExactOverloadParameterSymbols()",
         "changeSignatureRefusesCompilerProvenExternalOverrideBoundary()",
+        "changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings()",
         "compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly()",
         "boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback()",
+        "extractRefusesWhenInsertedCallDoesNotBindToNewHelper()",
+        "extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits()",
         "extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits()",
     },
     "org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest": {
@@ -68,6 +77,11 @@ SUBJECT_FILES = {
     *BOUND_REQUIREMENTS.keys(),
     Path("docs/requirements/java-cli-command-catalog-k5-capability-projection-change.md"),
     Path("docs/requirements/kotlin-cli-change-signature-mode-compatibility.md"),
+    Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-001.md"),
+    Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-285da48-fail-f03763afc912473399ac0872bb1268bfe618bf92bfd7100391821d8778607ce2.md"),
+    Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-probes-ddeb32e82c77471e3585f227efb109dd81e2abdbdb61dc1e1247ad7056bb9be1.py"),
+    Path("docs/requirements/evidence/v0.7.0-k5-completion-adversarial-tests-only-red-b66166ffd37e5027b127bc450abd4c27feefeb3de635073f1a11d9a25b62cf6d.log"),
+    Path("docs/requirements/evidence/v0.7.0-k5-completion-adversarial-22-case-green-5ab69dbb96130a003ac61ba66621cabe6afd7e283bfe33a2380c310ece67958e.log"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change.md"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change-signature-change.md"),
     Path("docs/kotlin-adapter.md"),
@@ -98,6 +112,7 @@ SUBJECT_FILES = {
     Path("modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt"),
     Path("modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt"),
     Path("scripts/smoke-packaged-k5-completion.py"),
+    Path("scripts/smoke-packaged-kotlin.py"),
     Path("scripts/finalize-native-k5-completion.py"),
     Path("scripts/test-finalize-native-k5-completion.py"),
 }
@@ -149,11 +164,20 @@ def valid_checksum_record(fields: list[str], requirement: PurePath = REQUIREMENT
     return len(fields) == 2 and fields[0] == REQUIREMENT_SHA256 and fields[1] == requirement.as_posix()
 
 
+def validate_smoke(path: Path, marker: str, label: str) -> None:
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines or lines.count(marker) != 1 or lines[-1] != marker:
+        raise ValueError(f"{label} lacks one terminal exact marker")
+    if any("::error" in line or "Traceback" in line for line in lines):
+        raise ValueError(f"{label} contains failure evidence")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--smoke-log", type=Path, required=True)
+    parser.add_argument("--compatibility-smoke-log", type=Path, required=True)
     parser.add_argument("--report-root", type=Path, required=True)
     parser.add_argument("--package-root", type=Path, required=True)
     parser.add_argument("--repository-root", type=Path, default=Path("."))
@@ -198,11 +222,11 @@ def main() -> int:
         if not path.is_file() or sha256(path) != expected:
             raise ValueError(f"bound K5 completion requirement is missing or drifted: {relative}")
 
-    smoke_lines = [line for line in options.smoke_log.read_text(encoding="utf-8").splitlines() if line.strip()]
-    if smoke_lines.count(SMOKE_MARKER) != 1 or smoke_lines[-1] != SMOKE_MARKER:
-        raise ValueError("packaged K5 completion smoke lacks one terminal exact marker")
-    if any("::error" in line or "Traceback" in line for line in smoke_lines):
-        raise ValueError("packaged K5 completion smoke contains failure evidence")
+    validate_smoke(options.smoke_log, SMOKE_MARKER, "packaged K5 completion smoke")
+    validate_smoke(
+        options.compatibility_smoke_log, COMPATIBILITY_SMOKE_MARKER,
+        "packaged Kotlin compatibility smoke",
+    )
 
     reports = sorted(options.report_root.glob("*/build/test-results/test/TEST-*.xml"))
     if len(reports) != len(REQUIRED_SUITES):
@@ -267,6 +291,7 @@ def main() -> int:
         },
         "junit": {"totalRequiredTests": sum(map(len, REQUIRED_SUITES.values())), "suites": suites},
         "packagedSmokeSha256": sha256(options.smoke_log),
+        "packagedCompatibilitySmokeSha256": sha256(options.compatibility_smoke_log),
         "packagedSubjectJarSha256": dict(sorted(jar_map.items())),
         "subjectFileSha256": subject_hashes,
         "host": {
@@ -275,9 +300,9 @@ def main() -> int:
         },
         "embeddedRuntime": {"versionOutput": embedded_version, "javaSha256": sha256(embedded_java)},
         "boundaries": [
-            "Callable/type import removal is isolated-counterfactual K2 only; formatting is import-layout only.",
-            "Change signature is parameter-name-only across exact source families with unchanged JVM descriptors.",
-            "Extract/inline is one zero-input integer expression shape only.",
+            "Callable/type import removal is isolated-counterfactual K2 only; unmodeled raw Java fields refuse.",
+            "Change signature is parameter-name-only across exact source families; pre-existing new-name tokens refuse.",
+            "Extract/inline is one zero-input integer expression shape with exact helper-call binding and non-generated ownership only.",
             "Advanced shapes are read-only facts; delegated/platform/plugin/generated/framework cases remain refused.",
             "No general Kotlin support, whole-repository CI, installed asset, SBOM, signing, or release claim.",
         ],

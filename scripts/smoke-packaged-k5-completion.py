@@ -67,6 +67,63 @@ def main() -> int:
             raise AssertionError(f"Kotlin symbols are unavailable: {response}")
         return response.get("symbols", [])
 
+    def expect_cli_refusal(
+        workspace: Path,
+        operation: str,
+        arguments: list[str],
+        request: str,
+        refusal_code: str,
+    ) -> None:
+        before = {
+            path.relative_to(workspace).as_posix(): path.read_bytes()
+            for path in workspace.rglob("*") if path.is_file() and path.suffix in {".kt", ".java"}
+        }
+        transaction_root = workspace / ".refactorkit/transactions"
+        transactions_before = sorted(
+            path.relative_to(workspace).as_posix()
+            for path in transaction_root.rglob("*") if path.is_file()
+        ) if transaction_root.exists() else []
+        result = subprocess.run(
+            shared.command_for(cli, [
+                "kotlin", operation, str(workspace),
+                "--jdk-home", str(jdk), "--compiler-jar", str(compiler),
+                "--compiler-classpath", os.pathsep.join(map(str, classpath)),
+                "--request-id", request, *arguments,
+            ]),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=shared.COMMAND_TIMEOUT_SECONDS,
+        )
+        body = json.loads(result.stdout) if result.stdout.strip() else {}
+        expected_message = {
+            "kotlin.changeSignatureParameterConflict":
+                "New Kotlin parameter name already occurs in an affected source and could capture a binding",
+            "kotlin.extractCallBindingChanged":
+                "The inserted extraction call does not resolve exactly once to the new private helper",
+            "kotlin.extractSourceOwnershipUnavailable":
+                "Kotlin extract requires one authoritative non-generated source root",
+            "kotlin.inlineSourceOwnershipUnavailable":
+                "Kotlin inline requires one authoritative non-generated source root",
+            "kotlin.usageExternalFieldUnsupported":
+                "Kotlin external Java field usage lacks exact modeled JVM field identity",
+        }.get(refusal_code)
+        structured = body.get("status") == "REFUSED" and body.get("refusalCode") == refusal_code
+        surfaced = not body and expected_message is not None and expected_message in result.stderr
+        if result.returncode != 1 or not (structured or surfaced):
+            raise AssertionError(
+                f"packaged refusal differs for {operation}: rc={result.returncode}, "
+                f"body={body}, stderr={result.stderr}"
+            )
+        after = {
+            path.relative_to(workspace).as_posix(): path.read_bytes()
+            for path in workspace.rglob("*") if path.is_file() and path.suffix in {".kt", ".java"}
+        }
+        transactions_after = sorted(
+            path.relative_to(workspace).as_posix()
+            for path in transaction_root.rglob("*") if path.is_file()
+        ) if transaction_root.exists() else []
+        if after != before or transactions_after != transactions_before:
+            raise AssertionError(f"packaged refusal mutated code or transactions for {operation}")
+
     with tempfile.TemporaryDirectory(prefix="refactorkit-k5-completion-") as temporary:
         workspace = Path(temporary) / "workspace"
         shutil.copytree(repository / "samples/kotlin-maven-simple", workspace)
@@ -332,6 +389,86 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=20)
+
+        adversarial = Path(temporary) / "adversarial-workspace"
+        shutil.copytree(repository / "samples/kotlin-maven-simple", adversarial)
+        capture = adversarial / "src/main/kotlin/org/refactorkit/k5/adversarial/Capture.kt"
+        collision = adversarial / "src/main/kotlin/org/refactorkit/k5/adversarial/Collision.kt"
+        generated = adversarial / "target/generated-sources/kotlin/org/refactorkit/k5/Generated.kt"
+        for path in [capture, collision, generated]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        capture.write_text(
+            "package org.refactorkit.k5.adversarial\n"
+            "private val MAX_VALUE: Long = 100L\n"
+            "private fun captured(old: Int): Long {\n"
+            "    val first = run { val MAX_VALUE = 7; old.toLong() }\n"
+            "    return first + MAX_VALUE\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        collision.write_text(
+            "package org.refactorkit.k5.adversarial\n"
+            "import java.util.concurrent.ForkJoinPool.getCommonPoolParallelism\n"
+            "fun collisionAnswer(): Int = 40 + 2\n"
+            "fun importedAnswer(): Int = getCommonPoolParallelism()\n",
+            encoding="utf-8",
+        )
+        generated.write_text(
+            "package org.refactorkit.k5\n"
+            "fun generatedAnswer(): Int = 40 + 2\n"
+            "private fun generatedTiny(): Int = 20 + 22\n"
+            "fun generatedUse(): Int = generatedTiny()\n",
+            encoding="utf-8",
+        )
+        capture_symbol = next(
+            row for row in symbols(
+                adversarial, "src/main/kotlin/org/refactorkit/k5/adversarial/Capture.kt", "k5-capture-symbol",
+            ) if row.get("name") == "captured" and row.get("kind") == "function"
+        )
+        generated_tiny = next(
+            row for row in symbols(
+                adversarial, "target/generated-sources/kotlin/org/refactorkit/k5/Generated.kt",
+                "k5-generated-symbol",
+            ) if row.get("name") == "generatedTiny" and row.get("kind") == "function"
+        )
+        expect_cli_refusal(
+            adversarial, "change-signature",
+            ["--symbol", capture_symbol["id"], "--old-name", "old", "--new-name", "MAX_VALUE"],
+            "k5-capture-refusal", "kotlin.changeSignatureParameterConflict",
+        )
+        expect_cli_refusal(
+            adversarial, "extract-method",
+            ["--file", "src/main/kotlin/org/refactorkit/k5/adversarial/Collision.kt",
+             "--start-line", "3", "--end-line", "3", "--method-name", "getCommonPoolParallelism"],
+            "k5-extract-binding-refusal", "kotlin.extractCallBindingChanged",
+        )
+        expect_cli_refusal(
+            adversarial, "extract-method",
+            ["--file", "target/generated-sources/kotlin/org/refactorkit/k5/Generated.kt",
+             "--start-line", "2", "--end-line", "2", "--method-name", "generatedFortyTwo"],
+            "k5-generated-extract-refusal", "kotlin.extractSourceOwnershipUnavailable",
+        )
+        expect_cli_refusal(
+            adversarial, "inline-method", ["--symbol", generated_tiny["id"]],
+            "k5-generated-inline-refusal", "kotlin.inlineSourceOwnershipUnavailable",
+        )
+
+        external_field = Path(temporary) / "external-field-workspace"
+        shutil.copytree(repository / "samples/kotlin-maven-simple", external_field)
+        field_source = external_field / "src/main/kotlin/org/refactorkit/k5/ExternalField.kt"
+        field_source.parent.mkdir(parents=True, exist_ok=True)
+        field_source.write_text(
+            "package org.refactorkit.k5\n"
+            "import java.lang.Integer.MAX_VALUE\n"
+            "import java.lang.Long.*\n"
+            "fun externalField(): String = \"${MAX_VALUE::class.qualifiedName}:$MAX_VALUE\"\n",
+            encoding="utf-8",
+        )
+        expect_cli_refusal(
+            external_field, "organize-imports",
+            ["--file", "src/main/kotlin/org/refactorkit/k5/ExternalField.kt"],
+            "k5-external-field-refusal", "kotlin.usageExternalFieldUnsupported",
+        )
 
     print(MARKER)
     return 0

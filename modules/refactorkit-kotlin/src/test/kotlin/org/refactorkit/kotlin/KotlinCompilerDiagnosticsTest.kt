@@ -427,12 +427,33 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun organizeImportsRefusesUnmodeledExternalJavaFieldRatherThanRemovingUsedImport() {
+        val root = project(
+            "import java.lang.Integer.MAX_VALUE\n" +
+                "import java.lang.Long.*\n" +
+                "fun value(): String = \"${'$'}{MAX_VALUE::class.qualifiedName}:${'$'}MAX_VALUE\"\n",
+        )
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val before = source.readBytes()
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val planner = KotlinOrganizeImportsPlanner(KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)))
+
+        val plan = planner.preview(snapshot, root.relativize(source))
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.usageExternalFieldUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+        assertTrue(before.contentEquals(source.readBytes()))
+    }
+
+    @Test
     fun organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables() {
         val root = project(
             "import fixture.library.render\n" +
                 "import java.time.Instant\n" +
                 "import kotlin.math.abs\n" +
-                "fun value(): String = render(Instant.EPOCH, listOf(abs(-1).toString()))\n",
+                "fun value(): String = render(Instant.now(), listOf(abs(-1).toString()))\n",
         )
         root.resolve("src/main/kotlin/fixture/library/Library.kt").apply {
             parent.createDirectories()
@@ -472,7 +493,7 @@ class KotlinCompilerDiagnosticsTest {
         val root = project(
             "import java.time.Instant\n" +
                 "import java.util.UUID\n" +
-                "fun value(): Instant = Instant.EPOCH\n",
+                "fun value(): Instant = Instant.now()\n",
         )
         val style = root.resolve(".editorconfig")
         style.writeText("[*.kt]\nij_kotlin_imports_layout = unsupported-token\n")
@@ -643,6 +664,32 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings() {
+        val root = project(
+            "private val MAX_VALUE: Long = 100L\n" +
+                "private fun value(old: Int): Long {\n" +
+                "    val first = run { val MAX_VALUE = 7; old.toLong() }\n" +
+                "    return first + MAX_VALUE\n" +
+                "}\n",
+        )
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = catalogue.index.symbols.single {
+            it.name == "value" && it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION
+        }
+
+        val plan = KotlinChangeSignaturePlanner(adapter).previewRenameParameter(
+            snapshot, target.id, "old", "MAX_VALUE",
+        )
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.changeSignatureParameterConflict", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun privateFunctionParameterRenameUsesOwnerDescriptorOrdinalIdentity() {
         val root = project("private fun format(value: Int): String = value.toString()\n")
         val toolchain = toolchain(root)
@@ -771,6 +818,80 @@ class KotlinCompilerDiagnosticsTest {
             org.refactorkit.core.PatchEngine(inlineRoot).rollback(inlineApplied.transaction),
         )
         assertTrue(inlineBefore.contentEquals(inlineSource.readBytes()))
+    }
+
+    @Test
+    fun extractRefusesWhenInsertedCallDoesNotBindToNewHelper() {
+        val root = project(
+            "import java.util.concurrent.ForkJoinPool.getCommonPoolParallelism\n" +
+                "fun answer(): Int = 40 + 2\n" +
+                "fun imported(): Int = getCommonPoolParallelism()\n",
+        )
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val before = source.readBytes()
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val planner = KotlinExtractMethodPlanner(KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)))
+
+        val plan = planner.preview(
+            snapshot, root.relativize(source), 3, 3, "getCommonPoolParallelism",
+        )
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.extractCallBindingChanged", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+        assertTrue(before.contentEquals(source.readBytes()))
+
+        val shadowRoot = project(
+            "import java.util.concurrent.ForkJoinPool.*\n" +
+                "fun answer(): Int = 40 + 2\n" +
+                "fun imported(): Int = getCommonPoolParallelism()\n",
+        )
+        val shadowSource = shadowRoot.resolve("src/main/kotlin/fixture/Broken.kt")
+        val shadowToolchain = toolchain(shadowRoot)
+        val shadowSnapshot = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(shadowRoot), shadowToolchain,
+        )
+        val shadowPlan = KotlinExtractMethodPlanner(
+            KotlinLanguageAdapter(KotlinCompilerDiagnostics(shadowToolchain)),
+        ).preview(shadowSnapshot, shadowRoot.relativize(shadowSource), 3, 3, "getCommonPoolParallelism")
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, shadowPlan.status, shadowPlan.toString())
+        assertEquals("kotlin.extractBindingChanged", shadowPlan.refusalCode)
+        assertTrue(shadowPlan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
+    fun extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits() {
+        val root = project("fun baseline(): Int = 1\n")
+        val generated = root.resolve("target/generated-sources/kotlin/fixture/Generated.kt").apply {
+            parent.createDirectories()
+            writeText(
+                "package fixture\n" +
+                    "fun answer(): Int = 40 + 2\n" +
+                    "private fun tiny(): Int = 20 + 22\n" +
+                    "fun use(): Int = tiny()\n",
+            )
+        }
+        val before = generated.readBytes()
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val extract = KotlinExtractMethodPlanner(adapter).preview(
+            snapshot, root.relativize(generated), 2, 2, "fortyTwo",
+        )
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val helper = catalogue.index.symbols.single {
+            it.name == "tiny" && it.kind == org.refactorkit.core.Symbol.Kind.FUNCTION
+        }
+        val inline = KotlinInlineMethodPlanner(adapter).preview(snapshot, helper.id)
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, extract.status, extract.toString())
+        assertEquals("kotlin.extractSourceOwnershipUnavailable", extract.refusalCode)
+        assertTrue(extract.workspaceEdit.edits.isEmpty())
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, inline.status, inline.toString())
+        assertEquals("kotlin.inlineSourceOwnershipUnavailable", inline.refusalCode)
+        assertTrue(inline.workspaceEdit.edits.isEmpty())
+        assertTrue(before.contentEquals(generated.readBytes()))
     }
 
     @Test

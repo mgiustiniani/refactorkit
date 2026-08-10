@@ -49,8 +49,13 @@ class KotlinOrganizeImportsPlanner(
                 snapshot, result.failure.code ?: "kotlin.organizeImportsEvidenceUnavailable", result.failure.message,
             )
         }
-        if (before.symbolFailure != null || before.symbols == null ||
-            before.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) return refused(
+        before.symbolFailure?.let { failure ->
+            return refused(
+                snapshot, failure.code ?: "kotlin.organizeImportsBaselineIncomplete",
+                failure.message, before.diagnostics,
+            )
+        }
+        if (before.symbols == null || before.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) return refused(
             snapshot, "kotlin.organizeImportsBaselineIncomplete",
             "Kotlin organize imports requires complete error-free K2 declaration and usage evidence", before.diagnostics,
         )
@@ -91,7 +96,13 @@ class KotlinOrganizeImportsPlanner(
                 )
                 is KotlinCompilerDiagnosticsResult.Available -> {
                     if (result.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) continue
-                    if (result.symbolFailure != null || result.symbols == null) return refused(
+                    result.symbolFailure?.let { failure ->
+                        return refused(
+                            snapshot, failure.code ?: "kotlin.organizeImportsCounterfactualIncomplete",
+                            failure.message, result.diagnostics,
+                        )
+                    }
+                    if (result.symbols == null) return refused(
                         snapshot, "kotlin.organizeImportsCounterfactualIncomplete",
                         "K2 did not return complete declaration and usage evidence after isolated import removal",
                         result.diagnostics,
@@ -132,8 +143,13 @@ class KotlinOrganizeImportsPlanner(
                 snapshot, result.failure.code ?: "kotlin.organizeImportsStagedEvidenceUnavailable", result.failure.message,
             )
         }
-        if (after.symbolFailure != null || after.symbols == null ||
-            after.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) return refused(
+        after.symbolFailure?.let { failure ->
+            return refused(
+                snapshot, failure.code ?: "kotlin.organizeImportsDiagnosticsRegression",
+                failure.message, after.diagnostics,
+            )
+        }
+        if (after.symbols == null || after.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) return refused(
             snapshot, "kotlin.organizeImportsDiagnosticsRegression",
             "Organized imports do not retain complete error-free K2 evidence", after.diagnostics,
         )

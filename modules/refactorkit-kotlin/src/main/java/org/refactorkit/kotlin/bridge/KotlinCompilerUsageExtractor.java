@@ -44,6 +44,7 @@ import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
 import org.jetbrains.kotlin.fir.types.FirTypeRef;
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol;
+import org.jetbrains.kotlin.fir.symbols.impl.FirFieldSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol;
@@ -307,6 +308,9 @@ final class KotlinCompilerUsageExtractor {
         KtSourceElement targetSource = reference.getResolvedSymbol().getSource();
         if (!(usageSource instanceof KtPsiSourceElement)) return;
         PsiElement usagePsi = ((KtPsiSourceElement) usageSource).getPsi();
+        if (reference.getResolvedSymbol() instanceof FirFieldSymbol) {
+            throw failure("kotlin.usageExternalFieldUnsupported");
+        }
         if (!(usagePsi instanceof KtSimpleNameExpression)) {
             if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol) {
                 addResolvedFunctionUsage(
@@ -347,7 +351,10 @@ final class KotlinCompilerUsageExtractor {
                 );
                 String propertyName = property.getName().asString();
                 String getterName = JvmAbi.getterName(propertyName);
-                if (owner != null && usagePsi.getText().equals(propertyName) && property.getFir().getGetter() != null) {
+                if (owner != null && property.getFir().getGetter() == null) {
+                    throw failure("kotlin.usageExternalFieldUnsupported");
+                }
+                if (owner != null && usagePsi.getText().equals(propertyName)) {
                     addExternalCallableUsage(
                         usagePsi,
                         owner,
