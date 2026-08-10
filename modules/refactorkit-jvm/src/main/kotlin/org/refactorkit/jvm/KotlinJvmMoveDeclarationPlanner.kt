@@ -133,6 +133,13 @@ class KotlinJvmMoveDeclarationPlanner(
             else "kotlin.moveCallableReferenceUnsupported",
             "Kotlin move requires compiler-PSI proof that every moved top-level declaration contains no callable reference",
         )
+        if (isTopLevelFunction && catalogue.index.symbols.any { symbol ->
+                symbol.location.path.normalize() != source.path.normalize() &&
+                    catalogue.declarations[symbol.id]?.containsCallableReference == true
+            }) return refused(
+            snapshot, "kotlin.moveFunctionCallableReferenceUnsupported",
+            "Top-level function move refuses Kotlin callable-reference consumers outside the moved file",
+        )
         if (isTopLevelFunction && fileDeclarations.count {
                 it.symbol.kind == Symbol.Kind.FUNCTION && it.symbol.name == target.name
             } != 1) return refused(

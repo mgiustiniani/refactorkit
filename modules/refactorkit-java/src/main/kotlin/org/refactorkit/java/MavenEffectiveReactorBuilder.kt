@@ -153,6 +153,7 @@ internal data class MavenModuleModel(
     val kotlinPluginConfigured: Boolean = false,
     val kotlinJvmTarget: String? = null,
     val kotlinTargetJdk: String? = null,
+    val kotlinCompilerPlugins: List<String> = emptyList(),
     val modelFailure: String? = null,
     val reactorDescriptorFailure: MavenReactorDescriptorFailure? = null,
 )
@@ -500,6 +501,7 @@ internal class MavenEffectiveReactorBuilder(
             kotlinPluginConfigured = kotlinPlugin(model) != null,
             kotlinJvmTarget = kotlinJvmTarget(model),
             kotlinTargetJdk = kotlinTargetJdk(model),
+            kotlinCompilerPlugins = kotlinCompilerPlugins(model),
             modelFailure = sourceDirectories.failure,
         )
     }
@@ -524,6 +526,46 @@ internal class MavenEffectiveReactorBuilder(
     private fun kotlinTargetJdk(model: Model): String? = kotlinConfigurations(model).firstNotNullOfOrNull { configuration ->
         configuration.getChild("jdkToolchain")?.getChild("version")?.value?.normalizeJvmLevel()
     } ?: model.properties.getProperty("maven.compiler.release")?.normalizeJvmLevel()
+
+    private fun kotlinCompilerPlugins(model: Model): List<String> {
+        val plugin = kotlinPlugin(model) ?: return emptyList()
+        fun normalized(value: String): String = when (val id = value.trim().lowercase()) {
+            "allopen", "all-open" -> "all-open"
+            "noarg", "no-arg" -> "no-arg"
+            else -> id
+        }
+        val configured = kotlinConfigurations(model).flatMap { configuration ->
+            val plugins = configuration.getChild("compilerPlugins")?.children.orEmpty()
+                .filter { it.name == "plugin" }
+                .mapNotNull { it.value?.trim()?.takeIf(String::isNotBlank) }
+            val options = configuration.getChild("pluginOptions")?.children.orEmpty()
+                .filter { it.name in setOf("option", "pluginOption") }
+                .mapNotNull { it.value?.substringBefore(':')?.trim()?.takeIf(String::isNotBlank) }
+            plugins + options
+        }
+        val dependencies = plugin.dependencies.orEmpty().mapNotNull { dependency ->
+            dependency.artifactId?.removePrefix("kotlin-maven-")
+                ?.takeIf { it.isNotBlank() && it != "plugin" }
+        }
+        val goals = plugin.executions.flatMap { it.goals }.mapNotNull { goal ->
+            when {
+                goal.contains("kapt", ignoreCase = true) -> "kapt"
+                goal.contains("ksp", ignoreCase = true) -> "ksp"
+                else -> null
+            }
+        }
+        val separatePlugins = model.build?.plugins.orEmpty().mapNotNull { candidate ->
+            candidate.artifactId?.lowercase()?.let { artifact ->
+                when {
+                    "ksp" in artifact || "symbol-processing" in artifact -> "ksp"
+                    "kapt" in artifact -> "kapt"
+                    else -> null
+                }
+            }
+        }
+        return (configured + dependencies + goals + separatePlugins)
+            .map(::normalized).filter(String::isNotBlank).distinct().sorted()
+    }
 
     private fun kotlinConfigurations(model: Model): List<org.codehaus.plexus.util.xml.Xpp3Dom> {
         val plugin = kotlinPlugin(model) ?: return emptyList()

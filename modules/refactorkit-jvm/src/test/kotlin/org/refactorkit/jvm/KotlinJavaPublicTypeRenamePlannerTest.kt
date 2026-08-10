@@ -566,6 +566,38 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicTopLevelKotlinFunctionMoveRefusesCallableReferenceConsumer() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").writeText(
+            "package javax.swing.SwingUtilities\n" +
+                "fun isEventDispatchThread(): Boolean = true\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.consumer\n" +
+                "import javax.swing.SwingUtilities.isEventDispatchThread\n" +
+                "val dispatchReference: () -> Boolean = ::isEventDispatchThread\n" +
+                "fun greeting(): Boolean = dispatchReference()\n",
+        )
+        fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = catalogue.index.symbols.single { it.name == "isEventDispatchThread" }
+        assertTrue(catalogue.index.symbols.any { symbol ->
+            symbol.location.path == Path.of("src/main/kotlin/fixture/consumer/UseGreeting.kt") &&
+                catalogue.declarations[symbol.id]?.containsCallableReference == true
+        }, catalogue.toString())
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            snapshot, target.id, "moved", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.moveFunctionCallableReferenceUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun publicTopLevelKotlinFunctionMoveRefusesImplicitIteratorBindingSubstitution() {
         val fixture = moveFixture()
         fixture.root.resolve("src/main/kotlin/neutral/Box.kt").apply {

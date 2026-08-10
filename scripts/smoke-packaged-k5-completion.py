@@ -105,6 +105,12 @@ def main() -> int:
                 "Kotlin inline requires one authoritative non-generated source root",
             "kotlin.usageExternalFieldUnsupported":
                 "Kotlin external Java field usage lacks exact modeled JVM field identity",
+            "kotlin.usageExternalEnumEntryUnsupported":
+                "Kotlin enum-entry usage lacks exact modeled JVM field identity",
+            "kotlin.usagePropertyAliasUnsupported":
+                "Kotlin property alias usage lacks exact modeled property identity",
+            "kotlin.compilerPluginsUnsupported":
+                "Kotlin compiler-plugin execution remains outside the bounded semantic model",
         }.get(refusal_code)
         structured = body.get("status") == "REFUSED" and body.get("refusalCode") == refusal_code
         surfaced = not body and expected_message is not None and expected_message in result.stderr
@@ -392,9 +398,18 @@ def main() -> int:
 
         adversarial = Path(temporary) / "adversarial-workspace"
         shutil.copytree(repository / "samples/kotlin-maven-simple", adversarial)
+        adversarial_pom = adversarial / "pom.xml"
+        adversarial_pom.write_text(adversarial_pom.read_text(encoding="utf-8").replace(
+            "</plugins>",
+            "<plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId>"
+            "<version>3.5.0</version><executions><execution><id>custom-generated</id>"
+            "<goals><goal>add-source</goal></goals><configuration><sources>"
+            "<source>${project.build.directory}/custom-generated</source>"
+            "</sources></configuration></execution></executions></plugin></plugins>",
+        ), encoding="utf-8")
         capture = adversarial / "src/main/kotlin/org/refactorkit/k5/adversarial/Capture.kt"
         collision = adversarial / "src/main/kotlin/org/refactorkit/k5/adversarial/Collision.kt"
-        generated = adversarial / "target/generated-sources/kotlin/org/refactorkit/k5/Generated.kt"
+        generated = adversarial / "target/custom-generated/org/refactorkit/k5/Generated.kt"
         for path in [capture, collision, generated]:
             path.parent.mkdir(parents=True, exist_ok=True)
         capture.write_text(
@@ -427,7 +442,7 @@ def main() -> int:
         )
         generated_tiny = next(
             row for row in symbols(
-                adversarial, "target/generated-sources/kotlin/org/refactorkit/k5/Generated.kt",
+                adversarial, "target/custom-generated/org/refactorkit/k5/Generated.kt",
                 "k5-generated-symbol",
             ) if row.get("name") == "generatedTiny" and row.get("kind") == "function"
         )
@@ -444,7 +459,7 @@ def main() -> int:
         )
         expect_cli_refusal(
             adversarial, "extract-method",
-            ["--file", "target/generated-sources/kotlin/org/refactorkit/k5/Generated.kt",
+            ["--file", "target/custom-generated/org/refactorkit/k5/Generated.kt",
              "--start-line", "2", "--end-line", "2", "--method-name", "generatedFortyTwo"],
             "k5-generated-extract-refusal", "kotlin.extractSourceOwnershipUnavailable",
         )
@@ -468,6 +483,67 @@ def main() -> int:
             external_field, "organize-imports",
             ["--file", "src/main/kotlin/org/refactorkit/k5/ExternalField.kt"],
             "k5-external-field-refusal", "kotlin.usageExternalFieldUnsupported",
+        )
+
+        enum_workspace = Path(temporary) / "enum-workspace"
+        shutil.copytree(repository / "samples/kotlin-maven-simple", enum_workspace)
+        enum_source = enum_workspace / "src/main/kotlin/org/refactorkit/k5/Enum.kt"
+        enum_source.parent.mkdir(parents=True, exist_ok=True)
+        enum_source.write_text(
+            "package org.refactorkit.k5\n"
+            "import java.util.concurrent.TimeUnit.SECONDS\n"
+            "import java.time.temporal.ChronoUnit.*\n"
+            "fun enumValue(): Any = SECONDS\n",
+            encoding="utf-8",
+        )
+        expect_cli_refusal(
+            enum_workspace, "organize-imports",
+            ["--file", "src/main/kotlin/org/refactorkit/k5/Enum.kt"],
+            "k5-enum-refusal", "kotlin.usageExternalEnumEntryUnsupported",
+        )
+
+        alias_workspace = Path(temporary) / "alias-property-workspace"
+        shutil.copytree(repository / "samples/kotlin-maven-simple", alias_workspace)
+        alias_library = alias_workspace / "src/main/kotlin/org/refactorkit/k5/library/Library.kt"
+        alias_source = alias_workspace / "src/main/kotlin/org/refactorkit/k5/Alias.kt"
+        alias_library.parent.mkdir(parents=True, exist_ok=True)
+        alias_source.parent.mkdir(parents=True, exist_ok=True)
+        alias_library.write_text(
+            "package org.refactorkit.k5.library\nval sourceSeconds: String = \"source\"\n", encoding="utf-8",
+        )
+        alias_source.write_text(
+            "package org.refactorkit.k5\n"
+            "import org.refactorkit.k5.library.sourceSeconds as SECONDS\n"
+            "import java.time.temporal.ChronoUnit.*\n"
+            "fun aliasValue(): Any = SECONDS\n",
+            encoding="utf-8",
+        )
+        expect_cli_refusal(
+            alias_workspace, "organize-imports",
+            ["--file", "src/main/kotlin/org/refactorkit/k5/Alias.kt"],
+            "k5-alias-refusal", "kotlin.usagePropertyAliasUnsupported",
+        )
+
+        plugin_workspace = Path(temporary) / "maven-plugin-workspace"
+        shutil.copytree(repository / "samples/kotlin-maven-simple", plugin_workspace)
+        plugin_pom = plugin_workspace / "pom.xml"
+        plugin_pom.write_text(plugin_pom.read_text(encoding="utf-8").replace(
+            "<configuration>",
+            "<configuration><compilerPlugins><plugin>all-open</plugin></compilerPlugins>"
+            "<pluginOptions><option>all-open:annotation=org.refactorkit.k5.Open</option></pluginOptions>",
+            1,
+        ).replace(
+            "</plugin>",
+            "<dependencies><dependency><groupId>org.jetbrains.kotlin</groupId>"
+            "<artifactId>kotlin-maven-allopen</artifactId><version>2.0.21</version>"
+            "</dependency></dependencies></plugin>",
+            1,
+        ), encoding="utf-8")
+        expect_cli_refusal(
+            plugin_workspace, "extract-method",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt",
+             "--start-line", "3", "--end-line", "3", "--method-name", "pluginHelper"],
+            "k5-plugin-refusal", "kotlin.compilerPluginsUnsupported",
         )
 
     print(MARKER)

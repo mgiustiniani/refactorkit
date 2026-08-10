@@ -269,6 +269,53 @@ def main() -> int:
                 process.kill()
                 process.wait(timeout=20)
 
+        callable_workspace = Path(temporary) / "callable-reference-workspace"
+        shutil.copytree(repository / "samples" / "kotlin-maven-simple", callable_workspace)
+        callable_source = callable_workspace / "src/main/kotlin/probe/Dispatch.kt"
+        callable_consumer = callable_workspace / "src/main/kotlin/probe/Use.kt"
+        callable_source.parent.mkdir(parents=True, exist_ok=True)
+        callable_source.write_text(
+            "package javax.swing.SwingUtilities\nfun isEventDispatchThread(): Boolean = true\n",
+            encoding="utf-8",
+        )
+        callable_consumer.write_text(
+            "package probe\nimport javax.swing.SwingUtilities.isEventDispatchThread\n"
+            "val dispatchReference: () -> Boolean = ::isEventDispatchThread\n"
+            "fun useDispatch(): Boolean = dispatchReference()\n",
+            encoding="utf-8",
+        )
+        callable_symbols = shared.run(
+            cli, callable_workspace, jdk, compiler, classpath, "k5-callable-consumer-symbol",
+            "symbols", ["--file", "src/main/kotlin/probe/Dispatch.kt"],
+        )
+        callable_target = next(
+            row for row in callable_symbols.get("symbols", [])
+            if row.get("name") == "isEventDispatchThread" and row.get("kind") == "function"
+        )
+        callable_before = shared.tree_hash(callable_workspace / "src")
+        callable_transactions = transaction_files(callable_workspace)
+        callable_result = subprocess.run(
+            shared.command_for(cli, [
+                "kotlin", "move-declaration", str(callable_workspace),
+                "--jdk-home", str(jdk), "--compiler-jar", str(compiler),
+                "--compiler-classpath", os.pathsep.join(map(str, classpath)),
+                "--request-id", "k5-callable-consumer-refusal",
+                "--symbol", callable_target["id"], "--to-package", "moved",
+                "--accept-external-consumer-risk",
+            ]),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=shared.COMMAND_TIMEOUT_SECONDS,
+        )
+        if (callable_result.returncode != 1 or
+                "Top-level function move refuses Kotlin callable-reference consumers" not in callable_result.stderr):
+            raise AssertionError(
+                f"packaged callable-reference consumer refusal differs: "
+                f"rc={callable_result.returncode}, out={callable_result.stdout}, err={callable_result.stderr}"
+            )
+        if (shared.tree_hash(callable_workspace / "src") != callable_before or
+                transaction_files(callable_workspace) != callable_transactions):
+            raise AssertionError("packaged callable-reference consumer refusal wrote source or transaction files")
+
     print(MARKER)
     return 0
 

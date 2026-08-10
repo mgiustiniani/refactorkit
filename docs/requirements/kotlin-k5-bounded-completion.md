@@ -17,44 +17,45 @@ Any content change requires an explicit non-weakening approved-change record, ne
 
 ## Exact source oracle
 
-Native qualification executes exactly twenty-two tests with zero skip, failure, error, duplicate, missing case or unrelated report.
+Native qualification executes exactly twenty-three tests with zero skip, failure, error, duplicate, missing case or unrelated report.
 
-`org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest` (sixteen):
+`org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest` (seventeen):
 
 1. `organizeImportsRefusesCommentAttachedToImportBlock()`
 2. `organizeImportsRemovesCompilerProvenUnusedTypeAndSortsCrLfBlock()`
 3. `organizeImportsUsesCounterfactualK2EvidenceForExternalCallables()`
 4. `organizeImportsRefusesCompilingCallableBindingSubstitution()`
 5. `organizeImportsRefusesUnmodeledExternalJavaFieldRatherThanRemovingUsedImport()`
-6. `organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()`
-7. `organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()`
-8. `overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()`
-9. `namedArgumentsResolveToExactOverloadParameterSymbols()`
-10. `changeSignatureRefusesCompilerProvenExternalOverrideBoundary()`
-11. `changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings()`
-12. `compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly()`
-13. `boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback()`
-14. `extractRefusesWhenInsertedCallDoesNotBindToNewHelper()`
-15. `extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits()`
-16. `extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits()`
+6. `organizeImportsRefusesUnmodeledEnumAndAliasedPropertyRebound()`
+7. `organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()`
+8. `organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()`
+9. `overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()`
+10. `namedArgumentsResolveToExactOverloadParameterSymbols()`
+11. `changeSignatureRefusesCompilerProvenExternalOverrideBoundary()`
+12. `changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings()`
+13. `compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly()`
+14. `boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback()`
+15. `extractRefusesWhenInsertedCallDoesNotBindToNewHelper()`
+16. `extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits()`
+17. `extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits()`
 
 `org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest` (two):
 
-17. `kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller()`
-18. `publicKotlinParameterRenameRequiresExternalConsumerApproval()`
+18. `kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller()`
+19. `publicKotlinParameterRenameRequiresExternalConsumerApproval()`
 
 `org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest` (one):
 
-19. `kotlinChangeSignatureUsesLazyMixedOperationDiagnostics()`
+20. `kotlinChangeSignatureUsesLazyMixedOperationDiagnostics()`
 
 `org.refactorkit.kotlin.KotlinLanguageAdapterTest` (one):
 
-20. `descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly()`
+21. `descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly()`
 
 `org.refactorkit.kotlin.KotlinJvmBuildModelTest` (two):
 
-21. `androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases()`
-22. `unsupportedKotlinPlatformFailsClosed()`
+22. `androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases()`
+23. `unsupportedKotlinPlatformFailsClosed()`
 
 ## Packaged and native gate
 

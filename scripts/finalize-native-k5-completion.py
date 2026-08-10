@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 REQUIREMENT = Path("docs/requirements/kotlin-k5-bounded-completion.md")
-REQUIREMENT_SHA256 = "c7563bbfa0737d27d69aa9cda8ae6249f6886b298b81d6a1330e981fd788ed4a"
+REQUIREMENT_SHA256 = "7bb83fdf5a1f89ff358c6662bcd5ecfb1f4d086e1034f725a40a7652291b3197"
 BOUND_REQUIREMENTS = {
     Path("docs/requirements/kotlin-jvm-organize-imports-callables-formatting.md"):
         "0d28daa17f8d1a92097503125b405775d1ff2ff73361e1674b57643bec3c9a6e",
@@ -43,6 +43,7 @@ REQUIRED_SUITES = {
         "organizeImportsUsesCounterfactualK2EvidenceForExternalCallables()",
         "organizeImportsRefusesCompilingCallableBindingSubstitution()",
         "organizeImportsRefusesUnmodeledExternalJavaFieldRatherThanRemovingUsedImport()",
+        "organizeImportsRefusesUnmodeledEnumAndAliasedPropertyRebound()",
         "organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()",
         "organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()",
         "overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()",
@@ -78,10 +79,17 @@ SUBJECT_FILES = {
     Path("docs/requirements/java-cli-command-catalog-k5-capability-projection-change.md"),
     Path("docs/requirements/kotlin-cli-change-signature-mode-compatibility.md"),
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-001.md"),
+    Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-002.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-285da48-fail-f03763afc912473399ac0872bb1268bfe618bf92bfd7100391821d8778607ce2.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-probes-ddeb32e82c77471e3585f227efb109dd81e2abdbdb61dc1e1247ad7056bb9be1.py"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-adversarial-tests-only-red-b66166ffd37e5027b127bc450abd4c27feefeb3de635073f1a11d9a25b62cf6d.log"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-adversarial-22-case-green-5ab69dbb96130a003ac61ba66621cabe6afd7e283bfe33a2380c310ece67958e.log"),
+    Path("docs/requirements/evidence/v0.7.0-k5-pre-native-audit-ce65175-fail-48f3815f314ddb88c41aaf0300972bcc55766eef68a5bec0c61241798c92203e.md"),
+    Path("docs/requirements/evidence/probe-k5-enum-rebound-4cee58ffb423157eaaca28ecfeb531342f82d2a599ad4937b0664a30f2b07de9.py"),
+    Path("docs/requirements/evidence/probe-k5-organize-alias-property-enum-bcd83f9abc979141657f4095fb7d17b24980351a831cd1fcb426c7fd73de81d0.py"),
+    Path("docs/requirements/evidence/probe-k5-custom-generated-param-ce9b281e84e3e9e7d3fabf3ffd52a38cef347f3b35778e43b55d2f41eed76351.py"),
+    Path("docs/requirements/evidence/probe-k5-maven-allopen-34807117871815749ef9d9e06165c83341614b9453d95e85560eec4e1d7f4735.py"),
+    Path("docs/requirements/evidence/v0.7.0-k5-completion-second-audit-23-case-green-07516d18391337648be2f27e0ef85a25c265b2d4ef1708489c1ed4d1394ea926.log"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change.md"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change-signature-change.md"),
     Path("docs/kotlin-adapter.md"),
@@ -90,6 +98,7 @@ SUBJECT_FILES = {
     Path("features/java-cli-command-catalog.feature"),
     Path("features/managed-apply-diagnostics-gate-selector.feature"),
     Path("modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/JavaProjectScanner.kt"),
+    Path("modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/MavenEffectiveReactorBuilder.kt"),
     Path("modules/refactorkit-kotlin/src/main/java/org/refactorkit/kotlin/bridge/KotlinCompilerBridgeMain.java"),
     Path("modules/refactorkit-kotlin/src/main/java/org/refactorkit/kotlin/bridge/KotlinCompilerCallableSignatureExtractor.java"),
     Path("modules/refactorkit-kotlin/src/main/java/org/refactorkit/kotlin/bridge/KotlinCompilerSymbolExtractor.java"),
@@ -109,6 +118,12 @@ SUBJECT_FILES = {
     Path("modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/KotlinMoveDeclarationDiagnosticsRouteTest.kt"),
     Path("modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/manageddiagnostics/ManagedApplyDiagnosticsGateSelectorSteps.kt"),
     Path("modules/refactorkit-cli/src/main/kotlin/org/refactorkit/cli/RefactorKitCli.kt"),
+    Path("modules/refactorkit-cli/src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogCucumberTest.kt"),
+    Path("modules/refactorkit-cli/src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogSteps.kt"),
+    Path("modules/refactorkit-cli/src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2CucumberTest.kt"),
+    Path("modules/refactorkit-cli/src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2Steps.kt"),
+    Path("modules/refactorkit-cli/src/test/resources/org/refactorkit/cli/reqjavaclicatalog001/capabilities-k5-candidate-a8cc8f03c496.json"),
+    Path("modules/refactorkit-cli/src/test/resources/org/refactorkit/cli/reqjavaclicatalog001/help-k5-candidate-56d503763b94.txt"),
     Path("modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt"),
     Path("modules/refactorkit-mcp/src/main/kotlin/org/refactorkit/mcp/McpSession.kt"),
     Path("scripts/smoke-packaged-k5-completion.py"),
@@ -300,7 +315,7 @@ def main() -> int:
         },
         "embeddedRuntime": {"versionOutput": embedded_version, "javaSha256": sha256(embedded_java)},
         "boundaries": [
-            "Callable/type import removal is isolated-counterfactual K2 only; unmodeled raw Java fields refuse.",
+            "Callable/type import removal is isolated-counterfactual K2 only; unmodeled raw fields, enum entries, and property aliases refuse.",
             "Change signature is parameter-name-only across exact source families; pre-existing new-name tokens refuse.",
             "Extract/inline is one zero-input integer expression shape with exact helper-call binding and non-generated ownership only.",
             "Advanced shapes are read-only facts; delegated/platform/plugin/generated/framework cases remain refused.",

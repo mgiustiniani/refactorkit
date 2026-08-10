@@ -264,13 +264,16 @@ A subsequent unpromoted K5 candidate adds three narrowly bounded families:
 - extraction/inlining of only a top-level zero-input integer expression body,
   using exact compiler declaration/body/use ranges.
 
-Counterfactual import removal treats a raw external Java field as incomplete
-usage authority (`kotlin.usageExternalFieldUnsupported`) until exact JVM field
+Counterfactual import removal treats a raw external Java field, external/source
+enum entry, or property alias as incomplete usage authority until exact JVM
 identity is modeled; it never removes such a used import. Parameter rename
 refuses a proposed identifier already present in an affected source rather than
 attempting incomplete capture analysis. Extract requires the replacement call's
 K2 target to be the newly created private helper, and both extract and inline
-require one authoritative non-generated source root.
+require one authoritative non-generated source root. Effective Maven build-helper
+roots below `target`, `build/generated`, or `build/tmp/kapt3` are generated even
+with custom terminal names. Maven compiler-plugin/plugin-option dependencies and
+kapt/KSP declarations project into the existing compiler-plugin refusal.
 
 It also publishes read-only compiler facts for extension receivers, suspend
 functions, companion/data/sealed/value classes and exact JVM-name effects.

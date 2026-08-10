@@ -92,8 +92,10 @@ class JavaProjectScanner(
                 .flatMap { it.sourceRoots }.map(normalizedRoot::resolve)
             val effectiveMainRoots = (mainRoots + gradleMainRoots).distinct()
             val effectiveTestRoots = (testRoots + gradleTestRoots).distinct()
-            val explicitGeneratedTest = generatedSourceRoots(moduleRoot, test = true)
-            val discoveredGeneratedMain = generatedSourceRoots(moduleRoot, test = false)
+            val explicitGeneratedTest = (generatedSourceRoots(moduleRoot, test = true) +
+                effectiveTestRoots.filter { declaredGeneratedSourceRoot(moduleRoot, it) }).distinct()
+            val discoveredGeneratedMain = (generatedSourceRoots(moduleRoot, test = false) +
+                effectiveMainRoots.filter { declaredGeneratedSourceRoot(moduleRoot, it) }).distinct()
             val pluginTestGenerated = discoveredGeneratedMain.filter { generatedRoot ->
                 maven?.testGeneratedPathHints.orEmpty().any { hint ->
                     generatedRoot.any { component -> component.toString().contains(hint, ignoreCase = true) }
@@ -230,6 +232,9 @@ class JavaProjectScanner(
                     put("kotlin.platform", if (maven.kotlinPluginConfigured) "jvm" else "unconfigured")
                     maven.kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
                     maven.kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }
+                    if (maven.kotlinCompilerPlugins.isNotEmpty()) {
+                        put("kotlin.compilerPlugins", maven.kotlinCompilerPlugins.joinToString(","))
+                    }
                     maven.mainDependencyScopes.forEach { (coordinate, scope) ->
                         coordinateNames[coordinate]?.let { dependency ->
                             put("java.moduleDependency.main.$dependency.scope", scope)
@@ -613,6 +618,14 @@ class JavaProjectScanner(
             primary?.let(::add)
             addAll(additionalSourceDirectories)
         }.map { it.toAbsolutePath().normalize() }.distinct()
+    }
+
+    private fun declaredGeneratedSourceRoot(moduleRoot: Path, sourceRoot: Path): Boolean {
+        val module = moduleRoot.toAbsolutePath().normalize()
+        val source = sourceRoot.toAbsolutePath().normalize()
+        return source.startsWith(module.resolve("target")) ||
+            source.startsWith(module.resolve("build/generated")) ||
+            source.startsWith(module.resolve("build/tmp/kapt3"))
     }
 
     private fun generatedSourceRoots(root: Path, test: Boolean): List<Path> {

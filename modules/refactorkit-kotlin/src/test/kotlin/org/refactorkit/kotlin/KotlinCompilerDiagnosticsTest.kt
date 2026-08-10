@@ -448,6 +448,47 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun organizeImportsRefusesUnmodeledEnumAndAliasedPropertyRebound() {
+        val enumRoot = project(
+            "import java.util.concurrent.TimeUnit.SECONDS\n" +
+                "import java.time.temporal.ChronoUnit.*\n" +
+                "fun value(): Any = SECONDS\n",
+        )
+        val enumSource = enumRoot.resolve("src/main/kotlin/fixture/Broken.kt")
+        val enumToolchain = toolchain(enumRoot)
+        val enumSnapshot = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(enumRoot), enumToolchain,
+        )
+        val enumPlan = KotlinOrganizeImportsPlanner(
+            KotlinLanguageAdapter(KotlinCompilerDiagnostics(enumToolchain)),
+        ).preview(enumSnapshot, enumRoot.relativize(enumSource))
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, enumPlan.status, enumPlan.toString())
+        assertEquals("kotlin.usageExternalEnumEntryUnsupported", enumPlan.refusalCode)
+        assertTrue(enumPlan.workspaceEdit.edits.isEmpty())
+
+        val aliasRoot = project(
+            "import fixture.library.sourceSeconds as SECONDS\n" +
+                "import java.time.temporal.ChronoUnit.*\n" +
+                "fun value(): Any = SECONDS\n",
+        )
+        aliasRoot.resolve("src/main/kotlin/fixture/library/Library.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.library\nval sourceSeconds: String = \"source\"\n")
+        }
+        val aliasSource = aliasRoot.resolve("src/main/kotlin/fixture/Broken.kt")
+        val aliasToolchain = toolchain(aliasRoot)
+        val aliasSnapshot = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(aliasRoot), aliasToolchain,
+        )
+        val aliasPlan = KotlinOrganizeImportsPlanner(
+            KotlinLanguageAdapter(KotlinCompilerDiagnostics(aliasToolchain)),
+        ).preview(aliasSnapshot, aliasRoot.relativize(aliasSource))
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, aliasPlan.status, aliasPlan.toString())
+        assertEquals("kotlin.usagePropertyAliasUnsupported", aliasPlan.refusalCode)
+        assertTrue(aliasPlan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables() {
         val root = project(
             "import fixture.library.render\n" +
@@ -863,7 +904,16 @@ class KotlinCompilerDiagnosticsTest {
     @Test
     fun extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits() {
         val root = project("fun baseline(): Int = 1\n")
-        val generated = root.resolve("target/generated-sources/kotlin/fixture/Generated.kt").apply {
+        val pom = root.resolve("pom.xml")
+        pom.writeText(pom.readText().replace(
+            "</plugins>",
+            "<plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId>" +
+                "<version>3.5.0</version><executions><execution><id>custom-generated</id>" +
+                "<goals><goal>add-source</goal></goals><configuration><sources>" +
+                "<source>${'$'}{project.build.directory}/custom-generated</source>" +
+                "</sources></configuration></execution></executions></plugin></plugins>",
+        ))
+        val generated = root.resolve("target/custom-generated/fixture/Generated.kt").apply {
             parent.createDirectories()
             writeText(
                 "package fixture\n" +

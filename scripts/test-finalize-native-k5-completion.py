@@ -21,10 +21,10 @@ SPEC.loader.exec_module(FINALIZER)
 
 
 class K5CompletionFinalizerContractTest(unittest.TestCase):
-    def test_exact_oracle_has_twenty_two_unique_cases_in_five_suites(self) -> None:
+    def test_exact_oracle_has_twenty_three_unique_cases_in_five_suites(self) -> None:
         self.assertEqual(5, len(FINALIZER.REQUIRED_SUITES))
         cases = [case for suite in FINALIZER.REQUIRED_SUITES.values() for case in suite]
-        self.assertEqual(22, len(cases))
+        self.assertEqual(23, len(cases))
         self.assertEqual(len(cases), len(set(cases)))
 
     def test_exact_platform_matrix_is_closed(self) -> None:

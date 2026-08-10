@@ -44,6 +44,7 @@ import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
 import org.jetbrains.kotlin.fir.types.FirTypeRef;
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol;
+import org.jetbrains.kotlin.fir.symbols.impl.FirEnumEntrySymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirFieldSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol;
@@ -311,6 +312,9 @@ final class KotlinCompilerUsageExtractor {
         if (reference.getResolvedSymbol() instanceof FirFieldSymbol) {
             throw failure("kotlin.usageExternalFieldUnsupported");
         }
+        if (reference.getResolvedSymbol() instanceof FirEnumEntrySymbol) {
+            throw failure("kotlin.usageExternalEnumEntryUnsupported");
+        }
         if (!(usagePsi instanceof KtSimpleNameExpression)) {
             if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol) {
                 addResolvedFunctionUsage(
@@ -354,7 +358,10 @@ final class KotlinCompilerUsageExtractor {
                 if (owner != null && property.getFir().getGetter() == null) {
                     throw failure("kotlin.usageExternalFieldUnsupported");
                 }
-                if (owner != null && usagePsi.getText().equals(propertyName)) {
+                if (owner != null && !usagePsi.getText().equals(propertyName)) {
+                    throw failure("kotlin.usagePropertyAliasUnsupported");
+                }
+                if (owner != null) {
                     addExternalCallableUsage(
                         usagePsi,
                         owner,
@@ -428,6 +435,8 @@ final class KotlinCompilerUsageExtractor {
             !matchesTargetName(usageIdentifier, target, importAliases)) {
             if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol && "FUNCTION".equals(target.kind())) {
                 addUsage(usageIdentifier, target, identities, usages);
+            } else if ("PROPERTY".equals(target.kind())) {
+                throw failure("kotlin.usagePropertyAliasUnsupported");
             }
             return;
         }

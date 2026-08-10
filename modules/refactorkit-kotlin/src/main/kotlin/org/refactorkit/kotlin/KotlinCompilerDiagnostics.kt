@@ -951,6 +951,10 @@ class KotlinCompilerDiagnostics private constructor(
                     "Kotlin external callable usage lacks an exact JVM descriptor"
                 "kotlin.usageExternalFieldUnsupported" ->
                     "Kotlin external Java field usage lacks exact modeled JVM field identity"
+                "kotlin.usageExternalEnumEntryUnsupported" ->
+                    "Kotlin enum-entry usage lacks exact modeled JVM field identity"
+                "kotlin.usagePropertyAliasUnsupported" ->
+                    "Kotlin property alias usage lacks exact modeled property identity"
                 "kotlin.usageExtractionFailed" -> "Kotlin compiler usage extraction failed"
                 "kotlin.compilerUsageTargetInvalid" -> "Kotlin compiler usage target payload is invalid"
                 "kotlin.compilerUsagePathInvalid" -> "Kotlin compiler usage path payload is invalid"
@@ -1340,6 +1344,8 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.usageExtractionFailed",
             "kotlin.usageCallableDescriptorUnavailable",
             "kotlin.usageExternalFieldUnsupported",
+            "kotlin.usageExternalEnumEntryUnsupported",
+            "kotlin.usagePropertyAliasUnsupported",
             "kotlin.compilerUsageTargetInvalid",
             "kotlin.compilerUsagePathInvalid",
             "kotlin.compilerUsageRangeInvalid",
