@@ -905,6 +905,7 @@ class RefactorKitCli(
                                 put("oldName", parsed.options.getValue("old-name"))
                                 put("newName", parsed.options.getValue("new-name"))
                             }
+                            "inline-method" -> Unit
                             else -> put("file", parsed.options.getValue("file"))
                         }
                         put("acceptExternalConsumerRisk", "accept-external-consumer-risk" in parsed.flags)

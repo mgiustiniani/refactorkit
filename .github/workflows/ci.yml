@@ -579,3 +579,92 @@ jobs:
             modules/refactorkit-kotlin/build/test-results/test/TEST-*.xml
             modules/refactorkit-jvm/build/test-results/test/TEST-*.xml
           if-no-files-found: error
+
+  k5-bounded-completion-native:
+    name: K5 bounded completion (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+            gradle: ./gradlew
+          - os: windows-2025
+            platform: windows-x86_64
+            gradle: ./gradlew.bat
+          - os: macos-15-intel
+            platform: macos-x86_64
+            gradle: ./gradlew
+          - os: macos-15
+            platform: macos-aarch64
+            gradle: ./gradlew
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout exact subject revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - name: Set up exact JDK 21 qualification runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.11+10.0.LTS'
+          cache: gradle
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Validate K5 completion finalizer contract
+        run: python3 scripts/test-finalize-native-k5-completion.py
+
+      - name: Run exact K5 completion tests
+        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.organizeImports*' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.namedArgumentsResolveToExactOverloadParameterSymbols' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.changeSignatureRefusesCompilerProvenExternalOverrideBoundary' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits' --tests 'org.refactorkit.kotlin.KotlinLanguageAdapterTest.descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.unsupportedKotlinPlatformFailsClosed' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicKotlinParameterRenameRequiresExternalConsumerApproval' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinChangeSignatureUsesLazyMixedOperationDiagnostics'
+
+      - name: Package exact subject
+        run: ${{ matrix.gradle }} --no-daemon packageCliRuntime
+
+      - name: Run packaged K5 completion smoke
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          result = subprocess.run([sys.executable, "scripts/smoke-packaged-k5-completion.py"], text=True, capture_output=True)
+          log = result.stdout + result.stderr
+          path = pathlib.Path("build/qualification/k5-completion/packaged-smoke.log")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(log)
+          print(result.stdout)
+          print(result.stderr, file=sys.stderr)
+          result.check_returncode()
+
+      - name: Finalize fail-closed native receipt
+        shell: python
+        run: |
+          import pathlib, subprocess, sys
+          output = pathlib.Path("build/qualification/k5-completion/native-${{ matrix.platform }}.json")
+          subprocess.run([
+              sys.executable, "scripts/finalize-native-k5-completion.py",
+              "--platform", "${{ matrix.platform }}",
+              "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
+              "--smoke-log", "build/qualification/k5-completion/packaged-smoke.log",
+              "--report-root", "modules",
+              "--package-root", "modules/refactorkit-cli/build/package/refactorkit",
+              "--output", str(output),
+          ], check=True)
+
+      - name: Upload qualification receipt and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k5-bounded-completion-${{ matrix.platform }}
+          path: |
+            build/qualification/k5-completion/**
+            modules/refactorkit-kotlin/build/test-results/test/TEST-*.xml
+            modules/refactorkit-jvm/build/test-results/test/TEST-*.xml
+          if-no-files-found: error

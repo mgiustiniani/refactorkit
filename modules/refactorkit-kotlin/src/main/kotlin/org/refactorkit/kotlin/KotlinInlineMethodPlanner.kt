@@ -93,7 +93,11 @@ class KotlinInlineMethodPlanner(
             snapshot, "kotlin.inlinePostImageIdentityMismatch",
             "K2 did not prove exact removal of only the private helper identity",
         )
-        if (usageFingerprint(before, snapshot, target.id) != usageFingerprint(after, staged, target.id)) return refused(
+        val beforeBindings = usageFingerprint(
+            before, snapshot, target.id, Triple(target.location.path.normalize(), declarationRange, bodyRange),
+        )
+        val afterBindings = usageFingerprint(after, staged, target.id, null)
+        if (beforeBindings != afterBindings) return refused(
             snapshot, "kotlin.inlineBindingChanged",
             "Inlining changes a non-target compiler-resolved binding",
         )
@@ -118,6 +122,7 @@ class KotlinInlineMethodPlanner(
         evidence: Evidence,
         snapshot: ProjectSnapshot,
         excluded: SymbolId,
+        excludedDeclaration: Triple<java.nio.file.Path, SourceRange, SourceRange>?,
     ): List<String> {
         val sources = snapshot.files.associateBy { it.path.normalize() }
         fun selected(path: java.nio.file.Path, range: SourceRange): String {
@@ -126,14 +131,28 @@ class KotlinInlineMethodPlanner(
                 TextEdits.offsetOf(source.content, range.start), TextEdits.offsetOf(source.content, range.end),
             )
         }
+        fun insideExcluded(location: org.refactorkit.core.SourceLocation): Boolean {
+            val (path, declaration, body) = excludedDeclaration ?: return false
+            if (location.path.normalize() != path) return false
+            val source = sources.getValue(path)
+            val declarationStart = TextEdits.offsetOf(source.content, declaration.start)
+            val declarationEnd = TextEdits.offsetOf(source.content, declaration.end)
+            val bodyStart = TextEdits.offsetOf(source.content, body.start)
+            val bodyEnd = TextEdits.offsetOf(source.content, body.end)
+            val usageStart = TextEdits.offsetOf(source.content, location.range.start)
+            val usageEnd = TextEdits.offsetOf(source.content, location.range.end)
+            val inDeclaration = usageStart >= declarationStart && usageEnd <= declarationEnd
+            val inMovedBody = usageStart >= bodyStart && usageEnd <= bodyEnd
+            return inDeclaration && !inMovedBody
+        }
         return buildList {
-            evidence.usages.filterNot { it.targetId == excluded }.forEach {
+            evidence.usages.filterNot { it.targetId == excluded || insideExcluded(it.location) }.forEach {
                 add("I\u0000${it.location.path.normalize()}\u0000${it.targetId.value}\u0000${selected(it.location.path, it.location.range)}")
             }
-            evidence.externalTypes.forEach {
+            evidence.externalTypes.filterNot { insideExcluded(it.location) }.forEach {
                 add("T\u0000${it.location.path.normalize()}\u0000${it.jvmBinaryName}\u0000${selected(it.location.path, it.location.range)}")
             }
-            evidence.externalCallables.forEach {
+            evidence.externalCallables.filterNot { insideExcluded(it.location) }.forEach {
                 add("C\u0000${it.location.path.normalize()}\u0000${it.jvmOwner}\u0000${it.callableName}\u0000${it.jvmDescriptor}\u0000${selected(it.location.path, it.location.range)}")
             }
         }.sorted()
