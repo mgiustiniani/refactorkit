@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "status": "FAILED",
+  "classification": "MEANINGFUL_NATIVE_CONFIGURATION_RED",
+  "runId": 31394432715,
+  "runUrl": "https://github.com/mgiustiniani/refactorkit/actions/runs/31394432715",
+  "revision": "e5f21f64a7eeaf6a1601c28fd2a0aa2d268b447a",
+  "sharedFailure": "qualification revision must be one exact non-merge source commit, not a synthetic merge revision",
+  "rootCause": "The K5 job used the default shallow actions/checkout history. The candidate commit was the shallow boundary, so git rev-list --parents could not observe its single parent and the fail-closed finalizer rejected all four hosts as unverifiable.",
+  "sharedSuccessfulSteps": [
+    "checkout exact subject revision",
+    "set up exact JDK 21 qualification runtime",
+    "validate Gradle wrapper",
+    "run exact K5 move-next tests",
+    "package exact subject",
+    "run packaged K5 move-next smoke",
+    "upload qualification reports"
+  ],
+  "failedStep": "finalize fail-closed native receipt",
+  "jobs": {
+    "linux-x86_64": {
+      "jobId": 93473732199,
+      "conclusion": "failure",
+      "logSha256": "49b4c8a60ee7c8f7f28547696ba487005f875facfe14248e1ee84f6ac54569e5"
+    },
+    "windows-x86_64": {
+      "jobId": 93473732243,
+      "conclusion": "failure",
+      "logSha256": "4cd2416b6ace324385e1ea51137b6d04dc9af5123fe36a6b9a11cb4b0bf79383"
+    },
+    "macos-x86_64": {
+      "jobId": 93473732185,
+      "conclusion": "failure",
+      "logSha256": "6a2e4b235d4b16209c1d00c443f1864519b7acee3b8e70cba049f205031ee469"
+    },
+    "macos-aarch64": {
+      "jobId": 93473732345,
+      "conclusion": "failure",
+      "logSha256": "a38c1a5e2e81b2a056da8a9ab98bad9a0f3fc56b7d4c1ec2260c8e867ee30f82"
+    }
+  },
+  "promotionEffect": "NONE",
+  "requiredCorrection": "Fetch at least the candidate parent in the K5 checkout step, retain the non-merge finalizer check, and rerun all four native jobs on the corrected immutable revision."
+}

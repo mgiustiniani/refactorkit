@@ -128,6 +128,20 @@ class NativeK5MoveNextFinalizerTest(unittest.TestCase):
         self.assertEqual(sorted(MODULE.REQUIRED_SUITES), sorted(receipt["junit"]["suites"]))
         self.assertEqual(MODULE.REQUIREMENT_SHA256, receipt["requirement"]["sha256"])
 
+    def test_native_workflow_fetches_candidate_parent_for_topology_check(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        marker = "\n  k5-move-next-native:\n"
+        self.assertEqual(1, workflow.count(marker))
+        section = workflow.split(marker, 1)[1]
+        checkout = (
+            "      - name: Checkout exact subject revision\n"
+            "        uses: actions/checkout@v4\n"
+            "        with:\n"
+            "          ref: ${{ github.event.pull_request.head.sha || github.sha }}\n"
+            "          fetch-depth: 2\n"
+        )
+        self.assertIn(checkout, section)
+
     def test_dirty_tracked_checkout_fails(self) -> None:
         (self.repository / "tracked.txt").write_text("dirty\n", encoding="utf-8")
         result = self.run_finalizer()
