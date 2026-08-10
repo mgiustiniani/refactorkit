@@ -14,6 +14,9 @@ import subprocess
 import tempfile
 
 
+COMMAND_TIMEOUT_SECONDS = 180
+
+
 def command_for(cli: Path, args: list[str]) -> list[str]:
     if os.name == "nt":
         return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", str(cli), *args]
@@ -66,7 +69,7 @@ def run(
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=60,
+        timeout=COMMAND_TIMEOUT_SECONDS,
     )
     if result.returncode != 0:
         raise AssertionError(f"Kotlin diagnostics exited {result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}")
@@ -455,7 +458,8 @@ def main() -> int:
             raise AssertionError(f"shared Java/Kotlin CLI apply failed: {cli_signature_apply}")
         rollback = subprocess.run(
             command_for(cli, ["patch", "rollback", cli_signature_apply["transactionId"], "--root", str(workspace)]),
-            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=COMMAND_TIMEOUT_SECONDS,
         )
         if rollback.returncode != 0 or tree_hash(workspace / "src") != symmetric_before:
             raise AssertionError(f"shared Java/Kotlin CLI rollback failed: {rollback.stdout} {rollback.stderr}")

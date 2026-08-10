@@ -84,6 +84,13 @@ class KotlinSupportVerifierTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("capability refusal token missing", " ".join(receipt["failures"]))
 
+    def test_packaged_command_timeout_regression_fails(self) -> None:
+        path = self.root / "scripts/smoke-packaged-kotlin.py"
+        path.write_text(path.read_text().replace("COMMAND_TIMEOUT_SECONDS = 180", "COMMAND_TIMEOUT_SECONDS = 60"))
+        result, receipt = self.run_verifier()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("qualification command timeout", " ".join(receipt["failures"]))
+
     def test_constructor_schema_drift_fails(self) -> None:
         path = self.root / "docs/api-0.2-kotlin-symbols-schema.json"
         payload = json.loads(path.read_text())

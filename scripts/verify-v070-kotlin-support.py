@@ -152,6 +152,10 @@ def main() -> int:
                       '"kotlinx-coroutines-core-jvm", "1.6.4"', '"annotations", "13.0"'):
             if token not in smoke_text:
                 fail(failures, f"qualified compiler-classpath pin missing: {token}")
+        if "COMMAND_TIMEOUT_SECONDS = 180" not in smoke_text or smoke_text.count(
+            "timeout=COMMAND_TIMEOUT_SECONDS"
+        ) != 2:
+            fail(failures, "packaged Kotlin qualification command timeout must remain bounded at 180 seconds")
     except Exception as problem:
         fail(failures, f"implementation projection cannot be inspected: {problem}")
 
