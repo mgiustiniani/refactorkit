@@ -10,8 +10,6 @@ import sys
 from pathlib import Path
 
 OPEN_PLAN_ROWS = {
-    "kotlin-support": "- [ ] Publish qualified Kotlin/JDK/Gradle/Maven support rows and license/SBOM",
-    "kotlin-identity": "- [ ] Model JVM binary names, Kotlin source declarations and callable/property",
     "kotlin-depth": "- [ ] Move declaration/file/package with import and Java interoperability updates.",
     "typescript-advanced": "- [ ] Source-file relocation using exact `getEditsForFileRename` authority,",
     "maven-module-depth": "- [ ] Continue Java change-signature, move/package/module, extract/inline and",
@@ -21,11 +19,21 @@ OPEN_PLAN_ROWS = {
     "release-evidence": "- [ ] Produce one versioned release evidence manifest joining repository/tag/full",
 }
 
+CLOSED_PLAN_ROWS = {
+    "kotlin-support": "- [x] Publish qualified Kotlin/JDK/Gradle/Maven support rows and license/SBOM",
+    "kotlin-identity": "- [x] Model JVM binary names, Kotlin source declarations and callable/property",
+    "shared-jvm-identity": "- [x] Establish cross-language Java/Kotlin declaration and reference identity for",
+    "kotlin-capability-boundaries": "- [x] Keep Kotlin/JVM, Kotlin Multiplatform, Android, generated code, compiler",
+    "kotlin-build-spi": "- [x] Validate the Build Model SPI against Kotlin so any remaining Java/Maven",
+    "persistent-jvm-state": "- [x] Continue from the snapshot-keyed normalized JDT cache to finer persistent",
+    "shared-refresh-orchestration": "- [x] Continue targeted extraction of shared workspace-refresh lifecycle, apply,",
+}
+
 REQUIRED_SUPPORT_CLAIMS = {
     "snapshot": "Status: active `0.7.0-SNAPSHOT` qualification ledger.",
     "projection-boundary": "does not close K5, T5, J1, I1, or the release as a whole.",
     "generic-native-boundary": "Historical generic native acceptance does not qualify an operation-specific row.",
-    "kotlin-boundary": "General Kotlin managed support, the remaining K2 identity model, and every unchecked K5 operation remain unqualified.",
+    "kotlin-boundary": "General Kotlin managed support and every unchecked K5 operation remain unqualified.",
     "typescript-boundary": "All nine unchecked T5 advanced-operation rows remain unqualified.",
     "module-boundary": "Packaged/native/cross-platform module rename or move and general Maven-module authority remain unqualified.",
     "recipe-boundary": "Recipe evidence is operation-specific; no generic or advanced migration-recipe authority is claimed.",
@@ -76,6 +84,9 @@ def verify(repository_root: Path) -> dict[str, object]:
     for name, row in OPEN_PLAN_ROWS.items():
         if row not in plan:
             failures.append(f"roadmap row is no longer explicitly open: {name}")
+    for name, row in CLOSED_PLAN_ROWS.items():
+        if row not in plan:
+            failures.append(f"qualified roadmap row is not explicitly closed: {name}")
 
     for name, claim in REQUIRED_SUPPORT_CLAIMS.items():
         if claim not in support:
@@ -135,6 +146,7 @@ def verify(repository_root: Path) -> dict[str, object]:
         "schemaVersion": 1,
         "status": "PASSED" if not failures else "FAILED",
         "openRoadmapRowsVerified": sorted(OPEN_PLAN_ROWS),
+        "closedRoadmapRowsVerified": sorted(CLOSED_PLAN_ROWS),
         "supportBoundariesVerified": sorted(REQUIRED_SUPPORT_CLAIMS),
         "nativeWorkflowTokensVerified": sorted(REQUIRED_NATIVE_WORKFLOW_TOKENS),
         "k1NativeWorkflowTokensVerified": sorted(REQUIRED_K1_NATIVE_WORKFLOW_TOKENS),

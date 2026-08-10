@@ -1,9 +1,9 @@
 # Kotlin/JVM semantic toolchain boundary
 
-Status: explicit declarative discovery and bounded external K2 diagnostics plus
-descriptor-exact declaration navigation are implemented for `0.7.0-SNAPSHOT`.
-K1/K2 promotion remains pending four-host receipt and review. Reads are
-experimental compiler authority; mutation authority remains operation-specific.
+Status: explicit declarative discovery, bounded external K2 diagnostics and
+descriptor-exact declaration navigation are qualified for `0.7.0-SNAPSHOT` by
+four-host run `31355580092`. Reads are experimental compiler authority; mutation
+authority remains operation-specific.
 
 ## Provider selection
 

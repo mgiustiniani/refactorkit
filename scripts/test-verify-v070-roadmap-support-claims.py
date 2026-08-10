@@ -52,6 +52,21 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.assertEqual("PASSED", receipt["nativeEvidenceState"])
         self.assertFalse(receipt["nativeParentRowsOpen"])
         self.assertEqual(4, receipt["exactTemurin2111Pins"])
+        self.assertEqual(7, len(receipt["closedRoadmapRowsVerified"]))
+
+    def test_reopened_qualified_kotlin_foundation_row_fails(self) -> None:
+        path = self.root / "docs/releases/v0.7.0-plan.md"
+        text = path.read_text(encoding="utf-8").replace(
+            "- [x] Publish qualified Kotlin/JDK/Gradle/Maven support rows and license/SBOM",
+            "- [ ] Publish qualified Kotlin/JDK/Gradle/Maven support rows and license/SBOM",
+        )
+        path.write_text(text, encoding="utf-8")
+        result, receipt = self._run()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(
+            "qualified roadmap row is not explicitly closed: kotlin-support",
+            receipt["failures"],
+        )
 
     def test_checked_roadmap_row_without_projection_update_fails(self) -> None:
         path = self.root / "docs/releases/v0.7.0-plan.md"

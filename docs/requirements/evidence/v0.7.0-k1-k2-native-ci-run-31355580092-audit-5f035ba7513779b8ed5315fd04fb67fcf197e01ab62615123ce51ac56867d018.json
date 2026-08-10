@@ -1,0 +1,81 @@
+{
+  "boundaries": [
+    "Dedicated K1/K2 jobs only; unrelated run jobs are outside this audit.",
+    "This audit does not assert whole-repository CI success.",
+    "Roadmap promotion still requires independent post-native review."
+  ],
+  "crossHostSubjectJarSha256": {
+    "refactorkit-core-0.7.0-SNAPSHOT.jar": "37cea7707d5f25fed7e9bccf89647bf88d6cf396e7bf5c5aab773fa60d7544f8",
+    "refactorkit-daemon-0.7.0-SNAPSHOT.jar": "467b184a8ae8369dcd5ec3a622182bfe34c7be3728244f6fee99f163f81a149e",
+    "refactorkit-java-0.7.0-SNAPSHOT.jar": "d18496e5667e62a951676a73ed0b8b8a59728cb7f90fab940aeb9d4021b6b836",
+    "refactorkit-jvm-0.7.0-SNAPSHOT.jar": "51b3414e58be22e09aeccf8f533eefa83223cacca63134f57a025e2887c17fb9",
+    "refactorkit-kotlin-0.7.0-SNAPSHOT.jar": "be97c03b15c5957ad86167753911558409f8af859fb6dbfb93d0436b25032b10",
+    "refactorkit-lsp-0.7.0-SNAPSHOT.jar": "a54d199564d0916efadb7bdf7f6c6a28ba91e565be471b5f61e48bbccb66e8c6",
+    "refactorkit-mcp-0.7.0-SNAPSHOT.jar": "c455c30c56307bb636265cc51b2b330aaf7e9b70c3fe8827e559bb09506b8bd4"
+  },
+  "platforms": {
+    "linux-x86_64": {
+      "embeddedJavaSha256": "b1b0a09aaa036695716c829cd7c5213ea055eecd475d1462020330e251b717b2",
+      "jobId": 93354512572,
+      "junitTotals": {
+        "errors": 0,
+        "executed": 184,
+        "failures": 0,
+        "skipped": 0,
+        "tests": 184
+      },
+      "receiptSha256": "24882bd3b92a6f0138d80330cb848e4d592d90ee4e3c4a66cb53e5816f9d3d99",
+      "smokeSha256": "dd0e7ccf2b9c1ca40398dbc9e26d35587f6d4d43533200be2cb4d74e384b2f5f",
+      "supportReceiptSha256": "3965e3d872001d455528cea37b363856355798303ce5b65a5b0a38e822f142aa"
+    },
+    "macos-aarch64": {
+      "embeddedJavaSha256": "afb8ed976e06d85c89192312923301959535169abe087d70166cd00fb96de2e5",
+      "jobId": 93354512539,
+      "junitTotals": {
+        "errors": 0,
+        "executed": 184,
+        "failures": 0,
+        "skipped": 0,
+        "tests": 184
+      },
+      "receiptSha256": "65ac05dfb72ea904f4e4c5aed151d6ce09d001143a082dbfed9440f3fd093eae",
+      "smokeSha256": "dd0e7ccf2b9c1ca40398dbc9e26d35587f6d4d43533200be2cb4d74e384b2f5f",
+      "supportReceiptSha256": "3965e3d872001d455528cea37b363856355798303ce5b65a5b0a38e822f142aa"
+    },
+    "macos-x86_64": {
+      "embeddedJavaSha256": "3e67ca9ecc78e5b4694008c330beecd9588df5ef3da320d674a77fe2b6c3eada",
+      "jobId": 93354512550,
+      "junitTotals": {
+        "errors": 0,
+        "executed": 184,
+        "failures": 0,
+        "skipped": 0,
+        "tests": 184
+      },
+      "receiptSha256": "e1ba498659ba6ef3f5b2d3e51bc60539b9073d1e7b470943ffb863a5c083745c",
+      "smokeSha256": "dd0e7ccf2b9c1ca40398dbc9e26d35587f6d4d43533200be2cb4d74e384b2f5f",
+      "supportReceiptSha256": "3965e3d872001d455528cea37b363856355798303ce5b65a5b0a38e822f142aa"
+    },
+    "windows-x86_64": {
+      "embeddedJavaSha256": "5e0fab9f07952ceb6e71eb9fd33e1ed69959904ca00cf70869b7baf516a98016",
+      "jobId": 93354512576,
+      "junitTotals": {
+        "errors": 0,
+        "executed": 184,
+        "failures": 0,
+        "skipped": 0,
+        "tests": 184
+      },
+      "receiptSha256": "88353a9375f1546ef669edb28d4f06ee0cf608c9d8427ccd96e4eac3a1acbc12",
+      "smokeSha256": "189e829c60bcb2487b256d192e8c112ab42c36558de1b353160a8dd6e233e921",
+      "supportReceiptSha256": "cbadb3802c3b934418832f45512d1e84ac830efa66c796827ef58e433cd89d8d"
+    }
+  },
+  "revision": "26e84d2e17b21c3172c2042a828c89a1f8b1540b",
+  "runId": 31355580092,
+  "runUrl": "https://github.com/mgiustiniani/refactorkit/actions/runs/31355580092",
+  "schemaVersion": 1,
+  "scope": "v0.7.0-k1-k2-shared-foundations-native-audit",
+  "status": "PASSED",
+  "supportProjectionSha256": "d75615a2a5517527a5d9e2eba54489d87320225d4210cdac35968c5317c64a94"
+}

@@ -85,13 +85,13 @@ RefactorKit provides deterministic code-intelligence and refactoring capabilitie
 |Kotlin/JVM library
 |`0.7.x` adapter owning `.kt`/`.kts` routing. Explicit JDK/compiler discovery and `kotlin-jvm-projection-v1` bind K2 diagnostics, declaration identities and exact FIR/PSI usages to immutable snapshots. Descriptor-exact type, overloaded/literal-`@JvmName` callable, source-constructor, direct/constructor-property, value-parameter and type-parameter identities are durable and bounded; generated class files must prove the exact JVM member. A session-owned two-entry LRU reuses detached normalized results only for the exact snapshot. K4 adds managed private-declaration proposals with staged diagnostics. Scripts, Multiplatform, Android, compiler-plugin/generated semantics and unsupported dynamic boundaries refuse.
 |`modules/refactorkit-kotlin`, `docs/kotlin-adapter.md`, `docs/kotlin-toolchain.md`, `docs/kotlin-build-model.md`, `docs/releases/v0.7.0-plan.md`.
-|K4 bounded row qualified; K1/K2 foundation candidate pending four-host receipt and review; K5 active
+|K1/K2 bounded foundation and K4 bounded row qualified; K5 active
 
 |Shared JVM Semantic Composition
 |Kotlin/JVM library
 |`refactorkit-jvm` composes independently attested Kotlin K2 and Java JDT evidence without coupling core to either adapter. `SharedJvmIdentityProjector` joins exact non-recovered type/method/constructor/field tuples and cross-language references for one attested snapshot without retaining JDT/FIR/PSI handles or granting mutation authority. The module also owns the stateless five-argument managed diagnostics-gate selector and its exact lazy authoritative Maven module-rename route. Kotlin-to-Java exposes compiler-generated classes only inside the disposable K2 overlay so JDT can bind Java uses. Java-to-Kotlin launches bounded ECJ with annotation processing disabled, packages hash-bound ephemeral classes, and lets K2 prove exact Kotlin type/constructor uses. Public mutation rows retain their separate external-risk, staged-evidence and refusal contracts.
 |`modules/refactorkit-jvm`, `ManagedApplyDiagnosticsGateSelector`, `docs/requirements/java-kotlin-shared-jvm-rename.md`; delegated EARLY and LATE SURFACE-005 C4 assessment; implementation-informed direct `LspSession.applyPlan` adoption.
-|existing bidirectional mutation rows and selector adoption remain separately qualified; normalized shared identity/index candidate is pending four-host receipt and independent review
+|existing bidirectional mutation rows, selector adoption and normalized shared identity/index foundation are separately qualified; no general cross-language mutation authority is implied
 
 |External Java Class Importer
 |Kotlin/JVM library

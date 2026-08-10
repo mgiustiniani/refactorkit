@@ -1,9 +1,8 @@
 # Kotlin/JVM build-model projection
 
-Status: bounded non-executable projection implemented for `0.7.0-SNAPSHOT` and
-consumed by experimental compiler diagnostics/declaration reads. K1/K2 foundation
-promotion remains pending four-host receipt and review; mutation authority stays
-operation-specific.
+Status: bounded non-executable projection qualified for `0.7.0-SNAPSHOT` by
+four-host run `31355580092` and consumed by experimental compiler
+diagnostics/declaration reads. Mutation authority stays operation-specific.
 
 ## Provider
 

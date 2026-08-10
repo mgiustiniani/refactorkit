@@ -848,7 +848,7 @@ The later `WorkspaceRefreshCoordinator` does not reverse this decision. It owns 
 
 == Shared JVM Identity and Persistent Semantic State
 
-Status: implementation candidate pending four-host K1/K2 receipt and independent review.
+Status: bounded foundation qualified by exact four-host run `31355580092`, downloaded-artifact audit, and independent post-native review.
 
 Java JDT and Kotlin K2 normalize JVM-visible declarations to the same bounded tuple: kind, binary owner, member name and exact field/method descriptor. JDT contributes only non-recovered binding evidence attested to the exact snapshot. K2 combines FIR/PSI source identity with one exact generated class-file member; overloads, literal `@JvmName`, source constructors and primary-constructor parameter/property dual identity therefore do not rely on source-name uniqueness. `SharedJvmIdentityProjector` joins these values deterministically and refuses stale, colliding, invalid-path or oversized input. It retains no compiler handle and grants no mutation authority.
 
