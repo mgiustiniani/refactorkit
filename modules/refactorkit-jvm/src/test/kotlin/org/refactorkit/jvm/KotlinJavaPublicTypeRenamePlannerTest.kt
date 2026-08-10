@@ -566,6 +566,68 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicTopLevelKotlinFunctionMoveRefusesImplicitIteratorBindingSubstitution() {
+        val fixture = moveFixture()
+        fixture.root.resolve("src/main/kotlin/neutral/Box.kt").apply {
+            parent.createDirectories()
+            writeText("package neutral\nclass Box(val values: List<String>)\n")
+        }
+        fixture.root.resolve("src/main/kotlin/fixture/api/Iterator.kt").writeText(
+            "package fixture.api\nimport neutral.Box\n" +
+                "operator fun Box.iterator(): Iterator<String> = values.iterator()\n" +
+                "operator fun Box.component1(): String = values.first()\n" +
+                "operator fun Box.contains(value: String): Boolean = value in values\n" +
+                "operator fun Box.get(index: Int): String = values[index]\n" +
+                "operator fun Box.invoke(): String = values.joinToString(\"\")\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/api/v2/Iterator.kt").apply {
+            parent.createDirectories()
+            writeText(
+                "package fixture.api.v2\nimport neutral.Box\n" +
+                    "operator fun Box.iterator(): Iterator<String> = values.asReversed().iterator()\n" +
+                    "operator fun Box.component1(): String = values.last()\n" +
+                    "operator fun Box.contains(value: String): Boolean = value !in values\n" +
+                    "operator fun Box.get(index: Int): String = values.reversed()[index]\n" +
+                    "operator fun Box.invoke(): String = values.asReversed().joinToString(\"\")\n",
+            )
+        }
+        fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").writeText(
+            "package fixture.api\nimport neutral.Box\n" +
+                "fun publicGreeting(box: Box): String {\n" +
+                "    var text = \"\"\n" +
+                "    for (value in box) text += value\n" +
+                "    val (first) = box\n" +
+                "    return if (first in box) text + box[0] + box() else text\n" +
+                "}\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.consumer\nimport fixture.api.publicGreeting\nimport neutral.Box\n" +
+                "fun greeting(): String = publicGreeting(Box(listOf(\"a\", \"b\")))\n",
+        )
+        fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val target = catalogue.index.symbols.single { it.name == "publicGreeting" }
+        val implicitSourceCallables = catalogue.usages
+            .filter { it.location.path == Path.of("src/main/kotlin/fixture/api/PublicGreeting.kt") }
+            .mapNotNull { catalogue.declarations[it.targetId]?.jvmName }
+            .toSet()
+        assertTrue(
+            implicitSourceCallables.containsAll(setOf("iterator", "component1", "contains", "get", "invoke")),
+            implicitSourceCallables.toString(),
+        )
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            snapshot, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.moveOutboundBindingChanged", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun publicTopLevelKotlinFunctionMoveRefusesExternalPackageFunctionBindingSubstitution() {
         val fixture = moveFixture()
         val dependencyJar = compileExternalPackageFunctions(fixture.toolchain)
@@ -1449,7 +1511,8 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     fun kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller() {
         val fixture = changeSignatureFixture()
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
-        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(fixture.snapshot))
+        val catalogueResult = adapter.compilerSymbols(fixture.snapshot)
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(catalogueResult, catalogueResult.toString())
         val target = catalogue.index.symbols.single { symbol ->
             symbol.name == "render" && catalogue.declarations.getValue(symbol.id).let {
                 it.jvmOwner == "fixture.Formatter" && it.jvmDescriptor == "(Ljava/lang/String;)Ljava/lang/String;"
@@ -1492,7 +1555,8 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     fun publicKotlinParameterRenameRequiresExternalConsumerApproval() {
         val fixture = changeSignatureFixture()
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
-        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(fixture.snapshot))
+        val catalogueResult = adapter.compilerSymbols(fixture.snapshot)
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(catalogueResult, catalogueResult.toString())
         val target = catalogue.index.symbols.single { symbol ->
             symbol.name == "render" && catalogue.declarations.getValue(symbol.id).let {
                 it.jvmOwner == "fixture.Formatter" && it.jvmDescriptor == "(Ljava/lang/String;)Ljava/lang/String;"

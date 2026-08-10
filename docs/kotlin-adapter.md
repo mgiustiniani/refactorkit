@@ -240,6 +240,10 @@ source callable references are intentionally absent from bounded usage evidence,
 compiler PSI exposes their presence on every admitted top-level declaration and
 the move refuses a reference in either the selected function or any private
 helper with `kotlin.moveFunctionCallableReferenceUnsupported` before planning.
+Compiler-desugared FIR function calls without a literal same-name PSI token
+(such as `iterator` behind a `for` expression) are separately projected at a
+stable source range with exact source/external JVM callable identity; any
+pre/post rebound returns `kotlin.moveOutboundBindingChanged` without edits.
 Kotlin-only move
 apply and daemon post-apply diagnostics use the operation-owned mixed K2/JDT
 provider rather than the generic K2 fallback. It
@@ -247,7 +251,7 @@ returns `kotlin.moveCompanionStandaloneUnsupported` only for an approved
 compiler-PSI-proven companion selection (not an ordinary nested object), without
 creating an edit or transaction. This candidate is
 not a promoted support claim until its dedicated four-host receipts and
-independent review pass; aliases, stars, implicit/qualified uses, callable
+independent review pass; aliases, stars, implicit/qualified consumer uses, callable
 references, overloads, extensions, suspend/default/`@JvmName`/multifile forms,
 and declaration splitting remain refused.
 

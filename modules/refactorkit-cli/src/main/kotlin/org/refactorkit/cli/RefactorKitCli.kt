@@ -825,7 +825,17 @@ class RefactorKitCli(
             System.err.println("Kotlin inline-method requires --symbol")
             return 2
         }
-        val kotlinSignatureMode = parsed.options["operation"] ?: "rename-parameter"
+        val inferredRenameParameter = listOf("old-name", "new-name").any { parsed.options[it] != null }
+        val inferredAddParameter = listOf("type", "name", "default").any { parsed.options[it] != null }
+        if (operation == "change-signature" && parsed.options["operation"] == null &&
+            inferredRenameParameter && inferredAddParameter) {
+            System.err.println("Kotlin change-signature requires --operation when rename and add arguments are mixed")
+            return 2
+        }
+        val kotlinSignatureMode = parsed.options["operation"] ?: when {
+            inferredAddParameter -> "add-parameter"
+            else -> "rename-parameter"
+        }
         if (operation == "change-signature" && kotlinSignatureMode !in setOf("rename-parameter", "add-parameter")) {
             System.err.println("Kotlin change-signature --operation must be rename-parameter or add-parameter")
             return 2

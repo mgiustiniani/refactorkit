@@ -179,7 +179,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
     @Given("the selector owns only this precedence-ordered routing table:")
     fun selectorOwnsOnlyThisRoutingTable(table: DataTable) {
         assertEquals(EXPECTED_ROUTE_TABLE, table.asMaps())
-        assertEquals((1..7).map(Int::toString), table.asMaps().map { it.getValue("order") })
+        assertEquals((1..8).map(Int::toString), table.asMaps().map { it.getValue("order") })
     }
 
     @Given(
@@ -276,7 +276,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
         assertEquals(gateId, gate.id)
         assertEquals(EXPECTED_PROVIDER_DESCRIPTION_BY_ROW.getValue(row), providerOrIdentity)
 
-        if (row == "7") {
+        if (row == "8") {
             assertSame(requireNotNull(exactOutlineExternalGate), gate)
         } else {
             assertTrue(gate !== exactOutlineExternalGate)
@@ -296,7 +296,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
         assertEquals(expected.affectedFiles, plan.affectedFiles)
         assertEquals(expected.affectedFiles.map(Path::toString).toSet(), plan.affectedFiles.map(Path::toString).toSet())
 
-        if (observedOutlineRow == "7") {
+        if (observedOutlineRow == "8") {
             assertEquals(listOf(expected.languageId), outlineResolverLanguages)
         } else {
             assertTrue(outlineResolverLanguages.isEmpty())
@@ -331,10 +331,10 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
         establishWorkspaceBaseline()
     }
 
-    @When("all six built-in routes and these isolated external outcomes are selected without invoking PatchEngine:")
+    @When("all seven built-in routes and these isolated external outcomes are selected without invoking PatchEngine:")
     fun selectAllBuiltInRoutesAndExternalOutcomes(table: DataTable) {
         assertEquals(EXPECTED_EXTERNAL_OUTCOME_TABLE, table.asMaps())
-        assertEquals(6, BUILT_IN_ROUTE_FIXTURES.size)
+        assertEquals(7, BUILT_IN_ROUTE_FIXTURES.size)
 
         BUILT_IN_ROUTE_FIXTURES.forEach { fixture ->
             attempts.values.forEach { attempt ->
@@ -399,7 +399,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             }
         }.exceptionOrNull()
 
-        assertEquals(12, builtInSelections.size)
+        assertEquals(14, builtInSelections.size)
         assertWorkspaceUnchanged()
     }
 
@@ -437,9 +437,9 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
 
         attempts.values.forEach { attempt ->
             val ownSelections = builtInSelections.filter { it.attempt === attempt }
-            assertEquals(6, ownSelections.size)
+            assertEquals(7, ownSelections.size)
             assertEquals(BUILT_IN_ROUTES, ownSelections.map { it.fixture.route }.toSet())
-            assertEquals(6, attempt.probe.invocations.size)
+            assertEquals(7, attempt.probe.invocations.size)
 
             ownSelections.forEach { selection ->
                 val invocation = attempt.probe.invocations.single { it.route == selection.fixture.route }
@@ -454,7 +454,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
 
         val suppliedAdapters = attempts.values.flatMap { listOf(it.javaAdapter, it.kotlinAdapter) }
         val observedAdapters = attempts.values.flatMap { it.probe.invocations }.map(ProviderInvocation::adapter)
-        assertEquals(12, observedAdapters.size)
+        assertEquals(14, observedAdapters.size)
         assertTrue(observedAdapters.all { observed -> suppliedAdapters.any { supplied -> supplied === observed } })
         assertWorkspaceUnchanged()
     }
@@ -496,7 +496,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
         assertWorkspaceUnchanged()
         assertTrue(externalGateProviderSnapshots.isEmpty())
         assertTrue(events.none { event -> EXCLUDED_EVENT_PREFIXES.any(event::startsWith) })
-        assertEquals(12, attempts.values.sumOf { it.probe.invocations.size })
+        assertEquals(14, attempts.values.sumOf { it.probe.invocations.size })
     }
 
     @Then("selector adoption is limited to these duplicate managed-apply call sites:")
@@ -506,7 +506,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             setOf("daemon refactor.apply", "MCP apply_refactoring"),
             selectionSurfaces.toSet(),
         )
-        assertEquals(14, selectionSurfaces.size)
+        assertEquals(16, selectionSurfaces.size)
     }
 
     @Then("these excluded surfaces preserve their existing behavior:")
@@ -623,6 +623,7 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             ROUTE_JAVA_MAVEN_OWNERSHIP,
             ROUTE_JAVA_JDT,
             ROUTE_KOTLIN_JVM_MOVE,
+            ROUTE_KOTLIN_JVM_CHANGE_SIGNATURE,
             ROUTE_JAVA_KOTLIN_RENAME,
             ROUTE_KOTLIN_JAVA_RENAME,
             ROUTE_KOTLIN_K2,
@@ -631,10 +632,11 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             "1" to ROUTE_JAVA_MAVEN_OWNERSHIP,
             "2" to ROUTE_JAVA_JDT,
             "3" to ROUTE_KOTLIN_JVM_MOVE,
-            "4" to ROUTE_JAVA_KOTLIN_RENAME,
-            "5" to ROUTE_KOTLIN_JAVA_RENAME,
-            "6" to ROUTE_KOTLIN_K2,
-            "7" to ROUTE_EXTERNAL,
+            "4" to ROUTE_KOTLIN_JVM_CHANGE_SIGNATURE,
+            "5" to ROUTE_JAVA_KOTLIN_RENAME,
+            "6" to ROUTE_KOTLIN_JAVA_RENAME,
+            "7" to ROUTE_KOTLIN_K2,
+            "8" to ROUTE_EXTERNAL,
         )
 
         fun diagnosticCode(probeName: String, route: String): String = "probe.$probeName.$route"
@@ -660,24 +662,30 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             ),
             mapOf(
                 "order" to "4",
+                "exact predicate" to "languageId == \"kotlin\" and operation == \"changeSignature.renameParameter\"",
+                "gate ID rule" to "kotlin-k2-java-jdt-change-signature",
+                "lazy provider or result" to "KotlinJvmChangeSignaturePlanner(currentKotlinAdapter).diagnostics(candidate)",
+            ),
+            mapOf(
+                "order" to "5",
                 "exact predicate" to "languageId == \"kotlin\" and javaAffected and operation != \"moveDeclaration\" and evidence == \"JDT_BINDING\"",
                 "gate ID rule" to "kotlin-k2-java-jdt",
                 "lazy provider or result" to "JavaKotlinPublicTypeRenamePlanner(currentKotlinAdapter).diagnostics(candidate)",
             ),
             mapOf(
-                "order" to "5",
-                "exact predicate" to "languageId == \"kotlin\" and javaAffected after rows 3 and 4 fail",
+                "order" to "6",
+                "exact predicate" to "languageId == \"kotlin\" and javaAffected after rows 3 through 5 fail",
                 "gate ID rule" to "kotlin-k2-java-jdt",
                 "lazy provider or result" to "KotlinJavaPublicTypeRenamePlanner(currentKotlinAdapter).diagnostics(candidate)",
             ),
             mapOf(
-                "order" to "6",
-                "exact predicate" to "languageId == \"kotlin\" and not javaAffected after moveDeclaration is excluded",
+                "order" to "7",
+                "exact predicate" to "languageId == \"kotlin\" and not javaAffected after operation-specific rows are excluded",
                 "gate ID rule" to "kotlin-k2",
                 "lazy provider or result" to "currentKotlinAdapter.compilerDiagnostics(candidate).diagnostics",
             ),
             mapOf(
-                "order" to "7",
+                "order" to "8",
                 "exact predicate" to "every other exact languageId",
                 "gate ID rule" to "resolver gate ID unchanged",
                 "lazy provider or result" to "externalGateResolver(languageId) return value unchanged",
@@ -688,10 +696,11 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
             "1" to "lazy JavaMoveAcrossMavenModulesPlanner provider using the current Java adapter",
             "2" to "lazy diagnostics provider of the current Java adapter",
             "3" to "lazy KotlinJvmMoveDeclarationPlanner provider using the current Kotlin adapter",
-            "4" to "lazy JavaKotlinPublicTypeRenamePlanner provider using the current Kotlin adapter",
-            "5" to "lazy KotlinJavaPublicTypeRenamePlanner provider using the current Kotlin adapter",
-            "6" to "lazy compilerDiagnostics result provider of the current Kotlin adapter",
-            "7" to "the exact resolver-returned gate object unchanged",
+            "4" to "lazy KotlinJvmChangeSignaturePlanner provider using the current Kotlin adapter",
+            "5" to "lazy JavaKotlinPublicTypeRenamePlanner provider using the current Kotlin adapter",
+            "6" to "lazy KotlinJavaPublicTypeRenamePlanner provider using the current Kotlin adapter",
+            "7" to "lazy compilerDiagnostics result provider of the current Kotlin adapter",
+            "8" to "the exact resolver-returned gate object unchanged",
         )
 
         val EXPECTED_ATTEMPT_TABLE = listOf(
@@ -805,6 +814,13 @@ class ManagedApplyDiagnosticsGateSelectorSteps {
                 "moveDeclaration",
                 RefactoringEvidence.JDT_BINDING,
                 listOf("src/main/kotlin/Foo.kt", "src/main/java/com/acme/FooUser.java"),
+            ),
+            BuiltInRouteFixture(
+                ROUTE_KOTLIN_JVM_CHANGE_SIGNATURE,
+                "kotlin",
+                "changeSignature.renameParameter",
+                RefactoringEvidence.NATIVE_AST,
+                listOf("src/main/kotlin/Foo.kt"),
             ),
             BuiltInRouteFixture(
                 ROUTE_JAVA_KOTLIN_RENAME,

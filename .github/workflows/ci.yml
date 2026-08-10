@@ -622,7 +622,10 @@ jobs:
         uses: gradle/actions/wrapper-validation@v4
 
       - name: Validate K5 completion finalizer contract
-        run: python3 scripts/test-finalize-native-k5-completion.py
+        shell: python
+        run: |
+          import runpy
+          runpy.run_path("scripts/test-finalize-native-k5-completion.py", run_name="__main__")
 
       - name: Run exact K5 completion tests
         run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.organizeImports*' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.namedArgumentsResolveToExactOverloadParameterSymbols' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.changeSignatureRefusesCompilerProvenExternalOverrideBoundary' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits' --tests 'org.refactorkit.kotlin.KotlinLanguageAdapterTest.descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.unsupportedKotlinPlatformFailsClosed' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicKotlinParameterRenameRequiresExternalConsumerApproval' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinChangeSignatureUsesLazyMixedOperationDiagnostics'

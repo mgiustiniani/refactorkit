@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.com.intellij.openapi.Disposable;
 import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer;
 import org.jetbrains.kotlin.com.intellij.openapi.vfs.VirtualFileManager;
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement;
+import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.kotlin.config.ApiVersion;
 import org.jetbrains.kotlin.config.CommonConfigurationKeys;
 import org.jetbrains.kotlin.config.CompilerConfiguration;
@@ -91,6 +92,7 @@ import java.util.Set;
 /** K2 FIR extraction for compiler-resolved source function and type usages after successful compilation. */
 final class KotlinCompilerUsageExtractor {
     private static final int MAX_USAGES = 2_000;
+    private static final int MAX_SELECTION_CHARS = 512;
 
     private KotlinCompilerUsageExtractor() {}
 
@@ -190,6 +192,7 @@ final class KotlinCompilerUsageExtractor {
                 }
                 @Override public void visitFunctionCall(FirFunctionCall call) {
                     collectNamedArguments(call, declarationTargets, identities, usages);
+                    collectImplicitFunctionBinding(call, declarationTargets, identities, usages);
                     call.acceptChildren(this);
                 }
                 @Override public void visitTypeParameter(FirTypeParameter parameter) {
@@ -223,6 +226,31 @@ final class KotlinCompilerUsageExtractor {
         } finally {
             Disposer.dispose(disposable);
         }
+    }
+
+    private static void collectImplicitFunctionBinding(
+        FirFunctionCall call,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        if (!(call.getCalleeReference() instanceof FirResolvedNamedReference)) return;
+        FirResolvedNamedReference reference = (FirResolvedNamedReference) call.getCalleeReference();
+        if (!(reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol)) return;
+        FirNamedFunctionSymbol function = (FirNamedFunctionSymbol) reference.getResolvedSymbol();
+        KtSourceElement referenceSource = reference.getSource();
+        PsiElement referencePsi = referenceSource instanceof KtPsiSourceElement
+            ? ((KtPsiSourceElement) referenceSource).getPsi() : null;
+        if (referencePsi instanceof KtSimpleNameExpression) {
+            PsiElement identifier = ((KtSimpleNameExpression) referencePsi).getReferencedNameElement();
+            if (identifier != null && (identifier.getText().equals(function.getName().asString()) ||
+                referencePsi instanceof KtOperationReferenceExpression)) return;
+        }
+        KtSourceElement callSource = call.getSource();
+        PsiElement usagePsi = callSource instanceof KtPsiSourceElement
+            ? ((KtPsiSourceElement) callSource).getPsi() : referencePsi;
+        if (usagePsi == null) return;
+        addResolvedFunctionUsage(usagePsi, function, targets, identities, usages);
     }
 
     private static void collectNamedArguments(
@@ -279,7 +307,14 @@ final class KotlinCompilerUsageExtractor {
         KtSourceElement targetSource = reference.getResolvedSymbol().getSource();
         if (!(usageSource instanceof KtPsiSourceElement)) return;
         PsiElement usagePsi = ((KtPsiSourceElement) usageSource).getPsi();
-        if (!(usagePsi instanceof KtSimpleNameExpression)) return;
+        if (!(usagePsi instanceof KtSimpleNameExpression)) {
+            if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol) {
+                addResolvedFunctionUsage(
+                    usagePsi, (FirNamedFunctionSymbol) reference.getResolvedSymbol(), targets, identities, usages
+                );
+            }
+            return;
+        }
         if (!(targetSource instanceof KtPsiSourceElement)) {
             if (reference.getResolvedSymbol() instanceof FirConstructorSymbol) {
                 ClassId classId = ((FirConstructorSymbol) reference.getResolvedSymbol()).getCallableId().getClassId();
@@ -302,21 +337,9 @@ final class KotlinCompilerUsageExtractor {
                     }
                 }
             } else if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol) {
-                FirNamedFunctionSymbol function = (FirNamedFunctionSymbol) reference.getResolvedSymbol();
-                String owner = externalCallableOwner(
-                    function.getCallableId().getClassId(), function.getFir().getContainerSource()
+                addResolvedFunctionUsage(
+                    usagePsi, (FirNamedFunctionSymbol) reference.getResolvedSymbol(), targets, identities, usages
                 );
-                if (owner != null && (usagePsi.getText().equals(function.getName().asString()) ||
-                    usagePsi instanceof KtOperationReferenceExpression)) {
-                    addExternalCallableUsage(
-                        usagePsi,
-                        owner,
-                        function.getName().asString(),
-                        jvmDescriptor(function.getFir(), function.getName().asString()),
-                        identities,
-                        usages
-                    );
-                }
             } else if (reference.getResolvedSymbol() instanceof FirPropertySymbol) {
                 FirPropertySymbol property = (FirPropertySymbol) reference.getResolvedSymbol();
                 String owner = externalCallableOwner(
@@ -395,8 +418,60 @@ final class KotlinCompilerUsageExtractor {
         String resolvedSourceName = "CONSTRUCTOR".equals(target.kind())
             ? target.name() : reference.getName().asString();
         if (!usageIdentifier.getText().equals(resolvedSourceName) ||
-            !matchesTargetName(usageIdentifier, target, importAliases)) return;
+            !matchesTargetName(usageIdentifier, target, importAliases)) {
+            if (reference.getResolvedSymbol() instanceof FirNamedFunctionSymbol && "FUNCTION".equals(target.kind())) {
+                addUsage(usageIdentifier, target, identities, usages);
+            }
+            return;
+        }
         addUsage(usageIdentifier, target, identities, usages);
+    }
+
+    private static void addResolvedFunctionUsage(
+        PsiElement usagePsi,
+        FirNamedFunctionSymbol function,
+        Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
+        Set<String> identities,
+        List<ExtractedUsage> usages
+    ) {
+        PsiElement location = boundedUsageElement(usagePsi);
+        if (location == null || !(location.getContainingFile() instanceof KtFile)) return;
+        KtSourceElement targetSource = function.getSource();
+        if (targetSource instanceof KtPsiSourceElement) {
+            PsiElement targetPsi = ((KtPsiSourceElement) targetSource).getPsi();
+            KtNamedFunction declaration = targetPsi instanceof KtNamedFunction
+                ? (KtNamedFunction) targetPsi : parent(targetPsi, KtNamedFunction.class);
+            if (declaration == null || parent(declaration, KtBlockExpression.class) != null) return;
+            PsiElement identifier = declaration.getNameIdentifier();
+            if (identifier == null) throw failure("kotlin.usageTargetLocationUnavailable");
+            KotlinCompilerSymbolExtractor.ExtractedSymbol target = targets.get(declarationTargetKey(
+                canonicalPath(declaration.getContainingKtFile()), identifier.getTextRange().getStartOffset(),
+                "FUNCTION"
+            ));
+            if (target == null) throw failure("kotlin.usageTargetMissing");
+            addUsage(location, target, identities, usages);
+            return;
+        }
+        String owner = externalCallableOwner(function.getCallableId().getClassId(), function.getFir().getContainerSource());
+        if (owner != null) {
+            addExternalCallableUsage(
+                location, owner, function.getName().asString(),
+                jvmDescriptor(function.getFir(), function.getName().asString()), identities, usages
+            );
+        }
+    }
+
+    private static PsiElement boundedUsageElement(PsiElement candidate) {
+        String text = candidate.getText();
+        if (isBoundedSelection(text)) return candidate;
+        KtSimpleNameExpression simpleName = PsiTreeUtil.findChildOfType(candidate, KtSimpleNameExpression.class);
+        PsiElement identifier = simpleName == null ? null : simpleName.getReferencedNameElement();
+        return identifier != null && isBoundedSelection(identifier.getText()) ? identifier : null;
+    }
+
+    private static boolean isBoundedSelection(String text) {
+        return text != null && !text.isEmpty() && text.length() <= MAX_SELECTION_CHARS &&
+            text.indexOf('\u0000') < 0 && text.indexOf('\r') < 0 && text.indexOf('\n') < 0;
     }
 
     private static void collectTypeParameter(

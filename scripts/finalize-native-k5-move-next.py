@@ -29,6 +29,7 @@ REQUIRED_TESTS = {
     "publicTopLevelKotlinFunctionMoveRefusesOutboundBindingSubstitution()",
     "publicTopLevelKotlinFunctionMoveRefusesOutboundCallableReference()",
     "publicTopLevelKotlinFunctionMoveRefusesCallableReferenceInPrivateHelper()",
+    "publicTopLevelKotlinFunctionMoveRefusesImplicitIteratorBindingSubstitution()",
     "publicTopLevelKotlinFunctionMoveRefusesExternalPackageFunctionBindingSubstitution()",
     "publicTopLevelKotlinFunctionMoveRequiresExternalConsumerApproval()",
     "publicTopLevelKotlinFunctionMoveRefusesPublicMemberInsidePrivateContainer()",
@@ -53,7 +54,7 @@ REQUIRED_SUITES = {
 REQUIREMENT = Path("docs/requirements/kotlin-jvm-move-top-level-function-and-companion-refusal.md")
 REQUIREMENT_SHA256 = "52dd7de86022e2d86e143c453fe2c445c2718149a6393d5ba462bbceb2642a0f"
 DIAGNOSTICS_FEATURE = Path("features/managed-apply-diagnostics-gate-selector.feature")
-DIAGNOSTICS_FEATURE_SHA256 = "e987144c50e88643baf828500dba9865f5955d99259ef5974ffa347d622835eb"
+DIAGNOSTICS_FEATURE_SHA256 = "63f0a250df2fd2dea5fd5fc1d13471af89158ef2566e73439c3241df27b6b8c1"
 SMOKE_MARKER = (
     "Packaged K5 move-next acceptance passed: exact-import top-level function move "
     "preview/apply/rollback and standalone companion refusal."
@@ -64,8 +65,10 @@ SUBJECT_FILES = {
     Path("docs/kotlin-adapter.md"),
     Path("docs/releases/v0.7.0-k5-move-next-acceptance.md"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change.md"),
+    Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change-signature-change.md"),
     Path("docs/requirements/kotlin-jvm-move-top-level-function-and-companion-refusal-approved-change-001.md"),
     Path("docs/requirements/kotlin-jvm-move-top-level-function-and-companion-refusal-approved-change-002.md"),
+    Path("docs/requirements/kotlin-jvm-move-top-level-function-and-companion-refusal-approved-change-003.md"),
     Path("docs/releases/v0.7.0-support-matrix.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-move-next-red-bbaf93d-a92aa9b803f0a3bd62f545d305f8c748bac16ecbf81c3eb629c31aaaae43a67b.log"),
     Path("docs/requirements/evidence/v0.7.0-k5-companion-evidence-red-bbaf93d-a6dc4c2ecbffb329be4899d4cb172b9045555866575f3dd23b9228273e3bda59.log"),
@@ -82,7 +85,10 @@ SUBJECT_FILES = {
     Path("docs/requirements/evidence/v0.7.0-k5-native-windows-checksum-red-run-31396325413-b7e0d2f0d2d469a7e575c4d109f6751b8a5c2918f03a5e68e430fca8a832a44b.json"),
     Path("docs/requirements/evidence/v0.7.0-k5-post-native-review-run-31398378153-fail-213a300e9ee6142cf455fd028471d874e229d89a7e851fd9691d2d7dd26b73e9.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-post-native-review-run-31402329615-fail-3b0f8a576f898cd98c1ae19d8e2230b693a1168b8072dc63ce97b25c66ca2617.md"),
+    Path("docs/requirements/evidence/v0.7.0-k5-post-native-review-run-31410944555-fail-c0819dac0b763ee9674ce2239ece662abdcf34581ab796fd21c1a138d3483bb4.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-post-native-callable-reference-red-872f1f4-fe3c343d3e5535a7055be980cad5d1544e92b78e08df61521720efcd348eebfd.log"),
+    Path("docs/requirements/evidence/kotlin-jvm-move-implicit-iterator-tests-only-red-3afd3f824129abc0491b1643a2993c2630ba3fe63df8f83a65d90d916a6ee4f5.log"),
+    Path("docs/requirements/evidence/kotlin-jvm-move-implicit-conventions-green-e6c221977cd58070761e8a704d732804ea1a03859fb36aaea3a6eadead12eb39.log"),
     Path("docs/requirements/evidence/v0.7.0-k5-pre-native-review-v5-external-callable-red-24580296965d3ae9dd8ba417575408c3060be94500a77cabc61d6e76a345bfef.xml"),
     Path("docs/requirements/evidence/v0.7.0-k5-pre-native-review-v5-descriptor-projection-red-eb596021ce8f796a47dc60b774cd5cbae973a3eab9280ee43046584cab265322.xml"),
     Path("modules/refactorkit-kotlin/src/main/java/org/refactorkit/kotlin/bridge/KotlinCompilerBridgeMain.java"),
@@ -314,6 +320,7 @@ def main() -> int:
         },
         "boundaries": [
             "One plain public top-level function whole-file move with unaliased exact Kotlin imports only.",
+            "Explicit and compiler-desugared outbound callable identities must remain exact across the staged move.",
             "Java, alias, star, same-package, qualified, callable-reference, overload, extension, suspend, default, JVM-name, multifile, generated, and plugin-dependent function forms remain refused.",
             "Standalone companion selection is refused; enclosing qualified whole-file type movement is unchanged.",
             "No general Kotlin managed-support, installed-runtime, final-SBOM, or whole-repository CI claim.",

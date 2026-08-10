@@ -7,7 +7,9 @@ Status: candidate change bound to `REQ-KOTLIN-MOVE-FUNCTION-001`; promotion requ
 - promoted parent: `bbaf93df170935c3af9ae4d45afa4f2af88dc213`
 - feature: `features/managed-apply-diagnostics-gate-selector.feature`
 - parent feature SHA-256: `7e26850a6077a22694841b44215cc9b2601d1165d35efe69eb9ca09d8deb4c16`
-- candidate feature SHA-256: `e987144c50e88643baf828500dba9865f5955d99259ef5974ffa347d622835eb`
+- move-only candidate feature SHA-256: `e987144c50e88643baf828500dba9865f5955d99259ef5974ffa347d622835eb`
+- current additive feature SHA-256: `63f0a250df2fd2dea5fd5fc1d13471af89158ef2566e73439c3241df27b6b8c1`
+- additive change record: `docs/requirements/managed-apply-diagnostics-gate-selector-k5-change-signature-change.md`
 - governing K5 requirement at routing-change approval: `a78db967566b7d7f3920f8653b910fe079d696ec50bcac455757454b8b2e149b`
 - current governing K5 requirement after semantic-closure clarification: `52dd7de86022e2d86e143c453fe2c445c2718149a6393d5ba462bbceb2642a0f`
 
@@ -32,8 +34,9 @@ No diagnostics provider runs during selection.
 ## Executable evidence
 
 - `KotlinMoveDeclarationDiagnosticsRouteTest` distinguishes Kotlin-only move and non-move routes and proves lazy provider identity.
-- `ManagedApplyDiagnosticsGateSelectorCucumberTest` passes the updated exact route table: 12 cases and 100 expanded steps, zero skips/failures/errors locally.
+- `ManagedApplyDiagnosticsGateSelectorCucumberTest` passes the current exact route table: 13 cases, zero skips/failures/errors locally.
 - `scripts/smoke-packaged-k5-move-next.py` applies and rolls back the Kotlin-only function move through daemon and MCP.
 
-This receipt does not broaden any non-move route or qualify a general Kotlin
-managed-support claim.
+This receipt's move route remains unchanged by the separately recorded additive
+parameter-rename row. Neither record qualifies a general Kotlin managed-support
+claim.
