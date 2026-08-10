@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 REQUIREMENT = Path("docs/requirements/kotlin-k5-bounded-completion.md")
-REQUIREMENT_SHA256 = "7bb83fdf5a1f89ff358c6662bcd5ecfb1f4d086e1034f725a40a7652291b3197"
+REQUIREMENT_SHA256 = "f49d39898cf334b746e9bd5e7c955795c9b2063bda64fa54d63929fcee9f701e"
 BOUND_REQUIREMENTS = {
     Path("docs/requirements/kotlin-jvm-organize-imports-callables-formatting.md"):
         "0d28daa17f8d1a92097503125b405775d1ff2ff73361e1674b57643bec3c9a6e",
@@ -44,6 +44,7 @@ REQUIRED_SUITES = {
         "organizeImportsRefusesCompilingCallableBindingSubstitution()",
         "organizeImportsRefusesUnmodeledExternalJavaFieldRatherThanRemovingUsedImport()",
         "organizeImportsRefusesUnmodeledEnumAndAliasedPropertyRebound()",
+        "organizeImportsRefusesUnmodeledTypeAliasRebound()",
         "organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()",
         "organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()",
         "overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()",
@@ -80,6 +81,7 @@ SUBJECT_FILES = {
     Path("docs/requirements/kotlin-cli-change-signature-mode-compatibility.md"),
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-001.md"),
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-002.md"),
+    Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-003.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-285da48-fail-f03763afc912473399ac0872bb1268bfe618bf92bfd7100391821d8778607ce2.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-probes-ddeb32e82c77471e3585f227efb109dd81e2abdbdb61dc1e1247ad7056bb9be1.py"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-adversarial-tests-only-red-b66166ffd37e5027b127bc450abd4c27feefeb3de635073f1a11d9a25b62cf6d.log"),
@@ -90,6 +92,10 @@ SUBJECT_FILES = {
     Path("docs/requirements/evidence/probe-k5-custom-generated-param-ce9b281e84e3e9e7d3fabf3ffd52a38cef347f3b35778e43b55d2f41eed76351.py"),
     Path("docs/requirements/evidence/probe-k5-maven-allopen-34807117871815749ef9d9e06165c83341614b9453d95e85560eec4e1d7f4735.py"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-second-audit-23-case-green-07516d18391337648be2f27e0ef85a25c265b2d4ef1708489c1ed4d1394ea926.log"),
+    Path("docs/requirements/evidence/v0.7.0-k5-pre-native-audit-a8822c2-fail-d1dee7d777b99817192d8f039c7b2a0e5dbeef092861f8f471232286acb43d2e.md"),
+    Path("docs/requirements/evidence/probe-a8822-organize-typealias-rebound-4d6ed84ac2de2a1d5d55b14bfacf90b9634b5bd99e62f5a5b6f3355a41139f93.py"),
+    Path("docs/requirements/evidence/probe-a8822-maven-xplugin-valid-apply-231462b891ce4611f7a62121d6373ab21f33fc6dc4c953c337a58d0212f9c16e.py"),
+    Path("docs/requirements/evidence/v0.7.0-k5-completion-typealias-xplugin-24-case-green-33f640f4015c6b0555febeea3a9be0c135e0e9c0887f8447c7f5cfa182f92c8e.log"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change.md"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change-signature-change.md"),
     Path("docs/kotlin-adapter.md"),
@@ -107,6 +113,7 @@ SUBJECT_FILES = {
     Path("modules/refactorkit-kotlin/src/main/kotlin/org/refactorkit/kotlin/KotlinCompilerDiagnostics.kt"),
     Path("modules/refactorkit-kotlin/src/main/kotlin/org/refactorkit/kotlin/KotlinExtractMethodPlanner.kt"),
     Path("modules/refactorkit-kotlin/src/main/kotlin/org/refactorkit/kotlin/KotlinInlineMethodPlanner.kt"),
+    Path("modules/refactorkit-kotlin/src/main/kotlin/org/refactorkit/kotlin/KotlinJvmBuildModel.kt"),
     Path("modules/refactorkit-kotlin/src/main/kotlin/org/refactorkit/kotlin/KotlinLanguageAdapter.kt"),
     Path("modules/refactorkit-kotlin/src/main/kotlin/org/refactorkit/kotlin/KotlinOrganizeImportsPlanner.kt"),
     Path("modules/refactorkit-kotlin/src/test/kotlin/org/refactorkit/kotlin/KotlinCompilerDiagnosticsTest.kt"),
@@ -315,7 +322,7 @@ def main() -> int:
         },
         "embeddedRuntime": {"versionOutput": embedded_version, "javaSha256": sha256(embedded_java)},
         "boundaries": [
-            "Callable/type import removal is isolated-counterfactual K2 only; unmodeled raw fields, enum entries, and property aliases refuse.",
+            "Callable/type import removal is isolated-counterfactual K2 only; unmodeled raw fields, enum entries, property aliases, and user typealiases refuse.",
             "Change signature is parameter-name-only across exact source families; pre-existing new-name tokens refuse.",
             "Extract/inline is one zero-input integer expression shape with exact helper-call binding and non-generated ownership only.",
             "Advanced shapes are read-only facts; delegated/platform/plugin/generated/framework cases remain refused.",

@@ -109,6 +109,8 @@ def main() -> int:
                 "Kotlin enum-entry usage lacks exact modeled JVM field identity",
             "kotlin.usagePropertyAliasUnsupported":
                 "Kotlin property alias usage lacks exact modeled property identity",
+            "kotlin.usageTypeAliasUnsupported":
+                "Kotlin typealias usage lacks exact modeled alias and expanded-type identity",
             "kotlin.compilerPluginsUnsupported":
                 "Kotlin compiler-plugin execution remains outside the bounded semantic model",
         }.get(refusal_code)
@@ -524,6 +526,35 @@ def main() -> int:
             "k5-alias-refusal", "kotlin.usagePropertyAliasUnsupported",
         )
 
+        typealias_workspace = Path(temporary) / "typealias-workspace"
+        shutil.copytree(repository / "samples/kotlin-maven-simple", typealias_workspace)
+        typealias_library = typealias_workspace / "src/main/kotlin/org/refactorkit/k5/library/Alias.kt"
+        typealias_shadow = typealias_workspace / "src/main/kotlin/org/refactorkit/k5/shadow/Alias.kt"
+        typealias_source = typealias_workspace / "src/main/kotlin/org/refactorkit/k5/TypeAlias.kt"
+        typealias_library.parent.mkdir(parents=True, exist_ok=True)
+        typealias_shadow.parent.mkdir(parents=True, exist_ok=True)
+        typealias_source.parent.mkdir(parents=True, exist_ok=True)
+        typealias_library.write_text(
+            "package org.refactorkit.k5.library\n"
+            "typealias Chosen = java.util.concurrent.TimeUnit\n", encoding="utf-8",
+        )
+        typealias_shadow.write_text(
+            "package org.refactorkit.k5.shadow\n"
+            "typealias Chosen = java.time.temporal.ChronoUnit\n", encoding="utf-8",
+        )
+        typealias_source.write_text(
+            "package org.refactorkit.k5\n"
+            "import org.refactorkit.k5.library.Chosen\n"
+            "import org.refactorkit.k5.shadow.*\n"
+            "fun aliasType(): String = Chosen::class.qualifiedName!!\n",
+            encoding="utf-8",
+        )
+        expect_cli_refusal(
+            typealias_workspace, "organize-imports",
+            ["--file", "src/main/kotlin/org/refactorkit/k5/TypeAlias.kt"],
+            "k5-typealias-refusal", "kotlin.usageTypeAliasUnsupported",
+        )
+
         plugin_workspace = Path(temporary) / "maven-plugin-workspace"
         shutil.copytree(repository / "samples/kotlin-maven-simple", plugin_workspace)
         plugin_pom = plugin_workspace / "pom.xml"
@@ -544,6 +575,21 @@ def main() -> int:
             ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt",
              "--start-line", "3", "--end-line", "3", "--method-name", "pluginHelper"],
             "k5-plugin-refusal", "kotlin.compilerPluginsUnsupported",
+        )
+
+        xplugin_workspace = Path(temporary) / "maven-xplugin-workspace"
+        shutil.copytree(repository / "samples/kotlin-maven-simple", xplugin_workspace)
+        xplugin_pom = xplugin_workspace / "pom.xml"
+        xplugin_pom.write_text(xplugin_pom.read_text(encoding="utf-8").replace(
+            "<jvmTarget>21</jvmTarget>",
+            "<jvmTarget>21</jvmTarget><args>"
+            "<arg>-Xplugin=${project.basedir}/custom-compiler-plugin.jar</arg></args>",
+        ), encoding="utf-8")
+        expect_cli_refusal(
+            xplugin_workspace, "extract-method",
+            ["--file", "src/main/kotlin/org/refactorkit/samples/Greeting.kt",
+             "--start-line", "3", "--end-line", "3", "--method-name", "xpluginHelper"],
+            "k5-xplugin-refusal", "kotlin.compilerPluginsUnsupported",
         )
 
     print(MARKER)

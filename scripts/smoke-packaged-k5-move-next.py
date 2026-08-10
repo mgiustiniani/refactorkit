@@ -316,6 +316,99 @@ def main() -> int:
                 transaction_files(callable_workspace) != callable_transactions):
             raise AssertionError("packaged callable-reference consumer refusal wrote source or transaction files")
 
+        typealias_workspace = Path(temporary) / "typealias-workspace"
+        shutil.copytree(repository / "samples" / "kotlin-maven-simple", typealias_workspace)
+        typealias_source = typealias_workspace / "src/main/kotlin/source/api/Function.kt"
+        typealias_source.parent.mkdir(parents=True, exist_ok=True)
+        typealias_source.write_text(
+            "package source.api\nfun selected(): String = \"baseline\"\n", encoding="utf-8",
+        )
+        typealias_symbols = shared.run(
+            cli, typealias_workspace, jdk, compiler, classpath, "k5-typealias-symbol",
+            "symbols", ["--file", "src/main/kotlin/source/api/Function.kt"],
+        )
+        typealias_target = next(
+            row for row in typealias_symbols.get("symbols", [])
+            if row.get("name") == "selected" and row.get("kind") == "function"
+        )
+        source_alias = typealias_workspace / "src/main/kotlin/source/api/Alias.kt"
+        target_alias = typealias_workspace / "src/main/kotlin/target/api/Alias.kt"
+        source_alias.parent.mkdir(parents=True, exist_ok=True)
+        target_alias.parent.mkdir(parents=True, exist_ok=True)
+        source_alias.write_text(
+            "package source.api\ntypealias Chosen = java.util.concurrent.TimeUnit\n", encoding="utf-8",
+        )
+        target_alias.write_text(
+            "package target.api\ntypealias Chosen = java.time.temporal.ChronoUnit\n", encoding="utf-8",
+        )
+        typealias_source.write_text(
+            "package source.api\nfun selected(): String = Chosen::class.qualifiedName!!\n", encoding="utf-8",
+        )
+        typealias_before = shared.tree_hash(typealias_workspace / "src")
+        typealias_transactions = transaction_files(typealias_workspace)
+        typealias_result = subprocess.run(
+            shared.command_for(cli, [
+                "kotlin", "move-declaration", str(typealias_workspace),
+                "--jdk-home", str(jdk), "--compiler-jar", str(compiler),
+                "--compiler-classpath", os.pathsep.join(map(str, classpath)),
+                "--request-id", "k5-typealias-refusal", "--symbol", typealias_target["id"],
+                "--to-package", "target.api", "--accept-external-consumer-risk",
+            ]),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=shared.COMMAND_TIMEOUT_SECONDS,
+        )
+        if (typealias_result.returncode != 1 or
+                "Kotlin typealias usage lacks exact modeled alias" not in typealias_result.stderr):
+            raise AssertionError(
+                f"packaged typealias move refusal differs: rc={typealias_result.returncode}, "
+                f"out={typealias_result.stdout}, err={typealias_result.stderr}"
+            )
+        if (shared.tree_hash(typealias_workspace / "src") != typealias_before or
+                transaction_files(typealias_workspace) != typealias_transactions):
+            raise AssertionError("packaged typealias move refusal wrote source or transaction files")
+
+        xplugin_workspace = Path(temporary) / "maven-xplugin-workspace"
+        shutil.copytree(repository / "samples" / "kotlin-maven-simple", xplugin_workspace)
+        xplugin_source = xplugin_workspace / "src/main/kotlin/source/api/Function.kt"
+        xplugin_source.parent.mkdir(parents=True, exist_ok=True)
+        xplugin_source.write_text("package source.api\nfun selected(): Int = 42\n", encoding="utf-8")
+        xplugin_symbols = shared.run(
+            cli, xplugin_workspace, jdk, compiler, classpath, "k5-xplugin-symbol",
+            "symbols", ["--file", "src/main/kotlin/source/api/Function.kt"],
+        )
+        xplugin_target = next(
+            row for row in xplugin_symbols.get("symbols", [])
+            if row.get("name") == "selected" and row.get("kind") == "function"
+        )
+        xplugin_pom = xplugin_workspace / "pom.xml"
+        xplugin_pom.write_text(xplugin_pom.read_text(encoding="utf-8").replace(
+            "<jvmTarget>21</jvmTarget>",
+            "<jvmTarget>21</jvmTarget><args>"
+            "<arg>-Xplugin=${project.basedir}/custom-compiler-plugin.jar</arg></args>",
+        ), encoding="utf-8")
+        xplugin_before = shared.tree_hash(xplugin_workspace / "src")
+        xplugin_transactions = transaction_files(xplugin_workspace)
+        xplugin_result = subprocess.run(
+            shared.command_for(cli, [
+                "kotlin", "move-declaration", str(xplugin_workspace),
+                "--jdk-home", str(jdk), "--compiler-jar", str(compiler),
+                "--compiler-classpath", os.pathsep.join(map(str, classpath)),
+                "--request-id", "k5-xplugin-refusal", "--symbol", xplugin_target["id"],
+                "--to-package", "target.api", "--accept-external-consumer-risk",
+            ]),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=shared.COMMAND_TIMEOUT_SECONDS,
+        )
+        if (xplugin_result.returncode != 1 or
+                "Kotlin compiler-plugin execution remains outside" not in xplugin_result.stderr):
+            raise AssertionError(
+                f"packaged Maven -Xplugin move refusal differs: rc={xplugin_result.returncode}, "
+                f"out={xplugin_result.stdout}, err={xplugin_result.stderr}"
+            )
+        if (shared.tree_hash(xplugin_workspace / "src") != xplugin_before or
+                transaction_files(xplugin_workspace) != xplugin_transactions):
+            raise AssertionError("packaged Maven -Xplugin move refusal wrote source or transaction files")
+
     print(MARKER)
     return 0
 

@@ -498,6 +498,45 @@ class KotlinJavaPublicTypeRenamePlannerTest {
     }
 
     @Test
+    fun publicTopLevelKotlinFunctionMoveRefusesTypeAliasBindingSubstitution() {
+        val fixture = moveFixture()
+        val source = fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt")
+        source.writeText("package fixture.api\nfun publicGreeting(): String = \"baseline\"\n")
+        fixture.root.resolve("src/main/kotlin/fixture/api/Alias.kt").writeText(
+            "package fixture.api\ntypealias Chosen = java.util.concurrent.TimeUnit\n",
+        )
+        fixture.root.resolve("src/main/kotlin/fixture/api/v2/Alias.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.api.v2\ntypealias Chosen = java.time.temporal.ChronoUnit\n")
+        }
+        fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.consumer\nimport fixture.api.publicGreeting\n" +
+                "fun greeting(): String = publicGreeting()\n",
+        )
+        fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
+        val baseline = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(fixture.root), fixture.toolchain,
+        )
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
+        val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(baseline))
+            .index.symbols.single { it.name == "publicGreeting" }
+        source.writeText(
+            "package fixture.api\nfun publicGreeting(): String = Chosen::class.qualifiedName!!\n",
+        )
+        val rebound = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(fixture.root), fixture.toolchain,
+        )
+
+        val plan = KotlinJvmMoveDeclarationPlanner(adapter).preview(
+            rebound, target.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.usageTypeAliasUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+    }
+
+    @Test
     fun publicTopLevelKotlinFunctionMoveRefusesOutboundCallableReference() {
         val fixture = moveFixture()
         fixture.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt").writeText(
@@ -639,7 +678,8 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         fixture.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(fixture.root), fixture.toolchain)
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(fixture.toolchain))
-        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(snapshot))
+        val catalogueResult = adapter.compilerSymbols(snapshot)
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(catalogueResult, catalogueResult.toString())
         val target = catalogue.index.symbols.single { it.name == "publicGreeting" }
         val implicitSourceCallables = catalogue.usages
             .filter { it.location.path == Path.of("src/main/kotlin/fixture/api/PublicGreeting.kt") }

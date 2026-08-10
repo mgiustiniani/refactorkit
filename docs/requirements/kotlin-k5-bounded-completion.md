@@ -15,11 +15,23 @@ The candidate is the conjunction of these immutable inputs:
 
 Any content change requires an explicit non-weakening approved-change record, new hashes, a new candidate revision, four new receipts and fresh review.
 
+## Bound approved-change history
+
+| Approved change | SHA-256 |
+|---|---|
+| `kotlin-k5-bounded-completion-approved-change-001.md` | `1cffdf674d54d9178b6685e992dbaa0cbbcd4639a17a7903b87f9c008b8db907` |
+| `kotlin-k5-bounded-completion-approved-change-002.md` | `935d57dee8be66f70a578b25ce8b150feb0a50d442e268cfeb1eabf29b3abca7` |
+| `kotlin-k5-bounded-completion-approved-change-003.md` | `69a9669712dd0a227e89636c25919d3d8c07d8d143bff489212c259fdc5bab82` |
+
+These records preserve rejected-candidate evidence and authorize only
+non-weakening refusals before a replacement native run. They do not authorize
+promotion or reuse of any historical receipt.
+
 ## Exact source oracle
 
-Native qualification executes exactly twenty-three tests with zero skip, failure, error, duplicate, missing case or unrelated report.
+Native qualification executes exactly twenty-four tests with zero skip, failure, error, duplicate, missing case or unrelated report.
 
-`org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest` (seventeen):
+`org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest` (eighteen):
 
 1. `organizeImportsRefusesCommentAttachedToImportBlock()`
 2. `organizeImportsRemovesCompilerProvenUnusedTypeAndSortsCrLfBlock()`
@@ -27,35 +39,36 @@ Native qualification executes exactly twenty-three tests with zero skip, failure
 4. `organizeImportsRefusesCompilingCallableBindingSubstitution()`
 5. `organizeImportsRefusesUnmodeledExternalJavaFieldRatherThanRemovingUsedImport()`
 6. `organizeImportsRefusesUnmodeledEnumAndAliasedPropertyRebound()`
-7. `organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()`
-8. `organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()`
-9. `overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()`
-10. `namedArgumentsResolveToExactOverloadParameterSymbols()`
-11. `changeSignatureRefusesCompilerProvenExternalOverrideBoundary()`
-12. `changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings()`
-13. `compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly()`
-14. `boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback()`
-15. `extractRefusesWhenInsertedCallDoesNotBindToNewHelper()`
-16. `extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits()`
-17. `extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits()`
+7. `organizeImportsRefusesUnmodeledTypeAliasRebound()`
+8. `organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables()`
+9. `organizeImportsRefusesStaleOrUnsupportedProjectStyleWithoutEdits()`
+10. `overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods()`
+11. `namedArgumentsResolveToExactOverloadParameterSymbols()`
+12. `changeSignatureRefusesCompilerProvenExternalOverrideBoundary()`
+13. `changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings()`
+14. `compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly()`
+15. `boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback()`
+16. `extractRefusesWhenInsertedCallDoesNotBindToNewHelper()`
+17. `extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits()`
+18. `extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits()`
 
 `org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest` (two):
 
-18. `kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller()`
-19. `publicKotlinParameterRenameRequiresExternalConsumerApproval()`
+19. `kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller()`
+20. `publicKotlinParameterRenameRequiresExternalConsumerApproval()`
 
 `org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest` (one):
 
-20. `kotlinChangeSignatureUsesLazyMixedOperationDiagnostics()`
+21. `kotlinChangeSignatureUsesLazyMixedOperationDiagnostics()`
 
 `org.refactorkit.kotlin.KotlinLanguageAdapterTest` (one):
 
-21. `descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly()`
+22. `descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly()`
 
 `org.refactorkit.kotlin.KotlinJvmBuildModelTest` (two):
 
-22. `androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases()`
-23. `unsupportedKotlinPlatformFailsClosed()`
+23. `androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases()`
+24. `unsupportedKotlinPlatformFailsClosed()`
 
 ## Packaged and native gate
 
@@ -69,7 +82,8 @@ add-parameter CLI compatibility. Together they prove:
 - daemon preview/apply/operation-owned diagnostics/rollback for organize imports, mixed Kotlin/Java parameter rename and extract;
 - MCP preview/apply/rollback for inline;
 - byte-exact source restoration after every transaction; and
-- exact refusal-oriented capability projection for the unsupported matrices.
+- exact refusal-oriented capability projection for the unsupported matrices; and
+- no-write typealias-rebound and Maven `-Xplugin` refusals.
 
 Required hosts are Linux x86-64, Windows x86-64, macOS x86-64 and macOS arm64. Host and embedded runtimes are exact Temurin/OpenJDK `21.0.11+10`. A receipt binds one clean non-merge commit, platform, requirement hashes, focused XML hashes, packaged-smoke hash, subject-file hashes and packaged subject-JAR hashes. Installed-runtime, signed assets, whole-repository CI and release publication are not implied.
 

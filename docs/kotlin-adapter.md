@@ -251,7 +251,7 @@ returns `kotlin.moveCompanionStandaloneUnsupported` only for an approved
 compiler-PSI-proven companion selection (not an ordinary nested object), without
 creating an edit or transaction. This candidate is
 not a promoted support claim until its dedicated four-host receipts and
-independent review pass; aliases, stars, implicit/qualified consumer uses, callable
+independent review pass; aliases, user typealiases, stars, implicit/qualified consumer uses, callable
 references, overloads, extensions, suspend/default/`@JvmName`/multifile forms,
 and declaration splitting remain refused.
 
@@ -265,15 +265,16 @@ A subsequent unpromoted K5 candidate adds three narrowly bounded families:
   using exact compiler declaration/body/use ranges.
 
 Counterfactual import removal treats a raw external Java field, external/source
-enum entry, or property alias as incomplete usage authority until exact JVM
-identity is modeled; it never removes such a used import. Parameter rename
+enum entry, property alias, or FIR typealias as incomplete usage
+authority until exact JVM identity is modeled; it never removes such a used import. Parameter rename
 refuses a proposed identifier already present in an affected source rather than
 attempting incomplete capture analysis. Extract requires the replacement call's
 K2 target to be the newly created private helper, and both extract and inline
 require one authoritative non-generated source root. Effective Maven build-helper
 roots below `target`, `build/generated`, or `build/tmp/kapt3` are generated even
-with custom terminal names. Maven compiler-plugin/plugin-option dependencies and
-kapt/KSP declarations project into the existing compiler-plugin refusal.
+with custom terminal names. Maven compiler-plugin/plugin-option dependencies,
+`-Xplugin` compiler arguments, and kapt/KSP declarations project into the
+existing compiler-plugin refusal.
 
 It also publishes read-only compiler facts for extension receivers, suspend
 functions, companion/data/sealed/value classes and exact JVM-name effects.

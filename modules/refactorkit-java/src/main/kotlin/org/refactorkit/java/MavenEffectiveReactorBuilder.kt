@@ -541,7 +541,19 @@ internal class MavenEffectiveReactorBuilder(
             val options = configuration.getChild("pluginOptions")?.children.orEmpty()
                 .filter { it.name in setOf("option", "pluginOption") }
                 .mapNotNull { it.value?.substringBefore(':')?.trim()?.takeIf(String::isNotBlank) }
-            plugins + options
+            val argsNode = configuration.getChild("args")
+            val compilerArgs = (argsNode?.children.orEmpty().mapNotNull { it.value } +
+                listOfNotNull(argsNode?.value))
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .mapNotNull { argument ->
+                    when {
+                        argument.startsWith("-Xplugin") -> "external-xplugin"
+                        argument.startsWith("plugin:") -> argument.removePrefix("plugin:").substringBefore(':')
+                        else -> null
+                    }
+                }
+            plugins + options + compilerArgs
         }
         val dependencies = plugin.dependencies.orEmpty().mapNotNull { dependency ->
             dependency.artifactId?.removePrefix("kotlin-maven-")

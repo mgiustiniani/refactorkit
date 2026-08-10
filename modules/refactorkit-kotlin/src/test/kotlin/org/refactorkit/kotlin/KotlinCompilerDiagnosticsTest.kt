@@ -489,6 +489,35 @@ class KotlinCompilerDiagnosticsTest {
     }
 
     @Test
+    fun organizeImportsRefusesUnmodeledTypeAliasRebound() {
+        val root = project(
+            "import fixture.library.Chosen\n" +
+                "import fixture.shadow.*\n" +
+                "fun value(): String = Chosen::class.qualifiedName!!\n",
+        )
+        root.resolve("src/main/kotlin/fixture/library/Alias.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.library\ntypealias Chosen = java.util.concurrent.TimeUnit\n")
+        }
+        root.resolve("src/main/kotlin/fixture/shadow/Alias.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.shadow\ntypealias Chosen = java.time.temporal.ChronoUnit\n")
+        }
+        val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
+        val before = source.readBytes()
+        val toolchain = toolchain(root)
+        val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val plan = KotlinOrganizeImportsPlanner(
+            KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)),
+        ).preview(snapshot, root.relativize(source))
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, plan.status, plan.toString())
+        assertEquals("kotlin.usageTypeAliasUnsupported", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+        assertTrue(before.contentEquals(source.readBytes()))
+    }
+
+    @Test
     fun organizeImportsUsesSnapshotBoundEditorConfigLayoutForSourceCallables() {
         val root = project(
             "import fixture.library.render\n" +

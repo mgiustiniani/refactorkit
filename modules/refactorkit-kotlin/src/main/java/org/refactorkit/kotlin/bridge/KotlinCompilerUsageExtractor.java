@@ -37,6 +37,7 @@ import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
 import org.jetbrains.kotlin.fir.scopes.jvm.SignatureUtilsKt;
 import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
+import org.jetbrains.kotlin.fir.types.AbbreviatedTypeAttributeKt;
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
 import org.jetbrains.kotlin.fir.types.ConeKotlinType;
 import org.jetbrains.kotlin.fir.types.ConeTypeParameterType;
@@ -48,6 +49,7 @@ import org.jetbrains.kotlin.fir.symbols.impl.FirEnumEntrySymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirFieldSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol;
+import org.jetbrains.kotlin.fir.symbols.impl.FirTypeAliasSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol;
 import org.jetbrains.kotlin.fir.symbols.impl.FirValueParameterSymbol;
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid;
@@ -519,6 +521,7 @@ final class KotlinCompilerUsageExtractor {
     ) {
         KtSourceElement source = typeRef.getSource();
         if (!(source instanceof KtPsiSourceElement)) return;
+        if (unsupportedTypeAlias(typeRef.getType())) throw failure("kotlin.usageTypeAliasUnsupported");
         KotlinCompilerSymbolExtractor.ExtractedSymbol target;
         String externalIdentity = null;
         if (typeRef.getType() instanceof ConeClassLikeType) {
@@ -544,6 +547,10 @@ final class KotlinCompilerUsageExtractor {
         }
     }
 
+    private static boolean unsupportedTypeAlias(ConeKotlinType type) {
+        return AbbreviatedTypeAttributeKt.isTypealiasExpansion(type);
+    }
+
     private static void collectQualifier(
         FirResolvedQualifier qualifier,
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
@@ -560,6 +567,7 @@ final class KotlinCompilerUsageExtractor {
         if (identifier == null) return;
         FirClassLikeSymbol<?> symbol = qualifier.getSymbol();
         if (symbol == null) return;
+        if (symbol instanceof FirTypeAliasSymbol) throw failure("kotlin.usageTypeAliasUnsupported");
         KtSourceElement symbolSource = symbol.getSource();
         if (symbolSource instanceof KtPsiSourceElement) {
             KtClassOrObject type = targetType(((KtPsiSourceElement) symbolSource).getPsi());

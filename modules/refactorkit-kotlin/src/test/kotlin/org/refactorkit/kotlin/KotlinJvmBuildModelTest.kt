@@ -251,7 +251,8 @@ class KotlinJvmBuildModelTest {
               <build><plugins><plugin>
                 <groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-maven-plugin</artifactId><version>2.0.21</version>
                 <configuration><jvmTarget>21</jvmTarget><compilerPlugins><plugin>all-open</plugin></compilerPlugins>
-                  <pluginOptions><option>all-open:annotation=fixture.Open</option></pluginOptions></configuration>
+                  <pluginOptions><option>all-open:annotation=fixture.Open</option></pluginOptions>
+                  <args><arg>-Xplugin=${'$'}{project.basedir}/custom-plugin.jar</arg></args></configuration>
                 <dependencies><dependency><groupId>org.jetbrains.kotlin</groupId>
                   <artifactId>kotlin-maven-allopen</artifactId><version>2.0.21</version></dependency></dependencies>
               </plugin></plugins></build>
@@ -264,7 +265,7 @@ class KotlinJvmBuildModelTest {
         val mavenFacet = mavenPlugin.modules.single().sourceSets.single().languageFacets.single()
         assertEquals(BuildModelStatus.EXECUTION_REFUSED, mavenPlugin.status)
         assertTrue(mavenPlugin.diagnostics.any { it.code == "kotlin.compilerPluginsUnsupported" })
-        assertEquals(listOf("all-open"), mavenFacet.compilerPluginIds)
+        assertEquals(listOf("all-open", "external-xplugin"), mavenFacet.compilerPluginIds)
     }
 
     @Test
