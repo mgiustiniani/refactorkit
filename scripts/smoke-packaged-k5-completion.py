@@ -529,7 +529,7 @@ def main() -> int:
         typealias_workspace = Path(temporary) / "typealias-workspace"
         shutil.copytree(repository / "samples/kotlin-maven-simple", typealias_workspace)
         typealias_library = typealias_workspace / "src/main/kotlin/org/refactorkit/k5/library/Alias.kt"
-        typealias_shadow = typealias_workspace / "src/main/kotlin/org/refactorkit/k5/shadow/Alias.kt"
+        typealias_shadow = typealias_workspace / "src/main/kotlin/org/refactorkit/k5/shadow/Chosen.kt"
         typealias_source = typealias_workspace / "src/main/kotlin/org/refactorkit/k5/TypeAlias.kt"
         typealias_library.parent.mkdir(parents=True, exist_ok=True)
         typealias_shadow.parent.mkdir(parents=True, exist_ok=True)
@@ -539,14 +539,13 @@ def main() -> int:
             "typealias Chosen = java.util.concurrent.TimeUnit\n", encoding="utf-8",
         )
         typealias_shadow.write_text(
-            "package org.refactorkit.k5.shadow\n"
-            "typealias Chosen = java.time.temporal.ChronoUnit\n", encoding="utf-8",
+            "package org.refactorkit.k5.shadow\nclass Chosen\n", encoding="utf-8",
         )
         typealias_source.write_text(
             "package org.refactorkit.k5\n"
             "import org.refactorkit.k5.library.Chosen\n"
             "import org.refactorkit.k5.shadow.*\n"
-            "fun aliasType(): String = Chosen::class.qualifiedName!!\n",
+            "fun aliasType(items: List<Chosen>): Int = items.size\n",
             encoding="utf-8",
         )
         expect_cli_refusal(

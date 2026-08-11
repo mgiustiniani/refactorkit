@@ -332,17 +332,18 @@ def main() -> int:
             if row.get("name") == "selected" and row.get("kind") == "function"
         )
         source_alias = typealias_workspace / "src/main/kotlin/source/api/Alias.kt"
-        target_alias = typealias_workspace / "src/main/kotlin/target/api/Alias.kt"
+        target_alias = typealias_workspace / "src/main/kotlin/target/api/Chosen.kt"
         source_alias.parent.mkdir(parents=True, exist_ok=True)
         target_alias.parent.mkdir(parents=True, exist_ok=True)
         source_alias.write_text(
             "package source.api\ntypealias Chosen = java.util.concurrent.TimeUnit\n", encoding="utf-8",
         )
-        target_alias.write_text(
-            "package target.api\ntypealias Chosen = java.time.temporal.ChronoUnit\n", encoding="utf-8",
-        )
+        target_alias.write_text("package target.api\nclass Chosen\n", encoding="utf-8")
         typealias_source.write_text(
-            "package source.api\nfun selected(): String = Chosen::class.qualifiedName!!\n", encoding="utf-8",
+            "package source.api\n"
+            "fun selected(): String = hidden(emptyList())\n"
+            "private fun hidden(values: List<Chosen>): String = values.size.toString()\n",
+            encoding="utf-8",
         )
         typealias_before = shared.tree_hash(typealias_workspace / "src")
         typealias_transactions = transaction_files(typealias_workspace)

@@ -1,0 +1,31 @@
+{
+  "move": {
+    "symbols_rc": 0,
+    "rc": 0,
+    "status": "applied",
+    "refusal": null,
+    "before_signature": "#7 = Utf8               (Ljava/util/List<+Ljava/util/ArrayList<Ljava/lang/String;>;>;)I\nSignature: #7                           // (Ljava/util/List<+Ljava/util/ArrayList<Ljava/lang/String;>;>;)I",
+    "after_signature": "#7 = Utf8               (Ljava/util/List<Ltarget/api/ArrayList<Ljava/lang/String;>;>;)I\nSignature: #7                           // (Ljava/util/List<Ltarget/api/ArrayList<Ljava/lang/String;>;>;)I",
+    "source_exists": false,
+    "destination": "package target.api\nprivate fun hidden(value: List<ArrayList<String>>): Int = value.size\nfun selected(): Int = 42\n",
+    "consumer": "package consumer\nimport target.api.selected\nfun consume(): Int = selected()\n",
+    "transactions": [
+      ".refactorkit/transactions/transaction-ae80562b-0c4f-4eef-8614-63887e9115fb.json"
+    ],
+    "stderr": ""
+  },
+  "organize": {
+    "rc": 0,
+    "status": "applied",
+    "refusal": null,
+    "before_signature": "#7 = Utf8               (Ljava/util/List<+Ljava/util/ArrayList<Ljava/lang/String;>;>;)I\nSignature: #7                           // (Ljava/util/List<+Ljava/util/ArrayList<Ljava/lang/String;>;>;)I",
+    "after_signature": "#7 = Utf8               (Ljava/util/List<Lother/shadow/ArrayList<Ljava/lang/String;>;>;)I\nSignature: #7                           // (Ljava/util/List<Lother/shadow/ArrayList<Ljava/lang/String;>;>;)I",
+    "mutated": true,
+    "source": "package consumer\nimport other.shadow.*\nfun value(items: List<ArrayList<String>>): Int = items.size\n",
+    "transactions": [
+      ".refactorkit/transactions/transaction-4aa6322d-1c79-4d76-89b4-7c6dfefcbc97.json"
+    ],
+    "stderr": "",
+    "stdout": null
+  }
+}

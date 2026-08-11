@@ -493,15 +493,15 @@ class KotlinCompilerDiagnosticsTest {
         val root = project(
             "import fixture.library.Chosen\n" +
                 "import fixture.shadow.*\n" +
-                "fun value(): String = Chosen::class.qualifiedName!!\n",
+                "fun value(items: List<Chosen>): Int = items.size\n",
         )
         root.resolve("src/main/kotlin/fixture/library/Alias.kt").apply {
             parent.createDirectories()
             writeText("package fixture.library\ntypealias Chosen = java.util.concurrent.TimeUnit\n")
         }
-        root.resolve("src/main/kotlin/fixture/shadow/Alias.kt").apply {
+        root.resolve("src/main/kotlin/fixture/shadow/Chosen.kt").apply {
             parent.createDirectories()
-            writeText("package fixture.shadow\ntypealias Chosen = java.time.temporal.ChronoUnit\n")
+            writeText("package fixture.shadow\nclass Chosen\n")
         }
         val source = root.resolve("src/main/kotlin/fixture/Broken.kt")
         val before = source.readBytes()
@@ -515,6 +515,30 @@ class KotlinCompilerDiagnosticsTest {
         assertEquals("kotlin.usageTypeAliasUnsupported", plan.refusalCode)
         assertTrue(plan.workspaceEdit.edits.isEmpty())
         assertTrue(before.contentEquals(source.readBytes()))
+
+        val stdlibRoot = project(
+            "import kotlin.collections.ArrayList\n" +
+                "import fixture.shadow.*\n" +
+                "fun value(items: List<ArrayList<String>>): Int = items.size\n",
+        )
+        stdlibRoot.resolve("src/main/kotlin/fixture/shadow/ArrayList.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.shadow\nclass ArrayList<T>\n")
+        }
+        val stdlibSource = stdlibRoot.resolve("src/main/kotlin/fixture/Broken.kt")
+        val stdlibBefore = stdlibSource.readBytes()
+        val stdlibToolchain = toolchain(stdlibRoot)
+        val stdlibSnapshot = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(stdlibRoot), stdlibToolchain,
+        )
+        val stdlibPlan = KotlinOrganizeImportsPlanner(
+            KotlinLanguageAdapter(KotlinCompilerDiagnostics(stdlibToolchain)),
+        ).preview(stdlibSnapshot, stdlibRoot.relativize(stdlibSource))
+
+        assertEquals(org.refactorkit.core.PatchStatus.REFUSED, stdlibPlan.status, stdlibPlan.toString())
+        assertEquals("kotlin.usageTypeAliasUnsupported", stdlibPlan.refusalCode)
+        assertTrue(stdlibPlan.workspaceEdit.edits.isEmpty())
+        assertTrue(stdlibBefore.contentEquals(stdlibSource.readBytes()))
     }
 
     @Test

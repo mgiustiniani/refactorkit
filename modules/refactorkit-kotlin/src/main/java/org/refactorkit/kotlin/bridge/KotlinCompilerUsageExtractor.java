@@ -40,7 +40,9 @@ import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
 import org.jetbrains.kotlin.fir.types.AbbreviatedTypeAttributeKt;
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
 import org.jetbrains.kotlin.fir.types.ConeKotlinType;
+import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection;
 import org.jetbrains.kotlin.fir.types.ConeTypeParameterType;
+import org.jetbrains.kotlin.fir.types.ConeTypeProjection;
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef;
 import org.jetbrains.kotlin.fir.types.FirTypeRef;
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol;
@@ -97,6 +99,7 @@ import java.util.Set;
 final class KotlinCompilerUsageExtractor {
     private static final int MAX_USAGES = 2_000;
     private static final int MAX_SELECTION_CHARS = 512;
+    private static final int MAX_TYPE_ARGUMENT_DEPTH = 64;
 
     private KotlinCompilerUsageExtractor() {}
 
@@ -548,7 +551,19 @@ final class KotlinCompilerUsageExtractor {
     }
 
     private static boolean unsupportedTypeAlias(ConeKotlinType type) {
-        return AbbreviatedTypeAttributeKt.isTypealiasExpansion(type);
+        return unsupportedTypeAlias(type, 0);
+    }
+
+    private static boolean unsupportedTypeAlias(ConeKotlinType type, int depth) {
+        if (depth > MAX_TYPE_ARGUMENT_DEPTH) throw failure("kotlin.usageTypeDepthLimitExceeded");
+        if (AbbreviatedTypeAttributeKt.isTypealiasExpansion(type)) return true;
+        for (ConeTypeProjection argument : type.getTypeArguments()) {
+            if (argument instanceof ConeKotlinTypeProjection &&
+                unsupportedTypeAlias(((ConeKotlinTypeProjection) argument).getType(), depth + 1)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void collectQualifier(

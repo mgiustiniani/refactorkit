@@ -22,6 +22,7 @@ Any content change requires an explicit non-weakening approved-change record, ne
 | `kotlin-k5-bounded-completion-approved-change-001.md` | `1cffdf674d54d9178b6685e992dbaa0cbbcd4639a17a7903b87f9c008b8db907` |
 | `kotlin-k5-bounded-completion-approved-change-002.md` | `935d57dee8be66f70a578b25ce8b150feb0a50d442e268cfeb1eabf29b3abca7` |
 | `kotlin-k5-bounded-completion-approved-change-003.md` | `69a9669712dd0a227e89636c25919d3d8c07d8d143bff489212c259fdc5bab82` |
+| `kotlin-k5-bounded-completion-approved-change-004.md` | `16855786e493bb59a35433ab72cd130bfb540c712a5c8477fc9803027d71ea9f` |
 
 These records preserve rejected-candidate evidence and authorize only
 non-weakening refusals before a replacement native run. They do not authorize
@@ -83,7 +84,7 @@ add-parameter CLI compatibility. Together they prove:
 - MCP preview/apply/rollback for inline;
 - byte-exact source restoration after every transaction; and
 - exact refusal-oriented capability projection for the unsupported matrices; and
-- no-write typealias-rebound and Maven `-Xplugin` refusals.
+- no-write direct/nested typealias-rebound and Maven `-Xplugin` refusals.
 
 Required hosts are Linux x86-64, Windows x86-64, macOS x86-64 and macOS arm64. Host and embedded runtimes are exact Temurin/OpenJDK `21.0.11+10`. A receipt binds one clean non-merge commit, platform, requirement hashes, focused XML hashes, packaged-smoke hash, subject-file hashes and packaged subject-JAR hashes. Installed-runtime, signed assets, whole-repository CI and release publication are not implied.
 

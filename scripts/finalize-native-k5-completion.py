@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 REQUIREMENT = Path("docs/requirements/kotlin-k5-bounded-completion.md")
-REQUIREMENT_SHA256 = "f49d39898cf334b746e9bd5e7c955795c9b2063bda64fa54d63929fcee9f701e"
+REQUIREMENT_SHA256 = "f09b59f1d4861076e7d826c8c51c59e5048b3a04676a062822fdbc19ca6e1bce"
 BOUND_REQUIREMENTS = {
     Path("docs/requirements/kotlin-jvm-organize-imports-callables-formatting.md"):
         "0d28daa17f8d1a92097503125b405775d1ff2ff73361e1674b57643bec3c9a6e",
@@ -82,6 +82,7 @@ SUBJECT_FILES = {
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-001.md"),
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-002.md"),
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-003.md"),
+    Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-004.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-285da48-fail-f03763afc912473399ac0872bb1268bfe618bf92bfd7100391821d8778607ce2.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-probes-ddeb32e82c77471e3585f227efb109dd81e2abdbdb61dc1e1247ad7056bb9be1.py"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-adversarial-tests-only-red-b66166ffd37e5027b127bc450abd4c27feefeb3de635073f1a11d9a25b62cf6d.log"),
@@ -96,6 +97,12 @@ SUBJECT_FILES = {
     Path("docs/requirements/evidence/probe-a8822-organize-typealias-rebound-4d6ed84ac2de2a1d5d55b14bfacf90b9634b5bd99e62f5a5b6f3355a41139f93.py"),
     Path("docs/requirements/evidence/probe-a8822-maven-xplugin-valid-apply-231462b891ce4611f7a62121d6373ab21f33fc6dc4c953c337a58d0212f9c16e.py"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-typealias-xplugin-24-case-green-33f640f4015c6b0555febeea3a9be0c135e0e9c0887f8447c7f5cfa182f92c8e.log"),
+    Path("docs/requirements/evidence/v0.7.0-k5-pre-native-audit-e0ffc26-fail-956bcf46f9d0292500df189b681c128beecb2051d6cf3f2653178744cac723f6.md"),
+    Path("docs/requirements/evidence/probe-e0ffc26-nested-alias-parameter-rebound-11f3829105fd4b22d2dce129117ab72cbe3cff85b227e23e5f40e573cac28e78.py"),
+    Path("docs/requirements/evidence/probe-e0ffc26-nested-alias-parameter-rebound-output-a9a36fe03f1024f3d946633fd88e2c62ca2625e22ce836e85f28466e231ee6b9.json"),
+    Path("docs/requirements/evidence/probe-e0ffc26-stdlib-nested-alias-rebound-23ece4aa9ae54c9e5ba8738f05bf2112c0e82d0605399b976cd89fb875403883.py"),
+    Path("docs/requirements/evidence/probe-e0ffc26-stdlib-nested-alias-rebound-output-e8c2b201735f00f540e5ab23f4200d8d5c70c9cc9bb852dec6a73b9c0324a0f3.json"),
+    Path("docs/requirements/evidence/v0.7.0-k5-completion-nested-typealias-24-case-green-1a14d85b2fc7c2c14cdcd2332b18896a2dac41c48cbf23ffd46968e12f6e5459.log"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change.md"),
     Path("docs/requirements/managed-apply-diagnostics-gate-selector-k5-change-signature-change.md"),
     Path("docs/kotlin-adapter.md"),
@@ -322,7 +329,7 @@ def main() -> int:
         },
         "embeddedRuntime": {"versionOutput": embedded_version, "javaSha256": sha256(embedded_java)},
         "boundaries": [
-            "Callable/type import removal is isolated-counterfactual K2 only; unmodeled raw fields, enum entries, property aliases, and user typealiases refuse.",
+            "Callable/type import removal is isolated-counterfactual K2 only; unmodeled raw fields, enum entries, property aliases, and direct/nested typealiases refuse.",
             "Change signature is parameter-name-only across exact source families; pre-existing new-name tokens refuse.",
             "Extract/inline is one zero-input integer expression shape with exact helper-call binding and non-generated ownership only.",
             "Advanced shapes are read-only facts; delegated/platform/plugin/generated/framework cases remain refused.",

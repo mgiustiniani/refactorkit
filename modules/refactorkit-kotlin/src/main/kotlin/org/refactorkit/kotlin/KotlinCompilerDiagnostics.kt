@@ -957,6 +957,8 @@ class KotlinCompilerDiagnostics private constructor(
                     "Kotlin property alias usage lacks exact modeled property identity"
                 "kotlin.usageTypeAliasUnsupported" ->
                     "Kotlin typealias usage lacks exact modeled alias and expanded-type identity"
+                "kotlin.usageTypeDepthLimitExceeded" ->
+                    "Kotlin compiler type-argument depth exceeds the bounded usage model"
                 "kotlin.usageExtractionFailed" -> "Kotlin compiler usage extraction failed"
                 "kotlin.compilerUsageTargetInvalid" -> "Kotlin compiler usage target payload is invalid"
                 "kotlin.compilerUsagePathInvalid" -> "Kotlin compiler usage path payload is invalid"
@@ -1349,6 +1351,7 @@ class KotlinCompilerDiagnostics private constructor(
             "kotlin.usageExternalEnumEntryUnsupported",
             "kotlin.usagePropertyAliasUnsupported",
             "kotlin.usageTypeAliasUnsupported",
+            "kotlin.usageTypeDepthLimitExceeded",
             "kotlin.compilerUsageTargetInvalid",
             "kotlin.compilerUsagePathInvalid",
             "kotlin.compilerUsageRangeInvalid",

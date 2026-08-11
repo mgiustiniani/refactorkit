@@ -265,8 +265,9 @@ A subsequent unpromoted K5 candidate adds three narrowly bounded families:
   using exact compiler declaration/body/use ranges.
 
 Counterfactual import removal treats a raw external Java field, external/source
-enum entry, property alias, or FIR typealias as incomplete usage
-authority until exact JVM identity is modeled; it never removes such a used import. Parameter rename
+enum entry, property alias, or FIR typealias at any bounded generic depth as
+incomplete usage authority until exact JVM identity is modeled; type graphs over
+64 levels refuse with `kotlin.usageTypeDepthLimitExceeded`; it never removes such a used import. Parameter rename
 refuses a proposed identifier already present in an affected source rather than
 attempting incomplete capture analysis. Extract requires the replacement call's
 K2 target to be the newly created private helper, and both extract and inline

@@ -1,0 +1,31 @@
+{
+  "move": {
+    "symbols_rc": 0,
+    "rc": 0,
+    "status": "applied",
+    "refusal": null,
+    "before_signature": "#7 = Utf8               (Ljava/util/List<+Ljava/util/concurrent/TimeUnit;>;)I\nSignature: #7                           // (Ljava/util/List<+Ljava/util/concurrent/TimeUnit;>;)I",
+    "after_signature": "#7 = Utf8               (Ljava/util/List<Ltarget/api/Chosen;>;)I\nSignature: #7                           // (Ljava/util/List<Ltarget/api/Chosen;>;)I",
+    "source_exists": false,
+    "destination": "package target.api\nprivate fun hidden(value: List<Chosen>): Int = value.size\nfun selected(): Int = 42\n",
+    "consumer": "package consumer\nimport target.api.selected\nfun consume(): Int = selected()\n",
+    "transactions": [
+      ".refactorkit/transactions/transaction-644ae825-6f73-4ffd-bd79-9d3cc61be5d3.json"
+    ],
+    "stderr": ""
+  },
+  "organize": {
+    "rc": 0,
+    "status": "applied",
+    "refusal": null,
+    "before_signature": "#7 = Utf8               (Ljava/util/List<+Ljava/util/concurrent/TimeUnit;>;)I\nSignature: #7                           // (Ljava/util/List<+Ljava/util/concurrent/TimeUnit;>;)I",
+    "after_signature": "#7 = Utf8               (Ljava/util/List<Lother/shadow/Chosen;>;)I\nSignature: #7                           // (Ljava/util/List<Lother/shadow/Chosen;>;)I",
+    "mutated": true,
+    "source": "package consumer\nimport other.shadow.*\nfun value(items: List<Chosen>): Int = items.size\n",
+    "transactions": [
+      ".refactorkit/transactions/transaction-2e59b7fb-8745-45c2-b940-36d4e81ffc97.json"
+    ],
+    "stderr": "",
+    "stdout": null
+  }
+}

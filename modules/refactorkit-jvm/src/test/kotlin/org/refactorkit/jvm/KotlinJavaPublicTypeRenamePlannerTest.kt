@@ -505,9 +505,9 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         fixture.root.resolve("src/main/kotlin/fixture/api/Alias.kt").writeText(
             "package fixture.api\ntypealias Chosen = java.util.concurrent.TimeUnit\n",
         )
-        fixture.root.resolve("src/main/kotlin/fixture/api/v2/Alias.kt").apply {
+        fixture.root.resolve("src/main/kotlin/fixture/api/v2/Chosen.kt").apply {
             parent.createDirectories()
-            writeText("package fixture.api.v2\ntypealias Chosen = java.time.temporal.ChronoUnit\n")
+            writeText("package fixture.api.v2\nclass Chosen\n")
         }
         fixture.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
             "package fixture.consumer\nimport fixture.api.publicGreeting\n" +
@@ -521,7 +521,9 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         val target = assertIs<KotlinCompilerSymbolsResult.Available>(adapter.compilerSymbols(baseline))
             .index.symbols.single { it.name == "publicGreeting" }
         source.writeText(
-            "package fixture.api\nfun publicGreeting(): String = Chosen::class.qualifiedName!!\n",
+            "package fixture.api\n" +
+                "fun publicGreeting(): String = hidden(emptyList())\n" +
+                "private fun hidden(values: List<Chosen>): String = values.size.toString()\n",
         )
         val rebound = KotlinJvmBuildModelIntegration.attach(
             JavaProjectScanner().scan(fixture.root), fixture.toolchain,
@@ -534,6 +536,42 @@ class KotlinJavaPublicTypeRenamePlannerTest {
         assertEquals(PatchStatus.REFUSED, plan.status, plan.toString())
         assertEquals("kotlin.usageTypeAliasUnsupported", plan.refusalCode)
         assertTrue(plan.workspaceEdit.edits.isEmpty())
+
+        val stdlib = moveFixture()
+        val stdlibSource = stdlib.root.resolve("src/main/kotlin/fixture/api/PublicGreeting.kt")
+        stdlibSource.writeText("package fixture.api\nfun publicGreeting(): String = \"baseline\"\n")
+        stdlib.root.resolve("src/main/kotlin/fixture/api/v2/ArrayList.kt").apply {
+            parent.createDirectories()
+            writeText("package fixture.api.v2\nclass ArrayList<T>\n")
+        }
+        stdlib.root.resolve("src/main/kotlin/fixture/consumer/UseGreeting.kt").writeText(
+            "package fixture.consumer\nimport fixture.api.publicGreeting\n" +
+                "fun greeting(): String = publicGreeting()\n",
+        )
+        stdlib.root.resolve("src/main/java/fixture/consumer/Caller.java").deleteExisting()
+        val stdlibBaseline = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(stdlib.root), stdlib.toolchain,
+        )
+        val stdlibAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(stdlib.toolchain))
+        val stdlibTarget = assertIs<KotlinCompilerSymbolsResult.Available>(
+            stdlibAdapter.compilerSymbols(stdlibBaseline),
+        ).index.symbols.single { it.name == "publicGreeting" }
+        stdlibSource.writeText(
+            "package fixture.api\n" +
+                "fun publicGreeting(): String = hidden(emptyList())\n" +
+                "private fun hidden(values: List<ArrayList<String>>): String = values.size.toString()\n",
+        )
+        val stdlibRebound = KotlinJvmBuildModelIntegration.attach(
+            JavaProjectScanner().scan(stdlib.root), stdlib.toolchain,
+        )
+
+        val stdlibPlan = KotlinJvmMoveDeclarationPlanner(stdlibAdapter).preview(
+            stdlibRebound, stdlibTarget.id, "fixture.api.v2", acceptExternalConsumerRisk = true,
+        )
+
+        assertEquals(PatchStatus.REFUSED, stdlibPlan.status, stdlibPlan.toString())
+        assertEquals("kotlin.usageTypeAliasUnsupported", stdlibPlan.refusalCode)
+        assertTrue(stdlibPlan.workspaceEdit.edits.isEmpty())
     }
 
     @Test
