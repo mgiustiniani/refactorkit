@@ -9,5 +9,5 @@
 
 # Immutable runtime receipts and pinned stdout fixtures preserve tool-emitted bytes,
 # including trailing spaces.
-docs/requirements/evidence/*.log whitespace=-blank-at-eol,-blank-at-eof
+docs/requirements/evidence/*.log whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
 modules/refactorkit-cli/src/test/resources/org/refactorkit/cli/reqjavacliresult001/*.stdout whitespace=-blank-at-eol,-blank-at-eof

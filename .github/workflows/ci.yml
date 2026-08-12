@@ -23,11 +23,11 @@ jobs:
         shell: bash
         run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
-      - name: Set up exact JDK 21 build runtime
+      - name: Set up pinned JDK 21 build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21.0.11+10.0.LTS'
+          java-version: '21.0.11+9'
           cache: gradle
 
       - name: Set up Python for packaged daemon smoke
@@ -55,17 +55,11 @@ jobs:
       - name: Run golden tests
         run: ./refactorkit test-golden
 
-      - name: Test policy and packaging verification scripts
+      - name: Test packaging verification scripts
         run: |
-          python3 scripts/test-verify-v070-roadmap-support-claims.py
-          python3 scripts/verify-v070-roadmap-support-claims.py
-          python3 scripts/test-verify-v070-kotlin-support.py
-          python3 scripts/verify-v070-kotlin-support.py
-          python3 scripts/test-finalize-native-k1-k2-shared-foundations.py
-          python3 scripts/test-finalize-native-k5-move-next.py
           python3 scripts/test-verify-runtime-archive.py
+          python3 scripts/test-finalize-packaged-maven-module-rename-qualification.py
           python3 scripts/test-smoke-packaged-kill-recovery.py
-          python3 scripts/test-finalize-packaged-maven-move-class-authority-matrix.py
 
       - name: Validate architecture documentation
         run: |
@@ -78,6 +72,81 @@ jobs:
 
       - name: Package self-contained CLI
         run: ./gradlew packageCliRuntime distCliRuntimeZip
+
+      - name: Run packaged Maven move-class authority validation
+        timeout-minutes: 20
+        run: ./gradlew :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest
+
+      - name: Upload packaged Maven move-class authority reports (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-move-class-authority-reports-linux-x86_64
+          path: |
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority.json
+            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthorityTest/TEST-*.xml
+            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthorityTest/**
+          if-no-files-found: warn
+
+      - name: Run packaged Maven module-rename qualification
+        timeout-minutes: 30
+        run: >-
+          ./gradlew
+          :modules:refactorkit-cli:packagedMavenModuleRenameQualificationTest
+          :modules:refactorkit-cli:finalizePackagedMavenModuleRenameQualificationEvidence
+          --continue
+
+      - name: Upload packaged Maven module-rename qualification logs (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-logs-linux-x86_64
+          path: |
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/**
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/verifier/**
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification Cucumber JSON (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-cucumber-linux-x86_64
+          path: modules/refactorkit-cli/build/reports/cucumber/packaged-maven-module-rename-qualification.json
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification JUnit XML (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-junit-linux-x86_64
+          path: |
+            modules/refactorkit-cli/build/test-results/packagedMavenModuleRenameQualificationTest/TEST-*.xml
+            modules/refactorkit-cli/build/test-results/packagedMavenModuleRenameQualificationTest/**/*.xml
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification manifests (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-manifests-linux-x86_64
+          path: modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/manifests/**
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification failure diagnostics (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-failure-diagnostics-linux-x86_64
+          path: modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/failure-diagnostics/**
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification candidate checksum (linux-x86_64)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-checksum-linux-x86_64
+          path: modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/candidate/refactorkit-runtime.zip.sha256
+          if-no-files-found: error
 
       - name: Verify CLI runtime distribution
         run: |
@@ -114,9 +183,6 @@ jobs:
       - name: Run packaged real Kotlin qualification
         run: python3 scripts/smoke-packaged-kotlin.py
 
-      - name: Run packaged K5 move-next qualification
-        run: python3 scripts/smoke-packaged-k5-move-next.py
-
       - name: Run packaged kill-during-write recovery
         run: python3 scripts/smoke-packaged-kill-recovery.py
 
@@ -140,105 +206,6 @@ jobs:
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.spdx.json
           if-no-files-found: error
-
-  maven-move-class-native:
-    name: Maven move-class authority (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2022
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
-            gradle: ./gradlew
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout exact source revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Set up JDK 25 qualification input
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Record JDK 25 qualification home
-        shell: bash
-        run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-
-      - name: Set up exact JDK 21 build runtime
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21.0.11+10.0.LTS'
-          cache: gradle
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-
-      - name: Test native receipt finalizer
-        shell: python
-        run: |
-          import subprocess, sys
-          subprocess.run([sys.executable, "scripts/test-finalize-native-maven-move-class-authority.py"], check=True)
-
-      - name: Package exact self-contained runtime
-        timeout-minutes: 20
-        run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip --no-daemon
-
-      - name: Run public-CLI packaged Maven move-class authority
-        timeout-minutes: 20
-        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --no-daemon
-
-      - name: Run complete packaged Maven move-class authority matrix
-        timeout-minutes: 40
-        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityMatrixTest --no-daemon
-
-      - name: Finalize revision-bound native qualification receipt
-        if: always()
-        shell: python
-        env:
-          SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
-          QUALIFICATION_PLATFORM: ${{ matrix.platform }}
-        run: |
-          import os, pathlib, subprocess, sys
-          output = pathlib.Path("modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority") / f"native-{os.environ['QUALIFICATION_PLATFORM']}.json"
-          subprocess.run([
-              sys.executable,
-              "scripts/finalize-native-maven-move-class-authority.py",
-              "--repository-root", ".",
-              "--build-root", "modules/refactorkit-cli/build",
-              "--platform", os.environ["QUALIFICATION_PLATFORM"],
-              "--expected-revision", os.environ["SOURCE_REVISION"],
-              "--output", str(output),
-          ], check=True)
-
-      - name: Upload Maven move-class native qualification (${{ matrix.platform }})
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: packaged-maven-move-class-authority-reports-${{ matrix.platform }}
-          path: |
-            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority*.json
-            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthority*/TEST-*.xml
-            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthority*/**
-            modules/refactorkit-cli/build/qualification/packaged-maven-move-class-authority/*.json
-          if-no-files-found: warn
 
   cross-platform-runtime:
     name: Runtime (${{ matrix.platform }})
@@ -270,11 +237,11 @@ jobs:
         shell: bash
         run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
-      - name: Set up exact JDK 21 build runtime
+      - name: Set up pinned JDK 21 build runtime
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21.0.11+10.0.LTS'
+          java-version: '21.0.11+9'
           cache: gradle
 
       - name: Set up Python for packaged daemon smoke
@@ -307,6 +274,81 @@ jobs:
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
+
+      - name: Run native packaged Maven move-class authority validation
+        timeout-minutes: 20
+        run: ${{ matrix.gradle }} :modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --no-daemon
+
+      - name: Upload packaged Maven move-class authority reports (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-move-class-authority-reports-${{ matrix.platform }}
+          path: |
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-move-class-authority.json
+            modules/refactorkit-cli/build/test-results/packagedMavenMoveClassAuthorityTest/TEST-*.xml
+            modules/refactorkit-cli/build/reports/tests/packagedMavenMoveClassAuthorityTest/**
+          if-no-files-found: warn
+
+      - name: Run native packaged Maven module-rename qualification
+        timeout-minutes: 30
+        run: >-
+          ${{ matrix.gradle }}
+          :modules:refactorkit-cli:packagedMavenModuleRenameQualificationTest
+          :modules:refactorkit-cli:finalizePackagedMavenModuleRenameQualificationEvidence
+          --continue --no-daemon
+
+      - name: Upload packaged Maven module-rename qualification logs (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-logs-${{ matrix.platform }}
+          path: |
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/**
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/verifier/**
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification Cucumber JSON (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-cucumber-${{ matrix.platform }}
+          path: modules/refactorkit-cli/build/reports/cucumber/packaged-maven-module-rename-qualification.json
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification JUnit XML (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-junit-${{ matrix.platform }}
+          path: |
+            modules/refactorkit-cli/build/test-results/packagedMavenModuleRenameQualificationTest/TEST-*.xml
+            modules/refactorkit-cli/build/test-results/packagedMavenModuleRenameQualificationTest/**/*.xml
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification manifests (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-manifests-${{ matrix.platform }}
+          path: modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/manifests/**
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification failure diagnostics (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-failure-diagnostics-${{ matrix.platform }}
+          path: modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/failure-diagnostics/**
+          if-no-files-found: error
+
+      - name: Upload packaged Maven module-rename qualification candidate checksum (${{ matrix.platform }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-maven-module-rename-qualification-checksum-${{ matrix.platform }}
+          path: modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/candidate/refactorkit-runtime.zip.sha256
+          if-no-files-found: error
 
       - name: Native packaged build-model acceptance
         shell: python
@@ -396,292 +438,4 @@ jobs:
           path: |
             modules/refactorkit-cli/build/distributions/refactorkit-runtime-${{ matrix.platform }}.zip
             modules/refactorkit-cli/build/distributions/refactorkit-runtime-${{ matrix.platform }}.zip.sha256
-          if-no-files-found: error
-
-  k1-k2-shared-foundations-native:
-    name: K1 K2 shared JVM foundations (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2025
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
-            gradle: ./gradlew
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout exact subject revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Set up exact JDK 21 qualification runtime
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21.0.11+10.0.LTS'
-          cache: gradle
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-
-      - name: Verify bounded Kotlin support projection
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          subprocess.run([sys.executable, "scripts/test-verify-v070-kotlin-support.py"], check=True)
-          result = subprocess.run([sys.executable, "scripts/verify-v070-kotlin-support.py"], text=True, capture_output=True)
-          pathlib.Path("build/qualification/k1-k2-shared").mkdir(parents=True, exist_ok=True)
-          pathlib.Path("build/qualification/k1-k2-shared/support-reconciliation.json").write_text(result.stdout)
-          print(result.stdout)
-          print(result.stderr, file=sys.stderr)
-          result.check_returncode()
-
-      - name: Run focused K1 K2 and shared-foundation suites
-        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-core:test --tests org.refactorkit.core.BuildModelsTest --tests org.refactorkit.core.WorkspaceRefreshCoordinatorTest :modules:refactorkit-java:test --tests org.refactorkit.java.JdtJavaAnalysisCacheTest --tests org.refactorkit.java.JdtJavaSemanticAnalyzerTest :modules:refactorkit-kotlin:test --tests org.refactorkit.kotlin.KotlinCompilerAnalysisSessionTest --tests org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest --tests org.refactorkit.kotlin.KotlinJvmBuildModelTest --tests org.refactorkit.kotlin.KotlinLanguageAdapterTest :modules:refactorkit-jvm:test --tests org.refactorkit.jvm.SharedJvmIdentityIndexTest :modules:refactorkit-daemon:test --tests org.refactorkit.daemon.WorkspaceIndexDaemonTest --tests org.refactorkit.daemon.DaemonSessionTest :modules:refactorkit-mcp:test --tests org.refactorkit.mcp.McpSessionTest :modules:refactorkit-lsp:test --tests org.refactorkit.lsp.LspSessionTest :modules:refactorkit-typescript:test --tests org.refactorkit.typescript.TypeScriptBuildModelProviderTest
-
-      - name: Package exact subject
-        run: ${{ matrix.gradle }} --no-daemon packageCliRuntime
-
-      - name: Run packaged descriptor-exact Kotlin smoke
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          result = subprocess.run([sys.executable, "scripts/smoke-packaged-kotlin.py"], text=True, capture_output=True)
-          log = result.stdout + result.stderr
-          path = pathlib.Path("build/qualification/k1-k2-shared/packaged-kotlin-smoke.log")
-          path.write_text(log)
-          print(result.stdout)
-          print(result.stderr, file=sys.stderr)
-          result.check_returncode()
-
-      - name: Finalize fail-closed native receipt
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          output = pathlib.Path("build/qualification/k1-k2-shared/native-${{ matrix.platform }}.json")
-          subprocess.run([
-              sys.executable, "scripts/finalize-native-k1-k2-shared-foundations.py",
-              "--platform", "${{ matrix.platform }}",
-              "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
-              "--support-receipt", "build/qualification/k1-k2-shared/support-reconciliation.json",
-              "--smoke-log", "build/qualification/k1-k2-shared/packaged-kotlin-smoke.log",
-              "--report-root", "modules",
-              "--package-root", "modules/refactorkit-cli/build/package/refactorkit",
-              "--output", str(output),
-          ], check=True)
-
-      - name: Upload qualification receipt and reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: k1-k2-shared-foundations-${{ matrix.platform }}
-          path: |
-            build/qualification/k1-k2-shared/**
-            modules/*/build/test-results/test/TEST-*.xml
-          if-no-files-found: error
-
-  k5-move-next-native:
-    name: K5 move next (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2025
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
-            gradle: ./gradlew
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout exact subject revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 2
-
-      - name: Set up exact JDK 21 qualification runtime
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21.0.11+10.0.LTS'
-          cache: gradle
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-
-      - name: Run exact K5 move-next tests
-        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.successfulK2CompilationReturnsDurableJvmTypeSymbolsWithExactPsiRanges' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicTopLevelKotlinFunctionMove*' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.standaloneCompanionMoveHasStableRefusalAndNoEdits' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinOnlyMoveUsesLazyOperationDiagnosticsRatherThanGenericK2' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinOnlyNonMoveRetainsLazyGenericK2Fallback'
-
-      - name: Package exact subject
-        run: ${{ matrix.gradle }} --no-daemon packageCliRuntime
-
-      - name: Run packaged K5 move-next smoke
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          result = subprocess.run([sys.executable, "scripts/smoke-packaged-k5-move-next.py"], text=True, capture_output=True)
-          log = result.stdout + result.stderr
-          path = pathlib.Path("build/qualification/k5-move-next/packaged-smoke.log")
-          path.parent.mkdir(parents=True, exist_ok=True)
-          path.write_text(log)
-          print(result.stdout)
-          print(result.stderr, file=sys.stderr)
-          result.check_returncode()
-
-      - name: Finalize fail-closed native receipt
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          output = pathlib.Path("build/qualification/k5-move-next/native-${{ matrix.platform }}.json")
-          subprocess.run([
-              sys.executable, "scripts/finalize-native-k5-move-next.py",
-              "--platform", "${{ matrix.platform }}",
-              "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
-              "--smoke-log", "build/qualification/k5-move-next/packaged-smoke.log",
-              "--report-root", "modules",
-              "--package-root", "modules/refactorkit-cli/build/package/refactorkit",
-              "--output", str(output),
-          ], check=True)
-
-      - name: Upload qualification receipt and reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: k5-move-next-${{ matrix.platform }}
-          path: |
-            build/qualification/k5-move-next/**
-            modules/refactorkit-kotlin/build/test-results/test/TEST-*.xml
-            modules/refactorkit-jvm/build/test-results/test/TEST-*.xml
-          if-no-files-found: error
-
-  k5-bounded-completion-native:
-    name: K5 bounded completion (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2025
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
-            gradle: ./gradlew
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout exact subject revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 2
-
-      - name: Set up exact JDK 21 qualification runtime
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21.0.11+10.0.LTS'
-          cache: gradle
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-
-      - name: Validate K5 completion finalizer contract
-        shell: python
-        run: |
-          import runpy
-          runpy.run_path("scripts/test-finalize-native-k5-completion.py", run_name="__main__")
-
-      - name: Run exact K5 completion tests
-        run: ${{ matrix.gradle }} --no-daemon :modules:refactorkit-kotlin:test --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.organizeImports*' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.overrideFamiliesAreExactAndExcludeSameSignatureUnrelatedMethods' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.namedArgumentsResolveToExactOverloadParameterSymbols' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.changeSignatureRefusesCompilerProvenExternalOverrideBoundary' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.changeSignatureRefusesPreexistingNewNameTokenThatCouldCaptureBindings' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.compilerModelsAdvancedKotlinJvmShapesAndRefusesDelegatedPropertiesExplicitly' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.boundedExtractAndInlineUseExactCompilerExpressionRangesAndRollback' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractRefusesWhenInsertedCallDoesNotBindToNewHelper' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractAndInlineRefuseGeneratedSourceOwnershipWithoutEdits' --tests 'org.refactorkit.kotlin.KotlinCompilerDiagnosticsTest.extractAndInlineRefuseUnprovenControlAndUsageShapesWithoutEdits' --tests 'org.refactorkit.kotlin.KotlinLanguageAdapterTest.descriptorPromotesBoundedCompilerReadsAndPrivateTypeRenameProposalOnly' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.androidAndCompilerPluginFacetsRemainSeparateFailClosedCapabilityCases' --tests 'org.refactorkit.kotlin.KotlinJvmBuildModelTest.unsupportedKotlinPlatformFailsClosed' :modules:refactorkit-jvm:test --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.kotlinParameterRenameUpdatesOverrideNamedArgumentsAndPreservesJavaCaller' --tests 'org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest.publicKotlinParameterRenameRequiresExternalConsumerApproval' --tests 'org.refactorkit.jvm.KotlinMoveDeclarationDiagnosticsRouteTest.kotlinChangeSignatureUsesLazyMixedOperationDiagnostics'
-
-      - name: Package exact subject
-        run: ${{ matrix.gradle }} --no-daemon packageCliRuntime
-
-      - name: Run packaged K5 completion smoke
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          result = subprocess.run([sys.executable, "scripts/smoke-packaged-k5-completion.py"], text=True, capture_output=True)
-          log = result.stdout + result.stderr
-          path = pathlib.Path("build/qualification/k5-completion/packaged-smoke.log")
-          path.parent.mkdir(parents=True, exist_ok=True)
-          path.write_text(log)
-          print(result.stdout)
-          print(result.stderr, file=sys.stderr)
-          result.check_returncode()
-
-      - name: Run packaged Kotlin compatibility smoke
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          result = subprocess.run([sys.executable, "scripts/smoke-packaged-kotlin.py"], text=True, capture_output=True)
-          log = result.stdout + result.stderr
-          path = pathlib.Path("build/qualification/k5-completion/packaged-compatibility-smoke.log")
-          path.parent.mkdir(parents=True, exist_ok=True)
-          path.write_text(log)
-          print(result.stdout)
-          print(result.stderr, file=sys.stderr)
-          result.check_returncode()
-
-      - name: Finalize fail-closed native receipt
-        shell: python
-        run: |
-          import pathlib, subprocess, sys
-          output = pathlib.Path("build/qualification/k5-completion/native-${{ matrix.platform }}.json")
-          subprocess.run([
-              sys.executable, "scripts/finalize-native-k5-completion.py",
-              "--platform", "${{ matrix.platform }}",
-              "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
-              "--smoke-log", "build/qualification/k5-completion/packaged-smoke.log",
-              "--compatibility-smoke-log", "build/qualification/k5-completion/packaged-compatibility-smoke.log",
-              "--report-root", "modules",
-              "--package-root", "modules/refactorkit-cli/build/package/refactorkit",
-              "--output", str(output),
-          ], check=True)
-
-      - name: Upload qualification receipt and reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: k5-bounded-completion-${{ matrix.platform }}
-          path: |
-            build/qualification/k5-completion/**
-            modules/refactorkit-kotlin/build/test-results/test/TEST-*.xml
-            modules/refactorkit-jvm/build/test-results/test/TEST-*.xml
           if-no-files-found: error

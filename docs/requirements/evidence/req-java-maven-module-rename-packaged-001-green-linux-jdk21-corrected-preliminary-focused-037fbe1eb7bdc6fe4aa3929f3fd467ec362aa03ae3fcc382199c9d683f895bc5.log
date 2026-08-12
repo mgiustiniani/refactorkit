@@ -1,0 +1,1224 @@
+RefactorKit packaged Maven module-rename qualification focused logschemaVersion=1requirementId=REQ-JAVA-MAVEN-MODULE-RENAME-PACKAGED-001repositoryCommit=e808036879346cceb527560d2cfe06a6fbd7f3darepositoryTree=0ef1ce42849a82347d63e71be659a21b3ac6e3f2repositoryWorktreeState=DIRTYgithubSha=ABSENThost=Linux/x86-64platform=linux-x86_64cucumberScenarios=3cucumberSteps=138junitTotals={"errors":0,"failures":0,"skipped":0,"tests":3}verifierStatus=PRESENTcontentNormalization=CRLF_TO_LF===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-cli-complete.log sha256=7e16adc3e7d7eb4d3d3356313f0c3ba08920e515240c613770418196433f0e20 =====
+requirement=REQ-JAVA-MAVEN-MODULE-RENAME-PACKAGED-001
+surface=packaged CLI
+status=PASSED
+host=Linux/x86-64
+repositoryCommit=e808036879346cceb527560d2cfe06a6fbd7f3da
+repositoryTree=0ef1ce42849a82347d63e71be659a21b3ac6e3f2
+repositoryWorktreeState=DIRTY
+repositoryStatusSha256=48bb47c8daadfe1d9d4e53f62d981a683ac194c96b988d16aed80b6d30da1787
+qualificationMode=LOCAL_PRELIMINARY
+archiveSha256=17638db488c7b90cf351701b4597493e5428574d2d4e6428610a5f540e05ee85
+checksumSha256=e5f9917c764ea16bcd59aae7fa3a8396f770cb4b957b30ab9024fbd420020572
+verifierRecordSha256=86976c86b1d33e4beee54e6ec53b18331e58771574b8eeebd86593e2d1b46b36
+verifierCompleteLogSha256=1d9ccb167d18b5a123f05559393be39126020dcc31e875d45664e53f57aca680
+buildJdkVendor=Arch Linux
+buildJdkVersion=21.0.11
+buildJdkRuntimeReleaseSha256=b997cb5552a98b57a89b09c166e2d08b9ce5254fccbd80c562d9532105756af4
+buildJdkRuntimeJavaSha256=61ce96f8b36d39fc0a47672aa8b0b4e8f29f00c1dead75a83268ed0ca1ffe207
+buildJdkRuntimeModulesSha256=51ee349932a4618695742826192b02ef2037910b59e8484c163ec5e46e67891b
+candidateRuntimeReleaseSha256=3123a9179115c408914ebfbd95e267119f8deaaadcb3947910f1e757ba0e81c2
+candidateRuntimeModulesSha256=dcb68ca385db598939e798728780de4c16a0e85bd39c60f5f284f155f3ee68f2
+archiveIdentityProbeSha256=3b9a500b52cc08244943dbe090c51207d425947a07a3e0a4e7f07da59b080c25
+processMonitorProbeSha256=307a2591edc91b977950f233fd1bbf98c83404c2cc1e13cbbd5689ea0af768ad
+launcherMode=0755
+launcherSha256=fa9cd72b54f269d76053da247665cb931ff39631d1ac38c7b55aaa0c9dcadef3
+embeddedJavaSha256=bd12685bb6403175bb8803ef143738bf74d06565223be944de1dad20ef5e5625
+candidateReadOnly=true
+jvmJarSha256=bea2446b1f408fb7d87a6fc032bcfb92d65fc22030000e07654402f725d40d28
+gateMappingProofSha256=58c301ac08a2a4d9db6262bef453fd51e495c09572dc1df2056aaaca90a4cea2
+copyIdentity=c2e2f96c9b1eddef62f048cf770c879c8fbd046603063e38e4ce53c0b49bd2e5
+S0=31f5227c2c285e7c4595979671b29d524e328aaa919c393e339197d6b3aab0c2
+C1=d7572fafba1f073efd13aea769ffe7395729cea848b83f5bf749b7a93eb82cef
+S1=d7572fafba1f073efd13aea769ffe7395729cea848b83f5bf749b7a93eb82cef
+productS0=c57cd017961b6d69151f949c1b1026056e4b42e2090584cf47a63cafe0bd15e5
+productS1=045b6150e8eba3ffd677601f8a96405721773d33e31f68c0c7c2a53b989222f9
+transactionId=transaction-0eb33de9-38e7-458a-8b65-8b7b33250c1e
+normalizedForwardEditSha256=31b83762d159f75b4e4bd494d098e8cc23ece82d723ef5fbdc6bf0e9e03eb217
+gateIdentityVerified=true
+cleanupVerified=true
+failure=none
+
+===== cli-preview stdout =====
+Operation: java.renameMavenModule
+Status: PREVIEW
+Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).
+Evidence: JDT_BINDING
+
+Warnings:
+- Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.
+- The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.
+
+Affected files:
+- catalog-domain/pom.xml
+- catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-model/pom.xml
+- catalog-model/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-pricing/pom.xml
+- pom.xml
+
+Patch:
+--- a/catalog-model/pom.xml
++++ b/catalog-model/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+-  <artifactId>catalog-model</artifactId>
++  <artifactId>catalog-domain</artifactId>
+ </project>
+ 
+--- a/pom.xml
++++ b/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+ 
+   <groupId>com.acme.refactorkit.fixture</groupId>
+   <artifactId>java-maven-move-class-authority-reactor</artifactId>
+   <version>1.0.0</version>
+   <packaging>pom</packaging>
+ 
+   <properties>
+     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+     <maven.compiler.release>8</maven.compiler.release>
+   </properties>
+ 
+   <dependencyManagement>
+     <dependencies>
+       <dependency>
+         <groupId>ch.qos.reload4j</groupId>
+         <artifactId>reload4j</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-api-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.projectlombok</groupId>
+         <artifactId>lombok</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-context-support</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+     </dependencies>
+   </dependencyManagement>
+ 
+   <modules>
+     <module>catalog-common</module>
+     <module>catalog-generated-support</module>
+     <module>catalog-inventory</module>
+     <module>catalog-shipping</module>
+     <module>catalog-search</module>
+     <module>catalog-recommendations</module>
+     <module>catalog-admin</module>
+     <module>catalog-batch</module>
+     <module>customer-model</module>
+     <module>customer-notifications</module>
+     <module>order-model</module>
+     <module>order-processing</module>
+     <module>payment-contract</module>
+     <module>reporting-core</module>
+     <module>reporting-unrelated</module>
+-    <module>catalog-model</module>
++    <module>catalog-domain</module>
+     <module>catalog-pricing</module>
+     <module>catalog-storefront</module>
+     <module>catalog-acceptance</module>
+     <module>catalog-decoy</module>
+   </modules>
+ </project>
+ 
+--- a/catalog-pricing/pom.xml
++++ b/catalog-pricing/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+   <artifactId>catalog-pricing</artifactId>
+   <dependencies>
+     <dependency>
+       <groupId>com.acme.refactorkit.fixture</groupId>
+-      <artifactId>catalog-model</artifactId>
++      <artifactId>catalog-domain</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+       <groupId>com.acme.fixture.external</groupId>
+       <artifactId>catalog-price-contract</artifactId>
+       <version>1.0.0</version>
+       <scope>system</scope>
+       <systemPath>${project.basedir}/../fixture-libs/catalog-price-contract-1.0.0.jar</systemPath>
+     </dependency>
+   </dependencies>
+ 
+   <profiles>
+     <profile>
+       <id>req-java-maven-move-auth-009</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>field-scope-parent</artifactId>
+           <version>1.0.0</version>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>descriptor-pruning-parent</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+           <exclusions>
+             <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-context-support</artifactId>
+             </exclusion>
+           </exclusions>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010-alternate-path</id>
+       <dependencies>
+         <dependency>
+           <groupId>org.springframework</groupId>
+           <artifactId>spring-context-support</artifactId>
+           <version>1.0.0-refactorkit-fixture</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-011</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-012-management</id>
+       <dependencyManagement>
+         <dependencies>
+           <dependency>
+             <groupId>com.acme.fixture.authority</groupId>
+             <artifactId>ordinary-missing-management-bom</artifactId>
+             <version>1.0.0</version>
+             <type>pom</type>
+             <scope>import</scope>
+           </dependency>
+         </dependencies>
+       </dependencyManagement>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+   </profiles>
+ </project>
+ 
+rename catalog-model/pom.xml -> catalog-domain/pom.xml
+rename catalog-model/src/main/java/com/acme/catalog/legacy/Product.java -> catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+
+Use --apply to apply this change.
+===== cli-apply stdout =====
+Operation: java.renameMavenModule
+Status: PREVIEW
+Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).
+Evidence: JDT_BINDING
+
+Warnings:
+- Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.
+- The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.
+
+Affected files:
+- catalog-domain/pom.xml
+- catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-model/pom.xml
+- catalog-model/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-pricing/pom.xml
+- pom.xml
+
+Patch:
+--- a/catalog-model/pom.xml
++++ b/catalog-model/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+-  <artifactId>catalog-model</artifactId>
++  <artifactId>catalog-domain</artifactId>
+ </project>
+ 
+--- a/pom.xml
++++ b/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+ 
+   <groupId>com.acme.refactorkit.fixture</groupId>
+   <artifactId>java-maven-move-class-authority-reactor</artifactId>
+   <version>1.0.0</version>
+   <packaging>pom</packaging>
+ 
+   <properties>
+     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+     <maven.compiler.release>8</maven.compiler.release>
+   </properties>
+ 
+   <dependencyManagement>
+     <dependencies>
+       <dependency>
+         <groupId>ch.qos.reload4j</groupId>
+         <artifactId>reload4j</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-api-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.projectlombok</groupId>
+         <artifactId>lombok</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-context-support</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+     </dependencies>
+   </dependencyManagement>
+ 
+   <modules>
+     <module>catalog-common</module>
+     <module>catalog-generated-support</module>
+     <module>catalog-inventory</module>
+     <module>catalog-shipping</module>
+     <module>catalog-search</module>
+     <module>catalog-recommendations</module>
+     <module>catalog-admin</module>
+     <module>catalog-batch</module>
+     <module>customer-model</module>
+     <module>customer-notifications</module>
+     <module>order-model</module>
+     <module>order-processing</module>
+     <module>payment-contract</module>
+     <module>reporting-core</module>
+     <module>reporting-unrelated</module>
+-    <module>catalog-model</module>
++    <module>catalog-domain</module>
+     <module>catalog-pricing</module>
+     <module>catalog-storefront</module>
+     <module>catalog-acceptance</module>
+     <module>catalog-decoy</module>
+   </modules>
+ </project>
+ 
+--- a/catalog-pricing/pom.xml
++++ b/catalog-pricing/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+   <artifactId>catalog-pricing</artifactId>
+   <dependencies>
+     <dependency>
+       <groupId>com.acme.refactorkit.fixture</groupId>
+-      <artifactId>catalog-model</artifactId>
++      <artifactId>catalog-domain</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+       <groupId>com.acme.fixture.external</groupId>
+       <artifactId>catalog-price-contract</artifactId>
+       <version>1.0.0</version>
+       <scope>system</scope>
+       <systemPath>${project.basedir}/../fixture-libs/catalog-price-contract-1.0.0.jar</systemPath>
+     </dependency>
+   </dependencies>
+ 
+   <profiles>
+     <profile>
+       <id>req-java-maven-move-auth-009</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>field-scope-parent</artifactId>
+           <version>1.0.0</version>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>descriptor-pruning-parent</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+           <exclusions>
+             <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-context-support</artifactId>
+             </exclusion>
+           </exclusions>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010-alternate-path</id>
+       <dependencies>
+         <dependency>
+           <groupId>org.springframework</groupId>
+           <artifactId>spring-context-support</artifactId>
+           <version>1.0.0-refactorkit-fixture</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-011</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-012-management</id>
+       <dependencyManagement>
+         <dependencies>
+           <dependency>
+             <groupId>com.acme.fixture.authority</groupId>
+             <artifactId>ordinary-missing-management-bom</artifactId>
+             <version>1.0.0</version>
+             <type>pom</type>
+             <scope>import</scope>
+           </dependency>
+         </dependencies>
+       </dependencyManagement>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+   </profiles>
+ </project>
+ 
+rename catalog-model/pom.xml -> catalog-domain/pom.xml
+rename catalog-model/src/main/java/com/acme/catalog/legacy/Product.java -> catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+
+Applied. Transaction: transaction-0eb33de9-38e7-458a-8b65-8b7b33250c1e
+To rollback: refactorkit patch rollback transaction-0eb33de9-38e7-458a-8b65-8b7b33250c1e
+===== cli-diagnostics-after-apply stdout =====
+No diagnostics.
+===== cli-normal-rollback stdout =====
+Rolled back transaction transaction-0eb33de9-38e7-458a-8b65-8b7b33250c1e.
+===== cli-diagnostics-after-rollback stdout =====
+No diagnostics.
+===== cli-preview stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-01-cli-preview.properties -Drefactorkit.qualification.guard.token=68623ff436a963213f78bd360026f1b1c3058cd4844b6c102a074d027de814bb
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=7ede64415a8c06ef0cc32d4d5808749fcfe3bc73c3ab4a12531d2c04a303f448
+===== cli-apply stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-02-cli-apply.properties -Drefactorkit.qualification.guard.token=0daafe80e841b0708e8b857576a90294187075430a4ea6b3f3f1f0485498c01e
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=0fcf40f5928b4c65fb640e784c5bbb45afdfca58bd09e75abae48ba94f71843d
+===== cli-diagnostics-after-apply stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-03-cli-diagnostics-after-apply.properties -Drefactorkit.qualification.guard.token=70339d8fb715ce38a9b87d07eabe714c1b8caf8e6a800e880299759c031e820f
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=4271fc954faca6d85426f74f9886165dba101e931471a3a221911515d8e38d68
+===== cli-normal-rollback stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-04-cli-normal-rollback.properties -Drefactorkit.qualification.guard.token=30c0eecff42a87330724e3e56e3cb5eb5c6baa180e29565f01af7e4afc6b5e90
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=145fb13848da1e3ef07c7c5e025358065dea64e21537f3419fe6d495eae9fd0e
+===== cli-diagnostics-after-rollback stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-05-cli-diagnostics-after-rollback.properties -Drefactorkit.qualification.guard.token=ab628d8354c108ee964103d44de221bd10d00c7b8a6062b35121702d72af5ecf
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=66a469fd7b6d1e51d416fe0d2f2418bebd09c90f951598074f4903580070c4ff
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-cli-stderr.log sha256=46575f2b52123f8902784ae1db02be1904b638cbd1de3071bd8ece25ef575f11 =====
+===== cli-preview stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-01-cli-preview.properties -Drefactorkit.qualification.guard.token=68623ff436a963213f78bd360026f1b1c3058cd4844b6c102a074d027de814bb
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=7ede64415a8c06ef0cc32d4d5808749fcfe3bc73c3ab4a12531d2c04a303f448
+===== cli-apply stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-02-cli-apply.properties -Drefactorkit.qualification.guard.token=0daafe80e841b0708e8b857576a90294187075430a4ea6b3f3f1f0485498c01e
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=0fcf40f5928b4c65fb640e784c5bbb45afdfca58bd09e75abae48ba94f71843d
+===== cli-diagnostics-after-apply stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-03-cli-diagnostics-after-apply.properties -Drefactorkit.qualification.guard.token=70339d8fb715ce38a9b87d07eabe714c1b8caf8e6a800e880299759c031e820f
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=4271fc954faca6d85426f74f9886165dba101e931471a3a221911515d8e38d68
+===== cli-normal-rollback stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-04-cli-normal-rollback.properties -Drefactorkit.qualification.guard.token=30c0eecff42a87330724e3e56e3cb5eb5c6baa180e29565f01af7e4afc6b5e90
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=145fb13848da1e3ef07c7c5e025358065dea64e21537f3419fe6d495eae9fd0e
+===== cli-diagnostics-after-rollback stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-05-cli-diagnostics-after-rollback.properties -Drefactorkit.qualification.guard.token=ab628d8354c108ee964103d44de221bd10d00c7b8a6062b35121702d72af5ecf
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=66a469fd7b6d1e51d416fe0d2f2418bebd09c90f951598074f4903580070c4ff
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-cli-stdout.log sha256=6340b60dc8d34816eb1ac97a4e9c92b2824731c2c93113431d0c262adc70ff9e =====
+===== cli-preview stdout =====
+Operation: java.renameMavenModule
+Status: PREVIEW
+Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).
+Evidence: JDT_BINDING
+
+Warnings:
+- Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.
+- The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.
+
+Affected files:
+- catalog-domain/pom.xml
+- catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-model/pom.xml
+- catalog-model/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-pricing/pom.xml
+- pom.xml
+
+Patch:
+--- a/catalog-model/pom.xml
++++ b/catalog-model/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+-  <artifactId>catalog-model</artifactId>
++  <artifactId>catalog-domain</artifactId>
+ </project>
+ 
+--- a/pom.xml
++++ b/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+ 
+   <groupId>com.acme.refactorkit.fixture</groupId>
+   <artifactId>java-maven-move-class-authority-reactor</artifactId>
+   <version>1.0.0</version>
+   <packaging>pom</packaging>
+ 
+   <properties>
+     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+     <maven.compiler.release>8</maven.compiler.release>
+   </properties>
+ 
+   <dependencyManagement>
+     <dependencies>
+       <dependency>
+         <groupId>ch.qos.reload4j</groupId>
+         <artifactId>reload4j</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-api-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.projectlombok</groupId>
+         <artifactId>lombok</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-context-support</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+     </dependencies>
+   </dependencyManagement>
+ 
+   <modules>
+     <module>catalog-common</module>
+     <module>catalog-generated-support</module>
+     <module>catalog-inventory</module>
+     <module>catalog-shipping</module>
+     <module>catalog-search</module>
+     <module>catalog-recommendations</module>
+     <module>catalog-admin</module>
+     <module>catalog-batch</module>
+     <module>customer-model</module>
+     <module>customer-notifications</module>
+     <module>order-model</module>
+     <module>order-processing</module>
+     <module>payment-contract</module>
+     <module>reporting-core</module>
+     <module>reporting-unrelated</module>
+-    <module>catalog-model</module>
++    <module>catalog-domain</module>
+     <module>catalog-pricing</module>
+     <module>catalog-storefront</module>
+     <module>catalog-acceptance</module>
+     <module>catalog-decoy</module>
+   </modules>
+ </project>
+ 
+--- a/catalog-pricing/pom.xml
++++ b/catalog-pricing/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+   <artifactId>catalog-pricing</artifactId>
+   <dependencies>
+     <dependency>
+       <groupId>com.acme.refactorkit.fixture</groupId>
+-      <artifactId>catalog-model</artifactId>
++      <artifactId>catalog-domain</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+       <groupId>com.acme.fixture.external</groupId>
+       <artifactId>catalog-price-contract</artifactId>
+       <version>1.0.0</version>
+       <scope>system</scope>
+       <systemPath>${project.basedir}/../fixture-libs/catalog-price-contract-1.0.0.jar</systemPath>
+     </dependency>
+   </dependencies>
+ 
+   <profiles>
+     <profile>
+       <id>req-java-maven-move-auth-009</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>field-scope-parent</artifactId>
+           <version>1.0.0</version>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>descriptor-pruning-parent</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+           <exclusions>
+             <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-context-support</artifactId>
+             </exclusion>
+           </exclusions>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010-alternate-path</id>
+       <dependencies>
+         <dependency>
+           <groupId>org.springframework</groupId>
+           <artifactId>spring-context-support</artifactId>
+           <version>1.0.0-refactorkit-fixture</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-011</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-012-management</id>
+       <dependencyManagement>
+         <dependencies>
+           <dependency>
+             <groupId>com.acme.fixture.authority</groupId>
+             <artifactId>ordinary-missing-management-bom</artifactId>
+             <version>1.0.0</version>
+             <type>pom</type>
+             <scope>import</scope>
+           </dependency>
+         </dependencies>
+       </dependencyManagement>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+   </profiles>
+ </project>
+ 
+rename catalog-model/pom.xml -> catalog-domain/pom.xml
+rename catalog-model/src/main/java/com/acme/catalog/legacy/Product.java -> catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+
+Use --apply to apply this change.
+===== cli-apply stdout =====
+Operation: java.renameMavenModule
+Status: PREVIEW
+Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).
+Evidence: JDT_BINDING
+
+Warnings:
+- Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.
+- The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.
+
+Affected files:
+- catalog-domain/pom.xml
+- catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-model/pom.xml
+- catalog-model/src/main/java/com/acme/catalog/legacy/Product.java
+- catalog-pricing/pom.xml
+- pom.xml
+
+Patch:
+--- a/catalog-model/pom.xml
++++ b/catalog-model/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+-  <artifactId>catalog-model</artifactId>
++  <artifactId>catalog-domain</artifactId>
+ </project>
+ 
+--- a/pom.xml
++++ b/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+ 
+   <groupId>com.acme.refactorkit.fixture</groupId>
+   <artifactId>java-maven-move-class-authority-reactor</artifactId>
+   <version>1.0.0</version>
+   <packaging>pom</packaging>
+ 
+   <properties>
+     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+     <maven.compiler.release>8</maven.compiler.release>
+   </properties>
+ 
+   <dependencyManagement>
+     <dependencies>
+       <dependency>
+         <groupId>ch.qos.reload4j</groupId>
+         <artifactId>reload4j</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-api-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core-test</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+       <dependency>
+         <groupId>org.projectlombok</groupId>
+         <artifactId>lombok</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+       </dependency>
+       <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-context-support</artifactId>
+         <version>1.0.0-refactorkit-fixture</version>
+         <type>jar</type>
+         <scope>compile</scope>
+       </dependency>
+     </dependencies>
+   </dependencyManagement>
+ 
+   <modules>
+     <module>catalog-common</module>
+     <module>catalog-generated-support</module>
+     <module>catalog-inventory</module>
+     <module>catalog-shipping</module>
+     <module>catalog-search</module>
+     <module>catalog-recommendations</module>
+     <module>catalog-admin</module>
+     <module>catalog-batch</module>
+     <module>customer-model</module>
+     <module>customer-notifications</module>
+     <module>order-model</module>
+     <module>order-processing</module>
+     <module>payment-contract</module>
+     <module>reporting-core</module>
+     <module>reporting-unrelated</module>
+-    <module>catalog-model</module>
++    <module>catalog-domain</module>
+     <module>catalog-pricing</module>
+     <module>catalog-storefront</module>
+     <module>catalog-acceptance</module>
+     <module>catalog-decoy</module>
+   </modules>
+ </project>
+ 
+--- a/catalog-pricing/pom.xml
++++ b/catalog-pricing/pom.xml
+@@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project xmlns="http://maven.apache.org/POM/4.0.0">
+   <modelVersion>4.0.0</modelVersion>
+   <parent>
+     <groupId>com.acme.refactorkit.fixture</groupId>
+     <artifactId>java-maven-move-class-authority-reactor</artifactId>
+     <version>1.0.0</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+   <artifactId>catalog-pricing</artifactId>
+   <dependencies>
+     <dependency>
+       <groupId>com.acme.refactorkit.fixture</groupId>
+-      <artifactId>catalog-model</artifactId>
++      <artifactId>catalog-domain</artifactId>
+       <version>${project.version}</version>
+     </dependency>
+     <dependency>
+       <groupId>com.acme.fixture.external</groupId>
+       <artifactId>catalog-price-contract</artifactId>
+       <version>1.0.0</version>
+       <scope>system</scope>
+       <systemPath>${project.basedir}/../fixture-libs/catalog-price-contract-1.0.0.jar</systemPath>
+     </dependency>
+   </dependencies>
+ 
+   <profiles>
+     <profile>
+       <id>req-java-maven-move-auth-009</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>field-scope-parent</artifactId>
+           <version>1.0.0</version>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.external</groupId>
+           <artifactId>descriptor-pruning-parent</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+           <exclusions>
+             <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-context-support</artifactId>
+             </exclusion>
+           </exclusions>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-010-alternate-path</id>
+       <dependencies>
+         <dependency>
+           <groupId>org.springframework</groupId>
+           <artifactId>spring-context-support</artifactId>
+           <version>1.0.0-refactorkit-fixture</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-011</id>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <version>1.0.0</version>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+     <profile>
+       <id>req-java-maven-move-auth-012-management</id>
+       <dependencyManagement>
+         <dependencies>
+           <dependency>
+             <groupId>com.acme.fixture.authority</groupId>
+             <artifactId>ordinary-missing-management-bom</artifactId>
+             <version>1.0.0</version>
+             <type>pom</type>
+             <scope>import</scope>
+           </dependency>
+         </dependencies>
+       </dependencyManagement>
+       <dependencies>
+         <dependency>
+           <groupId>com.acme.fixture.missing</groupId>
+           <artifactId>ordinary-missing-leaf</artifactId>
+           <type>jar</type>
+           <scope>compile</scope>
+         </dependency>
+       </dependencies>
+     </profile>
+   </profiles>
+ </project>
+ 
+rename catalog-model/pom.xml -> catalog-domain/pom.xml
+rename catalog-model/src/main/java/com/acme/catalog/legacy/Product.java -> catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java
+
+Applied. Transaction: transaction-0eb33de9-38e7-458a-8b65-8b7b33250c1e
+To rollback: refactorkit patch rollback transaction-0eb33de9-38e7-458a-8b65-8b7b33250c1e
+===== cli-diagnostics-after-apply stdout =====
+No diagnostics.
+===== cli-normal-rollback stdout =====
+Rolled back transaction transaction-0eb33de9-38e7-458a-8b65-8b7b33250c1e.
+===== cli-diagnostics-after-rollback stdout =====
+No diagnostics.
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-daemon-complete.log sha256=5c565402a9268626181597cb8e566d862f038ee55b8d47f7ad41ffc9a8b3e925 =====
+requirement=REQ-JAVA-MAVEN-MODULE-RENAME-PACKAGED-001
+surface=packaged daemon
+status=PASSED
+host=Linux/x86-64
+repositoryCommit=e808036879346cceb527560d2cfe06a6fbd7f3da
+repositoryTree=0ef1ce42849a82347d63e71be659a21b3ac6e3f2
+repositoryWorktreeState=DIRTY
+repositoryStatusSha256=48bb47c8daadfe1d9d4e53f62d981a683ac194c96b988d16aed80b6d30da1787
+qualificationMode=LOCAL_PRELIMINARY
+archiveSha256=17638db488c7b90cf351701b4597493e5428574d2d4e6428610a5f540e05ee85
+checksumSha256=e5f9917c764ea16bcd59aae7fa3a8396f770cb4b957b30ab9024fbd420020572
+verifierRecordSha256=86976c86b1d33e4beee54e6ec53b18331e58771574b8eeebd86593e2d1b46b36
+verifierCompleteLogSha256=1d9ccb167d18b5a123f05559393be39126020dcc31e875d45664e53f57aca680
+buildJdkVendor=Arch Linux
+buildJdkVersion=21.0.11
+buildJdkRuntimeReleaseSha256=b997cb5552a98b57a89b09c166e2d08b9ce5254fccbd80c562d9532105756af4
+buildJdkRuntimeJavaSha256=61ce96f8b36d39fc0a47672aa8b0b4e8f29f00c1dead75a83268ed0ca1ffe207
+buildJdkRuntimeModulesSha256=51ee349932a4618695742826192b02ef2037910b59e8484c163ec5e46e67891b
+candidateRuntimeReleaseSha256=3123a9179115c408914ebfbd95e267119f8deaaadcb3947910f1e757ba0e81c2
+candidateRuntimeModulesSha256=dcb68ca385db598939e798728780de4c16a0e85bd39c60f5f284f155f3ee68f2
+archiveIdentityProbeSha256=3b9a500b52cc08244943dbe090c51207d425947a07a3e0a4e7f07da59b080c25
+processMonitorProbeSha256=307a2591edc91b977950f233fd1bbf98c83404c2cc1e13cbbd5689ea0af768ad
+launcherMode=0755
+launcherSha256=21dcd303596607fd8287d30f0a674a925917856215f10dbb32c8e6e725262219
+embeddedJavaSha256=bd12685bb6403175bb8803ef143738bf74d06565223be944de1dad20ef5e5625
+candidateReadOnly=true
+jvmJarSha256=bea2446b1f408fb7d87a6fc032bcfb92d65fc22030000e07654402f725d40d28
+gateMappingProofSha256=58c301ac08a2a4d9db6262bef453fd51e495c09572dc1df2056aaaca90a4cea2
+copyIdentity=3a1c3c784a0c4f4a33bca1094f1ef07751fe8a8d860f57737ec233d7fcfad678
+S0=31f5227c2c285e7c4595979671b29d524e328aaa919c393e339197d6b3aab0c2
+C1=d7572fafba1f073efd13aea769ffe7395729cea848b83f5bf749b7a93eb82cef
+S1=d7572fafba1f073efd13aea769ffe7395729cea848b83f5bf749b7a93eb82cef
+productS0=a006465bd9bacb66d487d95f83449d82559d6496cbe2d738f3b0802f6135803a
+productS1=4b250eadf2c946615fe4b6ee04c23f14360e974367411d0106aba8f53b4d89de
+transactionId=transaction-4e8fb1d7-fef3-4fd8-8eb1-8cb7e0cacd30
+normalizedForwardEditSha256=31b83762d159f75b4e4bd494d098e8cc23ece82d723ef5fbdc6bf0e9e03eb217
+gateIdentityVerified=true
+cleanupVerified=true
+failure=none
+
+===== daemon-session stdout =====
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-project-open-01","result":{"root":"<disposable-workspace>","fileCount":7,"moduleCount":20,"snapshotHash":"a006465bd9bacb66d487d95f83449d82559d6496cbe2d738f3b0802f6135803a","indexGeneration":2,"indexedSourceCount":7,"indexedSymbolCount":17,"watcherState":"active"},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-refactor-preview-02","result":{"planId":"plan-83a6dd65-f078-464b-86a8-0b3f82b98ebd","operation":"java.renameMavenModule","status":"PREVIEW","summary":"Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).","confidence":1.0,"riskLevel":"MEDIUM","evidence":"JDT_BINDING","affectedFiles":["catalog-domain/pom.xml","catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","catalog-model/pom.xml","catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","catalog-pricing/pom.xml","pom.xml"],"structuredDiff":[{"type":"modifyFile","path":"catalog-model/pom.xml"},{"type":"modifyFile","path":"pom.xml"},{"type":"modifyFile","path":"catalog-pricing/pom.xml"},{"type":"renameFile","path":"catalog-model/pom.xml","newPath":"catalog-domain/pom.xml"},{"type":"renameFile","path":"catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","newPath":"catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java"}],"warnings":["Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.","The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied."],"diagnosticsAfterPreview":[],"snapshot":{"hash":"a006465bd9bacb66d487d95f83449d82559d6496cbe2d738f3b0802f6135803a","validatedOnApply":true},"provider":{"name":"refactorkit-java","version":"0.7.0-SNAPSHOT"}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-refactor-apply-03","result":{"status":"applied","planId":"plan-83a6dd65-f078-464b-86a8-0b3f82b98ebd","transactionId":"transaction-4e8fb1d7-fef3-4fd8-8eb1-8cb7e0cacd30","changedFiles":[{"change":"move","path":"catalog-domain/pom.xml","previousPath":"catalog-model/pom.xml","primary":false},{"change":"move","path":"catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","previousPath":"catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","primary":false},{"change":"modify","path":"catalog-model/pom.xml","previousPath":null,"primary":false},{"change":"modify","path":"catalog-pricing/pom.xml","previousPath":null,"primary":false},{"change":"modify","path":"pom.xml","previousPath":null,"primary":false}],"changedFilePaths":["catalog-domain/pom.xml","catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","catalog-model/pom.xml","catalog-pricing/pom.xml","pom.xml"],"primaryFile":null,"diagnostics":[],"diagnosticsTruncated":false,"snapshotHash":"4b250eadf2c946615fe4b6ee04c23f14360e974367411d0106aba8f53b4d89de","provider":{"name":"RefactorKit","version":"0.7.0-SNAPSHOT"}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-diagnostics-04","result":[],"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-patch-rollback-05","result":{"status":"rolledBack","transactionId":"transaction-4e8fb1d7-fef3-4fd8-8eb1-8cb7e0cacd30","rolledBack":true,"changedFiles":[{"change":"modify","path":"catalog-model/pom.xml","previousPath":null,"primary":false},{"change":"move","path":"catalog-model/pom.xml","previousPath":"catalog-domain/pom.xml","primary":false},{"change":"move","path":"catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","previousPath":"catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","primary":false},{"change":"modify","path":"catalog-pricing/pom.xml","previousPath":null,"primary":false},{"change":"modify","path":"pom.xml","previousPath":null,"primary":false}],"changedFilePaths":["catalog-model/pom.xml","catalog-model/pom.xml","catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","catalog-pricing/pom.xml","pom.xml"],"diagnostics":[],"diagnosticsTruncated":false,"snapshotHash":"a006465bd9bacb66d487d95f83449d82559d6496cbe2d738f3b0802f6135803a","provider":{"name":"RefactorKit","version":"0.7.0-SNAPSHOT"}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-diagnostics-06","result":[],"error":null}
+===== daemon-session stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-01-daemon-session.properties -Drefactorkit.qualification.guard.token=faf002e6598ed325c89220ce9044e4689962ae1a266cb0096184bc2dc6581b02
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=6346854c4c7c99c8a748bb2168477eb1141ae3d852c9d4738a2bcc3d97d24f4a
+RefactorKit daemon ready (JSON-RPC / NDJSON)
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-daemon-stderr.log sha256=ae68afdcb55c894fa81ac58fbc171b5179e85f9a45d9e081947a1e87c2338c74 =====
+===== daemon-session stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-01-daemon-session.properties -Drefactorkit.qualification.guard.token=faf002e6598ed325c89220ce9044e4689962ae1a266cb0096184bc2dc6581b02
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=6346854c4c7c99c8a748bb2168477eb1141ae3d852c9d4738a2bcc3d97d24f4a
+RefactorKit daemon ready (JSON-RPC / NDJSON)
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-daemon-stdout.log sha256=6389880d32e710674c00e4b195b3c93895623c4a189ac2712508a124c5856919 =====
+===== daemon-session stdout =====
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-project-open-01","result":{"root":"<disposable-workspace>","fileCount":7,"moduleCount":20,"snapshotHash":"a006465bd9bacb66d487d95f83449d82559d6496cbe2d738f3b0802f6135803a","indexGeneration":2,"indexedSourceCount":7,"indexedSymbolCount":17,"watcherState":"active"},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-refactor-preview-02","result":{"planId":"plan-83a6dd65-f078-464b-86a8-0b3f82b98ebd","operation":"java.renameMavenModule","status":"PREVIEW","summary":"Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).","confidence":1.0,"riskLevel":"MEDIUM","evidence":"JDT_BINDING","affectedFiles":["catalog-domain/pom.xml","catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","catalog-model/pom.xml","catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","catalog-pricing/pom.xml","pom.xml"],"structuredDiff":[{"type":"modifyFile","path":"catalog-model/pom.xml"},{"type":"modifyFile","path":"pom.xml"},{"type":"modifyFile","path":"catalog-pricing/pom.xml"},{"type":"renameFile","path":"catalog-model/pom.xml","newPath":"catalog-domain/pom.xml"},{"type":"renameFile","path":"catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","newPath":"catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java"}],"warnings":["Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.","The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied."],"diagnosticsAfterPreview":[],"snapshot":{"hash":"a006465bd9bacb66d487d95f83449d82559d6496cbe2d738f3b0802f6135803a","validatedOnApply":true},"provider":{"name":"refactorkit-java","version":"0.7.0-SNAPSHOT"}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-refactor-apply-03","result":{"status":"applied","planId":"plan-83a6dd65-f078-464b-86a8-0b3f82b98ebd","transactionId":"transaction-4e8fb1d7-fef3-4fd8-8eb1-8cb7e0cacd30","changedFiles":[{"change":"move","path":"catalog-domain/pom.xml","previousPath":"catalog-model/pom.xml","primary":false},{"change":"move","path":"catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","previousPath":"catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","primary":false},{"change":"modify","path":"catalog-model/pom.xml","previousPath":null,"primary":false},{"change":"modify","path":"catalog-pricing/pom.xml","previousPath":null,"primary":false},{"change":"modify","path":"pom.xml","previousPath":null,"primary":false}],"changedFilePaths":["catalog-domain/pom.xml","catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","catalog-model/pom.xml","catalog-pricing/pom.xml","pom.xml"],"primaryFile":null,"diagnostics":[],"diagnosticsTruncated":false,"snapshotHash":"4b250eadf2c946615fe4b6ee04c23f14360e974367411d0106aba8f53b4d89de","provider":{"name":"RefactorKit","version":"0.7.0-SNAPSHOT"}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-diagnostics-04","result":[],"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-patch-rollback-05","result":{"status":"rolledBack","transactionId":"transaction-4e8fb1d7-fef3-4fd8-8eb1-8cb7e0cacd30","rolledBack":true,"changedFiles":[{"change":"modify","path":"catalog-model/pom.xml","previousPath":null,"primary":false},{"change":"move","path":"catalog-model/pom.xml","previousPath":"catalog-domain/pom.xml","primary":false},{"change":"move","path":"catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","previousPath":"catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java","primary":false},{"change":"modify","path":"catalog-pricing/pom.xml","previousPath":null,"primary":false},{"change":"modify","path":"pom.xml","previousPath":null,"primary":false}],"changedFilePaths":["catalog-model/pom.xml","catalog-model/pom.xml","catalog-model/src/main/java/com/acme/catalog/legacy/Product.java","catalog-pricing/pom.xml","pom.xml"],"diagnostics":[],"diagnosticsTruncated":false,"snapshotHash":"a006465bd9bacb66d487d95f83449d82559d6496cbe2d738f3b0802f6135803a","provider":{"name":"RefactorKit","version":"0.7.0-SNAPSHOT"}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-daemon-daemon-diagnostics-06","result":[],"error":null}
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-mcp-complete.log sha256=d9a14f07ea1e02dea0c21faab36b815bc6fa61537f39302e91b86f1bec37e3ef =====
+requirement=REQ-JAVA-MAVEN-MODULE-RENAME-PACKAGED-001
+surface=packaged MCP
+status=PASSED
+host=Linux/x86-64
+repositoryCommit=e808036879346cceb527560d2cfe06a6fbd7f3da
+repositoryTree=0ef1ce42849a82347d63e71be659a21b3ac6e3f2
+repositoryWorktreeState=DIRTY
+repositoryStatusSha256=48bb47c8daadfe1d9d4e53f62d981a683ac194c96b988d16aed80b6d30da1787
+qualificationMode=LOCAL_PRELIMINARY
+archiveSha256=17638db488c7b90cf351701b4597493e5428574d2d4e6428610a5f540e05ee85
+checksumSha256=e5f9917c764ea16bcd59aae7fa3a8396f770cb4b957b30ab9024fbd420020572
+verifierRecordSha256=86976c86b1d33e4beee54e6ec53b18331e58771574b8eeebd86593e2d1b46b36
+verifierCompleteLogSha256=1d9ccb167d18b5a123f05559393be39126020dcc31e875d45664e53f57aca680
+buildJdkVendor=Arch Linux
+buildJdkVersion=21.0.11
+buildJdkRuntimeReleaseSha256=b997cb5552a98b57a89b09c166e2d08b9ce5254fccbd80c562d9532105756af4
+buildJdkRuntimeJavaSha256=61ce96f8b36d39fc0a47672aa8b0b4e8f29f00c1dead75a83268ed0ca1ffe207
+buildJdkRuntimeModulesSha256=51ee349932a4618695742826192b02ef2037910b59e8484c163ec5e46e67891b
+candidateRuntimeReleaseSha256=3123a9179115c408914ebfbd95e267119f8deaaadcb3947910f1e757ba0e81c2
+candidateRuntimeModulesSha256=dcb68ca385db598939e798728780de4c16a0e85bd39c60f5f284f155f3ee68f2
+archiveIdentityProbeSha256=3b9a500b52cc08244943dbe090c51207d425947a07a3e0a4e7f07da59b080c25
+processMonitorProbeSha256=307a2591edc91b977950f233fd1bbf98c83404c2cc1e13cbbd5689ea0af768ad
+launcherMode=0755
+launcherSha256=6b9112d4d45d179d7dd81868834d4cbdea8f56f2cd34f78ec1c1b3cf670e99e4
+embeddedJavaSha256=bd12685bb6403175bb8803ef143738bf74d06565223be944de1dad20ef5e5625
+candidateReadOnly=true
+jvmJarSha256=bea2446b1f408fb7d87a6fc032bcfb92d65fc22030000e07654402f725d40d28
+gateMappingProofSha256=58c301ac08a2a4d9db6262bef453fd51e495c09572dc1df2056aaaca90a4cea2
+copyIdentity=b53ea65ad6d506eecc5e2b9065e28d4543841019651b614de346340ad2e5acb2
+S0=31f5227c2c285e7c4595979671b29d524e328aaa919c393e339197d6b3aab0c2
+C1=d7572fafba1f073efd13aea769ffe7395729cea848b83f5bf749b7a93eb82cef
+S1=d7572fafba1f073efd13aea769ffe7395729cea848b83f5bf749b7a93eb82cef
+productS0=d1cedb1797589596bf87311dccad3a7fb00351bb7e0901a1b2da701e1895fd5f
+productS1=1668121a3c3197b4256b252cf119ec4124b11f44284570cf67d564e694766312
+transactionId=transaction-a6ff0db4-d784-4813-b949-47d6c2a9d278
+normalizedForwardEditSha256=31b83762d159f75b4e4bd494d098e8cc23ece82d723ef5fbdc6bf0e9e03eb217
+gateIdentityVerified=true
+cleanupVerified=true
+failure=none
+
+===== mcp-session stdout =====
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-initialize-01","result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listChanged":false},"resources":{"subscribe":false,"listChanged":false},"prompts":{"listChanged":false}},"serverInfo":{"name":"refactorkit","version":"0.7.0-SNAPSHOT"},"refactorkitLanguageKernel":{"schemaVersion":1,"adapters":[{"languageId":"java","extensions":["java"],"backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"capabilities":[{"operation":"changeSignature.addParameter","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.changeParameterType","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.removeParameter","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.renameParameter","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.reorderParameters","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"definition","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"extractMethod","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"formatFile","stability":"stable","evidence":"structural-parse","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"hover","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"moveClass","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"moveSourceRoot","stability":"stable","evidence":"structural-parse","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"organizeImports","stability":"stable","evidence":"structural-parse","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"references","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"renameClass","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"renameMember","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"safeDelete","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]}]},{"languageId":"javascript","extensions":["js","jsx"],"backend":"tree-sitter-jni-0.25.3+typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"capabilities":[{"operation":"completion","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"definition","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"diagnostics","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"typescript-compiler-exact-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":536870912,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["js","jsx"],"diagnosticSnapshotModes":["immutable-editor-overlay","saved-disk"],"diagnosticRangeCapability":"exact-utf16-or-explicit-partial"},{"operation":"hover","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"identifierSearch","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["js"]},{"operation":"localRename","stability":"structural","evidence":"lexical","mutationAuthority":"proposal-only","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["js"]},{"operation":"outline","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["js"]},{"operation":"references","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"renameSymbol","stability":"experimental","evidence":"language-server","mutationAuthority":"proposal-only","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"signatureHelp","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"workspaceSymbols","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]}]},{"languageId":"kotlin","extensions":["kt","kts"],"backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"capabilities":[{"operation":"changeSignature","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"companionObject","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"dataClass","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"definition","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"diagnostics","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-diagnostics-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"],"diagnosticSnapshotModes":["saved-disk"]},{"operation":"documentSymbols","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"expectActual","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"extensionReceiver","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"extract","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"formatFile","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"inline","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"moveSymbol","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"multiplatform","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"organizeImports","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"parse","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"references","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"renameSymbol","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"scriptSemantics","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kts"]},{"operation":"sealedClass","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"suspendFunction","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"valueClass","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"workspaceSymbols","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]}]},{"languageId":"typescript","extensions":["ts","tsx"],"backend":"tree-sitter-jni-0.25.3+typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"capabilities":[{"operation":"completion","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"definition","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"diagnostics","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"typescript-compiler-exact-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":536870912,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["ts","tsx"],"diagnosticSnapshotModes":["immutable-editor-overlay","saved-disk"],"diagnosticRangeCapability":"exact-utf16-or-explicit-partial"},{"operation":"hover","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"identifierSearch","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["ts"]},{"operation":"localRename","stability":"structural","evidence":"lexical","mutationAuthority":"proposal-only","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["ts"]},{"operation":"outline","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["ts"]},{"operation":"references","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"renameSymbol","stability":"experimental","evidence":"language-server","mutationAuthority":"proposal-only","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"signatureHelp","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"workspaceSymbols","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]}]}],"vocabulary":{"stability":["stable","experimental","structural","refused","not-applicable"],"evidence":["compiler","language-server","native-ast","structural-parse","lexical","none"],"mutationAuthority":["managed-stable","proposal-only","none"],"executionMode":["in-process","external-process"],"diagnosticSnapshotMode":["saved-disk","immutable-editor-overlay"],"diagnosticRangeCapability":["exact-utf16-or-explicit-partial"]}}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-list-02","result":{"tools":[{"name":"project_scan","description":"Scan and index a Java project.","inputSchema":{"type":"object","properties":{"root":{"type":"string","description":"absolute path to project root"}},"required":["root"]}},{"name":"project_summary","description":"Return summary of the currently open project.","inputSchema":{"type":"object","properties":{},"required":[]}},{"name":"typescript_semantic_start","description":"Start an explicit bounded TypeScript/JavaScript semantic session.","inputSchema":{"type":"object","properties":{"languageId":{"type":"string","description":"typescript | javascript"},"nodeExecutable":{"type":"string","description":"explicit Node executable path"},"languageServerPackageRoot":{"type":"string","description":"explicit typescript-language-server package root"},"typeScriptPackageRoot":{"type":"string","description":"explicit typescript package root"},"allowWorkspaceLocalToolchain":{"type":"boolean","description":"explicit workspace executable trust (default false)"}},"required":["languageId","nodeExecutable","languageServerPackageRoot","typeScriptPackageRoot"]}},{"name":"typescript_semantic_stop","description":"Stop a TypeScript/JavaScript semantic session.","inputSchema":{"type":"object","properties":{"languageId":{"type":"string","description":"typescript | javascript"}},"required":["languageId"]}},{"name":"kotlin_semantic_start","description":"Configure an explicit bounded Kotlin/JVM compiler diagnostics session.","inputSchema":{"type":"object","properties":{"jdkHome":{"type":"string","description":"explicit qualified JDK 21 home"},"compilerJar":{"type":"string","description":"kotlin-compiler-embeddable 2.0.21 JAR"},"compilerClasspath":{"type":"array","description":"explicit compiler runtime JAR paths"},"allowWorkspaceLocalToolchain":{"type":"boolean","description":"explicit workspace-local trust (default false)"}},"required":["jdkHome","compilerJar","compilerClasspath"]}},{"name":"kotlin_semantic_stop","description":"Stop the configured Kotlin compiler diagnostics session.","inputSchema":{"type":"object","properties":{},"required":[]}},{"name":"kotlin_diagnostics","description":"Return compiler-backed Kotlin diagnostics and process attestation.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"}},"required":["semanticLease","expectedSnapshotHash"]}},{"name":"kotlin_symbols","description":"Return compiler-proven Kotlin/JVM type and function symbols with exact UTF-16 declaration ranges.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"query":{"type":"string","description":"optional case-insensitive declaration-name filter"},"file":{"type":"string","description":"optional normalized workspace-relative Kotlin source"}},"required":["semanticLease","expectedSnapshotHash"]}},{"name":"kotlin_definition","description":"Resolve an opaque Kotlin symbol ID against the attested saved snapshot.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"symbol":{"type":"string","description":"opaque ID returned by kotlin_symbols"}},"required":["semanticLease","expectedSnapshotHash","symbol"]}},{"name":"kotlin_usage_definition","description":"Resolve a compiler-proven Kotlin function or type usage to its declaration.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"file":{"type":"string","description":"normalized workspace-relative Kotlin source"},"line":{"type":"integer","description":"zero-based line"},"character":{"type":"integer","description":"zero-based UTF-16 character"}},"required":["semanticLease","expectedSnapshotHash","file","line","character"]}},{"name":"kotlin_references","description":"Return bounded partial references for a compiler-proven Kotlin function or type usage.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"file":{"type":"string","description":"normalized workspace-relative Kotlin source"},"line":{"type":"integer","description":"zero-based line"},"character":{"type":"integer","description":"zero-based UTF-16 character"},"includeDeclaration":{"type":"boolean","description":"include the declaration (default true)"},"limit":{"type":"integer","description":"maximum returned locations"}},"required":["semanticLease","expectedSnapshotHash","file","line","character"]}},{"name":"symbol_search","description":"Search for symbols in the project by name.","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"name or partial FQN to search"},"languageId":{"type":"string","description":"java | typescript | javascript (default java)"}},"required":["query"]}},{"name":"symbol_definition","description":"Return the definition location of a symbol.","inputSchema":{"type":"object","properties":{"symbol":{"type":"string","description":"fully-qualified or opaque symbol ID"},"languageId":{"type":"string","description":"java | typescript | javascript (default java)"}},"required":["symbol"]}},{"name":"symbol_references","description":"Find all references to a symbol.","inputSchema":{"type":"object","properties":{"symbol":{"type":"string","description":"fully-qualified symbol name"}},"required":["symbol"]}},{"name":"diagnostics","description":"Return legacy human-readable diagnostics for the project.","inputSchema":{"type":"object","properties":{},"required":[]}},{"name":"diagnostics_v2","description":"Return IDE-grade exact compiler diagnostics with snapshot, lease, authority, ranges, and attestation.","inputSchema":{"type":"object","properties":{"requestId":{"type":"string","description":"caller correlation ID"},"languageId":{"type":"string","description":"typescript | javascript"},"expectedSnapshotHash":{"type":"string","description":"opened project SHA-256"},"semanticLease":{"type":"string","description":"lease returned by typescript_semantic_start"},"sourceAuthority":{"type":"object","description":"saved-disk or immutable-editor-overlay authority"}},"required":["requestId","languageId","expectedSnapshotHash","semanticLease","sourceAuthority"]}},{"name":"available_refactorings","description":"List refactoring operations available for a selection.","inputSchema":{"type":"object","properties":{"symbol":{"type":"string","description":"fully-qualified symbol name"}},"required":["symbol"]}},{"name":"preview_refactoring","description":"Preview a refactoring operation without applying it.","inputSchema":{"type":"object","properties":{"operation":{"type":"string","description":"renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete"},"symbol":{"type":"string","description":"fully-qualified symbol name"},"languageId":{"type":"string","description":"java | kotlin | typescript | javascript (default java)"},"expectedSnapshotHash":{"type":"string","description":"required for Kotlin rename"},"semanticLease":{"type":"string","description":"required for Kotlin rename"},"arguments":{"type":"object","description":"operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)"}},"required":["operation"]}},{"name":"apply_refactoring","description":"Apply a managed plan or refuse a known review-only operation.","inputSchema":{"type":"object","properties":{"operationId":{"type":"string","description":"non-capability ID returned by lexical review"},"planId":{"type":"string","description":"managed plan ID returned by preview_refactoring"},"semanticLease":{"type":"string","description":"required for Kotlin rename apply"}},"required":[],"oneOf":[{"required":["operationId"]},{"required":["planId"]}]}},{"name":"rollback_refactoring","description":"Roll back a previously applied transaction; normal mode refuses post-apply changes.","inputSchema":{"type":"object","properties":{"transactionId":{"type":"string","description":"transaction ID returned by apply_refactoring"},"force":{"type":"boolean","description":"explicitly overwrite post-apply changes (default false)"}},"required":["transactionId"]}},{"name":"import_external_java_class","description":"Import an external Java class into the project with license/conflict checks.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"Java source code to import (may contain markdown fences)"},"targetPackage":{"type":"string","description":"fully-qualified target package (e.g. com.example.util)"},"sourceUrl":{"type":"string","description":"optional URL where the code was obtained"},"licensePolicy":{"type":"string","description":"warn | block-unknown | allow (default: warn)"}},"required":["code","targetPackage"]}},{"name":"generate_context_bundle","description":"Generate a structured context bundle for AI assistance.","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"optional symbol search query to focus the bundle"},"maxSymbols":{"type":"number","description":"maximum symbols to include (default 50)"},"includeSnippets":{"type":"boolean","description":"include declaration snippets (default true)"}},"required":[]}}]},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-03","result":{"content":[{"type":"text","text":"Scanned <disposable-workspace>\nFiles: 7\nModules: 20\nSnapshot: d1cedb1797589596bf87311dccad3a7fb00351bb7e0901a1b2da701e1895fd5f"}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-04","result":{"content":[{"type":"text","text":"Plan ID  : plan-05a29d4b-bc02-4bcf-a1e1-7a96b9fe0ec6\nOperation: java.renameMavenModule\nStatus   : PREVIEW\nSummary  : Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).\nRisk     : MEDIUM\nEvidence : JDT_BINDING\nConfidence: 1.0\nAffected : 6 file(s)\n  catalog-model/pom.xml\n  pom.xml\n  catalog-pricing/pom.xml\n  catalog-domain/pom.xml\n  catalog-model/src/main/java/com/acme/catalog/legacy/Product.java\n  catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java\nWarnings:\n  - Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.\n  - The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.\n\nTo apply: use tool apply_refactoring with planId=plan-05a29d4b-bc02-4bcf-a1e1-7a96b9fe0ec6"}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-05","result":{"content":[{"type":"text","text":"Applied successfully.\nTransaction ID: transaction-a6ff0db4-d784-4813-b949-47d6c2a9d278\nTo rollback: use tool rollback_refactoring with transactionId=transaction-a6ff0db4-d784-4813-b949-47d6c2a9d278"}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-06","result":{"content":[{"type":"text","text":"No diagnostics."}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-07","result":{"content":[{"type":"text","text":"Rolled back transaction transaction-a6ff0db4-d784-4813-b949-47d6c2a9d278."}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-08","result":{"content":[{"type":"text","text":"No diagnostics."}],"isError":false},"error":null}
+===== mcp-session stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-01-mcp-session.properties -Drefactorkit.qualification.guard.token=ff878b6cb81f8f9c3f33483de82b992af47403cf4c19e935b007332984a92f86
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=53ac33cf75ff71d1093a278b8b2931e34661f3cc15896de5daa9ceaacfb5820b
+RefactorKit MCP server ready (protocol 2024-11-05)
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-mcp-stderr.log sha256=a64411f11946a49e1a0cdaad47834db8f40cf7fd83653922ed0802a8686a70d3 =====
+===== mcp-session stderr =====
+Picked up JAVA_TOOL_OPTIONS: -javaagent:<subject-sandbox>/qualification-child-security-guard-agent.jar -Djava.security.manager=allow -Duser.home=<isolated-home> -Djava.io.tmpdir=<isolated-temp> -Djava.net.useSystemProxies=false -Duser.language=en -Duser.country=US -Drefactorkit.qualification.guard.required=true -Drefactorkit.qualification.guard.policyVersion=packaged-story-bdd-jdk21-v1 -Drefactorkit.qualification.guard.home=<isolated-home> -Drefactorkit.qualification.guard.temporary=<isolated-temp> -Drefactorkit.qualification.guard.installedRuntime=<installed-test-runtime> -Drefactorkit.qualification.guard.workspace=<disposable-workspace> -Drefactorkit.qualification.guard.readOnlyCandidate=<candidate-root> -Drefactorkit.qualification.guard.attestation=<isolated-temp>/child-guard-01-mcp-session.properties -Drefactorkit.qualification.guard.token=ff878b6cb81f8f9c3f33483de82b992af47403cf4c19e935b007332984a92f86
+WARNING: A terminally deprecated method in java.lang.System has been called
+WARNING: System::setSecurityManager has been called by org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard (file:<subject-sandbox>/qualification-child-security-guard-agent.jar)
+WARNING: Please consider reporting this to the maintainers of org.refactorkit.cli.packagedmavenmodulerename.QualificationChildSecurityGuard
+WARNING: System::setSecurityManager will be removed in a future release
+REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED policyVersion=packaged-story-bdd-jdk21-v1 tokenSha256=53ac33cf75ff71d1093a278b8b2931e34661f3cc15896de5daa9ceaacfb5820b
+RefactorKit MCP server ready (protocol 2024-11-05)
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/packaged-mcp-stdout.log sha256=508d23d6d0888221558d1bfc1975a4531281a6b8cea90853d85c462dcfcad8d0 =====
+===== mcp-session stdout =====
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-initialize-01","result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listChanged":false},"resources":{"subscribe":false,"listChanged":false},"prompts":{"listChanged":false}},"serverInfo":{"name":"refactorkit","version":"0.7.0-SNAPSHOT"},"refactorkitLanguageKernel":{"schemaVersion":1,"adapters":[{"languageId":"java","extensions":["java"],"backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"capabilities":[{"operation":"changeSignature.addParameter","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.changeParameterType","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.removeParameter","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.renameParameter","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"changeSignature.reorderParameters","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"definition","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"extractMethod","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"formatFile","stability":"stable","evidence":"structural-parse","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"hover","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"moveClass","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"moveSourceRoot","stability":"stable","evidence":"structural-parse","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"organizeImports","stability":"stable","evidence":"structural-parse","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"references","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"renameClass","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"renameMember","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]},{"operation":"safeDelete","stability":"stable","evidence":"compiler","mutationAuthority":"managed-stable","backend":"eclipse-jdt-3.44","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["java"]}]},{"languageId":"javascript","extensions":["js","jsx"],"backend":"tree-sitter-jni-0.25.3+typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"capabilities":[{"operation":"completion","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"definition","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"diagnostics","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"typescript-compiler-exact-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":536870912,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["js","jsx"],"diagnosticSnapshotModes":["immutable-editor-overlay","saved-disk"],"diagnosticRangeCapability":"exact-utf16-or-explicit-partial"},{"operation":"hover","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"identifierSearch","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["js"]},{"operation":"localRename","stability":"structural","evidence":"lexical","mutationAuthority":"proposal-only","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["js"]},{"operation":"outline","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["js"]},{"operation":"references","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"renameSymbol","stability":"experimental","evidence":"language-server","mutationAuthority":"proposal-only","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"signatureHelp","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]},{"operation":"workspaceSymbols","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["js","jsx"]}]},{"languageId":"kotlin","extensions":["kt","kts"],"backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"capabilities":[{"operation":"changeSignature","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"companionObject","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"dataClass","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"definition","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"diagnostics","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-diagnostics-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"],"diagnosticSnapshotModes":["saved-disk"]},{"operation":"documentSymbols","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"expectActual","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"extensionReceiver","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"extract","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"formatFile","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"inline","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"moveSymbol","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"multiplatform","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"organizeImports","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"parse","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"references","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"renameSymbol","stability":"experimental","evidence":"compiler","mutationAuthority":"proposal-only","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]},{"operation":"scriptSemantics","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kts"]},{"operation":"sealedClass","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"suspendFunction","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"valueClass","stability":"refused","evidence":"none","mutationAuthority":"none","backend":"kotlin-analysis-unavailable-v1","runtime":{"executionMode":"in-process","supportsTimeout":false,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":null,"maxInputBytes":null,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["kt"]},{"operation":"workspaceSymbols","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"kotlin-compiler-jvm-declarations-k2-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":134217728,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["kt"]}]},{"languageId":"typescript","extensions":["ts","tsx"],"backend":"tree-sitter-jni-0.25.3+typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"capabilities":[{"operation":"completion","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"definition","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"diagnostics","stability":"experimental","evidence":"compiler","mutationAuthority":"none","backend":"typescript-compiler-exact-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":30000,"maxInputBytes":536870912,"maxOutputBytes":8388608,"maxProcesses":1}},"extensions":["ts","tsx"],"diagnosticSnapshotModes":["immutable-editor-overlay","saved-disk"],"diagnosticRangeCapability":"exact-utf16-or-explicit-partial"},{"operation":"hover","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"identifierSearch","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["ts"]},{"operation":"localRename","stability":"structural","evidence":"lexical","mutationAuthority":"proposal-only","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["ts"]},{"operation":"outline","stability":"stable","evidence":"native-ast","mutationAuthority":"none","backend":"tree-sitter-jni-0.25.3","runtime":{"executionMode":"in-process","supportsTimeout":true,"supportsCancellation":false,"usesWorkspaceOverlay":false,"recordsProcessProvenance":false,"limits":{"requestTimeoutMillis":2000,"maxInputBytes":16777216,"maxOutputBytes":null,"maxProcesses":null}},"extensions":["ts"]},{"operation":"references","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"renameSymbol","stability":"experimental","evidence":"language-server","mutationAuthority":"proposal-only","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"signatureHelp","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]},{"operation":"workspaceSymbols","stability":"experimental","evidence":"language-server","mutationAuthority":"none","backend":"typescript-lsp-explicit-v1","runtime":{"executionMode":"external-process","supportsTimeout":true,"supportsCancellation":true,"usesWorkspaceOverlay":true,"recordsProcessProvenance":true,"limits":{"requestTimeoutMillis":10000,"maxInputBytes":8388608,"maxOutputBytes":67108864,"maxProcesses":8}},"extensions":["ts","tsx"]}]}],"vocabulary":{"stability":["stable","experimental","structural","refused","not-applicable"],"evidence":["compiler","language-server","native-ast","structural-parse","lexical","none"],"mutationAuthority":["managed-stable","proposal-only","none"],"executionMode":["in-process","external-process"],"diagnosticSnapshotMode":["saved-disk","immutable-editor-overlay"],"diagnosticRangeCapability":["exact-utf16-or-explicit-partial"]}}},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-list-02","result":{"tools":[{"name":"project_scan","description":"Scan and index a Java project.","inputSchema":{"type":"object","properties":{"root":{"type":"string","description":"absolute path to project root"}},"required":["root"]}},{"name":"project_summary","description":"Return summary of the currently open project.","inputSchema":{"type":"object","properties":{},"required":[]}},{"name":"typescript_semantic_start","description":"Start an explicit bounded TypeScript/JavaScript semantic session.","inputSchema":{"type":"object","properties":{"languageId":{"type":"string","description":"typescript | javascript"},"nodeExecutable":{"type":"string","description":"explicit Node executable path"},"languageServerPackageRoot":{"type":"string","description":"explicit typescript-language-server package root"},"typeScriptPackageRoot":{"type":"string","description":"explicit typescript package root"},"allowWorkspaceLocalToolchain":{"type":"boolean","description":"explicit workspace executable trust (default false)"}},"required":["languageId","nodeExecutable","languageServerPackageRoot","typeScriptPackageRoot"]}},{"name":"typescript_semantic_stop","description":"Stop a TypeScript/JavaScript semantic session.","inputSchema":{"type":"object","properties":{"languageId":{"type":"string","description":"typescript | javascript"}},"required":["languageId"]}},{"name":"kotlin_semantic_start","description":"Configure an explicit bounded Kotlin/JVM compiler diagnostics session.","inputSchema":{"type":"object","properties":{"jdkHome":{"type":"string","description":"explicit qualified JDK 21 home"},"compilerJar":{"type":"string","description":"kotlin-compiler-embeddable 2.0.21 JAR"},"compilerClasspath":{"type":"array","description":"explicit compiler runtime JAR paths"},"allowWorkspaceLocalToolchain":{"type":"boolean","description":"explicit workspace-local trust (default false)"}},"required":["jdkHome","compilerJar","compilerClasspath"]}},{"name":"kotlin_semantic_stop","description":"Stop the configured Kotlin compiler diagnostics session.","inputSchema":{"type":"object","properties":{},"required":[]}},{"name":"kotlin_diagnostics","description":"Return compiler-backed Kotlin diagnostics and process attestation.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"}},"required":["semanticLease","expectedSnapshotHash"]}},{"name":"kotlin_symbols","description":"Return compiler-proven Kotlin/JVM type and function symbols with exact UTF-16 declaration ranges.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"query":{"type":"string","description":"optional case-insensitive declaration-name filter"},"file":{"type":"string","description":"optional normalized workspace-relative Kotlin source"}},"required":["semanticLease","expectedSnapshotHash"]}},{"name":"kotlin_definition","description":"Resolve an opaque Kotlin symbol ID against the attested saved snapshot.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"symbol":{"type":"string","description":"opaque ID returned by kotlin_symbols"}},"required":["semanticLease","expectedSnapshotHash","symbol"]}},{"name":"kotlin_usage_definition","description":"Resolve a compiler-proven Kotlin function or type usage to its declaration.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"file":{"type":"string","description":"normalized workspace-relative Kotlin source"},"line":{"type":"integer","description":"zero-based line"},"character":{"type":"integer","description":"zero-based UTF-16 character"}},"required":["semanticLease","expectedSnapshotHash","file","line","character"]}},{"name":"kotlin_references","description":"Return bounded partial references for a compiler-proven Kotlin function or type usage.","inputSchema":{"type":"object","properties":{"semanticLease":{"type":"string","description":"lease returned by kotlin_semantic_start"},"expectedSnapshotHash":{"type":"string","description":"configured Kotlin snapshot hash"},"file":{"type":"string","description":"normalized workspace-relative Kotlin source"},"line":{"type":"integer","description":"zero-based line"},"character":{"type":"integer","description":"zero-based UTF-16 character"},"includeDeclaration":{"type":"boolean","description":"include the declaration (default true)"},"limit":{"type":"integer","description":"maximum returned locations"}},"required":["semanticLease","expectedSnapshotHash","file","line","character"]}},{"name":"symbol_search","description":"Search for symbols in the project by name.","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"name or partial FQN to search"},"languageId":{"type":"string","description":"java | typescript | javascript (default java)"}},"required":["query"]}},{"name":"symbol_definition","description":"Return the definition location of a symbol.","inputSchema":{"type":"object","properties":{"symbol":{"type":"string","description":"fully-qualified or opaque symbol ID"},"languageId":{"type":"string","description":"java | typescript | javascript (default java)"}},"required":["symbol"]}},{"name":"symbol_references","description":"Find all references to a symbol.","inputSchema":{"type":"object","properties":{"symbol":{"type":"string","description":"fully-qualified symbol name"}},"required":["symbol"]}},{"name":"diagnostics","description":"Return legacy human-readable diagnostics for the project.","inputSchema":{"type":"object","properties":{},"required":[]}},{"name":"diagnostics_v2","description":"Return IDE-grade exact compiler diagnostics with snapshot, lease, authority, ranges, and attestation.","inputSchema":{"type":"object","properties":{"requestId":{"type":"string","description":"caller correlation ID"},"languageId":{"type":"string","description":"typescript | javascript"},"expectedSnapshotHash":{"type":"string","description":"opened project SHA-256"},"semanticLease":{"type":"string","description":"lease returned by typescript_semantic_start"},"sourceAuthority":{"type":"object","description":"saved-disk or immutable-editor-overlay authority"}},"required":["requestId","languageId","expectedSnapshotHash","semanticLease","sourceAuthority"]}},{"name":"available_refactorings","description":"List refactoring operations available for a selection.","inputSchema":{"type":"object","properties":{"symbol":{"type":"string","description":"fully-qualified symbol name"}},"required":["symbol"]}},{"name":"preview_refactoring","description":"Preview a refactoring operation without applying it.","inputSchema":{"type":"object","properties":{"operation":{"type":"string","description":"renameSymbol | renameClass | renameMember | extractMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete"},"symbol":{"type":"string","description":"fully-qualified symbol name"},"languageId":{"type":"string","description":"java | kotlin | typescript | javascript (default java)"},"expectedSnapshotHash":{"type":"string","description":"required for Kotlin rename"},"semanticLease":{"type":"string","description":"required for Kotlin rename"},"arguments":{"type":"object","description":"operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)"}},"required":["operation"]}},{"name":"apply_refactoring","description":"Apply a managed plan or refuse a known review-only operation.","inputSchema":{"type":"object","properties":{"operationId":{"type":"string","description":"non-capability ID returned by lexical review"},"planId":{"type":"string","description":"managed plan ID returned by preview_refactoring"},"semanticLease":{"type":"string","description":"required for Kotlin rename apply"}},"required":[],"oneOf":[{"required":["operationId"]},{"required":["planId"]}]}},{"name":"rollback_refactoring","description":"Roll back a previously applied transaction; normal mode refuses post-apply changes.","inputSchema":{"type":"object","properties":{"transactionId":{"type":"string","description":"transaction ID returned by apply_refactoring"},"force":{"type":"boolean","description":"explicitly overwrite post-apply changes (default false)"}},"required":["transactionId"]}},{"name":"import_external_java_class","description":"Import an external Java class into the project with license/conflict checks.","inputSchema":{"type":"object","properties":{"code":{"type":"string","description":"Java source code to import (may contain markdown fences)"},"targetPackage":{"type":"string","description":"fully-qualified target package (e.g. com.example.util)"},"sourceUrl":{"type":"string","description":"optional URL where the code was obtained"},"licensePolicy":{"type":"string","description":"warn | block-unknown | allow (default: warn)"}},"required":["code","targetPackage"]}},{"name":"generate_context_bundle","description":"Generate a structured context bundle for AI assistance.","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"optional symbol search query to focus the bundle"},"maxSymbols":{"type":"number","description":"maximum symbols to include (default 50)"},"includeSnippets":{"type":"boolean","description":"include declaration snippets (default true)"}},"required":[]}}]},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-03","result":{"content":[{"type":"text","text":"Scanned <disposable-workspace>\nFiles: 7\nModules: 20\nSnapshot: d1cedb1797589596bf87311dccad3a7fb00351bb7e0901a1b2da701e1895fd5f"}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-04","result":{"content":[{"type":"text","text":"Plan ID  : plan-05a29d4b-bc02-4bcf-a1e1-7a96b9fe0ec6\nOperation: java.renameMavenModule\nStatus   : PREVIEW\nSummary  : Rename direct Maven module directory 'catalog-model' to 'catalog-domain' and explicitly change artifact 'catalog-model' to 'catalog-domain'; update 1 proven direct consumer dependency origin(s) and move 2 regular file(s).\nRisk     : MEDIUM\nEvidence : JDT_BINDING\nConfidence: 1.0\nAffected : 6 file(s)\n  catalog-model/pom.xml\n  pom.xml\n  catalog-pricing/pom.xml\n  catalog-domain/pom.xml\n  catalog-model/src/main/java/com/acme/catalog/legacy/Product.java\n  catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java\nWarnings:\n  - Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.\n  - The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.\n\nTo apply: use tool apply_refactoring with planId=plan-05a29d4b-bc02-4bcf-a1e1-7a96b9fe0ec6"}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-05","result":{"content":[{"type":"text","text":"Applied successfully.\nTransaction ID: transaction-a6ff0db4-d784-4813-b949-47d6c2a9d278\nTo rollback: use tool rollback_refactoring with transactionId=transaction-a6ff0db4-d784-4813-b949-47d6c2a9d278"}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-06","result":{"content":[{"type":"text","text":"No diagnostics."}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-07","result":{"content":[{"type":"text","text":"Rolled back transaction transaction-a6ff0db4-d784-4813-b949-47d6c2a9d278."}],"isError":false},"error":null}
+{"jsonrpc":"2.0","id":"packaged-mcp-mcp-tools-call-08","result":{"content":[{"type":"text","text":"No diagnostics."}],"isError":false},"error":null}
+===== modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/verifier/runtime-archive-verifier-complete.log sha256=1d9ccb167d18b5a123f05559393be39126020dcc31e875d45664e53f57aca680 =====
+schemaVersion=1
+platform=linux-x86_64
+archive=modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip
+archiveSha256=17638db488c7b90cf351701b4597493e5428574d2d4e6428610a5f540e05ee85
+checksum=modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/candidate/refactorkit-runtime.zip.sha256
+checksumSha256=e5f9917c764ea16bcd59aae7fa3a8396f770cb4b957b30ab9024fbd420020572
+exitCode=0
+===== stdout =====
+Extracted MCP launcher verified: initialize, tools/list, EOF shutdown (exit 0)
+Runtime archive verified: refactorkit-runtime.zip (linux-x86_64)
+===== stderr =====
+===== finalizer reconciliation =====
+missingArtifacts=[]
+validationErrors=[]

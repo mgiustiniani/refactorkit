@@ -1,0 +1,14 @@
+COMMAND: python3 scripts/test-verify-runtime-archive.py
+............
+----------------------------------------------------------------------
+Ran 12 tests in 0.151s
+
+OK
+
+VERIFIER_TEST_EXIT_STATUS=0
+
+COMMAND: python3 scripts/verify-runtime-archive.py <archive> <checksum> --platform linux-x86_64
+Extracted MCP launcher verified: initialize, tools/list, EOF shutdown (exit 0)
+Runtime archive verified: refactorkit-runtime.zip (linux-x86_64)
+
+VERIFIER_ARCHIVE_EXIT_STATUS=0

@@ -1,8 +1,23 @@
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.application.tasks.CreateStartScripts
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.attribute.AclEntryType
+import java.nio.file.attribute.AclFileAttributeView
+import java.nio.file.attribute.DosFileAttributeView
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermission
+import java.security.MessageDigest
+import java.util.Locale
+import java.util.zip.ZipFile
 
 plugins {
     kotlin("jvm")
@@ -30,7 +45,6 @@ dependencies {
     implementation(project(":modules:refactorkit-testkit"))
     runtimeOnly(project(":modules:refactorkit-mcp"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    runtimeOnly(project(":modules:refactorkit-lsp"))
     testImplementation(project(":modules:refactorkit-lsp"))
     testImplementation(project(":modules:refactorkit-mcp"))
     testImplementation(kotlin("test"))
@@ -52,6 +66,20 @@ configurations.named(packagedMavenMoveClassAuthorityTestSourceSet.implementation
     extendsFrom(configurations.testImplementation.get())
 }
 configurations.named(packagedMavenMoveClassAuthorityTestSourceSet.runtimeOnlyConfigurationName) {
+    extendsFrom(configurations.testRuntimeOnly.get())
+}
+
+val packagedMavenModuleRenameQualificationTestSourceSet = sourceSets.create(
+    "packagedMavenModuleRenameQualificationTest",
+) {
+    kotlin.srcDir("src/packagedMavenModuleRenameQualificationTest/kotlin")
+    resources.srcDir(rootProject.file("features"))
+}
+
+configurations.named(packagedMavenModuleRenameQualificationTestSourceSet.implementationConfigurationName) {
+    extendsFrom(configurations.testImplementation.get())
+}
+configurations.named(packagedMavenModuleRenameQualificationTestSourceSet.runtimeOnlyConfigurationName) {
     extendsFrom(configurations.testRuntimeOnly.get())
 }
 
@@ -261,7 +289,7 @@ val packagedMavenMoveClassAuthorityCucumberJson = layout.buildDirectory.file(
 
 tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
     group = "verification"
-    description = "Run public-CLI packaged-process Cucumber validation for Maven move-class authority."
+    description = "Run packaged-process Cucumber validation for Maven move-class authority."
     dependsOn("refactorkitRuntimeDist")
     inputs.dir(packageDir)
         .withPropertyName("packagedRuntime")
@@ -277,11 +305,6 @@ tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
     useJUnitPlatform()
     maxParallelForks = 1
     forkEvery = 0
-    filter {
-        includeTestsMatching(
-            "org.refactorkit.cli.packagedmavenmoveauthority.PackagedJavaMavenMoveClassAuthorityCucumberTest",
-        )
-    }
 
     doFirst {
         systemProperty("refactorkit.packaged.root", packagedMavenMoveClassAuthorityPackageRoot.get())
@@ -294,133 +317,6 @@ tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
         html.required.set(true)
         html.outputLocation.set(layout.buildDirectory.dir("reports/tests/packagedMavenMoveClassAuthorityTest"))
     }
-}
-
-val packagedMavenMoveClassAuthorityMatrixSpecs = listOf(
-    Triple("Req001", "req-001", "org.refactorkit.cli.mavenmoveauthority.JavaMavenMoveClassAvailableAuthorityCucumberTest"),
-    Triple("Req002", "req-002", "org.refactorkit.cli.mavenmoveobserverauthority.JavaMavenMoveClassObserverAuthorityCucumberTest"),
-    Triple("Req003", "req-003", "org.refactorkit.cli.acceptance.JavaMavenMoveClassGuidanceAuthorityCucumberTest"),
-    Triple("Req004", "req-004", "org.refactorkit.cli.req004lexicalreview.JavaMavenMoveClassLexicalFallbackReviewCucumberTest"),
-    Triple("Req005006", "req-005-006", "org.refactorkit.cli.acceptance.JavaMavenMoveClassApplyAuthorityCucumberTest"),
-    Triple("Req007", "req-007", "org.refactorkit.cli.acceptance.JavaMavenMoveClassOfflineMissingAuthorityCucumberTest"),
-    Triple("Req008", "req-008", "org.refactorkit.cli.req008authority.JavaMavenMoveClassAuthorityFailureCucumberTest"),
-    Triple("Req009", "req-009", "org.refactorkit.cli.acceptance.JavaMavenMoveClassExplicitTransitiveScopeAuthorityCucumberTest"),
-    Triple("Req010", "req-010", "org.refactorkit.cli.acceptance.JavaMavenMoveClassDescriptorPruningAuthorityCucumberTest"),
-    Triple("Req011", "req-011", "org.refactorkit.cli.acceptance.JavaMavenMoveClassOrdinaryMissingLeafAuthorityCucumberTest"),
-    Triple("Req012", "req-012", "org.refactorkit.cli.acceptance.JavaMavenMoveClassSelectedDescriptorAuthorityCucumberTest"),
-    Triple("Req013", "req-013", "org.refactorkit.cli.req013authority.JavaMavenMoveClassUnderLockAuthorityCucumberTest"),
-)
-
-val packagedMavenMoveClassAuthorityPackagedLibraries = providers.provider {
-    fileTree(packageDir.get().dir("lib").asFile) { include("*.jar") }
-        .files.sortedBy(File::getName)
-}
-val packagedMavenMoveClassAuthorityExternalTestLibraries = providers.provider {
-    val repositoryModules = rootProject.layout.projectDirectory.dir("modules").asFile.toPath()
-        .toAbsolutePath().normalize()
-    configurations.testRuntimeClasspath.get().files.filterNot { file ->
-        file.toPath().toAbsolutePath().normalize().startsWith(repositoryModules)
-    }.sortedBy(File::getAbsolutePath)
-}
-val configurePackagedMavenMoveClassAuthorityWorker: Test.(String) -> Unit = { reportName ->
-    dependsOn("refactorkitRuntimeDist", "testClasses", packagedMavenMoveClassAuthorityTestSourceSet.classesTaskName)
-    inputs.dir(packageDir)
-        .withPropertyName("packagedRuntime")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.dir(packagedMavenMoveClassAuthorityFixture)
-        .withPropertyName("mavenMoveClassAuthorityFixture")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    testClassesDirs = sourceSets.test.get().output.classesDirs +
-        packagedMavenMoveClassAuthorityTestSourceSet.output.classesDirs
-    classpath = files(
-        packagedMavenMoveClassAuthorityPackagedLibraries,
-        sourceSets.test.get().output,
-        packagedMavenMoveClassAuthorityTestSourceSet.output,
-        packagedMavenMoveClassAuthorityExternalTestLibraries,
-    )
-    executable = packageDir.get().file(
-        if (org.gradle.internal.os.OperatingSystem.current().isWindows) "runtime/bin/java.exe" else "runtime/bin/java",
-    ).asFile.absolutePath
-    environment.remove("JAVA_HOME")
-    environment.remove("JAVA_TOOL_OPTIONS")
-    environment.remove("JDK_JAVA_OPTIONS")
-    environment.remove("_JAVA_OPTIONS")
-    systemProperty("refactorkit.packaged.root", packagedMavenMoveClassAuthorityPackageRoot.get())
-    systemProperty("refactorkit.repository.root", packagedMavenMoveClassAuthorityRepositoryRoot.get())
-    useJUnitPlatform()
-    maxParallelForks = 1
-    forkEvery = 0
-    reports {
-        junitXml.required.set(true)
-        junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/$reportName"))
-        html.required.set(true)
-        html.outputLocation.set(layout.buildDirectory.dir("reports/tests/$reportName"))
-    }
-}
-
-/** Each requirement group receives a separate embedded-runtime worker and JSON receipt. */
-val packagedMavenMoveClassAuthorityMatrixTasks = packagedMavenMoveClassAuthorityMatrixSpecs.map {
-        (taskSuffix, reportSlug, runner) ->
-    val taskName = "packagedMavenMoveClassAuthority${taskSuffix}MatrixTest"
-    tasks.register<Test>(taskName) {
-        group = "verification"
-        description = "Run packaged Maven move-class $reportSlug acceptance in an isolated worker."
-        configurePackagedMavenMoveClassAuthorityWorker(taskName)
-        val cucumberJson = layout.buildDirectory.file(
-            "reports/cucumber/packaged-maven-move-class-authority-$reportSlug.json",
-        )
-        outputs.file(cucumberJson).withPropertyName("cucumberJsonReport")
-        systemProperty("cucumber.plugin", "json:${cucumberJson.get().asFile.absolutePath}")
-        filter { includeTestsMatching(runner) }
-    }
-}
-
-val packagedMavenMoveClassAuthorityClasspathAttestationTest = tasks.register<Test>(
-    "packagedMavenMoveClassAuthorityClasspathAttestationTest",
-) {
-    group = "verification"
-    description = "Attest packaged production code sources and embedded Java for the authority matrix."
-    configurePackagedMavenMoveClassAuthorityWorker(name)
-    filter {
-        includeTestsMatching(
-            "org.refactorkit.cli.packagedmavenmoveauthority.PackagedProductionClasspathAttestationTest",
-        )
-    }
-}
-
-val packagedMavenMoveClassAuthorityMatrixManifest = layout.buildDirectory.file(
-    "qualification/packaged-maven-move-class-authority/matrix-manifest.json",
-)
-tasks.register<Exec>("packagedMavenMoveClassAuthorityMatrixTest") {
-    group = "verification"
-    description = "Run and fail-closed reconcile all packaged Maven move-class authority requirement groups."
-    dependsOn(packagedMavenMoveClassAuthorityMatrixTasks)
-    dependsOn(packagedMavenMoveClassAuthorityClasspathAttestationTest)
-    inputs.file(rootProject.file("scripts/finalize-packaged-maven-move-class-authority-matrix.py"))
-    inputs.file(rootProject.file("features/java-maven-move-class-apply-authority.feature"))
-    inputs.file(rootProject.file("docs/requirements/req-java-maven-move-auth-013-baseline.md"))
-    inputs.dir(packageDir.map { it.dir("lib") })
-    inputs.file(packageDir.map { it.file("runtime/release") })
-    packagedMavenMoveClassAuthorityMatrixSpecs.forEach { (taskSuffix, reportSlug, _) ->
-        inputs.file(layout.buildDirectory.file(
-            "reports/cucumber/packaged-maven-move-class-authority-$reportSlug.json",
-        ))
-        inputs.dir(layout.buildDirectory.dir(
-            "test-results/packagedMavenMoveClassAuthority${taskSuffix}MatrixTest",
-        ))
-    }
-    inputs.dir(layout.buildDirectory.dir(
-        "test-results/packagedMavenMoveClassAuthorityClasspathAttestationTest",
-    ))
-    outputs.file(packagedMavenMoveClassAuthorityMatrixManifest)
-    executable = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "python" else "python3"
-    args(
-        rootProject.file("scripts/finalize-packaged-maven-move-class-authority-matrix.py").absolutePath,
-        "--repository-root", rootProject.projectDir.absolutePath,
-        "--package-root", packageDir.get().asFile.absolutePath,
-        "--build-root", layout.buildDirectory.get().asFile.absolutePath,
-        "--output", packagedMavenMoveClassAuthorityMatrixManifest.get().asFile.absolutePath,
-    )
 }
 
 tasks.register<Exec>("smokePackagedCli") {
@@ -482,6 +378,7 @@ tasks.register<Zip>("refactorkitRuntimeZip") {
     eachFile {
         if (path == "refactorkit/bin/refactorkit" ||
             path == "refactorkit/bin/refactorkit-daemon" ||
+            path == "refactorkit/bin/refactorkit-mcp" ||
             path.startsWith("refactorkit/runtime/bin/") ||
             path == "refactorkit/runtime/lib/jexec" ||
             path == "refactorkit/runtime/lib/jspawnhelper"
@@ -495,4 +392,483 @@ tasks.register<Zip>("refactorkitRuntimeZip") {
     doLast {
         println("Self-contained RefactorKit CLI zip: ${archiveFile.get().asFile.absolutePath}")
     }
+}
+
+fun fileSha256(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().buffered().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            if (count > 0) digest.update(buffer, 0, count)
+        }
+    }
+    return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+}
+
+fun validatePackagedMavenModuleRenameCandidateArchive(archive: File) {
+    require(archive.isFile) { "Packaged Maven module-rename candidate archive is missing: $archive" }
+    val exactPaths = mutableSetOf<String>()
+    val caseFoldedPaths = mutableSetOf<String>()
+
+    ZipFile(archive).use { zip ->
+        val entries = zip.entries()
+        var entryCount = 0
+        while (entries.hasMoreElements()) {
+            val entry = entries.nextElement()
+            entryCount += 1
+            val rawName = entry.name
+            require(rawName.isNotEmpty() && !rawName.contains('\\') && !rawName.startsWith('/')) {
+                "Unsafe ZIP entry path: $rawName"
+            }
+            val normalizedName = rawName.removeSuffix("/")
+            val segments = normalizedName.split('/')
+            require(
+                normalizedName.isNotEmpty() &&
+                    segments.first() == "refactorkit" &&
+                    segments.none { segment -> segment.isEmpty() || segment == "." || segment == ".." },
+            ) {
+                "ZIP entry escapes the single refactorkit candidate root: $rawName"
+            }
+            require(exactPaths.add(normalizedName)) { "Duplicate ZIP entry path: $rawName" }
+            require(caseFoldedPaths.add(normalizedName.lowercase(Locale.ROOT))) {
+                "Case-folded ZIP entry collision: $rawName"
+            }
+
+            if (!entry.isDirectory) {
+                zip.getInputStream(entry).use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (input.read(buffer) >= 0) {
+                        // Drain every entry before extraction so malformed or CRC-invalid content fails closed.
+                    }
+                }
+            }
+        }
+        require(entryCount > 0 && exactPaths.contains("refactorkit")) {
+            "Candidate archive must contain one non-empty refactorkit root"
+        }
+    }
+}
+
+val packagedMavenModuleRenameQualificationCandidateArchive =
+    tasks.named<Zip>("refactorkitRuntimeZip").flatMap { task -> task.archiveFile }
+val packagedMavenModuleRenameQualificationEvidenceRoot = layout.buildDirectory.dir(
+    "qualification/packaged-maven-module-rename",
+)
+val packagedMavenModuleRenameQualificationCandidateChecksum =
+    packagedMavenModuleRenameQualificationEvidenceRoot.map { root ->
+        root.file("candidate/refactorkit-runtime.zip.sha256")
+    }
+val packagedMavenModuleRenameQualificationExtractedRoot =
+    packagedMavenModuleRenameQualificationEvidenceRoot.map { root -> root.dir("candidate/extracted") }
+val packagedMavenModuleRenameQualificationCandidateRoot =
+    packagedMavenModuleRenameQualificationExtractedRoot.map { root -> root.dir("refactorkit") }
+val packagedMavenModuleRenameQualificationLogs =
+    packagedMavenModuleRenameQualificationEvidenceRoot.map { root -> root.dir("logs") }
+val packagedMavenModuleRenameQualificationManifests =
+    packagedMavenModuleRenameQualificationEvidenceRoot.map { root -> root.dir("manifests") }
+val packagedMavenModuleRenameQualificationFailureDiagnostics =
+    packagedMavenModuleRenameQualificationEvidenceRoot.map { root -> root.dir("failure-diagnostics") }
+val packagedMavenModuleRenameQualificationVerifierRoot =
+    packagedMavenModuleRenameQualificationEvidenceRoot.map { root -> root.dir("verifier") }
+val packagedMavenModuleRenameQualificationVerifierLog =
+    packagedMavenModuleRenameQualificationVerifierRoot.map { root ->
+        root.file("runtime-archive-verifier-complete.log")
+    }
+val packagedMavenModuleRenameQualificationVerifierStatus =
+    packagedMavenModuleRenameQualificationVerifierRoot.map { root ->
+        root.file("runtime-archive-verifier-status.properties")
+    }
+val packagedMavenModuleRenameQualificationTestOutcome =
+    packagedMavenModuleRenameQualificationEvidenceRoot.map { root ->
+        root.file("run/test-task-outcome.properties")
+    }
+val packagedMavenModuleRenameQualificationHostManifest =
+    packagedMavenModuleRenameQualificationManifests.map { root ->
+        root.file("packaged-maven-module-rename-host-evidence-manifest.json")
+    }
+val packagedMavenModuleRenameQualificationJunitAggregate =
+    packagedMavenModuleRenameQualificationManifests.map { root ->
+        root.file("packaged-maven-module-rename-junit-xml-aggregate.json")
+    }
+val packagedMavenModuleRenameQualificationFailureAggregate =
+    packagedMavenModuleRenameQualificationFailureDiagnostics.map { root ->
+        root.file("aggregate-failure-diagnostics.json")
+    }
+val packagedMavenModuleRenameQualificationFocusedLog =
+    packagedMavenModuleRenameQualificationLogs.map { root ->
+        root.file("packaged-maven-module-rename-qualification-focused.log")
+    }
+val packagedMavenModuleRenameQualificationCucumberJson = layout.buildDirectory.file(
+    "reports/cucumber/packaged-maven-module-rename-qualification.json",
+)
+val packagedMavenModuleRenameQualificationFixture = rootProject.layout.projectDirectory.dir(
+    "testdata/acceptance/java-maven-move-class-authority-20-modules",
+)
+val packagedMavenModuleRenameQualificationFeature = rootProject.layout.projectDirectory.file(
+    "features/java-maven-module-rename-packaged.feature",
+)
+val packagedMavenModuleRenameQualificationBaseline = rootProject.layout.projectDirectory.file(
+    "docs/requirements/req-java-maven-module-rename-packaged-001-baseline.md",
+)
+val packagedMavenModuleRenameQualificationApprovedChange = rootProject.layout.projectDirectory.file(
+    "docs/requirements/req-java-maven-module-rename-packaged-001-approved-change-001.md",
+)
+
+val checksumPackagedMavenModuleRenameQualificationCandidate = tasks.register(
+    "checksumPackagedMavenModuleRenameQualificationCandidate",
+) {
+    group = "verification"
+    description = "Create the SHA-256 sidecar for the packaged Maven module-rename candidate archive."
+    dependsOn("refactorkitRuntimeZip")
+    inputs.file(packagedMavenModuleRenameQualificationCandidateArchive)
+        .withPropertyName("candidateArchive")
+        .withPathSensitivity(PathSensitivity.NONE)
+    outputs.file(packagedMavenModuleRenameQualificationCandidateChecksum)
+        .withPropertyName("candidateArchiveChecksum")
+
+    doLast {
+        val archive = packagedMavenModuleRenameQualificationCandidateArchive.get().asFile
+        val checksum = packagedMavenModuleRenameQualificationCandidateChecksum.get().asFile
+        checksum.parentFile.mkdirs()
+        checksum.writeText("${fileSha256(archive)}  ${archive.name}\n", Charsets.UTF_8)
+    }
+}
+
+fun resetPackagedMavenModuleRenameQualificationExtraction(root: File) {
+    val rootPath = root.toPath()
+    if (Files.notExists(rootPath, LinkOption.NOFOLLOW_LINKS)) return
+    require(!Files.isSymbolicLink(rootPath)) { "Qualification extraction root must not be a symbolic link" }
+    val paths = Files.walk(rootPath).use { stream ->
+        stream.sorted(Comparator.comparingInt<Path> { path -> path.nameCount }).toList()
+    }
+    val currentUser = runCatching {
+        rootPath.fileSystem.userPrincipalLookupService.lookupPrincipalByName(System.getProperty("user.name"))
+    }.getOrNull()
+    paths.forEach { path ->
+        require(!Files.isSymbolicLink(path)) { "Qualification extraction contains a symbolic link: $path" }
+        Files.getFileAttributeView(path, DosFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS)
+            ?.let { view -> if (view.readAttributes().isReadOnly) view.setReadOnly(false) }
+        Files.getFileAttributeView(path, AclFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS)
+            ?.takeIf { currentUser != null }
+            ?.let { view ->
+                val retained = view.acl.filterNot { entry ->
+                    entry.type() == AclEntryType.DENY && entry.principal() == currentUser
+                }
+                if (retained.size != view.acl.size) view.acl = retained
+            }
+        Files.getFileAttributeView(path, PosixFileAttributeView::class.java, LinkOption.NOFOLLOW_LINKS)
+            ?.let { view ->
+                val permissions = view.readAttributes().permissions().toMutableSet()
+                permissions += PosixFilePermission.OWNER_WRITE
+                view.setPermissions(permissions)
+            }
+    }
+    root.deleteRecursively()
+    require(Files.notExists(rootPath, LinkOption.NOFOLLOW_LINKS)) {
+        "Previous read-only qualification extraction could not be reset"
+    }
+}
+
+val preparePackagedMavenModuleRenameQualificationCandidate = tasks.register<Sync>(
+    "preparePackagedMavenModuleRenameQualificationCandidate",
+) {
+    group = "verification"
+    description = "Verify and safely extract the packaged Maven module-rename candidate archive."
+    dependsOn(checksumPackagedMavenModuleRenameQualificationCandidate)
+    inputs.file(packagedMavenModuleRenameQualificationCandidateChecksum)
+        .withPropertyName("candidateArchiveChecksum")
+        .withPathSensitivity(PathSensitivity.NONE)
+    from(packagedMavenModuleRenameQualificationCandidateArchive.map { archive -> zipTree(archive.asFile) })
+    into(packagedMavenModuleRenameQualificationExtractedRoot)
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+    includeEmptyDirs = true
+
+    doFirst {
+        resetPackagedMavenModuleRenameQualificationExtraction(
+            packagedMavenModuleRenameQualificationExtractedRoot.get().asFile,
+        )
+        val archive = packagedMavenModuleRenameQualificationCandidateArchive.get().asFile
+        val checksum = packagedMavenModuleRenameQualificationCandidateChecksum.get().asFile
+        val checksumLine = checksum.readText(Charsets.UTF_8).trimEnd('\r', '\n')
+        val fields = checksumLine.split("  ", limit = 2)
+        require(fields.size == 2 && fields[0].matches(Regex("[0-9a-f]{64}")) && fields[1] == archive.name) {
+            "Invalid candidate archive checksum sidecar: $checksum"
+        }
+        require(fileSha256(archive) == fields[0]) {
+            "Packaged Maven module-rename candidate archive checksum mismatch: $archive"
+        }
+        validatePackagedMavenModuleRenameCandidateArchive(archive)
+    }
+
+    doLast {
+        require(packagedMavenModuleRenameQualificationCandidateRoot.get().asFile.isDirectory) {
+            "Safely extracted candidate root is missing"
+        }
+    }
+}
+
+fun packagedMavenModuleRenameQualificationPlatform(): String {
+    val operatingSystem = org.gradle.internal.os.OperatingSystem.current()
+    val architecture = System.getProperty("os.arch").lowercase(Locale.ROOT)
+    val x8664 = architecture in setOf("amd64", "x86_64", "x64")
+    val arm64 = architecture in setOf("aarch64", "arm64")
+    return when {
+        operatingSystem.isLinux && x8664 -> "linux-x86_64"
+        operatingSystem.isWindows && x8664 -> "windows-x86_64"
+        operatingSystem.isMacOsX && x8664 -> "macos-x86_64"
+        operatingSystem.isMacOsX && arm64 -> "macos-aarch64"
+        else -> error(
+            "Unsupported packaged Maven module-rename qualification host: ${operatingSystem.name}/$architecture",
+        )
+    }
+}
+
+fun packagedMavenModuleRenameNativeQualificationRequested(): Boolean =
+    System.getenv("GITHUB_ACTIONS").equals("true", ignoreCase = true) ||
+        providers.systemProperty("refactorkit.packaged.module.rename.nativeQualification")
+            .orNull.equals("true", ignoreCase = true)
+
+val capturePackagedMavenModuleRenameQualificationVerifierEvidence = tasks.register<Exec>(
+    "capturePackagedMavenModuleRenameQualificationVerifierEvidence",
+) {
+    group = "verification"
+    description = "Run the fixed runtime verifier and retain its complete qualification evidence."
+    dependsOn(preparePackagedMavenModuleRenameQualificationCandidate)
+    inputs.file(packagedMavenModuleRenameQualificationCandidateArchive)
+        .withPropertyName("candidateArchive")
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(packagedMavenModuleRenameQualificationCandidateChecksum)
+        .withPropertyName("candidateArchiveChecksum")
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(rootProject.layout.projectDirectory.file("scripts/verify-runtime-archive.py"))
+        .withPropertyName("runtimeArchiveVerifier")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.property("qualificationPlatform", providers.provider(::packagedMavenModuleRenameQualificationPlatform))
+    outputs.files(
+        packagedMavenModuleRenameQualificationVerifierLog,
+        packagedMavenModuleRenameQualificationVerifierStatus,
+    ).withPropertyName("runtimeArchiveVerifierEvidence")
+    outputs.upToDateWhen { false }
+
+    val capturedStdout = ByteArrayOutputStream()
+    val capturedStderr = ByteArrayOutputStream()
+    isIgnoreExitValue = true
+    workingDir = rootProject.projectDir
+
+    doFirst {
+        delete(packagedMavenModuleRenameQualificationVerifierRoot)
+        packagedMavenModuleRenameQualificationVerifierRoot.get().asFile.mkdirs()
+        capturedStdout.reset()
+        capturedStderr.reset()
+        standardOutput = capturedStdout
+        errorOutput = capturedStderr
+        commandLine(
+            System.getenv("PYTHON")?.takeIf(String::isNotBlank) ?: "python",
+            rootProject.file("scripts/verify-runtime-archive.py").absolutePath,
+            packagedMavenModuleRenameQualificationCandidateArchive.get().asFile.absolutePath,
+            packagedMavenModuleRenameQualificationCandidateChecksum.get().asFile.absolutePath,
+            "--platform",
+            packagedMavenModuleRenameQualificationPlatform(),
+        )
+    }
+
+    doLast {
+        val archive = packagedMavenModuleRenameQualificationCandidateArchive.get().asFile
+        val checksum = packagedMavenModuleRenameQualificationCandidateChecksum.get().asFile
+        val platform = packagedMavenModuleRenameQualificationPlatform()
+        val exitCode = executionResult.get().exitValue
+        fun normalizedCapture(bytes: ByteArray): String = String(bytes, StandardCharsets.UTF_8)
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+        val stdout = normalizedCapture(capturedStdout.toByteArray())
+        val stderr = normalizedCapture(capturedStderr.toByteArray())
+        packagedMavenModuleRenameQualificationVerifierLog.get().asFile.writeText(
+            buildString {
+                appendLine("schemaVersion=1")
+                appendLine("platform=$platform")
+                appendLine("archive=modules/refactorkit-cli/build/distributions/${archive.name}")
+                appendLine("archiveSha256=${fileSha256(archive)}")
+                appendLine("checksum=modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/candidate/${checksum.name}")
+                appendLine("checksumSha256=${fileSha256(checksum)}")
+                appendLine("exitCode=$exitCode")
+                appendLine("===== stdout =====")
+                append(stdout)
+                if (stdout.isNotEmpty() && !stdout.endsWith('\n')) appendLine()
+                appendLine("===== stderr =====")
+                append(stderr)
+                if (stderr.isNotEmpty() && !stderr.endsWith('\n')) appendLine()
+            },
+            Charsets.UTF_8,
+        )
+        packagedMavenModuleRenameQualificationVerifierStatus.get().asFile.writeText(
+            buildString {
+                appendLine("schemaVersion=1")
+                appendLine("platform=$platform")
+                appendLine("exitCode=$exitCode")
+                appendLine("archiveSha256=${fileSha256(archive)}")
+                appendLine("checksumSha256=${fileSha256(checksum)}")
+            },
+            Charsets.UTF_8,
+        )
+    }
+}
+
+val packagedMavenModuleRenameQualificationTest = tasks.register<Test>(
+    "packagedMavenModuleRenameQualificationTest",
+) {
+    group = "verification"
+    description = "Run packaged native Cucumber qualification for the bounded Maven module rename."
+    dependsOn(capturePackagedMavenModuleRenameQualificationVerifierEvidence)
+    inputs.file(packagedMavenModuleRenameQualificationCandidateArchive)
+        .withPropertyName("candidateArchive")
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(packagedMavenModuleRenameQualificationCandidateChecksum)
+        .withPropertyName("candidateArchiveChecksum")
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.dir(packagedMavenModuleRenameQualificationCandidateRoot)
+        .withPropertyName("extractedCandidate")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(packagedMavenModuleRenameQualificationFixture)
+        .withPropertyName("mavenModuleRenameFixture")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(packagedMavenModuleRenameQualificationFeature)
+        .withPropertyName("qualificationFeature")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(packagedMavenModuleRenameQualificationBaseline)
+        .withPropertyName("requirementsBaseline")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(packagedMavenModuleRenameQualificationApprovedChange)
+        .withPropertyName("approvedRequirementsChange")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(packagedMavenModuleRenameQualificationCucumberJson)
+        .withPropertyName("cucumberJsonReport")
+    outputs.dirs(
+        packagedMavenModuleRenameQualificationLogs,
+        packagedMavenModuleRenameQualificationManifests,
+        packagedMavenModuleRenameQualificationFailureDiagnostics,
+    ).withPropertyName("qualificationEvidence")
+    outputs.file(packagedMavenModuleRenameQualificationTestOutcome)
+        .withPropertyName("qualificationTestOutcome")
+    outputs.upToDateWhen { false }
+
+    testClassesDirs = packagedMavenModuleRenameQualificationTestSourceSet.output.classesDirs
+    classpath = packagedMavenModuleRenameQualificationTestSourceSet.runtimeClasspath
+    useJUnitPlatform()
+    maxParallelForks = 1
+    forkEvery = 0
+
+    doFirst {
+        delete(
+            packagedMavenModuleRenameQualificationCucumberJson,
+            packagedMavenModuleRenameQualificationLogs,
+            packagedMavenModuleRenameQualificationManifests,
+            packagedMavenModuleRenameQualificationFailureDiagnostics,
+            packagedMavenModuleRenameQualificationTestOutcome,
+        )
+        listOf(
+            packagedMavenModuleRenameQualificationLogs,
+            packagedMavenModuleRenameQualificationManifests,
+            packagedMavenModuleRenameQualificationFailureDiagnostics,
+        ).forEach { directory -> directory.get().asFile.mkdirs() }
+        val testOutcome = packagedMavenModuleRenameQualificationTestOutcome.get().asFile
+        testOutcome.parentFile.mkdirs()
+        testOutcome.writeText(
+            "schemaVersion=1\nstate=STARTED\ntaskPath=:modules:refactorkit-cli:packagedMavenModuleRenameQualificationTest\n",
+            Charsets.UTF_8,
+        )
+
+        systemProperty(
+            "refactorkit.packaged.module.rename.repository.root",
+            rootProject.layout.projectDirectory.asFile.absolutePath,
+        )
+        systemProperty(
+            "refactorkit.packaged.module.rename.candidate.archive",
+            packagedMavenModuleRenameQualificationCandidateArchive.get().asFile.absolutePath,
+        )
+        systemProperty(
+            "refactorkit.packaged.module.rename.candidate.checksum",
+            packagedMavenModuleRenameQualificationCandidateChecksum.get().asFile.absolutePath,
+        )
+        systemProperty(
+            "refactorkit.packaged.module.rename.candidate.root",
+            packagedMavenModuleRenameQualificationCandidateRoot.get().asFile.absolutePath,
+        )
+        systemProperty(
+            "refactorkit.packaged.module.rename.reports.logs",
+            packagedMavenModuleRenameQualificationLogs.get().asFile.absolutePath,
+        )
+        systemProperty(
+            "refactorkit.packaged.module.rename.reports.manifests",
+            packagedMavenModuleRenameQualificationManifests.get().asFile.absolutePath,
+        )
+        systemProperty(
+            "refactorkit.packaged.module.rename.reports.failureDiagnostics",
+            packagedMavenModuleRenameQualificationFailureDiagnostics.get().asFile.absolutePath,
+        )
+        systemProperty(
+            "refactorkit.packaged.module.rename.nativeQualification",
+            packagedMavenModuleRenameNativeQualificationRequested().toString(),
+        )
+    }
+
+    doLast {
+        packagedMavenModuleRenameQualificationTestOutcome.get().asFile.writeText(
+            "schemaVersion=1\nstate=COMPLETED\ntaskPath=:modules:refactorkit-cli:packagedMavenModuleRenameQualificationTest\n",
+            Charsets.UTF_8,
+        )
+    }
+
+    reports {
+        junitXml.required.set(true)
+        junitXml.outputLocation.set(
+            layout.buildDirectory.dir("test-results/packagedMavenModuleRenameQualificationTest"),
+        )
+        html.required.set(true)
+        html.outputLocation.set(
+            layout.buildDirectory.dir("reports/tests/packagedMavenModuleRenameQualificationTest"),
+        )
+    }
+}
+
+val finalizePackagedMavenModuleRenameQualificationEvidence = tasks.register<Exec>(
+    "finalizePackagedMavenModuleRenameQualificationEvidence",
+) {
+    group = "verification"
+    description = "Close and validate one run-level host evidence manifest after packaged module-rename qualification."
+    mustRunAfter(packagedMavenModuleRenameQualificationTest)
+    inputs.file(
+        rootProject.layout.projectDirectory.file(
+            "scripts/finalize-packaged-maven-module-rename-qualification.py",
+        ),
+    ).withPropertyName("qualificationEvidenceFinalizer")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.files(
+        packagedMavenModuleRenameQualificationHostManifest,
+        packagedMavenModuleRenameQualificationJunitAggregate,
+        packagedMavenModuleRenameQualificationFailureAggregate,
+        packagedMavenModuleRenameQualificationFocusedLog,
+    ).withPropertyName("closedQualificationEvidence")
+    outputs.upToDateWhen { false }
+    workingDir = rootProject.projectDir
+
+    doFirst {
+        val command = mutableListOf(
+            System.getenv("PYTHON")?.takeIf(String::isNotBlank) ?: "python",
+            rootProject.file("scripts/finalize-packaged-maven-module-rename-qualification.py").absolutePath,
+            "--repository-root",
+            rootProject.projectDir.absolutePath,
+            "--build-directory",
+            layout.buildDirectory.get().asFile.absolutePath,
+        )
+        if (packagedMavenModuleRenameNativeQualificationRequested()) {
+            command += "--native-qualification"
+        }
+        commandLine(command)
+    }
+}
+
+packagedMavenModuleRenameQualificationTest.configure {
+    finalizedBy(finalizePackagedMavenModuleRenameQualificationEvidence)
 }

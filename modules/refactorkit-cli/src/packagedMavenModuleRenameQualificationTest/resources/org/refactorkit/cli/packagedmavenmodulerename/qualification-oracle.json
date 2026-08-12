@@ -1,0 +1,150 @@
+{
+  "requirementId": "REQ-JAVA-MAVEN-MODULE-RENAME-PACKAGED-001",
+  "featureSha256": "185bf29396e42bd17e226520c7133ed02a42ef38229e890564c36d2e22558547",
+  "baselineSha256": "07ceef18167976c3e87d9738a9e677371ca91cbd49a421b3f645918def5a374d",
+  "approvedChangeSha256": "738a08b0622e42658c94d874a70b989bb29eb366a9575b9b96c46473154908ce",
+  "version": "0.7.0-SNAPSHOT",
+  "cliPreviewStdoutSha256": "b353a04f51595e749cbb7a0c7a4e5a63c355bd8182f555e6c01acdb8971a1c4c",
+  "cliPreviewStdoutBytes": 7917,
+  "operation": "java.renameMavenModule",
+  "gate": "java-rename-maven-module-staged-reactor-v1",
+  "request": {
+    "oldModuleDir": "catalog-model",
+    "newModuleDir": "catalog-domain",
+    "newArtifactId": "catalog-domain"
+  },
+  "launcherEntries": {
+    "refactorkit": {
+      "posixMode": "0755",
+      "sha256": "fa9cd72b54f269d76053da247665cb931ff39631d1ac38c7b55aaa0c9dcadef3"
+    },
+    "refactorkit-daemon": {
+      "posixMode": "0755",
+      "sha256": "21dcd303596607fd8287d30f0a674a925917856215f10dbb32c8e6e725262219"
+    },
+    "refactorkit-mcp": {
+      "posixMode": "0755",
+      "sha256": "6b9112d4d45d179d7dd81868834d4cbdea8f56f2cd34f78ec1c1b3cf670e99e4"
+    }
+  },
+  "images": [
+    {
+      "prePath": "pom.xml",
+      "postPath": "pom.xml",
+      "preBytes": 2717,
+      "preSha256": "f30c9b9cfd394aa431f390a4fb2ff752e37d92f984b8519476f55157c403ac4c",
+      "postBytes": 2718,
+      "postSha256": "1c0fe9b9ca5383628f346877afff52fd6afe00d1223ef391e736c5a3b5ceb23f"
+    },
+    {
+      "prePath": "catalog-model/pom.xml",
+      "postPath": "catalog-domain/pom.xml",
+      "preBytes": 397,
+      "preSha256": "d954a47ec44e429cbc94a4e0d5e5fc65fc006ab3335a2b5a26e45d2e7f03088e",
+      "postBytes": 398,
+      "postSha256": "e9a34b04e5d408a9f2f6444a30ed118d8dd2d88bf880e67ff297f296092ca17b"
+    },
+    {
+      "prePath": "catalog-pricing/pom.xml",
+      "postPath": "catalog-pricing/pom.xml",
+      "preBytes": 3337,
+      "preSha256": "88c4ffdf826165d119fe278bdc8946d75bbd76b2784c0e476cbf4f2ae06f9ecc",
+      "postBytes": 3338,
+      "postSha256": "10831298857e61c7f054200c046a277a29467f5d0cddc34f17c800c776fe307f"
+    },
+    {
+      "prePath": "catalog-model/src/main/java/com/acme/catalog/legacy/Product.java",
+      "postPath": "catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java",
+      "preBytes": 94,
+      "preSha256": "7bb9043767dbc5b61b34670812eed2c948eb6f0aca065a2cb76e28183573f663",
+      "postBytes": 94,
+      "postSha256": "7bb9043767dbc5b61b34670812eed2c948eb6f0aca065a2cb76e28183573f663"
+    }
+  ],
+  "edits": [
+    {
+      "kind": "Modify",
+      "path": "catalog-model/pom.xml",
+      "range": "9:14-9:27",
+      "newText": "catalog-domain",
+      "newPath": ""
+    },
+    {
+      "kind": "Modify",
+      "path": "pom.xml",
+      "range": "74:12-74:25",
+      "newText": "catalog-domain",
+      "newPath": ""
+    },
+    {
+      "kind": "Modify",
+      "path": "catalog-pricing/pom.xml",
+      "range": "13:18-13:31",
+      "newText": "catalog-domain",
+      "newPath": ""
+    },
+    {
+      "kind": "Rename",
+      "path": "catalog-model/pom.xml",
+      "range": "absent",
+      "newText": "absent",
+      "newPath": "catalog-domain/pom.xml"
+    },
+    {
+      "kind": "Rename",
+      "path": "catalog-model/src/main/java/com/acme/catalog/legacy/Product.java",
+      "range": "absent",
+      "newText": "absent",
+      "newPath": "catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java"
+    }
+  ],
+  "affectedPaths": [
+    "pom.xml",
+    "catalog-model/pom.xml",
+    "catalog-pricing/pom.xml",
+    "catalog-model/src/main/java/com/acme/catalog/legacy/Product.java",
+    "catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java",
+    "catalog-domain/pom.xml"
+  ],
+  "createdDirectories": [
+    "catalog-domain",
+    "catalog-domain/src",
+    "catalog-domain/src/main",
+    "catalog-domain/src/main/java",
+    "catalog-domain/src/main/java/com",
+    "catalog-domain/src/main/java/com/acme",
+    "catalog-domain/src/main/java/com/acme/catalog",
+    "catalog-domain/src/main/java/com/acme/catalog/legacy"
+  ],
+  "modules": [
+    "catalog-common",
+    "catalog-generated-support",
+    "catalog-inventory",
+    "catalog-shipping",
+    "catalog-search",
+    "catalog-recommendations",
+    "catalog-admin",
+    "catalog-batch",
+    "customer-model",
+    "customer-notifications",
+    "order-model",
+    "order-processing",
+    "payment-contract",
+    "reporting-core",
+    "reporting-unrelated",
+    "catalog-model",
+    "catalog-pricing",
+    "catalog-storefront",
+    "catalog-acceptance",
+    "catalog-decoy"
+  ],
+  "sourceInventory": [
+    "catalog-acceptance/src/test/java/com/acme/catalog/acceptance/ProductLifecycleSteps.java",
+    "catalog-decoy/src/main/java/com/acme/decoy/Product.java",
+    "catalog-generated-support/target/generated-sources/catalog-metadata/com/acme/catalog/generated/GeneratedCatalogMarker.java",
+    "catalog-model/src/main/java/com/acme/catalog/legacy/Product.java",
+    "catalog-pricing/src/main/java/com/acme/catalog/pricing/CatalogPrice.java",
+    "catalog-storefront/src/main/java/com/acme/catalog/storefront/ProductTile.java",
+    "reporting-unrelated/src/main/java/com/acme/reporting/ProductReport.java"
+  ]
+}

@@ -5,20 +5,30 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import pathlib
+import queue
 import shutil
 import stat
 import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import zipfile
 
 MAX_ENTRIES = 20_000
 MAX_EXPANDED_BYTES = 1_073_741_824
 MAX_COMPRESSION_RATIO = 1_000
+MAX_MCP_STREAM_BYTES = 1_048_576
+MAX_MCP_LINE_BYTES = 1_048_576
+MCP_RESPONSE_TIMEOUT_SECONDS = 30
+MCP_SHUTDOWN_TIMEOUT_SECONDS = 20
+MCP_DRAIN_TIMEOUT_SECONDS = 5
 FIXED_TIMESTAMP = (1980, 2, 1, 0, 0, 0)
+MCP_PROTOCOL_VERSION = "2024-11-05"
+REQUIRED_MCP_TOOLS = {"project_scan", "preview_refactoring", "apply_refactoring", "rollback_refactoring"}
 REQUIRED_MODULES = {"java.base", "java.compiler", "java.logging", "java.xml", "jdk.unsupported", "jdk.zipfs"}
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 
@@ -79,6 +89,7 @@ def require_layout(entries: dict[str, zipfile.ZipInfo], platform: str) -> None:
         "refactorkit/runtime/release",
         "refactorkit/bin/refactorkit.bat" if windows else "refactorkit/bin/refactorkit",
         "refactorkit/bin/refactorkit-daemon.bat" if windows else "refactorkit/bin/refactorkit-daemon",
+        "refactorkit/bin/refactorkit-mcp.bat" if windows else "refactorkit/bin/refactorkit-mcp",
         "refactorkit/runtime/bin/java.exe" if windows else "refactorkit/runtime/bin/java",
     }
     missing = required - entries.keys()
@@ -90,6 +101,7 @@ def require_layout(entries: dict[str, zipfile.ZipInfo], platform: str) -> None:
         executable = {
             "refactorkit/bin/refactorkit",
             "refactorkit/bin/refactorkit-daemon",
+            "refactorkit/bin/refactorkit-mcp",
             "refactorkit/runtime/bin/java",
         }
         for name in executable:
@@ -149,6 +161,302 @@ def restore_archive_permissions(root: pathlib.Path, entries: dict[str, zipfile.Z
             target.chmod((entry.external_attr >> 16) & 0o777)
 
 
+class _BoundedCapture:
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.content = bytearray()
+        self.total = 0
+        self.truncated = False
+        self.failure: BaseException | None = None
+        self.lock = threading.Lock()
+
+    def append(self, chunk: bytes) -> None:
+        with self.lock:
+            self.total += len(chunk)
+            available = self.limit - len(self.content)
+            if available > 0:
+                self.content.extend(chunk[:available])
+            if len(chunk) > available:
+                self.truncated = True
+
+    def mark_truncated(self) -> None:
+        with self.lock:
+            self.truncated = True
+
+    def record_failure(self, failure: BaseException) -> None:
+        with self.lock:
+            self.failure = failure
+
+    def snapshot(self) -> bytes:
+        with self.lock:
+            return bytes(self.content)
+
+
+_END_OF_MCP_STDOUT = object()
+
+
+def _offer_mcp_frame(frames: queue.Queue, frame: object, capture: _BoundedCapture) -> None:
+    try:
+        frames.put_nowait(frame)
+    except queue.Full:
+        capture.mark_truncated()
+
+
+def _drain_mcp_stdout(
+    stream,
+    capture: _BoundedCapture,
+    frames: queue.Queue,
+    line_limit: int,
+) -> None:
+    try:
+        while True:
+            line = stream.readline(line_limit + 1)
+            if not line:
+                break
+            capture.append(line)
+            complete = line.endswith(b"\n")
+            invalid_size_or_framing = len(line) > line_limit or not complete
+            _offer_mcp_frame(frames, (line, invalid_size_or_framing), capture)
+            if invalid_size_or_framing and not complete:
+                while True:
+                    remainder = stream.readline(line_limit + 1)
+                    if not remainder:
+                        break
+                    capture.append(remainder)
+                    if remainder.endswith(b"\n"):
+                        break
+    except BaseException as failure:
+        capture.record_failure(failure)
+    finally:
+        _offer_mcp_frame(frames, _END_OF_MCP_STDOUT, capture)
+
+
+def _drain_mcp_stderr(stream, capture: _BoundedCapture) -> None:
+    try:
+        while True:
+            chunk = stream.read(8192)
+            if not chunk:
+                break
+            capture.append(chunk)
+    except BaseException as failure:
+        capture.record_failure(failure)
+
+
+def _mcp_diagnostics(capture: _BoundedCapture) -> str:
+    return capture.snapshot().decode("utf-8", errors="replace")
+
+
+def _send_mcp_message(process: subprocess.Popen, message: dict, stderr: _BoundedCapture) -> None:
+    encoded = json.dumps(message, separators=(",", ":"), ensure_ascii=True).encode("utf-8") + b"\n"
+    if len(encoded) > MAX_MCP_LINE_BYTES:
+        raise AssertionError("MCP verifier request exceeds its line bound")
+    try:
+        if process.stdin is None:
+            raise AssertionError("MCP launcher stdin is unavailable")
+        process.stdin.write(encoded)
+        process.stdin.flush()
+    except (BrokenPipeError, OSError) as failure:
+        raise AssertionError(
+            f"MCP launcher closed stdin before the exchange completed: {_mcp_diagnostics(stderr)}"
+        ) from failure
+
+
+def _receive_mcp_response(
+    process: subprocess.Popen,
+    frames: queue.Queue,
+    stderr: _BoundedCapture,
+    expected_id: str,
+    method: str,
+    timeout: float,
+) -> object:
+    try:
+        frame = frames.get(timeout=timeout)
+    except queue.Empty as failure:
+        state = f"exit {process.returncode}" if process.poll() is not None else "still running"
+        raise AssertionError(
+            f"MCP launcher response timeout for {method} ({state}): {_mcp_diagnostics(stderr)}"
+        ) from failure
+    if frame is _END_OF_MCP_STDOUT:
+        raise AssertionError(
+            f"MCP launcher exited before the {method} response: {_mcp_diagnostics(stderr)}"
+        )
+    line, invalid_size_or_framing = frame
+    if invalid_size_or_framing:
+        raise AssertionError(f"MCP launcher emitted an oversized or unterminated response for {method}")
+    try:
+        response = json.loads(line.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as failure:
+        raise AssertionError(f"MCP launcher emitted a malformed response for {method}") from failure
+    if not isinstance(response, dict) or response.get("jsonrpc") != "2.0" or response.get("id") != expected_id:
+        raise AssertionError(f"MCP launcher emitted an invalid JSON-RPC envelope for {method}")
+    if response.get("error") is not None or "result" not in response:
+        raise AssertionError(f"MCP launcher returned an error or omitted result for {method}")
+    return response["result"]
+
+
+def _verify_mcp_initialize(result: object) -> None:
+    if not isinstance(result, dict) or result.get("protocolVersion") != MCP_PROTOCOL_VERSION:
+        raise AssertionError("MCP initialize returned an invalid protocol version")
+    server_info = result.get("serverInfo")
+    if not isinstance(server_info, dict) or server_info.get("name") != "refactorkit":
+        raise AssertionError("MCP initialize returned invalid server information")
+
+
+def _verify_mcp_tools(result: object) -> None:
+    if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+        raise AssertionError("MCP tools/list returned an invalid tool collection")
+    names = {
+        tool.get("name")
+        for tool in result["tools"]
+        if isinstance(tool, dict) and isinstance(tool.get("name"), str)
+    }
+    missing = REQUIRED_MCP_TOOLS - names
+    if missing:
+        raise AssertionError(f"MCP tools/list is missing required tools: {sorted(missing)}")
+
+
+def _join_mcp_drains(
+    threads: tuple[threading.Thread, threading.Thread],
+    stdout: _BoundedCapture,
+    stderr: _BoundedCapture,
+) -> None:
+    for thread in threads:
+        thread.join(MCP_DRAIN_TIMEOUT_SECONDS)
+        if thread.is_alive():
+            raise AssertionError(f"MCP launcher {thread.name} did not drain within the bound")
+    for label, capture in (("stdout", stdout), ("stderr", stderr)):
+        if capture.failure is not None:
+            raise AssertionError(f"MCP launcher {label} drain failed") from capture.failure
+
+
+def _abort_mcp_process(process: subprocess.Popen, threads: tuple[threading.Thread, threading.Thread]) -> None:
+    try:
+        if process.stdin is not None and not process.stdin.closed:
+            process.stdin.close()
+    except OSError:
+        pass
+    if process.poll() is None:
+        process.kill()
+        try:
+            process.wait(timeout=MCP_DRAIN_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+    for thread in threads:
+        thread.join(MCP_DRAIN_TIMEOUT_SECONDS)
+    for stream in (process.stdout, process.stderr):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+
+def verify_mcp_stdio(
+    command: list[str],
+    environment: dict[str, str],
+    *,
+    response_timeout: float = MCP_RESPONSE_TIMEOUT_SECONDS,
+    shutdown_timeout: float = MCP_SHUTDOWN_TIMEOUT_SECONDS,
+    output_limit: int = MAX_MCP_STREAM_BYTES,
+) -> None:
+    if response_timeout <= 0 or shutdown_timeout <= 0 or output_limit <= 0:
+        raise ValueError("MCP verifier bounds must be positive")
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=environment,
+    )
+    stdout = _BoundedCapture(output_limit)
+    stderr = _BoundedCapture(output_limit)
+    frames: queue.Queue = queue.Queue(maxsize=8)
+    line_limit = min(MAX_MCP_LINE_BYTES, output_limit)
+    stdout_thread = threading.Thread(
+        target=_drain_mcp_stdout,
+        args=(process.stdout, stdout, frames, line_limit),
+        name="stdout",
+        daemon=True,
+    )
+    stderr_thread = threading.Thread(
+        target=_drain_mcp_stderr,
+        args=(process.stderr, stderr),
+        name="stderr",
+        daemon=True,
+    )
+    threads = (stdout_thread, stderr_thread)
+    for thread in threads:
+        thread.start()
+
+    completed = False
+    try:
+        initialize_id = "runtime-archive-initialize"
+        _send_mcp_message(process, {
+            "jsonrpc": "2.0",
+            "id": initialize_id,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "refactorkit-runtime-archive-verifier", "version": "1"},
+            },
+        }, stderr)
+        initialize = _receive_mcp_response(
+            process, frames, stderr, initialize_id, "initialize", response_timeout,
+        )
+        _verify_mcp_initialize(initialize)
+
+        _send_mcp_message(process, {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {},
+        }, stderr)
+        tools_id = "runtime-archive-tools-list"
+        _send_mcp_message(process, {
+            "jsonrpc": "2.0",
+            "id": tools_id,
+            "method": "tools/list",
+            "params": {},
+        }, stderr)
+        tools = _receive_mcp_response(
+            process, frames, stderr, tools_id, "tools/list", response_timeout,
+        )
+        _verify_mcp_tools(tools)
+
+        # MCP has no RefactorKit-specific shutdown method; EOF is its public clean shutdown signal.
+        if process.stdin is None:
+            raise AssertionError("MCP launcher stdin is unavailable during shutdown")
+        process.stdin.close()
+        try:
+            returncode = process.wait(timeout=shutdown_timeout)
+        except subprocess.TimeoutExpired as failure:
+            raise AssertionError("MCP launcher did not shut down cleanly after EOF") from failure
+        _join_mcp_drains(threads, stdout, stderr)
+        if stdout.truncated or stderr.truncated:
+            raise AssertionError(
+                f"MCP launcher output exceeded the {output_limit}-byte per-stream bound"
+            )
+        if returncode != 0:
+            raise AssertionError(
+                f"MCP launcher exited nonzero ({returncode}): {_mcp_diagnostics(stderr)}"
+            )
+        while True:
+            try:
+                extra = frames.get_nowait()
+            except queue.Empty:
+                break
+            if extra is not _END_OF_MCP_STDOUT:
+                raise AssertionError("MCP launcher emitted unexpected extra stdout")
+        completed = True
+    finally:
+        if not completed:
+            _abort_mcp_process(process, threads)
+        else:
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
+
+
 def execute_extracted(root: pathlib.Path, platform: str) -> None:
     windows = platform.startswith("windows-")
     launcher = root / "refactorkit" / "bin" / ("refactorkit.bat" if windows else "refactorkit")
@@ -160,6 +468,13 @@ def execute_extracted(root: pathlib.Path, platform: str) -> None:
     result = subprocess.run(command, text=True, capture_output=True, timeout=60, env=environment)
     if result.returncode != 0 or "RefactorKit" not in result.stdout or "API" not in result.stdout:
         raise AssertionError(f"extracted launcher failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
+
+    mcp_launcher = root / "refactorkit" / "bin" / ("refactorkit-mcp.bat" if windows else "refactorkit-mcp")
+    mcp_command = [str(mcp_launcher)]
+    if windows:
+        mcp_command = ["cmd", "/d", "/c", *mcp_command]
+    verify_mcp_stdio(mcp_command, environment)
+    print("Extracted MCP launcher verified: initialize, tools/list, EOF shutdown (exit 0)")
 
 
 def main() -> int:
