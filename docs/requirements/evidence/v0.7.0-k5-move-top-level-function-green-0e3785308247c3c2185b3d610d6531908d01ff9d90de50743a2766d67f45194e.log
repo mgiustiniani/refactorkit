@@ -1,0 +1,17 @@
+RefactorKit K5 top-level function move Cucumber GREEN evidence (focused)
+requirementId=REQ-KOTLIN-MOVE-FUNCTION-001
+workflow=bdd-java
+host=Linux/x86-64
+buildJdk=OpenJDK 21.0.11 (Arch Linux)
+command=./gradlew :modules:refactorkit-jvm:test --tests org.refactorkit.jvm.movetoplevelfunction.KotlinJvmMoveTopLevelFunctionCucumberTest
+cucumberScenarios=29
+cucumberSteps=109
+passed=109
+failed=0
+skipped=0
+status=GREEN
+CucumberJson=v0.7.0-k5-move-top-level-function-green-0e3785308247c3c2185b3d610d6531908d01ff9d90de50743a2766d67f45194e.json
+feature=features/kotlin-jvm-move-top-level-function.feature
+coverage=AC-FUNCTION-001..006
+refusalCodes=actual production codes (kotlin.moveFunctionShapeUnsupported, kotlin.moveDeclarationUnsupported, kotlin.moveFunctionConsumerShapeUnsupported, kotlin.moveFunctionCallableReferenceUnsupported, kotlin.moveFunctionJavaConsumerUnsupported, kotlin.moveDestinationOverloadUnsupported, kotlin.moveSourceOwnershipUnavailable, kotlin.symbolCompilationFailed, kotlin.moveGeneratedReference, kotlin.scriptSemanticsUnsupported, kotlin.symbolDelegatedPropertyUnsupported, kotlin.moveFileShapeUnsupported)
+promotion=@partial pending four-platform RED/GREEN + independent review (no CI per user directive)
