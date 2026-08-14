@@ -1,0 +1,41 @@
+RefactorKit K5 top-level function move GREEN evidence (post-fix verification)
+requirementId=REQ-KOTLIN-MOVE-FUNCTION-001
+workflow=bdd-java
+status=GREEN
+reviewerFindingsClosed=RQ-KMF-RED-002,RQ-KMF-CUC-001,RQ-KMF-CUC-002,RQ-KMF-CUC-003
+
+Commands (after the minimal production fix):
+  JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon :modules:refactorkit-jvm:test \
+    --tests "org.refactorkit.jvm.movetoplevelfunction.KotlinJvmMoveTestsOnlyRedTest"
+  -> BUILD SUCCESSFUL (1 test passed)
+
+  JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon :modules:refactorkit-jvm:test \
+    --tests "org.refactorkit.jvm.movetoplevelfunction.KotlinJvmMoveTopLevelFunctionCucumberTest"
+  -> BUILD SUCCESSFUL, 29 scenarios / 109 steps, all passed (0 failed)
+
+Production change (minimal, non-weakening, justified by the executable RED fixture):
+  modules/refactorkit-jvm/src/main/kotlin/org/refactorkit/jvm/KotlinJvmMoveDeclarationPlanner.kt
+  packageEdit kotlin terminator now allows a trailing line comment after the package token
+  ("(?:[ \\t]*;|[ \\t]*//.*$|[ \\t]*$)") so a compiler-proven source file whose package
+  declaration carries a trailing comment moves as a SEMANTIC_PREVIEW, preserving the comment
+  byte for byte (only the package token is replaced). Java terminator unchanged.
+
+Cucumber glue changes (RQ-KMF-CUC-001/002/003, GREEN):
+  modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/movetoplevelfunction/KotlinJvmMoveTopLevelFunctionSteps.kt
+  - AC-FUNCTION-001 fixture now uses implicit PUBLIC ("fun computeInvoiceTotal()") with a real
+    compiler-proven private top-level helper ("private fun taxRate(): Double = 0.21"); the glue
+    asserts no explicit "public" modifier and helper presence (CUC-001, CUC-002).
+  - AC-FUNCTION-006 fixture also carries the private helper so the shared "line endings and
+    every private helper byte remain exact" step is genuinely exercised for apply/rollback.
+  - AC-FUNCTION-004 unresolved/recovered/truncated consumers now write distinct semantic
+    states: unresolved (no import), recovered (import resolves but call recovered/errored by a
+    return-type mismatch), truncated (call expression cut off); each refuses with the actual
+    code kotlin.symbolCompilationFailed (CUC-003).
+
+Scenario/step counts (Cucumber, actual):
+  scenarios=29 steps=109 passed=109 failed=0
+
+Declared status stays @partial (anti-fake): promotion to @implemented-and-validated remains
+blocked pending the independent requirements-quality-reviewer PASS and any baseline/CI gates.
+The executable tests-only RED is now recorded in
+docs/requirements/evidence/v0.7.0-k5-move-top-level-function-tests-only-red-08dd3c3.log.

@@ -434,7 +434,10 @@ class KotlinJvmMoveDeclarationPlanner(
     }
 
     private fun packageEdit(source: SourceFile, oldPackage: String, targetPackage: String): TextEdit? {
-        val terminator = if (source.languageId == "kotlin") "(?:[ \\t]*;|[ \\t]*$)" else "[ \\t]*;[ \\t]*$"
+        // Kotlin package declarations may carry a trailing line comment (e.g. "// note") that
+        // must be preserved byte for byte; only the package token is replaced. The Java form
+        // keeps the existing semicolon-terminated exact match.
+        val terminator = if (source.languageId == "kotlin") "(?:[ \\t]*;|[ \\t]*//.*$|[ \\t]*$)" else "[ \\t]*;[ \\t]*$"
         val match = Regex(
             "(?m)^[ \\t]*package[ \\t]+(${Regex.escape(oldPackage)})$terminator",
         ).findAll(source.content).toList().singleOrNull() ?: return null

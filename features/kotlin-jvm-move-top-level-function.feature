@@ -38,6 +38,13 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     And no source text other than the package and import tokens is rewritten or formatted
     And line endings and every private helper byte remain exact
 
+  # AC-FUNCTION-001 refinement: a trailing package comment is preserved byte for byte
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  Scenario: A compiler-proven public top-level function package declaration with a trailing comment preserves every other byte
+    Given the selected declaration is a compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose package declaration carries a trailing comment
+    When moveDeclaration previews the selection
+    Then the result is a SEMANTIC_PREVIEW that edits only the package token and preserves the trailing comment and every other byte exactly
+
   # AC-FUNCTION-002
   @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
   Scenario Outline: An unsupported top-level function shape refuses with a stable typed code

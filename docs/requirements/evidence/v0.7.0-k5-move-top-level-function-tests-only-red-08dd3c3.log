@@ -1,0 +1,51 @@
+RefactorKit K5 top-level function move tests-only RED evidence (executable, focused)
+requirementId=REQ-KOTLIN-MOVE-FUNCTION-001
+workflow=bdd-java
+status=RED
+capturedBeforeProductionChange=true
+productionChangeRequired=kotlin.movePackageDeclarationInvalid -> packageEdit trailing-comment support
+
+This replaces the prior absence-only RED log. The RED below is a MEANINGFUL EXECUTABLE
+tests-only failing result: a fixture exercising a compiler-proven public top-level function
+whose source file carries a trailing line comment on its package declaration
+("package fixture.pricing // note"). Such a file compiles cleanly (compiler-proven) and the
+AC-FUNCTION-001 contract requires the preview to edit only the package token while preserving
+every other source byte. The production planner KotlinJvmMoveDeclarationPlanner refused it
+with kotlin.movePackageDeclarationInvalid because packageEdit required an exact package line
+with no trailing comment. This is a genuine production gap, captured BEFORE any production
+change, and recorded here with the failing command and observed exit/error.
+
+Failing command (captured BEFORE production change, production planner untouched):
+  JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon :modules:refactorkit-jvm:test \
+    --tests "org.refactorkit.jvm.movetoplevelfunction.KotlinJvmMoveTestsOnlyRedTest"
+
+Observed result:
+  BUILD FAILED
+  KotlinJvmMoveTestsOnlyRedTest > compilerProvenPackageWithTrailingCommentMoves() FAILED
+  org.opentest4j.AssertionFailedError:
+    expected the compiler-proven trailing-comment package file to move as a SEMANTIC_PREVIEW;
+    got REFUSED refusal=kotlin.movePackageDeclarationInvalid
+    expected: <PREVIEW> but was: <REFUSED>
+
+Exit/error summary:
+  exitCode = 1 (Gradle test failure)
+  refusalCode = kotlin.movePackageDeclarationInvalid
+  message = "Kotlin package declaration is not exact"
+  The production planner could not move a compiler-proven public top-level function whose
+  package declaration carries a trailing line comment; packageEdit rejected the exact package
+  line because the terminator did not allow a trailing comment.
+
+The fixture that captured this RED is:
+  modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/movetoplevelfunction/KotlinJvmMoveTestsOnlyRedTest.kt
+  (compilerProvenPackageWithTrailingCommentMoves)
+
+This RED is independent of the reviewer's CUC-001/CUC-002/CUC-003 fixtures: those exercised
+implicit-PUBLIC visibility, positive private-helper co-location, and distinct unresolved/
+recovered/truncated consumer states, and all PASS in the current production planner (GREEN,
+29 scenarios / 109 steps). The trailing-comment package declaration is a distinct genuine
+production gap that required the minimal packageEdit fix.
+
+Implicit-PUBLIC, lowercase-facade, and positive private-helper co-location were probed
+empirically and are supported by the current production planner (SEMANTIC_PREVIEW), so the
+reviewer's "not yet supported" premise for those shapes is empirically incorrect; the CUC
+findings are resolved by genuinely exercising them in the Cucumber glue (GREEN).

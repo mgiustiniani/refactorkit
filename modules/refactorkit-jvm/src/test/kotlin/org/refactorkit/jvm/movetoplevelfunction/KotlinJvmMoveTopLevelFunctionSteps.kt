@@ -84,17 +84,32 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         val invoice = root.resolve("src/main/kotlin/fixture/pricing/Invoice.kt").apply { parent.createDirectories() }
         val use = root.resolve("src/main/kotlin/fixture/app/Use.kt").apply { parent.createDirectories() }
         writePom(root)
-        invoice.writeText("package fixture.pricing\r\npublic fun computeInvoiceTotal(): String = \"total\"\r\n")
+        // RQ-KMF-CUC-001: the AC-FUNCTION-001 implicit-PUBLIC claim is genuinely exercised.
+        // The selected function carries NO explicit public modifier (implicit PUBLIC) and is
+        // co-located with a real compiler-proven private top-level helper (RQ-KMF-CUC-002).
+        // Explicit PUBLIC remains exercised by the AC-FUNCTION-005 and AC-FUNCTION-006 fixtures.
+        invoice.writeText(
+            "package fixture.pricing\r\nfun computeInvoiceTotal(): String = \"total\"\r\n" +
+                "private fun taxRate(): Double = 0.21\r\n",
+        )
         use.writeText("package fixture.app\r\nimport fixture.pricing.computeInvoiceTotal\r\nfun run(): String = computeInvoiceTotal()\r\n")
         originalInvoice = invoice.readText()
         originalUse = use.readText()
         fixtureRoot = root
         toolchain = toolchain(root)
         snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val invoiceContent = requireNotNull(fixtureRoot).resolve("src/main/kotlin/fixture/pricing/Invoice.kt").readText()
         assertTrue(
-            requireNotNull(fixtureRoot).resolve("src/main/kotlin/fixture/pricing/Invoice.kt").readText()
-                .contains("public fun computeInvoiceTotal"),
-            "expected the selected top-level function to declare explicit PUBLIC visibility",
+            "fun computeInvoiceTotal(): String = \"total\"" in invoiceContent,
+            "expected the selected top-level function to be present",
+        )
+        assertTrue(
+            "public fun" !in invoiceContent,
+            "expected implicit PUBLIC visibility: the selected function must not carry an explicit public modifier",
+        )
+        assertTrue(
+            "private fun taxRate(): Double = 0.21" in invoiceContent,
+            "expected a compiler-proven private top-level helper co-located with the selected function",
         )
     }
 
@@ -116,9 +131,10 @@ class KotlinJvmMoveTopLevelFunctionSteps {
     fun sourceContainsOnlyFunctionAndPrivateHelpers() {
         val content = requireNotNull(fixtureRoot).resolve("src/main/kotlin/fixture/pricing/Invoice.kt").readText()
         assertEquals(
-            "package fixture.pricing\r\npublic fun computeInvoiceTotal(): String = \"total\"\r\n",
+            "package fixture.pricing\r\nfun computeInvoiceTotal(): String = \"total\"\r\n" +
+                "private fun taxRate(): Double = 0.21\r\n",
             content,
-            "expected the source file to contain exactly the selected public function and no other top-level declaration",
+            "expected the source file to contain exactly the selected implicit-public function and the compiler-proven private top-level helper",
         )
     }
 
@@ -147,6 +163,31 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         )
     }
 
+    @Given("^the selected declaration is a compiler-proven public top-level Kotlin function \"fixture\\.pricing\\.computeInvoiceTotal\" whose package declaration carries a trailing comment$")
+    fun selectedPublicTopLevelFunctionWithTrailingPackageComment() {
+        val root = temporaryDirectory("rk-jvm-move-trailing-comment")
+        val invoice = root.resolve("src/main/kotlin/fixture/pricing/Invoice.kt").apply { parent.createDirectories() }
+        val use = root.resolve("src/main/kotlin/fixture/app/Use.kt").apply { parent.createDirectories() }
+        writePom(root)
+        // compiler-proven source file: the package declaration carries a trailing line comment
+        // (e.g. "// note") that must survive the package-token move byte for byte.
+        invoice.writeText("package fixture.pricing // note\r\npublic fun computeInvoiceTotal(): String = \"total\"\r\n")
+        use.writeText("package fixture.app\r\nimport fixture.pricing.computeInvoiceTotal\r\nfun run(): String = computeInvoiceTotal()\r\n")
+        originalInvoice = invoice.readText()
+        originalUse = use.readText()
+        fixtureRoot = root
+        toolchain = toolchain(root)
+        snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        assertTrue(
+            "// note" in requireNotNull(fixtureRoot).resolve("src/main/kotlin/fixture/pricing/Invoice.kt").readText(),
+            "expected the package declaration to carry a trailing comment",
+        )
+        // The scenario omits the external-consumer-approval and consumer-import preconditions; the
+        // glue accepts the risk so the planner reaches the package-edit path (consistent with the
+        // AC-FUNCTION-002..004 refusal fixtures).
+        acceptExternalConsumerRisk = true
+    }
+
     @When("^moveDeclaration previews the selection$")
     fun moveDeclarationPreviewsSelection() {
         val snap = requireNotNull(snapshot)
@@ -170,7 +211,8 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
         val dest = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/Invoice.kt").normalize() }
         assertTrue("package fixture.accounting" in dest.content, dest.content)
-        assertTrue("public fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
+        assertTrue("fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
+        assertTrue("private fun taxRate(): Double = 0.21" in dest.content, dest.content)
         val consumer = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/app/Use.kt").normalize() }
         assertTrue("import fixture.accounting.computeInvoiceTotal" in consumer.content, consumer.content)
         assertTrue("fun run(): String = computeInvoiceTotal()" in consumer.content, consumer.content)
@@ -179,6 +221,21 @@ class KotlinJvmMoveTopLevelFunctionSteps {
             catalogue.declarations.values.any { it.jvmOwner == "fixture.pricing.InvoiceKt" },
             "expected the K2 file-facade owner fixture.pricing.InvoiceKt: ${catalogue.declarations.values}",
         )
+    }
+
+    @Then("^the result is a SEMANTIC_PREVIEW that edits only the package token and preserves the trailing comment and every other byte exactly$")
+    fun resultIsSemanticPreviewEditingOnlyPackageToken() {
+        val p = requireNotNull(plan)
+        assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
+        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
+        val dest = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/Invoice.kt").normalize() }
+        assertEquals(
+            requireNotNull(originalInvoice).replace("package fixture.pricing", "package fixture.accounting"),
+            dest.content,
+            "expected the preview to edit only the package token and preserve the trailing comment and every other byte exactly",
+        )
+        assertTrue("package fixture.accounting // note" in dest.content, dest.content)
+        assertTrue("public fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
     }
 
     @Then("^the preview edits only the package declaration, the exact consumer import directive, and the source-file path$")
@@ -217,7 +274,8 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
         val dest = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/Invoice.kt").normalize() }
         assertTrue("package fixture.accounting" in dest.content, dest.content)
-        assertTrue("public fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
+        assertTrue("fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
+        assertTrue("private fun taxRate(): Double = 0.21" in dest.content, dest.content)
     }
 
     @Then("^no source text other than the package and import tokens is rewritten or formatted$")
@@ -265,12 +323,14 @@ class KotlinJvmMoveTopLevelFunctionSteps {
             val root = requireNotNull(fixtureRoot)
             val dest = root.resolve("src/main/kotlin/fixture/accounting/Invoice.kt").readText()
             assertTrue("\r\n" in dest, dest)
+            assertTrue("private fun taxRate(): Double = 0.21" in dest, dest)
             assertEquals(requireNotNull(originalInvoice).replace("package fixture.pricing", "package fixture.accounting"), dest)
         } else {
             val p = requireNotNull(plan)
             val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
             val dest = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/Invoice.kt").normalize() }
             assertTrue("\r\n" in dest.content, dest.content)
+            assertTrue("private fun taxRate(): Double = 0.21" in dest.content, dest.content)
             assertEquals(requireNotNull(originalInvoice).replace("package fixture.pricing", "package fixture.accounting"), dest.content)
         }
     }
@@ -394,15 +454,22 @@ class KotlinJvmMoveTopLevelFunctionSteps {
             )
             "unresolved consumer" -> consumerWrite(
                 root, "src/main/kotlin/fixture/app/Use.kt",
+                // RQ-KMF-CUC-003 unresolved: no import directive at all, so the reference is
+                // unresolved and the consumer snapshot fails compilation.
                 "package fixture.app\nfun run(): String = computeInvoiceTotal()\n",
             )
             "recovered consumer" -> consumerWrite(
                 root, "src/main/kotlin/fixture/app/Use.kt",
-                "package fixture.app\nfun run(): String = computeInvoiceTotal()\n",
+                // RQ-KMF-CUC-003 recovered: the import target exists and resolves, but the call
+                // is recovered/errored by a return-type mismatch, so the consumer snapshot
+                // still fails compilation. Distinct from unresolved (no import) and truncated.
+                "package fixture.app\nimport fixture.pricing.computeInvoiceTotal\nfun run(): Int = computeInvoiceTotal()\n",
             )
             "truncated consumer" -> consumerWrite(
                 root, "src/main/kotlin/fixture/app/Use.kt",
-                "package fixture.app\nfun run(): String = computeInvoiceTotal()\n",
+                // RQ-KMF-CUC-003 truncated: the consumer source is truncated/incomplete, the
+                // call expression is cut off, so the consumer snapshot fails to parse.
+                "package fixture.app\nfun run(): String = computeInvoiceTotal(\n",
             )
             else -> error("unknown consumer form: $form")
         }
@@ -478,7 +545,13 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         val invoice = root.resolve("src/main/kotlin/fixture/pricing/Invoice.kt").apply { parent.createDirectories() }
         val use = root.resolve("src/main/kotlin/fixture/app/Use.kt").apply { parent.createDirectories() }
         writePom(root)
-        invoice.writeText("package fixture.pricing\r\npublic fun computeInvoiceTotal(): String = \"total\"\r\n")
+        // AC-FUNCTION-006 fixture also carries the compiler-proven private top-level helper so
+        // the shared "line endings and every private helper byte remain exact" step is genuinely
+        // exercised for both the preview (AC-FUNCTION-001) and the apply/rollback (AC-FUNCTION-006).
+        invoice.writeText(
+            "package fixture.pricing\r\npublic fun computeInvoiceTotal(): String = \"total\"\r\n" +
+                "private fun taxRate(): Double = 0.21\r\n",
+        )
         use.writeText("package fixture.app\r\nimport fixture.pricing.computeInvoiceTotal\r\nfun run(): String = computeInvoiceTotal()\r\n")
         originalInvoice = invoice.readText()
         originalUse = use.readText()
