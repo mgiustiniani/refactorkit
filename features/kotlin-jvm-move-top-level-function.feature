@@ -8,14 +8,19 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
   through AC-FUNCTION-006. It does not qualify general function relocation, Java callers, aliased
   callable imports, overload families, source-file facade renaming, multifile facades, JvmName
   facades, extension or suspend or default functions, callable references, member extraction, or
-  arbitrary declaration splitting. Plugin-dependent/Xplugin shapes are out of scope: the production
+  arbitrary declaration splitting. Plugin-dependent and Xplugin shapes are out of scope: the production
   planner has no Xplugin path, so a plugin-dependent top-level function is refused with the stable
   typed code kotlin.moveFunctionShapeUnsupported.
 
-  Declared status: production implementation exists on main, and local Linux GREEN Cucumber evidence
-  now exists (29 scenarios / 109 steps), but promotion to @implemented-and-validated is blocked
-  pending the tests-only RED and independent review evidence, so every scenario remains tagged @partial
-  (anti-fake).
+  Declared status: production implementation exists on main, and a genuine executable tests-only RED
+  exists: a compiler-proven package declaration carrying a trailing comment was refused with
+  kotlin.movePackageDeclarationInvalid, REFUSED not PREVIEW, before the production fix. The fix
+  preserves the trailing comment byte for byte. Local Linux source-built Cucumber GREEN now exists
+  (30 scenarios and 112 expanded steps, AC-FUNCTION-001..006 plus the trailing-comment refinement),
+  but promotion to @implemented-and-validated is blocked pending the independent
+  requirements-quality-reviewer PASS, so every scenario remains tagged @partial (anti-fake).
+  Four-platform and packaged qualification is deferred to K5 band close per user-approved-change-007;
+  the RED and the independent review are not deferred.
 
   Refusal codes in the scenarios are the actual production codes observed by the Cucumber glue, not
   invented granular codes. The source of truth matches executable reality (anti-fake).
