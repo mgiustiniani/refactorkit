@@ -19,15 +19,13 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
   (38 scenarios and 144 expanded steps: AC-FUNCTION-001..006, the trailing-comment refinement, the
   approved-change-001..006 scenarios covering filename-casing independence, implicit-outbound-rebinding
   refusal, convention-call refusal, typealias-bound and Maven -Xplugin refusal, and nested and excessive
-  typealias-depth refusal, plus the restored post-image attestation scenario), but promotion to @implemented-and-validated is blocked pending the independent requirements-quality-reviewer PASS, so
-  every scenario remains tagged @partial (anti-fake). Four-platform and packaged qualification is
-  deferred to band close per approved-change-007; the RED and the independent review are not deferred.
+  typealias-depth refusal, plus the restored post-image attestation scenario). Promotion to @implemented-and-validated is now granted by the independent requirements-quality-reviewer PASS at candidate 141e6d1 under approved-change-007, so every scenario is now tagged @implemented-and-validated (feature-level inheritance). Packaged and four-platform qualification remains deferred to K5 band close per approved-change-007.
 
   Refusal codes in the scenarios are the actual production codes observed by the Cucumber glue, not
   invented granular codes. The source of truth matches executable reality (anti-fake).
 
   # AC-FUNCTION-001
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: A compiler-proven public top-level function moves as moveDeclaration
     Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" with explicit or implicit PUBLIC visibility
     And the compiler-proven source file is present in the snapshot
@@ -45,14 +43,14 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     And line endings and every private helper byte remain exact
 
   # AC-FUNCTION-001 refinement: a trailing package comment is preserved byte for byte
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: A compiler-proven public top-level function package declaration with a trailing comment preserves every other byte
     Given the selected declaration is a compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose package declaration carries a trailing comment
     When moveDeclaration previews the selection
     Then the result is a SEMANTIC_PREVIEW that edits only the package token and preserves the trailing comment and every other byte exactly
 
   # AC-FUNCTION-002
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario Outline: An unsupported top-level function shape refuses with a stable typed code
     Given the selected declaration is one "<shape>" top-level Kotlin function
     When moveDeclaration previews the selection
@@ -74,7 +72,7 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
       | non-public selected                    | kotlin.moveDeclarationUnsupported      |
 
   # AC-FUNCTION-003
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario Outline: A co-located non-private top-level declaration refuses
     Given the source file contains the selected public top-level function and one "<declaration kind>" top-level declaration
     When moveDeclaration previews the selection
@@ -87,7 +85,7 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
       | protected        | kotlin.symbolCompilationFailed  |
 
   # AC-FUNCTION-004
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario Outline: A consumer form other than one unaliased explicit import refuses
     Given an in-workspace consumer uses "<consumer form>" of the source callable FQN "fixture.pricing.computeInvoiceTotal"
     When moveDeclaration previews the selection
@@ -108,7 +106,7 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
       | truncated consumer       | kotlin.symbolCompilationFailed            |
 
   # AC-FUNCTION-005
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: Destination same-name top-level function family absence is enforced
     Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal"
     And the caller explicitly accepts unknown external-consumer risk
@@ -119,7 +117,7 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     Then moveDeclaration previews a SEMANTIC_PREVIEW with exact new facade callable identity "fixture.accounting.computeInvoiceTotal"
 
   # AC-FUNCTION-006
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: Apply uses PatchEngine with authorization, diagnostics, WAL, attestation, and exact rollback
     Given an approved SEMANTIC_PREVIEW moves "fixture.pricing.computeInvoiceTotal" to "fixture.accounting"
     And the preview edits only the package declaration, the exact consumer import directive, and the source-file path
@@ -133,7 +131,7 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     And no source text other than the package and import tokens is rewritten or formatted
 
   # AC-FUNCTION-006 restoration: the committed post-image carries post-image attestation (RQ-KMF-AC6-ATTEST-001)
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: The committed post-image carries post-image attestation
     Given an approved SEMANTIC_PREVIEW moves "fixture.pricing.computeInvoiceTotal" to "fixture.accounting"
     And the preview edits only the package declaration, the exact consumer import directive, and the source-file path
@@ -144,7 +142,7 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     And line endings and every private helper byte remain exact
 
   # approved-change-001: the compiler-reported file-facade owner is authoritative independent of source-filename casing
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: A moved function whose source filename casing differs from the compiler-reported file-facade owner still succeeds
     Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose source filename casing differs from the compiler-reported file-facade owner
     And the destination package "fixture.accounting" has no same-name top-level function family
@@ -155,21 +153,21 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     And the moved destination file path retains the source-filename casing
 
   # approved-change-002: no implicit outbound source binding may silently rebind to a different target-package declaration
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: An implicit outbound source binding that would rebind to a different target-package declaration refuses
     Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose implicit outbound source binding would rebind to a different target-package declaration
     When moveDeclaration previews the selection
     Then the selection is refused with stable typed code "kotlin.moveOutboundBindingChanged" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
 
   # approved-change-003: a convention-call consumer of the moved callable retains exact identity or refuses
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario: A convention-call consumer of the moved callable that would rebind identity refuses
     Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose operator, component, or compareTo convention-call binding would rebind to a target-package declaration
     When moveDeclaration previews the selection
     Then the selection is refused with stable typed code "kotlin.moveOutboundBindingChanged" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
 
   # approved-change-005: typealias-bound and Maven -Xplugin top-level functions refuse before any patch or transaction
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario Outline: A typealias-bound or Maven -Xplugin top-level function refuses before any patch or transaction
     Given the selected declaration is one "<alias plugin kind>" top-level Kotlin function with no compiler-plugin annotation stub
     When moveDeclaration previews the selection
@@ -181,7 +179,7 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
       | Maven -Xplugin         | kotlin.compilerPluginsUnsupported     |
 
   # approved-change-006: a function whose callable identity depends on nested typealias depth refuses
-  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @implemented-and-validated
   Scenario Outline: A top-level function whose callable identity depends on nested typealias depth refuses before any patch or transaction
     Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose callable identity depends on a "<typealias depth>" typealias
     When moveDeclaration previews the selection
