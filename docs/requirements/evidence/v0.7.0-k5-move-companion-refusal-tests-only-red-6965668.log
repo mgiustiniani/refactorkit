@@ -1,0 +1,11 @@
+RefactorKit K5 companion-refusal tests-only RED evidence (focused)
+requirementId=REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+workflow=bdd-java
+status=RED
+Pre-slice baseline revision 9778febe46ed7f46192eb41801215b49ee121ac4 (tree de48fcfea9d39108f7f3ea4484f0be7bf3121174) contained NO feature
+features/kotlin-jvm-move-companion-refusal.feature and NO test dir modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/movedeclaration/.
+Verified: git ls-tree 9778feb for those paths returns empty.
+Meaningful RED = the executable Story BDD requirement and its Cucumber runner/glue were absent before this slice.
+Production planner (KotlinJvmMoveDeclarationPlanner line ~79 kotlin.moveCompanionStandaloneUnsupported) pre-existed on main
+and was NOT weakened; the slice added feature + runner + glue + evidence only.
+All 3 scenarios pass GREEN against production; no production code changed in this slice.
