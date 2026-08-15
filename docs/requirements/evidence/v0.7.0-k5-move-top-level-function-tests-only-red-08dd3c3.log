@@ -5,44 +5,67 @@ status=RED
 capturedBeforeProductionChange=true
 productionChangeRequired=kotlin.movePackageDeclarationInvalid -> packageEdit trailing-comment support
 
-This replaces the prior absence-only RED log. The RED below is a MEANINGFUL EXECUTABLE
-tests-only failing result: a fixture exercising a compiler-proven public top-level function
-whose source file carries a trailing line comment on its package declaration
-("package fixture.pricing // note"). Such a file compiles cleanly (compiler-proven) and the
-AC-FUNCTION-001 contract requires the preview to edit only the package token while preserving
-every other source byte. The production planner KotlinJvmMoveDeclarationPlanner refused it
-with kotlin.movePackageDeclarationInvalid because packageEdit required an exact package line
-with no trailing comment. This is a genuine production gap, captured BEFORE any production
-change, and recorded here with the failing command and observed exit/error.
+This RED is a GENUINE MEANINGFUL EXECUTABLE tests-only failing result, captured through the
+Cucumber Story BDD runner (not a direct-JUnit behavior test). It exercises the AC-FUNCTION-001
+trailing-comment refinement scenario against production WITHOUT the packageEdit trailing-comment
+fix. A compiler-proven public top-level Kotlin function whose source file carries a trailing line
+comment on its package declaration ("package fixture.pricing // note") compiles cleanly
+(compiler-proven), and the AC-FUNCTION-001 contract requires the preview to edit only the package
+token while preserving every other source byte. Production refused it with
+kotlin.movePackageDeclarationInvalid because packageEdit required an exact package line with no
+trailing comment. This is a genuine production gap, captured BEFORE any production change, and
+recorded here with the failing Cucumber command and observed exit/error.
 
-Failing command (captured BEFORE production change, production planner untouched):
+The previous absence-only and direct-JUnit transcripts are superseded. The direct-JUnit behavior
+test (KotlinJvmMoveTestsOnlyRedTest) was removed because direct hand-written JUnit behavior tests
+are prohibited by the workflow; the executable RED below is the Cucumber-based replacement.
+
+Failing Cucumber execution (captured BEFORE production change, production planner untouched;
+run against a temporary local revert of the packageEdit trailing-comment fix in an isolated git
+worktree, then the fix was restored so committed main keeps it intact):
+
+Failing command:
   JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon :modules:refactorkit-jvm:test \
-    --tests "org.refactorkit.jvm.movetoplevelfunction.KotlinJvmMoveTestsOnlyRedTest"
+    --tests "org.refactorkit.jvm.movetoplevelfunction.KotlinJvmMoveTopLevelFunctionCucumberTest" \
+    -Dcucumber.filter.name="trailing comment preserves every other byte"
+
+Scenario under test (feature scenario):
+  "A compiler-proven public top-level function package declaration with a trailing comment
+   preserves every other byte"
+  (Given/When/Then: the selected declaration carries a trailing package comment; moveDeclaration
+   previews the selection; the result is a SEMANTIC_PREVIEW that edits only the package token and
+   preserves the trailing comment and every other byte exactly)
 
 Observed result:
-  BUILD FAILED
-  KotlinJvmMoveTestsOnlyRedTest > compilerProvenPackageWithTrailingCommentMoves() FAILED
+  BUILD FAILED (Gradle test failure, exitCode = 1)
+  KotlinJvmMoveTopLevelFunctionCucumberTest > ... > A compiler-proven public top-level function
+    package declaration with a trailing comment preserves every other byte FAILED
   org.opentest4j.AssertionFailedError:
-    expected the compiler-proven trailing-comment package file to move as a SEMANTIC_PREVIEW;
-    got REFUSED refusal=kotlin.movePackageDeclarationInvalid
-    expected: <PREVIEW> but was: <REFUSED>
+    PatchPlan(... operation=moveDeclaration, status=REFUSED, summary="Kotlin package declaration
+    is not exact", affectedFiles=[], workspaceEdit=WorkspaceEdit(edits=[]), warnings=[Kotlin
+    package declaration is not exact], refusalCode=kotlin.movePackageDeclarationInvalid, ...)
+    ==> expected: <PREVIEW> but was: <REFUSED>
 
 Exit/error summary:
   exitCode = 1 (Gradle test failure)
   refusalCode = kotlin.movePackageDeclarationInvalid
+  status = REFUSED (not PREVIEW)
   message = "Kotlin package declaration is not exact"
   The production planner could not move a compiler-proven public top-level function whose
   package declaration carries a trailing line comment; packageEdit rejected the exact package
   line because the terminator did not allow a trailing comment.
 
-The fixture that captured this RED is:
-  modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/movetoplevelfunction/KotlinJvmMoveTestsOnlyRedTest.kt
-  (compilerProvenPackageWithTrailingCommentMoves)
+The fixture that captured this RED is the Cucumber glue step:
+  modules/refactorkit-jvm/src/test/kotlin/org/refactorkit/jvm/movetoplevelfunction/KotlinJvmMoveTopLevelFunctionSteps.kt
+  (selectedPublicTopLevelFunctionWithTrailingPackageComment: writes
+   "package fixture.pricing // note" + consumer Use.kt import, then the Then step asserts
+   PatchStatus.PREVIEW and staged destination equals originalInvoice with only the package token
+   replaced, backed by packageEdit regex group1 matching only the package token)
 
 This RED is independent of the reviewer's CUC-001/CUC-002/CUC-003 fixtures: those exercised
 implicit-PUBLIC visibility, positive private-helper co-location, and distinct unresolved/
 recovered/truncated consumer states, and all PASS in the current production planner (GREEN,
-29 scenarios / 109 steps). The trailing-comment package declaration is a distinct genuine
+38 scenarios / 144 steps). The trailing-comment package declaration is a distinct genuine
 production gap that required the minimal packageEdit fix.
 
 Implicit-PUBLIC, lowercase-facade, and positive private-helper co-location were probed

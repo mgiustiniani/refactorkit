@@ -843,14 +843,19 @@ class KotlinJvmMoveTopLevelFunctionSteps {
                 // usage extractor refuses kotlin.usageTypeAliasUnsupported.
                 "package fixture.pricing\ntypealias A = List<Double>\ntypealias B = A\npublic fun computeInvoiceTotal(): B = emptyList()\n"
             "excessive" ->
-                // A callable identity whose return type is a deeply-nested generic array (65 levels).
-                // Symbol extraction genuinely cannot verify the JVM binary identity of an
-                // array-returning function (even Array<Double> at depth 1 refuses), so production
-                // emits kotlin.symbolCallableBinaryMismatch; the feature Examples table declares that
-                // actual code for reconciliation (the usage extractor depth guard is not reached).
+                // A genuine excessive-typealias-depth fixture: a real nested typealias chain
+                // (T1 = T0, T2 = T1, ..., T65 = T64). The moved function's callable identity
+                // depends on the typealias chain, so the K2 usage extractor must refuse it with
+                // kotlin.usageTypeDepthLimitExceeded for excessive typealias traversal. The
+                // previous fixture used nested Array types WITHOUT a typealias and emitted the
+                // unrelated kotlin.symbolCallableBinaryMismatch; this is the approved-change-006
+                // excessive-depth shape.
                 run {
-                    val deep = (1..65).fold("Double") { acc, _ -> "Array<$acc>" }
-                    "package fixture.pricing\npublic fun computeInvoiceTotal(): $deep = TODO()\n"
+                    val sb = StringBuilder("package fixture.pricing\n")
+                    sb.append("typealias T0 = Double\n")
+                    for (i in 1..65) sb.append("typealias T$i = T${i - 1}\n")
+                    sb.append("public fun computeInvoiceTotal(): T65 = TODO()\n")
+                    sb.toString()
                 }
             else -> error("unknown typealias depth: $typealiasDepth")
         }

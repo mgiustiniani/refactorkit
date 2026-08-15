@@ -190,4 +190,4 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     Examples:
       | typealias depth | refusal code                          |
       | nested          | kotlin.usageTypeAliasUnsupported      |
-      | excessive       | kotlin.symbolCallableBinaryMismatch   |
+      | excessive       | kotlin.usageTypeDepthLimitExceeded    |

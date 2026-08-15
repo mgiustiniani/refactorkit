@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.config.JvmTarget;
 import org.jetbrains.kotlin.config.LanguageVersion;
 import org.jetbrains.kotlin.config.LanguageVersionSettingsImpl;
 import org.jetbrains.kotlin.fir.FirElement;
+import org.jetbrains.kotlin.fir.FirSession;
 import org.jetbrains.kotlin.fir.declarations.FirFunction;
 import org.jetbrains.kotlin.fir.declarations.FirProperty;
 import org.jetbrains.kotlin.fir.declarations.FirReceiverParameter;
@@ -37,6 +38,7 @@ import org.jetbrains.kotlin.fir.pipeline.FirResult;
 import org.jetbrains.kotlin.fir.pipeline.ModuleCompilerAnalyzedOutput;
 import org.jetbrains.kotlin.fir.scopes.jvm.SignatureUtilsKt;
 import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference;
+import org.jetbrains.kotlin.fir.resolve.LookupTagUtilsKt;
 import org.jetbrains.kotlin.fir.types.AbbreviatedTypeAttributeKt;
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType;
 import org.jetbrains.kotlin.fir.types.ConeKotlinType;
@@ -169,6 +171,8 @@ final class KotlinCompilerUsageExtractor {
             final Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters =
                 new HashMap<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol>();
             final Map<String, String> importAliases = new HashMap<String, String>();
+            final boolean[] seenBoundedTypealias = { false };
+            final FirSession usageSession = result.getOutputs().get(0).getSession();
             FirVisitorVoid typeParameterVisitor = new FirVisitorVoid() {
                 @Override public void visitElement(FirElement element) { element.acceptChildren(this); }
                 @Override public Object visitElement(FirElement element, Object ignored) {
@@ -207,11 +211,11 @@ final class KotlinCompilerUsageExtractor {
                     parameter.acceptChildren(this);
                 }
                 @Override public void visitResolvedTypeRef(FirResolvedTypeRef typeRef) {
-                    collectTypeReference(typeRef, typeTargets, typeParameters, importAliases, identities, usages);
+                    collectTypeReference(typeRef, typeTargets, typeParameters, importAliases, identities, usages, usageSession, seenBoundedTypealias);
                     typeRef.acceptChildren(this);
                 }
                 @Override public void visitResolvedQualifier(FirResolvedQualifier qualifier) {
-                    collectQualifier(qualifier, declarationTargets, importAliases, identities, usages);
+                    collectQualifier(qualifier, declarationTargets, importAliases, identities, usages, usageSession, seenBoundedTypealias);
                     qualifier.acceptChildren(this);
                 }
                 @Override public void visitResolvedImport(FirResolvedImport resolvedImport) {
@@ -222,6 +226,10 @@ final class KotlinCompilerUsageExtractor {
             for (ModuleCompilerAnalyzedOutput output : result.getOutputs()) {
                 for (org.jetbrains.kotlin.fir.declarations.FirFile file : output.getFir()) file.accept(visitor);
             }
+            // A bounded typealias usage (a typealias that the callable identity depends on but whose
+            // expansion chain is not excessive) makes the file unsupported: kotlin.usageTypeAliasUnsupported.
+            // Excessive typealias traversal throws kotlin.usageTypeDepthLimitExceeded earlier.
+            if (seenBoundedTypealias[0]) throw failure("kotlin.usageTypeAliasUnsupported");
             usages.sort(Comparator.comparing(ExtractedUsage::path)
                 .thenComparingInt(ExtractedUsage::startOffset)
                 .thenComparing(ExtractedUsage::targetIdentity));
@@ -520,11 +528,19 @@ final class KotlinCompilerUsageExtractor {
         Map<FirTypeParameterSymbol, KotlinCompilerSymbolExtractor.ExtractedSymbol> typeParameters,
         Map<String, String> importAliases,
         Set<String> identities,
-        List<ExtractedUsage> usages
+        List<ExtractedUsage> usages,
+        FirSession session,
+        boolean[] seenBoundedTypealias
     ) {
         KtSourceElement source = typeRef.getSource();
         if (!(source instanceof KtPsiSourceElement)) return;
-        if (unsupportedTypeAlias(typeRef.getType())) throw failure("kotlin.usageTypeAliasUnsupported");
+        if (unsupportedTypeAlias(typeRef.getType(), session)) {
+            // A bounded typealias usage (chain depth within the guard) makes the file unsupported;
+            // the refusal is deferred so an excessive typealias traversal elsewhere in the same
+            // callable can still report kotlin.usageTypeDepthLimitExceeded. Excessive traversal
+            // already threw inside unsupportedTypeAlias.
+            seenBoundedTypealias[0] = true;
+        }
         KotlinCompilerSymbolExtractor.ExtractedSymbol target;
         String externalIdentity = null;
         if (typeRef.getType() instanceof ConeClassLikeType) {
@@ -550,20 +566,58 @@ final class KotlinCompilerUsageExtractor {
         }
     }
 
-    private static boolean unsupportedTypeAlias(ConeKotlinType type) {
-        return unsupportedTypeAlias(type, 0);
+    private static boolean unsupportedTypeAlias(ConeKotlinType type, FirSession session) {
+        return unsupportedTypeAlias(type, 0, session);
     }
 
-    private static boolean unsupportedTypeAlias(ConeKotlinType type, int depth) {
+    private static boolean unsupportedTypeAlias(ConeKotlinType type, int depth, FirSession session) {
         if (depth > MAX_TYPE_ARGUMENT_DEPTH) throw failure("kotlin.usageTypeDepthLimitExceeded");
-        if (AbbreviatedTypeAttributeKt.isTypealiasExpansion(type)) return true;
+        if (AbbreviatedTypeAttributeKt.isTypealiasExpansion(type)) {
+            // A typealias usage is unsupported (kotlin.usageTypeAliasUnsupported) unless its
+            // expansion chain traversal is excessive, in which case it refuses with
+            // kotlin.usageTypeDepthLimitExceeded. Resolve the typealias symbol and walk its
+            // declaration expansion chain to count the depth.
+            ConeKotlinType aliasType = AbbreviatedTypeAttributeKt.getAbbreviatedType(type);
+            if (aliasType instanceof ConeClassLikeType) {
+                FirClassLikeSymbol<?> symbol = LookupTagUtilsKt.toSymbol(
+                    ((ConeClassLikeType) aliasType).getLookupTag(), session);
+                if (symbol instanceof FirTypeAliasSymbol) {
+                    refuseTypeAliasDepth((FirTypeAliasSymbol) symbol, session);
+                }
+            }
+            return true;
+        }
         for (ConeTypeProjection argument : type.getTypeArguments()) {
             if (argument instanceof ConeKotlinTypeProjection &&
-                unsupportedTypeAlias(((ConeKotlinTypeProjection) argument).getType(), depth + 1)) {
+                unsupportedTypeAlias(((ConeKotlinTypeProjection) argument).getType(), depth + 1, session)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static void refuseTypeAliasDepth(FirTypeAliasSymbol symbol, FirSession session) {
+        // Walk the typealias DECLARATION expansion chain (T65 = T64 = ... = T0 = Double) counting
+        // hops. Excessive typealias traversal (chain depth > the guard) refuses with
+        // kotlin.usageTypeDepthLimitExceeded; otherwise the caller refuses the bounded typealias
+        // usage with kotlin.usageTypeAliasUnsupported.
+        FirTypeAliasSymbol current = symbol;
+        int chainDepth = 0;
+        while (current != null) {
+            chainDepth++;
+            if (chainDepth > MAX_TYPE_ARGUMENT_DEPTH) throw failure("kotlin.usageTypeDepthLimitExceeded");
+            FirResolvedTypeRef ref = current.getResolvedExpandedTypeRef();
+            if (ref == null) return;
+            ConeKotlinType expanded = ref.getType();
+            if (expanded == null) return;
+            if (!AbbreviatedTypeAttributeKt.isTypealiasExpansion(expanded)) return;
+            ConeKotlinType aliasType = AbbreviatedTypeAttributeKt.getAbbreviatedType(expanded);
+            if (!(aliasType instanceof ConeClassLikeType)) return;
+            FirClassLikeSymbol<?> next = LookupTagUtilsKt.toSymbol(
+                ((ConeClassLikeType) aliasType).getLookupTag(), session);
+            if (!(next instanceof FirTypeAliasSymbol)) return;
+            current = (FirTypeAliasSymbol) next;
+        }
     }
 
     private static void collectQualifier(
@@ -571,7 +625,9 @@ final class KotlinCompilerUsageExtractor {
         Map<String, KotlinCompilerSymbolExtractor.ExtractedSymbol> targets,
         Map<String, String> importAliases,
         Set<String> identities,
-        List<ExtractedUsage> usages
+        List<ExtractedUsage> usages,
+        FirSession session,
+        boolean[] seenBoundedTypealias
     ) {
         KtSourceElement qualifierSource = qualifier.getSource();
         ClassId qualifierClassId = qualifier.getClassId();
@@ -582,7 +638,14 @@ final class KotlinCompilerUsageExtractor {
         if (identifier == null) return;
         FirClassLikeSymbol<?> symbol = qualifier.getSymbol();
         if (symbol == null) return;
-        if (symbol instanceof FirTypeAliasSymbol) throw failure("kotlin.usageTypeAliasUnsupported");
+        if (symbol instanceof FirTypeAliasSymbol) {
+            // A typealias qualifier is unsupported (kotlin.usageTypeAliasUnsupported) unless its
+            // expansion chain traversal is excessive, in which case it refuses with
+            // kotlin.usageTypeDepthLimitExceeded. Excessive traversal throws inside
+            // refuseTypeAliasDepth; a bounded usage defers to usageTypeAliasUnsupported at the end.
+            refuseTypeAliasDepth((FirTypeAliasSymbol) symbol, session);
+            seenBoundedTypealias[0] = true;
+        }
         KtSourceElement symbolSource = symbol.getSource();
         if (symbolSource instanceof KtPsiSourceElement) {
             KtClassOrObject type = targetType(((KtPsiSourceElement) symbolSource).getPsi());
