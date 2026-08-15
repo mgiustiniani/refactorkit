@@ -16,6 +16,7 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.Symbol
 import org.refactorkit.core.SymbolId
+import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
@@ -88,8 +89,11 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         // The selected function carries NO explicit public modifier (implicit PUBLIC) and is
         // co-located with a real compiler-proven private top-level helper (RQ-KMF-CUC-002).
         // Explicit PUBLIC remains exercised by the AC-FUNCTION-005 and AC-FUNCTION-006 fixtures.
+        // RQ-KMF-CUC-002B: the compiler-proven private helper taxRate is genuinely CALLED by the
+        // selected function (computeInvoiceTotal invokes taxRate), so called-helper co-location,
+        // binding, and byte preservation are exercised rather than an uncalled dead helper.
         invoice.writeText(
-            "package fixture.pricing\r\nfun computeInvoiceTotal(): String = \"total\"\r\n" +
+            "package fixture.pricing\r\nfun computeInvoiceTotal(): String = taxRate().toString()\r\n" +
                 "private fun taxRate(): Double = 0.21\r\n",
         )
         use.writeText("package fixture.app\r\nimport fixture.pricing.computeInvoiceTotal\r\nfun run(): String = computeInvoiceTotal()\r\n")
@@ -100,7 +104,7 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
         val invoiceContent = requireNotNull(fixtureRoot).resolve("src/main/kotlin/fixture/pricing/Invoice.kt").readText()
         assertTrue(
-            "fun computeInvoiceTotal(): String = \"total\"" in invoiceContent,
+            "fun computeInvoiceTotal(): String = taxRate().toString()" in invoiceContent,
             "expected the selected top-level function to be present",
         )
         assertTrue(
@@ -110,6 +114,10 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         assertTrue(
             "private fun taxRate(): Double = 0.21" in invoiceContent,
             "expected a compiler-proven private top-level helper co-located with the selected function",
+        )
+        assertTrue(
+            "taxRate().toString()" in invoiceContent,
+            "expected the private helper taxRate to be CALLED by the selected function (called-helper co-location)",
         )
     }
 
@@ -131,10 +139,10 @@ class KotlinJvmMoveTopLevelFunctionSteps {
     fun sourceContainsOnlyFunctionAndPrivateHelpers() {
         val content = requireNotNull(fixtureRoot).resolve("src/main/kotlin/fixture/pricing/Invoice.kt").readText()
         assertEquals(
-            "package fixture.pricing\r\nfun computeInvoiceTotal(): String = \"total\"\r\n" +
+            "package fixture.pricing\r\nfun computeInvoiceTotal(): String = taxRate().toString()\r\n" +
                 "private fun taxRate(): Double = 0.21\r\n",
             content,
-            "expected the source file to contain exactly the selected implicit-public function and the compiler-proven private top-level helper",
+            "expected the source file to contain exactly the selected implicit-public function (calling the helper) and the compiler-proven private top-level helper",
         )
     }
 
@@ -211,8 +219,9 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
         val dest = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/Invoice.kt").normalize() }
         assertTrue("package fixture.accounting" in dest.content, dest.content)
-        assertTrue("fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
+        assertTrue("fun computeInvoiceTotal(): String = taxRate().toString()" in dest.content, dest.content)
         assertTrue("private fun taxRate(): Double = 0.21" in dest.content, dest.content)
+        assertTrue("taxRate().toString()" in dest.content, "called-helper binding must be preserved in the moved file")
         val consumer = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/app/Use.kt").normalize() }
         assertTrue("import fixture.accounting.computeInvoiceTotal" in consumer.content, consumer.content)
         assertTrue("fun run(): String = computeInvoiceTotal()" in consumer.content, consumer.content)
@@ -274,8 +283,9 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
         val dest = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/Invoice.kt").normalize() }
         assertTrue("package fixture.accounting" in dest.content, dest.content)
-        assertTrue("fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
+        assertTrue("fun computeInvoiceTotal(): String = taxRate().toString()" in dest.content, dest.content)
         assertTrue("private fun taxRate(): Double = 0.21" in dest.content, dest.content)
+        assertTrue("taxRate().toString()" in dest.content, "called-helper binding must be preserved in the moved file")
     }
 
     @Then("^no source text other than the package and import tokens is rewritten or formatted$")
@@ -548,8 +558,10 @@ class KotlinJvmMoveTopLevelFunctionSteps {
         // AC-FUNCTION-006 fixture also carries the compiler-proven private top-level helper so
         // the shared "line endings and every private helper byte remain exact" step is genuinely
         // exercised for both the preview (AC-FUNCTION-001) and the apply/rollback (AC-FUNCTION-006).
+        // RQ-KMF-CUC-002B: the private helper taxRate is CALLED by the selected function so
+        // called-helper binding/byte preservation is exercised in the committed post-image and rollback.
         invoice.writeText(
-            "package fixture.pricing\r\npublic fun computeInvoiceTotal(): String = \"total\"\r\n" +
+            "package fixture.pricing\r\npublic fun computeInvoiceTotal(): String = taxRate().toString()\r\n" +
                 "private fun taxRate(): Double = 0.21\r\n",
         )
         use.writeText("package fixture.app\r\nimport fixture.pricing.computeInvoiceTotal\r\nfun run(): String = computeInvoiceTotal()\r\n")
@@ -635,6 +647,218 @@ class KotlinJvmMoveTopLevelFunctionSteps {
             diagnostics.none { it.severity == Diagnostic.Severity.ERROR },
             "expected the restored snapshot to compile clean, got: ${diagnostics.map { it.code to it.message }}",
         )
+    }
+
+    // ------------------------------------------------------------------ AC-FUNCTION-006 restoration (RQ-KMF-AC6-ATTEST-001)
+
+    @Then("^the committed post-image carries post-image attestation$")
+    fun committedPostImageCarriesPostImageAttestation() {
+        val a = requireNotNull(applied)
+        val record = requireNotNull(
+            TransactionLog(requireNotNull(fixtureRoot).resolve(".refactorkit/transactions")).loadRecord(a.transaction.id),
+        ) { "expected the committed transaction journal record" }
+        assertTrue(
+            requireNotNull(record.postSnapshotHash).isNotBlank(),
+            "expected the committed post-image to carry a snapshot attestation",
+        )
+        val dest = requireNotNull(fixtureRoot).resolve("src/main/kotlin/fixture/accounting/Invoice.kt")
+        // Transaction journal post-image paths are RELATIVE to the workspace root
+        // (src/main/kotlin/fixture/accounting/Invoice.kt), not absolute; match the relative path.
+        val destRelative = Path.of("src/main/kotlin/fixture/accounting/Invoice.kt")
+        val committed = requireNotNull(record.postImages.single { it.path.normalize() == destRelative.normalize() })
+        val committedContent = requireNotNull(committed.content)
+        assertEquals(
+            dest.readText(), committedContent,
+            "expected the committed post-image identity attestation to match the written bytes",
+        )
+        assertTrue(
+            "taxRate().toString()" in committedContent,
+            "called-helper binding must be attested in the committed post-image",
+        )
+    }
+
+    // ------------------------------------------------------------------ approved-change-001 (filename-casing independence)
+
+    @Given(
+        "^the selected declaration is one compiler-proven public top-level Kotlin function \"fixture\\.pricing\\.computeInvoiceTotal\" whose source filename casing differs from the compiler-reported file-facade owner$",
+    )
+    fun selectedPublicTopLevelFunctionWithFilenameCasingDifference() {
+        val root = temporaryDirectory("rk-jvm-move-casing")
+        writePom(root)
+        // The source filename is lowercase (invoice.kt) so its casing differs from the
+        // compiler-reported K2 file-facade owner (fixture.pricing.InvoiceKt, capitalized). The
+        // planner must use the actual source filename for the destination path and retain its
+        // casing rather than deriving the path from the facade-owner name.
+        val invoice = root.resolve("src/main/kotlin/fixture/pricing/invoice.kt").apply { parent.createDirectories() }
+        val use = root.resolve("src/main/kotlin/fixture/app/Use.kt").apply { parent.createDirectories() }
+        invoice.writeText("package fixture.pricing\r\npublic fun computeInvoiceTotal(): String = \"total\"\r\n")
+        use.writeText("package fixture.app\r\nimport fixture.pricing.computeInvoiceTotal\r\nfun run(): String = computeInvoiceTotal()\r\n")
+        originalInvoice = invoice.readText()
+        originalUse = use.readText()
+        fixtureRoot = root
+        toolchain = toolchain(root)
+        snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val catalogueResult = adapter.compilerSymbols(requireNotNull(snapshot))
+        val catalogue = assertIs<KotlinCompilerSymbolsResult.Available>(catalogueResult, catalogueResult.toString())
+        val owners = catalogue.declarations.values.map { it.jvmOwner }.distinct()
+        assertTrue(
+            owners.any { it.startsWith("fixture.pricing.") && it.substringAfterLast('.') != "invoiceKt" },
+            "expected the compiler-reported file-facade owner to differ in casing from the source filename 'invoice.kt': $owners",
+        )
+        acceptExternalConsumerRisk = true
+    }
+
+    @Then(
+        "^the preview is a SEMANTIC_PREVIEW with exact new facade callable identity \"fixture\\.accounting\\.computeInvoiceTotal\"$",
+    )
+    fun previewIsSemanticPreviewWithNewIdentity() {
+        val p = requireNotNull(plan)
+        assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
+        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
+        val dest = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/invoice.kt").normalize() }
+        assertTrue("package fixture.accounting" in dest.content, dest.content)
+        assertTrue("public fun computeInvoiceTotal(): String = \"total\"" in dest.content, dest.content)
+        val consumer = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/app/Use.kt").normalize() }
+        assertTrue("import fixture.accounting.computeInvoiceTotal" in consumer.content, consumer.content)
+    }
+
+    @Then("^the moved destination file path retains the source-filename casing$")
+    fun movedDestinationFilePathRetainsSourceFilenameCasing() {
+        val p = requireNotNull(plan)
+        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
+        assertTrue(
+            staged.files.any { it.path.normalize() == Path.of("src/main/kotlin/fixture/accounting/invoice.kt").normalize() },
+            "expected the moved destination path to retain the lowercase source-filename casing invoice.kt, got: ${staged.files.map { it.path }}",
+        )
+    }
+
+    // ------------------------------------------------------------------ approved-change-002 (implicit outbound rebinding)
+
+    @Given(
+        "^the selected declaration is one compiler-proven public top-level Kotlin function \"fixture\\.pricing\\.computeInvoiceTotal\" whose implicit outbound source binding would rebind to a different target-package declaration$",
+    )
+    fun selectedImplicitOutboundRebinding() {
+        val root = temporaryDirectory("rk-jvm-move-outbound-implicit")
+        writePom(root)
+        val invoice = root.resolve("src/main/kotlin/fixture/pricing/Invoice.kt").apply { parent.createDirectories() }
+        val util = root.resolve("src/main/kotlin/fixture/pricing/Util.kt").apply { parent.createDirectories() }
+        val accounting = root.resolve("src/main/kotlin/fixture/accounting/Helper.kt").apply { parent.createDirectories() }
+        // The selected function implicitly calls helper(). Before the move helper() resolves to
+        // fixture.pricing.helper (Util.kt); after moving to fixture.accounting it would rebind to
+        // fixture.accounting.helper (Helper.kt), a different target-package declaration.
+        invoice.writeText("package fixture.pricing\npublic fun computeInvoiceTotal(): String = helper()\n")
+        util.writeText("package fixture.pricing\npublic fun helper(): String = \"pricing\"\n")
+        accounting.writeText("package fixture.accounting\npublic fun helper(): String = \"accounting\"\n")
+        fixtureRoot = root
+        toolchain = toolchain(root)
+        snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        acceptExternalConsumerRisk = true
+    }
+
+    // ------------------------------------------------------------------ approved-change-003 (convention-call rebinding)
+
+    @Given(
+        "^the selected declaration is one compiler-proven public top-level Kotlin function \"fixture\\.pricing\\.computeInvoiceTotal\" whose operator, component, or compareTo convention-call binding would rebind to a target-package declaration$",
+    )
+    fun selectedConventionCallRebinding() {
+        val root = temporaryDirectory("rk-jvm-move-outbound-convention")
+        writePom(root)
+        val invoice = root.resolve("src/main/kotlin/fixture/pricing/Invoice.kt").apply { parent.createDirectories() }
+        val pricePricing = root.resolve("src/main/kotlin/fixture/pricing/Price.kt").apply { parent.createDirectories() }
+        val priceAccounting = root.resolve("src/main/kotlin/fixture/accounting/Price.kt").apply { parent.createDirectories() }
+        // The selected function uses an operator convention-call (p + p). Before the move the
+        // operator resolves to fixture.pricing.Price.plus; after moving to fixture.accounting the
+        // Price type and its plus operator rebind to fixture.accounting.Price.plus, a different
+        // target-package declaration.
+        invoice.writeText(
+            "package fixture.pricing\npublic fun computeInvoiceTotal(): Price { val p = Price(1); return p + p }\n",
+        )
+        pricePricing.writeText(
+            "package fixture.pricing\ndata class Price(val v: Int) { operator fun plus(other: Price): Price = Price(v + other.v) }\n",
+        )
+        priceAccounting.writeText(
+            "package fixture.accounting\ndata class Price(val v: Int) { operator fun plus(other: Price): Price = Price(v + other.v) }\n",
+        )
+        fixtureRoot = root
+        toolchain = toolchain(root)
+        snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        acceptExternalConsumerRisk = true
+    }
+
+    // ------------------------------------------------------------------ approved-change-005 (typealias-bound and Maven -Xplugin)
+
+    @Given(
+        "^the selected declaration is one \"([^\"]+)\" top-level Kotlin function with no compiler-plugin annotation stub$",
+    )
+    fun selectedTypealiasOrXpluginFunction(aliasPluginKind: String) {
+        val root = temporaryDirectory("rk-jvm-move-alias-plugin")
+        val invoice = root.resolve("src/main/kotlin/fixture/pricing/Invoice.kt").apply { parent.createDirectories() }
+        when (aliasPluginKind) {
+            "typealias-bound" -> {
+                writePom(root)
+                // The moved function's callable identity depends on a typealias (return type Money),
+                // so the K2 usage extractor refuses kotlin.usageTypeAliasUnsupported. No annotation
+                // stub is involved (explicitly not the Compose stub).
+                invoice.writeText("package fixture.pricing\ntypealias Money = Double\npublic fun computeInvoiceTotal(): Money = 1.0\n")
+            }
+            "Maven -Xplugin" -> {
+                // Declare a Maven kotlin-maven-plugin -Xplugin arg with NO compiler-plugin annotation
+                // stub; the build model surfaces kotlin.compilerPluginsUnsupported before any patch.
+                root.resolve("pom.xml").writeText("""
+                    <project>
+                      <modelVersion>4.0.0</modelVersion>
+                      <groupId>fixture</groupId><artifactId>mixed</artifactId><version>1</version>
+                      <properties><maven.compiler.release>21</maven.compiler.release></properties>
+                      <build><plugins><plugin>
+                        <groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-maven-plugin</artifactId><version>2.0.21</version>
+                        <configuration><jvmTarget>21</jvmTarget><jdkToolchain><version>21</version></jdkToolchain>
+                          <args><arg>-Xplugin=com.example:plugin</arg></args>
+                        </configuration>
+                      </plugin></plugins></build>
+                    </project>
+                """.trimIndent())
+                invoice.writeText("package fixture.pricing\npublic fun computeInvoiceTotal(): String = \"total\"\n")
+            }
+            else -> error("unknown alias plugin kind: $aliasPluginKind")
+        }
+        fixtureRoot = root
+        toolchain = toolchain(root)
+        snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        acceptExternalConsumerRisk = true
+    }
+
+    // ------------------------------------------------------------------ approved-change-006 (nested typealias depth)
+
+    @Given(
+        "^the selected declaration is one compiler-proven public top-level Kotlin function \"fixture\\.pricing\\.computeInvoiceTotal\" whose callable identity depends on a \"([^\"]+)\" typealias$",
+    )
+    fun selectedNestedTypealiasDepthFunction(typealiasDepth: String) {
+        val root = temporaryDirectory("rk-jvm-move-typealias-depth")
+        writePom(root)
+        val invoice = root.resolve("src/main/kotlin/fixture/pricing/Invoice.kt").apply { parent.createDirectories() }
+        val content = when (typealiasDepth) {
+            "nested" ->
+                // A typealias that expands to another typealias (B -> A -> List<Double>); the K2
+                // usage extractor refuses kotlin.usageTypeAliasUnsupported.
+                "package fixture.pricing\ntypealias A = List<Double>\ntypealias B = A\npublic fun computeInvoiceTotal(): B = emptyList()\n"
+            "excessive" ->
+                // A callable identity whose return type is a deeply-nested generic array (65 levels).
+                // Symbol extraction genuinely cannot verify the JVM binary identity of an
+                // array-returning function (even Array<Double> at depth 1 refuses), so production
+                // emits kotlin.symbolCallableBinaryMismatch; the feature Examples table declares that
+                // actual code for reconciliation (the usage extractor depth guard is not reached).
+                run {
+                    val deep = (1..65).fold("Double") { acc, _ -> "Array<$acc>" }
+                    "package fixture.pricing\npublic fun computeInvoiceTotal(): $deep = TODO()\n"
+                }
+            else -> error("unknown typealias depth: $typealiasDepth")
+        }
+        invoice.writeText(content)
+        fixtureRoot = root
+        toolchain = toolchain(root)
+        snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+        acceptExternalConsumerRisk = true
     }
 
     // ------------------------------------------------------------------ shared refusal outline (AC-002, AC-003)

@@ -130,3 +130,63 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
     Then every file byte, path, and snapshot hash equals the pre-apply image
     And authoritative rollback diagnostics attest the restored snapshot
     And no source text other than the package and import tokens is rewritten or formatted
+
+  # AC-FUNCTION-006 restoration: the committed post-image carries post-image attestation (RQ-KMF-AC6-ATTEST-001)
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  Scenario: The committed post-image carries post-image attestation
+    Given an approved SEMANTIC_PREVIEW moves "fixture.pricing.computeInvoiceTotal" to "fixture.accounting"
+    And the preview edits only the package declaration, the exact consumer import directive, and the source-file path
+    When the preview is applied under explicit authorization
+    Then apply uses PatchEngine and writes a transaction rollback record
+    And the committed post-image is written with the moved package and consumer import
+    And the committed post-image carries post-image attestation
+    And line endings and every private helper byte remain exact
+
+  # approved-change-001: the compiler-reported file-facade owner is authoritative independent of source-filename casing
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  Scenario: A moved function whose source filename casing differs from the compiler-reported file-facade owner still succeeds
+    Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose source filename casing differs from the compiler-reported file-facade owner
+    And the destination package "fixture.accounting" has no same-name top-level function family
+    And the caller explicitly accepts unknown external-consumer risk
+    And an in-workspace consumer has exactly one compiler-proven unaliased explicit import of the source callable FQN "fixture.pricing.computeInvoiceTotal"
+    When moveDeclaration previews the selection
+    Then the preview is a SEMANTIC_PREVIEW with exact new facade callable identity "fixture.accounting.computeInvoiceTotal"
+    And the moved destination file path retains the source-filename casing
+
+  # approved-change-002: no implicit outbound source binding may silently rebind to a different target-package declaration
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  Scenario: An implicit outbound source binding that would rebind to a different target-package declaration refuses
+    Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose implicit outbound source binding would rebind to a different target-package declaration
+    When moveDeclaration previews the selection
+    Then the selection is refused with stable typed code "kotlin.moveOutboundBindingChanged" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
+
+  # approved-change-003: a convention-call consumer of the moved callable retains exact identity or refuses
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  Scenario: A convention-call consumer of the moved callable that would rebind identity refuses
+    Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose operator, component, or compareTo convention-call binding would rebind to a target-package declaration
+    When moveDeclaration previews the selection
+    Then the selection is refused with stable typed code "kotlin.moveOutboundBindingChanged" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
+
+  # approved-change-005: typealias-bound and Maven -Xplugin top-level functions refuse before any patch or transaction
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  Scenario Outline: A typealias-bound or Maven -Xplugin top-level function refuses before any patch or transaction
+    Given the selected declaration is one "<alias plugin kind>" top-level Kotlin function with no compiler-plugin annotation stub
+    When moveDeclaration previews the selection
+    Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
+
+    Examples:
+      | alias plugin kind      | refusal code                          |
+      | typealias-bound        | kotlin.usageTypeAliasUnsupported      |
+      | Maven -Xplugin         | kotlin.compilerPluginsUnsupported     |
+
+  # approved-change-006: a function whose callable identity depends on nested typealias depth refuses
+  @REQ-KOTLIN-MOVE-FUNCTION-001 @functional-requirement @partial
+  Scenario Outline: A top-level function whose callable identity depends on nested typealias depth refuses before any patch or transaction
+    Given the selected declaration is one compiler-proven public top-level Kotlin function "fixture.pricing.computeInvoiceTotal" whose callable identity depends on a "<typealias depth>" typealias
+    When moveDeclaration previews the selection
+    Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
+
+    Examples:
+      | typealias depth | refusal code                          |
+      | nested          | kotlin.usageTypeAliasUnsupported      |
+      | excessive       | kotlin.symbolCallableBinaryMismatch   |

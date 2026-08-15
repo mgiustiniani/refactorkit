@@ -234,11 +234,22 @@ class KotlinCompilerDiagnostics private constructor(
         if (snapshot.files.any { it.languageId == "kotlin" && it.path.fileName.toString().endsWith(".kts") }) return refused(
             "kotlin.scriptSemanticsUnsupported", "Kotlin script semantics remain refused", attestation(),
         )
-        if (model == null || model.status != BuildModelStatus.AVAILABLE) return refused(
-            "kotlin.buildModelUnavailable",
-            "Compiler diagnostics require an AVAILABLE kotlin-jvm-projection-v1 build model",
-            attestation(),
-        )
+        if (model == null || model.status != BuildModelStatus.AVAILABLE) {
+            // A Maven -Xplugin (or declared compiler-plugin) build model is EXECUTION_REFUSED with a
+            // specific kotlin.compilerPluginsUnsupported diagnostic; surface that stable typed code
+            // rather than the coarse kotlin.buildModelUnavailable so the move refuses before any patch.
+            val pluginDiagnostic = model?.diagnostics?.firstOrNull { it.code == "kotlin.compilerPluginsUnsupported" }
+            if (pluginDiagnostic != null) return refused(
+                "kotlin.compilerPluginsUnsupported",
+                pluginDiagnostic.message,
+                attestation(),
+            )
+            return refused(
+                "kotlin.buildModelUnavailable",
+                "Compiler diagnostics require an AVAILABLE kotlin-jvm-projection-v1 build model",
+                attestation(),
+            )
+        }
         if (model.attributes["toolchainProjectionHash"] != toolchain.provenance.projectionHash ||
             model.attributes["backend"] != toolchain.provenance.backend) return refused(
             "kotlin.buildModelToolchainMismatch",
