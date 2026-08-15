@@ -16,11 +16,12 @@ Business Need: Move one compiler-proven public top-level Kotlin function as move
   exists: a compiler-proven package declaration carrying a trailing comment was refused with
   kotlin.movePackageDeclarationInvalid, REFUSED not PREVIEW, before the production fix. The fix
   preserves the trailing comment byte for byte. Local Linux source-built Cucumber GREEN now exists
-  (30 scenarios and 112 expanded steps, AC-FUNCTION-001..006 plus the trailing-comment refinement),
-  but promotion to @implemented-and-validated is blocked pending the independent
-  requirements-quality-reviewer PASS, so every scenario remains tagged @partial (anti-fake).
-  Four-platform and packaged qualification is deferred to K5 band close per user-approved-change-007;
-  the RED and the independent review are not deferred.
+  (38 scenarios and 144 expanded steps: AC-FUNCTION-001..006, the trailing-comment refinement, the
+  approved-change-001..006 scenarios covering filename-casing independence, implicit-outbound-rebinding
+  refusal, convention-call refusal, typealias-bound and Maven -Xplugin refusal, and nested and excessive
+  typealias-depth refusal, plus the restored post-image attestation scenario), but promotion to @implemented-and-validated is blocked pending the independent requirements-quality-reviewer PASS, so
+  every scenario remains tagged @partial (anti-fake). Four-platform and packaged qualification is
+  deferred to band close per approved-change-007; the RED and the independent review are not deferred.
 
   Refusal codes in the scenarios are the actual production codes observed by the Cucumber glue, not
   invented granular codes. The source of truth matches executable reality (anti-fake).
