@@ -31,6 +31,6 @@ approved-change-007; independent `requirements-quality-reviewer` PASS remains ma
 
 - Candidate: commit 4be82f1 (feature + runner/glue + RED/GREEN evidence + ARC42 appendix)
 - Linux GREEN: 3 scenarios / 14 steps passed
-  (`docs/requirements/evidence/v0.7.0-k5-move-companion-refusal-green-8ba36d655d6376cfaed96f7f4a188e7b7489c9b30f8d65639af30361584045ed.json`)
+  (`docs/requirements/evidence/v0.7.0-k5-move-companion-refusal-green-07e8d6a60b8c60c97063498e238e962497f30a9ec71dae0839fc83c557898bc8.json`)
 - Independent review: AC-COMPANION-REFUSAL-001 SATISFIED; RED gate was the sole blocker before this
   approved change.
