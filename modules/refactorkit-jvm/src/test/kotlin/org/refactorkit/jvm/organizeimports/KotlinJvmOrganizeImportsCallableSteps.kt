@@ -66,13 +66,18 @@ class KotlinJvmOrganizeImportsCallableSteps {
         """.trimIndent())
         root.resolve("src/main/kotlin/fixture/api/Greeting.kt").apply {
             parent.createDirectories()
-            writeText("package fixture.api\npublic fun greeting(): String = \"hi\"\npublic class Unused\n")
+            writeText(
+                "package fixture.api\npublic fun greeting(): String = \"hi\"\n" +
+                    "public fun greeting2(): String = \"yo\"\npublic class Unused\n",
+            )
         }
         root.resolve("src/main/kotlin/fixture/app/Main.kt").apply {
             parent.createDirectories()
+            // Two used top-level callables (greeting2 before greeting) deliberately non-sorted,
+            // plus one unused type, all in one contiguous import block.
             writeText(
-                "package fixture.app\nimport fixture.api.greeting\nimport fixture.api.Unused\n" +
-                    "fun run(): String = greeting()\n",
+                "package fixture.app\nimport fixture.api.greeting2\nimport fixture.api.greeting\nimport fixture.api.Unused\n" +
+                    "fun run(): String = greeting() + greeting2()\n",
             )
         }
         fixtureRoot = root
@@ -121,18 +126,24 @@ class KotlinJvmOrganizeImportsCallableSteps {
     fun callableImportPreserved() {
         val observed = replacementText ?: "(no preview replacement)"
         assertTrue(
-            plan?.status == PatchStatus.PREVIEW && "import fixture.api.greeting" in observed,
-            "expected the compiler-proven callable import preserved in the preview; status=${plan?.status} replacement=[$observed]",
+            plan?.status == PatchStatus.PREVIEW && "import fixture.api.greeting" in observed &&
+                "import fixture.api.greeting2" in observed,
+            "expected the compiler-proven callable imports preserved in the preview; status=${plan?.status} replacement=[$observed]",
         )
     }
 
     @Then("the retained imports are sorted")
     fun retainedImportsSorted() {
         val observed = replacementText ?: "(no preview replacement)"
+        val observedDirectives = observed.lineSequence()
+            .map(String::trim)
+            .filter { it.startsWith("import ") }
+            .toList()
+        val expectedSorted = listOf("import fixture.api.greeting", "import fixture.api.greeting2")
         assertTrue(
-            plan?.status == PatchStatus.PREVIEW && "import fixture.api.greeting" in observed &&
-                "import fixture.api.Unused" !in observed,
-            "expected the retained imports sorted in the preview; status=${plan?.status} replacement=[$observed]",
+            plan?.status == PatchStatus.PREVIEW && observedDirectives == expectedSorted,
+            "expected the retained import directives exactly sorted as $expectedSorted; " +
+                "status=${plan?.status} observed=$observedDirectives replacement=[$observed]",
         )
     }
 
