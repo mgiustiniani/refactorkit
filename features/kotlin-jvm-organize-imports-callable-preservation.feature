@@ -1,14 +1,16 @@
 # language: en
-@functional-requirement @partial
+@functional-requirement @implemented-and-validated
 Business Need: Preserve compiler-proven callable imports while removing unused type imports in Kotlin organize-imports
   Kotlin organize-imports must keep every compiler-proven top-level callable import that is actually used,
   while dropping unused type imports that share the same contiguous import block.
   A callable import is proven used through K2 compiler evidence and must not be removed merely because it is
   not a type import. Unused type imports are dropped; proven callable imports are preserved and sorted with the
   retained imports, and the preview must not introduce a compiler error.
-  Status: @partial pending the independent requirements-quality-reviewer PASS. Linux
-  source-built Cucumber GREEN exists but no independent PASS is recorded, so this
-  feature is not promoted to @implemented-and-validated.
+  Status: promotion to @implemented-and-validated granted by an independent
+  requirements-quality-reviewer PASS at c18e2b3 under approved-change-009.
+  The tests-only RED gate remains deferred as technical debt R-050 and is
+  requalified at K5 band close; broader packaged and four-platform gates remain
+  not claimed.
 
   @REQ-KOTLIN-JVM-ORGANIZE-IMPORTS-CALLABLE-001
   Scenario: A used top-level callable import is preserved while an unused type import is removed
