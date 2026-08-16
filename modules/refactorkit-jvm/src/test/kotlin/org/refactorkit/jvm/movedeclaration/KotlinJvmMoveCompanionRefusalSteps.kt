@@ -23,6 +23,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.readText
@@ -62,6 +63,12 @@ class KotlinJvmMoveCompanionRefusalSteps {
     private var selectedName: String? = null
     private var acceptExternalConsumerRisk = false
     private var plan: PatchPlan? = null
+
+    // AC-COMPANION-REFUSAL-002 real observable probe: the content identity of every regular file on
+    // the workspace root immediately before the preview. The refusal Then must prove the set is
+    // byte-for-byte unchanged afterward (no file created, modified, or deleted), which also proves
+    // no WAL/transaction record, pending managed-plan, or lock artifact was written into the workspace.
+    private var workspaceBaseline: Map<Path, String>? = null
 
     private val companionCode = "kotlin.moveCompanionStandaloneUnsupported"
     private val missingApprovalCode = "kotlin.moveExternalConsumerApprovalRequired"
@@ -195,6 +202,10 @@ class KotlinJvmMoveCompanionRefusalSteps {
 
     @When("^moveDeclaration previews the selection$")
     fun moveDeclarationPreviewsSelection() {
+        // AC-COMPANION-REFUSAL-002: snapshot the workspace-root content identity before the preview so
+        // the refusal Then can prove no filesystem mutation (create/modify/delete) and no WAL/transaction,
+        // pending managed-plan, or lock artifact was written into the workspace.
+        workspaceBaseline = snapshotWorkspaceContent(requireNotNull(fixtureRoot))
         val snap = requireNotNull(snapshot)
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
         val catalogue = compilerCatalogue()
@@ -225,8 +236,22 @@ class KotlinJvmMoveCompanionRefusalSteps {
     fun refusalContainsNoMutation() {
         val p = requireNotNull(plan)
         assertEquals(PatchStatus.REFUSED, p.status, p.toString())
+        // AC-002 surface 1: no WorkspaceEdit.
         assertTrue(p.workspaceEdit.edits.isEmpty(), "expected no WorkspaceEdit in the refusal: ${p.toString()}")
+        // AC-002 surface 2: no affected file.
         assertTrue(p.affectedFiles.isEmpty(), "expected no affected file in the refusal: ${p.toString()}")
+        // AC-002 surface 3: no pending managed plan. A managed plan awaiting apply would be PREVIEW,
+        // require explicit user approval, and carry a core lock-boundary authority lease; the refusal
+        // is REFUSED with requiresUserApproval=false and no lease.
+        assertTrue(!p.requiresUserApproval, "expected no pending managed plan awaiting approval in the refusal: ${p.toString()}")
+        assertTrue(p.authorityLease == null, "expected no managed under-lock authority lease in the refusal: ${p.toString()}")
+        // AC-002 surface 4: no lock acquired/held. Core materializes the workspace lock only as an
+        // OperationAuthorityLease on a managed preview; a REFUSED plan carries none (asserted above).
+        // AC-002 surfaces 5/6: no WAL or transaction record. Preview constructs no Transaction and
+        // writes no transaction/WAL file; the workspace-root content probe below proves no such
+        // artifact appeared.
+        // AC-002 surface 7: no filesystem mutation (create/modify/delete) on the workspace root.
+        verifyNoWorkspaceMutation()
     }
 
     // ------------------------------------------------------------------ AC-COMPANION-REFUSAL-001 second sentence (nested non-companion)
@@ -276,6 +301,28 @@ class KotlinJvmMoveCompanionRefusalSteps {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private fun snapshotWorkspaceContent(root: Path): Map<Path, String> {
+        if (!Files.isDirectory(root)) return emptyMap()
+        val files = Files.walk(root).use { stream ->
+            stream.filter { path -> Files.isRegularFile(path) }.toList()
+        }
+        return files.associate { path -> path.normalize() to sha256(Files.readAllBytes(path)) }
+    }
+
+    private fun verifyNoWorkspaceMutation() {
+        val root = requireNotNull(fixtureRoot)
+        val baseline = requireNotNull(workspaceBaseline)
+        val current = snapshotWorkspaceContent(root)
+        assertEquals(
+            baseline, current,
+            "expected no filesystem mutation on the workspace root after the refusal (no file created, " +
+                "modified, or deleted; no WAL/transaction/plan/lock artifact written); changed: ${current - baseline}",
+        )
+    }
+
+    private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(bytes).joinToString("") { "%02x".format(it) }
 
     private fun compilerCatalogue(): KotlinCompilerSymbolsResult.Available {
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))

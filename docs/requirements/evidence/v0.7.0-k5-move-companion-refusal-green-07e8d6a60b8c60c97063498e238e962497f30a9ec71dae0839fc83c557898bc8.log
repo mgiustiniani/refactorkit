@@ -1,0 +1,36 @@
+RefactorKit K5 companion-refusal Cucumber GREEN evidence (focused)
+requirementId=REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001
+workflow=bdd-java
+status=GREEN
+runner=org.refactorkit.jvm.movedeclaration.KotlinJvmMoveCompanionRefusalCucumberTest
+verificationCommand=JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew --no-daemon :modules:refactorkit-jvm:test --tests "org.refactorkit.jvm.movedeclaration.KotlinJvmMoveCompanionRefusalCucumberTest"
+result=BUILD SUCCESSFUL
+scenarios=3 (all passed)
+steps=14 (all passed)
+cucumberJson=docs/requirements/evidence/v0.7.0-k5-move-companion-refusal-green-07e8d6a60b8c60c97063498e238e962497f30a9ec71dae0839fc83c557898bc8.json
+cucumberJsonSha256=07e8d6a60b8c60c97063498e238e962497f30a9ec71dae0839fc83c557898bc8
+
+Narrative (approved-change-008 reconciliation):
+
+- No genuine executable tests-only RED exists for REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001.
+  Production (KotlinJvmMoveDeclarationPlanner line ~79, kotlin.moveCompanionStandaloneUnsupported)
+  pre-existed on main and was not weakened; all 3 Cucumber scenarios pass GREEN against that
+  existing production with no production code changed in this slice.
+
+- The mandatory tests-only RED gate is DEFERRED per user-approved approved-change-008
+  (docs/requirements/kotlin-jvm-move-top-level-function-and-companion-refusal-approved-change-008.md)
+  and recorded as ARCHITECTURAL/PROCESS technical debt R-049 in ARC42 chapter 11
+  (docs/arc42/11-risks-and-technical-debt.adoc); it must be requalified at K5 band close.
+
+- AC-COMPANION-REFUSAL-002 side-effect prohibition is now observed with real probes in the glue
+  (KotlinJvmMoveCompanionRefusalSteps.refusalContainsNoMutation): empty WorkspaceEdit.edits, empty
+  affectedFiles, REFUSED status with requiresUserApproval=false and no OperationAuthorityLease (no
+  pending managed plan, no lock acquired/held), no Transaction/WAL record written (preview constructs
+  none and no transaction/WAL file appears), and a workspace-root content-identity probe proving no
+  file was created, modified, or deleted.
+
+- Declared status remains @partial; promotion to @implemented-and-validated is pending the independent
+  requirements-quality-reviewer PASS. No implementation status is promoted.
+
+- Refusal codes in the scenarios are the actual production codes observed by the Cucumber glue, not
+  invented granular codes; the source of truth matches executable reality (anti-fake).
