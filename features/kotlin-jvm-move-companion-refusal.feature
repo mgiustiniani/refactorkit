@@ -27,9 +27,9 @@ Business Need: Refuse a standalone companion-object selection as a package/file 
   Promotion to @implemented-and-validated is granted by the independent requirements-quality-reviewer
   PASS at candidate ea66a4a. The packaged and four-platform qualification remains deferred per
   approved-change-007, and the tests-only RED gate remains deferred as technical debt R-049 to be
-  requalified at K5 band close per approved-change-008. All three scenarios are tagged
-  @implemented-and-validated; the tests-only RED gate and the packaged and four-platform qualification
-  remain deferred and no implementation status is overclaimed.
+  requalified at K5 band close per approved-change-008.
+  All three scenarios are tagged @implemented-and-validated; the tests-only RED gate and the packaged
+  and four-platform qualification remain deferred and no implementation status is overclaimed.
 
   Refusal codes in the scenarios are the actual production codes observed by the Cucumber glue, not
   invented granular codes. The source of truth matches executable reality (anti-fake).
