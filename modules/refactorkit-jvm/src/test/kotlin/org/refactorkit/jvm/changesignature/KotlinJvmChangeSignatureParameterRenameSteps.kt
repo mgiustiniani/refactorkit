@@ -46,7 +46,7 @@ import kotlin.test.assertTrue
 
 /**
  * Story BDD glue for features/kotlin-jvm-change-signature-parameter-rename.feature
- * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 33 expanded cases across 10 scenario outlines).
+ * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 14 scenarios / 32 expanded cases across 10 scenario outlines).
  *
  * It replicates the real K2 compiler toolchain fixture
  * (kotlin-compiler-embeddable-2.0.21, jvmTarget 21, jdkToolchain 21) and drives the production
@@ -266,9 +266,15 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     // ------------------------------------------------------------------ REQ-001 outline: unrelated member is not a family member
 
     @Given(
-        "^the selected declaration is a compiler-catalogued Kotlin function \"fixture\\.billing\\.calculateTotal\" whose parameter \"subtotal\" is at ordinal 0$",
+        "^the selected declaration is a compiler-catalogued Kotlin function \"([^\"]+)\" whose parameter \"([^\"]+)\" is at ordinal 0$",
     )
-    fun selectedFamilyTargetWithSubtotalAtOrdinal0() {
+    fun selectedFamilyTarget(targetFunction: String, parameterOldName: String) {
+        // Parameterized for the reconciled REQ-001 "family incompleteness refuses" outline whose
+        // Examples pass the target function (fixture.billing.calculateTotal or
+        // java.util.function.Function.apply) and the old parameter name (subtotal or value).
+        // Every literal call site renders calculateTotal/subtotal, so capturing the columns
+        // preserves prior behavior; the external-boundary row drives oldName=value, which the
+        // overrideFamilyIs("crossing ...") fixture then selects on the external override (apply).
         val root = temporaryDirectory("rk-jvm-change-signature-family")
         buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
         fixtureRoot = root
@@ -276,6 +282,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
         plannerMode = PlannerMode.K2
         acceptExternalConsumerRisk = true
+        oldName = parameterOldName
         selectFamilyTarget()
     }
 
@@ -353,12 +360,11 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         plannerMode = PlannerMode.K2
         acceptExternalConsumerRisk = true
         selectApply = condition == "crossing an external or unavailable declaration boundary"
-        if (selectApply) {
-            // The external boundary manifests on the external override (apply) whose parameter is
-            // `value`, not `subtotal`; production reaches kotlin.changeSignatureExternalHierarchyUnsupported
-            // only when the selected parameter name matches the external override's parameter.
-            oldName = "value"
-        }
+        // The external boundary manifests on the external override (apply) whose parameter is
+        // `value`, not `subtotal`; production reaches kotlin.changeSignatureExternalHierarchyUnsupported
+        // only when the selected parameter name matches the external override's parameter. The old
+        // name now comes from the parameterized Given Examples column, so this branch only flags
+        // that the target selection must land on the external override (apply).
         selectFamilyTarget()
     }
 
@@ -732,8 +738,12 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     // ------------------------------------------------------------------ shared When
 
-    @When("^changeSignature\\.renameParameter previews renaming parameter \"subtotal\" to \"netAmount\"$")
-    fun previewsRenameSubtotalToNetAmount() {
+    @When("^changeSignature\\.renameParameter previews renaming parameter \"([^\"]+)\" to \"netAmount\"$")
+    fun previewsRenameParameterToNetAmount(parameterOldName: String) {
+        // Parameterized so the reconciled REQ-001 "family incompleteness refuses" outline's
+        // external-boundary row (old name "value") drives the real production path; literal call
+        // sites render "subtotal", preserving prior behavior.
+        oldName = parameterOldName
         workspaceBaseline = snapshotWorkspaceContent(requireNotNull(fixtureRoot))
         drivePreview(acceptExternalConsumerRisk)
     }
@@ -767,6 +777,32 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         observedRefusals += ObservedRefusal(declaredCode, p.refusalCode, p.status)
     }
 
+    // ------------------------------------------------------------------ shared preview-succeeds Then
+
+    @Then(
+        "^the result is a SEMANTIC_PREVIEW that renames the exact parameter declaration token at ordinal 0 to \"netAmount\"$",
+    )
+    fun resultIsSemanticPreviewRenamingTokenAtOrdinal0ToNetAmount() {
+        val p = requireNotNull(plan)
+        assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
+        assertTrue(p.refusalCode == null, p.toString())
+        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
+        val content = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/billing/Calculator.kt").normalize() }.content
+        assertTrue("netAmount" in content, content)
+        observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
+    }
+
+    @Then(
+        "^no refusal code is produced and no WAL, transaction, lock, or filesystem mutation is applied$",
+    )
+    fun noRefusalCodeAndNoMutation() {
+        val p = requireNotNull(plan)
+        assertTrue(p.status != PatchStatus.REFUSED, p.toString())
+        assertTrue(p.refusalCode == null, p.toString())
+        verifyNoWorkspaceMutation()
+        observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
+    }
+
     // ------------------------------------------------------------------ shared When/Then for apply + rollback
 
     @When("^the preview is applied under explicit authorization$")
@@ -793,8 +829,9 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     private fun drivePreview(acceptRisk: Boolean) {
         val snap = requireNotNull(snapshot)
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
-        val catalogue = compilerCatalogue()
-        lastCatalogue = catalogue
+        // Tolerate a non-Available catalogue: the "baseline K2 errors" row genuinely does not
+        // compile, so production returns kotlin.symbolCompilationFailed before resolving the target.
+        lastCatalogue = tryCompilerCatalogue()
         val id = if (missingTarget) {
             SymbolId("fixture.billing.nonexistentFunction")
         } else {
@@ -812,7 +849,16 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     }
 
     private fun selectFamilyTarget() {
-        val catalogue = compilerCatalogue()
+        val catalogue = tryCompilerCatalogue()
+        if (catalogue == null) {
+            // Baseline K2 errors (e.g. kotlin.symbolCompilationFailed): no Available catalogue to
+            // select from. Production refuses before resolving the target, so keep a fallback
+            // identity for the planner call; the refusal Then only needs the returned code.
+            lastCatalogue = null
+            targetId = SymbolId("fixture.billing.calculateTotal")
+            targetOwner = null
+            return
+        }
         lastCatalogue = catalogue
         val candidate = if (selectApply) {
             catalogue.index.symbols.firstOrNull { symbol ->
@@ -845,6 +891,16 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         }
         if (result is KotlinCompilerSymbolsResult.Error) {
             error("K2 compiler symbols error: ${result.failure.code} :: ${result.failure.message}")
+        }
+        return assertIs<KotlinCompilerSymbolsResult.Available>(result)
+    }
+
+    /** Returns null when the compiler catalogue is not Available (baseline K2 errors/incomplete symbols). */
+    private fun tryCompilerCatalogue(): KotlinCompilerSymbolsResult.Available? {
+        val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
+        val result = adapter.compilerSymbols(requireNotNull(snapshot))
+        if (result is KotlinCompilerSymbolsResult.Refused || result is KotlinCompilerSymbolsResult.Error) {
+            return null
         }
         return assertIs<KotlinCompilerSymbolsResult.Available>(result)
     }

@@ -9,7 +9,7 @@ import org.junit.platform.suite.api.Suite
 
 /**
  * Story BDD runner for features/kotlin-jvm-change-signature-parameter-rename.feature
- * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 33 expanded cases across 10 scenario outlines).
+ * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 14 scenarios / 32 expanded cases across 10 scenario outlines).
  *
  * The glue uses the real K2 compiler toolchain (kotlin-compiler-embeddable-2.0.21,
  * jvmTarget 21, jdkToolchain 21) plus the JDT Java semantic analyzer, and drives the
