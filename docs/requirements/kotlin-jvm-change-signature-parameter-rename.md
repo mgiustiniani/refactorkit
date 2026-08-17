@@ -6,7 +6,7 @@ Status: candidate requirement; promotion requires executable RED/GREEN, packaged
 
 The bounded `changeSignature.renameParameter` operation accepts one compiler-catalogued Kotlin function and one exact value-parameter name. The target function is identified by its K2-to-JVM owner, JVM name and descriptor; the parameter is identified by that callable identity plus its zero-based ordinal. Same-name overloads and unrelated same-descriptor methods are not members of the target.
 
-K2 FIR override checking plus resolved source class-supertypes assigns one stable override-family identity. If the target is part of a source override/implementation family, every source declaration at the same ordinal is renamed atomically. An incomplete, ambiguous, generated, plugin-dependent, or external-only family refuses.
+K2 FIR override checking plus resolved source class-supertypes assigns one stable override-family identity. If the target is part of a source override/implementation family, every source declaration at the same ordinal is renamed atomically. An ambiguous family or a family crossing an external/unavailable declaration boundary refuses with a stable typed code; a hierarchy member with fewer than two family functions, or a family lacking one exact parameter declaration at the selected ordinal, still previews a rename.
 
 ## REQ-KOTLIN-CHANGE-SIGNATURE-002 — Exact edits
 
