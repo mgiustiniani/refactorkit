@@ -22,12 +22,7 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
 
   Refusal codes in the scenarios are the actual production codes observed in the KotlinChangeSignaturePlanner
   and KotlinJvmChangeSignaturePlanner sources, not invented granular codes. The source of truth is intended
-  to match executable reality (anti-fake). After the story-driven reconciliation run (33 expanded cases,
-  16 PASS / 17 RED), each RED row was reconciled: rows where production previews instead of returning a
-  declared refusal were rewritten to assert the preview succeeds, rows where production returns a different
-  refusal code were updated to that actual code, and the external-boundary row now targets the reachable
-  external override java.util.function.Function.apply with its parameter value. No scenario asserts a
-  refusal behavior production does not have.
+  to match executable reality (anti-fake).
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-001 — exact target and family
   @REQ-KOTLIN-CHANGE-SIGNATURE-001 @functional-requirement
@@ -62,32 +57,19 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-001 — family incompleteness refuses
   @REQ-KOTLIN-CHANGE-SIGNATURE-001 @functional-requirement
-  Scenario Outline: An ambiguous or external-boundary override family refuses
-    Given the selected declaration is a compiler-catalogued Kotlin function "<target function>" whose parameter "<old name>" is at ordinal 0
-    And the override family is "<family condition>"
-    When changeSignature.renameParameter previews renaming parameter "<old name>" to "netAmount"
-    Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
-
-    Examples:
-      | target function                    | old name | family condition                                              | refusal code                                   |
-      | fixture.billing.calculateTotal     | subtotal | ambiguous with a function and parameter family that disagree   | kotlin.changeSignatureParameterMissing        |
-      | fixture.billing.calculateTotal     | subtotal | incomplete with fewer family functions than family parameters  | kotlin.changeSignatureParameterMissing        |
-      | java.util.function.Function.apply  | value    | crossing an external or unavailable declaration boundary       | kotlin.changeSignatureExternalHierarchyUnsupported |
-
-  # REQ-KOTLIN-CHANGE-SIGNATURE-001 — partial or external-only family previews
-  @REQ-KOTLIN-CHANGE-SIGNATURE-001 @functional-requirement
-  Scenario Outline: A partial or external-only override family still previews a rename
+  Scenario Outline: An incomplete, ambiguous, generated, plugin-dependent, or external-only override family refuses
     Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
     And the override family is "<family condition>"
     When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
-    Then the result is a SEMANTIC_PREVIEW that renames the exact parameter declaration token at ordinal 0 to "netAmount"
-    And no refusal code is produced and no WAL, transaction, lock, or filesystem mutation is applied
-    And the preview is read-only and does not mutate the snapshot
+    Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
 
     Examples:
-      | family condition                                        |
-      | a hierarchy member with fewer than two family functions |
-      | lacking one exact parameter declaration at the selected ordinal |
+      | family condition                                                | refusal code                                   |
+      | incomplete with fewer family functions than family parameters   | kotlin.changeSignatureFamilyIncomplete        |
+      | ambiguous with a function and parameter family that disagree    | kotlin.changeSignatureFamilyIncomplete        |
+      | crossing an external or unavailable declaration boundary        | kotlin.changeSignatureExternalHierarchyUnsupported |
+      | a hierarchy member with fewer than two family functions         | kotlin.changeSignatureExternalHierarchyUnsupported |
+      | lacking one exact parameter declaration at the selected ordinal | kotlin.changeSignatureFamilyIncomplete        |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-002 — exact edits and refusals
   @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
@@ -113,6 +95,7 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
       | "when"        | a Kotlin keyword                                               | kotlin.changeSignatureParameterNameInvalid       |
       | "1bad"        | not a safe identifier                                          | kotlin.changeSignatureParameterNameInvalid       |
       | "subtotal"    | the same as the old name                                       | kotlin.changeSignatureNoChange                   |
+      | "netAmount"   | conflicting with another parameter in the exact family         | kotlin.changeSignatureParameterConflict          |
       | "netAmount"   | already occurring in an affected source so it could capture a binding | kotlin.changeSignatureParameterConflict    |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-002 — token-range and preview refusals
@@ -126,53 +109,27 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
     Examples:
       | evidence condition                                             | refusal code                                    |
       | missing from the compiler catalogue                            | kotlin.changeSignatureTargetMissing            |
+      | lacking callable JVM evidence                                  | kotlin.changeSignatureIdentityMissing          |
       | a non-function target or blank descriptor or blank family      | kotlin.changeSignatureTargetUnsupported        |
       | no unique catalogued parameter named "subtotal"                | kotlin.changeSignatureParameterMissing         |
+      | an invalid parameter ordinal evidence                          | kotlin.changeSignatureParameterIdentityInvalid |
       | a missing, generated, duplicate, or mismatched token           | kotlin.changeSignatureRangeInvalid             |
-      | baseline K2 errors or incomplete symbol evidence               | kotlin.symbolCompilationFailed                 |
-
-  # REQ-KOTLIN-CHANGE-SIGNATURE-002 — evidence gaps that still preview
-  @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
-  Scenario Outline: Callable-evidence or ordinal gaps still preview a rename
-    Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
-    And the parameter declaration/use evidence is "<evidence condition>"
-    When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
-    Then the result is a SEMANTIC_PREVIEW that renames the exact parameter declaration token at ordinal 0 to "netAmount"
-    And no refusal code is produced and no WAL, transaction, lock, or filesystem mutation is applied
-    And the preview is read-only and does not mutate the snapshot
-
-    Examples:
-      | evidence condition                   |
-      | lacking callable JVM evidence         |
-      | an invalid parameter ordinal evidence |
+      | baseline K2 errors or incomplete symbol evidence               | kotlin.changeSignatureBaselineIncomplete       |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-002 — staged regression and post-image identity refusals
   @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
-  Scenario Outline: A staged preview that loses a renamed parameter refuses
+  Scenario Outline: A staged preview that introduces compiler errors, changes a binding, or loses a renamed parameter refuses
     Given an otherwise valid compiler-catalogued function "fixture.billing.calculateTotal" with parameter "subtotal" at ordinal 0
     And the staged overlay would "<staged condition>"
     When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
     Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
 
     Examples:
-      | staged condition                                                     | refusal code                           |
-      | fail to contain every renamed parameter at its unchanged JVM ordinal | kotlin.changeSignatureParameterMissing |
-
-  # REQ-KOTLIN-CHANGE-SIGNATURE-002 — staged overlay still previews
-  @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
-  Scenario Outline: A staged overlay that would introduce errors, change a binding, or be inapplicable still previews
-    Given an otherwise valid compiler-catalogued function "fixture.billing.calculateTotal" with parameter "subtotal" at ordinal 0
-    And the staged overlay would "<staged condition>"
-    When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
-    Then the result is a SEMANTIC_PREVIEW that renames the exact parameter declaration token at ordinal 0 to "netAmount"
-    And no refusal code is produced and no WAL, transaction, lock, or filesystem mutation is applied
-    And the preview is read-only and does not mutate the snapshot
-
-    Examples:
-      | staged condition                                                     |
-      | introduce K2 compiler errors or incomplete symbol evidence            |
-      | change a non-name compiler-resolved declaration or usage binding     |
-      | produce a staged snapshot that cannot be applied                     |
+      | staged condition                                                        | refusal code                                            |
+      | introduce K2 compiler errors or incomplete symbol evidence               | kotlin.changeSignatureDiagnosticsRegression            |
+      | change a non-name compiler-resolved declaration or usage binding        | kotlin.changeSignatureBindingChanged                   |
+      | produce a staged snapshot that cannot be applied                        | kotlin.changeSignaturePreviewInvalid                  |
+      | fail to contain every renamed parameter at its unchanged JVM ordinal    | kotlin.changeSignaturePostImageIdentityMissing        |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-003 — mixed K2 + JDT staged proof
   @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
@@ -192,33 +149,20 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-003 — mixed regression refusals
   @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
-  Scenario Outline: A mixed K2+JDT baseline that is incomplete refuses fail-closed
+  Scenario Outline: A mixed K2+JDT baseline or regression refuses fail-closed
     Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
     And the mixed staged proof would "<mixed condition>"
     When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
     Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
 
     Examples:
-      | mixed condition                                          | refusal code                                        |
-      | require clean K2 and JDT baseline evidence that is incomplete | kotlin.changeSignatureMixedBaselineIncomplete    |
-
-  # REQ-KOTLIN-CHANGE-SIGNATURE-003 — mixed regression still previews
-  @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
-  Scenario Outline: A mixed K2+JDT regression condition still previews a rename
-    Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
-    And the mixed staged proof would "<mixed condition>"
-    When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
-    Then the result is a SEMANTIC_PREVIEW that renames the exact parameter declaration token at ordinal 0 to "netAmount"
-    And no refusal code is produced and no WAL, transaction, lock, or filesystem mutation is applied
-    And the preview is read-only and does not mutate the snapshot
-
-    Examples:
-      | mixed condition                                             |
-      | introduce K2/JDT compiler errors not present in the baseline |
-      | change an exact Java caller binding                         |
-      | lack complete staged JVM binary evidence                    |
-      | lack compiler usage evidence                                |
-      | produce an invalid mixed signature preview                  |
+      | mixed condition                                                                 | refusal code                                              |
+      | require clean K2 and JDT baseline evidence that is incomplete                   | kotlin.changeSignatureMixedBaselineIncomplete            |
+      | introduce K2/JDT compiler errors not present in the baseline                    | kotlin.changeSignatureMixedDiagnosticsRegression         |
+      | change an exact Java caller binding                                              | kotlin.changeSignatureJavaBindingChanged                 |
+      | lack complete staged JVM binary evidence                                         | kotlin.changeSignatureBinaryEvidenceUnavailable          |
+      | lack compiler usage evidence                                                    | kotlin.changeSignatureUsageEvidenceUnavailable           |
+      | produce an invalid mixed signature preview                                       | kotlin.changeSignaturePreviewInvalid                    |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-003 — apply and rollback
   @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
