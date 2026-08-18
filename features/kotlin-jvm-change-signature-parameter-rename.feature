@@ -14,11 +14,20 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
   parameter symbols, and the FIR argument-to-parameter-mapped Kotlin named-argument labels are edited.
 
   Declared status: @not-implemented. Production planners (KotlinChangeSignaturePlanner and the K2+JDT
-  KotlinJvmChangeSignaturePlanner) exist on main, but this feature has no Cucumber runner/glue and no
-  executable RED/GREEN or independent requirements-quality-reviewer PASS for this requirement yet, so no
-  scenario is tagged @implemented-and-validated and no implementation status is overclaimed. Promotion
-  requires a genuine executable tests-only RED, Cucumber GREEN against the agreed runner, packaged
-  CLI/daemon/MCP apply and rollback, four-platform qualification, and an independent review PASS.
+  KotlinJvmChangeSignaturePlanner) exist on main and were not weakened. The slice's Cucumber runner/glue
+  exists (KotlinJvmChangeSignatureParameterRenameCucumberTest and KotlinJvmChangeSignatureParameterRenameSteps
+  in modules/refactorkit-jvm) and passes Linux source-built GREEN against that existing production: 33
+  expanded cases / 171 steps, recorded separately as promotion evidence at
+  docs/requirements/evidence/v0.7.0-k5-change-signature-green-ad2c953dbb52c75de55699f9e5522e5318a7ebdf420988fc5a2a674f9ce1d8fe.json.
+  No scenario is tagged @implemented-and-validated and no implementation status is overclaimed (anti-fake).
+  Per user-approved approved-change-010 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-010.md)
+  the mandatory tests-only RED gate for REQ-KOTLIN-CHANGE-SIGNATURE-001..003 is deferred and recorded as
+  ARCHITECTURAL/PROCESS technical debt (R-051, chapter 11), requalified at K5 band close. The 12 non-inducible
+  defensive-gate refusal criteria are superseded and reframed per approved-change-011
+  (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-011.md) to assert the actual
+  production behavior (SEMANTIC_PREVIEW success, read-only) with a defensive-gate note and are NOT removed.
+  Packaged CLI/daemon/MCP apply and rollback and four-platform qualification remain deferred/not claimed.
+  Promotion to @implemented-and-validated awaits only the independent requirements-quality-reviewer PASS.
 
   Refusal codes in the scenarios are the actual production codes observed in the KotlinChangeSignaturePlanner
   and KotlinJvmChangeSignaturePlanner sources, not invented granular codes. The source of truth is intended
