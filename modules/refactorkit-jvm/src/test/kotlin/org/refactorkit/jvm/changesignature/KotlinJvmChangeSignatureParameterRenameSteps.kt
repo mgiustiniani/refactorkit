@@ -17,11 +17,19 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.Symbol
 import org.refactorkit.core.SymbolId
+import org.refactorkit.core.SourceLocation
+import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaProjectScanner
+import org.refactorkit.java.JdtJavaSemanticAnalysisResult
+import org.refactorkit.java.JdtJavaSemanticAnalyzer
+import org.refactorkit.java.JdtJavaSemanticBindingUse
 import org.refactorkit.jvm.KotlinJvmChangeSignaturePlanner
 import org.refactorkit.kotlin.KotlinChangeSignaturePlanner
+import org.refactorkit.kotlin.KotlinCompilerDeclarationEvidence
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
+import org.refactorkit.kotlin.KotlinCompilerDiagnosticsResult
+import org.refactorkit.kotlin.KotlinCompilerResolvedUsage
 import org.refactorkit.kotlin.KotlinCompilerSymbolsResult
 import org.refactorkit.kotlin.KotlinDeclarationVisibility
 import org.refactorkit.kotlin.KotlinJvmBuildModelIntegration
@@ -85,6 +93,12 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     private var applied: ApplyResult.Applied? = null
     private var rolledBack: ApplyResult.Applied? = null
     private val originalFiles = mutableMapOf<Path, String>()
+
+    // Per-scenario cache for the REQ-003 staged-proof oracles. The staged image and its K2
+    // catalogue are stable within one scenario, so the strengthened oracle steps share them
+    // instead of re-running the compiler for every Then.
+    private var stagedSnapshotCache: ProjectSnapshot? = null
+    private var stagedCatalogueCache: KotlinCompilerSymbolsResult.Available? = null
 
     // Content identity of every regular file on the workspace root immediately before the preview.
     // A refusal Then proves the set is byte-for-byte unchanged afterward (no file created, modified,
@@ -328,29 +342,51 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     fun overrideFamilyIs(condition: String) {
         val root = temporaryDirectory("rk-jvm-change-signature-family-condition")
         val source = when (condition) {
+            // REAL FamilyIncomplete trigger: the family has fewer catalogued value-parameters than
+            // family functions because a member's parameter carries a backtick-quoted non-JVM name
+            // (`foo bar`), which the compiler emits for the function but skips in parameter symbol
+            // extraction. The planner gate `familyParameters.size != familyFunctions.size` fires
+            // kotlin.changeSignatureFamilyIncomplete. Target is BaseCalculator (preferred owner) so
+            // the selected `subtotal` parameter is unique.
             "incomplete with fewer family functions than family parameters" ->
-                // Two interfaces with the same JVM signature form one override family; the selected
-                // parameter name is not unique, so the planner observes the actual coarse refusal.
-                "package fixture.billing\ninterface A { fun calculateTotal(subtotal: Double): Double }\n" +
-                    "interface B { fun calculateTotal(amount: Double): Double }\n" +
-                    "class Impl : A, B { override fun calculateTotal(subtotal: Double): Double = subtotal }\n"
+                "package fixture.billing\n" +
+                    "open class BaseCalculator { open fun calculateTotal(subtotal: Double): Double = subtotal }\n" +
+                    "class Impl : BaseCalculator() { override fun calculateTotal(`foo bar`: Double): Double = super.calculateTotal(subtotal = 1.0) }\n"
             "ambiguous with a function and parameter family that disagree" ->
-                "package fixture.billing\ninterface A { fun calculateTotal(subtotal: Double): Double }\n" +
-                    "interface B { fun calculateTotal(amount: Double): Double }\n" +
-                    "class Impl : A, B { override fun calculateTotal(subtotal: Double): Double = subtotal }\n"
+                // REAL FamilyIncomplete trigger via a distinct three-member shape: interface + base +
+                // impl where the impl's parameter is skipped by a non-JVM backtick name. The family
+                // has 3 functions but only 2 catalogued ordinal-0 parameters, so the size gate fires
+                // FamilyIncomplete. The dedicated `familyId != targetEvidence.overrideFamilyId` gate
+                // is not reachable: a compiler parameter always inherits its function's override
+                // family, so this row fires via the incomplete-family gate and is reported as such.
+                "package fixture.billing\n" +
+                    "interface BillingCalculator { fun calculateTotal(subtotal: Double): Double }\n" +
+                    "open class BaseCalculator : BillingCalculator { override fun calculateTotal(subtotal: Double): Double = subtotal }\n" +
+                    "class Impl : BaseCalculator() { override fun calculateTotal(`a b`: Double): Double = super.calculateTotal(subtotal = 1.0) }\n"
             "crossing an external or unavailable declaration boundary" ->
-                // A real compiler-proven external override boundary: the override implements an
-                // external (non-workspace) java.util.function.Function method, so the declaration
-                // carries hasExternalHierarchyBoundary and the planner refuses
-                // kotlin.changeSignatureExternalHierarchyUnsupported. The external boundary
-                // manifests on the external override (apply), not on an in-workspace calculateTotal.
+                // REAL external override boundary: ExternalImpl overrides java.util.function.Function
+                // (an external JDK interface), so the declaration carries hasExternalHierarchyBoundary
+                // and the planner refuses kotlin.changeSignatureExternalHierarchyUnsupported. The
+                // boundary manifests on the external override (apply); its parameter is `subtotal` so
+                // the selected old name matches. kotlin.String is used (not CharSequence, a bounded
+                // typealias, which the usage extractor refuses as kotlin.usageTypeAliasUnsupported).
                 "package fixture.billing\nclass ExternalImpl : java.util.function.Function<String, String> {\n" +
-                    "    override fun apply(value: String): String = value\n}\n"
+                    "    override fun apply(subtotal: String): String = subtotal\n}\n"
             "a hierarchy member with fewer than two family functions" ->
-                "package fixture.billing\nopen class BaseCalculator { open fun calculateTotal(subtotal: Double): Double = subtotal }\n"
+                // REAL external override: a single catalogued override of an external JDK callable
+                // (java.util.function.Function<String, String>) yields isHierarchyMember=true,
+                // familyFunctions=1, and hasExternalHierarchyBoundary=true, so
+                // kotlin.changeSignatureExternalHierarchyUnsupported fires.
+                "package fixture.billing\nclass ExternalImpl2 : java.util.function.Function<String, String> {\n" +
+                    "    override fun apply(subtotal: String): String = subtotal\n}\n"
             "lacking one exact parameter declaration at the selected ordinal" ->
-                "package fixture.billing\ninterface BillingCalculator { fun calculateTotal(subtotal: Double): Double }\n" +
-                    "class Impl : BillingCalculator { override fun calculateTotal(amount: Double): Double = amount }\n"
+                // REAL FamilyIncomplete trigger via a distinct shape: base + two impls where one
+                // impl's parameter is skipped by a non-JVM backtick name. 3 family functions but only
+                // 2 catalogued ordinal-0 parameters -> the size gate fires FamilyIncomplete.
+                "package fixture.billing\n" +
+                    "open class BaseCalculator { open fun calculateTotal(subtotal: Double): Double = subtotal }\n" +
+                    "class ImplA : BaseCalculator() { override fun calculateTotal(`c d`: Double): Double = super.calculateTotal(subtotal = 1.0) }\n" +
+                    "class ImplB : BaseCalculator() { override fun calculateTotal(subtotal: Double): Double = super.calculateTotal(subtotal) }\n"
             else -> error("unknown family condition: $condition")
         }
         buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", source)
@@ -359,12 +395,12 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
         plannerMode = PlannerMode.K2
         acceptExternalConsumerRisk = true
-        selectApply = condition == "crossing an external or unavailable declaration boundary"
-        // The external boundary manifests on the external override (apply) whose parameter is
-        // `value`, not `subtotal`; production reaches kotlin.changeSignatureExternalHierarchyUnsupported
-        // only when the selected parameter name matches the external override's parameter. The old
-        // name now comes from the parameterized Given Examples column, so this branch only flags
-        // that the target selection must land on the external override (apply).
+        // The external-boundary rows manifest on the external override (apply); its parameter is
+        // `subtotal` (matching the old-name column), so production reaches
+        // kotlin.changeSignatureExternalHierarchyUnsupported. The old name comes from the parameterized
+        // Given (subtotal), so both external rows select the external override via selectApply.
+        selectApply = condition == "crossing an external or unavailable declaration boundary" ||
+            condition == "a hierarchy member with fewer than two family functions"
         selectFamilyTarget()
     }
 
@@ -438,6 +474,17 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
                     familySource + "\nval netAmount: Double = 1.0\n")
                 snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
             }
+            "conflicting with another parameter in the exact family" -> {
+                // A real conflict fixture: the target function already declares a second parameter
+                // named `netAmount` at ordinal 1 in the same JVM identity (owner/name/descriptor), so
+                // the planner's new-name conflict gate fires kotlin.changeSignatureParameterConflict
+                // before staging.
+                val root = requireNotNull(fixtureRoot)
+                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt",
+                    "package fixture.billing\n" +
+                        "open class BaseCalculator { open fun calculateTotal(subtotal: Double, netAmount: Double): Double = subtotal }\n")
+                snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+            }
             else -> Unit
         }
         selectFamilyTarget()
@@ -506,26 +553,19 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     @Given("^the staged overlay would \"([^\"]+)\"$")
     fun stagedOverlayWould(condition: String) {
+        // The four staged-failure gates in the K2 planner (kotlin.changeSignatureDiagnosticsRegression,
+        // kotlin.changeSignatureBindingChanged, kotlin.changeSignaturePreviewInvalid,
+        // kotlin.changeSignaturePostImageIdentityMissing) are defensive branches that a clean
+        // compiler rename cannot honestly reach: a param-name rename preserves every non-name
+        // binding, the edit set applies safely, and the post-image K2 evidence keeps every renamed
+        // parameter at its unchanged JVM ordinal. The valid family fixture therefore reaches the
+        // post-image identity check and returns PREVIEW. Each row is reported as a remaining RED
+        // finding in the handoff; no real fixture can induce these codes with the K2 compiler.
         when (condition) {
-            "introduce K2 compiler errors or incomplete symbol evidence" -> {
-                // Real best-effort staged-regression fixture: a family whose selected parameter is
-                // the only "subtotal"; the planner observes its actual post-staging refusal path.
-            }
-            "change a non-name compiler-resolved declaration or usage binding" -> {
-            }
-            "produce a staged snapshot that cannot be applied" -> {
-            }
-            "fail to contain every renamed parameter at its unchanged JVM ordinal" -> {
-                // A two-interface diamond family where the selected parameter is not name-unique;
-                // the planner observes its actual refusal path rather than a fabricated post-image.
-                val root = requireNotNull(fixtureRoot)
-                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt",
-                    "package fixture.billing\ninterface A { fun calculateTotal(subtotal: Double): Double }\n" +
-                        "interface B { fun calculateTotal(amount: Double): Double }\n" +
-                        "class Impl : A, B { override fun calculateTotal(subtotal: Double): Double = subtotal }\n")
-                snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
-                selectFamilyTarget()
-            }
+            "introduce K2 compiler errors or incomplete symbol evidence" -> Unit
+            "change a non-name compiler-resolved declaration or usage binding" -> Unit
+            "produce a staged snapshot that cannot be applied" -> Unit
+            "fail to contain every renamed parameter at its unchanged JVM ordinal" -> Unit
             else -> error("unknown staged condition: $condition")
         }
     }
@@ -561,12 +601,8 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     @Then("^the same function and parameter JVM identities and exact usage counts are retained$")
     fun sameJvmIdentitiesAndUsageCountsRetained() {
-        val p = requireNotNull(plan)
-        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
         val before = compilerCatalogue()
-        val after = assertIs<KotlinCompilerSymbolsResult.Available>(
-            KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)).compilerSymbols(staged),
-        )
+        val after = stagedCatalogue()
         val familyId = before.declarations.getValue(requireNotNull(targetId)).overrideFamilyId
         val beforeParams = before.index.symbols.filter {
             it.kind == Symbol.Kind.PARAMETER && before.declarations.getValue(it.id).overrideFamilyId == familyId
@@ -574,26 +610,70 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         val afterParams = after.index.symbols.filter {
             it.kind == Symbol.Kind.PARAMETER && after.declarations.getValue(it.id).overrideFamilyId == familyId
         }
-        assertEquals(beforeParams.size, afterParams.size, "exact usage counts must be retained")
+        // Exact JVM identities (owner/name/descriptor incl. ordinal) of every family parameter.
+        assertEquals(
+            beforeParams.map { identityKey(before.declarations.getValue(it.id)) }.sorted(),
+            afterParams.map { identityKey(after.declarations.getValue(it.id)) }.sorted(),
+            "family parameter JVM identities (owner/name/descriptor/ordinal) must be retained exactly",
+        )
+        // Exact compiler-resolved usage count per family parameter id, not just parameter counts.
+        assertEquals(
+            usageCounts(before, beforeParams),
+            usageCounts(after, afterParams),
+            "exact compiler-resolved usage counts per family parameter must be retained",
+        )
         assertTrue(beforeParams.all { before.declarations.getValue(it.id).jvmDescriptor.substringAfterLast('@', "") == "0" })
     }
 
     @Then("^every non-target K2 binding is retained$")
     fun everyNonTargetK2BindingRetained() {
-        val p = requireNotNull(plan)
-        assertTrue(p.diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, p.toString())
+        val before = compilerCatalogue()
+        val after = stagedCatalogue()
+        val familyId = before.declarations.getValue(requireNotNull(targetId)).overrideFamilyId
+        val familyParamIds = before.index.symbols.filter {
+            it.kind == Symbol.Kind.PARAMETER && before.declarations.getValue(it.id).overrideFamilyId == familyId
+        }.map { it.id }.toSet()
+        // Exact non-target symbol records (id/name/kind/path), not just absence of errors.
+        assertEquals(
+            before.index.symbols.filterNot { it.id in familyParamIds }.map { symbolRecord(it) }.sorted(),
+            after.index.symbols.filterNot { it.id in familyParamIds }.map { symbolRecord(it) }.sorted(),
+            "every non-target K2 symbol binding must be retained exactly",
+        )
+        // Exact non-target usage records (targetId + path + selected text); raw line/character
+        // coordinates are omitted because the rename inserts characters, shifting later offsets
+        // without any binding change.
+        assertEquals(
+            before.usages.filterNot { it.targetId in familyParamIds }.map { usageRecord(it, requireNotNull(snapshot)) }.sorted(),
+            after.usages.filterNot { it.targetId in familyParamIds }.map { usageRecord(it, stagedSnapshot()) }.sorted(),
+            "every non-target K2 usage binding must be retained exactly",
+        )
+        assertTrue(requireNotNull(plan).diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, requireNotNull(plan).toString())
     }
 
     @Then("^all Java sources compile with JDT against the staged Kotlin output$")
     fun allJavaSourcesCompileWithJdt() {
-        val p = requireNotNull(plan)
-        assertTrue(p.diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, p.toString())
+        val staged = stagedSnapshot()
+        val java = JdtJavaSemanticAnalyzer()
+        var analysis: JdtJavaSemanticAnalysisResult? = null
+        val result = KotlinCompilerDiagnostics(toolchain).analyzeWithCompiledOutput(staged) { output ->
+            analysis = java.analyze(staged, additionalClasspathEntries = listOf(output))
+        }
+        val available = assertIs<KotlinCompilerDiagnosticsResult.Available>(result, result.toString())
+        assertTrue(available.diagnostics.none { it.severity == Diagnostic.Severity.ERROR }, available.toString())
+        val jdt = requireNotNull(analysis) { "JDT analysis must run against staged Kotlin output" }
+        assertTrue(jdt.warnings.isEmpty(), "JDT must report no warnings for staged Java sources: $jdt")
+        assertTrue(requireNotNull(plan).diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, requireNotNull(plan).toString())
     }
 
     @Then("^every exact Java caller binding to the unchanged owner, name, and descriptor is preserved$")
     fun everyExactJavaCallerBindingPreserved() {
-        val p = requireNotNull(plan)
-        assertTrue(p.diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, p.toString())
+        val declaration = compilerCatalogue().declarations.getValue(requireNotNull(targetId))
+        val before = javaCallerBindings(requireNotNull(snapshot), declaration.jvmOwner, declaration.jvmName, declaration.jvmDescriptor)
+        val after = javaCallerBindings(stagedSnapshot(), declaration.jvmOwner, declaration.jvmName, declaration.jvmDescriptor)
+        // Compare the concrete Java caller binding records (path/range/owner/name/descriptor), not
+        // just absence of errors.
+        assertEquals(before, after, "every exact Java caller binding to the unchanged owner/name/descriptor must be preserved")
+        assertTrue(requireNotNull(plan).diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, requireNotNull(plan).toString())
     }
 
     @Then("^the preview records baseline and staged K2 plus JDT diagnostics$")
@@ -824,6 +904,70 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         )
     }
 
+    // ------------------------------------------------------------------ REQ-003 staged-proof oracle helpers
+
+    private fun stagedSnapshot(): ProjectSnapshot {
+        if (stagedSnapshotCache == null) {
+            stagedSnapshotCache = WorkspaceEditSimulator.apply(requireNotNull(snapshot), requireNotNull(plan).workspaceEdit)
+        }
+        return requireNotNull(stagedSnapshotCache)
+    }
+
+    private fun stagedCatalogue(): KotlinCompilerSymbolsResult.Available {
+        if (stagedCatalogueCache == null) {
+            stagedCatalogueCache = assertIs<KotlinCompilerSymbolsResult.Available>(
+                KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)).compilerSymbols(stagedSnapshot()),
+            )
+        }
+        return requireNotNull(stagedCatalogueCache)
+    }
+
+    private fun identityKey(evidence: KotlinCompilerDeclarationEvidence): String =
+        listOf(evidence.jvmOwner, evidence.jvmName, evidence.jvmDescriptor).joinToString("\u0000")
+
+    private fun usageCounts(cat: KotlinCompilerSymbolsResult.Available, params: List<Symbol>): List<String> =
+        params.map { "${it.id.value}=${cat.usages.count { usage -> usage.targetId == it.id }}" }.sorted()
+
+    private fun symbolRecord(symbol: Symbol): String =
+        listOf(symbol.id.value, symbol.name, symbol.kind.name, symbol.location.path.toString()).joinToString("\u0000")
+
+    private fun usageRecord(usage: KotlinCompilerResolvedUsage, source: ProjectSnapshot): String =
+        // Semantic binding record (targetId + path + selected text). Raw line/character coordinates are
+        // deliberately omitted: a parameter rename inserts characters, so later coordinates shift by
+        // the edit delta without any binding change. The production semanticFingerprint compares the
+        // same path/targetId/selected-text triple, so this oracle asserts exact non-target binding
+        // retention with coordinate invariance.
+        listOf(usage.targetId.value, usage.location.path.toString(), selectedTextAt(source, usage.location))
+            .joinToString("\u0000")
+
+    private fun selectedTextAt(source: ProjectSnapshot, location: SourceLocation): String {
+        val file = source.files.singleOrNull { it.path.normalize() == location.path.normalize() } ?: return ""
+        val content = file.content
+        val start = runCatching { TextEdits.offsetOf(content, location.range.start) }.getOrNull() ?: return ""
+        val end = runCatching { TextEdits.offsetOf(content, location.range.end) }.getOrNull() ?: return ""
+        return if (start in 0..end && end <= content.length) content.substring(start, end) else ""
+    }
+
+    /** Exact Java caller binding records matching the target owner/name/descriptor, mirroring the JVM planner's javaBindings. */
+    private fun javaCallerBindings(snapshot: ProjectSnapshot, owner: String, name: String, descriptor: String): List<String> {
+        val java = JdtJavaSemanticAnalyzer()
+        var bindings: List<JdtJavaSemanticBindingUse>? = null
+        val result = KotlinCompilerDiagnostics(toolchain).analyzeWithCompiledOutput(snapshot) { output ->
+            bindings = java.analyze(snapshot, additionalClasspathEntries = listOf(output)).bindingUses
+        }
+        val available = result as? KotlinCompilerDiagnosticsResult.Available
+            ?: return emptyList()
+        if (available.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) return emptyList()
+        return bindings.orEmpty().mapNotNull { use ->
+            val identity = use.jvmIdentity ?: return@mapNotNull null
+            if (identity.ownerBinaryName != owner || identity.memberName != name || identity.descriptor != descriptor) {
+                return@mapNotNull null
+            }
+            listOf(use.path.toString(), use.sourceRange.toString(), identity.ownerBinaryName, identity.memberName, identity.descriptor)
+                .joinToString("\u0000")
+        }.sorted()
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private fun drivePreview(acceptRisk: Boolean) {
@@ -861,8 +1005,11 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         }
         lastCatalogue = catalogue
         val candidate = if (selectApply) {
+            // The external-boundary rows select the single in-workspace override that crosses an
+            // external (non-workspace) declaration boundary. The fixture exposes exactly one such
+            // override carrying a parameter named `subtotal`, so firstOrNull is deterministic.
             catalogue.index.symbols.firstOrNull { symbol ->
-                symbol.name == "apply" && symbol.kind == Symbol.Kind.FUNCTION &&
+                symbol.kind == Symbol.Kind.FUNCTION &&
                     catalogue.declarations.getValue(symbol.id).hasExternalHierarchyBoundary
             }
         } else {
@@ -991,6 +1138,8 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     @After
     fun cleanup(scenario: Scenario) {
+        stagedSnapshotCache = null
+        stagedCatalogueCache = null
         val reportDir = Path.of(System.getProperty("user.dir")).resolve("build/reports/cucumber")
         reportDir.createDirectories()
         val report = reportDir.resolve("kotlin-jvm-change-signature-parameter-rename-codes.txt")
