@@ -8,7 +8,6 @@ import io.cucumber.java.en.When
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
-import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
@@ -20,11 +19,13 @@ import org.refactorkit.core.SymbolId
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JdtJavaSemanticAnalysisResult
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
 import org.refactorkit.java.JdtJavaSemanticBindingUse
 import org.refactorkit.jvm.KotlinJvmChangeSignaturePlanner
+import org.refactorkit.jvm.ManagedApplyDiagnosticsGateSelector
 import org.refactorkit.kotlin.KotlinChangeSignaturePlanner
 import org.refactorkit.kotlin.KotlinCompilerDeclarationEvidence
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
@@ -124,6 +125,16 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     // outline and the mixed JVM outline. Cucumber creates a fresh glue instance per scenario.
     private var defensiveGuard: String? = null
     private var defensiveFixtureContext = DefensiveFixtureContext.GENERIC
+
+    // Declared REQ-001 family-incompleteness condition for the current outline row (set by
+    // overrideFamilyIs). The shared refusal Then verifies that the fixture actually induced the
+    // EXACT declared condition (not a substitute), failing the row with a precise RED finding when
+    // the declared condition is unreachable from a compiler fixture.
+    private var familyCondition: String? = null
+
+    // Set by pendingPlanEditSetContainsOnlyKotlinFiles (REQ-003) so the staged-overlay Then can
+    // assert the actual pending-plan edit set contains only Kotlin files.
+    private var pendingKotlinOnlyEditSet = false
 
     // ------------------------------------------------------------------ shared fixture helpers
 
@@ -359,6 +370,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     @Given("^the override family is \"([^\"]+)\"$")
     fun overrideFamilyIs(condition: String) {
+        familyCondition = condition
         val root = temporaryDirectory("rk-jvm-change-signature-family-condition")
         val source = when (condition) {
             // REAL FamilyIncomplete trigger: the family has fewer catalogued value-parameters than
@@ -603,7 +615,17 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     @Given("^the pending plan's final edit set contains only Kotlin files$")
     fun pendingPlanEditSetContainsOnlyKotlinFiles() {
-        // The family fixture is Kotlin-only; the planner never edits the Java caller bytes.
+        // Real precondition (the preview plan is created by the later When, so the actual edit set
+        // is asserted on the produced plan in the staged-overlay Then): every Kotlin source the
+        // planner can edit ends with .kt; the Java caller is added by the next Given and is never
+        // edited by the Kotlin-only rename.
+        val snap = requireNotNull(snapshot)
+        val kotlinFiles = snap.files.filter { it.languageId == "kotlin" }
+        assertTrue(
+            kotlinFiles.isNotEmpty() && kotlinFiles.all { it.path.fileName.toString().endsWith(".kt") },
+            "every Kotlin source the planner can edit must end with .kt: ${kotlinFiles.map { it.path }}",
+        )
+        pendingKotlinOnlyEditSet = true
     }
 
     @Given("^the exact operation is \"changeSignature\\.renameParameter\"$")
@@ -626,6 +648,32 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         val p = requireNotNull(plan)
         assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
         assertTrue(p.diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, p.toString())
+        // Real assertion of the pending plan's final edit set: every edited path ends with .kt and
+        // none is Java; the Java caller is never edited. Ties the pendingPlanEditSetContainsOnlyKotlinFiles
+        // Given precondition to the actual produced plan.
+        assertTrue(pendingKotlinOnlyEditSet, "pendingPlanEditSetContainsOnlyKotlinFiles precondition must have asserted")
+        val editedPaths = p.workspaceEdit.edits.mapNotNull { edit ->
+            when (edit) {
+                is FileEdit.Modify -> edit.path
+                is FileEdit.Create -> edit.path
+                is FileEdit.Delete -> edit.path
+                is FileEdit.Rename -> edit.newPath
+            }
+        }
+        assertTrue(editedPaths.isNotEmpty(), "pending plan must contain edited files: $p")
+        assertTrue(
+            editedPaths.all { it.fileName.toString().endsWith(".kt") },
+            "every edited path must be Kotlin (.kt): ${editedPaths.map { it.toString() }}",
+        )
+        assertTrue(
+            editedPaths.none { it.fileName.toString().endsWith(".java") },
+            "no edited path may be Java (.java): ${editedPaths.map { it.toString() }}",
+        )
+        assertTrue(
+            p.affectedFiles.all { it.fileName.toString().endsWith(".kt") } &&
+                p.affectedFiles.none { it.fileName.toString().endsWith(".java") },
+            "every affected path in the pending plan must be Kotlin and none Java: ${p.affectedFiles}",
+        )
     }
 
     @Then("^the same function and parameter JVM identities and exact usage counts are retained$")
@@ -772,8 +820,24 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         "^the managed-apply diagnostics gate for \"changeSignature\\.renameParameter\" is the lazy \"kotlin-k2-java-jdt-change-signature\" gate$",
     )
     fun managedApplyGateIsLazyChangeSignatureGate() {
-        // The apply step uses DiagnosticsGate.enabled("kotlin-k2-java-jdt-change-signature", ...)
-        // with the lazy mixed K2+JDT diagnostics provider (KotlinJvmChangeSignaturePlanner::diagnostics).
+        // Real assertion: exercise the production ManagedApplyDiagnosticsGateSelector for the
+        // changeSignature.renameParameter Kotlin route and assert it selects/enables the lazy
+        // kotlin-k2-java-jdt-change-signature gate (the mixed K2+JDT diagnostics provider).
+        val p = requireNotNull(plan)
+        val selected = ManagedApplyDiagnosticsGateSelector.select(
+            plan = p,
+            languageId = "kotlin",
+            javaAdapter = JavaLanguageAdapter(),
+            kotlinAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)),
+            externalGateResolver = { requested ->
+                error("changeSignature.renameParameter is a built-in Kotlin route; unexpected external gate lookup: $requested")
+            },
+        )
+        assertEquals(
+            "kotlin-k2-java-jdt-change-signature", selected.id,
+            "managed-apply selector must select the lazy kotlin-k2-java-jdt-change-signature gate",
+        )
+        assertNotNull(selected.provider, "the lazy kotlin-k2-java-jdt-change-signature gate must be enabled (non-null provider)")
     }
 
     @Then("^apply uses PatchEngine and writes a transaction rollback record$")
@@ -871,6 +935,13 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
             declaredCode, p.refusalCode,
             "declared refusal code '$declaredCode' did not equal the actual code '${p.refusalCode}'",
         )
+        // REQ-001 family-incompleteness outline: verify the fixture induced the EXACT declared
+        // condition, not a substitute. Rows whose declared condition is unreachable from a compiler
+        // fixture fail here with a precise RED finding (no false-green).
+        if (familyCondition != null) {
+            val catalogue = tryCompilerCatalogue()
+            if (catalogue != null) verifyFamilyCondition(catalogue, requireNotNull(familyCondition))
+        }
         assertTrue(p.workspaceEdit.edits.isEmpty(), p.toString())
         assertTrue(p.affectedFiles.isEmpty(), p.toString())
         assertTrue(!p.requiresUserApproval, p.toString())
@@ -935,10 +1006,23 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         val root = requireNotNull(fixtureRoot)
         val snap = requireNotNull(snapshot)
         val p = requireNotNull(plan)
-        val planner = KotlinJvmChangeSignaturePlanner(KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)))
+        // Exercise the production ManagedApplyDiagnosticsGateSelector instead of injecting the gate
+        // directly: it selects the lazy kotlin-k2-java-jdt-change-signature gate for this operation
+        // whose provider is the mixed K2+JDT KotlinJvmChangeSignaturePlanner::diagnostics.
+        val gate = ManagedApplyDiagnosticsGateSelector.select(
+            plan = p,
+            languageId = "kotlin",
+            javaAdapter = JavaLanguageAdapter(),
+            kotlinAdapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain)),
+            externalGateResolver = { requested ->
+                error("changeSignature.renameParameter is a built-in Kotlin route; unexpected external gate lookup: $requested")
+            },
+        )
+        assertEquals("kotlin-k2-java-jdt-change-signature", gate.id, "managed-apply gate for this operation")
+        assertNotNull(gate.provider, "managed-apply gate must be enabled")
         applied = assertIs<ApplyResult.Applied>(PatchEngine(root).apply(
             p, snap, ApplyAuthorization.explicit("kotlin-jvm-change-signature-parameter-rename-cucumber"),
-            DiagnosticsGate.enabled("kotlin-k2-java-jdt-change-signature", planner::diagnostics),
+            gate,
         ))
     }
 
@@ -1011,6 +1095,76 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
             listOf(use.path.toString(), use.sourceRange.toString(), identity.ownerBinaryName, identity.memberName, identity.descriptor)
                 .joinToString("\u0000")
         }.sorted()
+    }
+
+    /** REQ-001 family-incompleteness honesty gate: asserts the fixture induced the EXACT declared
+     * condition for the current outline row (not a substitute). Rows whose declared condition is
+     * unreachable from a compiler fixture fail here with a precise RED finding. */
+    private fun verifyFamilyCondition(catalogue: KotlinCompilerSymbolsResult.Available, condition: String) {
+        val targetEvidence = catalogue.declarations.getValue(requireNotNull(targetId))
+        val parameters = catalogue.index.symbols.filter {
+            it.kind == Symbol.Kind.PARAMETER && catalogue.declarations.getValue(it.id).let { ev ->
+                ev.jvmOwner == targetEvidence.jvmOwner && ev.jvmName == targetEvidence.jvmName &&
+                    ev.jvmDescriptor.substringBeforeLast('@') == targetEvidence.jvmDescriptor
+            }
+        }
+        val selected = parameters.singleOrNull { it.name == oldName }
+        val familyId = selected?.let { catalogue.declarations.getValue(it.id).overrideFamilyId }
+        val familyFunctions = catalogue.index.symbols.filter {
+            it.kind == Symbol.Kind.FUNCTION && catalogue.declarations.getValue(it.id).overrideFamilyId == familyId
+        }
+        val ordinal = selected?.let { catalogue.declarations.getValue(it.id).jvmDescriptor.substringAfterLast('@', "").toIntOrNull() }
+        val familyParameters = catalogue.index.symbols.filter {
+            it.kind == Symbol.Kind.PARAMETER && catalogue.declarations.getValue(it.id).let { ev ->
+                ev.overrideFamilyId == familyId && ev.jvmDescriptor.substringAfterLast('@', "").toIntOrNull() == ordinal
+            }
+        }
+        val inWorkspaceCalcTotal = targetEvidence.jvmOwner.startsWith("fixture.billing.") &&
+            targetEvidence.jvmName == "calculateTotal"
+        when (condition) {
+            "incomplete with fewer family functions than family parameters" ->
+                assertTrue(
+                    familyFunctions.size < familyParameters.size,
+                    "REQ-001 row 'incomplete with fewer family functions than family parameters' not induced: " +
+                        "familyFunctions=${familyFunctions.size} familyParameters=${familyParameters.size}; compiler emits " +
+                        "familyParameters.size <= familyFunctions.size, so 'fewer family functions than family parameters' " +
+                        "is unreachable from a compiler fixture",
+                )
+            "ambiguous with a function and parameter family that disagree" ->
+                assertTrue(
+                    selected != null && familyId != targetEvidence.overrideFamilyId,
+                    "REQ-001 row 'ambiguous with a function and parameter family that disagree' not induced: " +
+                        "selected-family=${familyId?.take(24)} target-family=${targetEvidence.overrideFamilyId.take(24)}; " +
+                        "a compiler parameter always inherits its function's override family, so the " +
+                        "familyId != targetEvidence.overrideFamilyId gate is unreachable from a compiler fixture",
+                )
+            "crossing an external or unavailable declaration boundary" ->
+                assertTrue(
+                    inWorkspaceCalcTotal && targetEvidence.hasExternalHierarchyBoundary,
+                    "REQ-001 row 'crossing an external or unavailable declaration boundary' not induced: " +
+                        "target=${targetEvidence.jvmOwner}.${targetEvidence.jvmName} " +
+                        "inWorkspaceCalcTotal=${inWorkspaceCalcTotal} extBoundary=${targetEvidence.hasExternalHierarchyBoundary}; " +
+                        "no in-workspace fixture.billing.calculateTotal member carries an external hierarchy boundary " +
+                        "(only an actual external override such as java.util.function.Function.apply carries one, " +
+                        "which the feature does not declare)",
+                )
+            "a hierarchy member with fewer than two family functions" ->
+                assertTrue(
+                    inWorkspaceCalcTotal && targetEvidence.isHierarchyMember && familyFunctions.size < 2,
+                    "REQ-001 row 'a hierarchy member with fewer than two family functions' not induced: " +
+                        "target=${targetEvidence.jvmOwner}.${targetEvidence.jvmName} " +
+                        "inWorkspaceCalcTotal=${inWorkspaceCalcTotal} isHierarchy=${targetEvidence.isHierarchyMember} " +
+                        "familyFunctions=${familyFunctions.size}; an in-workspace calculateTotal hierarchy member with " +
+                        "fewer than two family functions requires an external base declaring calculateTotal, which is unavailable",
+                )
+            "lacking one exact parameter declaration at the selected ordinal" ->
+                assertTrue(
+                    familyParameters.size != familyFunctions.size || familyParameters.isEmpty(),
+                    "REQ-001 row 'lacking one exact parameter declaration at the selected ordinal' not induced: " +
+                        "familyFunctions=${familyFunctions.size} familyParameters=${familyParameters.size}",
+                )
+            else -> error("unknown family condition: $condition")
+        }
     }
 
     // ------------------------------------------------------------------ helpers
