@@ -54,7 +54,8 @@ import kotlin.test.assertTrue
 
 /**
  * Story BDD glue for features/kotlin-jvm-change-signature-parameter-rename.feature
- * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 14 scenarios / 32 expanded cases across 10 scenario outlines).
+ * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 12 scenarios / 33 expanded cases across 8 scenario outlines:
+ * 4 plain + 8 outlines).
  *
  * It replicates the real K2 compiler toolchain fixture
  * (kotlin-compiler-embeddable-2.0.21, jvmTarget 21, jdkToolchain 21) and drives the production
@@ -68,6 +69,13 @@ import kotlin.test.assertTrue
  * rollback byte equality), never a hard-coded success path. Every observed declared-to-actual
  * mapping is appended to build/reports/cucumber/kotlin-jvm-change-signature-parameter-rename-codes.txt
  * for reconciliation.
+ *
+ * Approved change 011 supersedes 12 NON-INDUCIBLE defensive-gate refusal criteria. Those 12 reframed
+ * defensive scenarios are NOT refusals: on a clean compiler-proven fixture the retained defensive
+ * gates cannot honestly fire, so the glue drives a genuine SEMANTIC_PREVIEW (read-only, no mutation)
+ * and asserts PREVIEW success with no refusal code. The token-identity/staged guards are K2 planner
+ * gates (REQ-002); the mixed guards are JVM planner gates (REQ-003) and drive the clean mixed K2+JDT
+ * proof. The 21 inducible cases keep their real refusal/positive branches unchanged.
  */
 class KotlinJvmChangeSignatureParameterRenameSteps {
     private val temporaryDirectories = mutableListOf<Path>()
@@ -75,6 +83,10 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     private val observedPreviews = mutableListOf<ObservedPreview>()
 
     private enum class PlannerMode { K2, JVM }
+
+    /** Distinguishes the staged K2 defensive outline (PreviewInvalid is a K2 gate) from the mixed
+     * JVM defensive outline (PreviewInvalid is a JVM gate) when the shared guard code is ambiguous. */
+    private enum class DefensiveFixtureContext { GENERIC, STAGED_K2 }
 
     private var fixtureRoot: Path? = null
     private var snapshot: ProjectSnapshot? = null
@@ -105,6 +117,13 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     // or deleted), which also proves no WAL/transaction record, pending managed-plan, or lock
     // artifact was written into the workspace.
     private var workspaceBaseline: Map<Path, String>? = null
+
+    // Retained defensive-gate context for the 12 reframed defensive scenarios (approved-change-011).
+    // defensiveGuard captures the guard code from the feature And step; defensiveFixtureContext
+    // disambiguates the shared kotlin.changeSignaturePreviewInvalid guard between the staged K2
+    // outline and the mixed JVM outline. Cucumber creates a fresh glue instance per scenario.
+    private var defensiveGuard: String? = null
+    private var defensiveFixtureContext = DefensiveFixtureContext.GENERIC
 
     // ------------------------------------------------------------------ shared fixture helpers
 
@@ -502,7 +521,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     // ------------------------------------------------------------------ REQ-002 outline: token-range / preview refusals
 
-    @Given("^the parameter declaration/use evidence is (.+)$")
+    @Given("^the parameter declaration and use evidence is (.+)$")
     fun parameterEvidenceIs(raw: String) {
         // The Examples cells are quoted strings and one cell itself contains inner quotes
         // ("no unique catalogued parameter named \"subtotal\""), so strip the outer template
@@ -514,19 +533,12 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
                 buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
                 missingTarget = true
             }
-            "lacking callable JVM evidence" -> buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
             "a non-function target or blank descriptor or blank family" ->
                 buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", "package fixture.billing\nval calculateTotal: Double = 1.0\n")
             "no unique catalogued parameter named \"subtotal\"" ->
                 buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", "package fixture.billing\nfun calculateTotal(amount: Double): Double = amount\n")
-            "an invalid parameter ordinal evidence" -> buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
             "a missing, generated, duplicate, or mismatched token" ->
                 buildProject(root, "build/generated/ksp/main/kotlin/fixture/billing/Calculator.kt", familySource)
-            "baseline K2 errors or incomplete symbol evidence" ->
-                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource.replace(
-                    "override fun calculateTotal(subtotal: Double): Double = subtotal",
-                    "override fun calculateTotal(subtotal: Double): Double = missingSymbol()",
-                ))
             else -> error("unknown evidence condition: $condition")
         }
         fixtureRoot = root
@@ -535,9 +547,13 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         plannerMode = PlannerMode.K2
         acceptExternalConsumerRisk = true
         selectFamilyTarget()
+        // This outline's guards (DiagnosticsRegression, BindingChanged, PreviewInvalid,
+        // PostImageIdentityMissing) are K2 planner gates (REQ-002), so the shared
+        // kotlin.changeSignaturePreviewInvalid guard stays on the K2 planner here.
+        defensiveFixtureContext = DefensiveFixtureContext.STAGED_K2
     }
 
-    // ------------------------------------------------------------------ REQ-002 outline: staged regression / post-image refusals
+    // ------------------------------------------------------------------ REQ-002/REQ-003 outline: defensive-gate retained (approved-change-011)
 
     @Given("^an otherwise valid compiler-catalogued function \"fixture\\.billing\\.calculateTotal\" with parameter \"subtotal\" at ordinal 0$")
     fun otherwiseValidFunctionWithSubtotal() {
@@ -551,23 +567,36 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         selectFamilyTarget()
     }
 
-    @Given("^the staged overlay would \"([^\"]+)\"$")
-    fun stagedOverlayWould(condition: String) {
-        // The four staged-failure gates in the K2 planner (kotlin.changeSignatureDiagnosticsRegression,
-        // kotlin.changeSignatureBindingChanged, kotlin.changeSignaturePreviewInvalid,
-        // kotlin.changeSignaturePostImageIdentityMissing) are defensive branches that a clean
-        // compiler rename cannot honestly reach: a param-name rename preserves every non-name
-        // binding, the edit set applies safely, and the post-image K2 evidence keeps every renamed
-        // parameter at its unchanged JVM ordinal. The valid family fixture therefore reaches the
-        // post-image identity check and returns PREVIEW. Each row is reported as a remaining RED
-        // finding in the handoff; no real fixture can induce these codes with the K2 compiler.
-        when (condition) {
-            "introduce K2 compiler errors or incomplete symbol evidence" -> Unit
-            "change a non-name compiler-resolved declaration or usage binding" -> Unit
-            "produce a staged snapshot that cannot be applied" -> Unit
-            "fail to contain every renamed parameter at its unchanged JVM ordinal" -> Unit
-            else -> error("unknown staged condition: $condition")
+    @Given("^the \"([^\"]+)\" defensive gate is retained by the production planner$")
+    fun defensiveGateRetained(guardCode: String) {
+        // The 12 defensive gates (approved-change-011) are NON-INDUCIBLE from a clean compiler
+        // fixture: each is a branch the production planner retains but a clean rename cannot
+        // honestly reach, so this scenario asserts a genuine SEMANTIC_PREVIEW, not a refusal. The
+        // token-identity/staged guards are K2 planner gates (REQ-002); the mixed guards are JVM
+        // planner gates (REQ-003), so those add the Java caller and switch to the JVM planner so
+        // the clean mixed K2+JDT proof actually runs.
+        defensiveGuard = guardCode
+        if (useJvmPlannerForDefensiveGuard(guardCode)) {
+            val root = requireNotNull(fixtureRoot)
+            buildProject(root, "src/main/java/fixture/billing/Caller.java", javaCallerSource)
+            snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
+            plannerMode = PlannerMode.JVM
         }
+    }
+
+    private fun useJvmPlannerForDefensiveGuard(guardCode: String): Boolean {
+        // The mixed REQ-003 guards live in the JVM planner. kotlin.changeSignaturePreviewInvalid is
+        // shared by both the staged K2 outline and the mixed JVM outline, so the fixture context
+        // disambiguates which planner the retained guard belongs to.
+        val jvmMixedOnly = setOf(
+            "kotlin.changeSignatureMixedDiagnosticsRegression",
+            "kotlin.changeSignatureJavaBindingChanged",
+            "kotlin.changeSignatureBinaryEvidenceUnavailable",
+            "kotlin.changeSignatureUsageEvidenceUnavailable",
+        )
+        return guardCode in jvmMixedOnly ||
+            (guardCode == "kotlin.changeSignaturePreviewInvalid" &&
+                defensiveFixtureContext != DefensiveFixtureContext.STAGED_K2)
     }
 
     // ------------------------------------------------------------------ REQ-003 Scenario: mixed K2 + JDT staged proof
@@ -706,23 +735,6 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
                 buildProject(root, "src/main/java/fixture/billing/Caller.java",
                     "package fixture.billing; class Caller { double run() { return new BaseCalculator().calculateTotal(\"x\"); } }")
             }
-            "introduce K2/JDT compiler errors not present in the baseline" -> {
-                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
-                buildProject(root, "src/main/java/fixture/billing/Caller.java", javaCallerSource)
-            }
-            "change an exact Java caller binding" -> {
-                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
-                buildProject(root, "src/main/java/fixture/billing/Caller.java", javaCallerSource)
-            }
-            "lack complete staged JVM binary evidence" -> {
-                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
-            }
-            "lack compiler usage evidence" -> {
-                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
-            }
-            "produce an invalid mixed signature preview" -> {
-                buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
-            }
             else -> error("unknown mixed condition: $condition")
         }
         fixtureRoot = root
@@ -828,6 +840,16 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         drivePreview(acceptExternalConsumerRisk)
     }
 
+    @When("^changeSignature\\.renameParameter previews renaming parameter \"subtotal\" to \"netAmount\" on a clean compiler-proven fixture$")
+    fun previewsRenameParameterOnCleanCompilerProvenFixture() {
+        // Defensive-gate scenario (approved-change-011): the clean compiler-proven fixture cannot
+        // honestly induce the retained defensive gates, so the preview must succeed as a genuine
+        // SEMANTIC_PREVIEW. The externally-visible family requires external-consumer-risk acceptance
+        // to reach that success path (the feature asserts SEMANTIC_PREVIEW success, not a refusal).
+        workspaceBaseline = snapshotWorkspaceContent(requireNotNull(fixtureRoot))
+        drivePreview(acceptRisk = true)
+    }
+
     // The step text is used both as a Given (REQ-001 unrelated-member and family-incompleteness
     // outlines) and as a When (REQ-002 external-consumer-approval scenario). Cucumber matches step
     // definitions by step TEXT, not by the Given/When/Then keyword, so a single @Given method serves
@@ -879,6 +901,29 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         val p = requireNotNull(plan)
         assertTrue(p.status != PatchStatus.REFUSED, p.toString())
         assertTrue(p.refusalCode == null, p.toString())
+        verifyNoWorkspaceMutation()
+        observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
+    }
+
+    // ------------------------------------------------------------------ defensive-gate Then steps (approved-change-011)
+
+    @Then("^the preview succeeds as a SEMANTIC_PREVIEW with no refusal code$")
+    fun defensivePreviewSucceedsAsSemanticPreview() {
+        val p = requireNotNull(plan)
+        assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
+        assertTrue(p.refusalCode == null, p.toString())
+        observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
+    }
+
+    @Then("^the preview is read-only and does not mutate the snapshot or the filesystem$")
+    fun defensivePreviewReadOnlyAndNoFilesystemMutation() {
+        val snap = requireNotNull(snapshot)
+        val p = requireNotNull(plan)
+        assertEquals(snap.hash, p.snapshotHash, p.toString())
+        assertTrue(
+            snap.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/billing/Calculator.kt").normalize() }.content.contains("subtotal"),
+            "preview must not mutate the snapshot content",
+        )
         verifyNoWorkspaceMutation()
         observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
     }

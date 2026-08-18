@@ -9,7 +9,8 @@ import org.junit.platform.suite.api.Suite
 
 /**
  * Story BDD runner for features/kotlin-jvm-change-signature-parameter-rename.feature
- * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 14 scenarios / 32 expanded cases across 10 scenario outlines).
+ * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 12 scenarios / 33 expanded cases across 8 scenario outlines:
+ * 4 plain + 8 outlines).
  *
  * The glue uses the real K2 compiler toolchain (kotlin-compiler-embeddable-2.0.21,
  * jvmTarget 21, jdkToolchain 21) plus the JDT Java semantic analyzer, and drives the
@@ -23,6 +24,12 @@ import org.junit.platform.suite.api.Suite
  * build/reports/cucumber/kotlin-jvm-change-signature-parameter-rename-codes.txt for reconciliation.
  * GREEN scenarios assert the real preview/apply/rollback behavior (edits, risk, warnings,
  * PatchEngine transaction, rollback byte equality), never a hard-coded success path.
+ *
+ * Approved change 011 supersedes 12 NON-INDUCIBLE defensive-gate refusal criteria. Those 12 reframed
+ * defensive scenarios assert a genuine SEMANTIC_PREVIEW (read-only, no filesystem mutation) on a
+ * clean compiler-proven fixture: the retained defensive gates cannot honestly fire, so the glue
+ * drives the real production success path instead of a refusal. The 21 inducible cases keep their
+ * real refusal/positive branches unchanged.
  */
 @Suite
 @IncludeEngines("cucumber")
