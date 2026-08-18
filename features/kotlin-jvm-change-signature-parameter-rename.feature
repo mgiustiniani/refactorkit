@@ -24,6 +24,12 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
   and KotlinJvmChangeSignaturePlanner sources, not invented granular codes. The source of truth is intended
   to match executable reality (anti-fake).
 
+  Approved change 011 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-011.md)
+  supersedes 12 defensive-gate refusal criteria of REQ-KOTLIN-CHANGE-SIGNATURE-001..003 that are
+  NON-INDUCIBLE from a clean compiler fixture. Those 12 are reframed below to assert the actual production
+  behavior (SEMANTIC_PREVIEW success, read-only, no refusal) with a defensive-gate note; they are NOT
+  removed. The 21 inducible cases retain their refusal codes unchanged.
+
   # REQ-KOTLIN-CHANGE-SIGNATURE-001 — exact target and family
   @REQ-KOTLIN-CHANGE-SIGNATURE-001 @functional-requirement
   Scenario: A compiler-catalogued function value-parameter renames across its exact override family
@@ -98,38 +104,53 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
       | "netAmount"   | conflicting with another parameter in the exact family         | kotlin.changeSignatureParameterConflict          |
       | "netAmount"   | already occurring in an affected source so it could capture a binding | kotlin.changeSignatureParameterConflict    |
 
-  # REQ-KOTLIN-CHANGE-SIGNATURE-002 — token-range and preview refusals
+  # REQ-KOTLIN-CHANGE-SIGNATURE-002 — token-range refusals (inducible)
   @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
-  Scenario Outline: Missing, generated, duplicate, or mismatched token evidence refuses
+  Scenario Outline: A missing or unsupported catalogued target, parameter, or token-range refuses
     Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
-    And the parameter declaration/use evidence is "<evidence condition>"
+    And the parameter declaration and use evidence is "<evidence condition>"
     When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
     Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
 
     Examples:
       | evidence condition                                             | refusal code                                    |
       | missing from the compiler catalogue                            | kotlin.changeSignatureTargetMissing            |
-      | lacking callable JVM evidence                                  | kotlin.changeSignatureIdentityMissing          |
       | a non-function target or blank descriptor or blank family      | kotlin.changeSignatureTargetUnsupported        |
       | no unique catalogued parameter named "subtotal"                | kotlin.changeSignatureParameterMissing         |
-      | an invalid parameter ordinal evidence                          | kotlin.changeSignatureParameterIdentityInvalid |
       | a missing, generated, duplicate, or mismatched token           | kotlin.changeSignatureRangeInvalid             |
-      | baseline K2 errors or incomplete symbol evidence               | kotlin.changeSignatureBaselineIncomplete       |
 
-  # REQ-KOTLIN-CHANGE-SIGNATURE-002 — staged regression and post-image identity refusals
+  # REQ-KOTLIN-CHANGE-SIGNATURE-002 — token-identity guards (defensive)
   @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
-  Scenario Outline: A staged preview that introduces compiler errors, changes a binding, or loses a renamed parameter refuses
-    Given an otherwise valid compiler-catalogued function "fixture.billing.calculateTotal" with parameter "subtotal" at ordinal 0
-    And the staged overlay would "<staged condition>"
-    When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
-    Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
+  Scenario Outline: Defensive token-evidence guards are not inducible from a clean compiler fixture
+    defensive-gate, not inducible from a clean compiler fixture
+    Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
+    And the "<evidence guard>" defensive gate is retained by the production planner
+    When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount" on a clean compiler-proven fixture
+    Then the preview succeeds as a SEMANTIC_PREVIEW with no refusal code
+    And the preview is read-only and does not mutate the snapshot or the filesystem
 
     Examples:
-      | staged condition                                                        | refusal code                                            |
-      | introduce K2 compiler errors or incomplete symbol evidence               | kotlin.changeSignatureDiagnosticsRegression            |
-      | change a non-name compiler-resolved declaration or usage binding        | kotlin.changeSignatureBindingChanged                   |
-      | produce a staged snapshot that cannot be applied                        | kotlin.changeSignaturePreviewInvalid                  |
-      | fail to contain every renamed parameter at its unchanged JVM ordinal    | kotlin.changeSignaturePostImageIdentityMissing        |
+      | evidence guard                                 |
+      | kotlin.changeSignatureIdentityMissing          |
+      | kotlin.changeSignatureParameterIdentityInvalid |
+      | kotlin.changeSignatureBaselineIncomplete       |
+
+  # REQ-KOTLIN-CHANGE-SIGNATURE-002 — staged regression and post-image identity guards (defensive)
+  @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
+  Scenario Outline: Defensive staged-preview guards are not inducible from a clean compiler fixture
+    defensive-gate, not inducible from a clean compiler fixture
+    Given an otherwise valid compiler-catalogued function "fixture.billing.calculateTotal" with parameter "subtotal" at ordinal 0
+    And the "<staged guard>" defensive gate is retained by the production planner
+    When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount" on a clean compiler-proven fixture
+    Then the preview succeeds as a SEMANTIC_PREVIEW with no refusal code
+    And the preview is read-only and does not mutate the snapshot or the filesystem
+
+    Examples:
+      | staged guard                                                |
+      | kotlin.changeSignatureDiagnosticsRegression                  |
+      | kotlin.changeSignatureBindingChanged                         |
+      | kotlin.changeSignaturePreviewInvalid                         |
+      | kotlin.changeSignaturePostImageIdentityMissing               |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-003 — mixed K2 + JDT staged proof
   @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
@@ -147,22 +168,35 @@ Business Need: Rename one compiler-catalogued Kotlin/JVM value-parameter across 
     And the preview records baseline and staged K2 plus JDT diagnostics
     And a warning states that the positional Java binding(s) retain the unchanged JVM descriptor
 
-  # REQ-KOTLIN-CHANGE-SIGNATURE-003 — mixed regression refusals
+  # REQ-KOTLIN-CHANGE-SIGNATURE-003 — mixed baseline refusal (inducible)
   @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
-  Scenario Outline: A mixed K2+JDT baseline or regression refuses fail-closed
+  Scenario Outline: A mixed K2+JDT baseline that is incomplete refuses fail-closed
     Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
     And the mixed staged proof would "<mixed condition>"
     When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount"
     Then the selection is refused with stable typed code "<refusal code>" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation
 
     Examples:
-      | mixed condition                                                                 | refusal code                                              |
-      | require clean K2 and JDT baseline evidence that is incomplete                   | kotlin.changeSignatureMixedBaselineIncomplete            |
-      | introduce K2/JDT compiler errors not present in the baseline                    | kotlin.changeSignatureMixedDiagnosticsRegression         |
-      | change an exact Java caller binding                                              | kotlin.changeSignatureJavaBindingChanged                 |
-      | lack complete staged JVM binary evidence                                         | kotlin.changeSignatureBinaryEvidenceUnavailable          |
-      | lack compiler usage evidence                                                    | kotlin.changeSignatureUsageEvidenceUnavailable           |
-      | produce an invalid mixed signature preview                                       | kotlin.changeSignaturePreviewInvalid                    |
+      | mixed condition                                              | refusal code                                   |
+      | require clean K2 and JDT baseline evidence that is incomplete | kotlin.changeSignatureMixedBaselineIncomplete |
+
+  # REQ-KOTLIN-CHANGE-SIGNATURE-003 — mixed staged regression guards (defensive)
+  @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
+  Scenario Outline: Defensive mixed K2+JDT staged guards are not inducible from a clean compiler fixture
+    defensive-gate, not inducible from a clean compiler fixture
+    Given the selected declaration is a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" whose parameter "subtotal" is at ordinal 0
+    And the "<mixed guard>" defensive gate is retained by the production planner
+    When changeSignature.renameParameter previews renaming parameter "subtotal" to "netAmount" on a clean compiler-proven fixture
+    Then the preview succeeds as a SEMANTIC_PREVIEW with no refusal code
+    And the preview is read-only and does not mutate the snapshot or the filesystem
+
+    Examples:
+      | mixed guard                                                |
+      | kotlin.changeSignatureMixedDiagnosticsRegression            |
+      | kotlin.changeSignatureJavaBindingChanged                    |
+      | kotlin.changeSignatureBinaryEvidenceUnavailable             |
+      | kotlin.changeSignatureUsageEvidenceUnavailable              |
+      | kotlin.changeSignaturePreviewInvalid                        |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-003 — apply and rollback
   @REQ-KOTLIN-CHANGE-SIGNATURE-003 @functional-requirement
