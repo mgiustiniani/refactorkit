@@ -18,6 +18,11 @@ import org.junit.platform.suite.api.Suite
  * K2-level refusal codes) and [org.refactorkit.jvm.KotlinJvmChangeSignaturePlanner]
  * (REQ-003, mixed K2+JDT staged proof).
  *
+ * Runner reconciled to the human-readable feature prose (feature SHA 5005c0dd): the step regexes
+ * in [KotlinJvmChangeSignatureParameterRenameSteps] now match the rewritten domain/business
+ * Given/When/Then wording while keeping the same 21 inducible refusal gates, 12 defensive
+ * SEMANTIC_PREVIEW branches, and strengthened REQ-003 oracles.
+ *
  * Every refusal scenario asserts that the DECLARED stable typed code (from the feature
  * Examples table) EQUALS the ACTUAL refusalCode the planner returned, so the suite FAILS on a
  * typed-code regression. Every observed declared-to-actual mapping is appended to

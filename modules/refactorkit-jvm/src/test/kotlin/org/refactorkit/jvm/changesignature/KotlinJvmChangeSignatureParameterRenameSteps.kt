@@ -58,6 +58,13 @@ import kotlin.test.assertTrue
  * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 12 scenarios / 33 expanded cases across 8 scenario outlines:
  * 4 plain + 8 outlines).
  *
+ * Glue reconciled to the human-readable domain/business prose rewrite (feature SHA 5005c0dd):
+ * every step definition matches the new Given/When/Then wording (e.g. When 'a maintainer renames the
+ * parameter "subtotal" to "netAmount"'; Then 'RefactorKit refuses the operation and explains why,
+ * reporting the typed code "<refusal code>"'). Technical codes stay as data in the Examples/step
+ * assertions only. The 21 inducible refusal branches drive the real production gates; the 12 defensive
+ * branches assert SEMANTIC_PREVIEW success + read-only; REQ-003 oracles stay strengthened.
+ *
  * It replicates the real K2 compiler toolchain fixture
  * (kotlin-compiler-embeddable-2.0.21, jvmTarget 21, jdkToolchain 21) and drives the production
  * planners: [KotlinChangeSignaturePlanner] for the REQ-001/REQ-002 K2-level refusal codes and
@@ -156,7 +163,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     // ------------------------------------------------------------------ REQ-001 Scenario 1 (GREEN)
 
     @Given(
-        "^the selected declaration is one compiler-catalogued Kotlin function \"fixture\\.billing\\.calculateTotal\" whose K2-to-JVM owner, JVM name, and descriptor are exact$",
+        "^a compiler-catalogued Kotlin function \"fixture\\.billing\\.calculateTotal\" is selected, and its parameter \"subtotal\" is identified at ordinal 0$",
     )
     fun selectedExactFamilyTarget() {
         val root = temporaryDirectory("rk-jvm-change-signature-green")
@@ -167,12 +174,9 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         plannerMode = PlannerMode.K2
         acceptExternalConsumerRisk = true
         selectFamilyTarget()
-    }
-
-    @Given(
-        "^the selected value-parameter \"subtotal\" is identified by that callable identity plus zero-based ordinal 0$",
-    )
-    fun selectedParameterIdentifiedByOrdinal() {
+        // REQ-001 Scenario 1: the combined Given also asserts that the parameter "subtotal" is
+        // identified at ordinal 0 of the selected callable identity (previously a separate Given
+        // whose step text was removed by the human-readable prose rewrite).
         val catalogue = compilerCatalogue()
         val evidence = catalogue.declarations.getValue(requireNotNull(targetId))
         assertTrue(
@@ -188,7 +192,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     }
 
     @Given(
-        "^the snapshot carries complete error-free K2 evidence and one stable override-family identity from FIR override checking and resolved source class-supertypes$",
+        "^the snapshot carries complete error-free compiler evidence and one stable override-family identity from compiler override checking across resolved source hierarchies$",
     )
     fun snapshotCarriesCleanK2EvidenceAndStableFamily() {
         val adapter = KotlinLanguageAdapter(KotlinCompilerDiagnostics(toolchain))
@@ -226,7 +230,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         }
     }
 
-    @Given("^the caller explicitly accepts unknown external-consumer risk because a family member is non-private$")
+    @Given("^the caller explicitly accepts unknown external-consumer risk because one family member is non-private$")
     fun callerAcceptsBecauseFamilyMemberIsNonPrivate() {
         acceptExternalConsumerRisk = true
         val catalogue = compilerCatalogue()
@@ -238,7 +242,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     }
 
     @Then(
-        "^the result is a SEMANTIC_PREVIEW that renames the exact parameter declaration token at ordinal 0 in every family member atomically$",
+        "^RefactorKit returns a successful read-only preview that renames the parameter declaration at ordinal 0 in every family member atomically$",
     )
     fun resultIsSemanticPreviewRenamingEveryFamilyMember() {
         val p = requireNotNull(plan)
@@ -258,7 +262,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
     }
 
-    @Then("^every FIR-resolved body reference to those parameter symbols is renamed$")
+    @Then("^every compiler-resolved body reference to those parameter symbols is renamed$")
     fun everyFirResolvedBodyReferenceRenamed() {
         val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), requireNotNull(plan).workspaceEdit)
         val content = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/billing/Calculator.kt").normalize() }.content
@@ -266,7 +270,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertTrue("super.calculateTotal(netAmount)" in content, content)
     }
 
-    @Then("^every FIR argument-to-parameter-mapped Kotlin named-argument label \"subtotal\" is renamed$")
+    @Then("^every Kotlin named argument mapped to that parameter with the label \"subtotal\" is renamed$")
     fun everyNamedArgumentLabelRenamed() {
         val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), requireNotNull(plan).workspaceEdit)
         val content = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/billing/Calculator.kt").normalize() }.content
@@ -287,7 +291,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertTrue("calculateTotal(netAmount: Double = 0.0)" in content, content)
     }
 
-    @Then("^overload calls remain bound to the same JVM callable identity$")
+    @Then("^overload calls remain bound to the same callable identity$")
     fun overloadCallsRemainBound() {
         val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), requireNotNull(plan).workspaceEdit)
         val content = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/billing/Calculator.kt").normalize() }.content
@@ -310,7 +314,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     // ------------------------------------------------------------------ REQ-001 outline: unrelated member is not a family member
 
     @Given(
-        "^the selected declaration is a compiler-catalogued Kotlin function \"([^\"]+)\" whose parameter \"([^\"]+)\" is at ordinal 0$",
+        "^a compiler-catalogued Kotlin function \"([^\"]+)\" is selected, and its parameter \"([^\"]+)\" is at ordinal 0$",
     )
     fun selectedFamilyTarget(targetFunction: String, parameterOldName: String) {
         // Parameterized for the reconciled REQ-001 "family incompleteness refuses" outline whose
@@ -330,7 +334,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         selectFamilyTarget()
     }
 
-    @Given("^the compiler catalogue also contains one \"([^\"]+)\" of the target callable identity$")
+    @Given("^the compiler catalogue also contains one \"([^\"]+)\" of that function$")
     fun catalogueContainsUnrelatedMember(unrelatedMember: String) {
         val root = requireNotNull(fixtureRoot)
         val extra = when (unrelatedMember) {
@@ -346,7 +350,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     }
 
     @Then(
-        "^the preview renames only the exact target-family declaration tokens and leaves the \"([^\"]+)\" parameter token and its uses unchanged$",
+        "^RefactorKit renames only the exact target-family declaration tokens and leaves the \"([^\"]+)\" parameter token and its uses unchanged$",
     )
     fun previewRenamesOnlyFamilyAndLeavesUnrelated(unrelatedMember: String) {
         val p = requireNotNull(plan)
@@ -452,7 +456,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     }
 
     @When(
-        "^changeSignature\\.renameParameter previews renaming parameter \"subtotal\" to \"netAmount\" without accepting external-consumer risk$",
+        "^a maintainer renames the parameter \"subtotal\" to \"netAmount\" without accepting external-consumer risk$",
     )
     fun previewWithoutExternalConsumerRisk() {
         workspaceBaseline = snapshotWorkspaceContent(requireNotNull(fixtureRoot))
@@ -464,7 +468,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     }
 
     @Then(
-        "^changeSignature\\.renameParameter previews a SEMANTIC_PREVIEW with a HIGH risk level and a warning that unknown external named-argument consumers were explicitly accepted$",
+        "^RefactorKit returns a successful read-only preview flagged HIGH risk, with a warning that unknown external named-argument consumers were explicitly accepted$",
     )
     fun previewHighRiskWithWarning() {
         // After the second When accepts the external-consumer risk, the preview is performed again
@@ -521,7 +525,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         selectFamilyTarget()
     }
 
-    @When("^changeSignature\\.renameParameter previews renaming parameter \"subtotal\" to the requested name$")
+    @When("^a maintainer renames the parameter \"subtotal\" to the requested new name$")
     fun previewToRequestedName() {
         workspaceBaseline = snapshotWorkspaceContent(requireNotNull(fixtureRoot))
         val snap = requireNotNull(snapshot)
@@ -567,7 +571,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     // ------------------------------------------------------------------ REQ-002/REQ-003 outline: defensive-gate retained (approved-change-011)
 
-    @Given("^an otherwise valid compiler-catalogued function \"fixture\\.billing\\.calculateTotal\" with parameter \"subtotal\" at ordinal 0$")
+    @Given("^an otherwise valid compiler-catalogued function \"fixture\\.billing\\.calculateTotal\" is selected, with parameter \"subtotal\" at ordinal 0$")
     fun otherwiseValidFunctionWithSubtotal() {
         val root = temporaryDirectory("rk-jvm-change-signature-staged")
         buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
@@ -628,7 +632,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         pendingKotlinOnlyEditSet = true
     }
 
-    @Given("^the exact operation is \"changeSignature\\.renameParameter\"$")
+    @Given("^the exact operation is a parameter rename$")
     fun exactOperationIsChangeSignatureRenameParameter() {
         assertEquals("changeSignature.renameParameter", KotlinChangeSignaturePlanner.OPERATION)
     }
@@ -643,7 +647,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         selectFamilyTarget()
     }
 
-    @Then("^the staged overlay compiles without new K2 errors$")
+    @Then("^the staged overlay compiles without new Kotlin compiler errors$")
     fun stagedOverlayCompilesWithoutNewK2Errors() {
         val p = requireNotNull(plan)
         assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
@@ -676,7 +680,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         )
     }
 
-    @Then("^the same function and parameter JVM identities and exact usage counts are retained$")
+    @Then("^the same function and parameter identities and exact usage counts are retained$")
     fun sameJvmIdentitiesAndUsageCountsRetained() {
         val before = compilerCatalogue()
         val after = stagedCatalogue()
@@ -702,7 +706,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertTrue(beforeParams.all { before.declarations.getValue(it.id).jvmDescriptor.substringAfterLast('@', "") == "0" })
     }
 
-    @Then("^every non-target K2 binding is retained$")
+    @Then("^every non-target binding is retained$")
     fun everyNonTargetK2BindingRetained() {
         val before = compilerCatalogue()
         val after = stagedCatalogue()
@@ -727,7 +731,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertTrue(requireNotNull(plan).diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, requireNotNull(plan).toString())
     }
 
-    @Then("^all Java sources compile with JDT against the staged Kotlin output$")
+    @Then("^all Java sources compile against the staged Kotlin output$")
     fun allJavaSourcesCompileWithJdt() {
         val staged = stagedSnapshot()
         val java = JdtJavaSemanticAnalyzer()
@@ -742,7 +746,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertTrue(requireNotNull(plan).diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, requireNotNull(plan).toString())
     }
 
-    @Then("^every exact Java caller binding to the unchanged owner, name, and descriptor is preserved$")
+    @Then("^every Java caller binding to the unchanged owner, name, and descriptor is preserved$")
     fun everyExactJavaCallerBindingPreserved() {
         val declaration = compilerCatalogue().declarations.getValue(requireNotNull(targetId))
         val before = javaCallerBindings(requireNotNull(snapshot), declaration.jvmOwner, declaration.jvmName, declaration.jvmDescriptor)
@@ -753,7 +757,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertTrue(requireNotNull(plan).diagnosticsAfterPreview.none { it.severity == Diagnostic.Severity.ERROR }, requireNotNull(plan).toString())
     }
 
-    @Then("^the preview records baseline and staged K2 plus JDT diagnostics$")
+    @Then("^the preview records baseline and staged Kotlin plus Java compiler diagnostics$")
     fun previewRecordsBaselineAndStagedDiagnostics() {
         val p = requireNotNull(plan)
         assertNotNull(p.diagnosticsBefore, p.toString())
@@ -771,7 +775,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     // ------------------------------------------------------------------ REQ-003 outline: mixed fail-closed refusals
 
-    @Given("^the mixed staged proof would \"([^\"]+)\"$")
+    @Given("^the combined staged proof would \"([^\"]+)\"$")
     fun mixedStagedProofWould(condition: String) {
         val root = temporaryDirectory("rk-jvm-change-signature-mixed")
         when (condition) {
@@ -795,7 +799,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     // ------------------------------------------------------------------ REQ-003 Scenario: apply and rollback
 
-    @Given("^an approved SEMANTIC_PREVIEW renames parameter \"subtotal\" to \"netAmount\" across the exact family$")
+    @Given("^an approved successful preview renames parameter \"subtotal\" to \"netAmount\" across the exact family$")
     fun approvedSemanticPreviewAcrossFamily() {
         val root = temporaryDirectory("rk-jvm-change-signature-apply")
         buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", familySource)
@@ -817,7 +821,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     }
 
     @Given(
-        "^the managed-apply diagnostics gate for \"changeSignature\\.renameParameter\" is the lazy \"kotlin-k2-java-jdt-change-signature\" gate$",
+        "^the managed-apply diagnostics gate for a parameter rename is the lazy combined Kotlin and Java change-signature gate$",
     )
     fun managedApplyGateIsLazyChangeSignatureGate() {
         // Real assertion: exercise the production ManagedApplyDiagnosticsGateSelector for the
@@ -840,7 +844,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertNotNull(selected.provider, "the lazy kotlin-k2-java-jdt-change-signature gate must be enabled (non-null provider)")
     }
 
-    @Then("^apply uses PatchEngine and writes a transaction rollback record$")
+    @Then("^apply uses the patch engine and writes a transaction rollback record$")
     fun applyUsesPatchEngineWritesRollbackRecord() {
         val a = requireNotNull(applied)
         assertNotNull(a.transaction.id, "expected a write-ahead transaction id")
@@ -894,7 +898,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     // ------------------------------------------------------------------ shared When
 
-    @When("^changeSignature\\.renameParameter previews renaming parameter \"([^\"]+)\" to \"netAmount\"$")
+    @When("^a maintainer renames the parameter \"([^\"]+)\" to \"netAmount\"$")
     fun previewsRenameParameterToNetAmount(parameterOldName: String) {
         // Parameterized so the reconciled REQ-001 "family incompleteness refuses" outline's
         // external-boundary row (old name "value") drives the real production path; literal call
@@ -904,7 +908,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         drivePreview(acceptExternalConsumerRisk)
     }
 
-    @When("^changeSignature\\.renameParameter previews renaming parameter \"subtotal\" to \"netAmount\" on a clean compiler-proven fixture$")
+    @When("^a maintainer renames the parameter \"subtotal\" to \"netAmount\" on a clean compiler-proven fixture$")
     fun previewsRenameParameterOnCleanCompilerProvenFixture() {
         // Defensive-gate scenario (approved-change-011): the clean compiler-proven fixture cannot
         // honestly induce the retained defensive gates, so the preview must succeed as a genuine
@@ -926,7 +930,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
     // ------------------------------------------------------------------ shared refusal Then
 
     @Then(
-        "^the selection is refused with stable typed code \"([^\"]+)\" and no WorkspaceEdit, affected file, pending managed plan, lock, WAL, transaction, or filesystem mutation$",
+        "^RefactorKit refuses the operation and explains why, reporting the typed code \"([^\"]+)\", and changes no file, plan, lock, or transaction record$",
     )
     fun selectionRefusedWithCode(declaredCode: String) {
         val p = requireNotNull(plan)
@@ -952,33 +956,9 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
 
     // ------------------------------------------------------------------ shared preview-succeeds Then
 
-    @Then(
-        "^the result is a SEMANTIC_PREVIEW that renames the exact parameter declaration token at ordinal 0 to \"netAmount\"$",
-    )
-    fun resultIsSemanticPreviewRenamingTokenAtOrdinal0ToNetAmount() {
-        val p = requireNotNull(plan)
-        assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
-        assertTrue(p.refusalCode == null, p.toString())
-        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
-        val content = staged.files.single { it.path.normalize() == Path.of("src/main/kotlin/fixture/billing/Calculator.kt").normalize() }.content
-        assertTrue("netAmount" in content, content)
-        observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
-    }
-
-    @Then(
-        "^no refusal code is produced and no WAL, transaction, lock, or filesystem mutation is applied$",
-    )
-    fun noRefusalCodeAndNoMutation() {
-        val p = requireNotNull(plan)
-        assertTrue(p.status != PatchStatus.REFUSED, p.toString())
-        assertTrue(p.refusalCode == null, p.toString())
-        verifyNoWorkspaceMutation()
-        observedPreviews += ObservedPreview(p.status, p.riskLevel, p.refusalCode)
-    }
-
     // ------------------------------------------------------------------ defensive-gate Then steps (approved-change-011)
 
-    @Then("^the preview succeeds as a SEMANTIC_PREVIEW with no refusal code$")
+    @Then("^RefactorKit returns a successful read-only semantic preview \\(SEMANTIC_PREVIEW\\) with no refusal$")
     fun defensivePreviewSucceedsAsSemanticPreview() {
         val p = requireNotNull(plan)
         assertEquals(PatchStatus.PREVIEW, p.status, p.toString())
