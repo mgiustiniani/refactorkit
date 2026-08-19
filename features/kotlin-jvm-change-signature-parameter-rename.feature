@@ -31,13 +31,21 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   Packaged CLI, daemon, and MCP apply and rollback, and four-platform qualification, remain deferred and not
   claimed. Promotion to @implemented-and-validated awaits only the independent requirements-quality-reviewer PASS.
 
+  Per the user-approved change 012 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-012.md),
+  4 non-inducible REQ-001 family-incompleteness refusal criteria are superseded and reframed below to assert the actual
+  production behavior: a successful read-only semantic preview (SEMANTIC_PREVIEW), read-only, with an explicit
+  "defensive-gate, not inducible from a clean compiler fixture" note. They are not removed. The inducible
+  "lacking one exact parameter declaration at the selected ordinal" family-incompleteness case keeps its refusal.
+
   The refusal codes in the scenarios are the actual production codes observed in the change-signature planning
   sources, not invented granular codes. The source of truth is intended to match executable reality (anti-fake).
 
   Approved change 011 supersedes 12 defensive-gate refusal criteria of REQ-KOTLIN-CHANGE-SIGNATURE-001..003
   that are non-inducible from a clean compiler fixture. Those 12 are reframed below to assert the actual
   production behavior (a successful read-only preview, no refusal) with a defensive-gate note; they are not
-  removed. The 21 inducible cases retain their refusal codes unchanged.
+  removed. The 21 inducible cases retain their refusal codes unchanged under change 011; approved change 012
+  then supersedes 4 of the REQ-001 family-incompleteness cases among them, so the feature's expanded-case count
+  now reconciles to 17 inducible cases plus 16 defensive cases (33 total).
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-001 — exact target and family
   @REQ-KOTLIN-CHANGE-SIGNATURE-001 @functional-requirement
@@ -69,21 +77,23 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
       | same-name overload with a different descriptor                               |
       | unrelated same-descriptor method on another owner                            |
 
-  # REQ-KOTLIN-CHANGE-SIGNATURE-001 — family incompleteness refuses
+  # REQ-KOTLIN-CHANGE-SIGNATURE-001 — family-incompleteness gates: inducible refusal and retained defensive guards
   @REQ-KOTLIN-CHANGE-SIGNATURE-001 @functional-requirement
-  Scenario Outline: RefactorKit refuses when the override family is incomplete, ambiguous, or crosses an external boundary
+  Scenario Outline: RefactorKit refuses an inducible family-incompleteness gap or previews a retained defensive family-incompleteness gate
+    These four family-incompleteness gates are defensive safety checks that are not reproducible from a clean compiler fixture (defensive-gate, not inducible from a clean compiler fixture), so the production behavior is a successful read-only preview with a defensive-gate note. The inducible "lacking one exact parameter declaration at the selected ordinal" case keeps its refusal.
     Given a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" is selected, and its parameter "subtotal" is at ordinal 0
     And the override family is "<family condition>"
     When a maintainer renames the parameter "subtotal" to "netAmount"
-    Then RefactorKit refuses the operation and explains why, reporting the typed code "<refusal code>", and changes no file, plan, lock, or transaction record
+    Then RefactorKit <outcome>
+    And <assertion>
 
     Examples:
-      | family condition                                                | refusal code                                   |
-      | incomplete with fewer family functions than family parameters   | kotlin.changeSignatureFamilyIncomplete        |
-      | ambiguous with a function and parameter family that disagree    | kotlin.changeSignatureFamilyIncomplete        |
-      | crossing an external or unavailable declaration boundary        | kotlin.changeSignatureExternalHierarchyUnsupported |
-      | a hierarchy member with fewer than two family functions         | kotlin.changeSignatureExternalHierarchyUnsupported |
-      | lacking one exact parameter declaration at the selected ordinal | kotlin.changeSignatureFamilyIncomplete        |
+      | family condition                                                | outcome                                                                                         | assertion                                                         |
+      | incomplete with fewer family functions than family parameters   | returns a successful read-only semantic preview (SEMANTIC_PREVIEW) with no refusal                 | the preview is read-only and does not mutate the snapshot or the filesystem |
+      | ambiguous with a function and parameter family that disagree    | returns a successful read-only semantic preview (SEMANTIC_PREVIEW) with no refusal                 | the preview is read-only and does not mutate the snapshot or the filesystem |
+      | crossing an external or unavailable declaration boundary        | returns a successful read-only semantic preview (SEMANTIC_PREVIEW) with no refusal                 | the preview is read-only and does not mutate the snapshot or the filesystem |
+      | a hierarchy member with fewer than two family functions         | returns a successful read-only semantic preview (SEMANTIC_PREVIEW) with no refusal                 | the preview is read-only and does not mutate the snapshot or the filesystem |
+      | lacking one exact parameter declaration at the selected ordinal | refuses the operation and explains why, reporting the typed code "kotlin.changeSignatureFamilyIncomplete" | changes no file, plan, lock, or transaction record |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-002 — exact edits and refusals
   @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
