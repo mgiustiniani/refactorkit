@@ -62,8 +62,10 @@ import kotlin.test.assertTrue
  * every step definition matches the new Given/When/Then wording (e.g. When 'a maintainer renames the
  * parameter "subtotal" to "netAmount"'; Then 'RefactorKit refuses the operation and explains why,
  * reporting the typed code "<refusal code>"'). Technical codes stay as data in the Examples/step
- * assertions only. The 21 inducible refusal branches drive the real production gates; the 12 defensive
- * branches assert SEMANTIC_PREVIEW success + read-only; REQ-003 oracles stay strengthened.
+ * assertions only. The 17 inducible branches drive the real production gates (12 refusals + 5
+ * positive real-behavior branches); the 16 defensive branches assert SEMANTIC_PREVIEW success +
+ * read-only (12 from approved change 011 + 4 REQ-001 family-incompleteness gates from approved
+ * change 012); REQ-003 oracles stay strengthened.
  *
  * It replicates the real K2 compiler toolchain fixture
  * (kotlin-compiler-embeddable-2.0.21, jvmTarget 21, jdkToolchain 21) and drives the production
@@ -83,7 +85,14 @@ import kotlin.test.assertTrue
  * gates cannot honestly fire, so the glue drives a genuine SEMANTIC_PREVIEW (read-only, no mutation)
  * and asserts PREVIEW success with no refusal code. The token-identity/staged guards are K2 planner
  * gates (REQ-002); the mixed guards are JVM planner gates (REQ-003) and drive the clean mixed K2+JDT
- * proof. The 21 inducible cases keep their real refusal/positive branches unchanged.
+ * proof. Approved change 012 then supersedes 4 additional REQ-001 family-incompleteness criteria
+ * (fewer family functions than family parameters; function and parameter family disagree; crossing an
+ * external or unavailable declaration boundary; hierarchy member with fewer than two family functions)
+ * to the same defensive SEMANTIC_PREVIEW treatment: those 4 rows drive the clean complete in-workspace
+ * family and assert preview success + read-only, never a refusal. The inducible "lacking one exact
+ * parameter declaration at the selected ordinal" row (5) KEEPS its refusal
+ * kotlin.changeSignatureFamilyIncomplete and is verified with verifyFamilyCondition. The 17 inducible
+ * cases keep their real refusal/positive branches unchanged.
  */
 class KotlinJvmChangeSignatureParameterRenameSteps {
     private val temporaryDirectories = mutableListOf<Path>()
@@ -377,47 +386,23 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         familyCondition = condition
         val root = temporaryDirectory("rk-jvm-change-signature-family-condition")
         val source = when (condition) {
-            // REAL FamilyIncomplete trigger: the family has fewer catalogued value-parameters than
-            // family functions because a member's parameter carries a backtick-quoted non-JVM name
-            // (`foo bar`), which the compiler emits for the function but skips in parameter symbol
-            // extraction. The planner gate `familyParameters.size != familyFunctions.size` fires
-            // kotlin.changeSignatureFamilyIncomplete. Target is BaseCalculator (preferred owner) so
-            // the selected `subtotal` parameter is unique.
-            "incomplete with fewer family functions than family parameters" ->
-                "package fixture.billing\n" +
-                    "open class BaseCalculator { open fun calculateTotal(subtotal: Double): Double = subtotal }\n" +
-                    "class Impl : BaseCalculator() { override fun calculateTotal(`foo bar`: Double): Double = super.calculateTotal(subtotal = 1.0) }\n"
-            "ambiguous with a function and parameter family that disagree" ->
-                // REAL FamilyIncomplete trigger via a distinct three-member shape: interface + base +
-                // impl where the impl's parameter is skipped by a non-JVM backtick name. The family
-                // has 3 functions but only 2 catalogued ordinal-0 parameters, so the size gate fires
-                // FamilyIncomplete. The dedicated `familyId != targetEvidence.overrideFamilyId` gate
-                // is not reachable: a compiler parameter always inherits its function's override
-                // family, so this row fires via the incomplete-family gate and is reported as such.
-                "package fixture.billing\n" +
-                    "interface BillingCalculator { fun calculateTotal(subtotal: Double): Double }\n" +
-                    "open class BaseCalculator : BillingCalculator { override fun calculateTotal(subtotal: Double): Double = subtotal }\n" +
-                    "class Impl : BaseCalculator() { override fun calculateTotal(`a b`: Double): Double = super.calculateTotal(subtotal = 1.0) }\n"
-            "crossing an external or unavailable declaration boundary" ->
-                // REAL external override boundary: ExternalImpl overrides java.util.function.Function
-                // (an external JDK interface), so the declaration carries hasExternalHierarchyBoundary
-                // and the planner refuses kotlin.changeSignatureExternalHierarchyUnsupported. The
-                // boundary manifests on the external override (apply); its parameter is `subtotal` so
-                // the selected old name matches. kotlin.String is used (not CharSequence, a bounded
-                // typealias, which the usage extractor refuses as kotlin.usageTypeAliasUnsupported).
-                "package fixture.billing\nclass ExternalImpl : java.util.function.Function<String, String> {\n" +
-                    "    override fun apply(subtotal: String): String = subtotal\n}\n"
+            // Approved change 012 supersedes 4 non-inducible REQ-001 family-incompleteness refusal
+            // criteria (rows 1-4 below). Each declared condition is provably unreachable from a clean
+            // compiler fixture, so the fixture is the clean complete in-workspace family and the ACTUAL
+            // production behavior is a successful read-only SEMANTIC_PREVIEW, not a refusal. The gates
+            // are retained as defensive guards (not removed); the row asserts preview success + read-only,
+            // never a refusal.
+            "incomplete with fewer family functions than family parameters",
+            "ambiguous with a function and parameter family that disagree",
+            "crossing an external or unavailable declaration boundary",
             "a hierarchy member with fewer than two family functions" ->
-                // REAL external override: a single catalogued override of an external JDK callable
-                // (java.util.function.Function<String, String>) yields isHierarchyMember=true,
-                // familyFunctions=1, and hasExternalHierarchyBoundary=true, so
-                // kotlin.changeSignatureExternalHierarchyUnsupported fires.
-                "package fixture.billing\nclass ExternalImpl2 : java.util.function.Function<String, String> {\n" +
-                    "    override fun apply(subtotal: String): String = subtotal\n}\n"
+                familySource
             "lacking one exact parameter declaration at the selected ordinal" ->
                 // REAL FamilyIncomplete trigger via a distinct shape: base + two impls where one
                 // impl's parameter is skipped by a non-JVM backtick name. 3 family functions but only
-                // 2 catalogued ordinal-0 parameters -> the size gate fires FamilyIncomplete.
+                // 2 catalogued ordinal-0 parameters -> the size gate fires FamilyIncomplete. This
+                // inducible case KEEPS its refusal kotlin.changeSignatureFamilyIncomplete under
+                // approved change 012.
                 "package fixture.billing\n" +
                     "open class BaseCalculator { open fun calculateTotal(subtotal: Double): Double = subtotal }\n" +
                     "class ImplA : BaseCalculator() { override fun calculateTotal(`c d`: Double): Double = super.calculateTotal(subtotal = 1.0) }\n" +
@@ -430,12 +415,11 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
         plannerMode = PlannerMode.K2
         acceptExternalConsumerRisk = true
-        // The external-boundary rows manifest on the external override (apply); its parameter is
-        // `subtotal` (matching the old-name column), so production reaches
-        // kotlin.changeSignatureExternalHierarchyUnsupported. The old name comes from the parameterized
-        // Given (subtotal), so both external rows select the external override via selectApply.
-        selectApply = condition == "crossing an external or unavailable declaration boundary" ||
-            condition == "a hierarchy member with fewer than two family functions"
+        // Approved change 012: rows 1-4 are clean compiler-proven fixtures that must yield a
+        // successful read-only preview, so no row selects the external override anymore
+        // (selectApply stays false for every row). The ordinal-declaration row (5) keeps its
+        // refusal on the in-workspace family.
+        selectApply = false
         selectFamilyTarget()
     }
 
@@ -952,6 +936,42 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
         assertTrue(p.authorityLease == null, p.toString())
         verifyNoWorkspaceMutation()
         observedRefusals += ObservedRefusal(declaredCode, p.refusalCode, p.status)
+    }
+
+    // ------------------------------------------------------------------ REQ-001 family-incompleteness outline (approved change 012)
+
+    // Row 5 (inducible "lacking one exact parameter declaration at the selected ordinal") keeps its
+    // refusal kotlin.changeSignatureFamilyIncomplete. The generic outline renders the refusal as two
+    // separate steps: this Then asserts the refusal and the EXACT induced family condition; the And
+    // 'changes no file, plan, lock, or transaction record' proves no workspace mutation. Rows 1-4
+    // (superseded by approved change 012) instead drive the defensive SEMANTIC_PREVIEW Then/And steps.
+    @Then("^RefactorKit refuses the operation and explains why, reporting the typed code \"([^\"]+)\"$")
+    fun familyIncompleteRefusedWithCode(declaredCode: String) {
+        val p = requireNotNull(plan)
+        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
+        assertEquals(
+            declaredCode, p.refusalCode,
+            "declared refusal code '$declaredCode' did not equal the actual code '${p.refusalCode}'",
+        )
+        // REQ-001 family-incompleteness ordinal-declaration row: verify the fixture induced the EXACT
+        // declared condition, not a substitute.
+        if (familyCondition != null) {
+            val catalogue = tryCompilerCatalogue()
+            if (catalogue != null) verifyFamilyCondition(catalogue, requireNotNull(familyCondition))
+        }
+        assertTrue(p.workspaceEdit.edits.isEmpty(), p.toString())
+        assertTrue(p.affectedFiles.isEmpty(), p.toString())
+        assertTrue(!p.requiresUserApproval, p.toString())
+        assertTrue(p.authorityLease == null, p.toString())
+        observedRefusals += ObservedRefusal(declaredCode, p.refusalCode, p.status)
+    }
+
+    // REQ-001 family-incompleteness outline row 5 assertion: no file, plan, lock, or transaction
+    // record is changed by the refusal (the Then already asserted the refusal; this And proves the
+    // workspace filesystem is byte-for-byte unchanged).
+    @Then("^changes no file, plan, lock, or transaction record$")
+    fun changesNoFilePlanLockOrTransactionRecord() {
+        verifyNoWorkspaceMutation()
     }
 
     // ------------------------------------------------------------------ shared preview-succeeds Then
