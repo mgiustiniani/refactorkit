@@ -37,6 +37,14 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   "defensive-gate, not inducible from a clean compiler fixture" note. They are not removed. The inducible
   "lacking one exact parameter declaration at the selected ordinal" family-incompleteness case keeps its refusal.
 
+  Per the user-approved change 013 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-013.md),
+  the REQ-002 "duplicate ranges refuse" refusal criterion is superseded and reframed to assert the actual production
+  behavior: the planner coalesces/dedupes duplicate token ranges by range start before the range-invalid check, so
+  duplicate ranges never trigger a refusal. That criterion is retained below as a defensive-gate, not inducible from
+  a clean compiler fixture, and is not removed. The recorded Linux source-built GREEN (33/33 cases / 175 steps) was
+  captured against the pre-change-013 feature revision; the reframe keeps the 12 scenarios / 33 cases / 17 inducible
+  plus 16 defensive structure and adds no steps.
+
   The refusal codes in the scenarios are the actual production codes observed in the change-signature planning
   sources, not invented granular codes. The source of truth is intended to match executable reality (anti-fake).
 
@@ -45,7 +53,10 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   production behavior (a successful read-only preview, no refusal) with a defensive-gate note; they are not
   removed. The 21 inducible cases retain their refusal codes unchanged under change 011; approved change 012
   then supersedes 4 of the REQ-001 family-incompleteness cases among them, so the feature's expanded-case count
-  now reconciles to 17 inducible cases plus 16 defensive cases (33 total).
+  now reconciles to 17 inducible cases plus 16 defensive cases (33 total). Approved change 013 then supersedes the
+  REQ-002 "duplicate ranges refuse" criterion: duplicate token ranges are coalesced/deduped by the planner and never
+  refused, so that criterion is retained as a defensive-gate note in the token-range scenario and the 17 inducible
+  plus 16 defensive (33 total) reconciliation is unchanged.
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-001 — exact target and family
   @REQ-KOTLIN-CHANGE-SIGNATURE-001 @functional-requirement
@@ -125,6 +136,10 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   # REQ-KOTLIN-CHANGE-SIGNATURE-002 — token-range refusals (inducible)
   @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
   Scenario Outline: RefactorKit refuses when the target function, parameter, or token range cannot be identified
+    Under approved change 013 (kotlin-jvm-change-signature-parameter-rename-approved-change-013.md), duplicate token
+    ranges are coalesced/deduped by the planner before the range-invalid check, so duplicate ranges never trigger a
+    refusal; that criterion is retained as a defensive-gate, not inducible from a clean compiler fixture, and is not
+    removed.
     Given a compiler-catalogued Kotlin function "fixture.billing.calculateTotal" is selected, and its parameter "subtotal" is at ordinal 0
     And the parameter declaration and use evidence is "<evidence condition>"
     When a maintainer renames the parameter "subtotal" to "netAmount"
@@ -135,7 +150,7 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
       | missing from the compiler catalogue                            | kotlin.changeSignatureTargetMissing            |
       | a non-function target or blank descriptor or blank family      | kotlin.changeSignatureTargetUnsupported        |
       | no unique catalogued parameter named "subtotal"                | kotlin.changeSignatureParameterMissing         |
-      | a missing, generated, duplicate, or mismatched token           | kotlin.changeSignatureRangeInvalid             |
+      | a missing, generated, or mismatched token                      | kotlin.changeSignatureRangeInvalid             |
 
   # REQ-KOTLIN-CHANGE-SIGNATURE-002 — token-identity guards (defensive)
   @REQ-KOTLIN-CHANGE-SIGNATURE-002 @functional-requirement
