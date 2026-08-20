@@ -16,8 +16,8 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
 
   Declared status: @not-implemented. The production change-signature planning logic and the combined Kotlin and
   Java change-signature planner already exist on main and were not weakened. The slice's Cucumber runner and
-  glue exist and pass a Linux source-built GREEN against that existing production: 33 expanded cases, recorded
-  separately as promotion evidence (docs/requirements/evidence/v0.7.0-k5-change-signature-green-ad2c953dbb52c75de55699f9e5522e5318a7ebdf420988fc5a2a674f9ce1d8fe.json).
+  glue exist and pass a Linux source-built GREEN against that existing production: 33/33 cases / 175 steps, recorded
+  separately as promotion evidence (docs/requirements/evidence/v0.7.0-k5-change-signature-green-5f8c023883b47406d1a6565452ddd4d56bbd2d1e06faa489420e1ce8a4e48ee9.json).
   No scenario is tagged @implemented-and-validated and no implementation status is overclaimed (anti-fake).
 
   Per the user-approved change 010 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-010.md),
