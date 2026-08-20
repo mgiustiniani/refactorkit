@@ -58,7 +58,8 @@ import kotlin.test.assertTrue
  * (REQ-KOTLIN-CHANGE-SIGNATURE-001..003; 12 scenarios / 33 expanded cases across 8 scenario outlines:
  * 4 plain + 8 outlines).
  *
- * Glue reconciled to the human-readable domain/business prose rewrite (feature SHA 5005c0dd):
+ * Glue reconciled to the human-readable domain/business prose rewrite (feature SHA
+ * 4ae7c5740f55078ec8f7204b918dec81423e312ebd993c21d7fda890f296373a):
  * every step definition matches the new Given/When/Then wording (e.g. When 'a maintainer renames the
  * parameter "subtotal" to "netAmount"'; Then 'RefactorKit refuses the operation and explains why,
  * reporting the typed code "<refusal code>"'). Technical codes stay as data in the Examples/step
@@ -91,8 +92,15 @@ import kotlin.test.assertTrue
  * to the same defensive SEMANTIC_PREVIEW treatment: those 4 rows drive the clean complete in-workspace
  * family and assert preview success + read-only, never a refusal. The inducible "lacking one exact
  * parameter declaration at the selected ordinal" row (5) KEEPS its refusal
- * kotlin.changeSignatureFamilyIncomplete and is verified with verifyFamilyCondition. The 17 inducible
- * cases keep their real refusal/positive branches unchanged.
+ * kotlin.changeSignatureFamilyIncomplete and is verified with verifyFamilyCondition.
+ *
+ * Approved change 013 supersedes the REQ-002 "duplicate ranges refuse" criterion: production
+ * coalesces/dedupes duplicate token ranges by range start (KotlinChangeSignaturePlanner builds the
+ * locations list then `.distinctBy { it.first }`) before the range-invalid check, so duplicate ranges
+ * never trigger a refusal. That criterion is retained as a defensive-gate, not inducible from a clean
+ * compiler fixture, and is not removed: the composite token-range row now drives the inducible
+ * missing/generated/mismatched token case to kotlin.changeSignatureRangeInvalid (a real gate), never a
+ * duplicate-range refusal. The 17 inducible cases keep their real refusal/positive branches unchanged.
  */
 class KotlinJvmChangeSignatureParameterRenameSteps {
     private val temporaryDirectories = mutableListOf<Path>()
@@ -537,7 +545,16 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
                 buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", "package fixture.billing\nval calculateTotal: Double = 1.0\n")
             "no unique catalogued parameter named \"subtotal\"" ->
                 buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", "package fixture.billing\nfun calculateTotal(amount: Double): Double = amount\n")
-            "a missing, generated, duplicate, or mismatched token" ->
+            "a missing, generated, or mismatched token" ->
+                // Approved change 013 supersedes the REQ-002 "duplicate ranges refuse" criterion:
+                // production coalesces/dedupes duplicate token ranges by range start
+                // (KotlinChangeSignaturePlanner builds the locations list then `.distinctBy { it.first }`)
+                // before the range-invalid check, so duplicate ranges NEVER trigger a refusal. That
+                // criterion is retained as a defensive-gate, not inducible from a clean compiler fixture
+                // (a compiler cannot emit the same token range twice), and is not removed. This composite
+                // row therefore drives the inducible missing/generated/mismatched token case: the
+                // generated-source fixture below makes production refuse kotlin.changeSignatureRangeInvalid
+                // (a real gate), never a duplicate-range refusal.
                 buildProject(root, "build/generated/ksp/main/kotlin/fixture/billing/Calculator.kt", familySource)
             else -> error("unknown evidence condition: $condition")
         }

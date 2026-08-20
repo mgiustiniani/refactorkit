@@ -18,7 +18,8 @@ import org.junit.platform.suite.api.Suite
  * K2-level refusal codes) and [org.refactorkit.jvm.KotlinJvmChangeSignaturePlanner]
  * (REQ-003, mixed K2+JDT staged proof).
  *
- * Runner reconciled to the human-readable feature prose (feature SHA b1dc0970): the step regexes
+ * Runner reconciled to the human-readable feature prose (feature SHA
+ * 4ae7c5740f55078ec8f7204b918dec81423e312ebd993c21d7fda890f296373a): the step regexes
  * in [KotlinJvmChangeSignatureParameterRenameSteps] now match the rewritten domain/business
  * Given/When/Then wording while keeping the 17 inducible branches (12 refusals + 5 positive
  * real-behavior), 16 defensive SEMANTIC_PREVIEW branches (12 from approved change 011 + 4 REQ-001
@@ -38,7 +39,12 @@ import org.junit.platform.suite.api.Suite
  * supersession to 4 additional REQ-001 family-incompleteness criteria, which now also assert
  * SEMANTIC_PREVIEW success + read-only on the clean complete in-workspace family; the inducible
  * "lacking one exact parameter declaration at the selected ordinal" row keeps its refusal
- * kotlin.changeSignatureFamilyIncomplete. The 17 inducible cases keep their real
+ * kotlin.changeSignatureFamilyIncomplete. Approved change 013 supersedes the REQ-002 "duplicate ranges
+ * refuse" criterion: production coalesces/dedupes duplicate token ranges by range start (distinctBy
+ * { it.first }) before the range-invalid check, so duplicate ranges never trigger a refusal; that
+ * criterion is retained as a defensive-gate, not inducible from a clean compiler fixture, and the
+ * composite token-range row now drives the inducible missing/generated/mismatched case to
+ * kotlin.changeSignatureRangeInvalid. The 17 inducible cases keep their real
  * refusal/positive branches unchanged.
  */
 @Suite
