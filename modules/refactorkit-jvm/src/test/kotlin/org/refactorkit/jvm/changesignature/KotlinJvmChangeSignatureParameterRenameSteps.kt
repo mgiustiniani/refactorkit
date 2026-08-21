@@ -59,7 +59,7 @@ import kotlin.test.assertTrue
  * 4 plain + 8 outlines).
  *
  * Glue reconciled to the human-readable domain/business prose rewrite (feature SHA
- * 4ae7c5740f55078ec8f7204b918dec81423e312ebd993c21d7fda890f296373a):
+ * b6f19a011628a82e012e5f1f3b669aa4df2c62c07d78246dc729075f9584cfbf):
  * every step definition matches the new Given/When/Then wording (e.g. When 'a maintainer renames the
  * parameter "subtotal" to "netAmount"'; Then 'RefactorKit refuses the operation and explains why,
  * reporting the typed code "<refusal code>"'). Technical codes stay as data in the Examples/step

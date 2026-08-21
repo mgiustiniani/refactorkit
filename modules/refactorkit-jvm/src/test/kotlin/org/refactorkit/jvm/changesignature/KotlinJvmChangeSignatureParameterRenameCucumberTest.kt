@@ -19,7 +19,7 @@ import org.junit.platform.suite.api.Suite
  * (REQ-003, mixed K2+JDT staged proof).
  *
  * Runner reconciled to the human-readable feature prose (feature SHA
- * 4ae7c5740f55078ec8f7204b918dec81423e312ebd993c21d7fda890f296373a): the step regexes
+ * b6f19a011628a82e012e5f1f3b669aa4df2c62c07d78246dc729075f9584cfbf): the step regexes
  * in [KotlinJvmChangeSignatureParameterRenameSteps] now match the rewritten domain/business
  * Given/When/Then wording while keeping the 17 inducible branches (12 refusals + 5 positive
  * real-behavior), 16 defensive SEMANTIC_PREVIEW branches (12 from approved change 011 + 4 REQ-001
