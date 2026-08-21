@@ -39,7 +39,7 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
 
   Per the user-approved change 013 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-013.md),
   the REQ-002 "duplicate ranges refuse" refusal criterion is superseded and reframed to assert the actual production
-  behavior: the planner coalesces/dedupes duplicate token ranges by range start before the range-invalid check, so
+  behavior: the planner coalesces/dedupes duplicate token ranges by the complete token location (path and full source range) before the range-invalid check, so
   duplicate ranges never trigger a refusal. That criterion is retained below as a defensive-gate, not inducible from
   a clean compiler fixture, and is not removed. The recorded Linux source-built GREEN (33/33 cases / 175 steps) is
   the final committed post-approved-change-013 evidence ed022a8ba49c160e45d93c0f92871b162c8d53dc3fe5995f99bb67cbb5860d1a;
