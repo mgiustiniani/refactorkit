@@ -16,7 +16,7 @@ The planner changes only:
 - each FIR-resolved body reference to those parameter symbols; and
 - each FIR argument-to-parameter-mapped Kotlin named-argument label.
 
-Positional Kotlin and Java call sites do not change. Default argument expressions are preserved byte-for-byte. Overload calls remain bound to the same JVM callable identity. Duplicate ranges, a new-name conflict at any family member, Kotlin keywords, callable/reference incompleteness, or any token mismatch refuses.
+Positional Kotlin and Java call sites do not change. Default argument expressions are preserved byte-for-byte. Overload calls remain bound to the same JVM callable identity. Per approved change 013, duplicate token ranges are coalesced/deduped by the planner by range start before the range-invalid check and never trigger a refusal; a new-name conflict at any family member, Kotlin keywords, callable/reference incompleteness, or any token mismatch refuses.
 
 Public/protected/internal API changes require explicit external-consumer-risk acceptance. Preview is read-only.
 

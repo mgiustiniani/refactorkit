@@ -17,7 +17,7 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   Declared status: @not-implemented. The production change-signature planning logic and the combined Kotlin and
   Java change-signature planner already exist on main and were not weakened. The slice's Cucumber runner and
   glue exist and pass a Linux source-built GREEN against that existing production: 33/33 cases / 175 steps, recorded
-  separately as promotion evidence (docs/requirements/evidence/v0.7.0-k5-change-signature-green-5f8c023883b47406d1a6565452ddd4d56bbd2d1e06faa489420e1ce8a4e48ee9.json).
+  separately as promotion evidence (docs/requirements/evidence/v0.7.0-k5-change-signature-green-ed022a8ba49c160e45d93c0f92871b162c8d53dc3fe5995f99bb67cbb5860d1a.json).
   No scenario is tagged @implemented-and-validated and no implementation status is overclaimed (anti-fake).
 
   Per the user-approved change 010 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-010.md),
@@ -41,9 +41,9 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   the REQ-002 "duplicate ranges refuse" refusal criterion is superseded and reframed to assert the actual production
   behavior: the planner coalesces/dedupes duplicate token ranges by range start before the range-invalid check, so
   duplicate ranges never trigger a refusal. That criterion is retained below as a defensive-gate, not inducible from
-  a clean compiler fixture, and is not removed. The recorded Linux source-built GREEN (33/33 cases / 175 steps) was
-  captured against the pre-change-013 feature revision; the reframe keeps the 12 scenarios / 33 cases / 17 inducible
-  plus 16 defensive structure and adds no steps.
+  a clean compiler fixture, and is not removed. The recorded Linux source-built GREEN (33/33 cases / 175 steps) is
+  the final committed post-approved-change-013 evidence ed022a8ba49c160e45d93c0f92871b162c8d53dc3fe5995f99bb67cbb5860d1a;
+  the reframe keeps the 12 scenarios / 33 cases / 17 inducible plus 16 defensive structure and adds no steps.
 
   The refusal codes in the scenarios are the actual production codes observed in the change-signature planning
   sources, not invented granular codes. The source of truth is intended to match executable reality (anti-fake).
