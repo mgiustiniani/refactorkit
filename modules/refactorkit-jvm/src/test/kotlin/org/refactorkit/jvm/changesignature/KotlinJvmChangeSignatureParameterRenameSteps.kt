@@ -59,7 +59,7 @@ import kotlin.test.assertTrue
  * 4 plain + 8 outlines).
  *
  * Glue reconciled to the human-readable domain/business prose rewrite (feature SHA
- * b6f19a011628a82e012e5f1f3b669aa4df2c62c07d78246dc729075f9584cfbf):
+ * e22312ccf99b3956029202bc7c0ee44a8205a27afe615334ddbed6bd410774f0):
  * every step definition matches the new Given/When/Then wording (e.g. When 'a maintainer renames the
  * parameter "subtotal" to "netAmount"'; Then 'RefactorKit refuses the operation and explains why,
  * reporting the typed code "<refusal code>"'). Technical codes stay as data in the Examples/step
@@ -553,7 +553,7 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
             "a missing, generated, or mismatched token" ->
                 // Approved change 013 retains the REQ-002 "duplicate ranges refuse" criterion as a
                 // NON-INDUCIBLE defensive-gate, not an executable coalescence behavior: production
-                // dedupes token ranges by range start (`KotlinChangeSignaturePlanner` builds the
+                // dedupes token ranges by the complete token location (path and full source range) (`KotlinChangeSignaturePlanner` builds the
                 // locations list then `.distinctBy { it.first }`) before the range-invalid check, which
                 // makes the duplicate-detection branch tautological (the size-vs-distinct-size check
                 // cannot differ after distinctBy), and compiler `parseUsages` enforces unique keys, so a

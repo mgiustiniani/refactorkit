@@ -19,7 +19,7 @@ import org.junit.platform.suite.api.Suite
  * (REQ-003, mixed K2+JDT staged proof).
  *
  * Runner reconciled to the human-readable feature prose (feature SHA
- * b6f19a011628a82e012e5f1f3b669aa4df2c62c07d78246dc729075f9584cfbf): the step regexes
+ * e22312ccf99b3956029202bc7c0ee44a8205a27afe615334ddbed6bd410774f0): the step regexes
  * in [KotlinJvmChangeSignatureParameterRenameSteps] now match the rewritten domain/business
  * Given/When/Then wording while keeping the 17 inducible branches (12 refusals + 5 positive
  * real-behavior), 16 defensive SEMANTIC_PREVIEW branches (12 from approved change 011 + 4 REQ-001
@@ -41,7 +41,7 @@ import org.junit.platform.suite.api.Suite
  * "lacking one exact parameter declaration at the selected ordinal" row keeps its refusal
  * kotlin.changeSignatureFamilyIncomplete. Approved change 013 retains the REQ-002 "duplicate ranges
  * refuse" criterion as a NON-INDUCIBLE defensive-gate, not an executable coalescence behavior:
- * production dedupes token ranges by range start (distinctBy { it.first }) before the range-invalid
+ * production dedupes token ranges by the complete token location (path and full source range) (distinctBy { it.first }) before the range-invalid
  * check, which makes the duplicate-detection branch tautological (the size-vs-distinct-size check
  * cannot differ after distinctBy), and compiler parseUsages enforces unique keys, so no compiler
  * fixture can emit the same token range twice; candidate fixtures that try to induce a duplicate-range
