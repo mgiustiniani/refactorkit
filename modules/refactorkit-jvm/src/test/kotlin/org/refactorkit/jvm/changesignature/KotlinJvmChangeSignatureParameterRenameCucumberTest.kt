@@ -39,11 +39,15 @@ import org.junit.platform.suite.api.Suite
  * supersession to 4 additional REQ-001 family-incompleteness criteria, which now also assert
  * SEMANTIC_PREVIEW success + read-only on the clean complete in-workspace family; the inducible
  * "lacking one exact parameter declaration at the selected ordinal" row keeps its refusal
- * kotlin.changeSignatureFamilyIncomplete. Approved change 013 supersedes the REQ-002 "duplicate ranges
- * refuse" criterion: production coalesces/dedupes duplicate token ranges by range start (distinctBy
- * { it.first }) before the range-invalid check, so duplicate ranges never trigger a refusal; that
- * criterion is retained as a defensive-gate, not inducible from a clean compiler fixture, and the
- * composite token-range row now drives the inducible missing/generated/mismatched case to
+ * kotlin.changeSignatureFamilyIncomplete. Approved change 013 retains the REQ-002 "duplicate ranges
+ * refuse" criterion as a NON-INDUCIBLE defensive-gate, not an executable coalescence behavior:
+ * production dedupes token ranges by range start (distinctBy { it.first }) before the range-invalid
+ * check, which makes the duplicate-detection branch tautological (the size-vs-distinct-size check
+ * cannot differ after distinctBy), and compiler parseUsages enforces unique keys, so no compiler
+ * fixture can emit the same token range twice; candidate fixtures that try to induce a duplicate-range
+ * refusal fail to compile. There is therefore NO executable coalescence step (no scenario step asserts
+ * coalescence/dedupe behavior; the criterion is kept as a defensive-gate note only). The composite
+ * token-range row drives the inducible missing/generated/mismatched case to
  * kotlin.changeSignatureRangeInvalid. The 17 inducible cases keep their real
  * refusal/positive branches unchanged.
  */

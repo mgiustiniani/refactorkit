@@ -94,13 +94,18 @@ import kotlin.test.assertTrue
  * parameter declaration at the selected ordinal" row (5) KEEPS its refusal
  * kotlin.changeSignatureFamilyIncomplete and is verified with verifyFamilyCondition.
  *
- * Approved change 013 supersedes the REQ-002 "duplicate ranges refuse" criterion: production
- * coalesces/dedupes duplicate token ranges by range start (KotlinChangeSignaturePlanner builds the
- * locations list then `.distinctBy { it.first }`) before the range-invalid check, so duplicate ranges
- * never trigger a refusal. That criterion is retained as a defensive-gate, not inducible from a clean
- * compiler fixture, and is not removed: the composite token-range row now drives the inducible
- * missing/generated/mismatched token case to kotlin.changeSignatureRangeInvalid (a real gate), never a
- * duplicate-range refusal. The 17 inducible cases keep their real refusal/positive branches unchanged.
+ * Approved change 013 retains the REQ-002 "duplicate ranges refuse" criterion as a NON-INDUCIBLE
+ * defensive-gate, not an executable coalescence behavior. Production dedupes token ranges by range
+ * start (`KotlinChangeSignaturePlanner` builds the locations list then `.distinctBy { it.first }`)
+ * before the range-invalid check, which makes the duplicate-detection branch tautological
+ * (`locations.size != locations.map { it.first }.distinct().size` cannot differ after distinctBy), and
+ * compiler `parseUsages` enforces unique keys, so no compiler fixture can emit the same token range
+ * twice; candidate fixtures that try to induce a duplicate-range refusal fail to compile. There is
+ * therefore NO executable coalescence step: no scenario step asserts coalescence/dedupe behavior; the
+ * criterion is kept as a defensive-gate note only, matching the feature's defensive-gate note. The
+ * composite token-range row drives the inducible missing/generated/mismatched token case to
+ * kotlin.changeSignatureRangeInvalid (a real gate), never a duplicate-range refusal. The 17 inducible
+ * cases keep their real refusal/positive branches unchanged.
  */
 class KotlinJvmChangeSignatureParameterRenameSteps {
     private val temporaryDirectories = mutableListOf<Path>()
@@ -546,15 +551,19 @@ class KotlinJvmChangeSignatureParameterRenameSteps {
             "no unique catalogued parameter named \"subtotal\"" ->
                 buildProject(root, "src/main/kotlin/fixture/billing/Calculator.kt", "package fixture.billing\nfun calculateTotal(amount: Double): Double = amount\n")
             "a missing, generated, or mismatched token" ->
-                // Approved change 013 supersedes the REQ-002 "duplicate ranges refuse" criterion:
-                // production coalesces/dedupes duplicate token ranges by range start
-                // (KotlinChangeSignaturePlanner builds the locations list then `.distinctBy { it.first }`)
-                // before the range-invalid check, so duplicate ranges NEVER trigger a refusal. That
-                // criterion is retained as a defensive-gate, not inducible from a clean compiler fixture
-                // (a compiler cannot emit the same token range twice), and is not removed. This composite
-                // row therefore drives the inducible missing/generated/mismatched token case: the
-                // generated-source fixture below makes production refuse kotlin.changeSignatureRangeInvalid
-                // (a real gate), never a duplicate-range refusal.
+                // Approved change 013 retains the REQ-002 "duplicate ranges refuse" criterion as a
+                // NON-INDUCIBLE defensive-gate, not an executable coalescence behavior: production
+                // dedupes token ranges by range start (`KotlinChangeSignaturePlanner` builds the
+                // locations list then `.distinctBy { it.first }`) before the range-invalid check, which
+                // makes the duplicate-detection branch tautological (the size-vs-distinct-size check
+                // cannot differ after distinctBy), and compiler `parseUsages` enforces unique keys, so a
+                // compiler fixture cannot emit the same token range twice; candidate fixtures that try to
+                // induce a duplicate-range refusal fail to compile. There is therefore NO executable
+                // coalescence step (no scenario step asserts coalescence/dedupe behavior; the criterion
+                // is kept as a defensive-gate note only). This composite row drives the inducible
+                // missing/generated/mismatched token case: the generated-source fixture below makes
+                // production refuse kotlin.changeSignatureRangeInvalid (a real gate), never a
+                // duplicate-range refusal.
                 buildProject(root, "build/generated/ksp/main/kotlin/fixture/billing/Calculator.kt", familySource)
             else -> error("unknown evidence condition: $condition")
         }
