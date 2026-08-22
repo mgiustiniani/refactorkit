@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Business Need: Rename a parameter of a Kotlin function across its full override family, safely
   As a maintainer of a Kotlin JVM workspace
   I need RefactorKit to rename one parameter of a Kotlin function across the complete family of overrides that share it
@@ -14,12 +14,16 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   across the family, the compiler-resolved references to those parameters in the function body, and the Kotlin
   named-argument labels mapped to those parameters are edited.
 
-  Declared status: @not-implemented. The production change-signature planning logic and the combined Kotlin and
-  Java change-signature planner already exist on main and were not weakened. The slice's Cucumber runner and
-  glue exist and pass a Linux source-built Cucumber GREEN (33/33 cases / 175 steps) against that existing
-  production; it is recorded separately as promotion evidence and the exact committed evidence pointer is
-  maintained in the ARC42 requirements appendix.
-  No scenario is tagged @implemented-and-validated and no implementation status is overclaimed (anti-fake).
+  Declared status: @implemented-and-validated, granted by the independent requirements-quality-reviewer PASS at
+  candidate 4a7715a under approved change 010 (tests-only RED gate deferred, recorded as technical debt R-051,
+  requalified at the close of this milestone band), 011 (12 defensive-gate criteria superseded), 012 (4 REQ-001
+  family-incompleteness criteria superseded), and 013 (duplicate-range coalescence). The production
+  change-signature planning logic and the combined Kotlin and Java change-signature planner exist on main and
+  were not weakened. The Linux source-built Cucumber GREEN (33/33 cases / 175 steps, evidence 33570159e...json)
+  is recorded as promotion evidence and the exact committed evidence pointer is maintained in the ARC42
+  requirements appendix.
+  Every scenario keeps its stable @REQ-KOTLIN-CHANGE-SIGNATURE-001..003 tag and no scenario carries a
+  conflicting status tag (anti-fake).
 
   Per the user-approved change 010 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-010.md),
   the mandatory tests-only RED gate for REQ-KOTLIN-CHANGE-SIGNATURE-001..003 is deferred and recorded as
@@ -30,7 +34,7 @@ Business Need: Rename a parameter of a Kotlin function across its full override 
   (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-011.md) to assert the actual
   production behavior: a successful read-only preview with a defensive-gate note. They are not removed.
   Packaged CLI, daemon, and MCP apply and rollback, and four-platform qualification, remain deferred and not
-  claimed. Promotion to @implemented-and-validated awaits only the independent requirements-quality-reviewer PASS.
+  claimed; they requalify at the close of this milestone band.
 
   Per the user-approved change 012 (docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-012.md),
   4 non-inducible REQ-001 family-incompleteness refusal criteria are superseded and reframed below to assert the actual
