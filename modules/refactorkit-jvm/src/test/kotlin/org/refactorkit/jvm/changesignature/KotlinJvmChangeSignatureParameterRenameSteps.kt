@@ -59,7 +59,7 @@ import kotlin.test.assertTrue
  * 4 plain + 8 outlines).
  *
  * Glue reconciled to the human-readable domain/business prose rewrite (feature SHA
- * e22312ccf99b3956029202bc7c0ee44a8205a27afe615334ddbed6bd410774f0):
+ * ee8ee0d78f022234167c2e926fe0c9bac06be1b5097fbb492f73250b1408ba5f):
  * every step definition matches the new Given/When/Then wording (e.g. When 'a maintainer renames the
  * parameter "subtotal" to "netAmount"'; Then 'RefactorKit refuses the operation and explains why,
  * reporting the typed code "<refusal code>"'). Technical codes stay as data in the Examples/step
@@ -95,8 +95,9 @@ import kotlin.test.assertTrue
  * kotlin.changeSignatureFamilyIncomplete and is verified with verifyFamilyCondition.
  *
  * Approved change 013 retains the REQ-002 "duplicate ranges refuse" criterion as a NON-INDUCIBLE
- * defensive-gate, not an executable coalescence behavior. Production dedupes token ranges by range
- * start (`KotlinChangeSignaturePlanner` builds the locations list then `.distinctBy { it.first }`)
+ * defensive-gate, not an executable coalescence behavior. Production dedupes token ranges by the
+ * complete token location (path and full source range) (`KotlinChangeSignaturePlanner` builds the
+ * locations list then `.distinctBy { it.first }`)
  * before the range-invalid check, which makes the duplicate-detection branch tautological
  * (`locations.size != locations.map { it.first }.distinct().size` cannot differ after distinctBy), and
  * compiler `parseUsages` enforces unique keys, so no compiler fixture can emit the same token range
