@@ -19,9 +19,11 @@ Business Need: Apply a snapshot-bound Kotlin import layout to retained directive
   CLI daemon or MCP apply and rollback verification, no four-platform qualification, and no independent
   requirements-quality-reviewer PASS. None of the promotion gates is claimed.
   The refusal codes asserted in the scenarios are the actual production codes observed in the planning
-  source, kotlin.organizeImportsStyleUnsupported, kotlin.organizeImportsStyleStale, and
-  kotlin.organizeImportsNoChange, not invented granular codes. The source of truth is intended to match
-  executable reality (anti-fake).
+  source, kotlin.organizeImportsStyleUnsupported, kotlin.classpathEvidenceChanged, and
+  kotlin.organizeImportsNoChange, not invented granular codes. Changed or symlinked DECLARATION_FILE style
+  evidence is rejected by KotlinCompilerDiagnostics.validateClasspathEvidence as kotlin.classpathEvidenceChanged
+  before the planner's projectStyle boundary, so kotlin.organizeImportsStyleStale is unreachable in practice.
+  The source of truth is intended to match executable reality (anti-fake).
 
   # REQ-KOTLIN-IMPORT-STYLE-001 — default official layout
   @REQ-KOTLIN-IMPORT-STYLE-001 @functional-requirement
@@ -147,10 +149,10 @@ Business Need: Apply a snapshot-bound Kotlin import layout to retained directive
     Given one saved authoritative non-generated Kotlin JVM file with retained imports in one contiguous import block
     And the captured Kotlin layout evidence is "<evidence condition>"
     When organize-imports previews that Kotlin JVM file
-    Then RefactorKit refuses the operation before planning and explains why, reporting the typed code "kotlin.organizeImportsStyleStale"
+    Then RefactorKit refuses the operation before planning and explains why, reporting the typed code "<refusal code>"
     And the refusal changes no file, plan, lock, or transaction record
 
     Examples:
-      | evidence condition                                            |
-      | stale because the style fingerprint changed after the snapshot |
-      | a symbolic link instead of a no-follow regular file            |
+      | evidence condition                                            | refusal code                    |
+      | stale because the style fingerprint changed after the snapshot | kotlin.classpathEvidenceChanged |
+      | a symbolic link instead of a no-follow regular file            | kotlin.classpathEvidenceChanged |
