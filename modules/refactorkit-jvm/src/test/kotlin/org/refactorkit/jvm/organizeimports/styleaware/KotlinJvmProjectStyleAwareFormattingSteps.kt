@@ -50,9 +50,12 @@ import kotlin.test.assertTrue
  * projectStyle boundary is genuinely exercised.
  *
  * The feature declares the actual production refusal codes (kotlin.organizeImportsStyleUnsupported,
- * kotlin.organizeImportsStyleStale, kotlin.organizeImportsNoChange). Every refusal step asserts that
- * the DECLARED code EQUALS the ACTUAL refusalCode the planner returned; the suite FAILS on a
- * typed-code regression. Every observed declared-code to actual-code mapping is written to
+ * kotlin.classpathEvidenceChanged, kotlin.organizeImportsNoChange). Changed or symlinked
+ * DECLARATION_FILE style evidence is rejected by KotlinCompilerDiagnostics.validateClasspathEvidence
+ * as kotlin.classpathEvidenceChanged before the projectStyle boundary, so kotlin.organizeImportsStyleStale
+ * is unreachable in practice. Every refusal step asserts that the DECLARED code EQUALS the ACTUAL
+ * refusalCode the planner returned; the suite FAILS on a typed-code regression. Every observed
+ * declared-code to actual-code mapping is written to
  * build/reports/cucumber/kotlin-jvm-project-style-aware-formatting-codes.txt for reconciliation.
  */
 class KotlinJvmProjectStyleAwareFormattingSteps {
@@ -599,26 +602,14 @@ class KotlinJvmProjectStyleAwareFormattingSteps {
         )
     }
 
-    @Then("^RefactorKit refuses the operation before planning and explains why, reporting the typed code \"kotlin\\.organizeImportsStyleUnsupported\"$")
-    fun refusesStyleUnsupported() {
+    @Then("^RefactorKit refuses the operation before planning and explains why, reporting the typed code \"([^\"]+)\"$")
+    fun refusesWithTypedCode(refusalCode: String) {
         val p = requireNotNull(plan)
-        recordRefusal("kotlin.organizeImportsStyleUnsupported", p.refusalCode, p.status)
+        recordRefusal(refusalCode, p.refusalCode, p.status)
         assertEquals(PatchStatus.REFUSED, p.status, p.toString())
         assertEquals(
-            "kotlin.organizeImportsStyleUnsupported", p.refusalCode,
-            "declared refusal code 'kotlin.organizeImportsStyleUnsupported' did not equal the actual code '${p.refusalCode}'",
-        )
-        assertTrue(p.workspaceEdit.edits.isEmpty(), p.toString())
-    }
-
-    @Then("^RefactorKit refuses the operation before planning and explains why, reporting the typed code \"kotlin\\.organizeImportsStyleStale\"$")
-    fun refusesStyleStale() {
-        val p = requireNotNull(plan)
-        recordRefusal("kotlin.organizeImportsStyleStale", p.refusalCode, p.status)
-        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
-        assertEquals(
-            "kotlin.organizeImportsStyleStale", p.refusalCode,
-            "declared refusal code 'kotlin.organizeImportsStyleStale' did not equal the actual code '${p.refusalCode}'",
+            refusalCode, p.refusalCode,
+            "declared refusal code '$refusalCode' did not equal the actual code '${p.refusalCode}'",
         )
         assertTrue(p.workspaceEdit.edits.isEmpty(), p.toString())
     }
