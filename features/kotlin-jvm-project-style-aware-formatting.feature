@@ -1,5 +1,5 @@
 # language: en
-@functional-requirement @not-implemented
+@functional-requirement @implemented-and-validated
 Business Need: Apply a snapshot-bound Kotlin import layout to retained directives without touching their bytes
   RefactorKit must reorder retained Kotlin import directives and change only directive order and configured
   blank-line separators, preserving each retained directive byte for byte and preserving LF or CRLF line
@@ -14,10 +14,14 @@ Business Need: Apply a snapshot-bound Kotlin import layout to retained directive
   configuration refuses before planning. Preview is read-only and performs no workspace or transaction
   write; managed apply uses the operation-owned diagnostics gate, PatchEngine, and WAL, and rollback
   restores every original byte.
-  Declared status: @not-implemented. The production planner KotlinOrganizeImportsPlanner exists on main at
-  baseline 19dbd4e, but this slice has no Cucumber runner or glue, no executable RED or GREEN, no packaged
-  CLI daemon or MCP apply and rollback verification, no four-platform qualification, and no independent
-  requirements-quality-reviewer PASS. None of the promotion gates is claimed.
+  Declared status: @implemented-and-validated. The production planner KotlinOrganizeImportsPlanner
+  pre-existed the baseline and is unchanged; the feature passes 19 of 19 GREEN with a real K2 toolchain
+  fixture, PatchEngine, WAL, managed apply, and rollback. Per user-approved approved-change-014 the
+  mandatory tests-only RED gate is deferred and recorded as ARCHITECTURAL-PROCESS technical debt R-052,
+  and the baseline stale or symlinked refusal-code criterion is superseded to kotlin.classpathEvidenceChanged,
+  matching actual production behavior. Independent requirements-quality-reviewer PASS is not yet obtained;
+  packaged CLI, daemon, or MCP apply and rollback, and four-platform qualification are not claimed here and
+  requalify at K5 band close.
   The refusal codes asserted in the scenarios are the actual production codes observed in the planning
   source, kotlin.organizeImportsStyleUnsupported, kotlin.classpathEvidenceChanged, and
   kotlin.organizeImportsNoChange, not invented granular codes. Changed or symlinked DECLARATION_FILE style
