@@ -10,7 +10,7 @@ import org.junit.platform.suite.api.Suite
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("kotlin-jvm-project-style-aware-formatting.feature")
-@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.organizeimports.styleaware")
+@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.importstyle")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,
     value = "pretty, json:build/reports/cucumber/kotlin-jvm-project-style-aware-formatting.json",

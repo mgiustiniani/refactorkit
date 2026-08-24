@@ -1,4 +1,4 @@
-package org.refactorkit.jvm.organizeimports.styleaware
+package org.refactorkit.jvm.importstyle
 
 import io.cucumber.java.After
 import io.cucumber.java.Scenario
