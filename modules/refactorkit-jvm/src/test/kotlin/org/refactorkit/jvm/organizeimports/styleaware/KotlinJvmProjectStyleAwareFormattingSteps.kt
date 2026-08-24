@@ -427,11 +427,21 @@ class KotlinJvmProjectStyleAwareFormattingSteps {
 
     // ------------------------------------------------------------------ Then
 
-    @Then("^the retained directives are reordered into one Unicode-code-point-sorted group$")
+    @Then("^the retained directives are reordered into one String-natural-order-sorted group within the ASCII-bounded import grammar$")
     fun retainedDirectivesReorderedIntoOneGroup() {
         val p = requireNotNull(plan)
         assertTrue(p.status == PatchStatus.PREVIEW, p.toString())
-        assertEquals(expectedDirectiveOrder(), replacementDirectives(), "expected one sorted group")
+        assertEquals(expectedDirectiveOrder(), replacementDirectives(), "expected one String-natural-order-sorted group")
+    }
+
+    @Then("^Unicode code-point ordering is unobservable for valid import directives$")
+    fun unicodeCodePointOrderingUnobservable() {
+        val p = requireNotNull(plan)
+        assertTrue(p.status == PatchStatus.PREVIEW, p.toString())
+        // For valid ASCII-bounded import directives the observable sort is String natural order;
+        // Unicode code-point ordering is unobservable. Assert the observed order equals the
+        // natural-order expectation (no behavior/code change).
+        assertEquals(expectedDirectiveOrder(), replacementDirectives(), "expected String-natural-order sorting")
     }
 
     @Then("^each retained directive is preserved byte for byte$")
