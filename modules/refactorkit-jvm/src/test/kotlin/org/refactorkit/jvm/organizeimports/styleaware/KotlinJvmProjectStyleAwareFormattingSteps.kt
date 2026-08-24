@@ -41,7 +41,8 @@ import kotlin.test.assertTrue
 
 /**
  * Story BDD glue for features/kotlin-jvm-project-style-aware-formatting.feature
- * (REQ-KOTLIN-IMPORT-STYLE-001, @not-implemented).
+ * (REQ-KOTLIN-IMPORT-STYLE-001, @implemented-and-validated; RED gate deferred R-052
+ * per approved-change-014).
  *
  * It replicates the K2 toolchain fixture from the other organize-imports slices
  * (kotlin-compiler-embeddable-2.0.21, jvmTarget 21, jdkToolchain 21) and drives the
