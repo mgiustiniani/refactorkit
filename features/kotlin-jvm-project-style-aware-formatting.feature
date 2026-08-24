@@ -3,7 +3,8 @@
 Business Need: Apply a snapshot-bound Kotlin import layout to retained directives without touching their bytes
   RefactorKit must reorder retained Kotlin import directives and change only directive order and configured
   blank-line separators, preserving each retained directive byte for byte and preserving LF or CRLF line
-  endings. The default official layout is one Unicode-code-point-sorted group. A project may override
+  endings. The default official layout is one String-natural-order-sorted group within the ASCII-bounded
+  import grammar; Unicode code-point ordering is unobservable for valid import directives. A project may override
   grouping with one bounded .editorconfig ij_kotlin_imports_layout value captured as no-follow
   ClasspathEvidence, using one catch-all star token, an optional alias group, and unique package-prefix
   tokens in a declared group order, with groups separated by one empty line and the nearest captured
@@ -31,12 +32,13 @@ Business Need: Apply a snapshot-bound Kotlin import layout to retained directive
 
   # REQ-KOTLIN-IMPORT-STYLE-001 — default official layout
   @REQ-KOTLIN-IMPORT-STYLE-001 @functional-requirement
-  Scenario: The default official layout sorts retained directives into one Unicode-code-point group
+  Scenario: The default official layout sorts retained directives into one String-natural-order-sorted group
     Given one saved authoritative non-generated Kotlin JVM file with retained imports in one contiguous import block
     And the snapshot carries complete error-free compiler evidence and the retained import directives
     And no captured project style file overrides the layout
     When organize-imports previews that Kotlin JVM file
-    Then the retained directives are reordered into one Unicode-code-point-sorted group
+    Then the retained directives are reordered into one String-natural-order-sorted group within the ASCII-bounded import grammar
+    And Unicode code-point ordering is unobservable for valid import directives
     And each retained directive is preserved byte for byte
     And only directive order and configured blank-line separators change
     And the preview is read-only and does not mutate the snapshot or the filesystem
@@ -47,7 +49,7 @@ Business Need: Apply a snapshot-bound Kotlin import layout to retained directive
     Given one saved authoritative non-generated Kotlin JVM file with retained imports in one contiguous import block using "<line ending>" line endings
     And the snapshot carries complete error-free compiler evidence
     When organize-imports previews that Kotlin JVM file
-    Then the retained directives are reordered into one Unicode-code-point-sorted group
+    Then the retained directives are reordered into one String-natural-order-sorted group within the ASCII-bounded import grammar
     And the "<line ending>" line endings are preserved byte for byte
 
     Examples:
@@ -101,7 +103,7 @@ Business Need: Apply a snapshot-bound Kotlin import layout to retained directive
     And the style file is re-fingerprinted before use and matches the preview snapshot
     When organize-imports previews that Kotlin JVM file
     Then the explicit official-style declaration is recognized
-    And the retained directives are reordered into one Unicode-code-point-sorted group
+    And the retained directives are reordered into one String-natural-order-sorted group within the ASCII-bounded import grammar
     And each retained directive is preserved byte for byte
     And the preview is read-only and does not mutate the snapshot or the filesystem
 
