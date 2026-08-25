@@ -836,6 +836,7 @@ class JavaLanguageAdapter(
         "organizeImports" -> applyOrganizeImports(request)
         "formatFile" -> applyFormatFile(request)
         "safeDelete"   -> applySafeDelete(request)
+        "inlineVariable" -> applyInlineVariableRefusal(request)
         else           -> notImplemented(request, "Unknown operation: ${request.operation}")
     }
 
@@ -1047,6 +1048,32 @@ class JavaLanguageAdapter(
         workspaceEdit = WorkspaceEdit(),
         warnings = listOf(reason),
         riskLevel = RiskLevel.HIGH,
+    )
+
+    /**
+     * N-INLINE-VAR refusal-only production behavior (J1 catalogue row, REQ-JAVA-INLINE-VARIABLE-REFUSAL-001).
+     * inlineVariable is absent from the Java adapter; this branch fails closed deterministically with
+     * the stable typed refusal code java.inlineVariable.unsupported, an empty WorkspaceEdit and
+     * affected-file set, no approval, no managed-write authority lease, and no lock/WAL/transaction.
+     */
+    private fun applyInlineVariableRefusal(request: RefactoringRequest): PatchPlan = refused(
+        request,
+        "java.inlineVariable.unsupported",
+        "Inline-variable Java refactoring is unsupported; refused deterministically with java.inlineVariable.unsupported",
+    )
+
+    private fun refused(request: RefactoringRequest, code: String, message: String) = PatchPlan(
+        operation = request.operation,
+        status = PatchStatus.REFUSED,
+        snapshotHash = request.snapshot.hash,
+        confidence = 0.0,
+        requiresUserApproval = false,
+        summary = message,
+        affectedFiles = emptySet(),
+        workspaceEdit = WorkspaceEdit(),
+        warnings = listOf(message),
+        riskLevel = RiskLevel.HIGH,
+        refusalCode = code,
     )
 
     override fun formatEdits(edits: List<TextEdit>): List<TextEdit> = edits
