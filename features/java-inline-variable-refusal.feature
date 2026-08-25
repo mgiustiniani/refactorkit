@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Refuse an unsupported inline-variable Java refactoring request deterministically
   As a RefactorKit caller on a Java workspace
   I need the Java adapter to refuse an inlineVariable request with a deterministic typed
@@ -15,16 +15,17 @@ Ability: Refuse an unsupported inline-variable Java refactoring request determin
   operation name and refusal code. The refusal codes are asserted as step data below, not as
   narrative prose.
 
-  Genuine RED finding (anti-fake): production currently has no inline-variable planner.
-  JavaLanguageAdapter.applyRefactoring contains no inlineVariable branch, so the request falls
-  through to the generic notImplemented fallback, which returns PatchStatus.REFUSED with the
+  Genuine RED finding (anti-fake): before the slice, production had no inline-variable planner.
+  JavaLanguageAdapter.applyRefactoring contained no inlineVariable branch, so the request fell
+  through to the generic notImplemented fallback, which returned PatchStatus.REFUSED with the
   summary and warning text "Unknown operation: inlineVariable", an empty WorkspaceEdit, an
   empty affected-file set, requiresUserApproval=false, confidence=0.0, and riskLevel=HIGH,
-  while the typed refusal-code field refusalCode stays null. The typed refusal code
-  java.inlineVariable.unsupported is NOT emitted by production today. The scenario assertions
-  below document the required contract; the Java adapter must emit the typed refusal code for
-  this requirement to pass. The feature is declared @not-implemented and is a genuine RED
-  slice, and no implementation status is overclaimed.
+  while the typed refusal-code field refusalCode stayed null. The RED assertion proved the gap:
+  the typed refusal code java.inlineVariable.unsupported was NOT emitted by production. The
+  Java adapter now emits the typed refusal code java.inlineVariable.unsupported with an empty
+  edit and no managed-write authority, so this feature is promoted to @implemented-and-validated
+  against fresh Cucumber GREEN evidence (3 scenarios, 18 steps). No implementation status is
+  overclaimed; the independent requirements-quality-review PASS is pending.
 
   # Scenario 1: deterministic typed refusal for inlineVariable
   @REQ-JAVA-INLINE-VARIABLE-REFUSAL-001 @functional-requirement
