@@ -10,11 +10,12 @@ import org.junit.platform.suite.api.Suite
 /**
  * Story BDD runner for features/java-inline-variable-refusal.feature
  * (REQ-JAVA-INLINE-VARIABLE-REFUSAL-001, row N-INLINE-VAR of the approved J1 catalogue,
- * baseline 8aa49c3). The feature is @not-implemented and is a genuine RED slice: production
- * JavaLanguageAdapter.applyRefactoring has no inlineVariable branch and currently returns
- * refusalCode=null. The glue drives the real production adapter and asserts that the DECLARED
- * typed refusal code java.inlineVariable.unsupported EQUALS the ACTUAL refusalCode the adapter
- * returned, so the suite FAILS on the genuine RED until production emits the typed code.
+ * baseline 8aa49c3). The feature is @implemented-and-validated: the RED-to-GREEN cycle is
+ * complete (GREEN c05533f7). Production JavaLanguageAdapter.applyRefactoring now has an
+ * inlineVariable branch that emits the typed refusal code java.inlineVariable.unsupported with
+ * an empty edit and no managed-write authority. The glue drives the real production adapter and
+ * asserts that the DECLARED typed refusal code java.inlineVariable.unsupported EQUALS the ACTUAL
+ * refusalCode the adapter returned, so the suite fails on any typed-code regression.
  *
  * GLUE is scoped to org.refactorkit.jvm.inlinerefusal to avoid cross-slice step ambiguity.
  */

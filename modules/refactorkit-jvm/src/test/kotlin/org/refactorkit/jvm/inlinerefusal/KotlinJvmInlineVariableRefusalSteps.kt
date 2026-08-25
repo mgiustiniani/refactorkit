@@ -28,9 +28,9 @@ import kotlin.test.assertTrue
  * It drives the real production JavaLanguageAdapter.applyRefactoring with an inlineVariable
  * request on a minimal Java workspace and asserts that the DECLARED typed refusal code
  * java.inlineVariable.unsupported EQUALS the ACTUAL refusalCode the adapter returned, so the
- * suite FAILS on a typed-code regression. The feature is @not-implemented: production currently
- * has no inlineVariable branch and returns the generic notImplemented fallback with
- * refusalCode=null, so this glue is the genuine RED until production emits the typed code.
+ * suite FAILS on a typed-code regression. The feature is @implemented-and-validated: the
+ * RED-to-GREEN cycle is complete (GREEN c05533f7), and production now emits the typed refusal
+ * code java.inlineVariable.unsupported with an empty edit and no managed-write authority.
  *
  * Scenario 3 proves the refusal leaves no persistent side effect by snapshotting the workspace
  * root content identity (SHA-256 per regular file) before the persistent-side-effect check and
