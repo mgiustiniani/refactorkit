@@ -839,6 +839,7 @@ class JavaLanguageAdapter(
         "inlineVariable" -> applyInlineVariableRefusal(request)
         "inlineMethod" -> applyInlineMethodRefusal(request)
         "pullUpMember" -> applyPullUpMemberRefusal(request)
+        "pushDownMember" -> applyPushDownMemberRefusal(request)
         else           -> notImplemented(request, "Unknown operation: ${request.operation}")
     }
 
@@ -1086,6 +1087,18 @@ class JavaLanguageAdapter(
         request,
         "java.hierarchy.pullUp.unsupported",
         "Hierarchy pull-up member Java refactoring is unsupported; refused deterministically with java.hierarchy.pullUp.unsupported",
+    )
+
+    /**
+     * N-PUSH-DOWN refusal-only production behavior (J1 catalogue row, REQ-JAVA-HIERARCHY-PUSH-DOWN-REFUSAL-001).
+     * pushDownMember is absent from the Java adapter; this branch fails closed deterministically with
+     * the stable typed refusal code java.hierarchy.pushDown.unsupported, an empty WorkspaceEdit and
+     * affected-file set, no approval, no managed-write authority lease, and no lock/WAL/transaction.
+     */
+    private fun applyPushDownMemberRefusal(request: RefactoringRequest): PatchPlan = refused(
+        request,
+        "java.hierarchy.pushDown.unsupported",
+        "Hierarchy push-down member Java refactoring is unsupported; refused deterministically with java.hierarchy.pushDown.unsupported",
     )
 
     private fun refused(request: RefactoringRequest, code: String, message: String) = PatchPlan(
