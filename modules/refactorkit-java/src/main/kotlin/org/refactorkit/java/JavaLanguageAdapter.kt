@@ -838,6 +838,7 @@ class JavaLanguageAdapter(
         "safeDelete"   -> applySafeDelete(request)
         "inlineVariable" -> applyInlineVariableRefusal(request)
         "inlineMethod" -> applyInlineMethodRefusal(request)
+        "pullUpMember" -> applyPullUpMemberRefusal(request)
         else           -> notImplemented(request, "Unknown operation: ${request.operation}")
     }
 
@@ -1073,6 +1074,18 @@ class JavaLanguageAdapter(
         request,
         "java.inlineMethod.unsupported",
         "Inline-method Java refactoring is unsupported; refused deterministically with java.inlineMethod.unsupported",
+    )
+
+    /**
+     * N-PULL-UP refusal-only production behavior (J1 catalogue row, REQ-JAVA-HIERARCHY-PULL-UP-REFUSAL-001).
+     * pullUpMember is absent from the Java adapter; this branch fails closed deterministically with
+     * the stable typed refusal code java.hierarchy.pullUp.unsupported, an empty WorkspaceEdit and
+     * affected-file set, no approval, no managed-write authority lease, and no lock/WAL/transaction.
+     */
+    private fun applyPullUpMemberRefusal(request: RefactoringRequest): PatchPlan = refused(
+        request,
+        "java.hierarchy.pullUp.unsupported",
+        "Hierarchy pull-up member Java refactoring is unsupported; refused deterministically with java.hierarchy.pullUp.unsupported",
     )
 
     private fun refused(request: RefactoringRequest, code: String, message: String) = PatchPlan(
