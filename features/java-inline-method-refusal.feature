@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Refuse an unsupported inline-method Java refactoring request deterministically
   As a RefactorKit caller on a Java workspace
   I need the Java adapter to refuse an inlineMethod request with a deterministic typed
@@ -15,16 +15,18 @@ Ability: Refuse an unsupported inline-method Java refactoring request determinis
   operation name and refusal code. The refusal codes are asserted as step data below, not as
   narrative prose.
 
-  Genuine RED finding (anti-fake): before this slice, production has no inline-method planner.
-  JavaLanguageAdapter.applyRefactoring contains an inlineVariable branch but no inlineMethod
-  branch, so an inlineMethod request falls through to the generic notImplemented fallback,
-  which returns PatchStatus.REFUSED with the summary and warning text "Unknown operation:
+  Genuine RED finding (anti-fake): before the slice, production had no inline-method planner.
+  JavaLanguageAdapter.applyRefactoring contained an inlineVariable branch but no inlineMethod
+  branch, so an inlineMethod request fell through to the generic notImplemented fallback,
+  which returned PatchStatus.REFUSED with the summary and warning text "Unknown operation:
   inlineMethod", an empty WorkspaceEdit, an empty affected-file set, requiresUserApproval=false,
-  confidence=0.0, and riskLevel=HIGH, while the typed refusal-code field refusalCode stays null.
-  The RED assertion proves the gap: the typed refusal code java.inlineMethod.unsupported is
-  NOT emitted by production today. This feature therefore stays at feature-level @not-implemented;
-  no implementation status is overclaimed. The scenarios below are the executable backlog
-  contract that production must satisfy once the inlineMethod typed-refusal branch exists.
+  confidence=0.0, and riskLevel=HIGH, while the typed refusal-code field refusalCode stayed null.
+  The RED assertion proved the gap: the typed refusal code java.inlineMethod.unsupported was
+  NOT emitted by production. The Java adapter now emits the typed refusal code
+  java.inlineMethod.unsupported with an empty edit and no managed-write authority, so this
+  feature is promoted to @implemented-and-validated against fresh Cucumber GREEN evidence
+  (3 scenarios, 18 steps). No implementation status is overclaimed; the independent
+  requirements-quality-review PASS is pending.
 
   # Scenario 1: deterministic typed refusal for inlineMethod
   @REQ-JAVA-INLINE-METHOD-REFUSAL-001 @functional-requirement
