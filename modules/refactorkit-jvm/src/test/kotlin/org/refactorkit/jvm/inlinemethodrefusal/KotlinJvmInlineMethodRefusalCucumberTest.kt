@@ -10,13 +10,15 @@ import org.junit.platform.suite.api.Suite
 /**
  * Story BDD runner for features/java-inline-method-refusal.feature
  * (REQ-JAVA-INLINE-METHOD-REFUSAL-001, row N-INLINE-METHOD of the approved J1 catalogue,
- * baseline 8aa49c3). The feature is @not-implemented: the RED-to-GREEN cycle is in progress.
- * Production JavaLanguageAdapter.applyRefactoring has an inlineVariable branch but NO
- * inlineMethod branch, so an inlineMethod request falls through to the generic notImplemented
- * fallback ("Unknown operation: inlineMethod") with refusalCode=null. The glue drives the real
- * production adapter and asserts that the DECLARED typed refusal code java.inlineMethod.unsupported
- * EQUALS the ACTUAL refusalCode the adapter returned, so the suite FAILS on the genuine RED
- * (refusalCode=null) until production emits the typed inline-method refusal.
+ * baseline 8aa49c3). The feature is @implemented-and-validated: the RED-to-GREEN cycle is
+ * complete against fresh Cucumber GREEN evidence (c90cd5fa). Production
+ * JavaLanguageAdapter.applyRefactoring now has an explicit inlineMethod branch that fails
+ * closed deterministically with the stable typed refusal code java.inlineMethod.unsupported
+ * (an empty WorkspaceEdit, empty affected-file set, no approval, no managed-write lease). The
+ * glue drives the real production adapter and asserts that the DECLARED typed refusal code
+ * java.inlineMethod.unsupported EQUALS the ACTUAL refusalCode the adapter returned; the suite
+ * passes GREEN because production now emits the typed inline-method refusal instead of the
+ * generic notImplemented fallback.
  *
  * GLUE is scoped to org.refactorkit.jvm.inlinemethodrefusal, a distinct package from the
  * N-INLINE-VAR slice (org.refactorkit.jvm.inlinerefusal), so the shared When/Then step regexes

@@ -24,14 +24,15 @@ import kotlin.test.assertTrue
 /**
  * Story BDD glue for features/java-inline-method-refusal.feature
  * (REQ-JAVA-INLINE-METHOD-REFUSAL-001, row N-INLINE-METHOD of the approved J1 catalogue).
+ * The feature is @implemented-and-validated against fresh Cucumber GREEN evidence (c90cd5fa).
  *
  * It drives the real production JavaLanguageAdapter.applyRefactoring with an inlineMethod
  * request on a minimal Java workspace and asserts that the DECLARED typed refusal code
- * java.inlineMethod.unsupported EQUALS the ACTUAL refusalCode the adapter returned, so the
- * suite FAILS on the genuine RED (refusalCode=null) until production emits the typed
- * inline-method refusal. Before production gains an inlineMethod branch, the request falls
- * through to the generic notImplemented fallback ("Unknown operation: inlineMethod") with
- * refusalCode=null, which is exactly the RED assertion below.
+ * java.inlineMethod.unsupported EQUALS the ACTUAL refusalCode the adapter returned. Production
+ * JavaLanguageAdapter.applyRefactoring now has an explicit inlineMethod branch that fails
+ * closed deterministically with the stable typed refusal code java.inlineMethod.unsupported,
+ * an empty WorkspaceEdit, empty affected-file set, no approval, and no managed-write lease;
+ * this is the GREEN state, so the suite passes (RED-to-GREEN complete).
  *
  * Scenario 3 proves the refusal leaves no persistent side effect by snapshotting the workspace
  * root content identity (SHA-256 per regular file) before the persistent-side-effect check and
