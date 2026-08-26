@@ -2,7 +2,7 @@
 
 - Receipt ID: `REQ-JAVA-J1-CATALOGUE-APPROVED-001`
 - Captured: 2026-08-24
-- Baseline Git commit: `6791b88`
+- Baseline Git commit (receipt file): `8aa49c3` (catalogue scope decided at context `6791b88`)
 - Workflow: `bdd-java`
 - Release ledger target: `docs/releases/v0.7.0-plan.md` J1 "Broad Java move/package/module/extract/inline/hierarchy catalogue"
 
