@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Refuse an unsupported push-down member Java refactoring request deterministically
   As a RefactorKit caller on a Java workspace
   I need the Java adapter to refuse a pushDownMember request with a deterministic typed
@@ -24,11 +24,15 @@ Ability: Refuse an unsupported push-down member Java refactoring request determi
   returns PatchStatus.REFUSED with the summary and warning text "Unknown operation:
   pushDownMember", an empty WorkspaceEdit, an empty affected-file set,
   requiresUserApproval=false, confidence=0.0, and riskLevel=HIGH, while the typed
-  refusal-code field refusalCode stays null. The RED gap is honest: the typed refusal
-  code java.hierarchy.pushDown.unsupported is NOT emitted by production before this
-  slice, so this feature is left at feature-level @not-implemented. The scenarios below
-  assert that refusal contract as executable backlog and will pass only once production
-  adds the pushDownMember typed-refusal branch and semantic evidence is pinned.
+  refusal-code field refusalCode stays null. The RED assertion proved the gap:
+  the typed refusal code java.hierarchy.pushDown.unsupported was NOT emitted by production
+  before the slice. Production then added the pushDownMember typed-refusal branch, and this
+  feature is promoted to feature-level @implemented-and-validated with pinned semantic
+  evidence 0c9adecc: 3 scenarios and 18 steps GREEN through the Cucumber runner. The
+  refusal carries an empty WorkspaceEdit and an empty affected-file set, grants no approval
+  and no managed-write eligibility, and records no pending actionable plan, lock, WAL, or
+  transaction entry. The scenarios below assert that refusal contract as executable
+  backlog.
 
   # Scenario 1: deterministic typed refusal for pushDownMember
   @REQ-JAVA-HIERARCHY-PUSH-DOWN-REFUSAL-001 @functional-requirement
