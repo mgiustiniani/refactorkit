@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Move one complete non-generated Java source root with rename-only edits and deterministic typed refusals
   As a RefactorKit caller on a Java workspace
   I need the Java moveSourceRoot preview to relocate one complete non-generated source root
