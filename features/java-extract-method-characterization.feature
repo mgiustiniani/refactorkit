@@ -88,5 +88,10 @@ Ability: Extract one straight-line complete-line no-argument private void method
       | Selection contains 'return'; return values/exceptions/control flow are not supported by extract-method MVP | the selection contains a return statement |
       | Selection contains 'throw'; return values/exceptions/control flow are not supported by extract-method MVP | the selection contains a throw statement |
       | Selection contains 'break'; return values/exceptions/control flow are not supported by extract-method MVP | the selection contains break control flow |
+      | Selection contains 'continue'; return values/exceptions/control flow are not supported by extract-method MVP | the selection contains a continue statement |
+      | Selection contains 'yield'; return values/exceptions/control flow are not supported by extract-method MVP | the selection contains a yield statement |
+      | Selection appears to contain a type declaration | the selection contains a class, interface, enum, or record declaration |
+      | Selection appears to contain a method/control block declaration; select complete statements only | the selection contains a method or control block declaration |
+      | Selection has unbalanced braces | the selection has unmatched opening or closing braces |
       | Could not find final class closing brace for method insertion | the file has no final class closing brace |
       | Selected range appears to include the class closing brace | the selected range includes the class closing brace |
