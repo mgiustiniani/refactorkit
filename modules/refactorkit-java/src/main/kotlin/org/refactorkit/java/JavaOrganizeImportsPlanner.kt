@@ -43,6 +43,7 @@ class JavaOrganizeImportsPlanner {
                 status = PatchStatus.REFUSED,
                 snapshotHash = snapshot.hash,
                 confidence = 0.0,
+                requiresUserApproval = false,
                 summary = "Generated source cannot be rewritten: $detail",
                 affectedFiles = emptySet(),
                 workspaceEdit = WorkspaceEdit(),
