@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Extract one straight-line complete-line no-argument private void method and refuse unsupported selections with a finite real refusal message list
   As a RefactorKit caller on a Java workspace
   I need the Java extractMethod preview to turn one straight-line complete-line block
