@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Organize a single-file Java import block with deduplication, same-package removal, JDT-proven unused removal, sorted groups, static imports last, and preserved wildcard and unresolved imports
   As a RefactorKit caller on a Java workspace
   I need the Java organizeImports preview to tidy one file's import block into a sorted,
@@ -26,16 +26,18 @@ Ability: Organize a single-file Java import block with deduplication, same-packa
   import block is already organized produces no FileEdit and no affected-file entry: the
   preview returns an empty result.
 
-  Characterization RED-deferral (truthful, anti-fake): production already implements the
+  Characterization and promotion (truthful, anti-fake): production already implements the
   planner JavaOrganizeImportsPlanner in the Java adapter, so this feature begins GREEN and
   asserts the real behavior rather than inventing it. The RED-deferral is pre-approved in the
-  J1 catalogue because no Cucumber runner, glue, or independent requirements-quality review
-  exists for this row yet; the feature-level status is set to the @not-implemented tag until a
-  runner and glue validate the scenarios and an independent reviewer passes. Only real
-  production behavior is asserted. The only typed refusal code is the diagnostic code
-  java.generatedSource emitted with severity ERROR on a REFUSED plan; every other asserted
-  outcome is carried by real plan fields, warnings, and messages rather than invented
-  granular codes. Warnings are asserted as real warning text, not as narrative prose.
+  J1 catalogue. The feature-level status is promoted to @implemented-and-validated because a
+  Cucumber runner and glue now validate the scenarios: C-IMPORT GREEN 12 of 12 (evidence
+  c5b20a5b), the production fix asserts requiresUserApproval false, and scenario 4 is
+  reconciled. Independent requirements-quality review is a separate final gate and its PASS is
+  not yet obtained. Only real production behavior is asserted. The only typed refusal code is
+  the diagnostic code java.generatedSource emitted with severity ERROR on a REFUSED plan;
+  every other asserted outcome is carried by real plan fields, warnings, and messages rather
+  than invented granular codes. Warnings are asserted as real warning text, not as narrative
+  prose.
 
   # Scenario 1: successful single-file organizeImports preview with clean JDT binding evidence
   @REQ-JAVA-ORGANIZE-IMPORTS-CHAR-001 @functional-requirement
