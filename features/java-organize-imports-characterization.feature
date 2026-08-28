@@ -89,10 +89,14 @@ Ability: Organize a single-file Java import block with deduplication, same-packa
       | org.slf4j.Logger | com.example.App |
       | com.example.App | net.example.Util |
 
-  # Scenario 4: import block rules for duplicates, same-package, unused, static, wildcard, unresolved
+  # Scenario 4: import block rules for duplicates, same-package, unused, static, wildcard
+  # under clean JDT binding. An unresolved import is deliberately absent here because any
+  # unresolved import produces a JDT error warning, which makes the binding unclean and
+  # forces the STRUCTURAL fallback; unresolved imports are therefore preserved only in the
+  # unclean-fallback context asserted by Scenario 2, never alongside clean JDT unused removal.
   @REQ-JAVA-ORGANIZE-IMPORTS-CHAR-001 @functional-requirement
-  Scenario: The import block is deduplicated, freed of same-package and JDT-proven unused imports, static imports last, and wildcard and unresolved imports preserved
-    Given a single non-generated Java source file whose import block contains duplicate imports, a same-package import, used exact imports, unused exact imports, a wildcard import, and an unresolved import
+  Scenario: The import block is deduplicated, freed of same-package and JDT-proven unused imports, static imports last, and wildcard imports preserved
+    Given a single non-generated Java source file whose import block contains duplicate imports, a same-package import, used exact imports, unused exact imports, and a wildcard import
     And the JDT binding analysis is clean and proves the unused exact imports have no non-import use
     When the caller requests an organizeImports preview for that file
     Then the resulting single FileEdit.Modify rewrites the import block
@@ -101,7 +105,6 @@ Ability: Organize a single-file Java import block with deduplication, same-packa
     And the rewritten block keeps the used exact imports
     And the rewritten block drops the unused exact imports proven by JDT binding
     And the rewritten block keeps the wildcard import
-    And the rewritten block keeps the unresolved import
     And the rewritten block places static imports last in their own group
 
   # Scenario 5: already-organized single file returns an empty result
