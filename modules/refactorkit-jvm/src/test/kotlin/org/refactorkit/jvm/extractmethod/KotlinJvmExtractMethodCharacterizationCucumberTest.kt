@@ -12,9 +12,10 @@ import org.junit.platform.suite.api.Suite
  * (REQ-JAVA-EXTRACT-METHOD-CHAR-001, row C-EXTRACT of the approved finite J1 Java catalogue,
  * baseline b470e6c). The feature is GREEN-start: production already implements
  * JavaExtractMethodPlanner in the Java adapter, so this suite asserts the real behavior rather
- * than inventing it (truthful characterization, anti-fake). It covers 1 successful
- * straight-line complete-line no-argument private void extraction plus the 15 deterministic
- * real refusal MESSAGE strings asserted as Examples data (no invented typed refusal codes).
+ * than inventing it (truthful characterization, anti-fake). It covers 22 cases total:
+ * 1 successful straight-line complete-line no-argument private void extraction, 1 refusal
+ * contract scenario, and the 20 deterministic real refusal MESSAGE strings asserted as
+ * Examples data (no invented typed refusal codes).
  *
  * GLUE is scoped to org.refactorkit.jvm.extractmethod, a distinct package from every other
  * refusal slice, so shared refusal When/Then step regexes never collide into cross-slice step
