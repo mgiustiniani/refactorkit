@@ -338,6 +338,16 @@ class KotlinJvmExtractMethodCharacterizationSteps {
                 plan = preview(TARGET, 5, 5, "extract")
             "the selection contains break control flow" ->
                 plan = preview(TARGET, 5, 5, "extract")
+            "the selection contains a continue statement" ->
+                plan = preview(TARGET, 5, 5, "extract")
+            "the selection contains a yield statement" ->
+                plan = preview(TARGET, 5, 5, "extract")
+            "the selection contains a class, interface, enum, or record declaration" ->
+                plan = preview(TARGET, 5, 5, "extract")
+            "the selection contains a method or control block declaration" ->
+                plan = preview(TARGET, 5, 5, "extract")
+            "the selection has unmatched opening or closing braces" ->
+                plan = preview(TARGET, 5, 5, "extract")
             "the file has no final class closing brace" ->
                 plan = preview(TARGET, 5, 6, "extract")
             "the selected range includes the class closing brace" ->
@@ -423,6 +433,53 @@ class KotlinJvmExtractMethodCharacterizationSteps {
                |public final class ExtractTarget {
                |    public void run() {
                |        break;
+               |    }
+               |}
+               |""".trimMargin()
+        "the selection contains a continue statement" ->
+            """|package example.extract;
+               |
+               |public final class ExtractTarget {
+               |    public void run() {
+               |        continue;
+               |    }
+               |}
+               |""".trimMargin()
+        "the selection contains a yield statement" ->
+            """|package example.extract;
+               |
+               |public final class ExtractTarget {
+               |    public void run() {
+               |        yield;
+               |    }
+               |}
+               |""".trimMargin()
+        "the selection contains a class, interface, enum, or record declaration" ->
+            """|package example.extract;
+               |
+               |public final class ExtractTarget {
+               |    public void run() {
+               |        class Inner {}
+               |    }
+               |}
+               |""".trimMargin()
+        "the selection contains a method or control block declaration" ->
+            """|package example.extract;
+               |
+               |public final class ExtractTarget {
+               |    public void run() {
+               |        if (true) {
+               |        }
+               |    }
+               |}
+               |""".trimMargin()
+        "the selection has unmatched opening or closing braces" ->
+            """|package example.extract;
+               |
+               |public final class ExtractTarget {
+               |    public void run() {
+               |        {
+               |        System.out.println("alpha");
                |    }
                |}
                |""".trimMargin()
