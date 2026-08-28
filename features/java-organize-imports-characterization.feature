@@ -26,18 +26,20 @@ Ability: Organize a single-file Java import block with deduplication, same-packa
   import block is already organized produces no FileEdit and no affected-file entry: the
   preview returns an empty result.
 
-  Characterization and promotion (truthful, anti-fake): production already implements the
-  planner JavaOrganizeImportsPlanner in the Java adapter, so this feature begins GREEN and
-  asserts the real behavior rather than inventing it. The RED-deferral is pre-approved in the
-  J1 catalogue. The feature-level status is promoted to @implemented-and-validated because a
-  Cucumber runner and glue now validate the scenarios: C-IMPORT GREEN 12 of 12 (evidence
-  c5b20a5b), the production fix asserts requiresUserApproval false, and scenario 4 is
-  reconciled. Independent requirements-quality review is a separate final gate and its PASS is
-  not yet obtained. Only real production behavior is asserted. The only typed refusal code is
-  the diagnostic code java.generatedSource emitted with severity ERROR on a REFUSED plan;
-  every other asserted outcome is carried by real plan fields, warnings, and messages rather
-  than invented granular codes. Warnings are asserted as real warning text, not as narrative
-  prose.
+  Characterization and promotion (truthful, anti-fake): C-IMPORT was characterized as
+  GENUINE RED, not RED-deferral. The characterization revealed a real production mismatch:
+  the generated-refusal outcome asserted requiresUserApproval false, but the planner
+  JavaOrganizeImportsPlanner defaulted requiresUserApproval to true for generated source.
+  Per J1 catalogue baseline section 2, a characterization that reveals a real mismatch is
+  reclassified as GENUINE RED, so production was corrected (requiresUserApproval=false,
+  dd9094ed) while the requirement was retained. After the fix, C-IMPORT GREEN 12 of 12
+  (evidence c5b20a5b), a Cucumber runner and glue validate the scenarios, and scenario 4 is
+  reconciled. The feature-level status is promoted to @implemented-and-validated. Independent
+  requirements-quality review is a separate final gate and its PASS is not yet obtained. Only
+  real production behavior is asserted. The only typed refusal code is the diagnostic code
+  java.generatedSource emitted with severity ERROR on a REFUSED plan; every other asserted
+  outcome is carried by real plan fields, warnings, and messages rather than invented
+  granular codes. Warnings are asserted as real warning text, not as narrative prose.
 
   # Scenario 1: successful single-file organizeImports preview with clean JDT binding evidence
   @REQ-JAVA-ORGANIZE-IMPORTS-CHAR-001 @functional-requirement
