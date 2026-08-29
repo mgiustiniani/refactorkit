@@ -117,8 +117,7 @@ Ability: Rename a Java class, interface, enum, or record type exactly with JDT b
       | Invalid Java identifier: 1rename | the caller supplies a new simple name that is not a valid Java identifier |
       | Old and new type names are the same: UserService | the caller supplies a new simple name identical to the old simple name |
       | Symbol not found or not a renameable type: com.example.Missing | the symbol is absent from the index or is not a renameable type |
-      | Declaration file not found: src/main/java/com/example/UserService.java | the symbol declaration file is absent from the snapshot |
-      | Generated source cannot be rewritten: Generated.java (path is inside a generated-source or build-output location) | the declaration path is inside a generated-source or build-output location |
+      | Generated source cannot be rewritten: build/generated/sources/annotationProcessor/java/main/Generated.java (path is inside a generated-source or build-output location) | the declaration path is inside a generated-source or build-output location |
       | Generated source cannot be rewritten: Generated.java (source declares a generated-code annotation) | the declaration source declares a generated-code annotation |
       | Generated source cannot be rewritten: Generated.java (source header identifies generated code) | the declaration source header identifies generated code |
       | Rename target already exists: com.example.AccountService (src/main/java/com/example/AccountService.java) | the new fully qualified name or the new file path already exists |
