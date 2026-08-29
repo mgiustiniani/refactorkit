@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Rename a Java class, interface, enum, or record type exactly with JDT binding evidence and refuse invalid, generated, and conflicting requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
   I need the Java renameClass preview to rename a renameable type across its declaration, constructors, file, imports, and references using exact JDT source ranges and to refuse unsupported requests with a deterministic real message
@@ -22,9 +22,11 @@ Ability: Rename a Java class, interface, enum, or record type exactly with JDT b
   planner JavaRenameClassPlanner in the Java adapter, so this feature begins GREEN and
   asserts the real behavior rather than inventing it. The RED-deferral is pre-approved in
   the J1 catalogue because no Cucumber runner, glue, or independent requirements-quality
-  review exists for this row yet; the feature-level status is @not-implemented until a
-  runner and glue validate the scenarios and an independent reviewer passes. If a first
-  execution reveals a real mismatch, the row is reclassified as GENUINE RED per baseline
+  review existed for this row yet. C-RENAME-TYPE is GREEN 14 of 14 (evidence 0df18185,
+  101 steps, glue synced), so the feature-level status is promoted to @implemented-and-validated.
+  Independent requirements-quality review is a separate final gate and its PASS is not yet
+  obtained. If a first execution reveals a real mismatch, the row is reclassified as GENUINE RED
+  per baseline
   section 2 and production is corrected. The planner emits refusals as real MESSAGE strings
   through a refused snapshot plan, not as typed refusal codes; there is no refusalCode
   field. Every refusal message asserted below is the exact message string the planner
