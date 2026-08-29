@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall back to a lexical rename when JDT evidence is unclean, and refuse invalid, generated, and conflicting requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
   I need the Java renameMember preview to rename an owner-bound field using exact JDT declaration and reference ranges or a documented lexical fallback and to refuse unsupported requests with a deterministic real message
