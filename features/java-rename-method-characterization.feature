@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Rename a signed Java method exactly with JDT binding evidence across its override family and refuse invalid, generated, and unresolvable requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
   I need the Java renameMember preview with a signed member selector to rename the exact method signature and its override family using JDT source ranges and to refuse unsupported requests with a deterministic real message
@@ -35,9 +35,11 @@ Ability: Rename a signed Java method exactly with JDT binding evidence across it
   through a refused snapshot plan, not as typed refusal codes; there is no refusalCode field.
   Every refusal message asserted below is the exact message string the planner emits, and no
   invented renameMember.xxx typed code is introduced. The RED-deferral is pre-approved in the
-  J1 catalogue because no Cucumber runner, glue, or independent requirements-quality review
-  exists for this row yet; the feature-level status is set to the @not-implemented tag until a
-  runner and glue validate the scenarios and an independent reviewer passes. If a first
+  J1 catalogue because no Cucumber runner or glue existed for this row yet. The runner and
+  glue are now synced and the scenarios validate GREEN 14/14 (evidence ad7b4eae, 101 steps),
+  so the feature-level status is promoted to @implemented-and-validated. Independent
+  requirements-quality review PASS is tracked separately by the workflow and is not yet
+  obtained. If a first
   execution reveals a real mismatch, the row is reclassified as GENUINE RED per baseline
   section 2 and production is corrected. Each refusal is a REFUSED patch plan carrying its real
   message in the summary and warnings, an empty WorkspaceEdit and an empty affected-file set,
