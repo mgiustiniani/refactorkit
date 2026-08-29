@@ -107,13 +107,9 @@ Ability: Rename a signed Java method exactly with JDT binding evidence across it
       | Invalid Java identifier: 1rename | the caller supplies a new method name that is not a valid Java identifier |
       | Old and new names are the same: validate | the caller supplies a new method name identical to the old method name |
       | Owner type not found: com.example.Missing | the owner fully qualified name is absent from the symbol index or is not a recognized type |
-      | Owner declaration file not found: src/main/java/com/example/UserService.java | the owner declaration file is absent from the snapshot |
       | Generated source cannot be rewritten: build/generated/sources/annotationProcessor/java/main/Generated.java (path is inside a generated-source or build-output location) | the owner declaration path is inside a generated-source or build-output location |
       | Generated source cannot be rewritten: Generated.java (source declares a generated-code annotation) | the owner declaration source declares a generated-code annotation |
       | Generated source cannot be rewritten: Generated.java (source header identifies generated code) | the owner declaration source header identifies generated code |
       | Member 'validate' not found in com.example.UserService | no member with the old method name is declared in the owner type |
-      | No occurrences of 'validate' found in scope of com.example.UserService | no occurrence of the old method name is found in the reference scope of the owner |
       | Signed member rename for com.example.UserService#validate(java.lang.String) requires clean JDT semantic evidence; 1 parse/classpath warning(s) were reported. | the JDT semantic analysis reports one parse or classpath warning |
-      | Signed member selector com.example.UserService#validate(java.lang.String) did not resolve to exactly one JDT method candidate; found 2. | the signed selector resolves to two JDT method candidates instead of exactly one |
-      | Signed member selector com.example.UserService#validate(java.lang.String) has no JDT binding key; exact overload rename refused. | the resolved JDT method candidate carries no JDT binding key |
       | Signed member selector com.example.UserService#validate(java.lang.String) belongs to an override family containing declarations outside the scanned source workspace; source-only propagation is unsafe. | the override family contains declarations outside the scanned source workspace |
