@@ -1,5 +1,5 @@
 # language: en
-@not-implemented
+@implemented-and-validated
 Ability: Delete a JDT-proven unused Java type with exact binding evidence, fall back to lexical evidence when JDT is unclean, force-delete with references, and refuse unsafe, invalid, and generated requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
   I need the Java safeDelete preview to delete a JDT-proven unused type as a single declaration-file deletion and to refuse unsafe, invalid, and generated requests with a deterministic real message
