@@ -1088,6 +1088,46 @@ Status: implementation-informed with all current declared rows implemented-and-v
 
 SURFACE-001 remains source-built selector/apply/normal-rollback evidence only; SURFACE-002 is separately bounded to its source-built CLI row and is `@implemented-and-validated` after independent `PASS`; SURFACE-003 is separately bounded to its two source-built/in-process daemon JSON-RPC and MCP tools/call rows; SURFACE-004 is separately bounded to public in-process `LspSession.dispatch` proposal behavior plus harness-side client application; and SURFACE-005 is separately bounded to source-built/in-process public-dispatch managed apply/rollback. All five definitions/six cases are implemented-and-validated within those separate boundaries. None qualifies stdio or other external transport, external editor integration, packaged/native/platform execution, recipes, concurrency/crash-restart behavior, general Maven projects, release behavior, numerical coverage, or broad support.
 
+== J1 Maven Reconciliation (REQ-JAVA-J1-CATALOGUE-APPROVED-001)
+
+Status: confirmed catalogue scope; documentation-only reconciliation, no implementation claimed. Source: `docs/requirements/java-j1-catalogue-approved-baseline-001.md` (receipt ID `REQ-JAVA-J1-CATALOGUE-APPROVED-001`, captured 2026-08-24, baseline Git commit `8aa49c3`, catalogue scope decided at context `6791b88`). This note records catalogue scope for the Java 0.7.x J1 band and does NOT broaden any planner. It claims no feature, RED/GREEN, or independent `requirements-quality-reviewer` PASS; it is a record-only reconciliation.
+
+The J1 catalogue replaces the J1 `SPECIFICATION_AMBIGUITY` with a closed inventory. Section 4 exact Maven dimensions are recorded here so the narrow accepted surface and the explicit non-claims are the authoritative in-scope/out-of-scope boundary for Maven work in the J1 band.
+
+=== Accepted Maven dimensions (section 4)
+
+[cols="1,4",options="header"]
+|===
+|Dimension |Accepted scope
+
+|Source ownership
+|Complete roots, same source-set kind.
+
+|Module directory
+|`oldModuleDir -> newModuleDir`, one direct child.
+
+|Parent module
+|One direct literal `<modules><module>` entry.
+
+|Module artifactId
+|Optional explicit change.
+
+|Dependency rewrite
+|One exact literal occurrence, `dependencyPom`, exact GAV, `allIdenticalOccurrences=false`, jar/empty-classifier.
+|===
+
+=== Excluded Maven dimensions (non-claims)
+
+Module groupId mutation; module version mutation; dependency type/classifier other than jar/empty; duplicate occurrences beyond one exact literal; parent-coordinate migration; nested/profile modules; module creation; packaging changes; JPMS; move to another aggregator; property/inherited origins. None of these is claimed or in-scope for the J1 Maven reconciliation.
+
+=== Explicit non-claims (section 5)
+
+No new CLI/JSON-RPC/LSP/MCP protocol schemas; no recipe composition/authority; recipe-private whole-package `movePackage` is not public; no packaged/native-host/cross-platform qualification; no general Maven projects; no disposable real-project qualification; no green whole-repository/release result; no I1 checksums/SBOMs/attestations/download verification; no `formatFile`/createMavenModule/external-import/Kotlin/TypeScript; no recursive package migration; no configuration/framework-string rewriting; no hierarchy restructuring beyond the two explicit refusal rows (`N-PULL-UP` -> `java.hierarchy.pullUp.unsupported`, `N-PUSH-DOWN` -> `java.hierarchy.pushDown.unsupported`).
+
+=== Reconciliation boundary
+
+This reconciliation is documentation-only: it records catalogue scope without broadening planners. The J1 catalogue as a whole remains `@not-implemented`; no row of section 2 (characterization) or section 3 (new production behavior) is claimed until its own slice passes an independent `requirements-quality-reviewer` PASS. Frozen section 1 rows remain qualified per their existing evidence. The packaged module-rename feature remains an independent open release item; closing this catalogue does not close the 0.7.x band. Packaged/four-platform qualification is not claimed here.
+
 == Pending-plan Store Extraction
 
 Status: implementation-informed and reconciled with feature-level `@implemented-and-validated`. The extraction is a supporting quality/safety contract for existing daemon/LSP/MCP use cases, not a new externally invocable use case.
