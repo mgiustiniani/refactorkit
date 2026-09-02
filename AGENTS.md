@@ -1536,6 +1536,34 @@ import external class with naming conflict
 
 ---
 
+### 18.5 BDD Policy: Story BDD versus Spec BDD
+
+RefactorKit behavior tests follow requirement-first BDD with two complementary modes, classified before implementation:
+
+- **Story BDD (Cucumber-JVM)**: executable Gherkin scenarios for behaviors with living-documentation value, including externally observable behaviors, operational behaviors, refusals, diagnostics, and CLI/daemon/LSP/MCP surfaces. A `.feature` file is the single source of truth for a requirement; scenarios are selected one per slice, never batched.
+- **Spec BDD**: focused pure-domain specifications. Java subjects use JavaSpec (JavaSpec RC6 is Java-only and must never generate or mutate Kotlin source). Kotlin subjects require an explicitly approved Kotlin specification framework; when no framework is approved the slice fails with `KOTLIN_SPEC_TOOL_UNAVAILABLE` and no framework such as Kotest is added silently.
+- Language profile is `JAVA | KOTLIN | MIXED_JVM`; routing is per changed subject/file, not per repository label. Pure Java domain behavior routes to JavaSpec, pure Kotlin domain behavior routes to the approved Kotlin spec framework, and application/port/glue/adapter behavior routes to Cucumber story slices. Kotlin refactoring support uses only RefactorKit capabilities actually advertised by the installed Kotlin adapter; parity with Java support is never inferred.
+
+Direct hand-written JUnit/Jupiter behavior tests are **forbidden**: do not write or add JUnit tests as a substitute for Story BDD or Spec BDD. JUnit Platform remains permitted only as execution infrastructure for Cucumber, JavaSpec, or the approved Kotlin specification framework.
+
+### 18.6 Gherkin Receipt and Step-Reuse Policy
+
+Every Story implementation slice requires:
+
+1. a fresh hash-bound Gherkin receipt binding exactly one `<REQ-ID>#<scenario-slug>` identity; a bare shared `@REQ-*` tag is ambiguous and must not select a scenario;
+2. a pre-edit effective-glue/runner inventory produced by the installed BDD project analyzer, classifying every effective step as exact reuse, shared reuse candidate, new required, or ambiguous; reuse compatible existing glue and stop on ambiguity;
+3. no duplicate step expressions across effective glue roots and no avoidable per-slice runner. Never create a new leaf package solely to hide duplicated glue: duplicated expressions must be migrated incrementally into shared glue that is stateless or scenario-scoped; shared stateful glue requires an explicitly approved scenario-object factory.
+
+Default slice budgets: one active scenario, at most six expanded cases, four new step definitions, and eight changed files. Exceeding a budget requires an explicit numeric, reasoned override recorded in the approved-change history.
+
+### 18.7 Thin-Adapter Policy
+
+Adapters, runners, glue, handlers, controllers, and transport code follow `extract -> delegate -> response`. They must not contain domain rules, application orchestration, persistence, checksum/ETag computation, production in-memory state, multipart state machines, or cross-bounded-context translation outside explicit ACL or adapter modules.
+
+### 18.8 Documentation Gap Reporting
+
+Missing documentation must be reported even when no current agent owns creating it, using statuses: `actionable`, `blocked`, `missing-agent-capability`, `out-of-scope`, `stale`, `unknown`. When an ARC42 tree exists it remains the central integrated architecture narrative; bounded satellites (ADR bodies, Structurizr DSL, Gherkin features, dated research, operational/security/coverage reports, dataset manifests, user/protocol documentation) must link back to ARC42 and identify their authority boundary.
+
 ## 19. Coding Standards
 
 ### 19.1 Kotlin
