@@ -12,3 +12,4 @@ __pycache__/
 *.pyc
 .refactorkit/transactions/
 .refactorkit/workspace.lock
+.refactorkit/runs/
