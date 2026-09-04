@@ -20,14 +20,17 @@ import org.junit.platform.suite.api.Suite
  * passes GREEN because production now emits the typed inline-method refusal instead of the
  * generic notImplemented fallback.
  *
- * GLUE is scoped to org.refactorkit.jvm.inlinemethodrefusal, a distinct package from the
- * N-INLINE-VAR slice (org.refactorkit.jvm.inlinerefusal), so the shared When/Then step regexes
- * of the two refusal features never collide into cross-slice step ambiguity.
+ * GLUE is scoped to org.refactorkit.jvm.inlinemethodrefusal plus the shared refusal glue
+ * package org.refactorkit.jvm.refusals (slice glue-shared-refusal-r002), which carries the
+ * refusal-inspection steps over the scenario-scoped KotlinJvmRefusalScenarioContext port.
+ * The leaf package stays distinct from the N-INLINE-VAR slice (org.refactorkit.jvm.inlinerefusal)
+ * so the remaining leaf step regexes of the two refusal features never collide into
+ * cross-slice step ambiguity.
  */
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-inline-method-refusal.feature")
-@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.inlinemethodrefusal")
+@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.inlinemethodrefusal,org.refactorkit.jvm.refusals")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,
     value = "pretty, json:build/reports/cucumber/java-inline-method-refusal.json",
