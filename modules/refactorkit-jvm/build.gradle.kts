@@ -15,6 +15,7 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("io.cucumber:cucumber-java:7.20.1")
     testImplementation("io.cucumber:cucumber-junit-platform-engine:7.20.1")
+    testImplementation("io.cucumber:cucumber-picocontainer:7.20.1")
     testImplementation("org.junit.platform:junit-platform-suite:1.11.2")
 }
 

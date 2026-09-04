@@ -17,12 +17,14 @@ import org.junit.platform.suite.api.Suite
  * asserts that the DECLARED typed refusal code java.inlineVariable.unsupported EQUALS the ACTUAL
  * refusalCode the adapter returned, so the suite fails on any typed-code regression.
  *
- * GLUE is scoped to org.refactorkit.jvm.inlinerefusal to avoid cross-slice step ambiguity.
+ * GLUE is scoped to org.refactorkit.jvm.inlinerefusal plus the shared refusal glue package
+ * org.refactorkit.jvm.refusals (slice glue-shared-refusal-r001), which carries the
+ * refusal-inspection steps over the scenario-scoped KotlinJvmRefusalScenarioContext port.
  */
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-inline-variable-refusal.feature")
-@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.inlinerefusal")
+@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.inlinerefusal,org.refactorkit.jvm.refusals")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,
     value = "pretty, json:build/reports/cucumber/java-inline-variable-refusal.json",

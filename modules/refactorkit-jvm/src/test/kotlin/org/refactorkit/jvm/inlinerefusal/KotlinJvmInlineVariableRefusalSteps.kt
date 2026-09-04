@@ -11,6 +11,7 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
+import org.refactorkit.jvm.refusals.KotlinJvmRefusalScenarioContext
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -37,8 +38,17 @@ import kotlin.test.assertTrue
  * asserting the set is byte-for-byte unchanged afterward (no WAL/transaction/lock/pending-plan
  * artifact and no file create/modify/delete). Observed declared-to-actual mappings are appended
  * to build/reports/cucumber/java-inline-variable-refusal-codes.txt for reconciliation.
+ *
+ * Slice glue-shared-refusal-r001 (migration to shared refusal glue): the five Scenario 2
+ * inspection/eligibility steps — the caller inspects the refusal plan, the refusal carries an
+ * empty WorkspaceEdit, the refusal carries an empty affected-file set, the refusal grants no
+ * approval, and the refusal grants no managed-write eligibility — moved verbatim into the
+ * shared glue package org.refactorkit.jvm.refusals (KotlinJvmSharedRefusalSteps over the
+ * KotlinJvmRefusalScenarioContext port). previewInlineVariable publishes the produced plan
+ * into the injected scenario context, and the leaf plan field remains for the leaf Scenario 1
+ * and Scenario 3 steps. Step semantics and the @After report/cleanup behavior are unchanged.
  */
-class KotlinJvmInlineVariableRefusalSteps {
+class KotlinJvmInlineVariableRefusalSteps(private val context: KotlinJvmRefusalScenarioContext) {
     private val temporaryDirectories = mutableListOf<Path>()
     private lateinit var fixtureRoot: Path
     private lateinit var snapshot: ProjectSnapshot
@@ -72,11 +82,6 @@ class KotlinJvmInlineVariableRefusalSteps {
     @When("^the Java adapter previews the refactoring request$")
     fun javaAdapterPreviewsRequest() {
         previewInlineVariable()
-    }
-
-    @When("^the caller inspects the refusal plan$")
-    fun callerInspectsRefusalPlan() {
-        requireNotNull(plan) { "expected a REFUSED inlineVariable plan to inspect" }
     }
 
     @When("^the caller checks for persistent side effects$")
@@ -119,37 +124,6 @@ class KotlinJvmInlineVariableRefusalSteps {
         assertEquals(first.workspaceEdit, second.workspaceEdit, "workspaceEdit must be deterministic")
         assertEquals(first.affectedFiles, second.affectedFiles, "affectedFiles must be deterministic")
         assertEquals(first.requiresUserApproval, second.requiresUserApproval, "approval must be deterministic")
-    }
-
-    // ------------------------------------------------------- Scenario 2 Thens
-
-    @Then("^the refusal carries an empty WorkspaceEdit$")
-    fun refusalCarriesEmptyWorkspaceEdit() {
-        val p = requireNotNull(plan)
-        assertTrue(p.workspaceEdit.edits.isEmpty(), "expected no WorkspaceEdit in the refusal: ${p.toString()}")
-    }
-
-    @Then("^the refusal carries an empty affected-file set$")
-    fun refusalCarriesEmptyAffectedFiles() {
-        val p = requireNotNull(plan)
-        assertTrue(p.affectedFiles.isEmpty(), "expected no affected file in the refusal: ${p.toString()}")
-    }
-
-    @Then("^the refusal grants no approval$")
-    fun refusalGrantsNoApproval() {
-        val p = requireNotNull(plan)
-        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
-        assertTrue(!p.requiresUserApproval, "expected no user approval on the refusal: ${p.toString()}")
-    }
-
-    @Then("^the refusal grants no managed-write eligibility$")
-    fun refusalGrantsNoManagedWriteEligibility() {
-        val p = requireNotNull(plan)
-        // A managed-write eligible plan is PREVIEW and carries a core OperationAuthorityLease;
-        // the REFUSED inlineVariable plan must carry none and must not be an actionable apply.
-        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
-        assertTrue(p.authorityLease == null, "expected no managed-write authority lease: ${p.toString()}")
-        assertEquals(0.0, p.confidence, "expected zero confidence on a refused plan")
     }
 
     // ------------------------------------------------------- Scenario 3 Thens
@@ -215,6 +189,7 @@ class KotlinJvmInlineVariableRefusalSteps {
         )
         request = req
         plan = adapter.applyRefactoring(req)
+        context.plan = plan
     }
 
     private fun snapshotWorkspaceContent(root: Path): Map<Path, String> {
