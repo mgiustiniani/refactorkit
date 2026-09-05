@@ -19,15 +19,17 @@ import org.junit.platform.suite.api.Suite
  * an empty affected-file set, no approval, no managed-write lease, and no lock/WAL/transaction)
  * the suite passes GREEN.
  *
- * GLUE is scoped to org.refactorkit.jvm.hierarchypullup, a distinct package from the other
- * refusal slices (org.refactorkit.jvm.inlinerefusal and org.refactorkit.jvm.inlinemethodrefusal),
- * so the shared When/Then step regexes of the refusal features never collide into cross-slice
- * step ambiguity.
+ * GLUE is scoped to org.refactorkit.jvm.hierarchypullup plus the shared refusal glue
+ * package org.refactorkit.jvm.refusals (slice glue-shared-refusal-r003), which carries the
+ * refusal-inspection steps over the scenario-scoped KotlinJvmRefusalScenarioContext port.
+ * The leaf package stays distinct from the other refusal slices (org.refactorkit.jvm.inlinerefusal
+ * and org.refactorkit.jvm.inlinemethodrefusal) so the remaining leaf step regexes of the
+ * refusal features never collide into cross-slice step ambiguity.
  */
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-hierarchy-pull-up-refusal.feature")
-@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.hierarchypullup")
+@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.hierarchypullup,org.refactorkit.jvm.refusals")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,
     value = "pretty, json:build/reports/cucumber/java-hierarchy-pull-up-refusal.json",
