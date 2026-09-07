@@ -19,15 +19,17 @@ import org.junit.platform.suite.api.Suite
  * strings asserted as Examples data (no invented typed renameClass.xxx codes). Evidence for
  * the GREEN 14/14 run is 0df18185.
  *
- * GLUE is scoped to org.refactorkit.jvm.renameclass, a distinct package from every other Java
- * characterization slice, so shared refusal When/Then step regexes never collide into cross-slice
- * step ambiguity. The runner drives the real toolchain: JavaProjectScanner build-model discovery +
+ * GLUE is scoped to org.refactorkit.jvm.renameclass plus the shared refusal glue package
+ * org.refactorkit.jvm.refusals (slice glue-shared-refusal-r005), which carries the granular refusal
+ * inspection steps over the scenario-scoped KotlinJvmRefusalScenarioContext port; the leaf package
+ * stays distinct from every other Java characterization slice so the remaining leaf step regexes
+ * never collide into cross-slice step ambiguity. The runner drives the real toolchain: JavaProjectScanner build-model discovery +
  * JavaLanguageAdapter + JavaRenameClassPlanner.preview.
  */
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-rename-class-characterization.feature")
-@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.renameclass")
+@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.renameclass,org.refactorkit.jvm.refusals")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,
     value = "pretty, json:build/reports/cucumber/java-rename-class-characterization.json",

@@ -16,6 +16,7 @@ import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
+import org.refactorkit.jvm.refusals.KotlinJvmRefusalScenarioContext
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -62,8 +63,21 @@ import kotlin.test.assertTrue
  *    Generated.java (path is inside a generated-source or build-output location)" — a file inside
  *    build/generated/... scans with the full generated path, never the bare "Generated.java".
  * The glue now asserts the reconciled full-path message for the generated-source condition.
+ *
+ * Slice glue-shared-refusal-r005 (migration to shared refusal glue): the three granular
+ * Scenario 5 refusal-inspection steps — the caller inspects the refusal plan, the refusal
+ * carries an empty WorkspaceEdit, and the refusal carries an empty affected-file set — moved
+ * verbatim into the shared glue package org.refactorkit.jvm.refusals (KotlinJvmSharedRefusalSteps
+ * over the KotlinJvmRefusalScenarioContext port). adapterReturnsRefusedRenameClassPlan, the
+ * leaf's single plan-assignment site for the refusal preview, publishes the produced plan into
+ * the injected scenario context, and the leaf plan field remains for every other leaf scenario.
+ * The shared steps assert emptiness only; the REFUSED status of the refusal stays asserted in
+ * this scenario by the leaf Given, the combined no-approval/no-managed-write step, and the
+ * no-typed-refusal-code step. Step semantics and the @After report/cleanup behavior are
+ * unchanged; the leaf's other duplicate groups (combined and characterization vocabulary) are
+ * intentionally kept for later shared-glue ports.
  */
-class KotlinJvmRenameClassCharacterizationSteps {
+class KotlinJvmRenameClassCharacterizationSteps(private val context: KotlinJvmRefusalScenarioContext) {
     private val temporaryDirectories = mutableListOf<Path>()
     private val observedRefusals = mutableListOf<ObservedRefusal>()
 
@@ -199,6 +213,7 @@ class KotlinJvmRenameClassCharacterizationSteps {
         snapshot = JavaProjectScanner().scan(requireNotNull(fixtureRoot))
         // A real refusal: an invalid Java method name. The plan is REFUSED and carries the real message.
         plan = preview(requireNotNull(snapshot), "com.example.UserService", "1rename")
+        context.plan = plan
         assertEquals(PatchStatus.REFUSED, requireNotNull(plan).status, requireNotNull(plan).summary)
     }
 
@@ -223,13 +238,6 @@ class KotlinJvmRenameClassCharacterizationSteps {
     @When("^the caller requests a renameClass preview for that declaration$")
     fun previewForDeclaration() {
         plan = preview(requireNotNull(snapshot), requireNotNull(symbolFqn), requireNotNull(newName))
-    }
-
-    // --------------------------------------------------------- Scenario 5 When
-
-    @When("^the caller inspects the refusal plan$")
-    fun inspectRefusalPlan() {
-        requireNotNull(plan)
     }
 
     // -------------------------------------------------------- Scenario 6 When
@@ -403,20 +411,6 @@ class KotlinJvmRenameClassCharacterizationSteps {
     fun refusalOperationName() {
         val p = requireNotNull(plan)
         assertEquals("renameClass", p.operation, p.toString())
-    }
-
-    @Then("^the refusal carries an empty WorkspaceEdit$")
-    fun refusalCarriesEmptyWorkspaceEdit() {
-        val p = requireNotNull(plan)
-        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
-        assertTrue(p.workspaceEdit.edits.isEmpty(), "expected empty WorkspaceEdit: ${p.toString()}")
-    }
-
-    @Then("^the refusal carries an empty affected-file set$")
-    fun refusalCarriesEmptyAffectedSet() {
-        val p = requireNotNull(plan)
-        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
-        assertTrue(p.affectedFiles.isEmpty(), "expected empty affected-file set: ${p.toString()}")
     }
 
     @Then("^the refusal grants no approval and no managed-write eligibility$")
