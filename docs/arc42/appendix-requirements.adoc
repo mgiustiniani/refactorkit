@@ -14,6 +14,31 @@ The thirteen-definition/31-case Maven move-class subset retains its independentl
 
 Separately, REQ-KOTLIN-JVM-ORGANIZE-IMPORTS-CALLABLE-001 is the 14th configured feature (`features/kotlin-jvm-organize-imports-callable-preservation.feature`, one ordinary scenario/eight declared steps/eight expanded steps) and is now declared `@implemented-and-validated` after the independent `requirements-quality-reviewer` `PASS` at candidate `c18e2b3` (reviewed receipt `docs/requirements/evidence/v0.7.0-k5-organize-imports-callable-green-c7210179a3253f27a9c12f95e1ef30dd2371ed31ccaf32c11b271897d1a75821.json`). It is a narrow sub-slice of REQ-KOTLIN-ORGANIZE-CALLABLE-001 and is included in the reconciled 59-definition/293-case aggregate above; the 3 change-signature definitions/33 cases (REQ-KOTLIN-CHANGE-SIGNATURE-001..003) are now also `@implemented-and-validated` after the independent `requirements-quality-reviewer` `PASS` at candidate `4a7715a`. Its observed Linux source-built Cucumber GREEN (1 scenario/8 steps, superseded receipt SHA-256 `3ee8c374eb38c7078932325cf47b0a96b7f71b648b833d32af609a57e5963f33`) was recorded separately as promotion evidence and never by itself upgraded the declared status. Per approved-change-009, its mandatory tests-only RED gate is deferred and recorded as ARCHITECTURAL/PROCESS technical debt (R-050, chapter 11) to be requalified at K5 band close. Packaged/four-platform and the broader REQ-KOTLIN-ORGANIZE-CALLABLE-001 gates are not claimed here and requalify at K5 band close.
 
+== Annotated Java navigation correction
+
+The earlier aggregate/status paragraphs are historical snapshots and do not include this addition.
+The source of truth is link:../../features/java-annotated-member-navigation.feature[`REQ-JAVA-ANNOTATED-NAVIGATION-001`],
+a functional, read-only CLI Business Need with one scenario, six declaration shapes and four steps.
+Its declared status remains `@partial`: local Linux qualification does not certify every packaged platform
+or every Java grammar shape, and does not change managed refactoring authority.
+
+The bounded correction preserves inline/preceding/qualified/multiline annotation declarations and their
+original source locations, including fields and constructors. `JavaLanguageAdapter.lookupSymbol` adds a
+typed unavailable-analysis outcome while retaining the nullable `findSymbol` compatibility API.
+The CLI keeps exit 1 and `Symbol not found` for missing selections; signed analysis with warnings now
+returns exit 2, empty stdout and stderr code `java.definition.analysisIncomplete` with warning count and
+first source diagnostic. Warnings are not ignored or reclassified as complete semantic evidence.
+The default embedded image includes both `java.compiler` and `jdk.compiler` for `com.sun.source` consumers.
+
+Validation uses the actual bundled launcher, an explicitly scrubbed environment and a disposable Maven
+workspace. It checks exact declaration locations, compiler API availability, unrelated-error refusal,
+recovery and unchanged input bytes. Run `:modules:refactorkit-cli:javaNavigationTest` with a JDK 21 build
+JVM; the task builds the self-contained distribution and is part of `check`. The ordinary `test` task
+excludes this package-dependent suite. Machine-readable results are written to
+`modules/refactorkit-cli/build/reports/cucumber/java-annotated-member-navigation.json`.
+The shared steps are thin adapters into the test-only navigation fixture; the pre-edit analyzer found
+four required new steps and no reusable/ambiguous matches. This adds no new JUnit behavior test.
+
 == Requirement Sources
 
 [cols="1,3,1",options="header"]

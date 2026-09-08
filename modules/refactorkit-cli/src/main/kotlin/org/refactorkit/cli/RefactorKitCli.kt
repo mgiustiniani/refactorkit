@@ -44,6 +44,7 @@ import org.refactorkit.java.MavenDependencyIdentity
 import org.refactorkit.java.MavenDependencyRewrite
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
+import org.refactorkit.java.JavaSymbolLookupResult
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JavaSafeDeletePlanner
@@ -294,10 +295,25 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val symbol = parsed.options["symbol"] ?: run { System.err.println("--symbol required"); return 2 }
         val snap = scanFrom(parsed.positionals.firstOrNull() ?: ".") ?: return 1
-        val sym = javaAdapter.findSymbol(snap, org.refactorkit.core.SymbolId(symbol))
-        if (sym == null) { println("Symbol not found: $symbol"); return 1 }
-        println("${sym.location.path}:${sym.location.range.start.line + 1}")
-        return 0
+        return when (val lookup = javaAdapter.lookupSymbol(snap, org.refactorkit.core.SymbolId(symbol))) {
+            is JavaSymbolLookupResult.Found -> {
+                val location = lookup.symbol.location
+                println("${location.path}:${location.range.start.line + 1}")
+                0
+            }
+            JavaSymbolLookupResult.NotFound -> {
+                println("Symbol not found: $symbol")
+                1
+            }
+            is JavaSymbolLookupResult.AnalysisUnavailable -> {
+                System.err.println(
+                    "java.definition.analysisIncomplete: signed definition unavailable " +
+                        "(${lookup.warningCount} semantic warning(s)); " +
+                        "${lookup.firstWarningPath}:${lookup.firstWarningLine + 1}: ${lookup.firstWarningMessage}",
+                )
+                2
+            }
+        }
     }
 
     // ── rename ────────────────────────────────────────────────────────────────

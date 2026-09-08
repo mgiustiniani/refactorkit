@@ -93,12 +93,14 @@ tasks.named<JavaExec>("run") {
 
 tasks.test {
     useJUnitPlatform()
+    // This suite needs the self-contained distribution; javaNavigationTest owns its lifecycle.
+    exclude("**/navigation/JavaNavigationCucumberTest.class")
 }
 
 // ── self-contained CLI packaging ─────────────────────────────────────────────
 
 val runtimeModules = providers.gradleProperty("refactorkit.runtime.modules")
-    .orElse("java.se,jdk.httpserver,jdk.unsupported,jdk.zipfs")
+    .orElse("java.se,jdk.compiler,jdk.httpserver,jdk.unsupported,jdk.zipfs")
 
 val packageDir = layout.buildDirectory.dir("package/refactorkit")
 val runtimeDir = layout.buildDirectory.dir("jlink/runtime")
@@ -116,7 +118,7 @@ fun javaTool(toolName: String): String {
  *
  * Override modules if needed:
  *   ./gradlew :modules:refactorkit-cli:jlinkRuntime \
- *     -Prefactorkit.runtime.modules=java.base,java.compiler,java.desktop,java.logging,java.xml,jdk.unsupported,jdk.zipfs
+ *     -Prefactorkit.runtime.modules=java.base,java.compiler,java.desktop,java.logging,java.xml,jdk.compiler,jdk.unsupported,jdk.zipfs
  */
 tasks.register<Exec>("jlinkRuntime") {
     group = "distribution"
@@ -318,6 +320,20 @@ tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
         html.outputLocation.set(layout.buildDirectory.dir("reports/tests/packagedMavenMoveClassAuthorityTest"))
     }
 }
+
+tasks.register<Test>("javaNavigationTest") {
+    group = "verification"
+    description = "Validate annotated Java navigation through the self-contained CLI."
+    dependsOn("refactorkitRuntimeDist")
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("org.refactorkit.cli.navigation.JavaNavigationCucumberTest") }
+    systemProperty("refactorkit.navigation.package", packageDir.get().asFile.absolutePath)
+    inputs.dir(packageDir)
+}
+
+tasks.named("check") { dependsOn("javaNavigationTest") }
 
 tasks.register<Exec>("smokePackagedCli") {
     group = "verification"

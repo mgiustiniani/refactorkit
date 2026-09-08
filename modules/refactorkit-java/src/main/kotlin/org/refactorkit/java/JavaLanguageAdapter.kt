@@ -66,6 +66,18 @@ sealed interface JavaJdtDefinitionProjection {
     data class Refused(val diagnostic: Diagnostic) : JavaJdtDefinitionProjection
 }
 
+/** Read-only lookup distinguishes a missing selection from unavailable semantic analysis. */
+sealed interface JavaSymbolLookupResult {
+    data class Found(val symbol: Symbol) : JavaSymbolLookupResult
+    data object NotFound : JavaSymbolLookupResult
+    data class AnalysisUnavailable(
+        val warningCount: Int,
+        val firstWarningPath: String,
+        val firstWarningLine: Int,
+        val firstWarningMessage: String,
+    ) : JavaSymbolLookupResult
+}
+
 class JavaLanguageAdapter(
     private val jdtCache: JdtJavaAnalysisCache = JdtJavaAnalysisCache(),
 ) : LanguageAdapter {
@@ -160,11 +172,29 @@ class JavaLanguageAdapter(
         }
     }
 
-    fun findSymbol(project: ProjectSnapshot, symbolId: SymbolId): Symbol? {
+    /** Nullable compatibility API; callers needing refusal evidence use lookupSymbol. */
+    fun findSymbol(project: ProjectSnapshot, symbolId: SymbolId): Symbol? =
+        (lookupSymbol(project, symbolId) as? JavaSymbolLookupResult.Found)?.symbol
+
+    fun lookupSymbol(project: ProjectSnapshot, symbolId: SymbolId): JavaSymbolLookupResult {
         lastSnapshot = project
         val lexicalSymbol = buildSymbols(project).symbols.find { it.id == symbolId }
-        if (lexicalSymbol != null) return lexicalSymbol
-        return findJdtSignedSymbol(project, symbolId)
+        if (lexicalSymbol != null) return JavaSymbolLookupResult.Found(lexicalSymbol)
+        if (!symbolId.value.isSignedMemberId()) return JavaSymbolLookupResult.NotFound
+        val analysis = jdtCache.get(project).analysis
+        // Keep the existing fail-closed authority policy; do not disguise it as absence.
+        val warnings = analysis.warnings
+        if (warnings.isNotEmpty()) {
+            val first = warnings.first()
+            // Project immutable values; never expose the cached analysis's mutable warning list.
+            return JavaSymbolLookupResult.AnalysisUnavailable(
+                warnings.size, first.path.toString(), first.line, first.message,
+            )
+        }
+        val symbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value }
+            ?: return JavaSymbolLookupResult.NotFound
+        if (symbol.bindingKey.isNullOrBlank()) return JavaSymbolLookupResult.NotFound
+        return JavaSymbolLookupResult.Found(symbol.toCoreSymbol())
     }
 
     fun findReferences(project: ProjectSnapshot, symbolId: SymbolId): List<Reference> {
@@ -432,15 +462,6 @@ class JavaLanguageAdapter(
     private fun validPosition(content: String, position: SourcePosition): Boolean {
         val lines = content.split('\n')
         return position.line in lines.indices && position.character <= lines[position.line].length
-    }
-
-    private fun findJdtSignedSymbol(project: ProjectSnapshot, symbolId: SymbolId): Symbol? {
-        if (!symbolId.value.isSignedMemberId()) return null
-        val analysis = jdtCache.get(project).analysis
-        if (analysis.warnings.isNotEmpty()) return null
-        val semanticSymbol = analysis.symbols.singleOrNull { it.qualifiedName == symbolId.value } ?: return null
-        if (semanticSymbol.bindingKey.isNullOrBlank()) return null
-        return semanticSymbol.toCoreSymbol()
     }
 
     private fun findJdtSymbolAtLocation(project: ProjectSnapshot, location: SourceLocation): Symbol? {
@@ -1274,7 +1295,7 @@ class JavaLanguageAdapter(
         fun finishLine(lineEnd: Int) {
             if (lineDepth == 0) {
                 val text = content.substring(lineStart, lineEnd).trim()
-                if (text.isNotEmpty() && !text.startsWith("@")) lines += lineStart until lineEnd
+                if (text.isNotEmpty()) lines += lineStart until lineEnd
             }
             lineStart = lineEnd + 1
             lineDepth = depth
@@ -1282,6 +1303,15 @@ class JavaLanguageAdapter(
 
         while (i < endExclusive) {
             when {
+                content[i] == '@' && depth == 0 && content.substring(lineStart, i).isBlank() -> {
+                    val end = annotationEnd(content, i, endExclusive)
+                    if (end > i) {
+                        // Drop the annotation prefix, not its declaration; retain original offsets.
+                        i = end
+                        lineStart = end
+                        lineDepth = depth
+                    } else i++
+                }
                 content[i] == '\n' -> { finishLine(i); i++ }
                 startsLineComment(content, i) -> i = skipLineComment(content, i, endExclusive)
                 startsBlockComment(content, i) -> i = skipBlockComment(content, i, endExclusive)
@@ -1294,6 +1324,46 @@ class JavaLanguageAdapter(
         }
         if (lineStart < endExclusive && lineDepth == 0) lines += lineStart until endExclusive
         return lines
+    }
+
+    /** Skip one complete leading annotation, including nested arguments and multiline literals. */
+    private fun annotationEnd(content: String, start: Int, limit: Int): Int {
+        fun whitespace(from: Int): Int {
+            var cursor = from
+            while (cursor < limit && content[cursor].isWhitespace()) cursor++
+            return cursor
+        }
+        var cursor = start + 1
+        if (cursor >= limit || !Character.isJavaIdentifierStart(content[cursor])) return start
+        while (true) {
+            val nameStart = cursor
+            while (cursor < limit && Character.isJavaIdentifierPart(content[cursor])) cursor++
+            if (content.substring(nameStart, cursor) == "interface") return start
+            val next = whitespace(cursor)
+            if (next >= limit || content[next] != '.') break
+            cursor = whitespace(next + 1)
+            if (cursor >= limit || !Character.isJavaIdentifierStart(content[cursor])) return start
+        }
+        val arguments = whitespace(cursor)
+        if (arguments >= limit || content[arguments] != '(') return cursor
+        cursor = arguments + 1
+        var parentheses = 1
+        while (cursor < limit) {
+            when {
+                startsLineComment(content, cursor) -> cursor = skipLineComment(content, cursor, limit)
+                startsBlockComment(content, cursor) -> cursor = skipBlockComment(content, cursor, limit)
+                content[cursor] == '"' -> cursor = skipStringLiteral(content, cursor, limit)
+                content[cursor] == '\'' -> cursor = skipCharLiteral(content, cursor, limit)
+                content[cursor] == '(' -> { parentheses++; cursor++ }
+                content[cursor] == ')' -> {
+                    parentheses--
+                    cursor++
+                    if (parentheses == 0) return cursor
+                }
+                else -> cursor++
+            }
+        }
+        return start // Incomplete annotation: never guess where a declaration begins.
     }
 
     private fun isTopLevelOffset(content: String, offset: Int): Boolean {
