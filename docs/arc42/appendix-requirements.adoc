@@ -1157,8 +1157,13 @@ The link:../releases/v0.7.0-j1-acceptance.md[2026-09-08 J1 acceptance report]
 records a clean-candidate local packaged module-rename rerun (CLI/daemon/MCP,
 3 cases/138 steps) and restoration of previously versioned CI qualification jobs.
 It is execution/CI evidence only: the approved 20-module fixture's disposable
-copies are the sole real-project subject, the independent catalogue review and
-four-host module-rename reports remain missing, and no J1 or release row is promoted.
+copies are the sole real-project subject. The explicit
+link:../requirements/v0.7.0-local-host-acceptance-approved-change-001.md[V070-LOCAL-HOST-ACCEPTANCE-001]
+product-owner decision waives repeated multi-host verification as a `0.7.0`
+release gate across J1/T5/K5/I1. Missing host reports remain unverified rather
+than promoted; local semantic/transaction safety gates remain required. The
+independent catalogue review is still pending and is not claimed or waived by
+that decision. No publication or general platform support is inferred.
 
 == Pending-plan Store Extraction
 
