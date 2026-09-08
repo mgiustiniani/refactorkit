@@ -104,7 +104,13 @@ def verify(repository_root: Path) -> dict[str, object]:
     if K1_NATIVE_JOB_MARKER not in workflow:
         failures.append("dedicated K1/K2 native workflow job is missing")
     else:
-        k1_native_workflow = workflow.split(K1_NATIVE_JOB_MARKER, 1)[1]
+        # Adjacent K5 jobs must not satisfy a missing K1/K2 identity token.
+        k1_native_workflow = re.split(
+            r"^  [a-zA-Z_][a-zA-Z0-9_-]*:[ \t]*$",
+            workflow.split(K1_NATIVE_JOB_MARKER, 1)[1],
+            maxsplit=1,
+            flags=re.MULTILINE,
+        )[0]
         for name, token in REQUIRED_K1_NATIVE_WORKFLOW_TOKENS.items():
             if token not in k1_native_workflow:
                 failures.append(f"dedicated K1/K2 native workflow token is missing: {name}")
@@ -134,10 +140,10 @@ def verify(repository_root: Path) -> dict[str, object]:
         failures.append("closed P0 native parent rows require all four native rows to be PASSED")
 
     exact_jdk_count = workflow.count("java-version: '21.0.11+10.0.LTS'")
-    if exact_jdk_count != 4:
+    if exact_jdk_count != 6:
         failures.append(
-            "CI must pin build, dedicated authority, runtime, and K1/K2 foundation jobs to exactly "
-            f"four setup-java 21.0.11+10.0.LTS entries, found {exact_jdk_count}"
+            "CI must pin build, dedicated authority, runtime, K1/K2 foundation, and both K5 jobs to exactly "
+            f"six setup-java 21.0.11+10.0.LTS entries, found {exact_jdk_count}"
         )
     if "java-version: '21.0.11+9'" in workflow:
         failures.append("CI contains unavailable setup-java version 21.0.11+9")

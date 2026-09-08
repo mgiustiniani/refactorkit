@@ -1153,6 +1153,13 @@ No new CLI/JSON-RPC/LSP/MCP protocol schemas; no recipe composition/authority; r
 
 This reconciliation is documentation-only: it records catalogue scope without broadening planners. The J1 catalogue as a whole remains `@not-implemented`; no row of section 2 (characterization) or section 3 (new production behavior) is claimed until its own slice passes an independent `requirements-quality-reviewer` PASS. Frozen section 1 rows remain qualified per their existing evidence. The packaged module-rename feature remains an independent open release item; closing this catalogue does not close the 0.7.x band. Packaged/four-platform qualification is not claimed here.
 
+The link:../releases/v0.7.0-j1-acceptance.md[2026-09-08 J1 acceptance report]
+records a clean-candidate local packaged module-rename rerun (CLI/daemon/MCP,
+3 cases/138 steps) and restoration of previously versioned CI qualification jobs.
+It is execution/CI evidence only: the approved 20-module fixture's disposable
+copies are the sole real-project subject, the independent catalogue review and
+four-host module-rename reports remain missing, and no J1 or release row is promoted.
+
 == Pending-plan Store Extraction
 
 Status: implementation-informed and reconciled with feature-level `@implemented-and-validated`. The extraction is a supporting quality/safety contract for existing daemon/LSP/MCP use cases, not a new externally invocable use case.

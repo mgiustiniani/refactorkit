@@ -51,7 +51,7 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         self.assertEqual(4, receipt["nativeRows"])
         self.assertEqual("PASSED", receipt["nativeEvidenceState"])
         self.assertFalse(receipt["nativeParentRowsOpen"])
-        self.assertEqual(4, receipt["exactTemurin2111Pins"])
+        self.assertEqual(6, receipt["exactTemurin2111Pins"])
         self.assertEqual(7, len(receipt["closedRoadmapRowsVerified"]))
 
     def test_reopened_qualified_kotlin_foundation_row_fails(self) -> None:
@@ -166,7 +166,7 @@ class RoadmapSupportClaimVerifierTest(unittest.TestCase):
         result, receipt = self._run()
         self.assertNotEqual(0, result.returncode)
         self.assertIn(
-            "CI must pin build, dedicated authority, runtime, and K1/K2 foundation jobs to exactly four setup-java 21.0.11+10.0.LTS entries, found 3",
+            "CI must pin build, dedicated authority, runtime, K1/K2 foundation, and both K5 jobs to exactly six setup-java 21.0.11+10.0.LTS entries, found 5",
             receipt["failures"],
         )
         self.assertIn("CI contains unavailable setup-java version 21.0.11+9", receipt["failures"])
