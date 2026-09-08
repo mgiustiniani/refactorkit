@@ -17,6 +17,7 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
 import org.refactorkit.java.JdtJavaSemanticSymbolKind
+import org.refactorkit.jvm.refusals.KotlinJvmRefusalScenarioContext
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -62,8 +63,21 @@ import kotlin.test.assertTrue
  * same snapshot.files it searches, so a found owner symbol's location.path is always present) and
  * "No occurrences of 'amount' found" (the owner declaration file is always in the reference scope
  * and contains the declaration occurrence, so the lexical path always finds at least one).
+ *
+ * Slice glue-shared-refusal-r006 (migration to shared refusal glue): the three granular
+ * Scenario 4 refusal-inspection steps — the caller inspects the refusal plan, the refusal
+ * carries an empty WorkspaceEdit, and the refusal carries an empty affected-file set — moved
+ * verbatim into the shared glue package org.refactorkit.jvm.refusals (KotlinJvmSharedRefusalSteps
+ * over the KotlinJvmRefusalScenarioContext port). adapterReturnsRefusedRenameMemberPlan, the
+ * leaf's single plan-assignment site for the refusal preview, publishes the produced plan into
+ * the injected scenario context, and the leaf plan field remains for every other leaf scenario.
+ * The shared steps assert emptiness only; the REFUSED status of the refusal stays asserted in
+ * this scenario by the leaf Given, the leaf no-approval/no-managed-write step, and the
+ * no-typed-refusal-code step. Step semantics and the @After report/cleanup behavior are
+ * unchanged; the leaf's other duplicate groups (combined and characterization vocabulary) are
+ * intentionally kept for later shared-glue ports.
  */
-class KotlinJvmRenameFieldCharacterizationSteps {
+class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRefusalScenarioContext) {
     private val temporaryDirectories = mutableListOf<Path>()
     private val observedRefusals = mutableListOf<ObservedRefusal>()
 
@@ -162,6 +176,7 @@ class KotlinJvmRenameFieldCharacterizationSteps {
         snapshot = JavaProjectScanner().scan(requireNotNull(fixtureRoot))
         // A real refusal: a symbol with no hash separator. The plan is REFUSED and carries the real message.
         plan = preview(requireNotNull(snapshot), "com.example.UserService", "renamed")
+        context.plan = plan
         assertEquals(PatchStatus.REFUSED, requireNotNull(plan).status, requireNotNull(plan).summary)
     }
 
@@ -186,13 +201,6 @@ class KotlinJvmRenameFieldCharacterizationSteps {
     @When("^the caller requests a renameMember preview for that member with a valid new name$")
     fun previewForMember() {
         plan = preview(requireNotNull(snapshot), requireNotNull(symbolFqnWithMember), requireNotNull(newMemberName))
-    }
-
-    // ------------------------------------------------------------ Scenario 4 When
-
-    @When("^the caller inspects the refusal plan$")
-    fun inspectRefusalPlan() {
-        requireNotNull(plan)
     }
 
     // ------------------------------------------------------------ Scenario 5 When
@@ -390,20 +398,6 @@ class KotlinJvmRenameFieldCharacterizationSteps {
     fun refusalOperationName() {
         val p = requireNotNull(plan)
         assertEquals("renameMember", p.operation, p.toString())
-    }
-
-    @Then("^the refusal carries an empty WorkspaceEdit$")
-    fun refusalCarriesEmptyWorkspaceEdit() {
-        val p = requireNotNull(plan)
-        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
-        assertTrue(p.workspaceEdit.edits.isEmpty(), "expected empty WorkspaceEdit: ${p.toString()}")
-    }
-
-    @Then("^the refusal carries an empty affected-file set$")
-    fun refusalCarriesEmptyAffectedSet() {
-        val p = requireNotNull(plan)
-        assertEquals(PatchStatus.REFUSED, p.status, p.toString())
-        assertTrue(p.affectedFiles.isEmpty(), "expected empty affected-file set: ${p.toString()}")
     }
 
     @Then("^the refusal grants no approval and no managed-write eligibility$")
