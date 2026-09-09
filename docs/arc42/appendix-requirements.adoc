@@ -2,6 +2,163 @@
 :toc:
 :sectnums:
 
+== Authorized source consolidation — r004
+
+The user's explicit `si` authorizes separate local candidate commits. Shared
+Kotlin test infrastructure, the five J1 oracles, the complete inherited T5
+implementation, K5 integration005 and I1 creation-owned recovery now have
+separate commits; integrated documentation follows in its own commit. See the
+link:../releases/v0.7.0-candidate-consolidation.md[bounded consolidation record]
+and link:../../.refactorkit/runs/v070-candidate-consolidation-r004/summary.md[local integrity evidence].
+Implementation, test, feature and frozen-requirement bytes are unchanged from
+r003; only this integrated status and the release-plan pointer receive new prose.
+Earlier statements that no commit occurred describe their original runs.
+
+The committed source tree is immutable, but the checkout still retains two
+unrelated, untracked `io/cucumber/messages/types/*.class` artifacts. They are not
+candidate inputs and are neither deleted nor hidden. Do not label this checkout
+fully clean or relabel r003's runtime as a newly built or qualified candidate.
+Version remains `0.7.0-SNAPSHOT`, API `0.2`; no release tag, push, publication or
+installation is performed. Final J1/T5/K5 acceptance, K5 reseal, wider I1 and
+coverage applicability, and release provenance/download joins remain open.
+Repeated multi-host qualification stays `WAIVED_BY_USER`, not PASS. No feature
+status or release checkbox is promoted by consolidation.
+
+== Earlier packaged corrective continuation — r003
+
+The link:../../.refactorkit/runs/v070-native-closure-r003/summary.md[r003 execution record]
+adds actual local packaged CLI/daemon/MCP execution of the existing TypeScript
+Stories: 26 cases/95 steps. Eight separate I1 cases/31 steps exercise a real
+public daemon crash during a 517-edit module-directory migration, exact recovery,
+and preservation of foreign, changed, symbolic, same-byte-replaced, legacy and
+unreceipted staging inputs. The unchanged twenty-module fixture is expanded only
+inside disposable stress copies. These are not an operation/surface Cartesian
+product or a whole-tree result.
+
+The crash exposed a real orphan-stage recovery defect. Two initially insufficient
+corrections and their independent FAIL reports remain preserved. The final core
+correction requires a checksummed successful-creation receipt in the existing
+TransactionLog, binding exact paths, filesystem identity and complete image hashes.
+An intent marker alone cannot own a file. The private resource receipt neither
+changes WAL-v8 nor adds lifecycle phases. Missing/corrupt/unmarked ownership fails
+closed; live replacement between validation and deletion remains unqualified.
+Independent review accepts this bounded source correction. Core125 and golden33
+pass; the exact K5 24-case oracle and completion/compatibility/move-next packaged
+smokes also pass on the new archive.
+
+The package is `package-owned/refactorkit-runtime.zip` under r003, SHA-256
+`a614fcc247078c23b75f36168bb5cd1b0225d2c38e0ca485009017ae7715e9a4`.
+The final 34-case packaged boundary observes CLI embedded-Java execution and
+checks runtime/archive identity. Subsequent focused help/crash reruns cover the
+final audit-order and teardown hardening; the review closes only its named
+transport findings. Earlier source-child, old-package and failed attempts are
+not relabeled. Checksum/layout/embedded launchers and packaged kill recovery pass.
+
+Clean candidate consolidation, candidate-bound J1 coverage/glue/status and final
+J1/T5/K5 acceptance, wider I1 applicability, and release manifest/SPDX/attestation/
+download joins remain open. No commit, tag, publication or installation occurred.
+Repeated multi-host execution stays `WAIVED_BY_USER`, not PASS. Conservative
+feature statuses and release checkboxes remain unchanged. This appendix owns the
+integrated status; run and release reports remain evidence satellites.
+
+== Earlier bounded closure — 2026-09-09
+
+The link:../../.refactorkit/runs/v070-direct-closure-r002/summary.md[current bounded run]
+supersedes the unresolved corrective findings below, not the original approved
+requirements or final-candidate gates. Separate read-only reviewers accepted the
+five J1 exact-oracle corrections and the T5 restart, migration, null-evidence,
+native-configuration and bounded catalogue/composition source paths. Initial
+partial/failed/timeout reviews remain preserved; follow-ups close only their
+stated findings. These are not milestone or release approvals.
+
+`REQ-TS-MIGRATION-CONFIG-AUTHORITY-001` now proves that the actual pinned compiler
+returns one configuration suggestion and one source edit: substituting the native
+configuration yields an available but wrong staged model. The final plan retains
+the source edit and uses independent JSONC origins (one case/five steps GREEN).
+A later independent review exposed false `COMPILER_PROVEN` labels on relocation
+refusals. Genuine three-case RED was corrected by changing only the planner's
+refusal evidence to `STRUCTURAL`; four refusal cases/32 steps and both native
+successful relocation cases/22 steps pass. Successful compiler authority and
+existing unqualified adapter-refusal metadata are unchanged.
+
+K5 link:../requirements/kotlin-k5-bounded-completion-approved-change-005.md[integration 005]
+now binds the approved leaf supersessions and corrects their attribution to change
+012 for the four REQ-001 cases. Independent follow-up is `PASS_FOR_RESEAL`, not
+`PASS_FOR_PROMOTION`. All 24 exact source cases and the completion, compatibility
+and move-next packaged smokes passed locally. The current archive differs from
+that first package only in `TypeScriptSourceFileRelocationPlanner.class`; all seven
+K5 subject JARs remain identical. No old receipt is relabeled as a new native one.
+
+Local I1 evidence adds 33 golden tests and checksum/layout/embedded-launcher and
+kill-during-write/WAL-recovery verification on the refreshed Linux archive.
+TypeScript's earlier impacted module run passed 122 tests; the subsequent
+metadata-only correction has its separate six-case regression above. These are
+bounded runs, not a current whole-tree or published-asset qualification.
+
+Open gates remain a clean immutable candidate, final candidate-bound milestone
+acceptance (including advanced-family packaging and K5 post-native review), release
+manifest/SPDX/attestation joins and independent downloaded published-asset checks.
+No staging, commit, installation or publication occurred. The host matrix remains
+`WAIVED_BY_USER`; J1 feature statuses and the nine T5 release checkboxes remain
+conservative pending final acceptance. This appendix remains the integrated
+narrative; the linked run and release reports are evidence satellites.
+
+== Earlier corrective evidence — 2026-09-09
+
+The original approved catalogue and completion contract remain normative. Earlier
+aggregate totals and promotion prose below describe historical input sets, not the
+current status of the corrected features. This section supersedes those claims
+for the five J1 rows listed here; it does not recalculate a repository-wide total.
+The independent review remains `J1 REVIEW_REQUIRED / T5 FAIL` pending a new review
+of the corrections, not because the old defect is still unreproduced or uncorrected.
+
+[cols="1,3,1",options="header"]
+|===
+|Requirement / row |Current bounded evidence |Declared status
+|`REQ-JAVA-MOVE-SOURCE-ROOT-CHAR-001` / C-ROOT
+|link:../../features/java-move-source-root-characterization.feature[Complete root move]: three independent rename pairs, six exact paths and complete unchanged-content post-image.
+|`@partial`
+|`REQ-JAVA-EXTRACT-METHOD-CHAR-001` / C-EXTRACT
+|link:../../features/java-extract-method-characterization.feature[Extraction]: exact replacement/insertion ranges and authored body/post-image, with selected statements exactly once.
+|`@partial`
+|`REQ-JAVA-RENAME-CLASS-CHAR-001` / C-RENAME-TYPE
+|link:../../features/java-rename-class-characterization.feature[Type rename]: exact declaration/constructor/reference token edits, file rename and complete authored image.
+|`@partial`
+|`REQ-JAVA-RENAME-METHOD-CHAR-001` / C-RENAME-METHOD
+|link:../../features/java-rename-method-characterization.feature[Signed method rename]: exact declaration/call ranges, replacement text and complete image.
+|`@partial`
+|`REQ-JAVA-RENAME-FIELD-CHAR-001` / C-RENAME-FIELD
+|link:../../features/java-rename-field-characterization.feature[Field rename]: exact field/reference ranges and complete image independent of JDT's reference enumeration.
+|`@partial`
+|`REQ-TS-SEMANTIC-RESTART-AUTHORITY-001`
+|link:../../features/typescript-advanced-operations.feature[Operational Story]: actual owned semantic-child crash, same-adapter restart, retained old-plan refusal before WAL even after fresh identical preview, then fresh approval/apply/rollback; genuine RED followed by one case/nine steps GREEN.
+|`@not-implemented` (feature-wide release status retained)
+|`REQ-TS-COMPILER-EVIDENCE-MISSING-001`
+|link:../../features/typescript-advanced-operations.feature[Functional Story]: real valid compiler edits and clean diagnostics with only captured exchange evidence withheld; one case/four steps proves typed no-write refusal.
+|`@not-implemented` (feature-wide release status retained)
+|===
+
+J1 production is unchanged. Its five existing runners passed 76 cases/512 steps,
+including unchanged refusals. The existing `REQ-TS-PROJECT-MIGRATION-001` fixture
+now asserts three exact Modify plus two Rename edits, seven affected paths,
+original/actual-staged graph identity and independently executed clean diagnostics;
+it reuses the existing graph helper and public WAL/rollback evidence. No test-only
+oracle improvement is mislabeled as a production RED.
+
+Current scoped regression: 309 passed, 7 existing filtered CLI skips, zero failures
+or errors (JVM76, TypeScript121, daemon58, MCP26, public CLI28 passed). This is not
+whole-tree, clean packaged-candidate, K5/I1 or numerical-coverage qualification.
+The repeated 0.7.0 host matrix remains `WAIVED_BY_USER`, not PASS. Fresh independent
+acceptance, the remaining bounded T5 questions, K5 sealed-input integration and I1
+final-candidate/recovery/shipped-asset integrity remain open.
+
+See link:../releases/v0.7.0-j1-acceptance.md[J1 execution evidence],
+link:../releases/v0.7.0-t5-local-safety.md[T5 execution evidence] and the
+link:../../.refactorkit/runs/v070-direct-fixes-r001/summary.md[hash-bound local run].
+Those reports are evidence satellites; this appendix remains the integrated narrative.
+
+== Earlier bounded acceptance records
+
 Completion-program note: the confirmed non-Gherkin `v0.7.x` rows in this appendix are release-scope requirements derived from `docs/requirements/v0.7.x-completion-contract.md`. They remain explicitly planned or open except for the locally resolved P0 build-scaffold admission gate, and they do not alter the configured feature inventory, Gherkin tags, implementation statuses, or totals below. The scaffold receipt promotes no production capability status.
 
 Status: implementation-informed for separately bounded implemented slices and for the current atomic CATALOG-001/CATALOG-002/RESULT-001 Kotlin CLI behavior; broader coverage and qualification need review. CATALOG-001, CATALOG-002, and RESULT-001 are declared `@implemented-and-validated` within separately bounded source-built evidence. The configured `features/` root contains twenty-four feature documents, 56 repository-unique requirement definitions, 251 expanded executable cases, 1,161 declared scenario steps, two backgrounds with 10 background steps, and 2,410 expanded case steps. All 55 definitions/248 cases are effectively `@implemented-and-validated` within their owning evidence boundaries, including the 3 change-signature definitions/33 cases (REQ-KOTLIN-CHANGE-SIGNATURE-001..003) after the independent `requirements-quality-reviewer` `PASS` at candidate `4a7715a` (feature SHA-256 `fc3124f261a2abba10d5d0a7c3e1f15b1828afb6d2cb3cfb480079af72eb2de1`, 33/33 Cucumber GREEN, evidence `docs/requirements/evidence/v0.7.0-k5-change-signature-green-33570159e1da0331580e332da3e3ebe5b6d585e441e1f9eebebcfd6405596d70.json`); per user-approved approved-change-010 the mandatory tests-only RED gate for this slice is deferred and recorded as ARCHITECTURAL/PROCESS technical debt R-051, chapter 11, requalify at K5 band close, per approved-change-011 the 12 non-inducible defensive-gate refusal criteria are superseded/reframed to SEMANTIC_PREVIEW success and read-only, per approved-change-012 the 4 non-inducible REQ-001 family-incompleteness criteria are also superseded/reframed (17 inducible + 16 defensive = 33 cases) while the inducible ordinal-declaration row keeps its refusal, and per approved-change-013 the REQ-002 'duplicate ranges refuse' criterion is superseded/reframed to duplicate-range coalescence/dedupe (never refused, reframed not removed); packaged/four-platform qualification is not claimed; the implemented set includes REQ-KOTLIN-JVM-ORGANIZE-IMPORTS-CALLABLE-001 after the independent `requirements-quality-reviewer` `PASS` at candidate `c18e2b3`; its mandatory tests-only RED gate remains deferred per approved-change-009 and recorded as ARCHITECTURAL/PROCESS technical debt (R-050, chapter 11) to be requalified at K5 band close, its observed Linux source-built Cucumber GREEN was recorded separately as promotion evidence and never by itself upgraded the declared status, and REQ-KOTLIN-MOVE-COMPANION-REFUSAL-001 (1 definition/3 cases) after the independent `requirements-quality-reviewer` `PASS` at candidate `ea66a4a`; its observed tests-only RED and local Linux Cucumber GREEN are recorded separately as promotion evidence, its mandatory tests-only RED gate is deferred per approved-change-008 and recorded as ARCHITECTURAL/PROCESS technical debt (R-049, chapter 11) to be requalified at K5 band close, and packaged/four-platform qualification remains deferred per approved-change-007; REQ-JAVA-CLI-RESULT-001 contributes one dual-classified definition/case and 30 declared/expanded steps. REQ-JAVA-INLINE-METHOD-REFUSAL-001 (`features/java-inline-method-refusal.feature`, one functional definition/3 cases/18 declared steps/18 expanded steps) is now declared `@implemented-and-validated` after the `JavaLanguageAdapter.kt` fix routes `inlineMethod` to `applyInlineMethodRefusal` and emits the stable typed refusal code `java.inlineMethod.unsupported` under catalogue baseline `REQ-JAVA-J1-CATALOGUE-APPROVED-001` at `8aa49c3` (feature SHA-256 `690ceb34b8bf76ba6136017cee54cb902409e807b69c4c652b26deff1761dbe8`; fresh Cucumber GREEN evidence `c90cd5fae0c52051f028e075f1eb100409bae05cce5221e4da1d5f15d2de3cf9.json`, SHA-256 `c90cd5fae0c52051f028e075f1eb100409bae05cce5221e4da1d5f15d2de3cf9`, recorded as promotion evidence); independent `requirements-quality-reviewer` PASS is pending, not obtained, and packaged/four-platform qualification is not claimed. REQ-JAVA-EXTRACT-METHOD-CHAR-001 (`features/java-extract-method-characterization.feature`, one functional definition/22 cases/28 declared steps/142 expanded steps) is now declared `@implemented-and-validated` under catalogue baseline `REQ-JAVA-J1-CATALOGUE-APPROVED-001` at `8aa49c3` (feature SHA-256 `d67d53686d797b2ad9e1321d64482f907218997e07c8c5fcc9e8b0a465ffc749`; fresh Cucumber GREEN evidence `594a01aeac108d3309cd432b644c7ca420d0f488ed0edba203a412bfc3551b1e.json`, SHA-256 `594a01aeac108d3309cd432b644c7ca420d0f488ed0edba203a412bfc3551b1e`, recorded as promotion evidence; the earlier `803bd3e43b4dfb7050154cb92992d938d70926ddc7129f3599df4599555c784e` evidence (17 cases/112 steps) remains superseded historical evidence); its characterization RED-deferral is pre-approved in the catalogue and recorded as ARCHITECTURAL/PROCESS technical debt (R-054, chapter 11); independent `requirements-quality-reviewer` PASS is pending, not obtained, and packaged/four-platform qualification is not claimed. REQ-JAVA-ORGANIZE-IMPORTS-CHAR-001 (`features/java-organize-imports-characterization.feature`, one functional definition/12 cases/59 declared steps/99 expanded steps) is now declared `@implemented-and-validated` under catalogue baseline `REQ-JAVA-J1-CATALOGUE-APPROVED-001` at `8aa49c3` (feature SHA-256 `37feec08f1fde9194cd6e25ea4aa2e754b7df6b7be9370af5b668bdf5400f847`; fresh Cucumber GREEN evidence `docs/requirements/evidence/v0.7.0-j1-organize-imports-char-green-c5b20a5b368ba93ab2c78c15ad8b0e98a85b777f3f8e49c3b6dfd250093428bf.json`, SHA-256 `c5b20a5b368ba93ab2c78c15ad8b0e98a85b777f3f8e49c3b6dfd250093428bf`, recorded as promotion evidence; the production fix asserts `requiresUserApproval=false` and scenario 4 is reconciled); its characterization RED-deferral is pre-approved in the catalogue and recorded as ARCHITECTURAL/PROCESS technical debt (R-055, chapter 11); independent `requirements-quality-reviewer` PASS is pending, not obtained, and packaged/four-platform qualification is not claimed. REQ-JAVA-HIERARCHY-PULL-UP-REFUSAL-001 (`features/java-hierarchy-pull-up-refusal.feature`, one functional definition/3 cases/18 declared steps/18 expanded steps) is now declared `@implemented-and-validated` after the `JavaLanguageAdapter.kt` fix routes `pullUpMember` to a typed-refusal branch and emits the stable typed refusal code `java.hierarchy.pullUp.unsupported` under catalogue baseline `REQ-JAVA-J1-CATALOGUE-APPROVED-001` at `8aa49c3` (feature SHA-256 `249834c2eb28b760a142e24c8e9ecdfd8318187de8698ad2e5bd1cc9b6946d66`; fresh Cucumber GREEN evidence `6781f0cfdce625d11f78f10ee88f5b38996c546468322104de75e2b389eb568e.json`, SHA-256 `6781f0cfdce625d11f78f10ee88f5b38996c546468322104de75e2b389eb568e`, recorded as promotion evidence); independent `requirements-quality-reviewer` PASS is pending, not obtained, and packaged/four-platform qualification is not claimed. The Kotlin move-top-level-function feature contributes one functional definition/38 cases (AC-FUNCTION-001 through `006`, the trailing-comment refinement, the restored post-image attestation scenario, and the approved-change-001..006 scenarios) now `@implemented-and-validated` after the independent `requirements-quality-reviewer` `PASS` at candidate `141e6d1` under approved-change-007, so the implemented aggregate is now all-implemented at 50 definitions/196 cases (the change-signature feature is `@implemented-and-validated` after independent `PASS` at `4a7715a`); its genuine tests-only RED and local Linux source-built Cucumber GREEN are recorded separately as promotion evidence, and packaged/four-platform requalification remains deferred to K5 band close per approved-change-007. The Kotlin import-style feature (`features/kotlin-jvm-project-style-aware-formatting.feature`, REQ-KOTLIN-IMPORT-STYLE-001, one functional definition/19 expanded cases/72 declared steps/117 expanded steps) is the 16th configured feature and is now declared `@implemented-and-validated` after the status-only promotion at candidate `c6579acb` under user-approved approved-change-014 (`docs/requirements/kotlin-jvm-organize-imports-callables-formatting-import-style-approved-change-014.md`, SHA-256 `22d9b5046cd3f63e597946b70469aad84cbb9ac1fd20191dedb2d3ac28aa9058`; baseline `REQ-KOTLIN-IMPORT-STYLE-001-BASELINE-001`, SHA-256 `3594feb73cd808850ec412ff4229b772376edf4feb8669bdbd5338b3217fcc5f`; feature SHA-256 `8c820f53a686403171ab3ffd69b638bc088c02689c91aa66de59e5d6693a1e41`), so the implemented aggregate is now all-implemented at 50 definitions/196 cases; the production planner `KotlinOrganizeImportsPlanner` pre-existed the baseline and is unchanged, and the feature passes 19/19 GREEN with a real K2 toolchain fixture, PatchEngine, WAL, managed apply, and rollback (evidence `docs/requirements/evidence/v0.7.0-k5-project-style-formatting-green-62a43e2d2cdc167942a27b8435deb887a4760f319e33aec6e8bc398340525270.json`, SHA-256 `62a43e2d2cdc167942a27b8435deb887a4760f319e33aec6e8bc398340525270`, recorded separately as promotion evidence and never by itself upgrading the declared status). Per user-approved approved-change-015 (`docs/requirements/kotlin-jvm-organize-imports-callables-formatting-import-style-approved-change-015.md`, SHA-256 `4c431281659ee363ff57fcfaab61178a1730237bd9be14986a0c338640d0ae18`), ITEM-2 is superseded from 'one Unicode-code-point-sorted group' to String natural order within the ASCII-bounded Kotlin import grammar (Unicode code-point ordering unobservable for valid import directives), and the superseded feature passes 19/19 GREEN (10 scenarios/19 expanded cases/72 declared steps/117 expanded steps) with fresh evidence `docs/requirements/evidence/v0.7.0-k5-project-style-formatting-green-8c2ed9605de54834a003818b32967788fb57ea5c792597063563d738c88c9e8f.json` (SHA-256 `8c2ed9605de54834a003818b32967788fb57ea5c792597063563d738c88c9e8f`), recorded separately as promotion evidence and never by itself upgrading the declared status; the earlier bd73a47a evidence `docs/requirements/evidence/v0.7.0-k5-project-style-formatting-green-bd73a47abc51d9359d7cac84c94108b79be79ea7789b4686174d6e0fdf99d297.json` (SHA-256 `bd73a47abc51d9359d7cac84c94108b79be79ea7789b4686174d6e0fdf99d297`) remains superseded historical evidence. Per approved-change-014 the mandatory tests-only RED gate for this slice is deferred and recorded as ARCHITECTURAL/PROCESS technical debt (R-052, chapter 11) to be requalified at K5 band close, and the baseline stale or symlinked refusal-code criterion is superseded to `kotlin.classpathEvidenceChanged`; the refusal codes asserted (`kotlin.organizeImportsStyleUnsupported`, `kotlin.classpathEvidenceChanged`, `kotlin.organizeImportsNoChange`) are the actual production codes, not invented granular codes. Independent `requirements-quality-reviewer` PASS is not yet obtained; packaged CLI/daemon/MCP apply+rollback and four-platform qualification are not claimed here and requalify at K5 band close. REQ-JAVA-CLI-CATALOG-001 previously received independent `PASS` for AC-CATALOG-001 through `012`; feature SHA-256 `01e1cd700279c605b0dc3b47e40ca275730dec187d3f5eab2f379ae9a45ed790`, unchanged production SHA-256 `f8335da5f74ae529d06109425ffb7e5510b5b058b57aa11c624902fe6a1ec5dd`, and immutable post-promotion log/JSON SHA-256 `7bed3ef7c64f74c52ce831507eb650751a1a021aa5e8f62d1c53d0a104b22c98` / `41ad5b1bfd0c9ffb7fff95f2014f1658109f7aa2256e2875446e3499ab39897c` remain historical evidence for the exact then-current unversioned-v1 source revision, not validation of the revised explicit selector. Approved change SHA-256 `9fee5e4230e9e00ef267ddf48b72ab133d3469cb8c9b2fa8cf5aa42e9af2024e` defines CATALOG-001 explicit v1; REQ-JAVA-CLI-CATALOG-002 baseline SHA-256 `df91e509e82c1a516f226887030702a78d0c41288ccdfe14b241942ef6fd2fea` defines default v2. Both catalogue requirements are `@implemented-and-validated` at current promoted feature SHA-256 `f02fc091db83e8b96909e4c596bda9702204c62f2874fdf1a0fd45a01e3970cf`. Current atomic Kotlin production is `RefactorKitCli.kt` SHA-256 `db6067bf3235191957203474da95f03c4399f4de47661af9a3dcb3ef65720246` plus new `CliProtocolProjection.kt` SHA-256 `ac65359ed95dd09efaa6820b05a7c7d0c18a3b4495cc3e4f738f76d19149b50d`; no Java, build, or installation file changed. The six current focused log/JSON receipts are mode `0444`. Shared test-only `GuardedChildJvm.kt` SHA-256 `081b01d28686118aaa4ab7e94b1e3f8e17b8b9c31b5d6a59b79c7ad99305bdc5` centralizes guarded child startup: each standard JDK 21 parent explicitly unsets `JAVA_TOOL_OPTIONS` and `JDK_JAVA_OPTIONS`, while each child self-supplies `-Djava.security.manager=allow` and inherits neither variable. CATALOG-001 process-harness/steps SHA-256 are `693b79305620851ec0d35a66b76f48951e328567a741ecd29ca6753d16991fbe` / `eb4026a2448fbe1f83cc9b3959b7f7c1f911cfc7eaeaed46a10f2504125ace4b`; current post-promotion link:../requirements/evidence/req-java-cli-catalog-001-post-promotion-focused-5f31ba5a9162fb4673af2cffce95e1d32bc3da8648726aa23ecde3f1766e71e7.log[CATALOG-001 log] / link:../requirements/evidence/req-java-cli-catalog-001-post-promotion-cucumber-1c8397c4e697558c58e997286505594016cdbc827a9df1446b2c07ef4c49ba63.json[Cucumber JSON] SHA-256 `5f31ba5a9162fb4673af2cffce95e1d32bc3da8648726aa23ecde3f1766e71e7` / `1c8397c4e697558c58e997286505594016cdbc827a9df1446b2c07ef4c49ba63` passed one scenario/22 steps. CATALOG-002 steps SHA-256 is `d719adb927698dec637df43c7a626a60cdcdd22149686d5f3c4dc0e68af4e19d`; its process harness remains unchanged at SHA-256 `1ffe05b9e5c6418b3a206d4e113ea4e9ab5f72ae37f63d4046d5cac95406679e`. Current post-promotion link:../requirements/evidence/req-java-cli-catalog-002-post-promotion-focused-b561b3ebf0e32d7dca84081af0e48bca21dd57d8b392e99af18b4f99dcfd7e21.log[CATALOG-002 log] / link:../requirements/evidence/req-java-cli-catalog-002-post-promotion-cucumber-96f1e3825fc933baae06b76981a135a0aee7d79b6498382c43a36aca6fbb7464.json[Cucumber JSON] SHA-256 `b561b3ebf0e32d7dca84081af0e48bca21dd57d8b392e99af18b4f99dcfd7e21` / `96f1e3825fc933baae06b76981a135a0aee7d79b6498382c43a36aca6fbb7464` passed one scenario/31 steps. RESULT-001 process-harness/steps SHA-256 are `4d38ab55b7e006da0bd1d49aaea79796a5724acccb6c9149d07a644cb6b9b398` / `3407b8edf7658d3d5db9917e2b351b4a98afcb4ea2fa8aefe5804ec91d3bc0a4`; the corrected pre-final-promotion log/JSON SHA-256 `63d8d62f22317d09579abf6381a08a01c85f894e31db183c98aa52f222f3feb6` / `4996f117788f1fa53195f0822d25a92e0848e322a4e9da11723f6df36130e4ca` passed one scenario/30 steps and remains immutable superseded evidence. Final mode-`0444` post-re-promotion link:../requirements/evidence/req-java-cli-result-001-final-post-promotion-focused-6ab958c33d541b79c08b2eef354a2bddfdb298d60040364f4d5c935915d14c3d.log[RESULT-001 log] / link:../requirements/evidence/req-java-cli-result-001-final-post-promotion-cucumber-2e10af7f91c7fdf57f5501672dce98869baf26258b86129a35b5b4cec451f21a.json[Cucumber JSON] SHA-256 `6ab958c33d541b79c08b2eef354a2bddfdb298d60040364f4d5c935915d14c3d` / `2e10af7f91c7fdf57f5501672dce98869baf26258b86129a35b5b4cec451f21a` passed one scenario/30 steps. Supporting mode-`0444` link:../requirements/evidence/req-java-cli-result-001-final-post-promotion-unit-testclasses-5ff927b32797f4acf60693a562b900e21d958d1b6a9166d9de91b1c52aded264.log[`testClasses`/unit log] SHA-256 `5ff927b32797f4acf60693a562b900e21d958d1b6a9166d9de91b1c52aded264` records fresh `testClasses` PASS and CLI unit regression 12/12. Earlier CATALOG-001 and RESULT-001 environment-dependent GREEN pairs remain immutable historical evidence, as do CATALOG-002 child pair `8893904630a068eb61956ec6e9201f2bb0f655253ed6a75396ffe51101cb8ba4` / `c47fa3fdab6df0091908451caf7f6ddf4e5433b66acdb8e9aff0296a7da7ae15` for its prior tree and still-earlier caller-dependent pair `900a113224f343387ef392e46a7aab13aa9078531ea9e473d8d1d8298333ca21` / `8bd64526526acc3b10981a1b898677c4245487752b36e4913cc6b0fd1d4bb2bd`; all are superseded as current evidence. The immutable RESULT post-promotion failure log/JSON SHA-256 `fcd32c7eb2736ba5c2d9faa65109b18f1f900886d04bf382af2c74b28eeeaa49` / `95770ab372b1c97052da80dea6d72b043da3276255d8eb6cbf63ad255105e554` record the stale full-file feature pin failing before preview execution. The correction requires exactly one REQ tag line and one allowed status token, canonicalizes only that token to `@absent`, requires the canonical full feature hash, and rejects every other drift. All 30 scenario steps and tripwires are unchanged, while assertion calls increased. A current official `io.cucumber:gherkin:28.0.0` parser check reports the aggregate totals with zero parse/tag/status/duplicate-ID/reconciliation errors. The result Gherkin source is `features/java-cli-operation-result.feature`, current promoted SHA-256 `5956f93a681562f6922a9101daa8c153c9a3b8d1f7fdc260bd0070d5faf48ea5`, with status-neutral canonical SHA-256 `b6f62831bf38c2fdaadbd02abc024abd16c8818a812678c76a1eb146642e4ed9`; it traces to immutable baseline SHA-256 `8f29946c5dcb0128075764fbcd2756156d61edfad4d0fffe2f49afa526c68957`, approved-change SHA-256 `7c8555ba5c3f393f1809136a38e86da9419234962864513bd4515001557c250c`, and atomic-boundary approved-change SHA-256 `40a0183ec29584724a98e2357738078e7caa8d8356c90a7c0e4cd9930ff3e73e`. Its meaningful RED log/JSON SHA-256 `896524674ae4745bce1dcd869dcef19de0f79b5fa46e5d06bfda88f802791a78` / `94c6e89a3879634ed2679a307ccd4f6cab942f90c428c792efd097d8edc7e5b9` record legacy human output. Human stdout/stderr/bundle pins are `b353a04f51595e749cbb7a0c7a4e5a63c355bd8182f555e6c01acdb8971a1c4c` / `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / `2c38357f125f5d20b1ea9b840d2a8eff12e64337a5fe8655afa10cb5777fb31b`; capabilities remain SHA-256 `dec4087fa8b7ba038a5b9a82728ec724054ee6fd28456eb9ec637fd7d0d0d1c3`; installation remained unchanged and uninvoked. Parser/source reconciliation remains documentation evidence only and does not change declared status. The prior all-implemented audit SHA-256 `a8a104d1977fd481049d29c7b844869266410d8ffa66a0f9cfc9fd825a2eac62` remains historical evidence for its exact source revision. The preceding nine-feature audit remains historical evidence for 37 definitions/82 cases/575 declared steps/11 background steps/1,171 expanded steps (log SHA-256 `542222f5b7656720d1706bc1d3995902396dfc4086252180bd85b407fee67f69`). The preceding eight-feature all-implemented audit remains historical evidence for 32 definitions/76 cases/479 declared steps/1,016 expanded steps (log SHA-256 `ed57576520bdfa92810ebbe93e0e4c238632feae2a74a10a99b35f8e16101925`). The preceding seven-feature audit remains historical evidence for its exact then-current 28 definitions/60 cases/433 declared steps/885 expanded steps, including the one absent Maven module-rename definition/case (log SHA-256 `271ec890cad8065f0536ab27ca885d81e7d070382ca96fdf9d8cf26afa7e137a`). The preceding six-feature post-promotion audit remains historical evidence for its exact then-current 27 definitions/59 cases/386 declared steps/838 expanded steps (log SHA-256 `f20f39f2421edaf4c5208363a3479a0f7696635631a27d95aeb2a99d04d9be0d`). The authoritative diagnostics-evaluation feature contributes four functional definitions/16 cases/43 declared steps/128 expanded steps, all `@implemented-and-validated`; independent acceptance passed 16/16 scenarios and 128/128 steps (log/JSON SHA-256 `bba1414c3f21f05a7487364af135631574a4eb0dca1668a2285f7436e205fcd2`/`c56c28cec512a57c01e1e9aced0ea6f903b88339e661ffdc80f106044b3eb2a6`). The module-rename feature contributes one functional definition/case and 50 declared/expanded steps, also `@implemented-and-validated`; its independent log/JSON SHA-256 are `b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`/`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`. Final review returned `PASS_FOR_PROMOTION` (manifest SHA-256 `6633a8de15a320024f76311575d99f7c6d3bec877bb07ba6f05177efcc5d58d1`; summary SHA-256 `76a2d8d508fbec9786abfb30bc25a0953f41cf6c163a0508e25433a6530d3b02`). These promotions do not qualify broad module rename/move, protocols, recipes, packaged/native/cross-platform execution, general Maven projects, native CI, release-wide support, or the broad roadmap row. The managed module-rename surface feature contributes five definitions/six cases/135 declared scenario steps/192 expanded case steps and one five-step Background. Per definition, SURFACE-001 contributes 25 declared steps/one case, SURFACE-002 29/one, SURFACE-003 27/two, SURFACE-004 12/one, and SURFACE-005 42/one. All five managed-surface definitions and all six cases are `@implemented-and-validated`; dual-classified SURFACE-002 retains its separately bounded source-built CLI evidence. The prior promotions and their receipts remain historical. The historical final official JDK 21 focused rerun for `001` passed one scenario, all 25 scenario steps plus the then-current six-step Background (31 expanded), and two hooks, with no failures, skips, or undefined results (log SHA-256 `4e826737d94150bcebe0a38d3fee970e84339532f3fe4ef07189da2506bdedef`; Cucumber JSON SHA-256 `2cf337ab1f963b133222b941df0fd577b9518794e60d23dde81390ba6e760a4c`), and independent review returned `PASS_FOR_PROMOTION`. The subsequent required `./gradlew --no-daemon --rerun-tasks check goldenTest` gate was authoritative for that promoted tree and remains historical: `BUILD SUCCESSFUL` in 7m 31s with 82/82 tasks; standard `test` XML only, excluding the intentionally separate stale packaged Maven task, reconciles 146 files, 1,068 discovered, 835 executed, 233 skipped/tag-filtered, and zero failures/errors (log SHA-256 `663ddcf3cb836fa2058d65160b57df19202b2f1908a0331faeb96ee6ca66209d`; XML manifest SHA-256 `bca4e1f718f56ce3095ef9168267b42506f467ec5b1046408e764b1948502905`). Static analysis remains configured non-blocking, and no aggregate numerical coverage is claimed; earlier RED, implementation, focused, and scoped whole-tree receipts remain historical. Exact selector/apply/normal-rollback behavior, the bounded source-built CLI row, and the two bounded source-built/in-process daemon/MCP rows remain separately qualified. The SURFACE-003 receipt is recorded once in its requirement-catalogue evidence row below. Against baseline `REQ004-BDD-EVIDENCE-001` SHA-256 `61079d0aba9a9bf156faa80eadb937cca20155eeab47006df746cbd677123c1c`, independent review returned `PASS` with no findings for reviewed HEAD `db25c9af2d62c8e9e90f93792a6c6593e6e13698` plus scoped boundary manifest SHA-256 `e797994c103d960546c32547de01ad6182b080dafdba52599854eaa74656c8ee`. Gherkin promotion changed only SURFACE-004 and produced feature SHA-256 `20d3df5193586bfe0b3db202bf48295c1c8cfd9b41bfcaa3f71ce76846be0e81`; the subsequent SURFACE-005 refinement produced historical feature SHA-256 `25b71b2630590db5034cd58755fd0892dad800b1c3f199946770a003e668f3a8`. After independent SURFACE-005 `PASS`, promotion changed only that status tag and produced historical feature SHA-256 `793e02aa42e0f4d90f4a85382910b1e684bb80e3f8547d9c02080c4d8b6a8a17`. Its post-promotion JDK 21 focused source-built/in-process public-`LspSession.dispatch` acceptance was `BUILD SUCCESSFUL`; Cucumber JSON SHA-256 `79234761252fdcb07845a34eda0581c7f4b53beecbe21e1eb294d00c552731ff` has one scenario and 17/17 passed results. The harness-side client applies the returned operations outside LSP; this qualifies no external transport, editor integration, managed apply, or rollback. SURFACE-005 is implemented-and-validated under baseline SHA-256 `0be6995539bab1088406c042b577edf5723cf27d4eb60092c39a621122c66ea0`; independent review returned `PASS` with no findings for AC-005-01 through AC-005-11. Meaningful RED, the minimal selector-adoption correction, and post-promotion bounded JDK 21 source-built/in-process acceptance are recorded in its catalogue row below; no external transport/editor, package/native/platform, concurrency/crash, general-Maven, release, broader-support, or numerical-coverage inference is allowed. Final SURFACE-002 regression reconciliation is bounded by immutable baseline `REQ002-WHOLE-TREE-REGRESSION-001` SHA-256 `387520937b1fc2922b146652ed18b545b508cd33d95189806178d3b5fb91bbfe`. The repository-wide and repeated focused RED logs at `docs/requirements/evidence/req002-surface002-repository-wide-jdk21-goldentest-failure-8076201a19fad44076b810b7555859606a5717ff03cff97037fe392fcff10914.log` and `docs/requirements/evidence/req002-surface002-isolated-focused-repeated-failure-13497ab251fff223dcb8c490fd96c09c8ef1a09a81aad70dfa732378e9059b04.log` remain historical proof of the same failure: the child-process/socket observation step had been removed from the shared Background for SURFACE-003 and was absent locally, leaving `authorityObservationRequested=false`. The correction restored the exact existing step inside SURFACE-002 only; independent review returned `PASS` and authorized `@partial` to `@implemented-and-validated`. The status-only promotion preserved the scenario-local step and produced current feature SHA-256 `1c29ad27146f06072c9815a1e056e2702cd25b8975ea2f0307385091e9859ad3`. Final post-promotion focused evidence at `docs/requirements/evidence/req002-post-promotion-focused-green-aee52f1114259413d6d6c77d384c6b30ed5afd82ab6b8c3d92921eb4bea367a2.log` was `BUILD SUCCESSFUL`; Cucumber JSON SHA-256 `4db1de3fca326ea9067a0d6653570c5fcf090a266e142cb9d27c854afd191b97` records one case and 34/34 expanded results: 29 scenario plus five Background steps. Final JDK 21 whole-tree evidence at `docs/requirements/evidence/req002-post-promotion-whole-tree-final-34b45bc447938de5bc5ce2c6351bdb7feda4e4403642e6add9d3e31cd7a044b0.log` was `BUILD SUCCESSFUL` in 12m 47s with 87/87 tasks; 155 standard-test XML files reconcile 1,096 discovered, 844 executed, 252 skipped/tag-filtered, and zero failures/errors. Static analysis remains configured non-blocking and emitted findings; no clean-static or numerical-coverage claim is made. Earlier RED and pre-promotion GREEN receipts remain historical for their exact revisions.
@@ -237,63 +394,63 @@ The following stable IDs decompose the user-confirmed completion program. They a
 |Every T5 proposal binds pinned toolchain/process provenance, lease, exact snapshot/overlay, UTF-16 selection, preferences, exact upstream operation or returned refactor/action identity, normalized edits, staged compiler diagnostics, and limits. Invented LSP shapes and generic labels grant no authority. Dynamic/mixed JavaScript requires separate evidence or truthful stable refusal.
 |UC-TYPESCRIPT-T5
 |confirmed
-|planned; reviewed research `SRC-2026-08-02-013`; current advanced planners are negative evidence
+|local compiler-owned previews and stable unsupported-operation refusals now have executable evidence in `features/typescript-advanced-operations.feature`; see link:../releases/v0.7.0-t5-local-safety.md[bounded T5 progress]. Public surfaces, model-changing migration, independent review and release qualification remain open.
 
 |RPK-V07-TS-FILE-RELOCATE-001
 |functional
 |Relocate one TypeScript source file through exact `getEditsForFileRename` authority and compiler-proven import/export updates. Do not conflate with declaration move.
 |UC-TYPESCRIPT-T5
 |confirmed distinct T5 row
-|planned / unqualified
+|unqualified for release; link:../releases/v0.7.0-t5-local-safety.md[local dirty-worktree safety progress] distinguishes the historical 65-test safety boundary from subsequent production command/snapshot/toolchain authority, exact diagnostics and bounded managed apply/rollback evidence. Final public-surface/catalogue acceptance remains open.
 
 |RPK-V07-TS-DECLARATION-MOVE-001
 |functional
 |Move selected declarations through one exact action returned by `getApplicableRefactors` and selected through `getEditsForRefactor`. Preserve action/interactive-input identity; do not infer from file relocation.
 |UC-TYPESCRIPT-T5
 |confirmed distinct T5 row
-|planned / unqualified
+|local existing-target returned-action preview/apply/rollback and caller-result evidence; unqualified public surfaces and release
 
 |RPK-V07-TS-MODULE-MIGRATION-001
 |functional
 |Rewrite exact module specifiers and TypeScript project references as one separately evaluated model-changing migration. npm package/module rename is outside this row.
 |UC-TYPESCRIPT-T5
 |confirmed distinct T5 row
-|planned / unqualified
+|planned / unqualified migration. `REQ-TS-COMPOSITE-DIAGNOSTICS-001/002` and `REQ-TS-SNAPSHOT-PROJECT-MODEL-001/002` now prove local no-build composite diagnostics and snapshot-only graph modeling (10 cases/44 steps); authored post-images are not compiler/configuration-origin authority or managed-transaction acceptance.
 
 |RPK-V07-TS-ORGANIZE-IMPORTS-001
 |functional
 |Expose and qualify explicit `All`, `SortAndCombine`, and `RemoveUnused` organize-import modes with exact preferences/format evidence; one mode cannot qualify another.
 |UC-TYPESCRIPT-T5
 |confirmed distinct T5 row
-|planned / unqualified
+|all three modes have bounded local compiler/managed-write evidence; public surfaces and release remain unqualified
 
 |RPK-V07-TS-EXTRACT-001
 |functional
 |Treat extract-function and extract-constant as exact returned action identities with bounded control/data-flow proof and typed refusal for unavailable/interactive/ambiguous actions.
 |UC-TYPESCRIPT-T5
 |confirmed distinct T5 row
-|planned / unqualified
+|both exact returned actions have local selection, arithmetic-result and managed-write evidence; legacy guessed extraction refuses; public surfaces and release remain unqualified
 
 |RPK-V07-TS-INLINE-VARIABLE-001
 |functional
 |Inline a variable only through its exact compiler action and staged diagnostics. This row grants no inline-function authority.
 |UC-TYPESCRIPT-T5
 |confirmed distinct T5 row
-|planned / unqualified
+|local exact returned-action, arithmetic-result and managed-write evidence; public surfaces and release remain unqualified
 
 |RPK-V07-TS-CHANGE-SIGNATURE-001
 |functional
 |Change signature only with separately proven declaration-family, overload/override, and call-site authority; otherwise return a stable typed refusal.
 |UC-TYPESCRIPT-T5
 |confirmed distinct T5 row
-|planned / unqualified; no inspected public TypeScript 5.9.3 operation proves general authority
+|stable `typescript.changeSignatureUnsupported` refusal has local evidence; no inspected public TypeScript 5.9.3 operation proves general authority; final refusal-row/surface acceptance remains open
 
 |RPK-V07-TS-INLINE-FUNCTION-001
 |functional with safety refusal
 |Promote inline function only as a separately proven compiler/action row, never from inline-variable or extract evidence. Without complete authority, retain a stable typed refusal.
 |UC-TYPESCRIPT-T5
 |confirmed conditional T5 row
-|planned / unqualified; current `inlineMethod` extract delegation is negative evidence
+|both inline-function aliases now refuse with `typescript.inlineFunctionUnsupported` without extract delegation; local refusal evidence exists, final refusal-row/surface acceptance remains open
 
 |RPK-V07-LSP-MODULE-RENAME-001
 |non-functional / API compatibility and ownership
@@ -723,7 +880,7 @@ UC_APPLY ..> UC_ROLLBACK : after complete success
 
 |UC-TYPESCRIPT-T5
 |RPK-V07-TS-AUTHORITY-001; RPK-V07-TS-FILE-RELOCATE-001; RPK-V07-TS-DECLARATION-MOVE-001; RPK-V07-TS-MODULE-MIGRATION-001; RPK-V07-TS-ORGANIZE-IMPORTS-001; RPK-V07-TS-EXTRACT-001; RPK-V07-TS-INLINE-VARIABLE-001; RPK-V07-TS-CHANGE-SIGNATURE-001; RPK-V07-TS-INLINE-FUNCTION-001
-|Confirmed non-Gherkin T5 decomposition. `SRC-2026-08-02-013` and `typed-typescript-refactor-authority` are research inputs only. Current planner source/invented methods/inline delegation and Java-only recipes are negative evidence; every row remains planned or must close through its permitted stable refusal.
+|Confirmed T5 decomposition; research remains non-authoritative. `features/typescript-source-file-relocation.feature`, `features/typescript-advanced-operations.feature` and `features/typescript-advanced-surfaces.feature` exercise bounded compiler-owned operations, exact JSONC project-reference migration, auxiliary model inputs, stable refusals, retained-child owning-session recipes and public CLI/daemon/MCP gates. Local source evidence is summarized in link:../releases/v0.7.0-t5-local-safety.md[T5 progress]; independent review and final-candidate acceptance remain open. A deterministically reproduced process-registry cleanup race is corrected; the earlier generic probe logs lack enough telemetry for retrospective attribution. LSP remains client-owned; these feature statuses are not promoted by local GREEN.
 
 |UC-V07-QUALIFY
 |RPK-V07-COMPLETION-001; RPK-V07-SCAFFOLD-001; RPK-V07-RELEASE-EVIDENCE-001
@@ -2564,13 +2721,13 @@ Visible absence, preflight rejection, engine refusal, lookup journal failure, an
 |The confirmed contract permits only enclosing-type/file carry of a companion and requires a stable direct-selection refusal with no edit/apply capability. Executable acceptance now exists at `features/kotlin-jvm-move-companion-refusal.feature`: production refuses a compiler-proven companion selection with the stable typed code `kotlin.moveCompanionStandaloneUnsupported`, a nested non-companion object does not receive that code (`kotlin.moveDeclarationUnsupported`), and missing approval retains fail-closed precedence (`kotlin.moveExternalConsumerApprovalRequired`). All 3 scenarios/14 steps pass GREEN against that existing production with no genuine executable tests-only RED; the observed tests-only RED (pre-slice absence) and Linux GREEN are recorded separately. Per approved-change-008 the mandatory tests-only RED gate is deferred and recorded as ARCHITECTURAL/PROCESS technical debt (R-049, chapter 11) to be requalified at K5 band close; packaged/four-platform qualification remains deferred per approved-change-007. The scenarios are now declared `@implemented-and-validated` after the independent `requirements-quality-reviewer` `PASS` at candidate `ea66a4a`, with the observed RED and Linux GREEN recorded separately as promotion evidence.
 |executable corrective backlog `features/kotlin-jvm-move-companion-refusal.feature` and `RPK-V07-KOT-COMPANION-MOVE-001`; declared `@implemented-and-validated` after independent `PASS` at candidate `ea66a4a`; per approved-change-008 the tests-only RED gate is deferred and recorded as ARCHITECTURAL/PROCESS technical debt (R-049, chapter 11) to be requalified at K5 band close; the prior "current planner source admits a companion as a direct target" negative-evidence claim is superseded by the feature's stated production behavior
 
-|TypeScript T5 executable authority is missing
-|The eight operation rows and overarching typed-authority contract have no executable Gherkin/acceptance in the configured root. Current advanced planners use unqualified request shapes, inline delegates to extract, and TypeScript recipes are not executable through the Java-only engine. Dynamic/mixed JavaScript needs separate success/refusal evidence.
-|planned release blocker; `RPK-V07-TS-*`, current source is negative evidence
+|TypeScript T5 independent and final-candidate acceptance is incomplete
+|Local implementation now includes the eight-family catalogue, compiler/JSONC-bound sibling migration, exact auxiliary inputs, public CLI/daemon/MCP routes and retained owning recipe gates. The latest TypeScript run passes 119 tests including 70 Cucumber cases/299 steps. Its final lifecycle boundary passes 209 tests across core process management, TypeScript, daemon and MCP; public migration additionally passes 3/12. Separate public coverage passes 26 TypeScript cases/95 steps plus the existing Java case; help adds 1 case/3 steps. A deterministic completed-child removal reproduces the size-one `Collection.toList()` race and `NoSuchElementException`; iterator-based collection fixes it without widening retries. Earlier generic Node failures lack exception-class telemetry, so their retrospective attribution is unproved. Public returned-action discovery is not supplied; explicit identities are re-queried and bound during preview. No general package move or managed LSP authority is claimed.
+|blocked independent/final-candidate review; historical probe attribution remains unknown; `RPK-V07-TS-*`, link:../releases/v0.7.0-t5-local-safety.md[bounded progress], no promotion from local GREEN alone
 
-|Authority-preserving model-changing recipes are unproven
-|Existing recipe reduction can retain net bytes while losing operation-owned evaluation or auxiliary model inputs. No executable row proves exact child-authority retention or a recipe-wide authoritative final-candidate evaluator.
-|planned release blocker; `RPK-V07-RECIPE-AUTHORITY-001`
+|Authority-preserving model-changing recipe integration remains unproven
+|The existing RecipeEngine now retains one exact compiler-owned child plus projections through CLI/daemon/MCP, including the actual diagnostics gate. Public apply/rollback and rejection of an old child after session replacement pass locally; an internal checked-JavaScript child also passes. A migration lease independently binds its exact approved before/staged models. Independent/final-candidate recipe acceptance remains open; no generic multi-mutation reduction or recipe-wide authority is granted.
+|blocked final-candidate acceptance; `RPK-V07-RECIPE-AUTHORITY-001`; public owning-session implementation gap is stale
 
 |Release evidence subjects are not yet joined
 |The clean revision, operation-family reports, native archives/extracted images, SBOMs, attestations, and independently downloaded final assets do not yet reconcile through one immutable manifest. A support matrix or intermediate Actions artifact cannot close this gap.
