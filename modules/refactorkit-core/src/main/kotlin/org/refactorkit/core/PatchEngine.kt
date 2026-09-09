@@ -46,6 +46,7 @@ class PatchEngine(
     private val faultInjector: PatchFaultInjector = PatchFaultInjector.NONE,
 ) {
     private val normalizedRoot = workspaceRoot.toAbsolutePath().normalize()
+    private val stagingReservation = "filesystem, snapshot, edit, approval, precondition, and diagnostics validation passed; workspace-staging=transaction-path-v2"
     private val recoveryStates = setOf(
         JournalState.PREPARED,
         JournalState.APPLYING,
@@ -521,6 +522,8 @@ class PatchEngine(
                 code = "rollback.preconditionUnavailable",
             )))
         }
+        val stagingConflicts = validateReservedStagingPathsAbsent(record)
+        if (stagingConflicts.isNotEmpty()) return@withWorkspaceLock ApplyResult.Refused(stagingConflicts)
         if (mode == RollbackMode.NORMAL) {
             val conflicts = validateRollbackPostImages(record) + validateCreatedDirectoryState(record)
             if (conflicts.isNotEmpty()) {
@@ -546,7 +549,7 @@ class PatchEngine(
         val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
         val permissions = record.preImages.associate { it.path to it.posixPermissions }
         transactionLog.update(record.copy(state = JournalState.ROLLING_BACK, failure = reason))
-        commitPostImages(currentImages, record.preImages, permissions)
+        commitPostImages(record, currentImages, record.preImages, permissions)
         removeCreatedDirectories(record.createdDirectories)
         transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
         emptyList()
@@ -653,11 +656,14 @@ class PatchEngine(
         }
     }
 
-    private fun validateCreatedDirectoryState(record: TransactionJournalRecord): List<Diagnostic> {
+    private fun validateCreatedDirectoryState(
+        record: TransactionJournalRecord,
+        ownedStagingPaths: Set<Path> = emptySet(),
+    ): List<Diagnostic> {
         if (record.createdDirectories.isEmpty()) return emptyList()
         val allowed = (record.createdDirectories + record.postImages.filter { it.content != null }.map { it.path })
             .map { resolveInsideWorkspace(it) }
-            .toSet()
+            .toSet() + ownedStagingPaths
         return record.createdDirectories.flatMap { relative ->
             val directory = resolveInsideWorkspace(relative)
             if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) emptyList() else {
@@ -1537,7 +1543,9 @@ class PatchEngine(
         exactPostSnapshotHash: String? = null,
     ): ApplyResult {
         val record = try {
-            prepareJournalRecord(plan, snapshot, approval, stagedWorkspaceEdit, exactPostSnapshotHash)
+            prepareJournalRecord(plan, snapshot, approval, stagedWorkspaceEdit, exactPostSnapshotHash).also { candidate ->
+                require(validateReservedStagingPathsAbsent(candidate).isEmpty()) { "Reserved staging path already exists" }
+            }
         } catch (error: Exception) {
             return ApplyResult.Refused(listOf(Diagnostic(
                 "Cannot stage transaction before apply: ${error.message}",
@@ -1559,6 +1567,7 @@ class PatchEngine(
 
         return try {
             commitPostImages(
+                record,
                 record.preImages,
                 record.postImages,
                 record.postImages.associate { it.path to it.posixPermissions },
@@ -1632,7 +1641,7 @@ class PatchEngine(
             history = listOf(JournalEvent(
                 JournalState.PREPARED,
                 Instant.now(),
-                "filesystem, snapshot, edit, approval, precondition, and diagnostics validation passed",
+                stagingReservation,
             )),
         )
     }
@@ -1855,22 +1864,29 @@ class PatchEngine(
     }
 
     private fun commitPostImages(
+        record: TransactionJournalRecord,
         preImages: List<FileImage>,
         postImages: List<FileImage>,
         desiredPermissions: Map<Path, Set<PosixFilePermission>?> = emptyMap(),
     ) {
         val stagedFiles = linkedMapOf<Path, Path>()
+        val stagingProofs = linkedMapOf<Path, Pair<String, String>>()
+        val reserved = ownsStagingReservation(record)
+        if (reserved) transactionLog.writeStagingOwnership(record, emptyMap(), create = true)
         val preByPath = preImages.associateBy { it.path }
         val postByPath = postImages.associateBy { it.path }
         try {
             postImages.filter { it.content != null }.forEachIndexed { index, image ->
                 val target = resolveInsideWorkspace(image.path)
                 createDirectoriesDurably(requireNotNull(target.parent))
-                val temporary = target.parent.resolve(".refactorkit-stage-${UUID.randomUUID()}.tmp")
-                FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+                val temporary = if (ownsStagingReservation(record)) stagingPath(record.transaction.id, image.path)
+                    else target.parent.resolve(".refactorkit-stage-${UUID.randomUUID()}.tmp")
+                val identity = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+                    val createdIdentity = stagingIdentity(temporary)
                     val buffer = java.nio.ByteBuffer.wrap(requireNotNull(image.content).toByteArray(Charsets.UTF_8))
                     while (buffer.hasRemaining()) channel.write(buffer)
                     channel.force(true)
+                    createdIdentity
                 }
                 applyStagedPermissions(
                     temporary,
@@ -1881,9 +1897,17 @@ class PatchEngine(
                     postByPath,
                 )
                 FileChannel.open(temporary, StandardOpenOption.WRITE).use { it.force(true) }
+                forceWorkspaceDirectory(requireNotNull(temporary.parent))
                 stagedFiles[image.path] = temporary
+                stagingProofs[temporary] = identity to sha256(requireNotNull(image.content).toByteArray(Charsets.UTF_8))
+                require(safeStagingFile(temporary, listOf(image.content.toByteArray(Charsets.UTF_8)), stagingProofs[temporary])) {
+                    "Created staging file changed before its ownership was retained"
+                }
                 faultInjector.inject(PatchFaultPoint.AFTER_STAGED_FILE_FORCE, image.path, index + 1)
             }
+            if (reserved) transactionLog.writeStagingOwnership(record, stagingProofs.mapKeys { (path, _) ->
+                normalizedRoot.relativize(path).toString().replace('\\', '/')
+            }, create = false)
 
             postImages.sortedBy { it.content == null }.forEachIndexed { index, image ->
                 val target = resolveInsideWorkspace(image.path)
@@ -1892,6 +1916,9 @@ class PatchEngine(
                     target.parent?.let(::forceWorkspaceDirectory)
                 } else {
                     val temporary = requireNotNull(stagedFiles.remove(image.path))
+                    require(safeStagingFile(temporary, listOf(image.content.toByteArray(Charsets.UTF_8)), stagingProofs[temporary])) {
+                        "Staging file changed before atomic replacement"
+                    }
                     try {
                         Files.move(
                             temporary,
@@ -1911,7 +1938,15 @@ class PatchEngine(
                 faultInjector.inject(PatchFaultPoint.AFTER_COMMITTED_IMAGE, image.path, index + 1)
             }
         } finally {
-            stagedFiles.values.forEach { runCatching { Files.deleteIfExists(it) } }
+            stagedFiles.forEach { (imagePath, path) ->
+                val bytes = postByPath[imagePath]?.content?.toByteArray(Charsets.UTF_8)
+                if (bytes != null && safeStagingFile(path, listOf(bytes), stagingProofs[path])) runCatching {
+                    if (Files.deleteIfExists(path)) forceWorkspaceDirectory(requireNotNull(path.parent))
+                }
+            }
+            if (reserved && stagingImages(record).keys.none { Files.exists(it, LinkOption.NOFOLLOW_LINKS) }) {
+                transactionLog.deleteStagingOwnership(record)
+            }
         }
     }
 
@@ -2068,14 +2103,36 @@ class PatchEngine(
             markRecoveryRequired(record, "$reason; workspace state conflicts with journal images")
             return false
         }
-        val directoryConflicts = validateCreatedDirectoryState(record)
+        val ownedStages = stagingImages(record)
+        val proofs = try {
+            if (ownsStagingReservation(record)) transactionLog.readStagingOwnership(record).orEmpty() else emptyMap()
+        } catch (error: Exception) {
+            markRecoveryRequired(record, "$reason; cannot verify staging ownership: ${error.message}")
+            return false
+        }
+        val allowed = ownedStages.keys.map { normalizedRoot.relativize(it).toString().replace('\\', '/') }.toSet()
+        if (!allowed.containsAll(proofs.keys)) {
+            markRecoveryRequired(record, "$reason; staging receipt contains paths outside the transaction")
+            return false
+        }
+        val stageConflicts = validateOwnedStagingFiles(ownedStages, proofs)
+        if (stageConflicts.isNotEmpty()) {
+            markRecoveryRequired(record, "$reason; ${stageConflicts.joinToString("; ") { it.message }}")
+            return false
+        }
+        val directoryConflicts = validateCreatedDirectoryState(record, ownedStages.keys)
         if (directoryConflicts.isNotEmpty()) {
             markRecoveryRequired(record, "$reason; ${directoryConflicts.joinToString("; ") { it.message }}")
             return false
         }
         return try {
+            ownedStages.keys.forEach { path ->
+                if (Files.deleteIfExists(path)) forceWorkspaceDirectory(requireNotNull(path.parent))
+            }
+            if (ownsStagingReservation(record)) transactionLog.deleteStagingOwnership(record)
             if (current.any { (path, content) -> content != pre[path]?.content }) {
                 commitPostImages(
+                    record,
                     post.values.toList(),
                     pre.values.toList(),
                     pre.values.associate { it.path to it.posixPermissions },
@@ -2089,6 +2146,51 @@ class PatchEngine(
             false
         }
     }
+
+    // Same-directory temporary paths are reserved by the durable transaction identity, not by a broad prefix.
+    private fun stagingPath(transactionId: TransactionId, relative: Path): Path {
+        val target = resolveInsideWorkspace(relative)
+        val key = sha256(relative.normalize().toString().replace('\\', '/').toByteArray(Charsets.UTF_8))
+        return requireNotNull(target.parent).resolve(".refactorkit-stage-${transactionId.value}-$key.tmp")
+    }
+
+    private fun ownsStagingReservation(record: TransactionJournalRecord): Boolean =
+        record.history.firstOrNull()?.let { it.state == JournalState.PREPARED && it.detail == stagingReservation } == true
+
+    private fun stagingImages(record: TransactionJournalRecord): Map<Path, List<ByteArray>> =
+        if (!ownsStagingReservation(record)) emptyMap() else (record.preImages + record.postImages).filter { it.content != null }
+            .groupBy { stagingPath(record.transaction.id, it.path) }
+            .mapValues { (_, images) -> images.map { requireNotNull(it.content).toByteArray(Charsets.UTF_8) } }
+
+    private fun validateReservedStagingPathsAbsent(record: TransactionJournalRecord): List<Diagnostic> =
+        stagingImages(record).keys.filter { Files.exists(it, LinkOption.NOFOLLOW_LINKS) }.map {
+            Diagnostic("Reserved transaction staging path already exists: ${normalizedRoot.relativize(it)}",
+                Diagnostic.Severity.ERROR, code = "rollback.conflict")
+        }
+
+    private fun stagingIdentity(path: Path): String {
+        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        require(attributes.isRegularFile && !attributes.isSymbolicLink)
+        return "${requireNotNull(attributes.fileKey()) { "Filesystem does not expose staging identity" }}|${attributes.creationTime()}"
+    }
+
+    private fun safeStagingFile(path: Path, expected: List<ByteArray>, proof: Pair<String, String>?): Boolean = runCatching {
+        requireNotNull(proof) { "No successful creation receipt" }
+        require(validateNoSymbolicLinkTraversal(normalizedRoot.relativize(path)) == null)
+        require(stagingIdentity(path) == proof.first)
+        val maximum = expected.maxOf { it.size }
+        require(Files.size(path) <= maximum)
+        val bytes = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS).use { it.readNBytes(maximum + 1) }
+        sha256(bytes) == proof.second && expected.any { it.contentEquals(bytes) }
+    }.getOrDefault(false)
+
+    private fun validateOwnedStagingFiles(stages: Map<Path, List<ByteArray>>, proofs: Map<String, Pair<String, String>>): List<Diagnostic> =
+        stages.filterKeys { Files.exists(it, LinkOption.NOFOLLOW_LINKS) }.mapNotNull { (path, expected) ->
+            val key = normalizedRoot.relativize(path).toString().replace('\\', '/')
+            if (safeStagingFile(path, expected, proofs[key])) null else Diagnostic(
+                "Transaction staging path lacks exact creation and image ownership: $key",
+                Diagnostic.Severity.ERROR, code = "rollback.conflict")
+        }
 
     private fun readImage(path: Path): String? {
         val absolute = resolveInsideWorkspace(path)

@@ -34,6 +34,42 @@ classpath paths, compiler diagnostics and unchanged artifact hashes after cleanu
 This section governs test storage only; the integrated architecture remains in
 [ARC42 crosscutting concepts](arc42/08-crosscutting-concepts.adoc).
 
+## Packaged TypeScript advanced surfaces
+
+The existing `typescript-advanced-surfaces.feature` remains the source of truth
+for public behavior. Its existing CLI runner can exercise the actual packaged
+CLI and daemon/MCP NDJSON instead of in-process dispatch by explicitly supplying:
+
+```text
+-Drefactorkit.ts.packaged.root=/absolute/path/to/verified/refactorkit
+-Drefactorkit.ts.packaged.evidence=/absolute/path/to/owned/evidence
+```
+
+These properties are forwarded to the test JVM. The runtime must first match the
+selected archive's checksum and complete file image; record and recheck that image
+after execution. Select one scenario/outline at a time with the existing runner.
+The current local POSIX harness uses the embedded Java, bounded process-manager
+I/O and original authored image/arithmetic/WAL-v8/rollback oracles. A supplied
+runtime never silently falls back to in-process dispatch. Requests, responses,
+launcher provenance, observed CLI embedded-Java executables and child teardown
+are retained under the evidence directory. Forced descendant teardown has a shared
+ten-second deadline; package auditing runs before report parsing can fail.
+The LSP ownership scenario is a separate framed-protocol boundary and is not
+included in this NDJSON qualification. No new runner, dependency, compiler copy
+or workspace build-script execution is needed.
+
+The same runner hosts `managed-module-crash-recovery.feature`. It copies the
+frozen twenty-module reactor and adds512 ordinary sources only to its disposable
+stress copy, then kills a real daemon after a source move. Default execution uses
+an explicitly recorded source-classpath child, never packaged evidence. Supplied
+packaged mode uses the verified archive. Recovery and refusal oracles preserve
+whole reactor/foreign images; the pre-stage collision case explicitly reconstructs
+a valid APPLYING/S0 state rather than claiming a scheduled live race.
+
+Source-only reports remain source-only; this opt-in does not retrospectively
+promote them or claim other-host/final-release acceptance. The integrated status
+belongs to [ARC42](arc42/appendix-requirements.adoc).
+
 ## Unit tests
 
 Each module contains its own unit tests. Run with:

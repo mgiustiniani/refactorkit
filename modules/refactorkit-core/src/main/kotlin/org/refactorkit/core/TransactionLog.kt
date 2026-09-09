@@ -40,7 +40,7 @@ class TransactionLog(
 ) {
     val logDir: Path = logDir.toAbsolutePath().normalize()
     private val orphanTempPattern = Regex(
-        "\\.transaction-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.json\\.tmp-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+        "\\.transaction-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(?:json|staging)\\.tmp-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
     )
 
     /** Compatibility helper for importing an already-applied transaction. */
@@ -231,6 +231,45 @@ class TransactionLog(
         }
     }
 
+    internal fun writeStagingOwnership(record: TransactionJournalRecord, files: Map<String, Pair<String, String>>, create: Boolean) {
+        prepareLogDirectory()
+        val file = stagingFile(record.transaction.id)
+        val content = stagingOwnershipToJson(record, files)
+        require(content.toByteArray(Charsets.UTF_8).size <= 16 * 1024 * 1024) { "Staging receipt is too large" }
+        if (create) writeNewDurably(file, content, journalFaults = false) else {
+            requireNotNull(readStagingOwnership(record)) { "Staging receipt disappeared" }
+            replaceDurably(file, content, journalFaults = false)
+        }
+    }
+
+    internal fun readStagingOwnership(record: TransactionJournalRecord): Map<String, Pair<String, String>>? {
+        ensureSecureLogDirectory()
+        val file = stagingFile(record.transaction.id)
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return null
+        try {
+            requireRegularFile(file)
+            val limit = 16 * 1024 * 1024
+            require(Files.size(file) <= limit)
+            val bytes = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS).use { it.readNBytes(limit + 1) }
+            require(bytes.size <= limit)
+            return stagingOwnershipFromJson(bytes.toString(Charsets.UTF_8), record)
+        } catch (error: Exception) {
+            throw TransactionLogException("transaction.stagingOwnershipInvalid", "Staging ownership cannot be read safely", error)
+        }
+    }
+
+    internal fun deleteStagingOwnership(record: TransactionJournalRecord) {
+        if (readStagingOwnership(record) == null) return
+        Files.delete(stagingFile(record.transaction.id))
+        forceDirectory()
+    }
+
+    private fun stagingFile(id: TransactionId): Path {
+        val file = secureFile(id).resolveSibling(".${id.value}.staging")
+        require(!Files.isSymbolicLink(file)) { "Staging receipt must not be a symbolic link" }
+        return file
+    }
+
     private fun quarantine(file: Path, id: TransactionId, cause: Throwable): Nothing {
         val quarantineDir = logDir.resolve(".quarantine")
         val destination = quarantineDir.resolve(
@@ -277,14 +316,15 @@ class TransactionLog(
         }
     }
 
-    private fun writeNewDurably(file: Path, content: String) {
+    private fun writeNewDurably(file: Path, content: String, journalFaults: Boolean = true) {
         try {
             FileChannel.open(file, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
                 writeFully(channel, content)
                 channel.force(true)
             }
             setOwnerOnlyPermissions(file, directory = false)
-            faultInjector.inject(JournalFaultPoint.AFTER_NEW_FILE_FORCE, file)
+            // Lifecycle hooks remain about the WAL record, not its private staging resource receipt.
+            if (journalFaults) faultInjector.inject(JournalFaultPoint.AFTER_NEW_FILE_FORCE, file)
             forceDirectory()
         } catch (error: TransactionLogException) {
             throw error
@@ -297,15 +337,15 @@ class TransactionLog(
         }
     }
 
-    private fun replaceDurably(file: Path, content: String) {
-        val temporary = logDir.resolve(".${file.fileName}.tmp-${UUID.randomUUID()}")
+    private fun replaceDurably(file: Path, content: String, journalFaults: Boolean = true) {
+        val temporary = logDir.resolve(".${file.fileName.toString().removePrefix(".")}.tmp-${UUID.randomUUID()}")
         try {
             FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
                 writeFully(channel, content)
                 channel.force(true)
             }
             setOwnerOnlyPermissions(temporary, directory = false)
-            faultInjector.inject(JournalFaultPoint.AFTER_UPDATE_TEMP_FORCE, temporary)
+            if (journalFaults) faultInjector.inject(JournalFaultPoint.AFTER_UPDATE_TEMP_FORCE, temporary)
             try {
                 Files.move(
                     temporary,
@@ -320,7 +360,7 @@ class TransactionLog(
                     error,
                 )
             }
-            faultInjector.inject(JournalFaultPoint.AFTER_UPDATE_ATOMIC_MOVE, file)
+            if (journalFaults) faultInjector.inject(JournalFaultPoint.AFTER_UPDATE_ATOMIC_MOVE, file)
             forceDirectory()
         } catch (error: TransactionLogException) {
             Files.deleteIfExists(temporary)

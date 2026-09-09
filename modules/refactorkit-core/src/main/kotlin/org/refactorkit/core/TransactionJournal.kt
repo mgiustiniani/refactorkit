@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import java.nio.file.Path
@@ -271,6 +273,42 @@ private fun removeImageMetadata(
     return kotlinx.serialization.json.JsonArray(value.jsonArray.map { element ->
         JsonObject(element.jsonObject.filterKeys { it !in excluded })
     })
+}
+
+/** Private resource receipt in TransactionLog; it does not add lifecycle events or change WAL-v8. */
+internal fun stagingOwnershipToJson(record: TransactionJournalRecord, files: Map<String, Pair<String, String>>): String {
+    val body = JsonObject(linkedMapOf(
+        "version" to JsonPrimitive(1),
+        "transactionId" to JsonPrimitive(record.transaction.id.value),
+        "planId" to JsonPrimitive(record.transaction.planId.value),
+        "preSnapshotHash" to JsonPrimitive(record.preSnapshotHash),
+        "postSnapshotHash" to JsonPrimitive(record.postSnapshotHash),
+        "editSha256" to JsonPrimitive(WorkspaceEditIdentity.sha256(record.forwardEdit)),
+        "files" to JsonObject(files.toSortedMap().mapValues { (_, proof) ->
+            JsonArray(listOf(JsonPrimitive(proof.first), JsonPrimitive(proof.second)))
+        }),
+    ))
+    return JsonObject(body + ("checksum" to JsonPrimitive(sha256(body.toString())))).toString()
+}
+
+internal fun stagingOwnershipFromJson(content: String, record: TransactionJournalRecord): Map<String, Pair<String, String>> {
+    val document = canonicalJournalJson.parseToJsonElement(content).jsonObject
+    val body = JsonObject(document - "checksum")
+    require(document["checksum"] == JsonPrimitive(sha256(body.toString()))) { "Staging receipt checksum mismatch" }
+    val expected = canonicalJournalJson.parseToJsonElement(stagingOwnershipToJson(record, emptyMap())).jsonObject
+    require(document.filterKeys { it != "checksum" && it != "files" } == expected.filterKeys { it != "checksum" && it != "files" }) {
+        "Staging receipt does not belong to the transaction"
+    }
+    val files = requireNotNull(document["files"]).jsonObject
+    require(files.size <= record.preImages.size + record.postImages.size)
+    return files.mapValues { (_, value) ->
+        val parts = value.jsonArray
+        require(parts.size == 2 && parts.all { it is JsonPrimitive && it.isString })
+        val identity = (parts[0] as JsonPrimitive).content
+        val digest = (parts[1] as JsonPrimitive).content
+        require(identity.isNotBlank() && identity.length <= 512 && digest.matches(Regex("[0-9a-f]{64}")))
+        identity to digest
+    }
 }
 
 private fun checksum(dto: TransactionJournalDto): String =
