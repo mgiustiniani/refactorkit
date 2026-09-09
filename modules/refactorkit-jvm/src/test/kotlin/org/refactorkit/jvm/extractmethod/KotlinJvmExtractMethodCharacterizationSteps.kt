@@ -11,6 +11,9 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.TextEdit
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
@@ -170,8 +173,11 @@ class KotlinJvmExtractMethodCharacterizationSteps {
         val replace = requireNotNull(modify.textEdits.singleOrNull { it.newText.contains("extract();") }) {
             "missing replace edit"
         }
-        assertTrue(replace.newText.trim().startsWith("extract();"), "replace edit must call the new method")
-        assertTrue(replace.newText.trimEnd().startsWith("        "), "replace edit must keep the original indentation: '${replace.newText}'")
+        assertEquals(
+            TextEdit(SourceRange(SourcePosition(4, 0), SourcePosition(6, 0)), "        extract();\n"),
+            replace,
+            "the exact two selected complete lines must be replaced by exactly one indented call",
+        )
     }
 
     @Then("^the insert edit inserts a no-argument private void method declaration before the final class closing brace$")
@@ -181,19 +187,32 @@ class KotlinJvmExtractMethodCharacterizationSteps {
         val insert = requireNotNull(modify.textEdits.singleOrNull { it.newText.contains("private void extract() {") }) {
             "missing insert edit"
         }
-        assertTrue(insert.newText.contains("private void extract() {"), "insert edit must declare a private void method")
+        val expectedMethod = "\n     private void extract() {\n" +
+            "        System.out.println(\"alpha\");\n" +
+            "        System.out.println(\"beta\");\n" +
+            "    }\n"
+        assertEquals(
+            TextEdit(SourceRange(SourcePosition(7, 0), SourcePosition(7, 0)), expectedMethod),
+            insert,
+            "the complete selected statements must appear exactly once in the inserted method at the final brace",
+        )
         val snap = requireNotNull(snapshot)
-        val target = requireNotNull(snap.files.singleOrNull { it.path == TARGET })
-        // The insert point is on the final class closing brace line (the last non-blank line of the file).
-        val finalBraceLine = target.content.trimEnd().lines().size - 1
-        assertTrue(
-            insert.range.start.line == finalBraceLine,
-            "insert position must be on the final class closing brace line: ${insert.range.start}",
-        )
-        assertTrue(
-            insert.newText.contains("private void extract() {\n"),
-            "insert edit must open a no-argument private void method body",
-        )
+        val expectedTarget = """|package example.extract;
+            |
+            |public final class ExtractTarget {
+            |    public void run() {
+            |        extract();
+            |    }
+            |
+            |     private void extract() {
+            |        System.out.println("alpha");
+            |        System.out.println("beta");
+            |    }
+            |}
+            |""".trimMargin()
+        val expectedImage = snap.trackedFiles.associate { it.path to it.content } + (TARGET to expectedTarget)
+        val staged = WorkspaceEditSimulator.apply(snap, p.workspaceEdit)
+        assertEquals(expectedImage, staged.trackedFiles.associate { it.path to it.content }, "exact authored post-image; no omitted, duplicated or residual statements")
     }
 
     @Then("^the plan warns that the limited MVP supports only no-argument private void methods$")

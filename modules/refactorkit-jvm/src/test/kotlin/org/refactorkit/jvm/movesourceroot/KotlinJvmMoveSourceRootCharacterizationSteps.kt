@@ -208,16 +208,29 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
     @Then("^the plan carries a rename-only WorkspaceEdit whose entries are all FileEdit.Rename$")
     fun planCarriesRenameOnlyEdit() {
         val p = requireNotNull(plan)
-        assertTrue(p.workspaceEdit.edits.isNotEmpty(), "expected at least one rename edit: ${p.toString()}")
-        assertTrue(p.workspaceEdit.edits.all { it is FileEdit.Rename }, "expected a rename-only edit set: ${p.workspaceEdit.edits}")
+        val expected = expectedRenames()
+        assertEquals(expected.size, p.workspaceEdit.edits.size, "every authored compilation unit must move exactly once")
+        assertEquals(expected.toSet(), p.workspaceEdit.edits.toSet(), "only the exact source-root-relative renames are allowed")
     }
 
     @Then("^the plan declares package declarations, imports, fully qualified type names, and source bytes unchanged$")
     fun planDeclaresIdentityUnchanged() {
         val p = requireNotNull(plan)
         val before = requireNotNull(snapshot)
+        val expected = expectedRenames()
+        assertEquals(
+            expected.map { it.path }.toSet(),
+            before.files.filter { it.path.startsWith(FROM) }.map { it.path }.toSet(),
+            "the independently authored inventory must cover the whole source root",
+        )
+        val expectedImage = before.trackedFiles.associate { it.path to it.content }.toMutableMap()
+        expected.forEach { rename ->
+            assertTrue(rename.newPath !in expectedImage, "fixture destination must be absent: ${rename.newPath}")
+            expectedImage[rename.newPath] = requireNotNull(expectedImage.remove(rename.path))
+        }
         val staged = WorkspaceEditSimulator.apply(before, p.workspaceEdit)
-        p.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>().forEach { rename ->
+        assertEquals(expectedImage, staged.trackedFiles.associate { it.path to it.content }, "complete staged image, including unrelated tracked inputs")
+        expected.forEach { rename ->
             val beforeFile = requireNotNull(before.files.singleOrNull { it.path == rename.path }) { "missing source ${rename.path}" }
             val afterFile = requireNotNull(staged.files.singleOrNull { it.path == rename.newPath }) { "missing target ${rename.newPath}" }
             assertEquals(beforeFile.content, afterFile.content, "source bytes must be unchanged for ${rename.path}")
@@ -253,11 +266,9 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
     @Then("^the plan lists every affected source path and destination path$")
     fun planListsEveryAffectedPath() {
         val p = requireNotNull(plan)
-        val expected = p.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>()
-            .flatMap { listOf(it.path, it.newPath) }
-            .toSet()
-        assertTrue(expected.isNotEmpty(), "expected non-empty affected-file set")
-        assertEquals(expected, p.affectedFiles, "affectedFiles must list every source and destination path")
+        val expected = expectedRenames().flatMap { listOf(it.path, it.newPath) }.toSet()
+        assertEquals(6, expected.size, "three independently authored compilation units have six distinct paths")
+        assertEquals(expected, p.affectedFiles, "affectedFiles must list exactly the authored source and destination paths")
     }
 
     // -------------------------------------------------------------- outline Thens
@@ -297,6 +308,12 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
         snapshot = scanner.scan(requireNotNull(fixtureRoot))
         plan = JavaMoveSourceRootPlanner(JavaLanguageAdapter()).preview(requireNotNull(snapshot), from, to)
     }
+
+    private fun expectedRenames(): List<FileEdit.Rename> = listOf(
+        "example/shared/SharedValue.java",
+        "example/shared/package-info.java",
+        "module-info.java",
+    ).map { relative -> FileEdit.Rename(FROM.resolve(relative), TO.resolve(relative)) }
 
     private fun primaryTypeIdentity(file: SourceFile): String? {
         val name = file.path.fileName.toString().removeSuffix(".java")

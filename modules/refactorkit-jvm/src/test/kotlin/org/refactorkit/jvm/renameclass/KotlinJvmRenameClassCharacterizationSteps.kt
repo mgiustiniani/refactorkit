@@ -11,6 +11,10 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
+import org.refactorkit.core.TextEdit
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaFrameworkDetector
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
@@ -298,7 +302,11 @@ class KotlinJvmRenameClassCharacterizationSteps(private val context: KotlinJvmRe
             "expected every referencing file in affected files: ${p.affectedFiles}",
         )
         val newFile = decl.resolveSibling("${requireNotNull(newName)}.java")
-        assertTrue(p.affectedFiles.contains(newFile), "expected new file $newFile in affected files: ${p.affectedFiles}")
+        assertEquals(
+            setOf(STANDARD_DECLARATION, Path.of("src/main/java/com/example/Client.java"), newFile),
+            p.affectedFiles,
+            "the authored declaration, sole caller and destination are the complete affected set",
+        )
     }
 
     @Then("^the plan carries a WorkspaceEdit that combines the JDT source-range modifications and one FileEdit.Rename from the declaration file to the new file name$")
@@ -316,6 +324,19 @@ class KotlinJvmRenameClassCharacterizationSteps(private val context: KotlinJvmRe
         assertEquals(1, rename.size, "expected exactly one FileEdit.Rename: ${p.workspaceEdit.edits}")
         assertEquals(decl, rename[0].path, "the Rename must move the declaration file")
         assertEquals(newFile, rename[0].newPath, "the Rename must target the new file name")
+        fun at(column: Int) = TextEdit(SourceRange(SourcePosition(1, column), SourcePosition(1, column + 11)), "AccountManager")
+        val client = Path.of("src/main/java/com/example/Client.java")
+        val expectedEdits = mapOf(STANDARD_DECLARATION to listOf(at(13), at(34)), client to listOf(at(22), at(42)))
+        assertEquals(3, p.workspaceEdit.edits.size, "exactly two modifications and the declaration rename")
+        assertEquals(2, modifies.size, "one modification per authored source")
+        assertEquals(expectedEdits, modifies.associate { it.path to it.textEdits.sortedBy { edit -> edit.range.start.character } }, "exact authored JDT token ranges and replacement text")
+        val before = requireNotNull(snapshot)
+        val expectedImage = before.trackedFiles.associate { it.path to it.content }.toMutableMap()
+        expectedImage.remove(STANDARD_DECLARATION)
+        expectedImage[Path.of("src/main/java/com/example/AccountManager.java")] = "package com.example;\npublic class AccountManager { public AccountManager() {} }\n"
+        expectedImage[client] = "package com.example;\npublic class Client { AccountManager s = new AccountManager(); }\n"
+        val staged = WorkspaceEditSimulator.apply(before, p.workspaceEdit)
+        assertEquals(expectedImage, staged.trackedFiles.associate { it.path to it.content }, "complete independently authored post-image")
     }
 
     @Then("^the plan warns that the JDT type binding was selected and that declaration, constructor, and reference edits use exact JDT source ranges$")

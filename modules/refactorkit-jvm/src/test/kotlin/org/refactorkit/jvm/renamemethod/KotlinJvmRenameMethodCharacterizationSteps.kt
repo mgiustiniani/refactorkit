@@ -11,6 +11,10 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
+import org.refactorkit.core.TextEdit
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameMemberPlanner
@@ -287,6 +291,19 @@ class KotlinJvmRenameMethodCharacterizationSteps {
             referencingFiles.all { ref -> modifies.any { it.path == ref.path } },
             "expected a Modify on every referencing file: ${p.workspaceEdit.edits}",
         )
+        fun at(column: Int) = TextEdit(SourceRange(SourcePosition(1, column), SourcePosition(1, column + 8)), "renamed")
+        val client = Path.of("src/main/java/com/example/Client.java")
+        val expectedEdits = mapOf(STANDARD_DECLARATION to listOf(at(39)), client to listOf(at(50)))
+        assertEquals(2, p.workspaceEdit.edits.size, "exactly the declaration and caller modifications")
+        assertEquals(2, modifies.size, "no structural or unrelated edits")
+        assertEquals(expectedEdits, modifies.associate { it.path to it.textEdits }, "independently authored declaration/call ranges and replacement text")
+        assertEquals(expectedEdits.keys, p.affectedFiles, "exactly the two authored affected files")
+        val expectedImage = snap.trackedFiles.associate { it.path to it.content } + mapOf(
+            STANDARD_DECLARATION to "package com.example;\npublic class UserService { public void renamed(String s) {} }\n",
+            client to "package com.example;\npublic class Client { void x(){ new UserService().renamed(\"a\"); } }\n",
+        )
+        val staged = WorkspaceEditSimulator.apply(snap, p.workspaceEdit)
+        assertEquals(expectedImage, staged.trackedFiles.associate { it.path to it.content }, "complete independently authored post-image")
     }
 
     @Then("^the plan warns that the JDT binding selected the exact member signature and that edits were generated from JDT declaration and reference ranges$")

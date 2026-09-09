@@ -1,5 +1,5 @@
 # language: en
-@implemented-and-validated
+@partial
 Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall back to a lexical rename when JDT evidence is unclean, and refuse invalid, generated, and conflicting requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
   I need the Java renameMember preview to rename an owner-bound field using exact JDT declaration and reference ranges or a documented lexical fallback and to refuse unsupported requests with a deterministic real message
@@ -41,8 +41,9 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
   refusalCode field. Every refusal message asserted below is the exact message string the
   planner emits, and no invented renameMember.xxx typed code is introduced. The RED-deferral
   is pre-approved in the J1 catalogue because no Cucumber runner or glue existed for this
-  row yet. The feature-level status stays @not-implemented until a runner, glue, and an
-  independent requirements-quality review PASS exist. If a first execution reveals a real
+  row yet. The existing runner and glue exercise the real planner. Exact authored ranges
+  and complete post-image oracles are being strengthened after review; the feature remains
+  at status @partial pending independent acceptance. If execution reveals a real
   mismatch, the row is reclassified as GENUINE RED per baseline section 2 and production is
   corrected. Each refusal is a REFUSED patch plan carrying its real message in the summary
   and warnings, an empty WorkspaceEdit and an empty affected-file set, confidence 0.0, risk

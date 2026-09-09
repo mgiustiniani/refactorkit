@@ -1,5 +1,5 @@
 # language: en
-@implemented-and-validated
+@partial
 Ability: Rename a signed Java method exactly with JDT binding evidence across its override family and refuse invalid, generated, and unresolvable requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
   I need the Java renameMember preview with a signed member selector to rename the exact method signature and its override family using JDT source ranges and to refuse unsupported requests with a deterministic real message
@@ -36,11 +36,10 @@ Ability: Rename a signed Java method exactly with JDT binding evidence across it
   Every refusal message asserted below is the exact message string the planner emits, and no
   invented renameMember.xxx typed code is introduced. The RED-deferral is pre-approved in the
   J1 catalogue because no Cucumber runner or glue existed for this row yet. The runner and
-  glue are now synced and the scenarios validate GREEN 14/14 (evidence ad7b4eae, 101 steps),
-  so the feature-level status is promoted to @implemented-and-validated. Independent
-  requirements-quality review PASS is tracked separately by the workflow and is not yet
-  obtained. If a first
-  execution reveals a real mismatch, the row is reclassified as GENUINE RED per baseline
+  glue have historical GREEN 14/14 evidence (ad7b4eae, 101 steps), retained as a bounded run.
+  Exact authored ranges and complete post-image oracles are being strengthened after review;
+  the feature remains @partial pending independent acceptance of that corrective evidence.
+  If execution reveals a real mismatch, the row is reclassified as GENUINE RED per baseline
   section 2 and production is corrected. Each refusal is a REFUSED patch plan carrying its real
   message in the summary and warnings, an empty WorkspaceEdit and an empty affected-file set,
   confidence 0.0, risk HIGH, and no approval and no managed-write eligibility.

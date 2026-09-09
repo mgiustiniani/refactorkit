@@ -1,5 +1,5 @@
 # language: en
-@implemented-and-validated
+@partial
 Ability: Move one complete non-generated Java source root with rename-only edits and deterministic typed refusals
   As a RefactorKit caller on a Java workspace
   I need the Java moveSourceRoot preview to relocate one complete non-generated source root
@@ -21,10 +21,10 @@ Ability: Move one complete non-generated Java source root with rename-only edits
   Characterization RED-deferral (truthful, anti-fake): production already implements the
   planner JavaMoveSourceRootPlanner in the Java adapter, so this feature begins GREEN and
   asserts the real behavior rather than inventing it. The RED-deferral is pre-approved in the
-  catalogue because no Cucumber runner, glue, or independent requirements-quality review
-  exists for this row yet; the feature-level status is @not-implemented until a runner and
-  glue validate the scenarios and an independent reviewer passes. Only real production codes
-  are asserted; no invented granular codes are introduced.
+  catalogue for existing production. The existing runner and glue exercise the real planner;
+  the complete independent rename and staged-image oracles are being strengthened after review.
+  The feature remains @partial pending independent acceptance of that corrective evidence.
+  Only real production codes are asserted; no invented granular codes are introduced.
 
   # Scenario 1: successful complete non-generated root move as rename-only edits
   @REQ-JAVA-MOVE-SOURCE-ROOT-CHAR-001 @functional-requirement

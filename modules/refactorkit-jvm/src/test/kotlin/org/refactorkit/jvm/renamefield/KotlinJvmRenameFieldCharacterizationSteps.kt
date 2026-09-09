@@ -11,6 +11,10 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
+import org.refactorkit.core.TextEdit
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaProjectScanner
@@ -301,6 +305,19 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
             matchedRefs.all { ref -> modifies.any { it.path == ref.path } },
             "expected a Modify on every binding-matched referencing file: ${p.workspaceEdit.edits}",
         )
+        fun at(column: Int) = TextEdit(SourceRange(SourcePosition(1, column), SourcePosition(1, column + 6)), "renamed")
+        val client = Path.of("src/main/java/com/example/Client.java")
+        val expectedEdits = mapOf(STANDARD_DECLARATION to listOf(at(31)), client to listOf(at(77)))
+        assertEquals(2, p.workspaceEdit.edits.size, "exactly the authored declaration and field reference modifications")
+        assertEquals(2, modifies.size, "no structural or unrelated edits")
+        assertEquals(expectedEdits, modifies.associate { it.path to it.textEdits }, "independent exact field-token ranges and replacement text")
+        assertEquals(expectedEdits.keys, p.affectedFiles, "exactly the two authored affected files")
+        val expectedImage = snap.trackedFiles.associate { it.path to it.content } + mapOf(
+            STANDARD_DECLARATION to "package com.example;\npublic class UserService { int renamed; }\n",
+            client to "package com.example;\npublic class Client { void x(){ UserService u = new UserService(); int a = u.renamed; } }\n",
+        )
+        val staged = WorkspaceEditSimulator.apply(snap, p.workspaceEdit)
+        assertEquals(expectedImage, staged.trackedFiles.associate { it.path to it.content }, "complete independently authored post-image")
     }
 
     @Then("^the plan warns that the JDT binding selected the exact field and that edits were generated from JDT declaration and reference ranges$")

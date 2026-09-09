@@ -1,5 +1,5 @@
 # language: en
-@implemented-and-validated
+@partial
 Ability: Extract one straight-line complete-line no-argument private void method and refuse unsupported selections with a finite real refusal message list
   As a RefactorKit caller on a Java workspace
   I need the Java extractMethod preview to turn one straight-line complete-line block
@@ -26,10 +26,10 @@ Ability: Extract one straight-line complete-line no-argument private void method
   MESSAGE strings through a refused snapshot plan, not as typed refusal codes; there is no
   refusalCode field. Every refusal message asserted below is the exact message string the
   planner emits, and no invented extractMethod.xxx typed code is introduced. The RED-deferral
-  is pre-approved in the J1 catalogue because no Cucumber runner, glue, or independent
-  requirements-quality review exists for this row yet; the feature-level status is set to
-  the @not-implemented tag until a runner and glue validate the scenarios and an independent reviewer
-  passes. Each refusal is a REFUSED patch plan carrying its real message in the summary and
+  is pre-approved in the J1 catalogue for existing production. The existing runner and glue
+  exercise the real planner; exact selected-body and staged-image oracles are being strengthened
+  after review. The feature remains @partial pending independent acceptance of that evidence.
+  Each refusal is a REFUSED patch plan carrying its real message in the summary and
   warnings, an empty WorkspaceEdit and an empty affected-file set, confidence 0.0, risk HIGH,
   and no approval and no managed-write eligibility.
 
