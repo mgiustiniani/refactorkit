@@ -16,12 +16,12 @@ import xml.etree.ElementTree as ET
 
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 REQUIREMENT = Path("docs/requirements/kotlin-k5-bounded-completion.md")
-REQUIREMENT_SHA256 = "f09b59f1d4861076e7d826c8c51c59e5048b3a04676a062822fdbc19ca6e1bce"
+REQUIREMENT_SHA256 = "4807176539f6b3e97d547df46705e5b80593acf6f28e22cffb7f477e88291894"
 BOUND_REQUIREMENTS = {
     Path("docs/requirements/kotlin-jvm-organize-imports-callables-formatting.md"):
         "0d28daa17f8d1a92097503125b405775d1ff2ff73361e1674b57643bec3c9a6e",
     Path("docs/requirements/kotlin-jvm-change-signature-parameter-rename.md"):
-        "a605ea53b029cbbc003c455419bf99cbc720c5c3df7411f9e6585dde36260e95",
+        "632f20fcade6afd49ad5c86be6eede7b6a399db15401684ac75967cda5d8b8e4",
     Path("docs/requirements/kotlin-jvm-bounded-extract-inline.md"):
         "16386a71f2eb579f5f126664f53fba25a775a87f0e680e86ad102146a4b51b77",
     Path("docs/requirements/kotlin-advanced-shapes-and-platform-matrices.md"):
@@ -83,6 +83,10 @@ SUBJECT_FILES = {
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-002.md"),
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-003.md"),
     Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-004.md"),
+    Path("docs/requirements/kotlin-k5-bounded-completion-approved-change-005.md"),
+    Path("docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-011.md"),
+    Path("docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-012.md"),
+    Path("docs/requirements/kotlin-jvm-change-signature-parameter-rename-approved-change-013.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-285da48-fail-f03763afc912473399ac0872bb1268bfe618bf92bfd7100391821d8778607ce2.md"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-pre-native-audit-probes-ddeb32e82c77471e3585f227efb109dd81e2abdbdb61dc1e1247ad7056bb9be1.py"),
     Path("docs/requirements/evidence/v0.7.0-k5-completion-adversarial-tests-only-red-b66166ffd37e5027b127bc450abd4c27feefeb3de635073f1a11d9a25b62cf6d.log"),
