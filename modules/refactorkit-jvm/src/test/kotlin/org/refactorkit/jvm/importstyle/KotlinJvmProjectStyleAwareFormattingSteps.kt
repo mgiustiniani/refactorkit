@@ -779,12 +779,9 @@ class KotlinJvmProjectStyleAwareFormattingSteps {
                 path.fileName.toString().startsWith(it)
             } }
         val compilerSource = runtime.single { it.fileName.toString().startsWith("kotlin-compiler-embeddable-2.0.21") }
-        val toolchainRoot = temporaryDirectory("rk-jvm-toolchain")
-        val compiler = toolchainRoot.resolve(compilerSource.fileName.toString())
-        Files.copy(compilerSource, compiler)
-        val classpath = runtime.filterNot { it == compilerSource }.distinctBy { it.fileName.toString() }.map { source ->
-            toolchainRoot.resolve(source.fileName.toString()).also { Files.copy(source, it) }
-        }
+        // Borrow Gradle-resolved artifacts as read-only inputs; cleanup owns only fixture workspaces.
+        val compiler = compilerSource
+        val classpath = runtime.filterNot { it == compilerSource }.distinctBy { it.fileName.toString() }
         val discovery = KotlinToolchainDiscoverer().discover(KotlinToolchainRequest(
             workspaceRoot = workspace,
             jdkHome = Path.of(System.getProperty("java.home")),

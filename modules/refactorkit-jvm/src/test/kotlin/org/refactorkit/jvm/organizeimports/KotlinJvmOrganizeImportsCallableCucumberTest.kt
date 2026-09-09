@@ -10,6 +10,7 @@ import org.junit.platform.suite.api.Suite
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("kotlin-jvm-organize-imports-callable-preservation.feature")
+@SelectClasspathResource("kotlin-shared-test-toolchain.feature")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.organizeimports")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,

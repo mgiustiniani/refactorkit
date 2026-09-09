@@ -1377,13 +1377,14 @@ class KotlinCompilerDiagnosticsTest {
     fun scriptsPartialModelsAndToolchainDriftRefuseBeforeCompilerExecution() {
         val root = project("class Valid\n")
         root.resolve("src/main/kotlin/fixture/setup.kts").writeText("println(\"not executed\")\n")
-        val toolchain = toolchain(root)
+        val toolchain = toolchain(root, isolateAnnotations = true)
         val snapshot = KotlinJvmBuildModelIntegration.attach(JavaProjectScanner().scan(root), toolchain)
         val scripts = assertIs<KotlinCompilerDiagnosticsResult.Refused>(KotlinCompilerDiagnostics(toolchain).analyze(snapshot))
         assertEquals("kotlin.scriptSemanticsUnsupported", scripts.reason.code)
         assertEquals(null, scripts.attestation.process)
 
-        val evidence = toolchain.provenance.evidence.single { it.role == "compiler-classpath-000" }
+        val evidence = toolchain.provenance.evidence.single { it.path.fileName.toString() == "annotations-13.0.jar" }
+        check(evidence.path.parent in temporaryRoots) { "The tamper fixture must own the modified artifact" }
         Files.write(evidence.path, byteArrayOf(0), java.nio.file.StandardOpenOption.APPEND)
         val drift = assertIs<KotlinCompilerDiagnosticsResult.Refused>(KotlinCompilerDiagnostics(toolchain).analyze(snapshot))
         assertEquals("kotlin.toolchainEvidenceChanged", drift.reason.code)
@@ -1413,7 +1414,7 @@ class KotlinCompilerDiagnosticsTest {
         return root
     }
 
-    private fun toolchain(workspace: Path): KotlinSemanticToolchain {
+    private fun toolchain(workspace: Path, isolateAnnotations: Boolean = false): KotlinSemanticToolchain {
         val requiredRuntimePrefixes = listOf(
             "kotlin-compiler-embeddable-2.0.21", "kotlin-stdlib-2.0.21",
             "kotlin-script-runtime-2.0.21", "kotlin-reflect-1.6.10",
@@ -1427,11 +1428,13 @@ class KotlinCompilerDiagnosticsTest {
             } }
         val compilerSource = runtime.single { it.fileName.toString().startsWith("kotlin-compiler-embeddable-2.0.21") }
         assertEquals(requiredRuntimePrefixes.size, runtime.distinctBy { it.fileName.toString() }.size)
-        val toolchainRoot = temporaryDirectory("refactorkit-kotlin-real-toolchain")
-        val compiler = toolchainRoot.resolve(compilerSource.fileName.toString())
-        Files.copy(compilerSource, compiler)
+        // The compiler is always borrowed. Only the tiny artifact deliberately tampered with is copied.
+        val compiler = compilerSource
         val classpath = runtime.filterNot { it == compilerSource }.distinctBy { it.fileName.toString() }.map { source ->
-            toolchainRoot.resolve(source.fileName.toString()).also { Files.copy(source, it) }
+            if (isolateAnnotations && source.fileName.toString() == "annotations-13.0.jar") {
+                temporaryDirectory("refactorkit-kotlin-mutable-runtime").resolve(source.fileName)
+                    .also { Files.copy(source, it) }
+            } else source
         }
         val discovery = KotlinToolchainDiscoverer().discover(KotlinToolchainRequest(
             workspaceRoot = workspace,

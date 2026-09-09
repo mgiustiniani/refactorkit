@@ -13,6 +13,27 @@ Every Gradle `Test` worker uses bounded repository-local temporary storage below
 `/tmp` therefore cannot corrupt compiler/toolchain acceptance, and disposable
 evidence remains outside user workspaces.
 
+## Shared compiler inputs and temporary artifacts
+
+Kotlin/JVM compiler fixtures borrow the pinned JARs already resolved by Gradle
+through `kotlin.compiler.test.classpath`. They read those paths directly: no
+per-fixture compiler copy, backup, hard link, permission change or extra download.
+The Gradle cache is not fixture-owned and must never be registered for cleanup.
+Only a test that deliberately modifies an artifact isolates it first. The
+compiler-drift fixture copies just `annotations-13.0.jar` (about 18 KB), not the
+roughly 63 MiB compiler toolchain, and removes that owned copy during teardown.
+
+Workspace isolation and existing no-follow cleanup remain in place, including
+fixtures using `<module>/build/test-tmp`. Preserve diagnostics, reports and hashes
+when investigating failures, not redundant compiler environments. This policy
+does not change packaged runtime contents or erase historical acceptance inputs.
+The operational requirement is
+[`kotlin-shared-test-toolchain.feature`](../features/kotlin-shared-test-toolchain.feature),
+executed through the existing organize-imports runner. It verifies original
+classpath paths, compiler diagnostics and unchanged artifact hashes after cleanup.
+This section governs test storage only; the integrated architecture remains in
+[ARC42 crosscutting concepts](arc42/08-crosscutting-concepts.adoc).
+
 ## Unit tests
 
 Each module contains its own unit tests. Run with:
