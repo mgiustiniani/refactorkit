@@ -217,7 +217,8 @@ class ExternalSemanticProcessManager(
     fun cancel(id: String): Boolean = processes[id]?.let { it.cancel(); true } ?: false
 
     override fun close() {
-        processes.values.toList().forEach(ManagedSemanticProcess::close)
+        // Collection.toList() has a size-one fast path that races with the exit observer removing the last entry.
+        processes.values.iterator().asSequence().toList().forEach(ManagedSemanticProcess::close)
         processes.clear()
     }
 

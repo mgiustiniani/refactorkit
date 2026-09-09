@@ -11,8 +11,9 @@ import org.junit.platform.suite.api.Suite
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-refactoring-preview-command-boundary.feature")
+@SelectClasspathResource("typescript-advanced-surfaces.feature")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.cli.previewcommand")
-@ConfigurationParameter(key = FILTER_TAGS_PROPERTY_NAME, value = "@REQ-JAVA-PREVIEW-COMMAND-003")
+@ConfigurationParameter(key = FILTER_TAGS_PROPERTY_NAME, value = "@REQ-JAVA-PREVIEW-COMMAND-003 or @typescript-advanced-surfaces")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,
     value = "pretty, json:build/reports/cucumber/java-refactoring-preview-command-surface.json",

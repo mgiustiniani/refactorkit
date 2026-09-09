@@ -301,6 +301,7 @@ enum class RefactoringEvidence {
     NATIVE_AST,
     STRUCTURAL,
     LEXICAL_FALLBACK,
+    COMPILER_PROVEN,
 }
 
 /**

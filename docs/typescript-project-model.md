@@ -1,6 +1,10 @@
 # TypeScript/JavaScript declarative project model
 
 Status: `v0.6.0` T2 bounded model implemented; compiler-backed semantic use is T3.
+The local 0.7.0 snapshot-model and auxiliary-input integration below also support
+the bounded T5 migration, not general directory/package mutation authority.
+Architecture authority remains in
+[ARC42](arc42/appendix-requirements.adoc); this document describes the model API.
 
 Provider ID: `typescript-config-declarative-v1`.
 
@@ -50,9 +54,38 @@ Glob patterns are modeled but not executed or expanded by the provider.
   allowances are broader.
 
 `TypeScriptBuildModelIntegration.attach` inserts or replaces this provider model
-inside `ProjectSnapshot`. The effective model projection hash and evidence hash
-therefore participate in the engine-owned snapshot hash. Later preview/apply
-flows must rediscover the provider so config/package drift fails before WAL.
+inside `ProjectSnapshot` and captures exact config/extends/package evidence as
+auxiliary JSONC files when a source-only scan omitted it. Capture uses bounded
+UTF-8, size/hash checks and no-follow paths; existing snapshot bytes must match.
+Capture failure returns an unavailable `typescript.modelEvidenceChanged` model,
+not partially captured new authority. The model, evidence and auxiliary bytes
+participate in the engine-owned snapshot hash. Later preview/apply flows must
+rediscover the provider so config/package drift fails before WAL.
+
+## Immutable snapshot modeling
+
+`TypeScriptProjectModelBuilder.build(root)` discovers the current disk image.
+`build(snapshot)` instead uses only the exact files supplied by that snapshot,
+through the existing source-only semantic overlay, and removes the overlay after
+modeling. Callers must capture configuration, extends inputs and package manifests
+alongside sources; absent configuration is not borrowed from the old workspace.
+Relative paths, configuration byte hashes and the reference graph consequently
+belong to the staged image rather than a different on-disk layout.
+
+The [advanced-operation Story](../features/typescript-advanced-operations.feature)
+checks a relocated authored post-image, deterministic projection/evidence, clean
+real compiler diagnostics, and missing/cyclic/escaping/malformed configuration
+refusals with unchanged disk bytes. An authored post-image is model-test input,
+not compiler authority to perform the migration. The separately implemented
+`projectReferenceMigration` supplies that authority only for one complete sibling
+project: native directory import edits, parsed exact JSONC `references[].path`
+origins, expected before/staged graph/options and the retained owning compiler
+gate. It rejects uncaptured files, occupied destinations, nested projects,
+ambiguous origins, unsupported extends/aliases/publication markers and changed
+apply authority. Native configuration suggestions are not configuration authority.
+See the [bounded migration evidence](releases/v0.7.0-t5-local-safety.md); npm package
+rename, arbitrary directory moves and generic multi-mutation recipes are not
+qualified by this path.
 
 ## Evidence and limits
 

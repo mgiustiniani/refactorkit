@@ -1,0 +1,13 @@
+id: typescript.relocate-source
+name: Relocate a compiler-owned TypeScript source
+language: typescript
+description: Retain the sourceFileRelocation child plan and its owning semantic apply gate.
+parameters:
+  file: string
+  targetFile: string
+steps:
+  - type: sourceFileRelocation
+    file: "{{ file }}"
+    targetFile: "{{ targetFile }}"
+  - type: runDiagnostics
+  - type: summarizePatch

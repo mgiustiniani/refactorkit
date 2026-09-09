@@ -1,7 +1,9 @@
 # Experimental TypeScript/JavaScript semantic adapter
 
-Status: `v0.6.0` T3/T4 foundation; proposal-only and not yet a stable managed
-mutation capability. Layered descriptors are published by the library, CLI,
+Status: `v0.6.0` T3/T4 foundation plus bounded `0.7.0` managed-operation local
+acceptance, not final release qualification. Architecture authority remains in
+[ARC42](arc42/08-crosscutting-concepts.adoc); this document describes the adapter
+and public commands. Layered descriptors are published by the library, CLI,
 daemon, LSP and MCP capability schemas. CLI one-shot search, definition,
 references, diagnostics and rename use the same explicit-toolchain daemon
 orchestration in-process and close the session on every exit path.
@@ -69,7 +71,14 @@ The external LSP bridge now supports bounded full-document lifecycle:
 - UTF-16 position validation with surrogate-pair split refusal;
 - explicit crash restart only, capped at three attempts per rolling 60 seconds;
 - restart provenance continuity for server version, capabilities, executable and
-  argument hashes.
+  argument hashes;
+- retained diagnostics gates bound to the semantic generation that created them.
+  An admitted restart clears previous staged/migration approvals. Old gates refuse
+  before WAL with `diagnostics.unavailable` and reason
+  `typescript.refactoringAuthorityStale`, even after an identical fresh preview.
+  Callers must acquire a new preview and its owning gate in the restarted session.
+  The long-lived semantic child and per-exchange compiler child intentionally have
+  different identities; they are not required to share a process ID.
 
 Server capabilities are reduced to a deterministic known-capability map in
 session provenance. Diagnostics retain bounded message, code, severity, exact
@@ -81,8 +90,11 @@ compiler diagnostics provider independent of optional LSP publication versions.
 RefactorKit materializes the exact immutable snapshot plus hash-bound config evidence
 in a source-only overlay and launches the explicit Node binary against the
 hash-bound `lib/typescript.js` compiler API through a fixed bundled bridge. The
-bridge forces `noEmit`, disables incremental output, executes no package scripts or
-plugins, restricts compiler reads to the overlay and explicit compiler-library root,
+bridge forces `noEmit` but preserves declared composite/incremental/build-info
+options. It never invokes emit or a solution build, rejects compiler-host writes,
+and checks unbuilt project references through TypeScript's source redirect while
+honoring an explicit `disableSourceOfProjectReferenceRedirect`. It executes no
+package scripts or plugins, restricts reads to the overlay and explicit compiler-library root,
 returns the requested snapshot hash and at most 500 structured diagnostics,
 and is bounded to 30 seconds, 512 MiB V8 old space, 8 MiB stdout and 64 KiB stderr.
 Overlay mutation, process failure, malformed/incomplete output or snapshot mismatch
@@ -137,7 +149,7 @@ ancestor classification may promote only recognized type-alias, parameter or
 namespace/module declarations; `module Identifier` and `namespace Identifier`
 are distinguished from bounded node text. Ambient external string-module names
 are intentionally not identifiers and remain refused. An unclassified kind,
-unresolved symbol, constructor, package, invalid or no-op target refuses before requesting an edit. The
+unresolved symbol, constructor, package, invalid or no-op target refuses before requesting an edit.
 For declaration/composite/project-reference library surfaces, an exported symbol
 is treated as having potentially unbounded external consumers. Preview refuses
 with `typescript.externalConsumersUnknown` unless
@@ -162,8 +174,67 @@ adapter now has JVM acceptance for exact staged diagnostics, explicit authorizat
 managed apply, WAL and rollback. Its diagnostics gate re-hashes toolchain and
 project-model evidence while `PatchEngine` holds the workspace writer lock and
 refuses before WAL on drift. Stable mutation authority still requires packaged
-real-toolchain acceptance for apply, recovery and rollback on every supported
-native platform.
+real-toolchain final-candidate acceptance for apply, recovery and rollback.
+Repeated multi-host execution for 0.7.0 is
+[waived by the user](requirements/v0.7.0-local-host-acceptance-approved-change-001.md),
+not reported as verified on missing hosts.
+
+## Advanced operation families (local 0.7.0 candidate)
+
+The catalogue lists `renameSymbol` and these seven bounded families. A family is
+not an applicability promise for every selection; unsupported source shapes fail
+closed. Existing `renameSymbol` retains its separate LSP proposal contract above.
+
+| Operation | Required operation arguments / boundary |
+|---|---|
+| `sourceFileRelocation` | `file`, `targetFile`; exact compiler import/export edits before rename |
+| `organizeImports` | `file`; `mode` is `All`, `SortAndCombine` or `RemoveUnused` |
+| `extractFunction`, `extractConstant`, `inlineVariable` | `file`, `startLine`, `startCharacter`, `endLine`, `endCharacter`, exact `refactor` and `action` identities |
+| `moveDeclaration` | The same selection/action fields plus a distinct existing `targetFile`; incomplete cross-project caller edits refuse |
+| `projectReferenceMigration` | `fromDirectory`, `toDirectory`; one complete bounded sibling project, compiler source edits plus independently proven JSONC references |
+
+Selections are zero-based UTF-16; split surrogates and conflicting coordinates
+refuse. Optional formatting/preference arguments are hash-bound. Compiler-generated
+names are retained: `newName`/`methodName` do not silently rename extraction output.
+The caller supplies native action identities; preview re-queries
+`getApplicableRefactors`, selects exactly one matching available action, binds its
+returned descriptor hash and requests `getEditsForRefactor`. There is currently no
+public action-discovery endpoint. `changeSignature` and `inlineFunction` remain
+stable typed refusals; `extractMethod`/`moveSymbol` require exact action-specific
+operations rather than granting generic authority.
+
+```sh
+refactorkit typescript refactorings . --node "$NODE" \
+  --language-server-package "$LANGUAGE_SERVER_PACKAGE" --typescript-package "$TYPESCRIPT_PACKAGE"
+refactorkit typescript refactor . --operation projectReferenceMigration \
+  --arguments-json '{"fromDirectory":"packages/lib","toDirectory":"packages/domain"}' \
+  --node "$NODE" --language-server-package "$LANGUAGE_SERVER_PACKAGE" \
+  --typescript-package "$TYPESCRIPT_PACKAGE"
+```
+
+These commands preview only. `--apply` explicitly requests a fresh preview and
+managed apply within that invocation; a preview-only CLI process closes its
+semantic session and cannot donate its plan ID to a later invocation. The daemon
+uses `typescript.refactorings` for the catalogue and `refactor.preview` for advanced
+operations. MCP uses `available_refactorings` and `preview_refactoring`. Advanced
+preview arguments must include the owning `languageId`, `semanticLease` and
+`expectedSnapshotHash`; a foreign lease or stale snapshot fails closed. Retained
+plans use the actual owning diagnostics gate at apply, not a replacement session's
+gate. Existing dirty/affected-open-document refusals remain in force.
+
+For recipes, CLI `recipe run recipes/typescript/relocate-source.yml --root .`
+accepts the same explicit toolchain options plus `--param.file` and
+`--param.targetFile` (and optional `--apply`). Daemon/MCP use `operation=recipe`,
+with bounded `recipeYaml` and `param.<name>` arguments. Only one compiler-owned
+mutation plus diagnostics/summary projections is admitted; the returned plan keeps
+its child operation, snapshot, lease and owning gate. No project/package/framework
+script executes. Java recipe behavior is unchanged.
+
+Local public examples cover TypeScript; an internal checked-JavaScript recipe also
+passes. Dynamic/mixed JavaScript does not inherit compiler completeness. The
+[local safety ledger](releases/v0.7.0-t5-local-safety.md) records exact evidence and
+remaining review/qualification gaps. None of these managed routes adds an advanced
+managed LSP command or RefactorKit rollback to client-owned LSP edits.
 
 ## Refusal examples
 

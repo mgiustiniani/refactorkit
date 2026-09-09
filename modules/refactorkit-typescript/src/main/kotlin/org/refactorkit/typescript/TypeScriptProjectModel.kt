@@ -10,6 +10,7 @@ import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolPath
+import org.refactorkit.core.SemanticWorkspaceOverlay
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.file.FileVisitResult
@@ -151,7 +152,12 @@ class TypeScriptProjectModelBuilder(
         )
     }
 
-    fun build(snapshot: ProjectSnapshot): TypeScriptProjectModel = build(snapshot.workspace.root)
+    /** Models only the immutable snapshot; missing configuration never falls back to the old disk image. */
+    fun build(snapshot: ProjectSnapshot): TypeScriptProjectModel = runCatching {
+        SemanticWorkspaceOverlay.create(snapshot.copy(files = snapshot.trackedFiles, auxiliaryFiles = emptyList())).use { overlay -> build(overlay.root) }
+    }.getOrElse {
+        refused(listOf(diagnostic("typescript.modelSnapshotInvalid", "TypeScript snapshot cannot be modeled safely")))
+    }
 
     private fun discoverConfigs(root: Path, diagnostics: MutableList<Diagnostic>): List<Path> {
         val configs = mutableListOf<Path>()

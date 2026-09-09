@@ -42,9 +42,9 @@ internal class TypeScriptCompilerDiagnostics(
         if (!Files.isRegularFile(toolchain.typeScriptCompilerEntrypoint)) {
             return unavailable("typescript.compilerDiagnosticsUnavailable", "Hash-bound TypeScript compiler API entrypoint is unavailable")
         }
-        val paths = snapshot.files.associateBy { it.path.normalize() }.toMutableMap()
+        val paths = snapshot.trackedFiles.associateBy { it.path.normalize() }.toMutableMap()
         auxiliaryFiles.forEach { paths.putIfAbsent(it.path.normalize(), it) }
-        val semanticSnapshot = snapshot.copy(files = paths.values.sortedBy { it.path.toString() })
+        val semanticSnapshot = snapshot.copy(files = paths.values.sortedBy { it.path.toString() }, auxiliaryFiles = emptyList())
         val overlay = runCatching { SemanticWorkspaceOverlay.create(semanticSnapshot) }.getOrElse {
             return unavailable("typescript.compilerDiagnosticsOverlayFailed", it.message ?: "Compiler diagnostics overlay failed")
         }
@@ -138,7 +138,7 @@ internal class TypeScriptCompilerDiagnostics(
         if (diagnostics.size > TypeScriptDiagnosticsContract.MAX_DIAGNOSTICS) return unavailable(
             "typescript.compilerDiagnosticsLimit", "Compiler diagnostics exceed ${TypeScriptDiagnosticsContract.MAX_DIAGNOSTICS} entries",
         )
-        val sources = snapshot.files.associateBy { it.path.normalize() }
+        val sources = snapshot.trackedFiles.associateBy { it.path.normalize() }
         val parsed = mutableListOf<Diagnostic>()
         diagnostics.forEach { element ->
             val value = element as? JsonObject ?: return unavailable(

@@ -291,6 +291,12 @@
         }
       },
       {
+        "name": "typescript.refactorings",
+        "stability": "additive-api-0.2",
+        "requiresProject": true,
+        "writesWorkspace": false
+      },
+      {
         "name": "refactor.preview",
         "stability": "beta-contract",
         "requiresProject": true,
@@ -381,6 +387,20 @@
       "java.createMavenModule",
       "java.renameMavenModule"
     ],
+    "typescriptAdvanced": {
+      "authority": "docs/arc42/08-crosscutting-concepts.adoc",
+      "status": "local-acceptance-not-release-qualification",
+      "catalogueMethod": "typescript.refactorings",
+      "previewMethod": "refactor.preview",
+      "managedSurfaces": ["cli", "daemon", "mcp"],
+      "requiredAdvancedPreviewIdentity": ["languageId", "semanticLease", "expectedSnapshotHash"],
+      "operationFamilies": ["renameSymbol", "organizeImports", "sourceFileRelocation", "extractFunction", "extractConstant", "inlineVariable", "moveDeclaration", "projectReferenceMigration"],
+      "returnedActionSelection": "explicit identities re-queried and hash-bound at preview",
+      "recipeOperation": "recipe",
+      "recipeAuthority": "one unchanged child plan and the retained owning diagnostics gate",
+      "cliPreviewLifetime": "session-local; --apply performs and retains a fresh preview in its own invocation",
+      "lspManagedAdvancedMutations": false
+    },
     "moveClassLexicalFallbackReview": {
       "schemaVersion": 1,
       "canonicalization": "refactorkit.lexicalFallbackReview.canonical.v1",

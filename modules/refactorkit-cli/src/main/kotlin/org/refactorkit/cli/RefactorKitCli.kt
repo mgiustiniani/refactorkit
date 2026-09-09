@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.ManagedRollbackExecutor
@@ -66,6 +67,7 @@ import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
 import org.refactorkit.webimporter.SourceKind
 import java.nio.file.Path
+import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.UUID
 import kotlin.io.path.exists
@@ -725,11 +727,11 @@ class RefactorKitCli(
 
     private fun cmdTypeScript(args: List<String>): Int {
         if (args.isEmpty()) {
-            System.err.println("typescript requires a subcommand: search, definition, references, diagnostics, diagnostics-v2, or rename")
+            System.err.println("typescript requires a subcommand: search, definition, references, diagnostics, diagnostics-v2, rename, refactor, or refactorings")
             return 2
         }
         val operation = args.first()
-        if (operation !in setOf("search", "definition", "references", "diagnostics", "diagnostics-v2", "rename")) {
+        if (operation !in setOf("search", "definition", "references", "diagnostics", "diagnostics-v2", "rename", "refactor", "refactorings")) {
             System.err.println("Unknown typescript subcommand: $operation")
             return 2
         }
@@ -772,6 +774,21 @@ class RefactorKitCli(
                     })
                 }
                 "diagnostics" -> session.dispatch("diagnostics", buildJsonObject { put("languageId", languageId) })
+                "refactorings" -> session.dispatch("typescript.refactorings", buildJsonObject { put("languageId", languageId) })
+                "refactor" -> {
+                    val refactoring = parsed.options["operation"] ?: error("--operation required")
+                    val arguments = parsed.options["arguments-json"]?.let { semanticJson.parseToJsonElement(it).jsonObject } ?: JsonObject(emptyMap())
+                    val preview = session.dispatch("refactor.preview", buildJsonObject {
+                        put("operation", refactoring); put("languageId", languageId)
+                        put("semanticLease", started.getValue("semanticLease"))
+                        put("expectedSnapshotHash", opened.getValue("snapshotHash"))
+                        parsed.options["symbol"]?.let { put("symbol", it) }
+                        put("arguments", arguments)
+                    })
+                    if ("apply" in parsed.flags) session.dispatch("refactor.apply", buildJsonObject {
+                        put("planId", preview.jsonObject.getValue("planId"))
+                    }) else preview
+                }
                 "diagnostics-v2" -> session.dispatch("diagnostics.v2", buildJsonObject {
                     put("requestId", parsed.options["request-id"] ?: "cli-${UUID.randomUUID()}")
                     put("languageId", languageId)
@@ -804,7 +821,8 @@ class RefactorKitCli(
             println(semanticJson.encodeToString(result))
             0
         } catch (failure: Exception) {
-            System.err.println("TypeScript semantic command failed: ${failure.message}")
+            val refusalCode = ((failure as? JsonRpcException)?.data as? JsonObject)?.get("refusalCode")?.jsonPrimitive?.content
+            System.err.println("TypeScript semantic command failed${refusalCode?.let { " [$it]" }.orEmpty()}: ${failure.message}")
             1
         } finally {
             session.close()
@@ -1150,6 +1168,17 @@ class RefactorKitCli(
         val recipe = try { RecipeLoader.load(Paths.get(recipePath)) } catch (e: Exception) {
             System.err.println("Failed to load recipe: ${e.message}"); return 1
         }
+        if (recipe.language in setOf("typescript", "javascript")) {
+            val arguments = buildJsonObject {
+                put("recipeYaml", Files.readString(Paths.get(recipePath)))
+                params.forEach { (name, value) -> put("param.$name", value) }
+            }
+            val toolOptions = listOf("node", "language-server-package", "typescript-package").flatMap { name ->
+                parsed.options[name]?.let { listOf("--$name", it) }.orEmpty()
+            }
+            return cmdTypeScript(listOf("refactor", root, "--language", recipe.language, "--operation", "recipe", "--arguments-json", arguments.toString()) +
+                toolOptions + parsed.flags.filter { it in setOf("apply", "allow-workspace-local-toolchain") }.map { "--$it" })
+        }
         println("Recipe: ${recipe.name} (${recipe.id})\nMode  : ${if (dryRun) "preview" else "apply"}\n")
         val result = RecipeEngine().run(recipe, params, Paths.get(root), dryRun)
         result.stepPlans.forEach { step ->
@@ -1338,7 +1367,8 @@ class RefactorKitCli(
           refactorkit java create-module --module-name <name> --parent-pom <pom> [--root <path>] [--apply]
           refactorkit java move-across-maven-modules --from <root> --to <root> [--dependency-pom <pom> --source-group-id <id> --source-artifact-id <id> --source-version <v> --destination-group-id <id> --destination-artifact-id <id> --destination-version <v>] [--root <path>] [--apply]
           refactorkit java rename-module --old-module-dir <dir> --new-module-dir <dir> [--new-artifact-id <id>] [--root <path>] [--apply]
-          refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
+          refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename|refactorings> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]
+          refactorkit typescript refactor <root> --operation <id> [--arguments-json <object>] --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--apply]
           refactorkit kotlin diagnostics <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--request-id <id>]
           refactorkit kotlin symbols <root> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>] [--query <text>] [--file <workspace-relative.kt>]
           refactorkit kotlin definition <root> --symbol <opaque-id> --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]

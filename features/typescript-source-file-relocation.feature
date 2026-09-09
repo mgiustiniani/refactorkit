@@ -20,12 +20,12 @@ Ability: Relocate a TypeScript source file to a new file path with compiler-prov
   source file and one FileEdit.Modify per import or export updated file.
 
   RED-contract (truthful, anti-fake): this feature asserts the TARGET behavior the
-  TypeScript adapter must deliver, not current production internals. The current
-  TypeScriptMoveSymbolPlanner uses an invented getRefactorEdits LSP method shape, which is
-  prototype or negative evidence and does not implement the real getEditsForFileRename
-  path. The feature-level status is @not-implemented until a Cucumber runner and glue
-  validate the scenarios against a real pinned typescript 5.9.3 compiler server and an
-  independent requirements-quality review passes. The real protocol contract is asserted at
+  TypeScript adapter must deliver, not current production internals. The historical
+  TypeScriptMoveSymbolPlanner used an invented getRefactorEdits LSP method shape;
+  that path was prototype or negative evidence. Current relocation uses the real
+  getEditsForFileRename path and legacy moveSymbol refuses without exact action authority.
+  Local Cucumber execution and bounded independent source review do not by themselves
+  qualify a final packaged candidate, so feature-level @not-implemented is retained. The real protocol contract is asserted at
   a high level: the adapter sends getEditsForFileRename with the exact old and new file
   paths and applies the returned FileRenameEdit. No invented LSP shapes are asserted, and
   getRefactorEdits is never used. Refusals are deterministic REFUSED patch plans carrying
@@ -70,6 +70,7 @@ Ability: Relocate a TypeScript source file to a new file path with compiler-prov
     And the refusal carries an empty WorkspaceEdit and an empty affected-file set
     And the refusal grants no approval and no managed-write eligibility
     And the refusal carries confidence 0.0 and risk HIGH
+    And the relocation refusal claims no compiler-proven evidence or authority lease
     And the refusal summary and warning carry the message "<message>"
 
     Examples:
@@ -78,3 +79,36 @@ Ability: Relocate a TypeScript source file to a new file path with compiler-prov
       | TypeScript semantic adapter is not running | the semantic adapter has no active compiler-server session |
       | Relocation target collides with an existing file | the new file path already exists in the project snapshot |
       | TypeScript compiler server is unavailable or its evidence is not clean | the compiler server cannot be reached or its project evidence is stale or unclean |
+
+  # Operational timeout evidence uses a hostile protocol peer, never semantic success evidence.
+  # Architecture authority: ../docs/arc42/08-crosscutting-concepts.adoc (external semantic processes).
+  @REQ-TS-SOURCE-FILE-RELOCATION-001 @functional-requirement @non-functional-requirement
+  Scenario Outline: A stalled compiler-server exchange ends within its deadline and stops its process
+    Given a compiler-server peer that stalls during "<phase>" with a bounded deadline
+    When the compiler client opens the project and requests file-rename edits
+    Then the stalled compiler exchange terminates within the timeout budget without an edit proposal
+    And the compiler process is stopped and the workspace is unchanged
+
+    Examples:
+      | phase |
+      | open |
+      | rename |
+      | partial rename header |
+      | partial rename body |
+
+  # Malformed protocol peers provide negative parsing evidence, never semantic authority.
+  @REQ-TS-SOURCE-FILE-RELOCATION-001 @functional-requirement @non-functional-requirement
+  Scenario Outline: Malformed compiler-server rename responses are refused without partial edits
+    Given a compiler-server peer returns a malformed rename response where "<fault>"
+    When the compiler client opens the project and requests file-rename edits
+    Then the malformed compiler response is refused without any partial edit proposal
+    And the compiler process is stopped and the workspace is unchanged
+
+    Examples:
+      | fault |
+      | the body is not an array |
+      | the file list contains a malformed entry |
+      | the text changes contain a malformed entry |
+      | the success field is missing |
+      | the success field is a string |
+      | the replacement text is not a string |

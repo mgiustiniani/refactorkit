@@ -184,11 +184,33 @@ interface TypeScriptSemanticClient : AutoCloseable {
         snapshot: ProjectSnapshot,
         normalizer: ExternalWorkspaceEditNormalizer = ExternalWorkspaceEditNormalizer(),
     ): ExternalWorkspaceEditNormalization
+    fun requestProjectDirectoryEdit(from: Path, to: Path, snapshot: ProjectSnapshot): ExternalWorkspaceEditNormalization =
+        ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic("Compiler directory migration is unavailable", Diagnostic.Severity.ERROR,
+            code = "typescript.projectMigrationUnavailable")))
+    fun compilerMutationEvidence(): TypeScriptCompilerMutationEvidence? = null
+    fun requestCompilerRefactorEdit(
+        request: TypeScriptCompilerRefactorRequest, snapshot: ProjectSnapshot,
+        normalizer: ExternalWorkspaceEditNormalizer = ExternalWorkspaceEditNormalizer(),
+    ): ExternalWorkspaceEditNormalization = ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+        "Typed compiler refactor actions are unavailable", Diagnostic.Severity.ERROR, code = "typescript.refactorUnavailable",
+    )))
+    fun requestOrganizeImportsEdit(
+        file: Path, mode: TypeScriptOrganizeImportsMode, formatting: TypeScriptCompilerFormatting,
+        snapshot: ProjectSnapshot, normalizer: ExternalWorkspaceEditNormalizer = ExternalWorkspaceEditNormalizer(),
+    ): ExternalWorkspaceEditNormalization = ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+        "Typed compiler organizeImports is unavailable", Diagnostic.Severity.ERROR, code = "typescript.organizeImportsUnavailable",
+    )))
+    fun requestFileRenameEdit(
+        oldFilePath: Path,
+        newFilePath: Path,
+        snapshot: ProjectSnapshot,
+        normalizer: ExternalWorkspaceEditNormalizer = ExternalWorkspaceEditNormalizer(),
+    ): ExternalWorkspaceEditNormalization
 }
 
 class ExternalTypeScriptSemanticClient(
     languageId: String,
-    toolchain: TypeScriptSemanticToolchain,
+    private val toolchain: TypeScriptSemanticToolchain,
     projectModel: TypeScriptProjectModel,
 ) : TypeScriptSemanticClient {
     private val adapter = ExternalLspAdapter(
@@ -204,6 +226,8 @@ class ExternalTypeScriptSemanticClient(
     private val compilerDiagnostics = TypeScriptCompilerDiagnostics(toolchain, projectModel)
     private val evidencePaths = projectModel.evidence.map { it.path.normalize() }.toSet()
     private var auxiliaryFiles: List<SourceFile> = emptyList()
+    private var lastCompilerEvidence: TypeScriptCompilerMutationEvidence? = null
+    override fun compilerMutationEvidence(): TypeScriptCompilerMutationEvidence? = lastCompilerEvidence
     override val isRunning: Boolean get() = adapter.isRunning
     override val provenance: ExternalSemanticSessionProvenance? get() = adapter.sessionProvenance
     override fun start(snapshot: ProjectSnapshot) {
@@ -312,8 +336,64 @@ class ExternalTypeScriptSemanticClient(
     ): ExternalWorkspaceEditNormalization = adapter.requestWorkspaceEdit(
         "textDocument/organizeImports", paramsJson, snapshot, normalizer,
     )
+
+    override fun requestFileRenameEdit(
+        oldFilePath: Path,
+        newFilePath: Path,
+        snapshot: ProjectSnapshot,
+        normalizer: ExternalWorkspaceEditNormalizer,
+    ): ExternalWorkspaceEditNormalization = compilerEdit(
+        snapshot, "getEditsForFileRename",
+        mapOf("oldFilePath" to oldFilePath.normalize().toString(), "newFilePath" to newFilePath.normalize().toString()),
+    ) { it.getEditsForFileRename(oldFilePath, newFilePath, snapshot, normalizer) }
+
+    override fun requestProjectDirectoryEdit(from: Path, to: Path, snapshot: ProjectSnapshot): ExternalWorkspaceEditNormalization =
+        compilerEdit(snapshot, "getEditsForFileRename", mapOf("oldFilePath" to from.toString(), "newFilePath" to to.toString(), "scope" to "project-directory")) {
+            it.getEditsForFileRename(from, to, snapshot, ExternalWorkspaceEditNormalizer(), projectDirectory = true)
+        }
+
+    override fun requestOrganizeImportsEdit(
+        file: Path, mode: TypeScriptOrganizeImportsMode, formatting: TypeScriptCompilerFormatting,
+        snapshot: ProjectSnapshot, normalizer: ExternalWorkspaceEditNormalizer,
+    ): ExternalWorkspaceEditNormalization = compilerEdit(
+        snapshot, "organizeImports", formatting.evidence() + mapOf("file" to file.normalize().toString(), "mode" to mode.protocolName),
+    ) { it.organizeImports(file, mode, formatting, snapshot, normalizer) }
+
+    override fun requestCompilerRefactorEdit(
+        request: TypeScriptCompilerRefactorRequest, snapshot: ProjectSnapshot, normalizer: ExternalWorkspaceEditNormalizer,
+    ): ExternalWorkspaceEditNormalization = compilerEdit(snapshot, "getEditsForRefactor", request.evidence()) {
+        it.getEditsForRefactor(request, snapshot, normalizer)
+    }
+
+    private fun compilerEdit(
+        snapshot: ProjectSnapshot, command: String, arguments: Map<String, String>,
+        exchange: (TypeScriptCompilerServerClient) -> ExternalWorkspaceEditNormalization,
+    ): ExternalWorkspaceEditNormalization {
+        lastCompilerEvidence = null
+        val compilerServer = TypeScriptCompilerServerClient(toolchain)
+        return try {
+            compilerServer.start(snapshot)
+            val result = exchange(compilerServer)
+            if (result is ExternalWorkspaceEditNormalization.Accepted) {
+                lastCompilerEvidence = TypeScriptCompilerMutationEvidence(
+                    command, snapshot.hash, org.refactorkit.core.WorkspaceEditIdentity.sha256(result.normalized.workspaceEdit),
+                    arguments, requireNotNull(compilerServer.processProvenance()), compilerServer.returnedActionSha256(),
+                )
+            }
+            result
+        } catch (failure: Exception) {
+            ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+                message = failure.message ?: "TypeScript compiler server is unavailable",
+                severity = Diagnostic.Severity.ERROR,
+                code = "typescript.compilerServerUnavailable",
+            )))
+        } finally {
+            compilerServer.close()
+        }
+    }
     override fun close() {
         auxiliaryFiles = emptyList()
+        lastCompilerEvidence = null
         adapter.close()
     }
 }
@@ -327,11 +407,18 @@ class TypeScriptSemanticAdapter(
     private val currentTimeMillis: () -> Long = System::currentTimeMillis,
 ) : LanguageAdapter, AutoCloseable {
     private var activeSnapshot: ProjectSnapshot? = null
+    private var semanticGeneration = 0L
     private var acceptedServerProvenance: ServerProvenanceSignature? = null
     private val restartAttempts = ArrayDeque<Long>()
     private var lastRestartMillis: Long? = null
     private val approvedStagedSnapshotHashes = linkedSetOf<String>()
     private val overlayVersions = linkedMapOf<Path, Pair<Long, String>>()
+    private val projectMigration = TypeScriptProjectMigrationPlanner(client, toolchain, projectModel,
+        sessionMatches = ::active,
+        toolchainUnchanged = { toolchain.provenance.evidence.all(::verifyEvidence) },
+        mutationEligible = { semanticCompleteness().managedMutationEligible &&
+            (languageId != "javascript" || projectModel.projects.all { it.compilerOptions.checkJs == true }) },
+    )
 
     init {
         require(languageId in setOf("typescript", "javascript")) { "TypeScript semantic adapter language is invalid" }
@@ -372,11 +459,11 @@ class TypeScriptSemanticAdapter(
             }
             val text = decodeUtf8(bytes)
                 ?: return refusedStart("typescript.modelEvidenceInvalid", "TypeScript project evidence is not UTF-8")
-            if (snapshot.files.none { it.path.normalize() == item.path.normalize() }) {
+            if (snapshot.trackedFiles.none { it.path.normalize() == item.path.normalize() }) {
                 auxiliary += SourceFile(item.path.normalize(), text, "jsonc")
             }
         }
-        val semanticSnapshot = snapshot.copy(files = (snapshot.files + auxiliary).sortedBy { it.path.toString() })
+        val semanticSnapshot = snapshot.copy(files = (snapshot.trackedFiles + auxiliary).sortedBy { it.path.toString() }, auxiliaryFiles = emptyList())
         return try {
             client.start(semanticSnapshot)
             val missing = REQUIRED_CAPABILITIES.filterNot(client::supports)
@@ -396,6 +483,7 @@ class TypeScriptSemanticAdapter(
                     )
                 } else {
                     if (acceptedServerProvenance == null) acceptedServerProvenance = actualProvenance
+                    semanticGeneration++
                     activeSnapshot = snapshot
                     TypeScriptSemanticStart.Started(client.provenance)
                 }
@@ -430,6 +518,8 @@ class TypeScriptSemanticAdapter(
             "TypeScript semantic restart limit of $MAX_RESTARTS_PER_WINDOW per ${RESTART_WINDOW_MILLIS / 1_000}s was exceeded",
         )
         restartAttempts.addLast(now)
+        approvedStagedSnapshotHashes.clear()
+        projectMigration.clear()
         client.close()
         activeSnapshot = null
         overlayVersions.clear()
@@ -728,40 +818,57 @@ class TypeScriptSemanticAdapter(
     }
 
     /** Exact-version semantic gate required by PatchEngine for managed TypeScript apply. */
-    fun diagnosticsGate(): DiagnosticsGate = DiagnosticsGate.enabled("typescript-compiler-exact-v1") { snapshot ->
-        check(semanticScopeCompatible(snapshot)) { "TypeScript diagnostics snapshot is outside the active semantic scope" }
-        check(semanticCompleteness().managedMutationEligible) {
-            "typescript.semanticCompletenessInsufficient: ${semanticCompleteness().summary}"
-        }
-        check(toolchain.provenance.evidence.all(::verifyEvidence)) {
-            "typescript.toolchainEvidenceChanged: TypeScript semantic toolchain changed before managed apply"
-        }
-        check(projectEvidenceUnchanged(snapshot.workspace.root)) {
-            "typescript.modelEvidenceChanged: TypeScript project evidence changed before managed apply"
-        }
-        when (val result = client.synchronizedDiagnostics(snapshot)) {
-            is ExternalSemanticDiagnostics.Available -> result.diagnostics
-            is ExternalSemanticDiagnostics.Unavailable -> error("${result.diagnostic.code}: ${result.diagnostic.message}")
+    fun diagnosticsGate(): DiagnosticsGate {
+        val owningGeneration = semanticGeneration
+        return DiagnosticsGate.enabled("typescript-compiler-exact-v1") { snapshot ->
+            // A retained gate cannot borrow a restarted session, even after an identical fresh preview.
+            check(client.isRunning && semanticGeneration == owningGeneration) {
+                "typescript.refactoringAuthorityStale: The owning TypeScript semantic session is no longer active"
+            }
+            projectMigration.approvedDiagnostics(snapshot)?.let { return@enabled it }
+            check(semanticScopeCompatible(snapshot)) { "TypeScript diagnostics snapshot is outside the active semantic scope" }
+            check(semanticCompleteness().managedMutationEligible) {
+                "typescript.semanticCompletenessInsufficient: ${semanticCompleteness().summary}"
+            }
+            check(toolchain.provenance.evidence.all(::verifyEvidence)) {
+                "typescript.toolchainEvidenceChanged: TypeScript semantic toolchain changed before managed apply"
+            }
+            check(projectEvidenceUnchanged(snapshot.workspace.root)) {
+                "typescript.modelEvidenceChanged: TypeScript project evidence changed before managed apply"
+            }
+            when (val result = client.synchronizedDiagnostics(snapshot)) {
+                is ExternalSemanticDiagnostics.Available -> result.diagnostics
+                is ExternalSemanticDiagnostics.Unavailable -> error("${result.diagnostic.code}: ${result.diagnostic.message}")
+            }
         }
     }
 
-    override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = listOf(
+    override fun availableRefactorings(selection: CodeSelection): List<RefactoringDescriptor> = refactoringCatalogue()
+
+    /** Family catalogue, not a promise of applicability to an arbitrary selection. */
+    fun refactoringCatalogue(): List<RefactoringDescriptor> = listOf(
         RefactoringDescriptor("renameSymbol", "Rename TypeScript/JavaScript symbol", RiskLevel.MEDIUM),
-        RefactoringDescriptor("organizeImports", "Organize TypeScript/JavaScript imports", RiskLevel.LOW),
-        RefactoringDescriptor("moveSymbol", "Move TypeScript/JavaScript symbol to another file", RiskLevel.MEDIUM),
-        RefactoringDescriptor("changeSignature", "Change TypeScript/JavaScript method signature", RiskLevel.MEDIUM),
-        RefactoringDescriptor("extractMethod", "Extract TypeScript/JavaScript method/function", RiskLevel.MEDIUM),
-        RefactoringDescriptor("inlineMethod", "Inline TypeScript/JavaScript method/function call", RiskLevel.MEDIUM),
+        RefactoringDescriptor("organizeImports", "Organize imports: All, SortAndCombine or RemoveUnused", RiskLevel.LOW),
+        RefactoringDescriptor("sourceFileRelocation", "Relocate a compiler-owned source file", RiskLevel.LOW),
+        RefactoringDescriptor("extractFunction", "Extract function using an exact returned compiler action", RiskLevel.MEDIUM),
+        RefactoringDescriptor("extractConstant", "Extract constant using an exact returned compiler action", RiskLevel.MEDIUM),
+        RefactoringDescriptor("inlineVariable", "Inline variable using an exact returned compiler action", RiskLevel.MEDIUM),
+        RefactoringDescriptor("moveDeclaration", "Move declaration to an existing file using an exact returned action", RiskLevel.MEDIUM),
+        RefactoringDescriptor("projectReferenceMigration", "Migrate a bounded sibling project with proven reference origins", RiskLevel.MEDIUM),
     )
 
     override fun applyRefactoring(request: RefactoringRequest): PatchPlan {
         if (!active(request.snapshot)) return refusedPlan(
-            request, "typescript.semanticNotStarted", "TypeScript semantic adapter is not started for this snapshot",
+            request, "typescript.semanticNotStarted", "TypeScript semantic adapter is not running",
         )
+        if (request.operation == TypeScriptProjectMigrationPlanner.OPERATION) return projectMigration.preview(request)
+        if (TypeScriptCompilerRefactorKind.entries.any { it.operation == request.operation }) {
+            return TypeScriptCompilerRefactoringPlanner(client, compilerPreview()).preview(request)
+        }
         if (request.operation == "organizeImports") {
             val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
                 ?: return refusedPlan(request, "typescript.organizeImportsFileMissing", "organizeImports requires arguments.file")
-            return TypeScriptOrganizeImportsPlanner(client).preview(request.snapshot, Path.of(file))
+            return TypeScriptOrganizeImportsPlanner(client, compilerPreview()).preview(request.snapshot, Path.of(file), request.arguments)
         }
         if (request.operation == "moveSymbol") {
             val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
@@ -771,6 +878,13 @@ class TypeScriptSemanticAdapter(
             val targetFile = request.arguments["targetFile"]
                 ?: return refusedPlan(request, "typescript.moveTargetMissing", "moveSymbol requires arguments.targetFile")
             return TypeScriptMoveSymbolPlanner(client).preview(request.snapshot, Path.of(file), symbolName, Path.of(targetFile))
+        }
+        if (request.operation == "sourceFileRelocation") {
+            val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
+                ?: return refusedPlan(request, "typescript.relocationFileMissing", "sourceFileRelocation requires arguments.file")
+            val targetFile = request.arguments["targetFile"]
+                ?: return refusedPlan(request, "typescript.relocationTargetMissing", "sourceFileRelocation requires arguments.targetFile")
+            return TypeScriptSourceFileRelocationPlanner(client, compilerPreview()).preview(request.snapshot, Path.of(file), Path.of(targetFile))
         }
         if (request.operation == "changeSignature") {
             val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
@@ -791,15 +905,10 @@ class TypeScriptSemanticAdapter(
             val methodName = request.arguments["methodName"] ?: "extracted"
             return TypeScriptExtractMethodPlanner(client).preview(request.snapshot, Path.of(file), startLine, endLine, methodName)
         }
-        if (request.operation == "inlineMethod") {
-            val file = request.arguments["file"] ?: request.selection?.location?.path?.toString()
-                ?: return refusedPlan(request, "typescript.inlineFileMissing", "inlineMethod requires arguments.file")
-            val startLine = request.arguments["startLine"]?.toIntOrNull() ?: request.selection?.location?.range?.start?.line
-                ?: return refusedPlan(request, "typescript.inlineStartMissing", "inlineMethod requires arguments.startLine")
-            val endLine = request.arguments["endLine"]?.toIntOrNull() ?: request.selection?.location?.range?.end?.line
-                ?: return refusedPlan(request, "typescript.inlineEndMissing", "inlineMethod requires arguments.endLine")
-            return TypeScriptExtractMethodPlanner(client).preview(request.snapshot, Path.of(file), startLine, endLine, "inline:" + request.arguments["methodName"] ?: "inline")
-        }
+        if (request.operation in setOf("inlineMethod", "inlineFunction")) return refusedPlan(
+            request, "typescript.inlineFunctionUnsupported",
+            "TypeScript inline function has no separately qualified compiler action; extract and inline variable do not grant authority",
+        )
         if (request.operation != "renameSymbol") return refusedPlan(
             request, "language.operationUnsupported", "Unsupported TypeScript operation '${request.operation}'",
         )
@@ -955,6 +1064,19 @@ class TypeScriptSemanticAdapter(
         }
     }
 
+    private fun compilerPreview() = TypeScriptCompilerPreview(
+        toolchain, projectModel, client.provenance?.process?.id,
+        diagnostics = { snapshot ->
+            if (!semanticCompleteness().managedMutationEligible ||
+                (snapshot.files.any { it.languageId == "javascript" } && projectModel.projects.any { it.compilerOptions.checkJs != true })) {
+                unavailableDiagnostics("typescript.semanticCompletenessInsufficient", "Advanced mutation requires complete compiler checking")
+            } else exactDiagnostics(snapshot)
+        },
+        ownership = ::validateProjectOwnership,
+        evidence = client::compilerMutationEvidence,
+        approve = ::rememberApprovedStagedSnapshot,
+    )
+
     override fun formatEdits(edits: List<TextEdit>): List<TextEdit> = edits
 
     override fun close() {
@@ -963,6 +1085,7 @@ class TypeScriptSemanticAdapter(
         restartAttempts.clear()
         lastRestartMillis = null
         approvedStagedSnapshotHashes.clear()
+        projectMigration.clear()
         overlayVersions.clear()
         client.close()
     }
@@ -1001,11 +1124,13 @@ class TypeScriptSemanticAdapter(
         val roots = snapshot.buildSourceRootOwnerships().filter {
             it.providerId == TypeScriptProjectModel.PROVIDER_ID && it.modelStatus == BuildModelStatus.AVAILABLE
         }
+        val workspace = snapshot.workspace.root.toAbsolutePath().normalize()
         return affectedPaths(edit).sortedBy(Path::toString).mapNotNull { path ->
             val normalized = path.normalize()
-            val candidates = roots.filter { normalized.startsWith(it.root) }
-            val longest = candidates.maxOfOrNull { it.root.nameCount }
-            val owners = if (longest == null) emptyList() else candidates.filter { it.root.nameCount == longest }
+            // Resolve empty (workspace) roots before comparing prefixes or specificity.
+            val candidates = roots.filter { workspace.resolve(normalized).startsWith(workspace.resolve(it.root)) }
+            val longest = candidates.maxOfOrNull { workspace.resolve(it.root).nameCount }
+            val owners = if (longest == null) emptyList() else candidates.filter { workspace.resolve(it.root).nameCount == longest }
             when {
                 owners.isEmpty() -> diagnostic(
                     "typescript.projectOwnershipMissing",

@@ -1,7 +1,9 @@
 # TypeScript/JavaScript semantic toolchain boundary
 
 Status: first `v0.6.0` discovery/provenance slice; no stable TypeScript mutation
-authority yet.
+authority yet. Architecture authority remains in
+[ARC42](arc42/08-crosscutting-concepts.adoc); this document owns the explicit
+process/provenance policy, not operation or release acceptance.
 
 ## Provider identity
 
@@ -40,7 +42,13 @@ constant argument `--version`. It runs through `ExternalSemanticProcessManager`
 with cleared environment, 2-second timeout per attempt, at most two attempts,
 1 KiB stdout, 4 KiB stderr and process-tree cancellation. A bounded retry absorbs
 transient native process-start failures without changing executable or arguments.
-No JavaScript file is passed to this probe.
+No JavaScript file is passed to this probe. A nonzero exit now records its exit
+status in the refusal; timeout, stream bounds and the two-attempt ceiling remain
+unchanged. The [T5 local ledger](releases/v0.7.0-t5-local-safety.md) retains an
+earlier intermittent generic probe refusal, followed by a deterministically
+reproduced process-registry cleanup race and its iterator-based correction.
+The old logs lack an exception class, so retrospective cause attribution is not
+proved. Final scoped tests pass without increasing retry or timeout bounds.
 
 ## Provenance
 
@@ -67,7 +75,12 @@ most three attempts per rolling 60 seconds, and must preserve server version,
 capability hash, executable hash and argument hash. The V8 old-space flag bounds
 the primary JavaScript heap but is not an operating-system RSS sandbox.
 
-## Qualification matrix and package policy
+## Historical qualification matrix and package policy
+
+The matrix below covers its stated earlier read/rename/recovery subject. It does
+not qualify the advanced 0.7.0 families or the current final candidate. Repeated
+0.7.0 multi-host execution is [waived by the user](requirements/v0.7.0-local-host-acceptance-approved-change-001.md);
+missing final-candidate host reports remain unverified.
 
 Native CI now installs the lockfile-pinned qualification pair with
 `npm ci --ignore-scripts --no-audit --no-fund` after `actions/setup-node` selects
@@ -96,9 +109,12 @@ RefactorKit does not infer a version for those notifications. Managed flows inst
 use `typescript-compiler-exact-v1`: a bundled fixed bridge invokes only the
 hash-bound `lib/typescript.js` compiler API against an immutable source/config
 overlay, restricts compiler filesystem reads to that overlay and the explicit
-compiler-library root, forces no-emit/non-incremental analysis, returns the
-requested snapshot hash and structured bounded diagnostics, and is re-run under
-the writer lock.
+compiler-library root, forces no-emit analysis without disabling the declared
+composite/incremental options, returns the requested snapshot hash and structured
+bounded diagnostics, and is re-run under the writer lock. It does not invoke
+`emit` or a solution build and rejects compiler-host writes. Referenced projects
+can be checked from snapshot sources without prebuilt declarations; an explicit
+`disableSourceOfProjectReferenceRedirect` option remains effective.
 
 Native qualification now proves stable reads, forced language-server termination,
 provenance-preserving bounded restart, path-alias and re-export rename, exact

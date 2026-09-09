@@ -724,6 +724,15 @@ class TypeScriptSemanticAdapterTest {
             )))
         }
 
+        override fun requestFileRenameEdit(
+            oldFilePath: Path,
+            newFilePath: Path,
+            snapshot: ProjectSnapshot,
+            normalizer: ExternalWorkspaceEditNormalizer,
+        ): ExternalWorkspaceEditNormalization = ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+            "test stub", Diagnostic.Severity.ERROR, code = "externalEdit.testStub",
+        )))
+
         override fun requestRename(
             snapshot: ProjectSnapshot,
             location: SourceLocation,

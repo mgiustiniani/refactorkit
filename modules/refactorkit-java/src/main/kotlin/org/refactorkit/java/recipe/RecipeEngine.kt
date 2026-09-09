@@ -109,10 +109,25 @@ class RecipeEngine(
         params: Map<String, String>,
         workspaceRoot: Path,
         dryRun: Boolean = true,
+        managedContext: ManagedRecipeContext? = null,
     ): RecipeResult {
         validateRecipe(recipe)
         val resolvedParams = resolveParams(recipe, params)
         validateParams(recipe, resolvedParams)
+        if (recipe.language in setOf("typescript", "javascript")) {
+            val context = managedContext ?: return RecipeResult.Failed(emptyList(),
+                "recipe.semanticContextRequired: Open the owning TypeScript semantic session before preview")
+            if (context.snapshot.workspace.root.toAbsolutePath().normalize() != workspaceRoot.toAbsolutePath().normalize()) {
+                return RecipeResult.Failed(emptyList(), "recipe.contextMismatch: Recipe and semantic workspace roots differ")
+            }
+            if (!dryRun) return RecipeResult.Failed(emptyList(),
+                "recipe.retainedPlanApplyRequired: Apply the retained child plan through its owning semantic session and PatchEngine")
+            return try {
+                ManagedRecipePlanner().preview(recipe, resolvedParams, context)
+            } catch (failure: Exception) {
+                RecipeResult.Failed(emptyList(), "recipe.previewFailed: ${failure.message}")
+            }
+        }
 
         val initialSnapshot = scanner.scan(workspaceRoot)
         var stagedSnapshot = initialSnapshot
@@ -650,7 +665,7 @@ class RecipeEngine(
     private fun validateRecipe(recipe: RecipeDefinition) {
         require(recipe.id.isNotBlank()) { "Recipe id must not be blank" }
         require(recipe.steps.isNotEmpty()) { "Recipe '${recipe.id}' must contain at least one step" }
-        if (recipe.language != "java") error("Unsupported recipe language '${recipe.language}'. Only 'java' is supported.")
+        if (recipe.language !in setOf("java", "typescript", "javascript")) error("Unsupported recipe language '${recipe.language}'.")
     }
 
     private fun resolveParams(recipe: RecipeDefinition, provided: Map<String, String>): Map<String, String> {

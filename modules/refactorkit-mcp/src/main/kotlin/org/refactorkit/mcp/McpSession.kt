@@ -84,6 +84,10 @@ import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
 import org.refactorkit.typescript.TypeScriptDiagnosticsProtocol
 import org.refactorkit.typescript.TypeScriptProjectModelBuilder
+import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.java.recipe.ManagedRecipeContext
+import org.refactorkit.java.recipe.ManagedRecipePreview
+import org.refactorkit.typescript.TypeScriptRefactoringProtocol
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptSemanticStart
 import org.refactorkit.typescript.TypeScriptSemanticToolchain
@@ -265,17 +269,18 @@ class McpSession(
                     "semanticLease" to "string: lease returned by typescript_semantic_start",
                     "sourceAuthority" to "object: saved-disk or immutable-editor-overlay authority",
                 )))
-            add(tool("available_refactorings", "List refactoring operations available for a selection.",
-                required = listOf("symbol"),
-                props = mapOf("symbol" to "string: fully-qualified symbol name")))
+            add(tool("available_refactorings", "List bounded operation families; applicability still requires a semantic preview.",
+                required = emptyList(),
+                props = mapOf("symbol" to "string: fully-qualified symbol name (required for Java)",
+                    "languageId" to "string: java | typescript | javascript (default java)")))
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete | sourceFileRelocation | extractFunction | extractConstant | inlineVariable | moveDeclaration | projectReferenceMigration | recipe",
                     "symbol" to "string: fully-qualified symbol name",
                     "languageId" to "string: java | kotlin | typescript | javascript (default java)",
-                    "expectedSnapshotHash" to "string: required for Kotlin rename",
-                    "semanticLease" to "string: required for Kotlin rename",
+                    "expectedSnapshotHash" to "string: required for Kotlin mutations and advanced TypeScript/JavaScript previews",
+                    "semanticLease" to "string: required for Kotlin mutations and advanced TypeScript/JavaScript previews",
                     "arguments" to "object: operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)",
                 )))
             add(tool("apply_refactoring", "Apply a managed plan or refuse a known review-only operation.",
@@ -763,6 +768,8 @@ class McpSession(
     }
 
     private fun toolAvailableRefactorings(args: JsonObject): String {
+        val language = args.string("languageId") ?: "java"
+        if (language in setOf("typescript", "javascript")) return TypeScriptRefactoringProtocol.catalogue(requireSemanticAdapter(language)).toString()
         val symbolId = args.string("symbol") ?: missing("symbol")
         return "Available refactorings for $symbolId:\n" +
             "- renameClass: rename to a new simple name\n" +
@@ -805,7 +812,15 @@ class McpSession(
         } ?: emptyMap()
         val snap = requireSnapshot()
 
-        val plan = when (operation) {
+        val semanticOwner = if (languageId in setOf("typescript", "javascript") && operation != "renameSymbol") requireSemanticAdapter(languageId) else null
+        val retainedGate = semanticOwner?.diagnosticsGate()
+        val plan = if (semanticOwner != null) {
+            val request = RefactoringRequest(operation, symbolId = symbol?.let { org.refactorkit.core.SymbolId(it) }, arguments = opArgs, snapshot = snap)
+            if (operation == "recipe") ManagedRecipePreview.preview(request, ManagedRecipeContext(snap, semanticOwner, requireNotNull(retainedGate)),
+                args.string("expectedSnapshotHash"), args.string("semanticLease"), semanticLeases[languageId])
+            else TypeScriptRefactoringProtocol.preview(semanticOwner, request,
+                args.string("expectedSnapshotHash"), args.string("semanticLease"), semanticLeases[languageId])
+        } else when (operation) {
             "renameSymbol" -> {
                 if (languageId == "java") missing("languageId=kotlin|typescript|javascript")
                 if (languageId == "kotlin") {
@@ -1008,7 +1023,7 @@ class McpSession(
         }
 
         if (plan.status == PatchStatus.PREVIEW) pendingPlans.insert(plan.id, PendingPlan(
-            plan, languageId, if (languageId == "kotlin") args.string("semanticLease") else null,
+            plan, languageId, if (languageId == "kotlin") args.string("semanticLease") else null, retainedGate,
         ))
         return PreviewToolResult.Text(buildString {
             appendLine("Plan ID  : ${plan.id.value}")
@@ -1084,7 +1099,7 @@ class McpSession(
                 languageId = pending.languageId,
                 javaAdapter = adapter,
                 kotlinAdapter = kotlinAdapter,
-                externalGateResolver = { languageId -> requireSemanticAdapter(languageId).diagnosticsGate() },
+                externalGateResolver = { languageId -> pending.diagnosticsGate ?: requireSemanticAdapter(languageId).diagnosticsGate() },
             ),
         )) {
             is ApplyResult.Applied -> {
@@ -1505,6 +1520,7 @@ class McpSession(
         val plan: PatchPlan,
         val languageId: String = "java",
         val semanticLease: String? = null,
+        val diagnosticsGate: DiagnosticsGate? = null,
     )
 
     companion object {

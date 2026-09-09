@@ -154,6 +154,14 @@ class TypeScriptMcpIntegrationTest {
         ): ExternalWorkspaceEditNormalization = ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
             "test stub", Diagnostic.Severity.ERROR, code = "externalEdit.testStub",
         )))
+        override fun requestFileRenameEdit(
+            oldFilePath: Path,
+            newFilePath: Path,
+            snapshot: ProjectSnapshot,
+            normalizer: ExternalWorkspaceEditNormalizer,
+        ): ExternalWorkspaceEditNormalization = ExternalWorkspaceEditNormalization.Refused(listOf(Diagnostic(
+            "test stub", Diagnostic.Severity.ERROR, code = "externalEdit.testStub",
+        )))
         override fun requestRename(snapshot: ProjectSnapshot, location: SourceLocation, newName: String): ExternalWorkspaceEditNormalization =
             ExternalWorkspaceEditNormalizer().normalize(snapshot, ExternalWorkspaceEditProposal(
                 "lsp-typescript", "test", listOf(ExternalFileEditProposal.Modify(

@@ -93,6 +93,10 @@ tasks.named<JavaExec>("run") {
 
 tasks.test {
     useJUnitPlatform()
+    // Optional real CLI/NDJSON boundary for the existing TypeScript Stories; never implicit.
+    listOf("refactorkit.ts.packaged.root", "refactorkit.ts.packaged.evidence").forEach { key ->
+        providers.systemProperty(key).orNull?.let { systemProperty(key, it) }
+    }
     // This suite needs the self-contained distribution; javaNavigationTest owns its lifecycle.
     exclude("**/navigation/JavaNavigationCucumberTest.class")
 }

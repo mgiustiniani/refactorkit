@@ -40,13 +40,15 @@ try {
       }
       const parsed = ts.parseJsonConfigFileContent(loaded.config, safeSystem, path.dirname(configPath), {
         noEmit: true,
-        incremental: false,
-        tsBuildInfoFile: undefined,
       }, configPath);
       diagnostics.push(...parsed.errors);
       if (parsed.fileNames.length === 0) continue;
-      const options = { ...parsed.options, noEmit: true, incremental: false, tsBuildInfoFile: undefined };
+      // Preserve composite/incremental settings; read-only analysis does not invoke emit or a build.
+      const options = { ...parsed.options, noEmit: true };
       const host = ts.createCompilerHost(options, true);
+      // TypeScript still honors an explicit disableSourceOfProjectReferenceRedirect option.
+      host.useSourceOfProjectReferenceRedirect = () => true;
+      host.writeFile = () => { throw new Error('Read-only compiler diagnostics must not emit files'); };
       host.fileExists = safeSystem.fileExists;
       host.readFile = safeSystem.readFile;
       host.directoryExists = safeSystem.directoryExists;

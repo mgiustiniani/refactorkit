@@ -100,6 +100,10 @@ import org.refactorkit.typescript.TypeScriptAdapterDescriptors
 import org.refactorkit.typescript.TypeScriptBuildModelIntegration
 import org.refactorkit.typescript.TypeScriptDiagnosticsProtocol
 import org.refactorkit.typescript.TypeScriptProjectModelBuilder
+import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.java.recipe.ManagedRecipeContext
+import org.refactorkit.java.recipe.ManagedRecipePreview
+import org.refactorkit.typescript.TypeScriptRefactoringProtocol
 import org.refactorkit.typescript.TypeScriptSemanticAdapter
 import org.refactorkit.typescript.TypeScriptCompletionProjection
 import org.refactorkit.typescript.TypeScriptHoverProjection
@@ -205,6 +209,7 @@ class DaemonSession(
         "symbol.definition" -> symbolDefinition(params)
         "symbol.references" -> symbolReferences(params)
         "diagnostics"       -> diagnostics(params)
+        "typescript.refactorings" -> TypeScriptRefactoringProtocol.catalogue(requireSemanticAdapter(params?.string("languageId") ?: "typescript"))
         "refactor.preview"  -> refactorPreview(params)
         "refactor.apply"    -> refactorApply(params)
         "refactor.discard"  -> refactorDiscard(params)
@@ -1441,7 +1446,15 @@ class DaemonSession(
         } ?: emptyMap()
 
         val snap = requireSnapshot()
-        val plan = when (operation) {
+        val semanticOwner = if (requestedLanguage in setOf("typescript", "javascript") && operation != "renameSymbol") requireSemanticAdapter(requestedLanguage) else null
+        val retainedGate = semanticOwner?.diagnosticsGate()
+        val plan = if (semanticOwner != null) {
+            val request = RefactoringRequest(operation, symbolId = symbol?.let(::SymbolId), arguments = args, snapshot = snap)
+            if (operation == "recipe") ManagedRecipePreview.preview(request, ManagedRecipeContext(snap, semanticOwner, requireNotNull(retainedGate)),
+                p.string("expectedSnapshotHash"), p.string("semanticLease"), semanticLeases[requestedLanguage])
+            else TypeScriptRefactoringProtocol.preview(semanticOwner, request,
+                p.string("expectedSnapshotHash"), p.string("semanticLease"), semanticLeases[requestedLanguage])
+        } else when (operation) {
             "renameSymbol" -> {
                 if (requestedLanguage == "java") {
                     throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "renameSymbol requires kotlin, typescript or javascript languageId")
@@ -1710,6 +1723,7 @@ class DaemonSession(
             languageId = requestedLanguage,
             semanticLease = if (requestedLanguage == "kotlin") p.string("semanticLease") else null,
             indexGeneration = if (requestedLanguage == "kotlin") workspaceIndex.snapshot()?.generation else null,
+            diagnosticsGate = retainedGate,
         ))
         return planToJson(plan)
     }
@@ -1755,7 +1769,7 @@ class DaemonSession(
             languageId = pending.languageId,
             javaAdapter = adapter,
             kotlinAdapter = kotlinAdapter,
-            externalGateResolver = { languageId -> requireSemanticAdapter(languageId).diagnosticsGate() },
+            externalGateResolver = { languageId -> pending.diagnosticsGate ?: requireSemanticAdapter(languageId).diagnosticsGate() },
         )
         return when (val result = PatchEngine(root).apply(
             plan,
@@ -2822,6 +2836,7 @@ class DaemonSession(
         val languageId: String = "java",
         val semanticLease: String? = null,
         val indexGeneration: Long? = null,
+        val diagnosticsGate: DiagnosticsGate? = null,
     )
 
     private data class DaemonMethodCapability(
@@ -2959,6 +2974,7 @@ class DaemonSession(
                 "kotlin.definition", "experimental", true, false,
                 mapOf("compilerBacked" to true, "opaqueSymbolId" to true, "semanticLease" to true),
             ),
+            DaemonMethodCapability("typescript.refactorings", "additive-api-0.2", true, false),
             DaemonMethodCapability("refactor.preview", "beta-contract", true, false),
             DaemonMethodCapability("refactor.apply", "beta-contract", true, true),
             DaemonMethodCapability("refactor.discard", "beta-contract", false, false),

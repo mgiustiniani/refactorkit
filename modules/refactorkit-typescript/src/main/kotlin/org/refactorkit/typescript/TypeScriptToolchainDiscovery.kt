@@ -113,7 +113,7 @@ class ManagedNodeVersionProbe(
                     val output = process.output.bufferedReader(Charsets.UTF_8).readText().trim()
                     val error = process.stderrText().trim()
                     check(process.exitCode == 0) {
-                        "Node version probe failed${error.takeIf(String::isNotEmpty)?.let { ": $it" } ?: ""}"
+                        "Node version probe failed (exit=${process.exitCode})${error.takeIf(String::isNotEmpty)?.let { ": $it" } ?: ""}"
                     }
                     check(output.toByteArray(Charsets.UTF_8).size <= 1_024) { "Node version output exceeds limit" }
                     output

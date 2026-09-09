@@ -242,7 +242,10 @@ class LanguageAdapterRegistry(registrations: Collection<RegisteredLanguageAdapte
     }
 
     private fun evidenceSatisfies(required: SemanticEvidenceKind, actual: RefactoringEvidence): Boolean = when (required) {
-        SemanticEvidenceKind.COMPILER -> actual == RefactoringEvidence.JDT_BINDING
+        SemanticEvidenceKind.COMPILER -> actual in setOf(
+            RefactoringEvidence.JDT_BINDING,
+            RefactoringEvidence.COMPILER_PROVEN,
+        )
         SemanticEvidenceKind.LANGUAGE_SERVER -> actual == RefactoringEvidence.LANGUAGE_SERVER
         SemanticEvidenceKind.NATIVE_AST -> actual in setOf(
             RefactoringEvidence.JDT_BINDING,
