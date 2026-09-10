@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import re
 import subprocess
@@ -44,9 +45,38 @@ class V070ReleasePolicyContractTest(unittest.TestCase):
             "receipt['revision'] == binding['revision']", "receipt['schemaVersion'] == 1",
             "joined['revision']['githubSha'] == binding['revision']",
             "joined['package']['runtimeZip']['sha256'] == binding['archiveSha256']",
+            "Prepare 0.7.0 isolated installation-boundary fixture",
+            "systemProperty 'user.home'", "INSTALLED_BOUNDARY_TRIPWIRE_MUST_NOT_RUN",
+            "Verify 0.7.0 installation-boundary fixture remained exact",
+            "modules/*/build/test-results/", "modules/*/build/reports/cucumber/",
         ):
             self.assertIn(required, text)
         self.assertNotIn("continue-on-error", text)
+
+    def test_boundary_fixture_uses_independent_path_and_bytes(self) -> None:
+        def block(name: str) -> str:
+            step = self.release().split("      - name: " + name + "\n", 1)[1]
+            body = step.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+            return "\n".join(line[10:] if line.startswith("          ") else line for line in body.splitlines())
+
+        create = block("Prepare 0.7.0 isolated installation-boundary fixture")
+        verify = block("Verify 0.7.0 installation-boundary fixture remained exact")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def execute(code: str, optimized: bool = False) -> subprocess.CompletedProcess[str]:
+                return subprocess.run([sys.executable, *(["-O"] if optimized else []), "-c", code], cwd=root, capture_output=True, text=True)
+            self.assertNotEqual(0, execute(create, optimized=True).returncode)
+            self.assertEqual(0, execute(create).returncode)
+            self.assertEqual(0, execute(verify).returncode)
+            self.assertNotEqual(0, execute(verify, optimized=True).returncode)
+            record_path = root / ".refactorkit/runs/v070-release-ci/boundary-fixture.json"
+            record = json.loads(record_path.read_text())
+            launcher = Path(record["path"])
+            launcher.write_bytes(b"altered inert fixture\n")
+            record["sha256"] = hashlib.sha256(launcher.read_bytes()).hexdigest()
+            record_path.write_text(json.dumps(record))
+            self.assertNotEqual(0, execute(verify).returncode, "matching altered bytes and mutable record must not self-authenticate")
+            self.assertNotEqual(0, execute(verify, optimized=True).returncode)
 
     def test_inline_python_blocks_parse(self) -> None:
         blocks = re.findall(r"        shell: python\n        run: \|\n((?:          .*\n|\n)+)", self.release())

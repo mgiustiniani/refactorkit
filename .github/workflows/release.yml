@@ -63,11 +63,31 @@ jobs:
         if: github.ref_name == 'v0.7.0'
         shell: python
         run: |
-          import os, pathlib, subprocess
+          import os, pathlib, subprocess, sys
+          if sys.flags.optimize != 0:
+              raise RuntimeError('Release version verification requires non-optimized Python')
           assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == os.environ['GITHUB_SHA']
           assert 'version = "0.7.0"' in pathlib.Path('build.gradle.kts').read_text()
           core = pathlib.Path('modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/RefactorKitVersion.kt').read_text()
           assert 'const val VERSION = "0.7.0"' in core and 'const val API_VERSION = "0.2"' in core
+
+      - name: Prepare 0.7.0 isolated installation-boundary fixture
+        if: github.ref_name == 'v0.7.0'
+        shell: python
+        run: |
+          import hashlib, json, pathlib, sys
+          if sys.flags.optimize != 0:
+              raise RuntimeError('Release fixture preparation requires non-optimized Python')
+          out = pathlib.Path('.refactorkit/runs/v070-release-ci').resolve()
+          assert out.is_relative_to(pathlib.Path.cwd().resolve())
+          home = out / 'boundary-home'
+          assert not home.exists() and not home.is_symlink()
+          launcher = home / '.local/share/refactorkit/bin/refactorkit'
+          launcher.parent.mkdir(parents=True)
+          launcher.write_text('#!/bin/sh\nprintf "INSTALLED_BOUNDARY_TRIPWIRE_MUST_NOT_RUN\\n" >&2\nexit 97\n')
+          launcher.chmod(0o755)
+          (out / 'boundary-home.gradle').write_text("allprojects { tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { if (project.name == 'refactorkit-cli') { systemProperty 'user.home', new File(rootProject.projectDir, '.refactorkit/runs/v070-release-ci/boundary-home').absolutePath } } }\n")
+          (out / 'boundary-fixture.json').write_text(json.dumps({'path': str(launcher), 'sha256': hashlib.sha256(launcher.read_bytes()).hexdigest(), 'kind': 'authored inert non-selection fixture, not a product installation or acceptance subject', 'globalInstallationChanged': False}, indent=2))
 
       - name: Clean build and test
         if: github.ref_name != 'v0.7.0'
@@ -79,7 +99,34 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p .refactorkit/runs/v070-release-ci
-          ./gradlew clean build goldenTest --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --console=plain 2>&1 | tee .refactorkit/runs/v070-release-ci/whole-build.log
+          ./gradlew clean build goldenTest --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process -I .refactorkit/runs/v070-release-ci/boundary-home.gradle --console=plain 2>&1 | tee .refactorkit/runs/v070-release-ci/whole-build.log
+
+      - name: Verify 0.7.0 installation-boundary fixture remained exact
+        if: github.ref_name == 'v0.7.0'
+        shell: python
+        run: |
+          import hashlib, json, pathlib, sys
+          if sys.flags.optimize != 0:
+              raise RuntimeError('Release fixture verification requires non-optimized Python')
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+          workspace = pathlib.Path.cwd().resolve()
+          launcher = workspace / '.refactorkit/runs/v070-release-ci/boundary-home/.local/share/refactorkit/bin/refactorkit'
+          expected = b'#!/bin/sh\nprintf "INSTALLED_BOUNDARY_TRIPWIRE_MUST_NOT_RUN\\n" >&2\nexit 97\n'
+          record = json.loads(pathlib.Path('.refactorkit/runs/v070-release-ci/boundary-fixture.json').read_text())
+          require(record == {'path': str(launcher), 'sha256': hashlib.sha256(expected).hexdigest(), 'kind': 'authored inert non-selection fixture, not a product installation or acceptance subject', 'globalInstallationChanged': False}, 'Boundary fixture record does not match the independent oracle')
+          require(record['globalInstallationChanged'] is False, 'Invalid installation-state record')
+          for path in [launcher, *launcher.parents]:
+              if path == workspace:
+                  break
+              require(not path.is_symlink(), 'Symbolic boundary fixture path')
+          require(launcher.is_file() and launcher.read_bytes() == expected, 'Boundary fixture bytes changed')
+          installed = launcher.parents[1]
+          entries = list(installed.rglob('*'))
+          require({p.relative_to(installed).as_posix() for p in entries} == {'bin', 'bin/refactorkit'}, 'Boundary fixture entries changed')
+          require(not any(p.is_symlink() for p in entries) and (installed / 'bin').is_dir(), 'Boundary fixture entry kinds changed')
+          require(launcher.stat().st_mode & 0o777 == 0o755, 'Boundary fixture mode changed')
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
@@ -117,6 +164,8 @@ jobs:
         shell: python
         run: |
           import hashlib, importlib.util, json, os, pathlib, re, shutil, subprocess, sys, time, zipfile, xml.etree.ElementTree as ET
+          if sys.flags.optimize != 0:
+              raise RuntimeError('Release qualification requires non-optimized Python')
           sys.dont_write_bytecode = True
           P = pathlib.Path
           out = P('.refactorkit/runs/v070-release-ci')
@@ -237,6 +286,8 @@ jobs:
           include-hidden-files: true
           path: |
             .refactorkit/runs/v070-release-ci/
+            modules/*/build/test-results/
+            modules/*/build/reports/cucumber/
             modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/
             modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/manifests/
             modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/failure-diagnostics/
@@ -289,7 +340,9 @@ jobs:
         if: github.ref_name == 'v0.7.0'
         shell: python
         run: |
-          import hashlib, json, os, pathlib, shutil, subprocess
+          import hashlib, json, os, pathlib, shutil, subprocess, sys
+          if sys.flags.optimize != 0:
+              raise RuntimeError('Release binding requires non-optimized Python')
           P = pathlib.Path
           out = P('.refactorkit/runs/v070-release-ci')
           binding = json.loads((out / 'binding.json').read_text())
