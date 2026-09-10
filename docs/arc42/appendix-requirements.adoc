@@ -2,7 +2,43 @@
 :toc:
 :sectnums:
 
-== Authorized source consolidation — r004
+== Acceptance corrections and inspected bytecode preservation — r006
+
+The user authorized the corrections proposed after r005 rejected candidate
+`41f7f420`, and requested inspection of the two loose Cucumber class files first.
+`javap` and exact dependency-entry comparison identify both as unchanged copies
+from `io.cucumber:messages:24.1.0`; the resolved JVM/CLI test classpaths use that
+JAR, not the repository root. The approved reversible archive preserves bytes,
+inodes, modes and timestamps. No ignore rule or dependency was changed. See
+link:../releases/v0.7.0-candidate-corrections.md[correction and preservation report]
+and link:../../.refactorkit/runs/v070-acceptance-corrections-r006/summary.md[local evidence].
+
+Nine single-scenario J1 oracle slices now cover exact import/fallback/family edits
+and pre-preview no-write baselines. The generated-summary expectation explicitly
+names each authored fixture path; C-DELETE only corrects stale intake prose.
+Independent supplied-source review passes the new gaps; the113-case/793-step
+catalogue regression passes without changing Java production or prior positive
+oracles. Numerical coverage remains explicitly unmeasured, not a fabricated gate.
+
+A real six-case T5 RED exposed unsupported extensions/language conversion,
+configuration edits and excluded compiler inputs receiving PREVIEW authority.
+The existing relocation planner now limits edits to source-only authority, while
+the existing compiler diagnostics bridge checks actual old/staged target program
+membership. No Kotlin glob approximation, new registry or new dependency is added.
+Six cases/30 steps turn GREEN;128 TypeScript tests (79 cases/351 steps) and the
+27-case/98-step source surface suite pass. The latter includes the existing
+client-managed LSP case in addition to the26/95 native-comparable source subset.
+Independent review accepts this bounded correction, not native/release acceptance.
+
+Separate authorized commits retain these corrected byte images. Source test runs
+remain bound to their recorded inputs, not re-executed by committing. The previous
+r003 runtime and r004/r005 candidates are not relabeled as corrected artifacts.
+Final candidate-bound native acceptance, K5 reseal, wider I1 applicability and
+release/SPDX/attestation/download joins remain open. No tag, push, publication or
+installation is performed; feature statuses and release checkboxes are unchanged.
+Repeated multi-host qualification remains `WAIVED_BY_USER`, never PASS.
+
+== Earlier authorized source consolidation — r004
 
 The user's explicit `si` authorizes separate local candidate commits. Shared
 Kotlin test infrastructure, the five J1 oracles, the complete inherited T5

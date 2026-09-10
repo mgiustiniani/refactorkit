@@ -187,7 +187,7 @@ closed. Existing `renameSymbol` retains its separate LSP proposal contract above
 
 | Operation | Required operation arguments / boundary |
 |---|---|
-| `sourceFileRelocation` | `file`, `targetFile`; exact compiler import/export edits before rename |
+| `sourceFileRelocation` | `file`, `targetFile`; same recognized source language, actual compiler-program membership before/after, exact source import/export edits before rename |
 | `organizeImports` | `file`; `mode` is `All`, `SortAndCombine` or `RemoveUnused` |
 | `extractFunction`, `extractConstant`, `inlineVariable` | `file`, `startLine`, `startCharacter`, `endLine`, `endCharacter`, exact `refactor` and `action` identities |
 | `moveDeclaration` | The same selection/action fields plus a distinct existing `targetFile`; incomplete cross-project caller edits refuse |
@@ -221,6 +221,16 @@ preview arguments must include the owning `languageId`, `semanticLease` and
 `expectedSnapshotHash`; a foreign lease or stale snapshot fails closed. Retained
 plans use the actual owning diagnostics gate at apply, not a replacement session's
 gate. Existing dirty/affected-open-document refusals remain in force.
+
+Source relocation does not convert TypeScript to JavaScript/plain text or acquire
+configuration-edit authority. A compiler proposal that rewrites `tsconfig.json`
+(e.g. an explicit `files` entry), creates/deletes files beyond the one relocation,
+or edits non-source inputs is refused. Root-prefix ownership and an empty
+compiler diagnostic list are insufficient: the old and staged target must actually
+participate in the pinned compiler's configured programs. The existing bridge,
+overlay and process bounds provide this check; no approximation of TypeScript
+include/exclude globs is used. These source corrections require qualification of
+the corrected runtime; see [the r006 report](releases/v0.7.0-candidate-corrections.md).
 
 For recipes, CLI `recipe run recipes/typescript/relocate-source.yml --root .`
 accepts the same explicit toolchain options plus `--param.file` and
