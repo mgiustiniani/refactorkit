@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":modules:refactorkit-kotlin"))
     implementation(project(":modules:refactorkit-testkit"))
     runtimeOnly(project(":modules:refactorkit-mcp"))
+    runtimeOnly(project(":modules:refactorkit-lsp"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(project(":modules:refactorkit-lsp"))
     testImplementation(project(":modules:refactorkit-mcp"))

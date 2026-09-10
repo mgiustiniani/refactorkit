@@ -25,6 +25,10 @@ class NativeK1K2SharedFinalizerTest(unittest.TestCase):
             MODULE.REQUIRED_JARS,
         )
 
+    def test_cli_distribution_retains_the_required_lsp_runtime_dependency(self) -> None:
+        build = (ROOT / "modules/refactorkit-cli/build.gradle.kts").read_text(encoding="utf-8")
+        self.assertIn('runtimeOnly(project(":modules:refactorkit-lsp"))', build)
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
