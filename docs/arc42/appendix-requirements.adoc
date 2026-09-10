@@ -2,7 +2,40 @@
 :toc:
 :sectnums:
 
-== Acceptance corrections and inspected bytecode preservation — r006
+== Final bounded local acceptance — r007
+
+Independent supplied-evidence follow-up accepts J1 and T5 local catalogue/package
+and bounded I1 prepublication integration/regression; K5 completion and move-next
+receive `PASS_FOR_PROMOTION`. See
+link:../releases/v0.7.0-final-local-acceptance.md[acceptance report] and
+link:../../.refactorkit/runs/v070-final-acceptance-r007/summary.md[exact local evidence].
+Native runs bind `43105037`; the reviewed four-file CLI test-only successor is
+`9acd759f3bf7cd29e0c58b9e6a2df7b33942fa30`. Full source/build and ZIP-member joins
+preserve the unchanged `6ae7d451...` runtime identity without relabeling executions.
+
+Fresh J1 catalogue113/793, packaged Java3 and TypeScript26/95, K5 source24+25 and
+three packaged smokes, both real K5 finalizers, I1 packaged crash/conflict8/31 and
+selected126 source tests support their stated scopes. The final standard
+`check goldenTest` succeeds with1616 discovered,1241 passed,375 skipped/filtered
+and no failures/errors;100 tasks include59 up-to-date results. Static findings
+remain configured nonblocking and numerical coverage unmeasured. Original failed
+full-check and intermediate review responses remain historical, not hidden.
+
+The user subsequently authorized deletion of the two inspected Cucumber bytecode
+copies. Exactly14074 archived bytes were removed; dependency JAR, disassembly and
+receipts remain. Their absence is an explicit retention exception to r006's seal;
+its archive restore command no longer applies. No ignore change or extra checkout.
+
+Live uncooperative validation/deletion replacement, unqualified filesystem identity
+and power loss remain outside qualified evidence, not waived or inferred PASS.
+Only Linux x86-64 is locally accepted; repeated multi-host qualification stays
+`WAIVED_BY_USER / not verified`. Final version/tag, release manifest, SPDX,
+attestations, publication and independently downloaded-asset acceptance remain
+open. Release preparation must reconcile the existing multi-platform automation
+and snapshot-bound fixtures with the approved0.7.0 scope before publication.
+No tag/push/publication/global installation or released-version claim is made.
+
+== Earlier acceptance corrections and inspected bytecode preservation — r006
 
 The user authorized the corrections proposed after r005 rejected candidate
 `41f7f420`, and requested inspection of the two loose Cucumber class files first.
