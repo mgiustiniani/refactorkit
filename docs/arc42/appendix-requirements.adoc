@@ -2,7 +2,34 @@
 :toc:
 :sectnums:
 
-== Release-version preparation — r008
+== Authorized tagged build and LSP runtime restoration — r009
+
+The user authorized the exact tag update `14220182` -> `89426f70`; it completed
+with a remote old-value lease and local compare-and-swap, without a branch push.
+link:../releases/v0.7.0-tagged-build-recovery.md[The r009 report] retains both failed
+runs. GitHub34468219354 passes clean `build goldenTest` (1617 reported:1242 passed,
+375 skipped, zero failures/errors), all package/Java/TypeScript/Kotlin/kill-recovery
+smokes and actual J1 native3/138. The extra collected navigation case explains the
+one-case difference from r007. K1/K2 then refuses its missing LSP subject JAR;
+later qualification, SPDX/attestations and publication do not execute.
+
+Commit `b85fde2407299cc0cfaac863c541e54087f61d0c` restores the previously shipped
+internal LSP runtime dependency removed by b7bf1b2a and adds a fast infrastructure
+regression check. No external dependency, algorithm, glue, feature, runner, launcher
+or broader LSP authority is added. Offline archive `0c481706...` adds only that JAR;
+all214 earlier local versioned members remain byte-identical.
+
+Actual corrected-package local gates pass: K1/K2 200 tests/14 suites and finalizer,
+K5 24+25 tests and both finalizers/smokes, T5/I1 34 cases/126 steps/34 closed
+transports, and J1 three local cases/138 steps with `nativeQualification=false`.
+Source/archive/runtime audits remain exact. Independent review returns
+`PASS_FOR_CORRECTED_TAGGED_BUILD` for b85fde24, not CI/publication acceptance.
+The tag still points to89426f70; another explicit authorization is needed to bind
+it to b85fde24. New tagged CI, SPDX/attestations and independent asset downloads
+remain required. Other hosts stay `WAIVED_BY_USER / not verified`; no global
+installation or historical evidence is replaced.
+
+== Earlier release-version preparation — r008
 
 Following the accepted local gates below,
 link:../requirements/v0.7.0-release-version-transition-001.md[V070 release metadata]
