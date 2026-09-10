@@ -2,11 +2,12 @@
 Ability: Obtain a strict source-built Java module-rename preview result
   Scripts, IDEs, and local agents need a deterministic machine-readable preview result without treating correlation data as refactoring authority.
   The CLI distribution surface projects the existing Java Maven module-rename plan into one transient closed result document and leaves the human preview unchanged.
-  This qualification is limited to source-built RefactorKit 0.7.0-SNAPSHOT on local Linux, JDK 21, and the current CPU architecture.
+  This qualification is limited to source-built RefactorKit 0.7.0 on local Linux, JDK 21, and the current CPU architecture.
+  V070-RELEASE-VERSION-TRANSITION-001 changes only version metadata, not the preview oracle or release-parity exclusions.
 
   @REQ-JAVA-CLI-RESULT-001 @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: A qualified module rename returns the exact preview envelope and canonical complete-edit identity
-    Given the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
+    Given the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
     And the permanent fixture "testdata/acceptance/java-maven-move-class-authority-20-modules" is an immutable offline reactor with one root aggregator and exactly 20 direct non-aggregator JAR children
     And the harness creates pairwise-distinct machine-result and human-compatibility workspaces as fresh no-follow disposable byte copies of that permanent fixture, refusing every symbolic link and preserving every relative regular-file byte and path kind
     And each copy has "catalog-model" as one exact direct child, has no "catalog-domain" path, and contains the qualified source at "catalog-model/src/main/java/com/acme/catalog/legacy/Product.java"

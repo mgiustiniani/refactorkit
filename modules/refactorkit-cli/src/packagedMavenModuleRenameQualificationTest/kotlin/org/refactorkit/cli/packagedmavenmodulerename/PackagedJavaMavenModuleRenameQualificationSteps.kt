@@ -1130,7 +1130,7 @@ class PackagedJavaMavenModuleRenameQualificationSteps {
             },
         ).jsonObject
         assertEquals("2024-11-05", assertNotNull(mcpInitializeResponse).string("protocolVersion"))
-        assertEquals(QualificationOracle.version, assertNotNull(mcpInitializeResponse)
+        assertEquals(QualificationOracle.releaseVersion, assertNotNull(mcpInitializeResponse)
             .getValue("serverInfo").jsonObject.string("version"))
         assertNotNull(persistentProcess).notification("notifications/initialized", buildJsonObject {})
         val listed = mcpRequest("tools/list", buildJsonObject {}).jsonObject
@@ -1284,7 +1284,7 @@ class PackagedJavaMavenModuleRenameQualificationSteps {
 
     private fun validateJournalCore(journal: JsonObject, state: String) {
         assertEquals(8, journal.getValue("schemaVersion").jsonPrimitive.int)
-        assertEquals(QualificationOracle.version, journal.string("implementationVersion"))
+        assertEquals(QualificationOracle.releaseVersion, journal.string("implementationVersion"))
         assertEquals(QualificationOracle.operation, journal.string("operation"))
         assertEquals(state, journal.string("state"))
         val transaction = journal.getValue("transaction").jsonObject
@@ -1656,7 +1656,8 @@ class PackagedJavaMavenModuleRenameQualificationSteps {
                     put("statusSha256", "UNAVAILABLE")
                     put("qualificationMode", "UNAVAILABLE")
                 }
-                put("version", QualificationOracle.version)
+                put("version", QualificationOracle.releaseVersion)
+                put("historicalOracleVersion", QualificationOracle.version)
             })
             if (::host.isInitialized) put("nativeRunner", host.toJson())
             put("package", buildJsonObject {

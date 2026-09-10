@@ -174,9 +174,9 @@ class JavaCliOperationResultSteps {
         }
     }
 
-    @Given("the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
+    @Given("the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
     fun sourceBuiltRuntimeIsQualified() {
-        assertEquals("0.7.0-SNAPSHOT", RefactorKitVersion.VERSION)
+        assertEquals("0.7.0", RefactorKitVersion.VERSION)
         assertEquals(21, Runtime.version().feature())
         assertTrue(System.getProperty("os.name").contains("Linux", ignoreCase = true))
         assertTrue(System.getProperty("os.arch").isNotBlank())
@@ -985,15 +985,28 @@ class JavaCliOperationResultSteps {
 
         val status = allowedStatuses.single()
         val statusStart = targetLine.range.first + status.range.first
-        val canonicalText = featureText.replaceRange(
+        var canonicalText = featureText.replaceRange(
             statusStart,
             statusStart + status.value.length,
             CANONICAL_FEATURE_STATUS,
         )
+        // Preserve the original feature digest: only these exact, single metadata spans may evolve.
+        val releaseMetadata = mapOf(
+            "  This qualification is limited to source-built RefactorKit 0.7.0 on local Linux, JDK 21, and the current CPU architecture.\n" +
+                "  V070-RELEASE-VERSION-TRANSITION-001 changes only version metadata, not the preview oracle or release-parity exclusions.\n" to
+                "  This qualification is limited to source-built RefactorKit 0.7.0-SNAPSHOT on local Linux, JDK 21, and the current CPU architecture.\n",
+            "    Given the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture\n" to
+                "    Given the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture\n",
+        )
+        releaseMetadata.forEach { (current, historical) ->
+            val start = canonicalText.indexOf(current)
+            assertTrue(start >= 0 && start == canonicalText.lastIndexOf(current), "Exact release metadata must occur once")
+            canonicalText = canonicalText.replaceRange(start, start + current.length, historical)
+        }
         assertEquals(
             STATUS_NEUTRAL_FEATURE_SHA256,
             sha256(canonicalText.toByteArray(StandardCharsets.UTF_8)),
-            "RESULT001 feature drifted outside its single effective status token",
+            "RESULT001 feature drifted outside its status token and exact approved release-version metadata",
         )
     }
 

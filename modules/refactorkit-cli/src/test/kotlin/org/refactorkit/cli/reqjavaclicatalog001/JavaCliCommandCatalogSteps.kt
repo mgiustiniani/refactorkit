@@ -96,7 +96,7 @@ class JavaCliCommandCatalogSteps {
         }
     }
 
-    @Given("the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
+    @Given("the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
     fun establishSourceBuiltRuntime() {
         repositoryRoot = locateRepositoryRoot()
         installedRoot = Path.of(System.getProperty("user.home"), ".local", "share", "refactorkit")
@@ -104,7 +104,7 @@ class JavaCliCommandCatalogSteps {
         installedExecutable = installedRoot.resolve("bin/refactorkit")
         sourceBuiltCodeLocation = codeLocation(RefactorKitCli::class.java)
 
-        assertEquals("0.7.0-SNAPSHOT", RefactorKitVersion.VERSION)
+        assertEquals("0.7.0", RefactorKitVersion.VERSION)
         assertTrue(System.getProperty("os.name").contains("Linux", ignoreCase = true))
         assertEquals(21, Runtime.version().feature())
         assertTrue(System.getProperty("os.arch").isNotBlank())
@@ -408,10 +408,14 @@ class JavaCliCommandCatalogSteps {
 
     @Then("every existing human-oriented parser and command behavior remains compatible, with no requirement-owned change outside the additive truthful top-level help lines")
     fun humanHelpAndParserBehaviorRemainCompatible() {
-        // Retain the frozen Java oracle; apply only the separately approved T5 help delta.
+        // Retain frozen bytes; project only the approved T5 and release-version metadata deltas.
         val baselineLines = pinnedHelp.toString(Charsets.UTF_8).split('\n').flatMap { line ->
-            if (line == LEGACY_TYPESCRIPT_USAGE) listOf(TYPESCRIPT_CATALOGUE_USAGE, TYPESCRIPT_REFACTOR_USAGE)
-            else listOf(line)
+            when (line) {
+                LEGACY_TYPESCRIPT_USAGE -> listOf(TYPESCRIPT_CATALOGUE_USAGE, TYPESCRIPT_REFACTOR_USAGE)
+                "RefactorKit 0.7.0-SNAPSHOT  deterministic refactoring engine" ->
+                    listOf("RefactorKit 0.7.0  deterministic refactoring engine")
+                else -> listOf(line)
+            }
         }
         val actualLines = helpInvocation.stdoutText().split('\n')
         val baselineOutsideRequirement = baselineLines.filterNot { it.trim() == LEGACY_MOVE_USAGE }

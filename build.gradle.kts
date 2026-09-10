@@ -19,7 +19,7 @@ if (buildJdkFeature != 21) {
 
 allprojects {
     group = "org.refactorkit"
-    version = "0.7.0-SNAPSHOT"
+    version = "0.7.0"
 }
 
 subprojects {

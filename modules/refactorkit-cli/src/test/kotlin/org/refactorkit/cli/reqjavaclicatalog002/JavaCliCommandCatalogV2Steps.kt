@@ -92,7 +92,7 @@ class JavaCliCommandCatalogV2Steps {
         }
     }
 
-    @Given("the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
+    @Given("the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
     fun establishSourceBuiltRuntime() {
         repositoryRoot = locateRepositoryRoot()
         installedRoot = Path.of(System.getProperty("user.home"), ".local", "share", "refactorkit")
@@ -100,7 +100,7 @@ class JavaCliCommandCatalogV2Steps {
         installedExecutable = installedRoot.resolve("bin/refactorkit")
         sourceBuiltCodeLocation = codeLocation(RefactorKitCli::class.java)
 
-        assertEquals("0.7.0-SNAPSHOT", RefactorKitVersion.VERSION)
+        assertEquals("0.7.0", RefactorKitVersion.VERSION)
         assertTrue(System.getProperty("os.name").contains("Linux", ignoreCase = true))
         assertEquals(21, Runtime.version().feature())
         assertTrue(System.getProperty("os.arch").isNotBlank())

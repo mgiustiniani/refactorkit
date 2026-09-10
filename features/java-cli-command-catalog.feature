@@ -2,11 +2,12 @@
 Ability: Discover the exact public Java CLI command catalogue without entering a workspace lifecycle
   Scripts, IDEs, and local agents need one truthful machine-readable inventory of the Java command routes they may select.
   The catalogue is a transient CLI distribution-surface document, distinct from language capabilities, semantic operation results, approval, and write authority.
-  This qualification is limited to source-built RefactorKit 0.7.0-SNAPSHOT on local Linux, JDK 21, and the current CPU architecture.
+  This qualification is limited to the exact source-built version in each scenario on local Linux, JDK 21, and the current CPU architecture.
+  The version-only transition is governed by V070-RELEASE-VERSION-TRANSITION-001; it does not qualify package or release parity.
 
   @REQ-JAVA-CLI-CATALOG-001 @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: Source-built discovery reports the closed deterministic Java command catalogue and nothing else
-    Given the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
+    Given the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
     And the installed RefactorKit executable is guarded by an invocation tripwire and is neither selected nor invoked
     And the v1 command-catalogue contract admits exactly these fields in this order:
       | scope     | position | field             | JSON type     |
@@ -64,7 +65,7 @@ Ability: Discover the exact public Java CLI command catalogue without entering a
 
   @REQ-JAVA-CLI-CATALOG-002 @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: Default discovery reports exact catalogue v2 while explicit selection preserves exact v1
-    Given the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
+    Given the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
     And the installed RefactorKit executable is guarded by invocation, lookup, and no-follow mutation tripwires and is neither selected, invoked, nor modified
     And workspace opening, scanning, planning, locking, WAL, transaction, editing, and installation mutation boundaries are instrumented fail-closed
     And separate closed v1 and v2 validators are available without treating either version as the other
