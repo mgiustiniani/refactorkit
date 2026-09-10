@@ -16,6 +16,7 @@ import org.refactorkit.core.WorkspaceEditIdentity
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.treesitter.ExternalSemanticDiagnostics
 import java.security.MessageDigest
+import java.nio.file.Path
 
 /** An observed compiler exchange, not authority inferred from successful normalization. */
 data class TypeScriptCompilerMutationEvidence(
@@ -32,7 +33,7 @@ internal class TypeScriptCompilerPreview(
     private val toolchain: TypeScriptSemanticToolchain,
     private val model: TypeScriptProjectModel,
     private val sessionId: String?,
-    private val diagnostics: (ProjectSnapshot) -> ExternalSemanticDiagnostics,
+    private val diagnostics: (ProjectSnapshot, Set<Path>) -> ExternalSemanticDiagnostics,
     private val ownership: (ProjectSnapshot, WorkspaceEdit) -> List<Diagnostic>,
     private val evidence: () -> TypeScriptCompilerMutationEvidence?,
     private val approve: (String) -> Unit,
@@ -42,9 +43,11 @@ internal class TypeScriptCompilerPreview(
         operation: String,
         command: String,
         arguments: Map<String, String>,
+        requiredSourcesBefore: Set<Path> = emptySet(),
+        requiredSourcesAfter: Set<Path> = emptySet(),
         proposal: () -> PatchPlan,
     ): PatchPlan {
-        val before = when (val result = diagnostics(snapshot)) {
+        val before = when (val result = diagnostics(snapshot, emptySet())) {
             is ExternalSemanticDiagnostics.Unavailable -> return refused(snapshot, operation, result.diagnostic)
             is ExternalSemanticDiagnostics.Available -> result.diagnostics
         }
@@ -52,10 +55,19 @@ internal class TypeScriptCompilerPreview(
         val draft = proposal()
         if (draft.status != PatchStatus.PREVIEW) return draft
         ownership(snapshot, draft.workspaceEdit).firstOrNull()?.let { return refused(snapshot, operation, it) }
+        // Preserve refusal ordering; only accepted source proposals require compiler membership.
+        if (requiredSourcesBefore.isNotEmpty()) {
+            when (val result = diagnostics(snapshot, requiredSourcesBefore)) {
+                is ExternalSemanticDiagnostics.Unavailable -> return refused(snapshot, operation, result.diagnostic)
+                is ExternalSemanticDiagnostics.Available -> if (result.diagnostics.any { it.severity == Diagnostic.Severity.ERROR }) {
+                    return unclean(snapshot, operation, result.diagnostics, emptyList())
+                }
+            }
+        }
         val staged = runCatching { WorkspaceEditSimulator.apply(snapshot, draft.workspaceEdit) }.getOrElse {
             return refused(snapshot, operation, error("typescript.previewSimulationFailed", "Compiler edits cannot be simulated"))
         }
-        val after = when (val result = diagnostics(staged)) {
+        val after = when (val result = diagnostics(staged, requiredSourcesAfter)) {
             is ExternalSemanticDiagnostics.Unavailable -> return refused(snapshot, operation, result.diagnostic)
             is ExternalSemanticDiagnostics.Available -> result.diagnostics
         }

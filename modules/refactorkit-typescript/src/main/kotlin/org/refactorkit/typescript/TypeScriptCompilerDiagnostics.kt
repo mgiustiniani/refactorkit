@@ -35,7 +35,7 @@ internal class TypeScriptCompilerDiagnostics(
     private val toolchain: TypeScriptSemanticToolchain,
     private val projectModel: TypeScriptProjectModel,
 ) {
-    fun analyze(snapshot: ProjectSnapshot, auxiliaryFiles: List<SourceFile>): ExternalSemanticDiagnostics {
+    fun analyze(snapshot: ProjectSnapshot, auxiliaryFiles: List<SourceFile>, requiredSources: Set<Path> = emptySet()): ExternalSemanticDiagnostics {
         if (projectModel.projects.isEmpty() || projectModel.projects.size > MAX_PROJECTS) {
             return unavailable("typescript.compilerDiagnosticsProjectLimit", "Exact compiler diagnostics require 1..$MAX_PROJECTS projects")
         }
@@ -44,6 +44,10 @@ internal class TypeScriptCompilerDiagnostics(
         }
         val paths = snapshot.trackedFiles.associateBy { it.path.normalize() }.toMutableMap()
         auxiliaryFiles.forEach { paths.putIfAbsent(it.path.normalize(), it) }
+        if (requiredSources.size > 2 || requiredSources.any {
+                it.isAbsolute || it != it.normalize() || it.startsWith("..") || it !in paths
+            }) return unavailable("typescript.compilerSourceMembershipInvalid", "Required compiler sources must belong to the snapshot")
+        val required = JsonArray(requiredSources.map { it.toString().replace('\\', '/') }.sorted().map(::JsonPrimitive))
         val semanticSnapshot = snapshot.copy(files = paths.values.sortedBy { it.path.toString() }, auxiliaryFiles = emptyList())
         val overlay = runCatching { SemanticWorkspaceOverlay.create(semanticSnapshot) }.getOrElse {
             return unavailable("typescript.compilerDiagnosticsOverlayFailed", it.message ?: "Compiler diagnostics overlay failed")
@@ -66,6 +70,7 @@ internal class TypeScriptCompilerDiagnostics(
                 toolchain.typeScriptCompilerEntrypoint.toAbsolutePath().normalize().toString(),
                 overlay.root.toString(),
                 snapshot.hash,
+                required.toString(),
             ) + configs
             val execution = ExternalSemanticProcessManager(maxProcesses = TypeScriptDiagnosticsContract.MAX_PROCESSES).use { manager ->
                 val process = manager.launch(SemanticProcessSpec(
@@ -103,7 +108,7 @@ internal class TypeScriptCompilerDiagnostics(
             }
             val mutations = overlay.verifySourcesUnchanged()
             if (mutations.isNotEmpty()) return ExternalSemanticDiagnostics.Unavailable(mutations.first())
-            parse(execution.output, snapshot, execution.provenance)
+            parse(execution.output, snapshot, execution.provenance, required)
         } catch (failure: Exception) {
             unavailable("typescript.compilerDiagnosticsFailed", failure.message ?: "Exact compiler diagnostics failed")
         } finally {
@@ -123,6 +128,7 @@ internal class TypeScriptCompilerDiagnostics(
         output: String,
         snapshot: ProjectSnapshot,
         provenance: SemanticProcessProvenance,
+        requiredSources: JsonArray = JsonArray(emptyList()),
     ): ExternalSemanticDiagnostics {
         val root = runCatching { JSON.parseToJsonElement(output).jsonObject }.getOrNull()
             ?: return unavailable("typescript.compilerDiagnosticsInvalid", "Compiler diagnostics returned invalid JSON")
@@ -132,6 +138,9 @@ internal class TypeScriptCompilerDiagnostics(
         }
         if (root.string("snapshotHash") != snapshot.hash) return unavailable(
             "typescript.compilerDiagnosticsSnapshotMismatch", "Compiler diagnostics did not attest the requested snapshot",
+        )
+        if (requiredSources.isNotEmpty() && root["requiredSources"] != requiredSources) return unavailable(
+            "typescript.compilerSourceMembershipInvalid", "Compiler diagnostics did not attest the required sources",
         )
         val diagnostics = (root["diagnostics"] as? JsonArray)
             ?: return unavailable("typescript.compilerDiagnosticsInvalid", "Compiler diagnostics payload is missing")

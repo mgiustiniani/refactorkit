@@ -43,6 +43,9 @@ class TypeScriptAdvancedSteps {
     @Then("the guarded relocation has outcome {string} and refusal code {string}")
     fun outcome(outcome: String, code: String) = requireNotNull(fixture).verifyOutcome(outcome, code)
 
+    @Then("the relocation refusal states {string} without compiler write authority")
+    fun relocationRefusal(message: String) = requireNotNull(fixture).verifyRelocationRefusal(message)
+
     @When("the owning semantic child crashes and the same adapter restarts with the original snapshot")
     fun crashAndRestart() = requireNotNull(fixture).crashSemanticChildAndRestart()
 

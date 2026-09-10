@@ -56,7 +56,12 @@ internal class TypeScriptAdvancedFixture(private val condition: String) : AutoCl
     private val language = if (condition in setOf("unchecked JavaScript source", "checked JavaScript source")) "javascript" else "typescript"
     private val extension = if (language == "javascript") "js" else "ts"
     private val old = Path.of("src/a.$extension")
-    private val target = Path.of("src/nested/renamed.$extension")
+    private val target = Path.of(when (condition) {
+        "relocation to text without rootDir", "relocation to text with rootDir" -> "src/a.txt"
+        "relocation changes source language" -> "src/a.js"
+        "relocation target excluded from compiler" -> "src/ignored/renamed.ts"
+        else -> "src/nested/renamed.$extension"
+    })
     private val toolchain = run {
         var repo = Path.of("").toAbsolutePath()
         while (!Files.isRegularFile(repo.resolve("settings.gradle.kts"))) repo = requireNotNull(repo.parent)
@@ -89,7 +94,10 @@ internal class TypeScriptAdvancedFixture(private val condition: String) : AutoCl
     }
 
     init {
-        val sourceTexts = if (condition == "signature and inline function targets") oracle.sources + mapOf(
+        val sourceTexts = if (condition.startsWith("relocation ")) mapOf(
+            Path.of("src/a.ts") to "export const value = 2;\n",
+            Path.of("src/keep.ts") to "export const keep = 1;\n",
+        ) else if (condition == "signature and inline function targets") oracle.sources + mapOf(
             Path.of("src/function.ts") to "export function inc(x: number): number { return x + 1; }\nconst first = inc(1);\n",
         ) else if (condition == "imports with used and unused bindings") oracle.sources + mapOf(
             Path.of("src/imports.ts") to "import { zebra, unused, alpha } from './dep';\nexport const total = zebra + alpha;\n",
@@ -113,7 +121,18 @@ internal class TypeScriptAdvancedFixture(private val condition: String) : AutoCl
             Files.createDirectories(root.resolve(file.path).parent)
             Files.writeString(root.resolve(file.path), file.content)
         }
-        Files.writeString(root.resolve("tsconfig.json"), """{"compilerOptions":{"strict":true,"rootDir":"src","allowJs":${language == "javascript"},"checkJs":${condition == "checked JavaScript source"}},"include":["src/**/*"]}""")
+        val configuration = when (condition) {
+            "relocation to text without rootDir", "relocation changes source language" ->
+                """{"compilerOptions":{"strict":true},"include":["src/**/*.ts"]}"""
+            "relocation changes explicit files config" ->
+                """{"compilerOptions":{"strict":true},"files":["src/a.ts","src/keep.ts"]}"""
+            "relocation target excluded from compiler" ->
+                """{"compilerOptions":{"strict":true},"include":["src/**/*.ts"],"exclude":["src/ignored"]}"""
+            "relocation source excluded from compiler" ->
+                """{"compilerOptions":{"strict":true},"include":["src/**/*.ts"],"exclude":["src/a*.ts"]}"""
+            else -> """{"compilerOptions":{"strict":true,"rootDir":"src","allowJs":${language == "javascript"},"checkJs":${condition == "checked JavaScript source"}},"include":["src/**/*"]}"""
+        }
+        Files.writeString(root.resolve("tsconfig.json"), configuration)
         Files.writeString(root.resolve("package.json"), """{"name":"owned-t5-authority-fixture","private":true}""")
         model = TypeScriptProjectModelBuilder().build(root)
         val projectInputs = model.evidence.map { SourceFile(it.path, Files.readString(root.resolve(it.path)), "jsonc") }
@@ -366,6 +385,13 @@ internal class TypeScriptAdvancedFixture(private val condition: String) : AutoCl
             oracle.assertRewrites(plan, snapshot.copy(files = snapshot.files.filter { it.languageId == "typescript" }), model, toolchain)
             oracle.assertExactEdits(plan)
         }
+    }
+
+    fun verifyRelocationRefusal(message: String) {
+        assertEquals(message, plan.summary)
+        assertEquals(null, plan.authorityLease)
+        assertTrue(plan.evidence != org.refactorkit.core.RefactoringEvidence.COMPILER_PROVEN)
+        assertTrue(!Files.exists(root.resolve(".refactorkit")), "Refused preview must not create metadata")
     }
 
     private var catalogueQueried = false

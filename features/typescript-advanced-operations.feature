@@ -20,6 +20,23 @@ Feature: Compiler-bound TypeScript advanced operations retain managed-write auth
       | a deliberately broken edit proposal   | REFUSED      | typescript.diagnosticsNotClean                |
       | disk source differs from the snapshot | PREVIEW_ONLY | none                                         |
 
+  @REQ-TS-RELOCATION-ELIGIBILITY-001 @functional-requirement
+  Scenario Outline: Relocation refuses sources targets and compiler edits outside its qualified semantic context
+    Given a compiler-bound TypeScript relocation workspace with "<condition>"
+    When the relocation is previewed through its active semantic adapter
+    Then the guarded relocation has outcome "REFUSED" and refusal code "<code>"
+    And the relocation refusal states "<message>" without compiler write authority
+    And the relocation preserves approval diagnostics workspace bytes and rollback authority
+
+    Examples:
+      | condition | code | message |
+      | relocation to text without rootDir | none | Relocation target is not a recognized source in the source language |
+      | relocation to text with rootDir | none | Relocation target is not a recognized source in the source language |
+      | relocation changes source language | none | Relocation target is not a recognized source in the source language |
+      | relocation changes explicit files config | none | Compiler relocation edits exceed source-only authority |
+      | relocation target excluded from compiler | typescript.compilerDiagnosticsIncomplete | Required relocation source is outside compiler program: src/ignored/renamed.ts |
+      | relocation source excluded from compiler | typescript.compilerDiagnosticsIncomplete | Required relocation source is outside compiler program: src/a.ts |
+
   @REQ-TS-COMPILER-EVIDENCE-MISSING-001 @functional-requirement
   Scenario: A valid compiler edit without captured exchange evidence grants no apply authority
     Given a compiler-bound TypeScript relocation workspace with "missing compiler exchange evidence"

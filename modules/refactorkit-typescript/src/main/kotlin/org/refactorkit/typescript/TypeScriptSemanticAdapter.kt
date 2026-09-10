@@ -178,6 +178,14 @@ interface TypeScriptSemanticClient : AutoCloseable {
     fun findReferences(symbolId: SymbolId): List<Reference>
     fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic>
     fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics
+    fun synchronizedDiagnostics(snapshot: ProjectSnapshot, requiredSources: Set<Path>): ExternalSemanticDiagnostics {
+        val result = synchronizedDiagnostics(snapshot)
+        return if (requiredSources.isEmpty() || result is ExternalSemanticDiagnostics.Unavailable) result
+        else ExternalSemanticDiagnostics.Unavailable(Diagnostic(
+            "Compiler source membership evidence is unavailable", Diagnostic.Severity.ERROR,
+            code = "typescript.compilerSourceMembershipUnavailable",
+        ))
+    }
     fun requestRename(snapshot: ProjectSnapshot, location: SourceLocation, newName: String): ExternalWorkspaceEditNormalization
     fun requestWorkspaceEdit(
         paramsJson: String,
@@ -323,6 +331,8 @@ class ExternalTypeScriptSemanticClient(
     override fun diagnostics(snapshot: ProjectSnapshot): List<Diagnostic> = adapter.diagnostics(snapshot)
     override fun synchronizedDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics =
         compilerDiagnostics.analyze(snapshot, auxiliaryFiles)
+    override fun synchronizedDiagnostics(snapshot: ProjectSnapshot, requiredSources: Set<Path>): ExternalSemanticDiagnostics =
+        compilerDiagnostics.analyze(snapshot, auxiliaryFiles, requiredSources)
     override fun requestRename(
         snapshot: ProjectSnapshot,
         location: SourceLocation,
@@ -534,7 +544,9 @@ class TypeScriptSemanticAdapter(
     fun compilerAttestation(): TypeScriptCompilerAttestation = toolchain.compilerAttestation()
 
     /** Exact compiler diagnostics for the saved snapshot or a validated immutable source overlay. */
-    fun exactDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics {
+    fun exactDiagnostics(snapshot: ProjectSnapshot): ExternalSemanticDiagnostics = exactDiagnostics(snapshot, emptySet())
+
+    private fun exactDiagnostics(snapshot: ProjectSnapshot, requiredSources: Set<Path>): ExternalSemanticDiagnostics {
         if (!diagnosticScopeCompatible(snapshot)) return unavailableDiagnostics(
             "typescript.diagnosticsScopeMismatch",
             "Exact diagnostics snapshot is outside the active semantic lease",
@@ -547,7 +559,8 @@ class TypeScriptSemanticAdapter(
             "typescript.modelEvidenceChanged",
             "TypeScript project evidence changed after session startup",
         )
-        return client.synchronizedDiagnostics(snapshot)
+        return if (requiredSources.isEmpty()) client.synchronizedDiagnostics(snapshot)
+            else client.synchronizedDiagnostics(snapshot, requiredSources)
     }
 
     override fun languageId(): String = languageId
@@ -1066,11 +1079,11 @@ class TypeScriptSemanticAdapter(
 
     private fun compilerPreview() = TypeScriptCompilerPreview(
         toolchain, projectModel, client.provenance?.process?.id,
-        diagnostics = { snapshot ->
+        diagnostics = { snapshot, requiredSources ->
             if (!semanticCompleteness().managedMutationEligible ||
                 (snapshot.files.any { it.languageId == "javascript" } && projectModel.projects.any { it.compilerOptions.checkJs != true })) {
                 unavailableDiagnostics("typescript.semanticCompletenessInsufficient", "Advanced mutation requires complete compiler checking")
-            } else exactDiagnostics(snapshot)
+            } else exactDiagnostics(snapshot, requiredSources)
         },
         ownership = ::validateProjectOwnership,
         evidence = client::compilerMutationEvidence,

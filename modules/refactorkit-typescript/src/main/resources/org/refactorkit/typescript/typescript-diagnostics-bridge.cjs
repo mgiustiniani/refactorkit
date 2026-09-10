@@ -8,12 +8,18 @@ function fail(message) {
 }
 
 try {
-  const [compilerPath, root, snapshotHash, ...configs] = process.argv.slice(2);
-  if (!compilerPath || !root || !snapshotHash || configs.length === 0) {
+  const [compilerPath, root, snapshotHash, requiredSourceJson, ...configs] = process.argv.slice(2);
+  if (!compilerPath || !root || !snapshotHash || !requiredSourceJson || configs.length === 0) {
     fail('missing compiler, root, snapshot hash, or project config');
   } else {
     const ts = require(compilerPath);
     const normalizedRoot = path.resolve(root);
+    const requiredSources = JSON.parse(requiredSourceJson);
+    if (!Array.isArray(requiredSources) || requiredSources.length > 2 || requiredSources.some(file =>
+      typeof file !== 'string' || !file || path.isAbsolute(file) || path.relative(normalizedRoot, path.resolve(root, file)).startsWith('..'))) {
+      throw new Error('Invalid required compiler sources');
+    }
+    const missingSources = new Set(requiredSources);
     const compilerRoot = path.dirname(path.resolve(compilerPath));
     const allowed = candidate => {
       const absolute = path.resolve(candidate);
@@ -60,10 +66,15 @@ try {
         projectReferences: parsed.projectReferences,
         host,
       });
+      for (const file of missingSources) {
+        if (program.getSourceFile(path.resolve(root, file))) missingSources.delete(file);
+      }
       diagnostics.push(...ts.getPreEmitDiagnostics(program));
       if (diagnostics.length > 500) break;
     }
-    if (diagnostics.length > 500) {
+    if (missingSources.size) {
+      fail('Required relocation source is outside compiler program: ' + [...missingSources].sort().join(', '));
+    } else if (diagnostics.length > 500) {
       process.stdout.write(JSON.stringify({ schema: 1, complete: false, failure: 'diagnostic limit exceeded', diagnostics: [] }));
     } else {
       const output = diagnostics.map(diagnostic => {
@@ -92,7 +103,7 @@ try {
           file, line, character, endLine, endCharacter,
         };
       });
-      process.stdout.write(JSON.stringify({ schema: 1, complete: true, snapshotHash, diagnostics: output }));
+      process.stdout.write(JSON.stringify({ schema: 1, complete: true, snapshotHash, requiredSources, diagnostics: output }));
     }
   }
 } catch (error) {
