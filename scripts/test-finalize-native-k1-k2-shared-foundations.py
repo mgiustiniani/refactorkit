@@ -19,6 +19,12 @@ SPEC.loader.exec_module(MODULE)
 
 
 class NativeK1K2SharedFinalizerTest(unittest.TestCase):
+    def test_exact_release_version_jar_names(self) -> None:
+        self.assertEqual(
+            {f"refactorkit-{name}-0.7.0.jar" for name in ("core", "java", "kotlin", "jvm", "daemon", "mcp", "lsp")},
+            MODULE.REQUIRED_JARS,
+        )
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

@@ -150,7 +150,7 @@ SUBJECT_FILES = {
     Path("scripts/test-finalize-native-k5-completion.py"),
 }
 REQUIRED_JARS = {
-    f"refactorkit-{module}-0.7.0-SNAPSHOT.jar"
+    f"refactorkit-{module}-0.7.0.jar"
     for module in ("core", "java", "kotlin", "jvm", "daemon", "mcp", "cli")
 }
 
@@ -299,7 +299,7 @@ def main() -> int:
     if not embedded_java.is_file():
         raise ValueError("embedded package Java is missing")
     embedded_version = exact_java_version(embedded_java, "embedded Java")
-    jars = sorted((package_root / "lib").glob("refactorkit-*-0.7.0-SNAPSHOT.jar"))
+    jars = sorted((package_root / "lib").glob("refactorkit-*-0.7.0.jar"))
     jar_map = {path.name: sha256(path) for path in jars if path.name in REQUIRED_JARS}
     if set(jar_map) != REQUIRED_JARS:
         raise ValueError(f"packaged subject JARs differ from exact set: {sorted(jar_map)}")

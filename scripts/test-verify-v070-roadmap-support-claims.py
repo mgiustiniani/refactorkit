@@ -3,12 +3,56 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+
+class V070ReleasePolicyContractTest(unittest.TestCase):
+    def release(self) -> str:
+        return (Path(__file__).resolve().parents[1] / ".github/workflows/release.yml").read_text()
+
+    def test_only_v070_selects_one_qualified_host_and_holds_publication(self) -> None:
+        text = self.release()
+        selection = next(line for line in text.splitlines() if "include: ${{ fromJSON(" in line)
+        self.assertIn("github.ref_name == 'v0.7.0'", selection)
+        arrays = [json.loads(value) for value in re.findall(r"'(\[.*?\])'", selection)]
+        self.assertEqual(2, len(arrays))
+        self.assertEqual([{"os": "ubuntu-latest", "platform": "linux-x86_64", "gradle": "./gradlew"}], arrays[0])
+        self.assertEqual(["linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"], [row["platform"] for row in arrays[1]])
+        self.assertIn("draft: ${{ github.ref_name == 'v0.7.0' }}", text)
+        self.assertIn("'21.0.11+10.0.LTS'", text)
+        self.assertIn("if: always() && github.ref_name == 'v0.7.0'", text)
+
+    def test_existing_native_gates_and_supply_chain_remain_required(self) -> None:
+        text = self.release()
+        for required in (
+            "clean build goldenTest", "packagedMavenModuleRenameQualificationTest",
+            "scripts/finalize-native-k1-k2-shared-foundations.py", "scripts/finalize-native-k5-",
+            "JavaRefactoringPreviewCommandSurfaceCucumberTest", "len(cases) == 34",
+            "len(steps) == 126", "len(closed) == 34", "allChildrenExited",
+            "scripts/verify-runtime-archive.py", "scripts/smoke-packaged-kill-recovery.py",
+            "actions/attest-build-provenance@v2", "actions/attest-sbom@v2", "format: spdx-json",
+            "Independently verify downloaded release inputs", "sha256sum -c *.zip.sha256",
+            "assert not wire.exists() and not wire.is_symlink()", "report.unlink()",
+            "report.stat().st_mtime_ns >= started", "p.stat().st_mtime_ns >= started",
+            "receipt['revision'] == binding['revision']", "receipt['schemaVersion'] == 1",
+            "joined['revision']['githubSha'] == binding['revision']",
+            "joined['package']['runtimeZip']['sha256'] == binding['archiveSha256']",
+        ):
+            self.assertIn(required, text)
+        self.assertNotIn("continue-on-error", text)
+
+    def test_inline_python_blocks_parse(self) -> None:
+        blocks = re.findall(r"        shell: python\n        run: \|\n((?:          .*\n|\n)+)", self.release())
+        self.assertGreaterEqual(len(blocks), 8)
+        for block in blocks:
+            ast.parse("\n".join(line[10:] if line.startswith("          ") else line for line in block.splitlines()))
 
 
 class RoadmapSupportClaimVerifierTest(unittest.TestCase):

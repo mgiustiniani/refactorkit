@@ -32,7 +32,7 @@ REQUIRED_SUITES = {
     "org.refactorkit.typescript.TypeScriptBuildModelProviderTest",
 }
 REQUIRED_JARS = {
-    f"refactorkit-{module}-0.7.0-SNAPSHOT.jar"
+    f"refactorkit-{module}-0.7.0.jar"
     for module in ("core", "java", "kotlin", "jvm", "daemon", "mcp", "lsp")
 }
 SMOKE_MARKER = (
@@ -182,7 +182,7 @@ def main() -> int:
     ):
         raise ValueError(f"embedded runtime is not exact qualified JDK 21.0.11+10: {java_version}")
     library = package_root / "lib"
-    jar_paths = {path.name: path for path in library.glob("refactorkit-*-0.7.0-SNAPSHOT.jar")}
+    jar_paths = {path.name: path for path in library.glob("refactorkit-*-0.7.0.jar")}
     missing_jars = sorted(REQUIRED_JARS - jar_paths.keys())
     if missing_jars:
         raise ValueError(f"required packaged subject jars are missing: {missing_jars}")

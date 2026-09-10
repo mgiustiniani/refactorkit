@@ -16,19 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2022
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
-            gradle: ./gradlew
+        # V070-LOCAL-HOST-ACCEPTANCE-001: no other host is claimed verified for 0.7.0.
+        include: ${{ fromJSON(github.ref_name == 'v0.7.0' && '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' || '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -48,7 +37,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: ${{ github.ref_name == 'v0.7.0' && '21.0.11+10.0.LTS' || '21' }}
           cache: gradle
 
       - name: Set up Python for packaged daemon smoke
@@ -70,8 +59,27 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
+      - name: Verify 0.7.0 source version before building
+        if: github.ref_name == 'v0.7.0'
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == os.environ['GITHUB_SHA']
+          assert 'version = "0.7.0"' in pathlib.Path('build.gradle.kts').read_text()
+          core = pathlib.Path('modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/RefactorKitVersion.kt').read_text()
+          assert 'const val VERSION = "0.7.0"' in core and 'const val API_VERSION = "0.2"' in core
+
       - name: Clean build and test
+        if: github.ref_name != 'v0.7.0'
         run: ${{ matrix.gradle }} clean build --no-daemon
+
+      - name: Clean 0.7.0 build and complete standard regression
+        if: github.ref_name == 'v0.7.0'
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .refactorkit/runs/v070-release-ci
+          ./gradlew clean build goldenTest --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --console=plain 2>&1 | tee .refactorkit/runs/v070-release-ci/whole-build.log
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
@@ -91,14 +99,151 @@ jobs:
       - name: Native packaged real Kotlin qualification
         shell: python
         run: |
-          import subprocess, sys
-          subprocess.run([sys.executable, "scripts/smoke-packaged-kotlin.py"], check=True)
+          import os, pathlib, subprocess, sys
+          result = subprocess.run([sys.executable, "scripts/smoke-packaged-kotlin.py"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+          print(result.stdout.decode('utf-8', errors='replace'))
+          if os.environ['GITHUB_REF_NAME'] == 'v0.7.0':
+              pathlib.Path('.refactorkit/runs/v070-release-ci/compatibility-smoke.log').write_bytes(result.stdout)
+          result.check_returncode()
 
       - name: Native packaged kill-during-write recovery
         shell: python
         run: |
           import subprocess, sys
           subprocess.run([sys.executable, "scripts/smoke-packaged-kill-recovery.py"], check=True)
+
+      - name: Requalify 0.7.0 through existing source and packaged gates
+        if: github.ref_name == 'v0.7.0'
+        shell: python
+        run: |
+          import hashlib, importlib.util, json, os, pathlib, re, shutil, subprocess, sys, time, zipfile, xml.etree.ElementTree as ET
+          sys.dont_write_bytecode = True
+          P = pathlib.Path
+          out = P('.refactorkit/runs/v070-release-ci')
+          root = P('modules/refactorkit-cli/build/package/refactorkit').resolve()
+          archive = P('modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip')
+          sha = lambda p: hashlib.sha256(P(p).read_bytes()).hexdigest()
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert revision == os.environ['GITHUB_SHA']
+          sources = {p: sha(p) for p in subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0') if p}
+          archive_sha = sha(archive)
+          with zipfile.ZipFile(archive) as z:
+              members = {n.removeprefix('refactorkit/'): hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist() if not n.endswith('/')}
+          def audit():
+              assert sha(archive) == archive_sha
+              assert {p.relative_to(root).as_posix(): sha(p) for p in root.rglob('*') if p.is_file()} == members
+              assert all(sha(p) == digest for p, digest in sources.items())
+              assert not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all'])
+          records = []
+          def run(label, cmd, limit=900):
+              audit()
+              started = time.time_ns()
+              try:
+                  with (out / (label + '.log')).open('w') as log:
+                      result = subprocess.run(['timeout', '--signal=TERM', '--kill-after=15s', str(limit)+'s'] + cmd, stdout=log, stderr=subprocess.STDOUT)
+                  records.append({'label': label, 'argv': cmd, 'exit': result.returncode, 'startedEpochNs': started})
+                  (out / 'executions.json').write_text(json.dumps(records, indent=2))
+                  result.check_returncode()
+                  return started
+              finally:
+                  audit()
+          # Preserve the complete standard reports BEFORE filtered qualification overwrites task outputs.
+          for module in P('modules').iterdir():
+              for path in (module / 'build/test-results').rglob('TEST-*.xml'):
+                  target = out / 'whole' / path
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(path, target)
+              for path in (module / 'build/reports/cucumber').glob('*.json'):
+                  target = out / 'whole' / path
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(path, target)
+          version = subprocess.check_output([str(root / 'bin/refactorkit'), '--version'], text=True)
+          assert version == 'RefactorKit 0.7.0 (API 0.2)\n'
+          (out / 'version.txt').write_text(version)
+          gradle = ['./gradlew', '--no-daemon', '--max-workers=2', '-Pkotlin.compiler.execution.strategy=in-process', '--console=plain']
+          run('j1-packaged', gradle + [':modules:refactorkit-cli:packagedMavenModuleRenameQualificationTest'])
+          support = subprocess.run([sys.executable, 'scripts/verify-v070-kotlin-support.py'], capture_output=True)
+          (out / 'support-reconciliation.json').write_bytes(support.stdout)
+          (out / 'support-reconciliation.stderr').write_bytes(support.stderr)
+          support.check_returncode()
+          spec = importlib.util.spec_from_file_location('k1k2', 'scripts/finalize-native-k1-k2-shared-foundations.py')
+          foundations = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(foundations)
+          # Exact unchanged XML selection from the full execution, not a fabricated focused rerun.
+          for path in (out / 'whole/modules').glob('*/build/test-results/test/TEST-*.xml'):
+              if ET.parse(path).getroot().get('name') in foundations.REQUIRED_SUITES:
+                  target = out / 'k1-k2-reports' / path.relative_to(out / 'whole/modules')
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(path, target)
+          run('k1-k2-finalizer', [sys.executable, 'scripts/finalize-native-k1-k2-shared-foundations.py', '--platform', 'linux-x86_64', '--revision', revision, '--support-receipt', str(out / 'support-reconciliation.json'), '--smoke-log', str(out / 'compatibility-smoke.log'), '--report-root', str(out / 'k1-k2-reports'), '--package-root', str(root), '--output', str(out / 'k1-k2-native.json')])
+          for gate in ['completion', 'move-next']:
+              spec = importlib.util.spec_from_file_location('qualification_'+gate, 'scripts/finalize-native-k5-'+gate+'.py')
+              m = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(m)
+              cmd = gradle + [':modules:refactorkit-kotlin:cleanTest', ':modules:refactorkit-jvm:cleanTest']
+              for module in ['kotlin', 'jvm']:
+                  cmd += [':modules:refactorkit-'+module+':test']
+                  for suite, cases in sorted(m.REQUIRED_SUITES.items()):
+                      if suite.startswith('org.refactorkit.'+module+'.'):
+                          for case in sorted(cases):
+                              cmd += ['--tests', suite+'.'+case.removesuffix('()')]
+              started = run('k5-'+gate+'-source', cmd)
+              reports = out / ('k5-'+gate+'-reports')
+              reports.mkdir(exist_ok=False)
+              for module in ['refactorkit-kotlin', 'refactorkit-jvm']:
+                  for path in (P('modules') / module / 'build/test-results/test').glob('TEST-*.xml'):
+                      assert not path.is_symlink() and path.stat().st_mtime_ns >= started
+                      target = reports / path.relative_to('modules')
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      shutil.copy2(path, target)
+              run('k5-'+gate+'-smoke', [sys.executable, 'scripts/smoke-packaged-k5-'+gate+'.py', '--runtime', str(root)])
+              cmd = [sys.executable, 'scripts/finalize-native-k5-'+gate+'.py', '--platform', 'linux-x86_64', '--revision', revision, '--smoke-log', str(out / ('k5-'+gate+'-smoke.log')), '--report-root', str(reports), '--package-root', str(root), '--output', str(out / ('k5-'+gate+'-native.json'))]
+              if gate == 'completion':
+                  cmd += ['--compatibility-smoke-log', str(out / 'compatibility-smoke.log')]
+              run('k5-'+gate+'-finalizer', cmd)
+          # Existing runner and packaged process helper; only selection configuration is supplied.
+          names = []
+          for feature in ['features/typescript-advanced-surfaces.feature', 'features/managed-module-crash-recovery.feature']:
+              names += [n for n in re.findall(r'^  Scenario(?: Outline)?: (.+)$', P(feature).read_text(), re.M) if not n.startswith('LSP 0.2')]
+          pattern = '^(?:'+'|'.join(re.sub(r'<[^>]+>', '.+', re.escape(n)) for n in names)+')$'
+          init = out / 'select.gradle'
+          init.write_text("allprojects { tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { if (project.name == 'refactorkit-cli') { systemProperty 'cucumber.filter.name', System.getProperty('refactorkit.scenario') } } }\n")
+          wire = out / 'wire'
+          assert not wire.exists() and not wire.is_symlink()
+          report = P('modules/refactorkit-cli/build/reports/cucumber/java-refactoring-preview-command-surface.json')
+          if report.exists() or report.is_symlink():
+              assert report.is_file() and not report.is_symlink()
+              report.unlink()  # Known generated full-build output is already preserved in whole/.
+          started = run('t5-i1-packaged', gradle + ['-I', str(init.resolve()), '-Drefactorkit.scenario='+pattern, '-Drefactorkit.ts.packaged.root='+str(root), '-Drefactorkit.ts.packaged.evidence='+str(wire.resolve()), ':modules:refactorkit-cli:cleanTest', ':modules:refactorkit-cli:test', '--tests', 'org.refactorkit.cli.previewcommand.JavaRefactoringPreviewCommandSurfaceCucumberTest'])
+          assert report.is_file() and not report.is_symlink() and report.stat().st_mtime_ns >= started
+          shutil.copy2(report, out / 't5-i1-packaged.json')
+          cases = [c for f in json.loads(report.read_text()) for c in f.get('elements', []) if c.get('type') == 'scenario']
+          steps = [s for c in cases for s in c['steps']]
+          closed = list(wire.glob('*/*-closed.json'))
+          assert len(cases) == 34 and len(steps) == 126 and all(s['result']['status'] == 'passed' for s in steps)
+          assert len(closed) == 34 and all(json.loads(p.read_text())['allChildrenExited'] for p in closed)
+          assert all(not p.is_symlink() and p.stat().st_mtime_ns >= started for p in closed)
+          for feature, count, step_count in [('typescript-advanced-surfaces.feature', 26, 95), ('managed-module-crash-recovery.feature', 8, 31)]:
+              selected = [c for f in json.loads(report.read_text()) if f['uri'].endswith(feature) for c in f.get('elements', []) if c.get('type') == 'scenario']
+              assert len(selected) == count and sum(len(c['steps']) for c in selected) == step_count
+          audit()
+          (out / 'binding.json').write_text(json.dumps({'revision': revision, 'tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(), 'version': '0.7.0', 'apiVersion': '0.2', 'platform': 'linux-x86_64', 'multiHost': 'WAIVED_BY_USER_NOT_VERIFIED', 'archiveSha256': archive_sha, 'sourceSha256': sources, 'runtimeMembers': members, 't5Cases': 26, 'i1Cases': 8, 'steps': 126, 'closedTransports': 34, 'independentPostNativeReview': False}, indent=2))
+
+      - name: Retain 0.7.0 qualification evidence even on failure
+        if: always() && github.ref_name == 'v0.7.0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: v070-linux-qualification
+          include-hidden-files: true
+          path: |
+            .refactorkit/runs/v070-release-ci/
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/logs/
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/manifests/
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/failure-diagnostics/
+            modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/verifier/
+            modules/refactorkit-cli/build/reports/cucumber/packaged-maven-module-rename-qualification.json
+            modules/refactorkit-cli/build/test-results/packagedMavenModuleRenameQualificationTest/
+          if-no-files-found: error
 
       - name: Prepare platform asset and checksum
         shell: python
@@ -140,10 +285,64 @@ jobs:
           output-file: refactorkit-runtime-${{ matrix.platform }}.spdx.json
           upload-artifact: false
 
+      - name: Bind 0.7.0 source, native gates, toolchains and SPDX to the asset
+        if: github.ref_name == 'v0.7.0'
+        shell: python
+        run: |
+          import hashlib, json, os, pathlib, shutil, subprocess
+          P = pathlib.Path
+          out = P('.refactorkit/runs/v070-release-ci')
+          binding = json.loads((out / 'binding.json').read_text())
+          asset = P('refactorkit-runtime-0.7.0-linux-x86_64.zip')
+          sbom = P('refactorkit-runtime-linux-x86_64.spdx.json')
+          sha = lambda p: hashlib.sha256(P(p).read_bytes()).hexdigest()
+          assert binding['archiveSha256'] == sha(asset)
+          assert json.loads(sbom.read_text())['spdxVersion'].startswith('SPDX-')
+          receipts = {name: json.loads((out / (name+'-native.json')).read_text()) for name in ['k1-k2', 'k5-completion', 'k5-move-next']}
+          receipts['j1'] = json.loads(P('modules/refactorkit-cli/build/qualification/packaged-maven-module-rename/manifests/packaged-maven-module-rename-host-evidence-manifest.json').read_text())
+          assert binding['revision'] == os.environ['GITHUB_SHA'] and binding['platform'] == 'linux-x86_64'
+          assert binding['version'] == '0.7.0' and binding['apiVersion'] == '0.2'
+          scopes = {'k1-k2': 'v0.7.0-k1-k2-shared-foundations', 'k5-completion': 'v0.7.0-k5-bounded-completion', 'k5-move-next': 'v0.7.0-k5-move-next'}
+          for name, scope in scopes.items():
+              receipt = receipts[name]
+              assert type(receipt['schemaVersion']) is int and receipt['schemaVersion'] == 1 and receipt['status'] == 'PASSED'
+              assert receipt['revision'] == binding['revision'] and receipt['platform'] == receipt['detectedPlatform'] == binding['platform'] and receipt['scope'] == scope
+              assert receipt['embeddedRuntime']['javaSha256'] == binding['runtimeMembers']['runtime/bin/java']
+              last = 'lsp' if name == 'k1-k2' else 'cli'
+              expected = {f'refactorkit-{module}-0.7.0.jar' for module in ['core', 'java', 'kotlin', 'jvm', 'daemon', 'mcp', last]}
+              assert set(receipt['packagedSubjectJarSha256']) == expected
+              assert all(binding['runtimeMembers']['lib/'+jar] == digest for jar, digest in receipt['packagedSubjectJarSha256'].items())
+              if name == 'k1-k2':
+                  assert receipt['support']['projectionSha256'] == binding['sourceSha256']['docs/releases/v0.7.0-kotlin-support.json']
+                  assert receipt['support']['receiptSha256'] == sha(out / 'support-reconciliation.json')
+              else:
+                  assert all(binding['sourceSha256'][path] == digest for path, digest in receipt['subjectFileSha256'].items())
+          j1 = receipts['j1']
+          assert type(j1['schemaVersion']) is int and j1['schemaVersion'] == 1 and j1['status'] == 'PASSED'
+          assert j1['manifestKind'] == 'packaged-maven-module-rename-host-evidence' and j1['requirementId'] == 'REQ-JAVA-MAVEN-MODULE-RENAME-PACKAGED-001'
+          joined = j1['binding']
+          assert joined['revision']['commit'] == joined['revision']['githubSha'] == binding['revision'] and joined['revision']['tree'] == binding['tree']
+          assert joined['revision']['nativeQualification'] is True and joined['revision']['githubShaConsistent'] is True and joined['revision']['worktreeState'] == 'CLEAN'
+          assert joined['host']['platform'] == binding['platform']
+          assert joined['package']['runtimeZip']['sha256'] == binding['archiveSha256'] and joined['package']['runtimeZip']['byteLength'] == asset.stat().st_size
+          assert len(joined['cases']) == 3 and {case['surface'] for case in joined['cases']} == {'packaged CLI', 'packaged daemon', 'packaged MCP'}
+          for case in joined['cases']:
+              assert case['status'] == 'PASSED' and case['embeddedJava']['sha256'] == binding['runtimeMembers']['runtime/bin/java']
+              assert case['launcher']['sha256'] == binding['runtimeMembers'][case['launcher']['path']]
+              assert case['jvmAndSelector']['jvmJarSha256'] == binding['runtimeMembers'][case['jvmAndSelector']['jvmJarPath']]
+          for name in ['feature', 'baseline', 'approvedChange', 'oracle']:
+              item = joined['requirements'][name]
+              assert item['sha256'] == binding['sourceSha256'][item['path']]
+          node = pathlib.Path(shutil.which('node')).resolve()
+          manifest = {'schema': 'refactorkit.release-qualification/v1', 'tag': os.environ['GITHUB_REF_NAME'], 'version': '0.7.0', 'apiVersion': '0.2', 'sourceCommit': os.environ['GITHUB_SHA'], 'sourceTree': binding['tree'], 'platform': 'linux-x86_64', 'otherHosts': 'WAIVED_BY_USER_NOT_VERIFIED', 'asset': {'name': asset.name, 'sha256': sha(asset), 'bytes': asset.stat().st_size}, 'spdx': {'name': sbom.name, 'sha256': sha(sbom)}, 'nativeBinding': binding, 'receipts': receipts, 'node': {'version': subprocess.check_output([str(node), '--version'], text=True).strip(), 'sha256': sha(node)}, 'workflowRun': os.environ['GITHUB_RUN_ID'], 'workflowAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'independentPostBuildReview': 'PENDING', 'downloadVerification': 'PENDING', 'staticAnalysis': 'CONFIGURED_NONBLOCKING_NOT_CLEAN'}
+          P('refactorkit-runtime-0.7.0-linux-x86_64.release.json').write_text(json.dumps(manifest, indent=2)+'\n')
+
       - name: Attest platform runtime provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: refactorkit-runtime-*-${{ matrix.platform }}.zip
+          subject-path: |
+            refactorkit-runtime-*-${{ matrix.platform }}.zip
+            refactorkit-runtime-*-${{ matrix.platform }}.release.json
 
       - name: Attest platform runtime SBOM
         uses: actions/attest-sbom@v2
@@ -159,6 +358,7 @@ jobs:
             refactorkit-runtime-*-${{ matrix.platform }}.zip
             refactorkit-runtime-*-${{ matrix.platform }}.zip.sha256
             refactorkit-runtime-${{ matrix.platform }}.spdx.json
+            refactorkit-runtime-*-${{ matrix.platform }}.release.json
           if-no-files-found: error
 
   publish:
@@ -232,10 +432,13 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          # Hold 0.7.0 until supplied-evidence review and independent asset download verification.
+          draft: ${{ github.ref_name == 'v0.7.0' }}
           prerelease: ${{ contains(github.ref_name, '-') }}
-          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
+          make_latest: ${{ (contains(github.ref_name, '-') || github.ref_name == 'v0.7.0') && 'false' || 'true' }}
           body_path: RELEASE_NOTES.md
           files: |
             release-assets/*.zip
             release-assets/*.zip.sha256
             release-assets/*.spdx.json
+            release-assets/*.release.json

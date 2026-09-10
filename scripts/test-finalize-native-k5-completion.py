@@ -21,6 +21,12 @@ SPEC.loader.exec_module(FINALIZER)
 
 
 class K5CompletionFinalizerContractTest(unittest.TestCase):
+    def test_exact_release_version_jar_names(self) -> None:
+        self.assertEqual(
+            {f"refactorkit-{name}-0.7.0.jar" for name in ("core", "java", "kotlin", "jvm", "daemon", "mcp", "cli")},
+            FINALIZER.REQUIRED_JARS,
+        )
+
     def test_exact_oracle_has_twenty_four_unique_cases_in_five_suites(self) -> None:
         self.assertEqual(5, len(FINALIZER.REQUIRED_SUITES))
         cases = [case for suite in FINALIZER.REQUIRED_SUITES.values() for case in suite]

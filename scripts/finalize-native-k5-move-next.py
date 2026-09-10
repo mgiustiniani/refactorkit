@@ -130,7 +130,7 @@ SUBJECT_FILES = {
     Path("scripts/test-finalize-native-k5-move-next.py"),
 }
 REQUIRED_JARS = {
-    f"refactorkit-{module}-0.7.0-SNAPSHOT.jar"
+    f"refactorkit-{module}-0.7.0.jar"
     for module in ("core", "java", "kotlin", "jvm", "daemon", "mcp", "cli")
 }
 
@@ -294,7 +294,7 @@ def main() -> int:
         raise ValueError("packaged runtime Java or required K5 launchers are missing")
     embedded_java_version = exact_java_version(embedded_java, "embedded runtime")
     jar_paths = {
-        path.name: path for path in (package_root / "lib").glob("refactorkit-*-0.7.0-SNAPSHOT.jar")
+        path.name: path for path in (package_root / "lib").glob("refactorkit-*-0.7.0.jar")
     }
     missing_jars = sorted(REQUIRED_JARS - jar_paths.keys())
     if missing_jars:
