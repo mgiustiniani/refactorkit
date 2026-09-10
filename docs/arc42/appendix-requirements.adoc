@@ -2,7 +2,27 @@
 :toc:
 :sectnums:
 
-== Authorized tagged build and LSP runtime restoration — r009
+== Authorized b85fde24 build and checkout-history correction — r010
+
+The authorized `89426f70` -> `b85fde24` tag update completed with exact remote
+lease/local compare-and-swap, without branch push or changing the qualified
+runtime. link:../releases/v0.7.0-ci-history-recovery.md[The r010 report] records
+GitHub34479880234: clean build/golden1617 (1242 passed,375 skipped), package/all
+broad smokes, J1 native3/138, K1/K2 native200/14 and K5 completion24 plus smoke
+pass. K5 finalization then refuses because checkout depth1 hides the source
+parent. No K5 receipt, later gates, SPDX/attestation or release is produced.
+
+Reviewed CI-only correction `b9a31dc144b46e0721e2b8261f0ba2b085816463` reuses
+existing dedicated K5 depth2 for v0.7.0 only and checks exact HEAD/single visible
+parent before the expensive build. Both finalizers stay unchanged; wrong identity,
+shallow roots and merges still refuse. Fifteen infrastructure tests pass, including
+actual bare-object Git depth1/depth2/wrong-identity/merge cases. Review:
+`PASS_FOR_CHECKOUT_HISTORY_CORRECTION`, not CI/publication PASS. No runtime,
+Gradle, dependency, glue or feature changes; prior b85 local gate identities remain.
+The tag still points to b85fde24. Another exact authorization precedes b9a31dc1;
+final CI/supply-chain/download gates and all host/static/coverage/safety limits stay.
+
+== Earlier authorized tagged build and LSP runtime restoration — r009
 
 The user authorized the exact tag update `14220182` -> `89426f70`; it completed
 with a remote old-value lease and local compare-and-swap, without a branch push.
