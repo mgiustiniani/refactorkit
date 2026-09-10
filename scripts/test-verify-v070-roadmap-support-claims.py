@@ -30,6 +30,46 @@ class V070ReleasePolicyContractTest(unittest.TestCase):
         self.assertIn("'21.0.11+10.0.LTS'", text)
         self.assertIn("if: always() && github.ref_name == 'v0.7.0'", text)
 
+    def test_v070_checkout_exposes_the_source_parent_before_building(self) -> None:
+        text = self.release()
+        checkout = text.split("      - name: Checkout\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("fetch-depth: ${{ github.ref_name == 'v0.7.0' && '2' || '1' }}", checkout)
+        self.assertIn("require_source_revision(os.environ['GITHUB_SHA'])", text)
+        self.assertLess(text.index("require_source_revision(os.environ['GITHUB_SHA'])"), text.index("clean build goldenTest"))
+
+    def test_source_parent_preflight_refuses_shallow_root_and_merge(self) -> None:
+        blocks = re.findall(r"        shell: python\n        run: \|\n((?:          .*\n|\n)+)", self.release())
+        functions = [node for block in blocks for node in ast.parse("\n".join(line[10:] if line.startswith("          ") else line for line in block.splitlines())).body if isinstance(node, ast.FunctionDef) and node.name == "require_source_revision"]
+        self.assertEqual(1, len(functions), "one exact early revision preflight is required")
+        source = "import subprocess, sys\n" + ast.unparse(functions[0]) + "\nrequire_source_revision(sys.argv[1])\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            origin, fetched = root / "origin.git", root / "fetched.git"
+            def git(repository: Path, *args: str, input: str | None = None) -> str:
+                return subprocess.run(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-C", str(repository), *args], input=input, check=True, text=True, capture_output=True).stdout.strip()
+            for repository in (origin, fetched):
+                repository.mkdir()
+                git(repository, "init", "--bare", ".")
+            tree = git(origin, "mktree", input="")
+            parent = git(origin, "commit-tree", tree, "-m", "parent")
+            candidate = git(origin, "commit-tree", tree, "-p", parent, "-m", "candidate")
+            git(origin, "update-ref", "refs/heads/main", candidate)
+            def fetch(revision: str, depth: int) -> None:
+                git(fetched, "fetch", "--depth=" + str(depth), origin.as_uri(), revision)
+                git(fetched, "update-ref", "HEAD", revision)
+            def check(revision: str) -> subprocess.CompletedProcess[str]:
+                return subprocess.run([sys.executable, "-c", source, revision], cwd=fetched, text=True, capture_output=True)
+            fetch(candidate, 1)
+            self.assertNotEqual(0, check(candidate).returncode)
+            fetch(candidate, 2)
+            self.assertEqual(0, check(candidate).returncode)
+            self.assertNotEqual(0, check(parent).returncode)
+            other = git(origin, "commit-tree", tree, "-p", parent, "-m", "other")
+            merge = git(origin, "commit-tree", tree, "-p", candidate, "-p", other, "-m", "merge")
+            git(origin, "update-ref", "refs/heads/main", merge)
+            fetch(merge, 2)
+            self.assertNotEqual(0, check(merge).returncode)
+
     def test_existing_native_gates_and_supply_chain_remain_required(self) -> None:
         text = self.release()
         for required in (

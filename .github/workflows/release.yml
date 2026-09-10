@@ -22,6 +22,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Existing K5 finalizers require one visible source parent, as in the dedicated jobs.
+          fetch-depth: ${{ github.ref_name == 'v0.7.0' && '2' || '1' }}
 
       - name: Set up JDK 25 qualification input
         uses: actions/setup-java@v4
@@ -66,7 +69,14 @@ jobs:
           import os, pathlib, subprocess, sys
           if sys.flags.optimize != 0:
               raise RuntimeError('Release version verification requires non-optimized Python')
-          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == os.environ['GITHUB_SHA']
+          def require_source_revision(expected):
+              actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+              if actual != expected:
+                  raise RuntimeError('Checkout does not match the exact source revision')
+              ancestry = subprocess.check_output(['git', 'rev-list', '--parents', '-n', '1', actual], text=True).strip().split()
+              if len(ancestry) != 2 or ancestry[0] != actual:
+                  raise RuntimeError('Qualification needs one visible source parent; checkout fetch-depth must be at least 2')
+          require_source_revision(os.environ['GITHUB_SHA'])
           assert 'version = "0.7.0"' in pathlib.Path('build.gradle.kts').read_text()
           core = pathlib.Path('modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/RefactorKitVersion.kt').read_text()
           assert 'const val VERSION = "0.7.0"' in core and 'const val API_VERSION = "0.2"' in core
