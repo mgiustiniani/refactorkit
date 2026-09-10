@@ -65,6 +65,7 @@ class JavaCliCommandCatalogV2Steps {
     private lateinit var installedRoot: Path
     private lateinit var installedExecutable: Path
     private lateinit var sourceBuiltCodeLocation: Path
+    private var metadataDirectoryExistedBefore = false
     private lateinit var repositoryManifestBefore: Map<String, String>
     private lateinit var installationManifestBefore: Map<String, String>
     private lateinit var v1Oracle: ByteArray
@@ -87,7 +88,7 @@ class JavaCliCommandCatalogV2Steps {
         if (::repositoryManifestBefore.isInitialized) {
             assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
             assertEquals(installationManifestBefore, captureManifest(installedRoot, excludeRepositoryBuildState = false))
-            assertFalse(repositoryRoot.resolve(".refactorkit").exists())
+            assertEquals(metadataDirectoryExistedBefore, repositoryRoot.resolve(".refactorkit").exists())
         }
     }
 
@@ -119,9 +120,9 @@ class JavaCliCommandCatalogV2Steps {
         assertEquals('\n'.code.toByte(), v1Oracle.last())
         assertEquals('\n'.code.toByte(), v2Oracle.last())
 
+        metadataDirectoryExistedBefore = repositoryRoot.resolve(".refactorkit").exists()
         repositoryManifestBefore = captureManifest(repositoryRoot, excludeRepositoryBuildState = true)
         installationManifestBefore = captureManifest(installedRoot, excludeRepositoryBuildState = false)
-        assertFalse(repositoryRoot.resolve(".refactorkit").exists(), "test repository already contains .refactorkit")
     }
 
     @Given("the installed RefactorKit executable is guarded by invocation, lookup, and no-follow mutation tripwires and is neither selected, invoked, nor modified")
@@ -169,7 +170,10 @@ class JavaCliCommandCatalogV2Steps {
         assertFailsWith<SecurityException> { selfTest.checkWrite(repositoryRoot.resolve("tripwire-write").toString()) }
         assertFailsWith<SecurityException> { selfTest.checkDelete(repositoryRoot.resolve("tripwire-delete").toString()) }
         assertFailsWith<SecurityException> { selfTest.checkExec("refactorkit") }
-        assertEquals(4, selfTest.violations.size)
+        val evidencePath = repositoryRoot.resolve(".refactorkit/runs/catalogue-tripwire")
+        assertFailsWith<SecurityException> { selfTest.checkWrite(evidencePath.toString()) }
+        assertFailsWith<SecurityException> { selfTest.checkDelete(evidencePath.toString()) }
+        assertEquals(6, selfTest.violations.size)
         boundaryTripwiresArmed = true
     }
 
@@ -475,7 +479,7 @@ class JavaCliCommandCatalogV2Steps {
         assertEquals(allInvocations.size, guardedProcessInvocations)
         assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
         assertEquals(installationManifestBefore, captureManifest(installedRoot, excludeRepositoryBuildState = false))
-        assertFalse(repositoryRoot.resolve(".refactorkit").exists())
+        assertEquals(metadataDirectoryExistedBefore, repositoryRoot.resolve(".refactorkit").exists())
         assertTrue(allInvocations.none { invocation -> invocation.arguments.any { it == "--apply" } })
     }
 
@@ -685,6 +689,8 @@ class JavaCliCommandCatalogV2Steps {
                     return SKIP_SUBTREE
                 }
                 entries[manifestPath(relative)] = "directory:${permissions(dir)}"
+                // Parent-harness evidence can change during the test; subject writes remain tripwire-denied.
+                if (excludeRepositoryBuildState && relative == Path.of(".refactorkit", "runs")) return SKIP_SUBTREE
                 return CONTINUE
             }
 

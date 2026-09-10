@@ -63,6 +63,7 @@ class JavaCliCommandCatalogSteps {
     private lateinit var installedRoot: Path
     private lateinit var installedExecutable: Path
     private lateinit var sourceBuiltCodeLocation: Path
+    private var metadataDirectoryExistedBefore = false
     private lateinit var repositoryManifestBefore: Map<String, String>
     private lateinit var installationManifestBefore: Map<String, String>
     private lateinit var pinnedCapabilities: ByteArray
@@ -91,7 +92,7 @@ class JavaCliCommandCatalogSteps {
         if (::repositoryManifestBefore.isInitialized) {
             assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
             assertEquals(installationManifestBefore, captureManifest(installedRoot, excludeRepositoryBuildState = false))
-            assertFalse(repositoryRoot.resolve(".refactorkit").exists())
+            assertEquals(metadataDirectoryExistedBefore, repositoryRoot.resolve(".refactorkit").exists())
         }
     }
 
@@ -119,9 +120,9 @@ class JavaCliCommandCatalogSteps {
         assertEquals(PINNED_CAPABILITIES_SHA256, sha256(pinnedCapabilities))
         assertEquals(PINNED_HELP_SHA256, sha256(pinnedHelp))
 
+        metadataDirectoryExistedBefore = repositoryRoot.resolve(".refactorkit").exists()
         repositoryManifestBefore = captureManifest(repositoryRoot, excludeRepositoryBuildState = true)
         installationManifestBefore = captureManifest(installedRoot, excludeRepositoryBuildState = false)
-        assertFalse(repositoryRoot.resolve(".refactorkit").exists(), "test repository already contains .refactorkit")
     }
 
     @Given("the installed RefactorKit executable is guarded by an invocation tripwire and is neither selected nor invoked")
@@ -178,7 +179,10 @@ class JavaCliCommandCatalogSteps {
         assertFailsWith<SecurityException> { selfTest.checkWrite(repositoryRoot.resolve("tripwire-write").toString()) }
         assertFailsWith<SecurityException> { selfTest.checkDelete(repositoryRoot.resolve("tripwire-delete").toString()) }
         assertFailsWith<SecurityException> { selfTest.checkExec("refactorkit") }
-        assertEquals(4, selfTest.violations.size)
+        val evidencePath = repositoryRoot.resolve(".refactorkit/runs/catalogue-tripwire")
+        assertFailsWith<SecurityException> { selfTest.checkWrite(evidencePath.toString()) }
+        assertFailsWith<SecurityException> { selfTest.checkDelete(evidencePath.toString()) }
+        assertEquals(6, selfTest.violations.size)
     }
 
     @Given("a public-parser reachability probe resolves route and option grammar through the production parser but stops before command execution")
@@ -290,7 +294,7 @@ class JavaCliCommandCatalogSteps {
 
         assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
         assertEquals(installationManifestBefore, captureManifest(installedRoot, excludeRepositoryBuildState = false))
-        assertFalse(repositoryRoot.resolve(".refactorkit").exists())
+        assertEquals(metadataDirectoryExistedBefore, repositoryRoot.resolve(".refactorkit").exists())
         boundaryManifestsVerified = true
         routeContractVerified = true
     }
@@ -404,7 +408,11 @@ class JavaCliCommandCatalogSteps {
 
     @Then("every existing human-oriented parser and command behavior remains compatible, with no requirement-owned change outside the additive truthful top-level help lines")
     fun humanHelpAndParserBehaviorRemainCompatible() {
-        val baselineLines = pinnedHelp.toString(Charsets.UTF_8).split('\n')
+        // Retain the frozen Java oracle; apply only the separately approved T5 help delta.
+        val baselineLines = pinnedHelp.toString(Charsets.UTF_8).split('\n').flatMap { line ->
+            if (line == LEGACY_TYPESCRIPT_USAGE) listOf(TYPESCRIPT_CATALOGUE_USAGE, TYPESCRIPT_REFACTOR_USAGE)
+            else listOf(line)
+        }
         val actualLines = helpInvocation.stdoutText().split('\n')
         val baselineOutsideRequirement = baselineLines.filterNot { it.trim() == LEGACY_MOVE_USAGE }
         val actualOutsideRequirement = actualLines.filterNot { it.trim() in REQUIREMENT_OWNED_HELP_LINES }
@@ -470,7 +478,7 @@ class JavaCliCommandCatalogSteps {
         assertTrue(boundaryViolationReports.all { it.isEmpty() })
         assertEquals(repositoryManifestBefore, captureManifest(repositoryRoot, excludeRepositoryBuildState = true))
         assertEquals(installationManifestBefore, captureManifest(installedRoot, excludeRepositoryBuildState = false))
-        assertFalse(repositoryRoot.resolve(".refactorkit").exists())
+        assertEquals(metadataDirectoryExistedBefore, repositoryRoot.resolve(".refactorkit").exists())
         assertTrue(allInvocations.none { invocation -> invocation.arguments.any { it == "--apply" } })
     }
 
@@ -635,6 +643,8 @@ class JavaCliCommandCatalogSteps {
                     return SKIP_SUBTREE
                 }
                 entries[manifestPath(relative)] = "directory:${permissions(dir)}"
+                // Parent-harness evidence can change during the test; subject writes remain tripwire-denied.
+                if (excludeRepositoryBuildState && relative == Path.of(".refactorkit", "runs")) return SKIP_SUBTREE
                 return CONTINUE
             }
 
@@ -695,6 +705,12 @@ class JavaCliCommandCatalogSteps {
         const val PROBE_MODE = "probe"
         const val INVOKE_MODE = "invoke"
         const val PROCESS_TIMEOUT_SECONDS = 30L
+        const val LEGACY_TYPESCRIPT_USAGE =
+            "  refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]"
+        const val TYPESCRIPT_CATALOGUE_USAGE =
+            "  refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename|refactorings> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]"
+        const val TYPESCRIPT_REFACTOR_USAGE =
+            "  refactorkit typescript refactor <root> --operation <id> [--arguments-json <object>] --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--apply]"
 
         val TOP_LEVEL_FIELD_NAMES = listOf("schema", "schemaVersion", "commands")
         val ENTRY_FIELD_NAMES = listOf(

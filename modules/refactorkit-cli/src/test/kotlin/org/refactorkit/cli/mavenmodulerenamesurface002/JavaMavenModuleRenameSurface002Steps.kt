@@ -686,7 +686,7 @@ class JavaMavenModuleRenameSurface002Steps {
             record.history.map { it.state },
         )
         assertEquals(
-            "filesystem, snapshot, edit, approval, precondition, and diagnostics validation passed",
+            "filesystem, snapshot, edit, approval, precondition, and diagnostics validation passed; workspace-staging=transaction-path-v2",
             record.history.first().detail,
         )
         assertEquals(ApprovalKind.EXPLICIT_APPLY, record.transaction.approval.kind)
