@@ -350,10 +350,24 @@ class KotlinJvmRenameMethodCharacterizationSteps {
     @Then("^the plan summary reports the number of declarations and the number of affected files$")
     fun planSummaryReportsDeclarationsAndFiles() {
         val p = requireNotNull(plan)
-        assertTrue(
-            p.summary.contains("declaration(s)") && p.summary.contains("file(s) affected"),
-            "expected declaration(s)/file(s) affected in summary: ${p.summary}",
+        assertTrue(p.summary.contains("2 declaration(s)") && p.summary.contains("3 file(s) affected"), p.summary)
+        val base = Path.of("src/main/java/com/example/Base.java")
+        val child = Path.of("src/main/java/com/example/Child.java")
+        val client = Path.of("src/main/java/com/example/Client.java")
+        fun at(column: Int) = TextEdit(SourceRange(SourcePosition(1, column), SourcePosition(1, column + 8)), "renamed")
+        val expected = mapOf(base to listOf(at(32)), child to listOf(at(46)), client to listOf(at(44)))
+        val modifies = p.workspaceEdit.edits.filterIsInstance<FileEdit.Modify>()
+        assertEquals(3, p.workspaceEdit.edits.size)
+        assertEquals(3, modifies.size)
+        assertEquals(expected, modifies.associate { it.path to it.textEdits })
+        assertEquals(expected.keys, p.affectedFiles)
+        val before = requireNotNull(snapshot)
+        val expectedImage = before.trackedFiles.associate { it.path to it.content } + mapOf(
+            base to "package com.example;\npublic class Base { public void renamed(String s) {} }\n",
+            child to "package com.example;\npublic class Child extends Base { public void renamed(String s) {} }\n",
+            client to "package com.example;\npublic class Client { void x(){ new Child().renamed(\"a\"); } }\n",
         )
+        assertEquals(expectedImage, WorkspaceEditSimulator.apply(before, p.workspaceEdit).trackedFiles.associate { it.path to it.content })
     }
 
     // ------------------------------------------------------------ Scenario 3 Thens

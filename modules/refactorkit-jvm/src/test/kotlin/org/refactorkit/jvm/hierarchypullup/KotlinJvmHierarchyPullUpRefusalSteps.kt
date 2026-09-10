@@ -37,7 +37,7 @@ import kotlin.test.assertTrue
  * suite passes GREEN.
  *
  * Scenario 3 proves the refusal leaves no persistent side effect by snapshotting the workspace
- * root content identity (SHA-256 per regular file) before the persistent-side-effect check and
+ * root content identity (SHA-256 per regular file) before the first preview and
  * asserting the set is byte-for-byte unchanged afterward (no WAL/transaction/lock/pending-plan
  * artifact and no file create/modify/delete). Observed declared-to-actual mappings are appended
  * to build/reports/cucumber/java-hierarchy-pull-up-refusal-codes.txt for reconciliation.
@@ -89,9 +89,8 @@ class KotlinJvmHierarchyPullUpRefusalSteps(private val context: KotlinJvmRefusal
 
     @When("^the caller checks for persistent side effects$")
     fun callerChecksPersistentSideEffects() {
-        // AC: snapshot the workspace-root content identity before checking so the Then steps can
-        // prove no WAL/transaction/lock/pending-plan artifact and no file mutation was written.
-        workspaceBaseline = snapshotWorkspaceContent(fixtureRoot)
+        // Never overwrite the baseline after the Given has already produced the refusal.
+        verifyNoWorkspaceMutation()
     }
 
     // ------------------------------------------------------- Scenario 1 Thens
@@ -142,6 +141,7 @@ class KotlinJvmHierarchyPullUpRefusalSteps(private val context: KotlinJvmRefusal
     fun refusalRecordsNoLock() {
         val p = requireNotNull(plan)
         assertTrue(p.authorityLease == null, "expected no lock/authority lease on the refusal: ${p.toString()}")
+        verifyNoWorkspaceMutation()
     }
 
     @Then("^the refusal records no WAL$")
@@ -181,6 +181,7 @@ class KotlinJvmHierarchyPullUpRefusalSteps(private val context: KotlinJvmRefusal
         }
         fixtureRoot = root
         snapshot = JavaProjectScanner().scan(root)
+        workspaceBaseline = snapshotWorkspaceContent(root)
     }
 
     private fun previewPullUpMember() {
@@ -206,6 +207,7 @@ class KotlinJvmHierarchyPullUpRefusalSteps(private val context: KotlinJvmRefusal
     private fun verifyNoWorkspaceMutation() {
         val baseline = requireNotNull(workspaceBaseline) { "persistent-side-effect baseline was not captured" }
         val current = snapshotWorkspaceContent(fixtureRoot)
+        assertTrue(!Files.exists(fixtureRoot.resolve(".refactorkit")), "refusal must not create transaction/lock metadata")
         assertEquals(
             baseline, current,
             "expected no filesystem mutation on the workspace root after the refusal (no file " +

@@ -11,6 +11,9 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
+import org.refactorkit.core.TextEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaProjectScanner
@@ -336,9 +339,27 @@ class KotlinJvmJavaOrganizeImportsCharacterizationSteps {
     fun singleReplaceTextEditOverImportBlock() {
         val modify = assertNotNull(plan).workspaceEdit.edits.single() as FileEdit.Modify
         assertEquals(1, modify.textEdits.size, "expected a single replace TextEdit")
-        val textEdit = modify.textEdits.single()
-        assertTrue(textEdit.newText.startsWith("import "), "expected the TextEdit to replace the import block")
-        assertTrue(textEdit.newText.isNotEmpty())
+        // Authored fixture has five imports on lines2..6; the block includes its final newline.
+        assertEquals(
+            TextEdit(SourceRange(SourcePosition(2, 0), SourcePosition(7, 0)),
+                "import java.util.List;\nimport java.util.Map;\n"),
+            modify.textEdits.single(),
+        )
+        assertEquals(setOf(filePath), assertNotNull(plan).affectedFiles)
+        val expected = """
+            package com.example;
+
+            import java.util.List;
+            import java.util.Map;
+
+            public class Foo {
+                List<String> values;
+                Map<String, String> index;
+            }
+        """.trimIndent()
+        val staged = WorkspaceEditSimulator.apply(snapshot, assertNotNull(plan).workspaceEdit)
+        assertEquals(snapshot.files.associate { it.path to if (it.path == filePath) expected else it.content },
+            staged.files.associate { it.path to it.content })
     }
 
     @Then("the plan warns that JDT binding evidence checked exact imports and removed the unused import count")
@@ -526,14 +547,7 @@ class KotlinJvmJavaOrganizeImportsCharacterizationSteps {
 
     @Then("the refusal summary carries the message {string}")
     fun refusalSummaryMessage(message: String) {
-        assertTrue(message.isNotBlank() && message.contains("Generated.java"))
-        val observed = assertNotNull(plan)
-        assertTrue(
-            observed.summary.startsWith("Generated source cannot be rewritten: ") &&
-                observed.summary.contains("Generated.java (") &&
-                observed.summary.contains("cannot be rewritten"),
-            "expected refusal summary to carry the Generated.java message, got: ${observed.summary}",
-        )
+        assertEquals(message, assertNotNull(plan).summary)
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

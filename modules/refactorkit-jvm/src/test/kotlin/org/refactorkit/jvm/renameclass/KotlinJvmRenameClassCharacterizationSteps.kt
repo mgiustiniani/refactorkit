@@ -410,7 +410,24 @@ class KotlinJvmRenameClassCharacterizationSteps(private val context: KotlinJvmRe
 
     @Then("^the plan evidence is LEXICAL_FALLBACK$")
     fun planEvidenceLexicalFallback() {
-        assertEquals(RefactoringEvidence.LEXICAL_FALLBACK, requireNotNull(plan).evidence, requireNotNull(plan).toString())
+        val p = requireNotNull(plan)
+        assertEquals(RefactoringEvidence.LEXICAL_FALLBACK, p.evidence)
+        val client = Path.of("src/main/java/com/example/Client.java")
+        val destination = Path.of("src/main/java/com/example/AccountManager.java")
+        fun at(column: Int) = TextEdit(SourceRange(SourcePosition(1, column), SourcePosition(1, column + 11)), "AccountManager")
+        val expected = mapOf(STANDARD_DECLARATION to listOf(at(13)), client to listOf(at(22), at(42)))
+        val modifies = p.workspaceEdit.edits.filterIsInstance<FileEdit.Modify>()
+        assertEquals(3, p.workspaceEdit.edits.size)
+        assertEquals(2, modifies.size)
+        assertEquals(expected, modifies.associate { it.path to it.textEdits.sortedBy { edit -> edit.range.start.character } })
+        assertEquals(listOf(FileEdit.Rename(STANDARD_DECLARATION, destination)), p.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>())
+        assertEquals(expected.keys + setOf(destination), p.affectedFiles)
+        val before = requireNotNull(snapshot)
+        val expectedImage = before.trackedFiles.associate { it.path to it.content }.toMutableMap()
+        expectedImage.remove(STANDARD_DECLARATION)
+        expectedImage[destination] = "package com.example;\npublic class AccountManager { private MissingDependency dependency; }\n"
+        expectedImage[client] = "package com.example;\npublic class Client { AccountManager s = new AccountManager(); }\n"
+        assertEquals(expectedImage, WorkspaceEditSimulator.apply(before, p.workspaceEdit).trackedFiles.associate { it.path to it.content })
     }
 
     @Then("^the plan warns that JDT type-binding evidence was unavailable or not clean and that the rename uses lexical fallback and needs careful review$")

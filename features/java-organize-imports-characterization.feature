@@ -134,10 +134,10 @@ Ability: Organize a single-file Java import block with deduplication, same-packa
     And the refusal leaves no pending actionable plan
     And the refusal carries confidence 0.0 and risk HIGH
     And the refusal carries a Diagnostic with severity ERROR and code "java.generatedSource"
-    And the refusal summary carries the message "Generated source cannot be rewritten: Generated.java (<reason>)"
+    And the refusal summary carries the message "Generated source cannot be rewritten: <path> (<reason>)"
 
     Examples:
-      | reason |
-      | path is inside a generated-source or build-output location |
-      | source declares a generated-code annotation |
-      | source header identifies generated code |
+      | reason | path |
+      | path is inside a generated-source or build-output location | build/generated/sources/annotationProcessor/java/main/Generated.java |
+      | source declares a generated-code annotation | src/main/java/Generated.java |
+      | source header identifies generated code | src/main/java/Generated.java |

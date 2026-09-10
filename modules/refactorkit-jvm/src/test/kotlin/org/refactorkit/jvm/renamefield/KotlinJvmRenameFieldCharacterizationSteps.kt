@@ -16,7 +16,6 @@ import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaLanguageAdapter
-import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
@@ -363,11 +362,20 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
     fun planAffectedSetFromJavaLexerOccurrences() {
         val p = requireNotNull(plan)
         val snap = requireNotNull(snapshot)
-        val expected = snap.files
-            .filter { it.languageId == "java" && JavaLexer.findOccurrences(it.content, "amount").isNotEmpty() }
-            .map { it.path }
-            .toSet()
-        assertEquals(expected, p.affectedFiles, "expected affected-file set from JavaLexer occurrences: ${p.affectedFiles}")
+        // Expected values are authored independently of the production lexer and returned plan.
+        val client = Path.of("src/main/java/com/example/Client.java")
+        fun at(column: Int) = TextEdit(SourceRange(SourcePosition(1, column), SourcePosition(1, column + 6)), "renamed")
+        val expected = mapOf(STANDARD_DECLARATION to listOf(at(31)), client to listOf(at(77)))
+        val modifies = p.workspaceEdit.edits.filterIsInstance<FileEdit.Modify>()
+        assertEquals(2, p.workspaceEdit.edits.size)
+        assertEquals(2, modifies.size)
+        assertEquals(expected, modifies.associate { it.path to it.textEdits })
+        assertEquals(expected.keys, p.affectedFiles)
+        val expectedImage = snap.trackedFiles.associate { it.path to it.content } + mapOf(
+            STANDARD_DECLARATION to "package com.example;\npublic class UserService { int renamed; MissingDependency d; }\n",
+            client to "package com.example;\npublic class Client { void x(){ UserService u = new UserService(); int a = u.renamed; } }\n",
+        )
+        assertEquals(expectedImage, WorkspaceEditSimulator.apply(snap, p.workspaceEdit).trackedFiles.associate { it.path to it.content })
     }
 
     @Then("^the plan warns that reflection, Spring event or listener names, Jackson property names, and annotation-processor output are NOT updated and require manual review$")

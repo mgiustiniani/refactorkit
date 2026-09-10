@@ -20,10 +20,11 @@ Ability: Delete a JDT-proven unused Java type with exact binding evidence, fall 
   Characterization RED-deferral (truthful, anti-fake): production already implements the
   planner JavaSafeDeletePlanner in the Java adapter, so this feature begins GREEN and
   asserts the real behavior rather than inventing it. The RED-deferral is pre-approved in
-  the J1 catalogue because no Cucumber runner, glue, or independent requirements-quality
-  review exists for this row yet; the feature-level status stays @not-implemented until a
-  runner and glue validate the scenarios and an independent reviewer passes. If a first
-  execution reveals a real mismatch, the row is reclassified as GENUINE RED per baseline
+  the J1 catalogue. At intake, the row had no Cucumber runner, glue, or independent
+  requirements-quality review. The current runner/glue now validate the scenarios,
+  and r005 records bounded C-DELETE source acceptance; the existing feature tag is not
+  final J1, native, or release acceptance. If an execution reveals a real mismatch,
+  the row is reclassified as GENUINE RED per baseline
   section 2 and production is corrected. The planner emits refusals as real MESSAGE strings
   through a refused snapshot plan, not as typed refusal codes; there is no refusalCode
   field. Every refusal message asserted below is the exact message string the planner
