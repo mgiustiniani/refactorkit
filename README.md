@@ -37,11 +37,13 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 - Supreme multi-language `v1.0.0` roadmap: [`docs/releases/v1.0.0-plan.md`](docs/releases/v1.0.0-plan.md)
 - Deterministic formatting contract: [`docs/formatting.md`](docs/formatting.md)
 
-Latest release is `v0.6.2`; main develops `0.7.0-SNAPSHOT`. API `0.2` remains
-the beta compatibility baseline. The `v0.6.2` publication patch delivers the
-`v0.6.0` managed TypeScript/JavaScript semantic foundation on the
-natively built self-contained runtime matrix; platforms are marked supported only
-after native managed apply/recovery/rollback acceptance. Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
+Newest published version is **`v0.7.0` for Linux x86-64**, independently verified
+within its approved bounded Java, TypeScript/JavaScript, Kotlin and recovery scope.
+See [0.7.0 acceptance](docs/releases/v0.7.0-acceptance.md). Source/build is `0.7.0`;
+API `0.2` remains the beta compatibility baseline. Other0.7.0 hosts are explicitly
+waived/not verified; Windows/macOS retain the separately qualified `v0.6.2` assets.
+GitHub's cross-platform Latest alias deliberately remains on the earlier release.
+Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is
 the reference and widest catalogue, while other mature ecosystems target
 equivalent semantic safety and idiomatic depth.
@@ -50,7 +52,7 @@ equivalent semantic safety and idiomatic depth.
 
 | Platform | Architecture | Published support | Planned asset |
 |---|---|---|---|
-| Linux | x86_64 | `v0.6.2` supported | `refactorkit-runtime-<version>-linux-x86_64.zip` |
+| Linux | x86_64 | `v0.7.0` bounded support | `refactorkit-runtime-<version>-linux-x86_64.zip` |
 | Windows | x86_64 | `v0.6.2` supported | `refactorkit-runtime-<version>-windows-x86_64.zip` |
 | macOS | Intel x86_64 | `v0.6.2` supported | `refactorkit-runtime-<version>-macos-x86_64.zip` |
 | macOS | Apple Silicon arm64 | `v0.6.2` supported | `refactorkit-runtime-<version>-macos-aarch64.zip` |
@@ -60,31 +62,34 @@ receives an independent checksum/SBOM/attestation, and must pass packaged
 version, semantic lookup, format/apply/rollback, recovery and filesystem safety
 checks. The IDE does not require a globally installed Java runtime.
 
-## Install a v0.6.2 self-contained runtime
+## Install a self-contained runtime
 
-Select `linux-x86_64`, `windows-x86_64`, `macos-x86_64`, or `macos-aarch64`.
+Select **0.7.0 / `linux-x86_64`** for Linux. For Windows or macOS, select the
+separately verified **0.6.2** assets (`windows-x86_64`, `macos-x86_64`, or
+`macos-aarch64`);0.7.0 does not ship those platforms.
 Every package includes its native launcher and embedded Java runtime, so users do
 not need a globally installed Java runtime.
 
-Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.6.2>
+Release page: <https://github.com/mgiustiniani/refactorkit/releases/tag/v0.7.0>
 
-The immutable release commit and final asset hashes are recorded in
-[`docs/releases/v0.6.2-acceptance.md`](docs/releases/v0.6.2-acceptance.md); use
-each platform asset's adjacent checksum as authoritative.
+Immutable commits and asset identities are recorded in
+[0.7.0 acceptance](docs/releases/v0.7.0-acceptance.md) and
+[0.6.2 acceptance](docs/releases/v0.6.2-acceptance.md). Verify the selected asset's
+adjacent checksum and attestations before use.
 
 Linux x86_64 example:
 
 ```bash
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.2/refactorkit-runtime-0.6.2-linux-x86_64.zip
-curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.6.2/refactorkit-runtime-0.6.2-linux-x86_64.zip.sha256
-sha256sum -c refactorkit-runtime-0.6.2-linux-x86_64.zip.sha256
-unzip refactorkit-runtime-0.6.2-linux-x86_64.zip -d /tmp/refactorkit-v0.6.2
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.7.0/refactorkit-runtime-0.7.0-linux-x86_64.zip
+curl -LO https://github.com/mgiustiniani/refactorkit/releases/download/v0.7.0/refactorkit-runtime-0.7.0-linux-x86_64.zip.sha256
+sha256sum -c refactorkit-runtime-0.7.0-linux-x86_64.zip.sha256
+unzip refactorkit-runtime-0.7.0-linux-x86_64.zip -d /tmp/refactorkit-v0.7.0
 ```
 
 Run smoke checks with `JAVA_HOME` unset to prove the embedded runtime is used:
 
 ```bash
-RK=/tmp/refactorkit-v0.6.2/refactorkit/bin/refactorkit
+RK=/tmp/refactorkit-v0.7.0/refactorkit/bin/refactorkit
 
 env -u JAVA_HOME "$RK" --help
 env -u JAVA_HOME "$RK" scan samples/java-maven-simple
@@ -106,7 +111,7 @@ env -u JAVA_HOME ./gradlew :modules:refactorkit-cli:smokePackagedCli
 Optionally add the extracted launcher to `PATH`:
 
 ```bash
-export PATH=/tmp/refactorkit-v0.6.2/refactorkit/bin:$PATH
+export PATH=/tmp/refactorkit-v0.7.0/refactorkit/bin:$PATH
 refactorkit --help
 ```
 

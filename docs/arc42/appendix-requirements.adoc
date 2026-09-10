@@ -2,7 +2,36 @@
 :toc:
 :sectnums:
 
-== Authorized b85fde24 build and checkout-history correction — r010
+== Published bounded 0.7.0 acceptance — r012
+
+Release https://github.com/mgiustiniani/refactorkit/releases/tag/v0.7.0[v0.7.0]
+is *published and independently verified* within the approved J1/T5/K5/I1 scope.
+API0.2 is unchanged. Immutable source is `b9a31dc144b46e0721e2b8261f0ba2b085816463`,
+tree `95aa410e75a547a40a579bece3655e10611af8eb`; exact tagged CI34505984557/attempt1
+passes both jobs. link:../releases/v0.7.0-acceptance.md[Final acceptance] records
+1617 reported tests (1242 passed,375 skipped, zero failures/errors), all packaged
+smokes, J1 native3/138, K1/K2 200/14, K5 completion24/5 and move-next25/3 with
+actual finalizers, T5 26/95, I1 8/31 and34 closed transports/all children exited.
+
+The Linux x86-64 ZIP is75882034 bytes, SHA-256
+`97caf4e743a1b8a2529e944f280ca3b563531566f4d20a092ca08209300a69a8`.
+All1164 source-file hashes and222 runtime members join to the exact native image.
+ZIP/manifest build provenance and SPDX attestations verify cryptographically against
+the certificate-bound source/tag/workflow/run. Independently downloaded draft,
+CI inputs and all four unauthenticated public downloads match exactly; actual
+public archive/MCP/version/embedded-Java checks pass. Supplied-evidence reviews:
+`PASS_FOR_PUBLICATION`, then `PASS_RELEASE_ACCEPTANCE`; reviewer execution/hash
+recomputation is not claimed. Build-time manifest `PENDING` fields remain historical.
+
+Only Linux x86-64 is shipped. Other hosts remain `WAIVED_BY_USER / not verified`;
+0.6.2 remains available for Windows/macOS. Skips are not passes; static findings
+are not clean and coverage remains unmeasured. All bounded semantic, filesystem,
+race, power-loss and client-managed LSP exclusions remain. No backup integration,
+branch push or global installation replacement occurred. Published tag/assets are
+immutable. Earlier checkpoints below retain their original states and are not
+current release blockers or retroactively successful executions.
+
+== Earlier authorized b85fde24 build and checkout-history correction — r010
 
 The authorized `89426f70` -> `b85fde24` tag update completed with exact remote
 lease/local compare-and-swap, without branch push or changing the qualified
