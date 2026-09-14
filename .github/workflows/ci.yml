@@ -217,7 +217,7 @@ jobs:
       fail-fast: false
       matrix:
         include: >-
-          ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.qualification_platform == 'linux-x86_64' ? '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' : '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
+          ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.qualification_platform == 'linux-x86_64' && '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' || '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout exact source revision
