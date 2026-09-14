@@ -40,6 +40,11 @@ import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.WorkspaceSnapshotComposer
+import org.refactorkit.c.CRefactoringFacade
+import org.refactorkit.c.ClangSemanticToolchain
+import org.refactorkit.c.ClangToolchainDiscoverer
+import org.refactorkit.c.ClangToolchainDiscovery
+import org.refactorkit.c.ClangToolchainRequest
 import org.refactorkit.core.WorkspaceIndex
 import org.refactorkit.core.WorkspaceIndexCompleteness
 import org.refactorkit.core.WorkspaceIndexSession
@@ -216,6 +221,7 @@ class DaemonSession(
         "patch.recover"     -> patchRecover(params)
         "patch.rollback"    -> patchRollback(params)
         "java.importExternalClass" -> javaImportExternalClass(params)
+        "c.preview"         -> cPreview(params)
         else -> throw JsonRpcException(JsonRpcErrorCodes.METHOD_NOT_FOUND, "Method not found: $method")
         }
     }
@@ -1732,6 +1738,49 @@ class DaemonSession(
         val planId = params?.string("planId") ?: missing("planId")
         val discarded = planId.isNotBlank() && pendingPlans.remove(PlanId(planId)) != null
         return PROTOCOL_JSON.encodeToJsonElement(DiscardResponseDto(planId, discarded))
+    }
+
+    private fun cPreview(params: JsonObject?): JsonElement {
+        val p = params ?: missing("params")
+        val operation = p.string("operation") ?: missing("operation")
+        val args = (p["arguments"] as? JsonObject)?.let { obj ->
+            obj.entries.associate { (k, v) -> k to (v as? JsonPrimitive)?.content.orEmpty() }
+        } ?: emptyMap()
+        val snap = requireSnapshot()
+        val toolchain = discoverCToolchain(p)
+        val facade = CRefactoringFacade(toolchain)
+        try {
+            facade.start(snap)
+            val plan = facade.preview(snap, operation, args)
+            if (plan.status == PatchStatus.REFUSED) {
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.PLAN_REFUSED,
+                    plan.summary,
+                    buildJsonObject { plan.refusalCode?.let { put("refusalCode", it) } },
+                )
+            }
+            pendingPlans.insert(plan.id, PendingPlan(plan, languageId = "c"))
+            return planToJson(plan)
+        } finally {
+            facade.close()
+        }
+    }
+
+    private fun discoverCToolchain(p: JsonObject): ClangSemanticToolchain {
+        val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val request = ClangToolchainRequest(
+            workspaceRoot = root,
+            clangExecutable = p.string("clang")?.let(Paths::get),
+            clangdExecutable = p.string("clangd")?.let(Paths::get),
+            clangFormatExecutable = p.string("clangFormat")?.let(Paths::get),
+        )
+        return when (val discovery = ClangToolchainDiscoverer().discover(request)) {
+            is ClangToolchainDiscovery.Available -> discovery.toolchain
+            is ClangToolchainDiscovery.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                discovery.diagnostics.joinToString("; ") { it.message },
+            )
+        }
     }
 
     private fun refactorApply(params: JsonObject?): JsonElement {

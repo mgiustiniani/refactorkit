@@ -95,3 +95,45 @@ receives a dedicated `0.12.x` band based on compiler/SourceKit-LSP, SwiftSyntax,
 SwiftPM and bounded declarative Xcode models, including Objective-C bridging.
 Groovy, C# and Rust shift to `0.13.x`, `0.14.x` and `0.15.x`. Clojure remains the
 final planned language integration before global `1.0` stabilization.
+
+== Amendment 2026-09-10: C in 0.8.0; Multi-Host Qualification at 1.0.0
+
+Status: accepted product decision, `V080-C-AND-V100-MULTIHOST-001`.
+The user explicitly directed that 0.8.0 be C and that multi-host verification
+occur at 1.0.0, then authorized the roadmap-alignment task. This amendment
+supersedes the earlier immediate Python-first and combined-Clang release
+allocation without changing the accepted lifecycle of this ADR.
+
+* `0.8.0` delivers a bounded C adapter using reusable Clang infrastructure,
+  before Python. It does not implicitly include C++ or Objective-C.
+* The remaining relative order is Python, Go, Scala, C++/Objective-C completion,
+  Swift, Groovy, C#, Rust, then Clojure and global 1.0 stabilization. Later minor
+  version numbers are explicitly unassigned; no language is removed or silently
+  renumbered into a release commitment.
+* Multi-host qualification is deferred to `1.0.0`, not a blocking gate for 0.8.0
+  or intervening 0.x releases. Each interim release must qualify the platform it
+  actually ships; other platforms remain *NOT VERIFIED* and must not receive
+  unqualified assets or PASS labels.
+* Local semantic correctness, diagnostics, approval, managed WAL/apply/rollback,
+  resource and filesystem safety, regressions, immutable source/artifact identity,
+  independent review, SBOM/attestations and downloaded-runtime verification remain
+  mandatory. This is a scheduling decision, not a general safety waiver.
+* The actual `1.0.0` candidate must pass every advertised native platform. The
+  reference matrix remains Linux x86-64, Windows x86-64, macOS x86-64 and macOS
+  arm64. Earlier native receipts, the original 0.7 waiver and failed runs remain
+  unchanged historical evidence, not qualification of a later candidate.
+
+link:../arc42/appendix-requirements.adoc[ARC42] owns integrated status and
+link:../releases/v0.8.0-plan.md[the C 0.8.0 plan] owns the bounded delivery and
+acceptance catalogue. The language-neutral transaction boundary and separate
+client-managed LSP authority do not change. Runtime, API, CI selection and source
+version are not changed by this documentation amendment; prospective single-host
+release wiring belongs to the 0.8 release task. Implementation must qualify each
+advertised operation rather than claim C stability from tool version probes,
+parsing or LSP rename alone.
+
+Cost/risk: platform portability regressions may remain undetected until 1.0.0;
+the deferred matrix is tracked explicitly. C still requires conservative handling
+of preprocessor configurations, shared headers, external consumers and API/ABI
+boundaries. Reusing Clang reduces later duplication but does not qualify other
+Clang-family languages automatically.

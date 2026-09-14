@@ -23,10 +23,11 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 ## Architecture documentation
 
 - ARC42 index: [`docs/arc42/README.adoc`](docs/arc42/README.adoc)
-- Release-blocking `v0.7.x` completion contract: [`docs/requirements/v0.7.x-completion-contract.md`](docs/requirements/v0.7.x-completion-contract.md)
+- Approved next release, `0.8.0` C plan: [`docs/releases/v0.8.0-plan.md`](docs/releases/v0.8.0-plan.md)
+- Historical approved `v0.7.x` completion contract: [`docs/requirements/v0.7.x-completion-contract.md`](docs/requirements/v0.7.x-completion-contract.md)
 - C4 model / System Context: [`docs/c4/workspace.dsl`](docs/c4/workspace.dsl)
 - Active product-critical Java/Maven diagnostics authority: [`docs/requirements/java-maven-authoritative-diagnostics.md`](docs/requirements/java-maven-authoritative-diagnostics.md)
-- Active `v0.7.x` Kotlin/JVM interoperability plan: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
+- Published `v0.7.0` Kotlin/JVM interoperability plan and history: [`docs/releases/v0.7.0-plan.md`](docs/releases/v0.7.0-plan.md)
 - Workspace index and semantic query plan: [`docs/releases/v0.7.0-intelligence-index-plan.md`](docs/releases/v0.7.0-intelligence-index-plan.md)
 - TypeScript workspace-index acceptance: [`docs/releases/v0.7.0-typescript-workspace-index-acceptance.md`](docs/releases/v0.7.0-typescript-workspace-index-acceptance.md)
 - Immutable editor-overlay foundation: [`docs/releases/v0.7.0-editor-overlay-foundation-acceptance.md`](docs/releases/v0.7.0-editor-overlay-foundation-acceptance.md)
@@ -47,6 +48,12 @@ Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
 adapters through Clojure and global all-language acceptance are complete. Java is
 the reference and widest catalogue, while other mature ecosystems target
 equivalent semantic safety and idiomatic depth.
+
+The next planned release is **0.8.0 dedicated to C, before Python**. C is not yet
+implemented or qualified by this planning update. **Multi-host qualification is
+scheduled at 1.0.0**; interim releases must still qualify their actually shipped
+platform and all local safety, diagnostics, transaction and artifact gates. Other
+hosts remain **NOT VERIFIED**. See the [C release plan](docs/releases/v0.8.0-plan.md).
 
 ## Self-contained runtime platforms
 

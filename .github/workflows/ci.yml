@@ -5,6 +5,13 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      qualification_platform:
+        description: 'Single-platform qualification target for 0.8.0 (other hosts remain NOT VERIFIED until 1.0.0)'
+        required: false
+        default: linux-x86_64
+        type: string
 
 jobs:
   build:
@@ -209,19 +216,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2022
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
-            gradle: ./gradlew
+        include: >-
+          ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.qualification_platform == 'linux-x86_64' ? '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' : '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout exact source revision

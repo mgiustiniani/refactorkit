@@ -8,13 +8,37 @@ Status: implementation-informed with planned items explicitly marked.
 
 RefactorKit is structured as a local, deterministic refactoring engine around a language-independent patch core and pluggable language/integration adapters. The primary strategy is to make changes previewable and diagnosable, with managed compensation after completely successful apply, for humans, CI, editors, and local AI agents. The audited current flows are preflighted compensatable batches, not ACID or crash-safe transactions; stronger rollback, isolation, durability, and recovery properties remain planned.
 
-The release strategy published the hardened Java/transaction foundation as `v0.4.0`, the cross-platform runtime and multi-language kernel as `v0.5.0`, and the managed TypeScript/JavaScript semantic foundation as `v0.6.0`. Later `0.x` bands build deep adapters. API `1.0` freezes only after Clojure completes the planned language sequence and global alpha/beta/RC acceptance passes; active API remains `0.2` until an explicit migration. Stability is evidence-gated per language and operation; unsupported shapes remain conservative refusals.
+The release strategy published the hardened Java/transaction foundation as `v0.4.0`, the cross-platform runtime and multi-language kernel as `v0.5.0`, the managed TypeScript/JavaScript semantic foundation as `v0.6.0`, and the bounded Java/TypeScript/Kotlin/recovery scope as `v0.7.0` on Linux x86-64 (link:../releases/v0.7.0-acceptance.md[final acceptance]). The next approved release is `0.8.0` dedicated to C before Python. Later `0.x` bands build deep adapters. API `1.0` freezes only after Clojure completes the planned language sequence and global alpha/beta/RC acceptance passes; active API remains `0.2` until an explicit migration. Stability is evidence-gated per language and operation; unsupported shapes remain conservative refusals.
 
 The packaged-process qualification strategy for existing `REQ-JAVA-MAVEN-MOVE-AUTH-001` is now implemented as a deployment/test validation adapter, not product semantics: the authoritative feature/pickle is executed by a separate packaged Cucumber source set/task against the real unpacked self-contained CLI. Ordinary `test`/`check` remains source-built and packaging-independent. Official final OpenJDK 21.0.11/Linux `amd64` execution of `:modules:refactorkit-cli:packagedMavenMoveClassAuthorityTest --rerun-tasks` reported `BUILD SUCCESSFUL` in 22s with 35 tasks, JUnit 22 discovered/1 executed/21 tag-filtered/0 failures or errors, and one Cucumber scenario with five background plus fourteen scenario steps (19/19 passed) and 2/2 hooks; packaged log SHA-256 `1fa8cf358882196659abd76e9793214d906383cf780124580ed9f64fb3d643c2`, JSON SHA-256 `9ea18b8638846c08a63c78c6201ef44c7205bb7a62a21da7fd184688e5ada955`. The separately reported final source-built whole-tree gate passed 1045 discovered/817 executed/228 skipped or tag-filtered standard tests with zero failures/errors, 140 XML files, and 82 executed tasks (log SHA-256 `89438b03d5228f8ff8173b82a5dc587a36b0907d476dd2adffceff54bca874ef`); it intentionally excludes the dedicated packaged task. Targeted custom-source-set PMD/SpotBugs tasks also passed (log SHA-256 `2cf542051224e2e81f81b5f7ec8132a59ef04258ff2902346076ab39b25c0ff2`) with an intentionally non-zero, reviewed/non-blocking classification of 99 packaged glue/harness findings (57 NP, 14 MS, 12 BC, 6 AT, 9 RCN, 1 UrF), no production source addition/modification by this slice, and no aggregate-cleanliness or numerical/child-JVM-coverage claim. That historical local evidence did not itself promote native CI. Exact revision-bound run `31336067318` subsequently passed public REQ-001 and the complete 13-ID/31-case production-JAR matrix on Linux x86-64, Windows x86-64, macOS x86-64, and macOS arm64. Every row remains `PASSED`; field/general populations, crash/concurrency, archive trust/SBOM/signing, numerical child-JVM coverage, unexercised deployment shapes, and a green whole-repository CI claim remain outside.
 
-== Confirmed `v0.7.x` Completion Strategy
+== Approved `0.8.0` C Strategy and Multi-Host Schedule
 
-Status: confirmed program architecture, with implementation planned or otherwise open unless a separately cited bounded row is already qualified. The normative scope is link:../requirements/v0.7.x-completion-contract.md[`docs/requirements/v0.7.x-completion-contract.md`], and the requirements appendix owns the decomposed completion catalogue. Existing accepted decisions and historical execution evidence remain unchanged.
+Status: approved plan, not C implementation evidence. Product decision
+`V080-C-AND-V100-MULTIHOST-001` is recorded in
+link:../adr/0009-supreme-multilanguage-v1-roadmap.adoc[ADR 0009's 2026-09-10 amendment].
+The link:../releases/v0.8.0-plan.md[C release plan] defines C11/C17 and a reference
+Clang/clangd/clang-format 22.1.8 qualification target on Linux x86-64. Version-only
+observations do not prove semantic support. C++/Objective-C remain later adapters.
+
+Reuse the registry, Build Model SPI, semantic processes, overlays, external-edit
+normalization, diagnostics gates and `PatchEngine`. C owns TU flags, preprocessor
+configuration, include/header ownership and Clang evidence outside core. Unknown
+required configurations, unsafe compiler arguments and unproved build origins
+must not grant mutation authority. Managed edits retain preview/approval/WAL/
+rollback; native LSP proposals retain their separate client-managed boundary.
+
+Multi-host qualification is deferred to *1.0.0*, not required before 0.8.0 or
+intervening 0.x releases. Qualify each actually shipped platform and leave other
+hosts *NOT VERIFIED*. Local safety, regressions, native source/runtime binding,
+independent review and verified downloads remain mandatory. Future CI selection
+is work for the release task; existing workflows/finalizers and historical host
+receipts are not rewritten by this scope update. At 1.0.0, qualify the full
+advertised platform matrix on the actual candidate.
+
+== Historical `v0.7.x` Completion Strategy
+
+Status: historical program-architecture checkpoint; the originally planned/open descriptions below retain that phase's meaning. The approved bounded release has since closed, as recorded in link:../releases/v0.7.0-acceptance.md[final 0.7.0 acceptance]. The normative scope is link:../requirements/v0.7.x-completion-contract.md[`docs/requirements/v0.7.x-completion-contract.md`], and the requirements appendix owns the decomposed completion catalogue. Existing accepted decisions and historical execution evidence remain unchanged.
 
 The completion strategy is *authority before aggregation*:
 

@@ -24,6 +24,7 @@ include(
     ":modules:refactorkit-web-importer",
     ":modules:refactorkit-tree-sitter",
     ":modules:refactorkit-typescript",
+    ":modules:refactorkit-c",
     ":modules:refactorkit-kotlin",
     ":modules:refactorkit-jvm",
     ":modules:refactorkit-testkit",

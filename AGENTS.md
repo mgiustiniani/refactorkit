@@ -1790,6 +1790,7 @@ Rust: rust-analyzer
 Go: gopls
 C#: Roslyn
 Kotlin: Kotlin language server or compiler-based tooling
+C: clangd, with Clang tooling for deep semantic analysis and rewrites
 ```
 
 RefactorKit acts as orchestrator:
@@ -1809,20 +1810,40 @@ Roadmap order after the shared kernel:
 ```text
 1. TypeScript / JavaScript
 2. Kotlin
-3. Python
-4. Go
-5. Scala
-6. C / C++ / Objective-C through shared Clang infrastructure
-7. Swift with SwiftPM/Xcode and Objective-C interoperability
-8. Groovy
-9. C#
-10. Rust
-11. Clojure, followed by global 1.0 stabilization
+3. C in 0.8.0, establishing reusable Clang infrastructure
+4. Python
+5. Go
+6. Scala
+7. C++ / Objective-C, completing the shared Clang family
+8. Swift with SwiftPM/Xcode and Objective-C interoperability
+9. Groovy
+10. C#
+11. Rust
+12. Clojure, followed by global 1.0 stabilization
 ```
+
+The approved 0.8.0 focus is C before Python, not all Clang-family languages at
+once. Later release numbers remain unassigned; preserve the relative language
+order and mandatory pre-1.0 targets. See `docs/releases/v0.8.0-plan.md`,
+`docs/releases/v1.0.0-plan.md` and ADR 0009's 2026-09-10 amendment.
 
 Objective-C and Objective-C++ retain capability matrices distinct from C/C++.
 Swift uses compiler/SourceKit-LSP/SwiftSyntax evidence and must model bridging
 boundaries explicitly. No language is promoted from parsing or LSP rename alone.
+
+### 23.4 Approved Multi-Host Schedule
+
+Multi-host qualification is deferred to **1.0.0** by explicit product decision.
+It is not a release gate for 0.8.0 or intervening 0.x releases. Qualify the actual
+single platform shipped by each interim release; other hosts remain **NOT VERIFIED**.
+Never publish an unqualified host artifact or relabel that host PASS.
+
+Local semantic correctness, staged diagnostics, approval, WAL/rollback, process
+and filesystem safety, regression, source/artifact identity, supply-chain evidence
+and independently executed downloads remain mandatory. This is not a general
+safety waiver. At 1.0.0, qualify the complete advertised platform matrix against
+the actual candidate. Preserve earlier native evidence, waivers and failed runs
+as historical records; do not weaken their finalizers or rewrite sealed receipts.
 
 ---
 

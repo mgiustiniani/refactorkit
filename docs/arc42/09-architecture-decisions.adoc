@@ -2,7 +2,7 @@
 :toc:
 :sectnums:
 
-Status: implementation-informed. This chapter indexes ADRs only; ADR bodies live under `docs/adr/`. Implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004, six-case `008`, REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`, and REQ-JAVA-MAVEN-MODULE-RENAME-001 remain bounded implementation consequences of accepted decisions. The confirmed `v0.7.x` companion-move, T5 authority decomposition, API `0.2` LSP ownership, recipe-composition, and release-evidence rules refine the same accepted decision set; they are planned/blocked requirements, not new implementation evidence. No ADR lifecycle changed.
+Status: implementation-informed. This chapter indexes ADRs only; ADR bodies live under `docs/adr/`. Implemented-and-validated REQ-JAVA-MAVEN-MOVE-AUTH-004, six-case `008`, REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004`, and REQ-JAVA-MAVEN-MODULE-RENAME-001 remain bounded implementation consequences of accepted decisions. The historical `v0.7.x` companion-move, T5 authority decomposition, API `0.2` LSP ownership, recipe-composition, and release-evidence assessments below retain their original phase status; current bounded publication evidence is in link:../releases/v0.7.0-acceptance.md[0.7.0 acceptance]. ADR 0009 now records the approved C 0.8.0 / multihost 1.0.0 scheduling amendment, not C implementation evidence. No ADR lifecycle changed.
 
 == ADR Search Result
 
@@ -57,7 +57,7 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |ADR 0009
 |Defer v1.0 Until IDE-Grade Multi-Language Completion
 |link:../adr/0009-supreme-multilanguage-v1-roadmap.adoc[docs/adr/0009-supreme-multilanguage-v1-roadmap.adoc]
-|Accepted; `v0.4.0` hardening and long-range all-language acceptance active
+|Accepted; 2026-09-10 amendment fixes C in 0.8.0 before Python and defers multi-host qualification to 1.0.0 without weakening local safety; later version numbers remain unassigned and all pre-1.0 languages retained
 
 |ADR 0010
 |Offline Effective Build Models and Source Ownership
@@ -74,6 +74,15 @@ ADR files were found under `docs/adr/` during alpha hardening.
 |link:../adr/0012-authoritative-release-aware-java-maven-diagnostics.adoc[docs/adr/0012-authoritative-release-aware-java-maven-diagnostics.adoc]
 |Accepted architecture; evidence refreshed 2026-07-31 without changing the decision. Full-reactor graph completeness remains descriptor-closed over selected nodes and hash-bound edge classifications. Bounded REQ-JAVA-MAVEN-MOVE-AUTH-001 through `012` now reconcile to twelve implemented-and-validated definitions and 22 expanded cases. Six-case `008` validates four immutable typed guidance outcomes, result-owned root-declared active-POM structural refusal, and one under-lock generic required-file-evidence drift refusal. Its expected semantic candidate-inventory hash is not mislabeled as observed; expected/observed hashes describe required-file evidence. Focused OpenJDK-21 evidence passed six selected cases and skipped sixteen with zero failures/errors. Independent final mutable-working-tree verification on OpenJDK 21.0.11 used `./gradlew --no-daemon --rerun-tasks check goldenTest`: `BUILD SUCCESSFUL` in 7m 33s; 1000 discovered, 780 executed, 220 skipped/tag-filtered, 0 failures, 0 errors; 77 tasks executed; full log SHA-256 `243b66895d262a03945e7f0c32431ccc0dd02055613ec555a2b6f359ac92491b`. This receipt does not imply packaged-process/runtime/native-platform/general authority or numerical coverage qualification; the SpotBugs baseline remains configured non-blocking. The ADR evidence section preserves independence from `003`/`004`/`010`/`011`/`012` and explicitly excludes packaged/runtime/native/general qualification. The exact Magrathea `a48e3c06` CLI/Linux/JDK-21 result remains separate field evidence. The 2026-08-02 append-only reconciliation records implemented-and-validated REQ-AUTHORITATIVE-DIAGNOSTICS-EVALUATION-001 through `004` (16/16 scenarios, 128/128 steps) and REQ-JAVA-MAVEN-MODULE-RENAME-001 (1/1 scenario, 50/50 steps) after independent OpenJDK 21.0.11 `PASS_FOR_PROMOTION`; it does not qualify broad module rename/move, protocols, recipes, packaged/native/cross-platform execution, general Maven projects, native CI, or release-wide support
 |===
+
+== C 0.8.0 Decision Fit
+
+link:../adr/0009-supreme-multilanguage-v1-roadmap.adoc[ADR 0009] contains the
+accepted `V080-C-AND-V100-MULTIHOST-001` amendment; this chapter indexes rather
+than duplicates its normative body. The link:../releases/v0.8.0-plan.md[C plan]
+and link:appendix-requirements.adoc[requirements appendix] separate approved
+scope from unimplemented/unqualified capabilities. No new transaction owner,
+API version or deployed adapter is introduced by the documentation change.
 
 == Decision Candidate Coverage
 
