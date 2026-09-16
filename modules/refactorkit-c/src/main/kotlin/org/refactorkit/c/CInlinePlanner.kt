@@ -212,7 +212,7 @@ class CInlinePlanner {
             // find the token text starting at col
             val idx = text.indexOf(token.text, i)
             val startCol = if (idx >= 0) idx - text.lastIndexOf('\n', idx) - 1 else col
-            result += Tok(token.type, token.text, token.line, startCol, startCol + token.text.length)
+            result += Tok(token.type, token.text, token.line - 1, startCol, startCol + token.text.length)
             // advance col
             col = startCol + token.text.length
             i = idx + token.text.length

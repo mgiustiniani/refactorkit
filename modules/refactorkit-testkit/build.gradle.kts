@@ -9,6 +9,7 @@ kotlin {
 dependencies {
     implementation(project(":modules:refactorkit-core"))
     implementation(project(":modules:refactorkit-java"))
+    implementation(project(":modules:refactorkit-c"))
     implementation(project(":modules:refactorkit-web-importer"))
     testImplementation(kotlin("test"))
 }

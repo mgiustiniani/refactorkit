@@ -9,6 +9,13 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolPath
+import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceRange
+import org.refactorkit.c.CExtractPlanner
+import org.refactorkit.c.CInlinePlanner
+import org.refactorkit.c.COrganizeIncludesPlanner
+import org.refactorkit.c.CProjectScanner
+import org.refactorkit.c.CRelocateComponentPlanner
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
@@ -50,6 +57,7 @@ class GoldenTestRunner(
     private val scanner: JavaProjectScanner = JavaProjectScanner(),
     private val adapter: JavaLanguageAdapter = JavaLanguageAdapter(),
 ) {
+    private val cScanner = CProjectScanner()
     fun run(testCase: GoldenTestCase): GoldenTestResult {
         val tempDir = Files.createTempDirectory("golden-${testCase.name}-")
         return try {
@@ -66,8 +74,8 @@ class GoldenTestRunner(
         // 2. Parse request
         val request = GoldenJson.parseRequest(testCase.requestFile.readText())
 
-        // 3. Scan
-        val snap = scanner.scan(workDir)
+        // 3. Scan (C operations use the offline C-family structural scanner)
+        val snap = if (isCOperation(request.operation)) cScanner.scan(workDir) else scanner.scan(workDir)
 
         // 4. Build plan
         val plan = try {
@@ -230,11 +238,49 @@ class GoldenTestRunner(
                     Paths.get(requireArgument(request, "to")), dependencyRewrites,
                 )
             }
+            "extractExpression" -> CExtractPlanner().preview(
+                snap,
+                cFile(request),
+                cRange(request),
+                requireArgument(request, "tempName"),
+            )
+            "inlineFunction" -> CInlinePlanner().preview(
+                snap,
+                cFile(request),
+                requireArgument(request, "symbol"),
+            )
+            "organizeIncludes" -> COrganizeIncludesPlanner().preview(
+                snap,
+                cFile(request),
+            )
+            "relocateComponent" -> CRelocateComponentPlanner().preview(
+                snap,
+                Paths.get(requireArgument(request, "componentDir")),
+                Paths.get(requireArgument(request, "newDir")),
+            )
             else -> error("Unknown operation: '${request.operation}'")
         }
 
     private fun requireSymbol(request: GoldenRequest): String =
         request.symbol ?: error("Operation '${request.operation}' requires 'symbol' in request.json")
+
+    private fun isCOperation(operation: String): Boolean =
+        operation in setOf("extractExpression", "inlineFunction", "organizeIncludes", "relocateComponent")
+
+    private fun cFile(request: GoldenRequest): Path =
+        Paths.get(requireArgument(request, "file"))
+
+    private fun cRange(request: GoldenRequest): SourceRange =
+        SourceRange(
+            SourcePosition(
+                requireArgument(request, "startLine").toInt(),
+                requireArgument(request, "startChar").toInt(),
+            ),
+            SourcePosition(
+                requireArgument(request, "endLine").toInt(),
+                requireArgument(request, "endChar").toInt(),
+            ),
+        )
 
     private fun requireArgument(request: GoldenRequest, name: String): String =
         request.arguments[name] ?: error("${request.operation} needs '$name' in arguments")
