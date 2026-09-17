@@ -59,12 +59,58 @@ class CRefactoringFacade(
         diagnostics
     }
 
-    /** Starts every clangd-backed C planner against the snapshot. */
+    /**
+     * Starts only the clangd-backed C planners required by [operation].
+     *
+     * Operations that do not consult clangd (move, format, organize includes,
+     * extract, inline, relocate) never launch a semantic process. If a start
+     * fails part-way, already-started planners are closed so no process leaks.
+     */
+    fun startFor(snapshot: ProjectSnapshot, operation: String) {
+        val starters: List<Pair<String, (ProjectSnapshot) -> Unit>> = when (operation) {
+            "renameSymbol" -> listOf("rename" to rename::start)
+            "renamePrefix" -> listOf("renamePrefix" to renamePrefix::start)
+            "safeDelete" -> listOf("safeDelete" to safeDelete::start)
+            "changeSignature" -> listOf("signature" to signature::start)
+            else -> emptyList()
+        }
+        var started = 0
+        try {
+            starters.forEach { (_, start) -> start(snapshot); started++ }
+        } catch (failure: Throwable) {
+            closeStarted(starters.take(started).map { it.first })
+            throw failure
+        }
+    }
+
+    /** Starts every clangd-backed C planner against the snapshot, closing them all on failure. */
     fun start(snapshot: ProjectSnapshot) {
-        rename.start(snapshot)
-        renamePrefix.start(snapshot)
-        safeDelete.start(snapshot)
-        signature.start(snapshot)
+        val starters = listOf(
+            "rename" to rename::start,
+            "renamePrefix" to renamePrefix::start,
+            "safeDelete" to safeDelete::start,
+            "signature" to signature::start,
+        )
+        var started = 0
+        try {
+            starters.forEach { (_, start) -> start(snapshot); started++ }
+        } catch (failure: Throwable) {
+            closeStarted(starters.take(started).map { it.first })
+            throw failure
+        }
+    }
+
+    private fun closeStarted(names: List<String>) {
+        names.forEach { name ->
+            runCatching {
+                when (name) {
+                    "rename" -> rename.close()
+                    "renamePrefix" -> renamePrefix.close()
+                    "safeDelete" -> safeDelete.close()
+                    "signature" -> signature.close()
+                }
+            }
+        }
     }
 
     fun preview(snapshot: ProjectSnapshot, operation: String, args: Map<String, String>): PatchPlan {

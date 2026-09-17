@@ -1752,7 +1752,7 @@ class DaemonSession(
         val toolchain = discoverCToolchain(p)
         val facade = CRefactoringFacade(toolchain)
         try {
-            facade.start(snap)
+            facade.startFor(snap, operation)
             val plan = facade.preview(snap, operation, args)
             if (plan.status == PatchStatus.REFUSED) {
                 throw JsonRpcException(

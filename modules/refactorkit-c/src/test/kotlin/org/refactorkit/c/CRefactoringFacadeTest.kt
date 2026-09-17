@@ -129,6 +129,29 @@ class CRefactoringFacadeTest {
         assertTrue(refused.diagnostics.isNotEmpty(), "unavailable diagnostics must not be reported as clean")
     }
 
+    @Test
+    fun startForSkipsClangdForNonSemanticOperations() {
+        // A toolchain whose clangd path cannot be launched: any clangd start would fail.
+        val facade = CRefactoringFacade(toolchain().copy(clangdExecutable = Path.of("/nonexistent/clangd")))
+        val snap = snapshot("int compute(int x) { return x + 1; }\n")
+        // organizeIncludes never consults clangd, so no semantic process is started.
+        facade.startFor(snap, "organizeIncludes")
+        facade.close()
+    }
+
+    @Test
+    fun failedStartDoesNotLeakStartedClangdPlanners() {
+        // clangd cannot launch, so the first clangd-backed start fails. The facade must
+        // close whatever it already started instead of leaving a process behind.
+        val facade = CRefactoringFacade(toolchain().copy(clangdExecutable = Path.of("/nonexistent/clangd")))
+        val snap = snapshot("int compute(int x) { return x + 1; }\n")
+        val failure = runCatching { facade.start(snap) }
+        assertTrue(failure.isFailure, "start must fail when clangd is unavailable")
+        // close() stays safe and idempotent after a failed start.
+        facade.close()
+        facade.close()
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),
