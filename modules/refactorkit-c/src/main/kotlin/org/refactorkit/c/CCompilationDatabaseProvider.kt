@@ -55,11 +55,33 @@ class CCompilationDatabaseProvider(
 
     private fun project(database: CCompilationDatabase, databasePath: Path, workspace: Path): BuildModel {
         val byDirectory = database.units.groupBy { it.directory }
+        val diagnostics = mutableListOf<BuildModelDiagnostic>()
         val modules = byDirectory.map { (directory, units) ->
             val sourceRoots = units.map { it.file.parent }.filterNotNull()
                 .map { workspace.relativize(it) }.distinct().sortedBy { it.toString() }
             val standards = units.mapNotNull { it.standard }.distinct().sorted()
             val targets = units.mapNotNull { it.target }.distinct().sorted()
+            val missingStandard = units.count { it.standard == null }
+            val conflictingStandard = standards.size > 1
+            val conflictingTarget = targets.size > 1
+            if (conflictingStandard) {
+                diagnostics += BuildModelDiagnostic(
+                    "c.compilationConfigurationConflict",
+                    "translation units in '${ProtocolPath.serialize(directory)}' declare conflicting C standards: ${standards.joinToString()}",
+                )
+            }
+            if (conflictingTarget) {
+                diagnostics += BuildModelDiagnostic(
+                    "c.compilationConfigurationConflict",
+                    "translation units in '${ProtocolPath.serialize(directory)}' declare conflicting targets: ${targets.joinToString()}",
+                )
+            }
+            if (missingStandard > 0) {
+                diagnostics += BuildModelDiagnostic(
+                    "c.compilationConfigurationIncomplete",
+                    "$missingStandard translation unit(s) in '${ProtocolPath.serialize(directory)}' declare no C standard",
+                )
+            }
             BuildModule(
                 id = "c:${ProtocolPath.serialize(directory)}",
                 name = directory.fileName.toString().takeIf(String::isNotBlank) ?: "c",
@@ -90,11 +112,16 @@ class CCompilationDatabaseProvider(
                 ),
             )
         }
+        val status = when {
+            diagnostics.any { it.code == "c.compilationConfigurationConflict" } -> BuildModelStatus.PARTIAL
+            diagnostics.any { it.code == "c.compilationConfigurationIncomplete" } -> BuildModelStatus.PARTIAL
+            else -> BuildModelStatus.AVAILABLE
+        }
         return BuildModel(
             providerId = id,
-            status = BuildModelStatus.AVAILABLE,
+            status = status,
             modules = modules.sortedBy(BuildModule::id),
-            diagnostics = emptyList(),
+            diagnostics = diagnostics,
             attributes = providerAttributes() + sortedMapOf(
                 "database" to ProtocolPath.serialize(databasePath),
                 "moduleCount" to modules.size.toString(),
@@ -117,6 +144,15 @@ class CCompilationDatabaseProvider(
         "credentialsAccess" to "denied",
         "networkAccess" to "denied",
         "providerVersion" to "1",
+        // Each build-provider capability is declared separately (C03).
+        "perUnitFlags" to "denied",
+        "standard" to "declared",
+        "defines" to "declared",
+        "includes" to "declared",
+        "target" to "declared",
+        "sysroot" to "declared",
+        "includeGraph" to "declared",
+        "ownership" to "declared",
     )
 
     private fun findCompilationDatabase(workspace: Path): Path? {

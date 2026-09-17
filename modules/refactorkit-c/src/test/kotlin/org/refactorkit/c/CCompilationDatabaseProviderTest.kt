@@ -79,6 +79,38 @@ class CCompilationDatabaseProviderTest {
         assertEquals(2, model.attributes["unitCount"]?.toInt())
     }
 
+    @Test
+    fun conflictingStandardWithinModuleIsPartial() {
+        val fixture = fixture()
+        fixture.workspace.resolve("compile_commands.json").writeText("""
+            [
+              { "directory": "${fixture.workspace}", "arguments": ["clang", "-std=c17", "-c", "src/a.c"], "file": "src/a.c" },
+              { "directory": "${fixture.workspace}", "arguments": ["clang", "-std=c99", "-c", "src/b.c"], "file": "src/b.c" }
+            ]
+        """.trimIndent())
+
+        val model = provider().discover(BuildModelRequest(fixture.workspace))
+        assertEquals(BuildModelStatus.PARTIAL, model.status)
+        assertTrue(model.diagnostics.any { it.code == "c.compilationConfigurationConflict" })
+    }
+
+    @Test
+    fun incompleteConfigurationIsPartialAndDeclaresCapabilities() {
+        val fixture = fixture()
+        fixture.workspace.resolve("compile_commands.json").writeText("""
+            [
+              { "directory": "${fixture.workspace}", "arguments": ["clang", "-c", "src/a.c"], "file": "src/a.c" }
+            ]
+        """.trimIndent())
+
+        val model = provider().discover(BuildModelRequest(fixture.workspace))
+        assertEquals(BuildModelStatus.PARTIAL, model.status)
+        assertTrue(model.diagnostics.any { it.code == "c.compilationConfigurationIncomplete" })
+        assertEquals("denied", model.attributes["perUnitFlags"])
+        assertEquals("declared", model.attributes["standard"])
+        assertEquals("declared", model.attributes["includes"])
+    }
+
     private fun provider() = CCompilationDatabaseProvider()
     private fun fixture(): Fixture {
         val workspace = Files.createTempDirectory("refactorkit-c-provider")
