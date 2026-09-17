@@ -99,19 +99,31 @@ class CFormatter(
     private fun verifyIdempotent(snapshot: ProjectSnapshot, file: Path, formatted: String, range: SourceRange?): Boolean {
         val root = snapshot.workspace.root.toAbsolutePath().normalize()
         val normalized = if (file.isAbsolute) file.toAbsolutePath().normalize() else root.resolve(file).normalize()
-        val arguments = buildList {
-            add("-style=$style")
-            if (range != null) add("-lines=${range.start.line + 1}:${range.end.line + 1}")
-            add(normalized.toString())
-        }
-        // Re-format the already-formatted text by writing it to a scratch file.
-        val scratch = root.resolve(".refactorkit-format-${SEQUENCE.getAndIncrement()}.c")
+        // Idempotence is probed in an isolated scratch directory outside the workspace so
+        // user files are never overwritten, deleted or shadowed by the formatter.
+        val scratchRoot = Files.createTempDirectory("refactorkit-clang-format-").toAbsolutePath().normalize()
+        val extension = normalized.fileName?.toString()?.substringAfterLast('.', "c") ?: "c"
+        val scratch = scratchRoot.resolve("scratch.$extension")
         return try {
             Files.writeString(scratch, formatted)
-            val second = runFormat(snapshot, arguments.map { if (it == normalized.toString()) scratch.toString() else it })
-            second == formatted
+            val arguments = buildList {
+                add("-style=$style")
+                if (range != null) add("-lines=${range.start.line + 1}:${range.end.line + 1}")
+                add(scratch.toString())
+            }
+            runFormat(snapshot, arguments) == formatted
         } finally {
-            runCatching { Files.deleteIfExists(scratch) }
+            deleteScratch(scratchRoot)
+        }
+    }
+
+    private fun deleteScratch(scratchRoot: Path) {
+        runCatching {
+            Files.walk(scratchRoot).use { paths ->
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach { path ->
+                    runCatching { Files.deleteIfExists(path) }
+                }
+            }
         }
     }
 
