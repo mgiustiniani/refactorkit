@@ -41,6 +41,8 @@ import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.WorkspaceSnapshotComposer
 import org.refactorkit.c.CRefactoringFacade
+import org.refactorkit.c.CCompilerDiagnostics
+import org.refactorkit.c.CDiagnosticsResult
 import org.refactorkit.c.ClangSemanticToolchain
 import org.refactorkit.c.ClangToolchainDiscoverer
 import org.refactorkit.c.ClangToolchainDiscovery
@@ -1759,12 +1761,30 @@ class DaemonSession(
                     buildJsonObject { plan.refusalCode?.let { put("refusalCode", it) } },
                 )
             }
-            pendingPlans.insert(plan.id, PendingPlan(plan, languageId = "c"))
+            pendingPlans.insert(plan.id, PendingPlan(plan, languageId = "c", diagnosticsGate = cDiagnosticsGate(toolchain)))
             return planToJson(plan)
         } finally {
             facade.close()
         }
     }
+
+    private fun cDiagnosticsGate(toolchain: ClangSemanticToolchain): DiagnosticsGate =
+        DiagnosticsGate.enabled("clang-exact-v1") { candidate ->
+            val sources = candidate.files.filter { it.languageId in setOf("c", "cpp", "objective-c") }
+            require(sources.isNotEmpty()) {
+                "clang.diagnosticsSourcesEmpty: no C-family sources in the candidate snapshot"
+            }
+            val diagnostics = CCompilerDiagnostics(toolchain).let { analyzer ->
+                sources.flatMap { source ->
+                    when (val result = analyzer.analyze(candidate, source.path)) {
+                        is CDiagnosticsResult.Available -> result.diagnostics
+                        is CDiagnosticsResult.Unavailable ->
+                            error("${result.diagnostic.code}: ${result.diagnostic.message}")
+                    }
+                }
+            }
+            diagnostics
+        }
 
     private fun discoverCToolchain(p: JsonObject): ClangSemanticToolchain {
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
@@ -1818,7 +1838,12 @@ class DaemonSession(
             languageId = pending.languageId,
             javaAdapter = adapter,
             kotlinAdapter = kotlinAdapter,
-            externalGateResolver = { languageId -> pending.diagnosticsGate ?: requireSemanticAdapter(languageId).diagnosticsGate() },
+            externalGateResolver = { languageId ->
+                pending.diagnosticsGate ?: when (languageId) {
+                    "c", "cpp", "objective-c" -> cDiagnosticsGate(discoverCToolchain(values))
+                    else -> requireSemanticAdapter(languageId).diagnosticsGate()
+                }
+            },
         )
         return when (val result = PatchEngine(root).apply(
             plan,

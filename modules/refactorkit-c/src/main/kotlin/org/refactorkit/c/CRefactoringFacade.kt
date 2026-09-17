@@ -37,6 +37,27 @@ class CRefactoringFacade(
     private val extract = CExtractPlanner()
     private val inline = CInlinePlanner()
     private val relocate = CRelocateComponentPlanner()
+    private val compilerDiagnostics = CCompilerDiagnostics(toolchain, processManager)
+
+    /**
+     * Exact-version compiler diagnostics gate required by PatchEngine for managed C apply.
+     *
+     * Never reports an unavailable compiler context as clean: an unavailable or
+     * failing clang analysis is surfaced as an explicit error diagnostic, so the
+     * central managed-apply gate refuses instead of silently approving.
+     */
+    fun diagnosticsGate(): DiagnosticsGate = DiagnosticsGate.enabled("clang-exact-v1") { candidate ->
+        val sources = candidate.files.filter { it.languageId in setOf("c", "cpp", "objective-c") }
+        require(sources.isNotEmpty()) { "clang.diagnosticsSourcesEmpty: no C-family sources in the candidate snapshot" }
+        val diagnostics = sources.flatMap { source ->
+            when (val result = compilerDiagnostics.analyze(candidate, source.path)) {
+                is CDiagnosticsResult.Available -> result.diagnostics
+                is CDiagnosticsResult.Unavailable ->
+                    error("${result.diagnostic.code}: ${result.diagnostic.message}")
+            }
+        }
+        diagnostics
+    }
 
     /** Starts every clangd-backed C planner against the snapshot. */
     fun start(snapshot: ProjectSnapshot) {
@@ -68,8 +89,20 @@ class CRefactoringFacade(
         }
     }
 
-    fun apply(snapshot: ProjectSnapshot, plan: PatchPlan): ApplyResult =
-        PatchEngine(snapshot.workspace.root).apply(plan, snapshot, ApplyAuthorization.explicit("c-facade"), DiagnosticsGate.disabled("c-facade"))
+    /**
+     * Applies a previewed C plan through the central PatchEngine.
+     *
+     * Approval and diagnostics come from the calling surface (CLI/daemon/LSP/MCP),
+     * never fabricated inside the adapter. Managed callers pass their retained
+     * [diagnosticsGate] so the central gate evaluates the candidate snapshot.
+     */
+    fun apply(
+        snapshot: ProjectSnapshot,
+        plan: PatchPlan,
+        authorization: ApplyAuthorization,
+        diagnosticsGate: DiagnosticsGate,
+    ): ApplyResult =
+        PatchEngine(snapshot.workspace.root).apply(plan, snapshot, authorization, diagnosticsGate)
 
     override fun close() {
         rename.close()
