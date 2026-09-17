@@ -19,6 +19,7 @@ data class CCompilationDatabasePolicy(
     val maxUnits: Int = DEFAULT_MAX_UNITS,
     val maxArgumentsPerUnit: Int = DEFAULT_MAX_ARGUMENTS_PER_UNIT,
     val requireArgumentsArray: Boolean = false,
+    val allowUnsafeCompilerFlags: Boolean = false,
 ) {
     init {
         require(maxDatabaseBytes in 1..DEFAULT_MAX_DATABASE_BYTES) { "database size bound is outside the safe range" }
@@ -30,6 +31,18 @@ data class CCompilationDatabasePolicy(
         const val DEFAULT_MAX_DATABASE_BYTES = 8L * 1024L * 1024L
         const val DEFAULT_MAX_UNITS = 4_096
         const val DEFAULT_MAX_ARGUMENTS_PER_UNIT = 512
+
+        /**
+         * Compiler flags that load, inject or replace code/toolchain state. They are
+         * untrusted data captured from `compile_commands.json` and must never reach a
+         * semantic process unless the caller explicitly opts in.
+         */
+        val UNSAFE_COMPILER_FLAGS = listOf(
+            "-Xclang", "-Xassembler", "-Xlinker", "-cc1", "-cc1as",
+            "-fplugin", "-plugin", "-load", "-mllvm",
+            "-include", "-imacros", "-include-pch",
+            "-B", "--prefix", "-specs",
+        )
     }
 }
 
@@ -174,6 +187,11 @@ class CCompilationDatabaseParser(
                 diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index 'arguments' are not strings")
                 return null
             }
+            val unsafe = unsafeCompilerFlag(strings)
+            if (unsafe != null) {
+                diagnostics += refusal("c.unsafeCompilerFlag", "unit $index captures unsafe compiler flag '$unsafe'")
+                return null
+            }
             return strings
         }
         if (policy.requireArgumentsArray) {
@@ -207,7 +225,26 @@ class CCompilationDatabaseParser(
             diagnostics += refusal("c.compilationDatabaseLimit", "unit $index command tokens exceed ${policy.maxArgumentsPerUnit}")
             return null
         }
+        val unsafe = unsafeCompilerFlag(tokens)
+        if (unsafe != null) {
+            diagnostics += refusal("c.unsafeCompilerFlag", "unit $index captures unsafe compiler flag '$unsafe'")
+            return null
+        }
         return tokens
+    }
+
+    /**
+     * Rejects compiler flags that load, inject or replace code or toolchain state.
+     * Captured commands are untrusted data: unsafe flags never reach the model unless
+     * the caller explicitly opts in via [CCompilationDatabasePolicy.allowUnsafeCompilerFlags].
+     */
+    private fun unsafeCompilerFlag(arguments: List<String>): String? {
+        if (policy.allowUnsafeCompilerFlags) return null
+        return arguments.firstOrNull { argument ->
+            CCompilationDatabasePolicy.UNSAFE_COMPILER_FLAGS.any { prefix ->
+                argument == prefix || argument.startsWith("$prefix=") || argument.startsWith("$prefix:")
+            }
+        }
     }
 
     private fun findFlag(arguments: List<String>, prefix: String): String? {

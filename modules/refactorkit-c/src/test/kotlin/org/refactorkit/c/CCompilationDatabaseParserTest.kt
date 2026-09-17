@@ -111,6 +111,47 @@ class CCompilationDatabaseParserTest {
         assertEquals(listOf("clang", "-c", "src/main.c"), tokenizeQuoted("  clang   -c   src/main.c  "))
     }
 
+    @Test
+    fun refusesUnsafeCompilerFlags() {
+        val fixture = fixture()
+        listOf(
+            "-Xclang -load -Xclang /tmp/evil.so",
+            "-fplugin=/tmp/evil.so",
+            "-plugin /tmp/evil.so",
+            "-include /tmp/injected.h",
+            "-imacros /tmp/injected.h",
+            "-B /tmp/toolchain",
+            "--prefix=/tmp/toolchain",
+            "-specs=/tmp/evil.spec",
+            "-mllvm -evil",
+        ).forEach { unsafe ->
+            assertCodes(parser().parse(fixture.workspace, """
+                [ { "directory": "${fixture.workspace}", "command": "clang $unsafe -c src/main.c", "file": "src/main.c" } ]
+            """.trimIndent().toByteArray()), "c.unsafeCompilerFlag")
+        }
+    }
+
+    @Test
+    fun allowsBoundedAnalysisFlags() {
+        val fixture = fixture()
+        val result = parser().parse(fixture.workspace, """
+            [ { "directory": "${fixture.workspace}", "arguments": ["clang", "-std=c17", "-DDEBUG=1", "-UFOO", "-Iinclude", "-isystem", "${fixture.workspace.resolve("include")}", "-Wall", "-Wextra", "-c", "src/main.c"], "file": "src/main.c" } ]
+        """.trimIndent().toByteArray())
+        assertIs<CCompilationDatabaseDiscovery.Available>(result)
+    }
+
+    @Test
+    fun unsafeFlagRejectionOnlyRelaxesOnExplicitOptIn() {
+        val fixture = fixture()
+        val json = """
+            [ { "directory": "${fixture.workspace}", "arguments": ["clang", "-Xclang", "-load", "/tmp/evil.so", "-c", "src/main.c"], "file": "src/main.c" } ]
+        """.trimIndent()
+        assertCodes(parser().parse(fixture.workspace, json.toByteArray()), "c.unsafeCompilerFlag")
+        val optedIn = CCompilationDatabaseParser(CCompilationDatabasePolicy(allowUnsafeCompilerFlags = true))
+            .parse(fixture.workspace, json.toByteArray())
+        assertIs<CCompilationDatabaseDiscovery.Available>(optedIn)
+    }
+
     private fun parser() = CCompilationDatabaseParser()
     private fun assertCodes(result: CCompilationDatabaseDiscovery, vararg expected: String) {
         val refused = assertIs<CCompilationDatabaseDiscovery.Refused>(result)
