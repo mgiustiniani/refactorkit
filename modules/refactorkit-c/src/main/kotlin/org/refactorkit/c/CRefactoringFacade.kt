@@ -3,6 +3,8 @@ package org.refactorkit.c
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
+import org.refactorkit.core.DiagnosticCategory
+import org.refactorkit.core.DiagnosticEvidence
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.ExternalSemanticProcessManager
 import org.refactorkit.core.FileEdit
@@ -119,8 +121,12 @@ class CRefactoringFacade(
             "renameSymbol" -> {
                 val symbol = args["symbol"] ?: error("Missing arguments.symbol")
                 val newName = args["newName"] ?: error("Missing arguments.newName")
-                val loc = symbolLocation(snapshot, symbol)
-                rename.rename(loc.file, loc.line, loc.character, newName, snapshot).toPlan(snapshot, "renameSymbol")
+                val resolved = resolveSymbol(snapshot, symbol)
+                when (resolved) {
+                    is SymbolResolution.Found ->
+                        rename.rename(resolved.location.file, resolved.location.line, resolved.location.character, newName, snapshot).toPlan(snapshot, "renameSymbol")
+                    is SymbolResolution.Refused -> refused(snapshot, "renameSymbol", resolved.diagnostics)
+                }
             }
             "renamePrefix" -> renamePrefix.preview(snapshot, parseMapping(args))
             "moveSource" -> move.preview(snapshot, file ?: error("Missing arguments.file"), Path.of(args["target"] ?: error("Missing arguments.target")))
@@ -157,18 +163,47 @@ class CRefactoringFacade(
         signature.close()
     }
 
-    private fun symbolLocation(snapshot: ProjectSnapshot, symbol: String): Location {
-        for (file in snapshot.files.filter { it.languageId in setOf("c", "cpp", "objective-c") }) {
+    private sealed interface SymbolResolution {
+        data class Found(val location: Location) : SymbolResolution
+        data class Refused(val diagnostics: List<Diagnostic>) : SymbolResolution
+    }
+
+    /**
+     * Resolves a symbol to a single binding location, refusing ambiguity.
+     *
+     * A name that resolves to distinct declarations in more than one file is
+     * ambiguous (same-name/shadowing risk): the rename must not guess the first
+     * textual occurrence. Absent names are refused explicitly instead of throwing.
+     */
+    private fun resolveSymbol(snapshot: ProjectSnapshot, symbol: String): SymbolResolution {
+        val candidates = mutableListOf<Location>()
+        for (file in snapshot.files.filter { it.languageId in setOf("c", "cpp", "objective-c") }.sortedBy { it.path.toString() }) {
             val tokens = CTokenizer().tokenize(file.content)
             for (token in tokens) {
-                if (token.type == CTokenType.IDENTIFIER && token.text == symbol) {
-                    val line = token.line - 1
-                    val char = file.content.lines().getOrNull(token.line - 1)?.indexOf(symbol) ?: 0
-                    return Location(file.path.normalize(), line, char)
-                }
+                if (token.type != CTokenType.IDENTIFIER || token.text != symbol) continue
+                val line = token.line - 1
+                val char = file.content.lines().getOrNull(token.line - 1)?.indexOf(symbol) ?: 0
+                candidates += Location(file.path.normalize(), line, char)
             }
         }
-        error("Symbol not found: $symbol")
+        val distinctFiles = candidates.map { it.file }.distinct()
+        return when {
+            candidates.isEmpty() -> SymbolResolution.Refused(listOf(Diagnostic(
+                message = "Symbol '$symbol' has no definition in this snapshot",
+                severity = Diagnostic.Severity.ERROR,
+                code = "c.renameSymbolNotFound",
+                evidence = DiagnosticEvidence.STRUCTURAL,
+                category = DiagnosticCategory.TYPE_RESOLUTION,
+            )))
+            distinctFiles.size > 1 -> SymbolResolution.Refused(listOf(Diagnostic(
+                message = "Symbol '$symbol' is ambiguous across ${distinctFiles.size} files; rename is refused",
+                severity = Diagnostic.Severity.ERROR,
+                code = "c.renameSymbolAmbiguous",
+                evidence = DiagnosticEvidence.STRUCTURAL,
+                category = DiagnosticCategory.TYPE_RESOLUTION,
+            )))
+            else -> SymbolResolution.Found(candidates.first())
+        }
     }
 
     private fun parseMapping(args: Map<String, String>): Map<String, String> {

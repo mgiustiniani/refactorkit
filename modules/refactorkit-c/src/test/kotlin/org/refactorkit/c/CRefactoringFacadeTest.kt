@@ -152,6 +152,30 @@ class CRefactoringFacadeTest {
         facade.close()
     }
 
+    @Test
+    fun renameSymbolRefusesMissingSymbolInsteadOfThrowing() {
+        val snap = snapshot("int compute(int x) { return x + 1; }\n")
+        val plan = facade().preview(snap, "renameSymbol", mapOf("symbol" to "absent", "newName" to "renamed"))
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("no definition"))
+    }
+
+    @Test
+    fun renameSymbolRefusesAmbiguousSameNameAcrossFiles() {
+        val content = "int compute(int x) { return x + 1; }\n"
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(
+                SourceFile(Path.of("src/a.c"), content, "c"),
+                SourceFile(Path.of("src/b.c"), content, "c"),
+            ),
+        )
+        val plan = facade().preview(snap, "renameSymbol", mapOf("symbol" to "compute", "newName" to "computeTotal"))
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("ambiguous"))
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),
