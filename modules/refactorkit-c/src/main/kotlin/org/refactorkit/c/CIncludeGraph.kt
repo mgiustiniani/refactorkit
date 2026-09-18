@@ -163,11 +163,11 @@ class CIncludeGraphBuilder(
                     }
                 }
             }
-            ownership[resolved] = classify(resolved, includeDirectories)
+            ownership[resolved] = classify(workspace, resolved, includeDirectories)
         }
 
         for (file in fileSet) {
-            ownership.putIfAbsent(file, classify(file, includeDirectories))
+            ownership.putIfAbsent(file, classify(workspace, file, includeDirectories))
         }
 
         return CIncludeGraph(
@@ -208,11 +208,16 @@ class CIncludeGraphBuilder(
         return candidates.firstOrNull { Files.isRegularFile(it) }
     }
 
-    private fun classify(path: Path, includeDirectories: List<Path>): CFileOwnership {
+    private fun classify(workspace: Path, path: Path, includeDirectories: List<Path>): CFileOwnership {
         val name = path.fileName.toString()
+        val normalized = path.toAbsolutePath().normalize()
+        val insideWorkspace = normalized.startsWith(workspace.toAbsolutePath().normalize())
+        val insideIncludeRoot = includeDirectories.any { normalized.startsWith(it.toAbsolutePath().normalize()) }
         return when {
             name.endsWith(".generated.c") || name.endsWith(".generated.h") -> CFileOwnership.GENERATED
-            name.endsWith(".h") && includeDirectories.any { path.startsWith(it) } -> CFileOwnership.PUBLIC
+            // Headers outside the workspace and every include root are read-only external evidence.
+            name.endsWith(".h") && !insideWorkspace && !insideIncludeRoot -> CFileOwnership.EXTERNAL
+            name.endsWith(".h") && insideIncludeRoot -> CFileOwnership.PUBLIC
             name.endsWith(".h") -> CFileOwnership.PRIVATE
             name.endsWith(".c") -> CFileOwnership.PRIVATE
             else -> CFileOwnership.UNKNOWN

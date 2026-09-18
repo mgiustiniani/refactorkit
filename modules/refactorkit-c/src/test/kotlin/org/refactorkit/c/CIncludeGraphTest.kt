@@ -67,6 +67,25 @@ class CIncludeGraphTest {
     }
 
     @Test
+    fun classifiesExternalHeaderOutsideWorkspaceAndIncludeRoots() {
+        val workspace = Files.createTempDirectory("refactorkit-c-external")
+        val include = workspace.resolve("include")
+        include.toFile().mkdirs()
+        val publicHeader = include.resolve("api.h")
+        publicHeader.writeText("void api(void);")
+        // A system/external header that lives outside the workspace and outside every -I root.
+        val externalRoot = Files.createTempDirectory("refactorkit-c-sysroot")
+        val externalHeader = externalRoot.resolve("stdio.h")
+        externalHeader.writeText("int printf(const char *, ...);")
+
+        val builder = CIncludeGraphBuilder()
+        val graph = builder.build(workspace, listOf(publicHeader, externalHeader), listOf(include))
+
+        assertEquals(CFileOwnership.PUBLIC, graph.ownership[publicHeader])
+        assertEquals(CFileOwnership.EXTERNAL, graph.ownership[externalHeader])
+    }
+
+    @Test
     fun enforcesBoundedFileAndDirectiveCounts() {
         val workspace = Files.createTempDirectory("refactorkit-c-bounded")
         val big = " ".repeat(3 * 1024 * 1024)
