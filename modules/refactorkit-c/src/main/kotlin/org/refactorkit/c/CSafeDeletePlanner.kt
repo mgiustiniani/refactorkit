@@ -50,12 +50,18 @@ class CSafeDeletePlanner(
         if (definition.externOrPublic) {
             return refused(snapshot, "Symbol '$symbol' is extern/public; a binary or external consumer is unavailable, so deletion is refused")
         }
-        val references = client.references(definition.file, definition.line, definition.character)
-            .filter { ref ->
-                !(ref.file.normalize() == definition.file.normalize() &&
-                    ref.startLine >= definition.line && ref.startLine <= definition.endLine &&
-                    ref.startCharacter >= definition.character && ref.endCharacter <= definition.endCharacter)
-            }
+        val references = when (val result = client.references(definition.file, definition.line, definition.character)) {
+            is CReferenceResult.Unavailable -> return refused(
+                snapshot,
+                "Semantic reference analysis for '$symbol' is unavailable; safe delete is refused",
+            )
+            is CReferenceResult.NotFound -> emptyList()
+            is CReferenceResult.Found -> result.references
+        }.filter { ref ->
+            !(ref.file.normalize() == definition.file.normalize() &&
+                ref.startLine >= definition.line && ref.startLine <= definition.endLine &&
+                ref.startCharacter >= definition.character && ref.endCharacter <= definition.endCharacter)
+        }
         if (references.isNotEmpty()) {
             return refused(snapshot, "Symbol '$symbol' has ${references.size} semantic reference(s); safe delete is refused")
         }

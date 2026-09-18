@@ -16,9 +16,11 @@ class ClangdSemanticClientTest {
     }
 
     @Test
-    fun returnsEmptyReferencesWhenNotStarted() {
+    fun reportsUnavailableReferencesWhenNotStarted() {
         val client = ClangdSemanticClient(toolchain())
-        assertTrue(client.references(Path.of("src/main.c"), 0, 0).isEmpty())
+        val result = client.references(Path.of("src/main.c"), 0, 0)
+        val unavailable = assertIs<CReferenceResult.Unavailable>(result)
+        assertTrue(unavailable.diagnostics.any { it.code == "clangd.notRunning" })
     }
 
     @Test

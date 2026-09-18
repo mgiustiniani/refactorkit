@@ -25,9 +25,11 @@ class CSymbolNavigationTest {
     }
 
     @Test
-    fun returnsEmptyReferencesWhenNotStarted() {
+    fun reportsUnavailableReferencesWhenNotStarted() {
         val nav = CSymbolNavigation(toolchain())
-        assertTrue(nav.references(Path.of("src/main.c"), 0, 0).isEmpty())
+        val result = nav.references(Path.of("src/main.c"), 0, 0)
+        val unavailable = assertIs<CReferenceResult.Unavailable>(result)
+        assertTrue(unavailable.diagnostics.any { it.code == "clangd.notStarted" })
     }
 
     @Test

@@ -7,6 +7,7 @@ import org.refactorkit.core.Workspace
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class CSafeDeletePlannerTest {
     @Test
@@ -26,6 +27,16 @@ class CSafeDeletePlannerTest {
         val snap = snapshot("extern int compute(int x);\nint main(void) { return compute(2); }\n")
         val plan = planner().preview(snap, "compute")
         assertEquals(PatchStatus.REFUSED, plan.status)
+    }
+
+    @Test
+    fun refusesStaticSymbolWhenReferenceAnalysisIsUnavailable() {
+        // A static (non-extern) symbol would be deletable only with a closed reference set.
+        // With clangd unavailable, unavailable analysis must never become "zero references".
+        val snap = snapshot("static int helper(void) { return 1; }\nint main(void) { return helper(); }\n")
+        val plan = planner().preview(snap, "helper")
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("unavailable") || plan.summary.contains("not started"))
     }
 
     private fun snapshot(content: String = "int compute(int x) { return x + 1; }\nint main(void) { return compute(2); }\n") = ProjectSnapshot(

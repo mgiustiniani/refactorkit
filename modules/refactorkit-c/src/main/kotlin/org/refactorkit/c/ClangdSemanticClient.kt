@@ -59,6 +59,19 @@ sealed interface CRenameResult {
     data class Refused(val diagnostics: List<Diagnostic>) : CRenameResult
 }
 
+/**
+ * Bounded clangd reference result.
+ *
+ * Distinguishes an absent reference set (NotFound, zero uses) from an
+ * unavailable analysis (Unavailable). Callers must never convert Unavailable
+ * into "zero references": safe delete depends on this distinction.
+ */
+sealed interface CReferenceResult {
+    data class Found(val references: List<CSymbolReference>) : CReferenceResult
+    data class NotFound(val diagnostics: List<Diagnostic>) : CReferenceResult
+    data class Unavailable(val diagnostics: List<Diagnostic>) : CReferenceResult
+}
+
 /** Bounded clangd semantic response. */
 sealed interface CClangdSemanticResult {
     data class Found(val definition: CSymbolDefinition) : CClangdSemanticResult
@@ -177,16 +190,18 @@ class ClangdSemanticClient(
     }
 
     /** Requests all references for a symbol at the given position. */
-    fun references(file: Path, line: Int, character: Int): List<CSymbolReference> {
-        val process = managedProcess ?: return emptyList()
-        if (!process.isAlive) return emptyList()
+    fun references(file: Path, line: Int, character: Int): CReferenceResult {
+        val process = managedProcess ?: return CReferenceResult.Unavailable(listOf(notRunningDiagnostic()))
+        if (!process.isAlive) return CReferenceResult.Unavailable(listOf(unavailableDiagnostic()))
         val response = withDeadline(requestTimeoutMillis) {
             send("textDocument/references", """{"textDocument":{"uri":${quote(uri(file))}},"position":{"line":$line,"character":$character},"context":{"includeDeclaration":true}}""")
-        } ?: return emptyList()
+        } ?: return CReferenceResult.Unavailable(listOf(unavailableDiagnostic()))
         val message = parseMessage(response)
-        if (message.success != true) return emptyList()
-        val body = message.body ?: return emptyList()
-        return parseLocations(body)
+        if (message.success != true) return CReferenceResult.Unavailable(listOf(
+            Diagnostic(message = message.error ?: "clangd refused references", severity = Diagnostic.Severity.ERROR, code = "clangd.refused", evidence = DiagnosticEvidence.COMPILER, category = DiagnosticCategory.TYPE_RESOLUTION),
+        ))
+        val body = message.body ?: return CReferenceResult.NotFound(listOf(notFoundDiagnostic()))
+        return CReferenceResult.Found(parseLocations(body))
     }
 
     override fun close() {

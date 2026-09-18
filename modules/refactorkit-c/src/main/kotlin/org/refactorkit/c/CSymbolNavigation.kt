@@ -73,9 +73,17 @@ class CSymbolNavigation(
         }
     }
 
-    /** Semantic references; bounded list or empty when unavailable. */
-    fun references(file: Path, line: Int, character: Int): List<CSymbolReference> {
-        if (!started) return emptyList()
+    /**
+     * Semantic references; distinguishes absent (NotFound, zero uses) from
+     * unavailable analysis (Unavailable). Never returns an empty list for an
+     * unavailable semantic session.
+     */
+    fun references(file: Path, line: Int, character: Int): CReferenceResult {
+        if (!started) return CReferenceResult.Unavailable(listOf(Diagnostic(
+            message = "C symbol navigation is not started",
+            severity = Diagnostic.Severity.ERROR,
+            code = "clangd.notStarted",
+        )))
         return semanticClient.references(file, line, character)
     }
 
