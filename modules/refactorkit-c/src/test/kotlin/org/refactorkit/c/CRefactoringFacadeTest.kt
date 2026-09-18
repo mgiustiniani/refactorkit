@@ -176,6 +176,24 @@ class CRefactoringFacadeTest {
         assertTrue(plan.summary.contains("ambiguous"))
     }
 
+    @Test
+    fun formatFileCarriesRealEditsAndAffectedFiles() {
+        val clangFormat = Path.of("/usr/bin/clang-format")
+        if (!Files.isExecutable(clangFormat)) return // clang-format not installed; integration not run
+        val workspace = Files.createTempDirectory("refactorkit-c-facade-format")
+        val content = "int compute(int x){return x+1;}\n"
+        Files.writeString(workspace.resolve("main.c"), content)
+        val snap = ProjectSnapshot(
+            Workspace(workspace),
+            emptyList(),
+            listOf(SourceFile(Path.of("main.c"), content, "c")),
+        )
+        val plan = CRefactoringFacade(toolchain()).preview(snap, "formatFile", mapOf("file" to "main.c"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertTrue(plan.workspaceEdit.edits.isNotEmpty(), "format preview must carry the accepted edits")
+        assertEquals(setOf(Path.of("main.c")), plan.affectedFiles)
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

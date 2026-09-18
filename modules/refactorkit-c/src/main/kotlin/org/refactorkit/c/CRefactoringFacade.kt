@@ -130,7 +130,7 @@ class CRefactoringFacade(
             }
             "renamePrefix" -> renamePrefix.preview(snapshot, parseMapping(args))
             "moveSource" -> move.preview(snapshot, file ?: error("Missing arguments.file"), Path.of(args["target"] ?: error("Missing arguments.target")))
-            "formatFile" -> format.formatWholeFile(snapshot, file ?: error("Missing arguments.file")).toPlan(snapshot, "formatFile")
+            "formatFile" -> format.formatWholeFile(snapshot, file ?: error("Missing arguments.file")).toPlan(snapshot, "formatFile", file ?: error("Missing arguments.file"))
             "organizeIncludes" -> organizeIncludes.preview(snapshot, file ?: error("Missing arguments.file"))
             "safeDelete" -> safeDelete.preview(snapshot, args["symbol"] ?: error("Missing arguments.symbol"))
             "changeSignature" -> signature.renameParameter(snapshot, file ?: error("Missing arguments.file"), args["oldParam"] ?: error("Missing arguments.oldParam"), args["newParam"] ?: error("Missing arguments.newParam"))
@@ -243,22 +243,27 @@ class CRefactoringFacade(
         is CRenamePlannerResult.Refused -> refused(snapshot, operation, diagnostics)
     }
 
-    private fun CFormatResult.toPlan(snapshot: ProjectSnapshot, operation: String): PatchPlan = when (this) {
-        is CFormatResult.Accepted -> PatchPlan(
-            operation = operation,
-            status = PatchStatus.PREVIEW,
-            snapshotHash = snapshot.hash,
-            confidence = 1.0,
-            requiresUserApproval = true,
-            summary = "C format preview",
-            affectedFiles = emptySet(),
-            workspaceEdit = WorkspaceEdit(emptyList()),
-            diagnosticsBefore = emptyList(),
-            diagnosticsAfterPreview = emptyList(),
-            warnings = listOf("Formatting edits are idempotent=$idempotent."),
-            riskLevel = RiskLevel.MEDIUM,
-            evidence = RefactoringEvidence.COMPILER_PROVEN,
-        )
+    private fun CFormatResult.toPlan(snapshot: ProjectSnapshot, operation: String, file: Path): PatchPlan = when (this) {
+        is CFormatResult.Accepted -> {
+            val relFile = snapshot.workspace.root.relativize(snapshot.workspace.root.resolve(file).normalize()).normalize()
+            val workspaceEdit = if (edits.isEmpty()) WorkspaceEdit(emptyList())
+            else WorkspaceEdit(listOf(FileEdit.Modify(relFile, edits)))
+            PatchPlan(
+                operation = operation,
+                status = PatchStatus.PREVIEW,
+                snapshotHash = snapshot.hash,
+                confidence = 1.0,
+                requiresUserApproval = true,
+                summary = if (edits.isEmpty()) "C format preview (no changes)" else "C format preview",
+                affectedFiles = workspaceEdit.affectedFiles(),
+                workspaceEdit = workspaceEdit,
+                diagnosticsBefore = emptyList(),
+                diagnosticsAfterPreview = emptyList(),
+                warnings = listOf("Formatting edits are idempotent=$idempotent."),
+                riskLevel = RiskLevel.MEDIUM,
+                evidence = RefactoringEvidence.COMPILER_PROVEN,
+            )
+        }
         is CFormatResult.Refused -> refused(snapshot, operation, diagnostics)
     }
 
