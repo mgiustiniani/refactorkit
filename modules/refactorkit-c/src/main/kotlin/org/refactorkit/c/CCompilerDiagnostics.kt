@@ -135,10 +135,12 @@ class CCompilerDiagnostics(
                     else -> Diagnostic.Severity.INFO
                 }
                 val message = groups[5].take(MAX_DIAGNOSTIC_MESSAGE)
+                val reportedFile = groups[1]
+                val attributed = attributeFile(reportedFile, file)
                 parsed += Diagnostic(
                     message = message,
                     severity = severity,
-                    location = SourceLocation(file, SourceRange(
+                    location = SourceLocation(attributed, SourceRange(
                         SourcePosition(groups[2].toInt() - 1, groups[3].toInt() - 1),
                         SourcePosition(groups[2].toInt() - 1, groups[3].toInt() - 1),
                     )),
@@ -167,6 +169,21 @@ class CCompilerDiagnostics(
             return unavailable("clang.compilerDiagnosticsIncomplete", "Compiler diagnostics were incomplete")
         }
         return CDiagnosticsResult.Available(parsed, provenance)
+    }
+
+    /**
+     * Attributes a reported diagnostic to the file clang actually names. clang
+     * prints the owning file, which may be an included header; the including
+     * translation unit is only the fallback for a blank/relative report.
+     */
+    private fun attributeFile(reportedFile: String, includingFile: Path): Path {
+        val trimmed = reportedFile.trim()
+        if (trimmed.isBlank()) return includingFile
+        val candidate = runCatching { Path.of(trimmed) }.getOrNull() ?: return includingFile
+        return when {
+            candidate.isAbsolute -> candidate.normalize()
+            else -> (includingFile.parent ?: Path.of("")).resolve(candidate).normalize()
+        }
     }
 
     private fun unavailable(code: String, message: String) = CDiagnosticsResult.Unavailable(Diagnostic(

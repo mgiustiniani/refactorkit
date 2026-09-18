@@ -46,6 +46,17 @@ class CCompilerDiagnosticsTest {
     }
 
     @Test
+    fun attributesDiagnosticToTheReportedHeader() {
+        // clang reports the file that owns the diagnostic; an error inside an included
+        // header must not be attributed to the including translation unit.
+        val output = "include/api.h:4:9: error: expected ';' after struct\n    4 | struct point { int x }\n      |                       ^\n1 error generated.\n"
+        val result = diag.parseForTest(output, Path.of("main.c"), provenance, exitCode = 1)
+        val available = assertIs<CDiagnosticsResult.Available>(result)
+        assertEquals(1, available.diagnostics.size)
+        assertEquals("include/api.h", available.diagnostics[0].location?.path?.toString())
+    }
+
+    @Test
     fun malformedOutputIsUnavailable() {
         val result = diag.parseForTest("garbage output without diagnostic line", Path.of("main.c"), provenance, exitCode = 1)
         assertIs<CDiagnosticsResult.Unavailable>(result)
