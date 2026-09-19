@@ -97,7 +97,9 @@ class CIncludeDirectiveParser(
     }
 
     private fun parseDirective(line: Int, trimmed: String): CIncludeDirective? {
-        val match = INCLUDE_PATTERN.matchEntire(trimmed) ?: return null
+        // A trailing comment (or other trailing text) after the include must not hide
+        // the directive; the include itself is matched, the rest is ignored here.
+        val match = INCLUDE_PATTERN.find(trimmed) ?: return null
         val quoted = match.groupValues.getOrNull(2)
         val angled = match.groupValues.getOrNull(3)
         val macro = match.groupValues.getOrNull(4)

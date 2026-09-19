@@ -36,11 +36,17 @@ class COrganizeIncludesPlanner {
         if (conflict != null) {
             return refused(snapshot, "Unresolved include conflict: '$conflict'")
         }
-        val bodyIdentifiers = bodyIdentifiers(source.content)
-        val kept = directives
-            .filter { !duplicate(directives, it) }
-            .filter { used(it, bodyIdentifiers) }
-            .sortedWith(compareBy({ it.kind }, { it.target }))
+        if (hasRepeatedHeader(directives)) {
+            return refused(snapshot, "Repeated includes require proof of no macro effect; deduplication is refused")
+        }
+        // Sorting is only provable for system (angled) includes; quoted includes can be
+        // order-sensitive, so their reordering is refused.
+        if (directives.any { it.kind == CIncludeKind.QUOTED }) {
+            return refused(snapshot, "Quoted includes can be order-sensitive; reordering is refused without proof")
+        }
+        // A header is only removed with proof of non-use. The basename heuristic is
+        // not proof (printf/stdio, FILE), so every include is kept and only sorted.
+        val kept = directives.sortedWith(compareBy({ it.kind }, { it.target }))
         if (kept.size == directives.size && directives.zip(kept).all { (a, b) -> a.line == b.line && a.target == b.target }) {
             return refused(snapshot, "Includes are already organized; no change needed")
         }
@@ -62,18 +68,13 @@ class COrganizeIncludesPlanner {
         )
     }
 
-    private fun duplicate(directives: List<CIncludeDirective>, directive: CIncludeDirective): Boolean =
-        directives.indexOfFirst { it.target == directive.target && it.kind == directive.kind } != directives.indexOf(directive)
-
-    private fun used(directive: CIncludeDirective, bodyIdentifiers: Set<String>): Boolean {
-        val basename = directive.target.substringAfterLast('/').substringBefore('.')
-        return basename in bodyIdentifiers
-    }
-
-    private fun bodyIdentifiers(content: String): Set<String> {
-        val nonInclude = content.lines().filter { !it.trim().startsWith("#include") }.joinToString("\n")
-        val tokens = CTokenizer().tokenize(nonInclude)
-        return tokens.filter { it.type == CTokenType.IDENTIFIER }.map { it.text }.toSet()
+    private fun hasRepeatedHeader(directives: List<CIncludeDirective>): Boolean {
+        val seen = mutableSetOf<String>()
+        for (d in directives) {
+            val key = "${d.kind}:${d.target}"
+            if (!seen.add(key)) return true
+        }
+        return false
     }
 
     private fun isMacroTarget(target: String): Boolean =
@@ -122,11 +123,23 @@ class COrganizeIncludesPlanner {
             edits += TextEdit(SourceRange(start, end), "")
         }
         // Reorder the kept block: replace the first kept line with the sorted block.
+        // Any trailing comment on an include line is preserved on the rewritten line.
         val firstKept = kept.firstOrNull() ?: return edits
-        val sortedBlock = kept.joinToString("\n") { includeText(it) }
+        val sortedBlock = kept.joinToString("\n") { directive ->
+            val original = lines.getOrNull(directive.line - 1) ?: ""
+            val trailing = trailingComment(original)
+            includeText(directive) + trailing
+        }
         val firstLineText = lines.getOrNull(firstKept.line - 1) ?: return edits
         edits += TextEdit(SourceRange(SourcePosition(firstKept.line - 1, 0), SourcePosition(firstKept.line - 1, firstLineText.length)), sortedBlock)
         return edits
+    }
+
+    /** Returns the trailing comment of an include line, or an empty string. */
+    private fun trailingComment(line: String): String {
+        val idx = line.indexOf("//")
+        if (idx >= 0) return " " + line.substring(idx).trimEnd()
+        return ""
     }
 
     private fun includeText(directive: CIncludeDirective): String = when (directive.kind) {
