@@ -7,6 +7,7 @@ import org.refactorkit.core.Workspace
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class CRenamePrefixPlannerTest {
@@ -29,6 +30,36 @@ class CRenamePrefixPlannerTest {
         val planner = CRenamePrefixPlanner(toolchain())
         val plan = planner.preview(snapshot(), mapOf("old" to "old"))
         assertEquals(PatchStatus.REFUSED, plan.status)
+    }
+
+    @Test
+    fun resolveOccurrenceRefusesAmbiguousSameNameAcrossFiles() {
+        val content = "int old_fn(void) { return 0; }\n"
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(
+                SourceFile(Path.of("src/a.c"), content, "c"),
+                SourceFile(Path.of("src/b.c"), content, "c"),
+            ),
+        )
+        val resolution = CRenamePrefixPlanner(toolchain()).resolveOccurrence(snap, "old_fn")
+        assertIs<CRenamePrefixPlanner.OccurrenceResolution.Refused>(resolution)
+        assertTrue(resolution.message.contains("ambiguous"))
+    }
+
+    @Test
+    fun resolveOccurrenceRefusesAbsentSymbol() {
+        val resolution = CRenamePrefixPlanner(toolchain()).resolveOccurrence(snapshot(), "absent")
+        assertIs<CRenamePrefixPlanner.OccurrenceResolution.Refused>(resolution)
+        assertTrue(resolution.message.contains("no semantic occurrence"))
+    }
+
+    @Test
+    fun resolveOccurrenceFindsSingleBinding() {
+        val resolution = CRenamePrefixPlanner(toolchain()).resolveOccurrence(snapshot(), "old_fn")
+        assertIs<CRenamePrefixPlanner.OccurrenceResolution.Found>(resolution)
+        assertEquals(Path.of("src/main.c"), resolution.occurrence.file)
     }
 
     private fun snapshot() = ProjectSnapshot(

@@ -35,6 +35,7 @@ class CRenamePrefixPlanner(
 ) : AutoCloseable {
     private val client = ClangdSemanticClient(toolchain, processManager)
     private var started = false
+    private var startFailure: String? = null
 
     fun start(snapshot: ProjectSnapshot) {
         require(!started) { "C prefix rename planner is already started" }
@@ -45,14 +46,18 @@ class CRenamePrefixPlanner(
             .all { client.didOpen(snapshot.workspace.root.resolve(it.path), it.content) }
         if (!opened) {
             close()
-            error("clangd did not open every C source file")
+            startFailure = "clangd did not open every C source file"
+            return
         }
         started = true
     }
 
+    /** Returns the typed start failure, or null when the planner started successfully. */
+    fun startFailure(): String? = startFailure
+
     /** Renames the explicit [mapping] (old symbol name -> new name) into one preview plan. */
     fun preview(snapshot: ProjectSnapshot, mapping: Map<String, String>): PatchPlan {
-        if (!started) return refused(snapshot, "C prefix rename planner is not started")
+        if (!started) return refused(snapshot, startFailure ?: "C prefix rename planner is not started")
         if (mapping.isEmpty()) return refused(snapshot, "No symbol mapping provided")
         if (mapping.size > MAX_SYMBOLS) return refused(snapshot, "Symbol mapping exceeds $MAX_SYMBOLS entries")
         if (mapping.any { (old, new) -> old.isBlank() || new.isBlank() || old == new }) {
@@ -64,8 +69,11 @@ class CRenamePrefixPlanner(
 
         val editsByFile = mutableMapOf<Path, MutableList<TextEdit>>()
         for ((oldName, newName) in mapping) {
-            val occurrence = findOccurrence(snapshot, oldName)
-                ?: return refused(snapshot, "Symbol '$oldName' has no semantic occurrence")
+            val resolved = resolveOccurrence(snapshot, oldName)
+            val occurrence = when (resolved) {
+                is OccurrenceResolution.Found -> resolved.occurrence
+                is OccurrenceResolution.Refused -> return refused(snapshot, resolved.message)
+            }
             val result = client.rename(occurrence.file, occurrence.line, occurrence.character, newName)
             when (result) {
                 is CRenameResult.Found -> {
@@ -118,22 +126,39 @@ class CRenamePrefixPlanner(
         started = false
     }
 
-    private fun findOccurrence(snapshot: ProjectSnapshot, name: String): Occurrence? {
-        for (source in snapshot.files) {
+    /**
+     * Resolves a symbol name to a single declaration occurrence, refusing ambiguity.
+     *
+     * A name declared in more than one file is ambiguous (same-name/unrelated symbols),
+     * so the prefix rename must not guess the first textual occurrence; an absent name is
+     * refused explicitly instead of being treated as a semantic occurrence.
+     */
+    internal fun resolveOccurrence(snapshot: ProjectSnapshot, name: String): OccurrenceResolution {
+        val candidates = mutableListOf<Occurrence>()
+        for (source in snapshot.files.sortedBy { it.path.toString() }) {
             if (source.languageId !in setOf("c", "cpp", "objective-c")) continue
             val tokens = CTokenizer().tokenize(source.content)
             for (token in tokens) {
-                if (token.type == CTokenType.IDENTIFIER && token.text == name) {
-                    val lineText = source.content.lines().getOrNull(token.line - 1) ?: continue
-                    val idx = lineText.indexOf(name)
-                    if (idx >= 0) return Occurrence(source.path.normalize(), token.line - 1, idx)
-                }
+                if (token.type != CTokenType.IDENTIFIER || token.text != name) continue
+                val lineText = source.content.lines().getOrNull(token.line - 1) ?: continue
+                val idx = lineText.indexOf(name)
+                if (idx >= 0) candidates += Occurrence(source.path.normalize(), token.line - 1, idx)
             }
         }
-        return null
+        val distinctFiles = candidates.map { it.file }.distinct()
+        return when {
+            candidates.isEmpty() -> OccurrenceResolution.Refused("Symbol '$name' has no semantic occurrence")
+            distinctFiles.size > 1 -> OccurrenceResolution.Refused("Symbol '$name' is ambiguous across ${distinctFiles.size} files; rename is refused")
+            else -> OccurrenceResolution.Found(candidates.first())
+        }
     }
 
-    private data class Occurrence(val file: Path, val line: Int, val character: Int)
+    internal sealed interface OccurrenceResolution {
+        data class Found(val occurrence: Occurrence) : OccurrenceResolution
+        data class Refused(val message: String) : OccurrenceResolution
+    }
+
+    internal data class Occurrence(val file: Path, val line: Int, val character: Int)
 
     private fun refused(snapshot: ProjectSnapshot, message: String) = PatchPlan(
         operation = "renameCSymbolPrefix",
