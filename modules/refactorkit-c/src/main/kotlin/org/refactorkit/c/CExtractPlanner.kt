@@ -46,7 +46,7 @@ class CExtractPlanner {
         }
         val type = inferType(source.content, range, expression) ?: return refused(snapshot, "Could not infer the expression type from its context")
         val statementRange = enclosingStatementRange(source.content, range) ?: return refused(snapshot, "Could not locate the enclosing statement")
-        val declaration = "${type} ${tempName} = ${expression};"
+        val declaration = "const $type $tempName = $expression;"
         val edits = listOf(
             TextEdit(SourceRange(statementRange.start, statementRange.start), declaration + "\n"),
             TextEdit(range, tempName),
@@ -70,15 +70,23 @@ class CExtractPlanner {
 
     private fun extractExpression(content: String, range: SourceRange): String? {
         val lines = content.lines()
+        if (range.start.line < 0 || range.end.line < 0) return null
+        if (range.start.line >= lines.size || range.end.line >= lines.size) return null
         if (range.start.line == range.end.line) {
-            return lines.getOrNull(range.start.line)?.substring(range.start.character, range.end.character)
+            val line = lines[range.start.line]
+            if (range.start.character < 0 || range.end.character > line.length || range.start.character > range.end.character) return null
+            return line.substring(range.start.character, range.end.character)
         }
-        val startLine = lines.getOrNull(range.start.line)?.substring(range.start.character) ?: return null
-        val endLine = lines.getOrNull(range.end.line)?.substring(0, range.end.character) ?: return null
+        val startLine = lines[range.start.line]
+        val endLine = lines[range.end.line]
+        if (range.start.character < 0 || range.start.character > startLine.length) return null
+        if (range.end.character < 0 || range.end.character > endLine.length) return null
+        val startTail = startLine.substring(range.start.character)
+        val endHead = endLine.substring(0, range.end.character)
         val middle = if (range.end.line - range.start.line > 1) {
             lines.subList(range.start.line + 1, range.end.line).joinToString("\n")
         } else ""
-        return "$startLine\n$middle\n$endLine"
+        return "$startTail\n$middle\n$endHead"
     }
 
     private fun hasSideEffects(expression: String): Boolean =
@@ -91,29 +99,53 @@ class CExtractPlanner {
         return line.contains("#") || line.contains("goto") || line.contains("longjmp") || line.contains("setjmp")
     }
 
-    private fun inferType(content: String, range: SourceRange, expression: String): String? {
+    internal fun inferType(content: String, range: SourceRange, expression: String): String? {
         val line = content.lines().getOrNull(range.start.line) ?: return null
         // Find the enclosing assignment `lhs = expr` and the lhs declared type.
         val assignmentIndex = line.lastIndexOf("=", range.start.character)
         if (assignmentIndex < 0) return null
         val lhs = line.substring(0, assignmentIndex).trim().let { it.substringAfterLast(' ').substringBefore('(').trim() }
         if (lhs.isBlank() || !lhs.matches(IDENTIFIER)) return null
-        return findDeclaredType(content, lhs)
+        return findDeclaredType(content, range.start.line, lhs)
     }
 
-    private fun findDeclaredType(content: String, name: String): String? {
+    private fun findDeclaredType(content: String, useLine: Int, name: String): String? {
         val lines = content.lines()
-        for (line in lines) {
+        val scope = enclosingScope(lines, useLine)
+        if (scope == null) return null
+        // The declaration must be the closest preceding one inside the enclosing
+        // scope, never a same-name declaration from another function.
+        var declared: String? = null
+        for (lineIndex in scope.first..minOf(useLine, scope.last)) {
+            val line = lines[lineIndex]
             val trimmed = line.trim()
             if (trimmed.startsWith("//") || trimmed.startsWith("/*")) continue
             for (match in TYPE_DECL.findAll(line)) {
                 val type = match.groupValues[1].trim()
-                if (match.groupValues[2] == name && type !in NON_TYPE_KEYWORDS) {
-                    return type
+                if (match.groupValues[2] == name && type !in NON_TYPE_KEYWORDS) declared = type
+            }
+        }
+        return declared
+    }
+
+    /** Returns the line range of the innermost brace scope containing [useLine]. */
+    private fun enclosingScope(lines: List<String>, useLine: Int): IntRange? {
+        var depth = 0
+        var start: Int? = null
+        for (i in 0..minOf(useLine, lines.lastIndex)) {
+            val line = lines[i]
+            for (ch in line) {
+                if (ch == '{') {
+                    if (depth == 0) start = i
+                    depth++
+                } else if (ch == '}') {
+                    depth--
+                    if (depth == 0 && start != null && i >= useLine) return start..i
+                    if (depth == 0) start = null
                 }
             }
         }
-        return null
+        return start?.let { it..minOf(useLine, lines.lastIndex) }
     }
 
     private fun enclosingStatementRange(content: String, range: SourceRange): SourceRange? {
