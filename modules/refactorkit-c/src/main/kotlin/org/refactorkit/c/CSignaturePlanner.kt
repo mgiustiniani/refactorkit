@@ -32,6 +32,7 @@ class CSignaturePlanner(
 ) : AutoCloseable {
     private val client = ClangdSemanticClient(toolchain, processManager)
     private var started = false
+    private var startFailure: String? = null
 
     fun start(snapshot: ProjectSnapshot) {
         require(!started) { "C signature planner is already started" }
@@ -42,19 +43,26 @@ class CSignaturePlanner(
             .all { client.didOpen(snapshot.workspace.root.resolve(it.path), it.content) }
         if (!opened) {
             close()
-            error("clangd did not open every C source file")
+            startFailure = "clangd did not open every C source file"
+            return
         }
         started = true
     }
 
+    /** Returns the typed start failure, or null when the planner started successfully. */
+    fun startFailure(): String? = startFailure
+
     /** Renames a parameter, updating the prototype, definition and body references. */
     fun renameParameter(snapshot: ProjectSnapshot, file: Path, oldParam: String, newParam: String): PatchPlan {
-        if (!started) return refused(snapshot, "C signature planner is not started")
+        if (!started) return refused(snapshot, startFailure ?: "C signature planner is not started")
         if (oldParam.isBlank() || newParam.isBlank() || oldParam == newParam) {
             return refused(snapshot, "Parameter rename mapping is invalid")
         }
-        val occurrence = findParameterOccurrence(snapshot, file, oldParam)
-            ?: return refused(snapshot, "Parameter '$oldParam' was not found in the function signature")
+        val analysis = analyzeSignature(snapshot, file, oldParam)
+        val occurrence = when (analysis) {
+            is SignatureAnalysis.Found -> Occurrence(file.normalize(), analysis.line, analysis.character)
+            is SignatureAnalysis.Refused -> return refused(snapshot, analysis.message)
+        }
         val result = client.rename(occurrence.file, occurrence.line, occurrence.character, newParam)
         return when (result) {
             is CRenameResult.Found -> {
@@ -97,18 +105,47 @@ class CSignaturePlanner(
         started = false
     }
 
-    private fun findParameterOccurrence(snapshot: ProjectSnapshot, file: Path, name: String): Occurrence? {
+    /**
+     * Validates a parameter rename against the function signature in [file] and
+     * locates the parameter inside the parameter list, not the first same-name
+     * identifier in the body.
+     *
+     * Refusals cover variadic and old-style (K&R) declarations, which cannot be
+     * renamed safely, and a parameter that is absent from the signature.
+     */
+    internal fun analyzeSignature(snapshot: ProjectSnapshot, file: Path, paramName: String): SignatureAnalysis {
         val source = snapshot.files.singleOrNull { it.path.normalize() == file.normalize() }
-            ?: return null
-        val tokens = CTokenizer().tokenize(source.content)
-        for (token in tokens) {
-            if (token.type == CTokenType.IDENTIFIER && token.text == name) {
-                val lineText = source.content.lines().getOrNull(token.line - 1) ?: continue
-                val idx = lineText.indexOf(name)
-                if (idx >= 0) return Occurrence(source.path.normalize(), token.line - 1, idx)
+            ?: return SignatureAnalysis.Refused("File '$file' is not part of the snapshot")
+        val text = source.content
+        val lines = text.lines()
+        for (lineIndex in lines.indices) {
+            val line = lines[lineIndex]
+            val open = line.indexOf('(')
+            if (open < 0) continue
+            val close = line.indexOf(')', open)
+            if (close < 0) continue
+            val paramsText = line.substring(open + 1, close).trim()
+            if (paramsText.isEmpty() || paramsText == "void") continue
+            val params = paramsText.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            if (params.isEmpty()) continue
+            val isVariadic = params.any { it == "..." || it.startsWith("...") }
+            val isOldStyle = params.any { it.split(' ').size < 2 && !it.startsWith("...") }
+            val paramIndex = params.indexOfFirst { param ->
+                param.split(' ').lastOrNull()?.replace("*", "")?.trim() == paramName
             }
+            if (paramIndex < 0) continue
+            if (isVariadic) return SignatureAnalysis.Refused("Variadic function signature cannot be safely renamed")
+            if (isOldStyle) return SignatureAnalysis.Refused("Old-style (K&R) signature cannot be safely renamed")
+            val char = line.indexOf(paramName, open + 1)
+            if (char < 0) continue
+            return SignatureAnalysis.Found(lineIndex, char, paramIndex, params.size)
         }
-        return null
+        return SignatureAnalysis.Refused("Parameter '$paramName' was not found in the function signature")
+    }
+
+    internal sealed interface SignatureAnalysis {
+        data class Found(val line: Int, val character: Int, val paramIndex: Int, val paramCount: Int) : SignatureAnalysis
+        data class Refused(val message: String) : SignatureAnalysis
     }
 
     private data class Occurrence(val file: Path, val line: Int, val character: Int)

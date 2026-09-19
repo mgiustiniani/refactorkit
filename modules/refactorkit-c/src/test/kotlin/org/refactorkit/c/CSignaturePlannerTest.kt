@@ -7,6 +7,7 @@ import org.refactorkit.core.Workspace
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class CSignaturePlannerTest {
@@ -29,6 +30,55 @@ class CSignaturePlannerTest {
         val planner = CSignaturePlanner(toolchain())
         val plan = planner.renameParameter(snapshot(), Path.of("src/main.c"), "zzz", "y")
         assertEquals(PatchStatus.REFUSED, plan.status)
+    }
+
+    @Test
+    fun resolvesParameterInsideSignatureNotFirstBodyIdentifier() {
+        // 'a' also appears in the body; the parameter identity must come from the
+        // signature parameter list, not the first same-name identifier.
+        val content = "int f(int a, int b) { int a_local = a + 1; return a_local; }\n"
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(SourceFile(Path.of("src/main.c"), content, "c")),
+        )
+        val analysis = CSignaturePlanner(toolchain()).analyzeSignature(snap, Path.of("src/main.c"), "a")
+        assertIs<CSignaturePlanner.SignatureAnalysis.Found>(analysis)
+        assertEquals(0, analysis.paramIndex)
+        assertEquals(2, analysis.paramCount)
+    }
+
+    @Test
+    fun refusesVariadicSignature() {
+        val content = "int f(int a, ...) { return a; }\n"
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(SourceFile(Path.of("src/main.c"), content, "c")),
+        )
+        val analysis = CSignaturePlanner(toolchain()).analyzeSignature(snap, Path.of("src/main.c"), "a")
+        assertIs<CSignaturePlanner.SignatureAnalysis.Refused>(analysis)
+        assertTrue(analysis.message.contains("Variadic"))
+    }
+
+    @Test
+    fun refusesOldStyleSignature() {
+        val content = "int f(a, b) int a; int b; { return a + b; }\n"
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(SourceFile(Path.of("src/main.c"), content, "c")),
+        )
+        val analysis = CSignaturePlanner(toolchain()).analyzeSignature(snap, Path.of("src/main.c"), "a")
+        assertIs<CSignaturePlanner.SignatureAnalysis.Refused>(analysis)
+        assertTrue(analysis.message.contains("Old-style"))
+    }
+
+    @Test
+    fun refusesParameterAbsentFromSignature() {
+        val analysis = CSignaturePlanner(toolchain()).analyzeSignature(snapshot(), Path.of("src/main.c"), "absent")
+        assertIs<CSignaturePlanner.SignatureAnalysis.Refused>(analysis)
+        assertTrue(analysis.message.contains("not found in the function signature"))
     }
 
     private fun snapshot() = ProjectSnapshot(
