@@ -3,6 +3,7 @@ package org.refactorkit.c
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
+import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.Workspace
 import java.nio.file.Path
 import kotlin.test.Test
@@ -37,6 +38,33 @@ class CSafeDeletePlannerTest {
         val plan = planner().preview(snap, "helper")
         assertEquals(PatchStatus.REFUSED, plan.status)
         assertTrue(plan.summary.contains("unavailable") || plan.summary.contains("not started"))
+    }
+
+    @Test
+    fun deletionRangeCoversWholeSingleLineDeclaration() {
+        // The range must start at the storage/type prefix, not at the symbol name,
+        // so no 'static int ' residue is left behind.
+        val content = "static int helper(void) { return 1; }\n"
+        val range = planner().deletionRange(content, "helper")
+        assertEquals(SourcePosition(0, 0), range?.start)
+        assertEquals(0, range?.end?.line)
+        assertEquals(content.trimEnd().length, range?.end?.character)
+    }
+
+    @Test
+    fun deletionRangeCoversMultilineFunctionBody() {
+        val content = "static int helper(void)\n{\n    return 1;\n}\n"
+        val range = planner().deletionRange(content, "helper")
+        assertEquals(SourcePosition(0, 0), range?.start)
+        assertEquals(3, range?.end?.line)
+    }
+
+    @Test
+    fun deletionRangeCoversWholeVariableDeclaration() {
+        val content = "static int counter = 0;\n"
+        val range = planner().deletionRange(content, "counter")
+        assertEquals(SourcePosition(0, 0), range?.start)
+        assertEquals(content.trimEnd().length, range?.end?.character)
     }
 
     private fun snapshot(content: String = "int compute(int x) { return x + 1; }\nint main(void) { return compute(2); }\n") = ProjectSnapshot(

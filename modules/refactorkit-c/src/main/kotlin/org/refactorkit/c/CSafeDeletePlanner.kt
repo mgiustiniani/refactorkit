@@ -25,6 +25,96 @@ class CSafeDeletePlanner(
 ) : AutoCloseable {
     private val client = ClangdSemanticClient(toolchain, processManager)
     private var started = false
+    private var startFailure: String? = null
+
+    /**
+     * Computes the exact deletion range for a source-owned definition of [symbol].
+     *
+     * The range spans the whole declaration from the first storage/type token to the
+     * terminating `;` (or the closing `}` of a function body), so no `static int` prefix
+     * and no multiline body is left behind. Returns null when no definition is found.
+     */
+    internal fun deletionRange(content: String, symbol: String): SourceRange? {
+        val tokens = CTokenizer().tokenize(content)
+        val lines = content.lines()
+        for (i in tokens.indices) {
+            val t = tokens[i]
+            if (t.type != CTokenType.IDENTIFIER || t.text != symbol) continue
+            val next = tokens.getOrNull(i + 1)
+            val prev = tokens.getOrNull(i - 1)
+            val prev2 = tokens.getOrNull(i - 2)
+            val isFunction = next != null && next.text == "("
+            val isVariable = next != null && (next.text in setOf("=", ";", ",", ")")) ||
+                (prev != null && prev.type == CTokenType.IDENTIFIER && prev.text in TYPE_KEYWORDS)
+            if (!isFunction && !isVariable) continue
+
+            val startLine = declarationStartLine(tokens, i)
+            val startChar = declarationStartChar(lines, startLine, i, tokens)
+            if (isFunction) {
+                val open = tokens.getOrNull(i + 1) ?: continue
+                val closeParen = matchingToken(tokens, i + 1, "(", ")") ?: continue
+                val afterParams = tokens.getOrNull(closeParen + 1)
+                if (afterParams != null && afterParams.text == "{") {
+                    val bodyClose = matchingToken(tokens, closeParen + 1, "{", "}") ?: continue
+                    val endLine = tokens[bodyClose].line - 1
+                    val endChar = (lines.getOrNull(endLine)?.length ?: 0)
+                    return SourceRange(SourcePosition(startLine, startChar), SourcePosition(endLine, endChar))
+                }
+                val endLine = tokens[closeParen].line - 1
+                val endChar = semicolonEndChar(lines, tokens, closeParen)
+                return SourceRange(SourcePosition(startLine, startChar), SourcePosition(endLine, endChar))
+            }
+            val endLine = t.line - 1
+            val endChar = semicolonEndChar(lines, tokens, i)
+            return SourceRange(SourcePosition(startLine, startChar), SourcePosition(endLine, endChar))
+        }
+        return null
+    }
+
+    private fun declarationStartLine(tokens: List<CToken>, symbolIndex: Int): Int {
+        var start = symbolIndex
+        var j = symbolIndex - 1
+        while (j >= 0) {
+            val token = tokens[j]
+            val isPrefix = token.type == CTokenType.IDENTIFIER &&
+                (token.text in TYPE_KEYWORDS || token.text.matches(IDENTIFIER))
+            if (!isPrefix) break
+            start = j
+            j--
+        }
+        return tokens[start].line - 1
+    }
+
+    private fun declarationStartChar(lines: List<String>, startLine: Int, symbolIndex: Int, tokens: List<CToken>): Int {
+        val lineText = lines.getOrNull(startLine) ?: return 0
+        val first = lineText.indexOfFirst { !it.isWhitespace() }
+        return if (first >= 0) first else 0
+    }
+
+    private fun semicolonEndChar(lines: List<String>, tokens: List<CToken>, fromIndex: Int): Int {
+        var j = fromIndex + 1
+        while (j < tokens.size) {
+            if (tokens[j].text == ";") {
+                val line = tokens[j].line - 1
+                val lineText = lines.getOrNull(line) ?: return 0
+                return lineText.length
+            }
+            j++
+        }
+        val line = tokens[fromIndex].line - 1
+        return lines.getOrNull(line)?.length ?: 0
+    }
+
+    private fun matchingToken(tokens: List<CToken>, openIndex: Int, open: String, close: String): Int? {
+        var depth = 0
+        for (i in openIndex until tokens.size) {
+            when (tokens[i].text) {
+                open -> depth++
+                close -> { depth--; if (depth == 0) return i }
+            }
+        }
+        return null
+    }
 
     fun start(snapshot: ProjectSnapshot) {
         require(!started) { "C safe-delete planner is already started" }
@@ -35,13 +125,17 @@ class CSafeDeletePlanner(
             .all { client.didOpen(snapshot.workspace.root.resolve(it.path), it.content) }
         if (!opened) {
             close()
-            error("clangd did not open every C source file")
+            startFailure = "clangd did not open every C source file"
+            return
         }
         started = true
     }
 
+    /** Returns the typed start failure, or null when the planner started successfully. */
+    fun startFailure(): String? = startFailure
+
     fun preview(snapshot: ProjectSnapshot, symbol: String): PatchPlan {
-        if (!started) return refused(snapshot, "C safe-delete planner is not started")
+        if (!started) return refused(snapshot, startFailure ?: "C safe-delete planner is not started")
         if (symbol.isBlank() || !symbol.matches(IDENTIFIER)) {
             return refused(snapshot, "Invalid symbol name: '$symbol'")
         }
@@ -66,8 +160,12 @@ class CSafeDeletePlanner(
             return refused(snapshot, "Symbol '$symbol' has ${references.size} semantic reference(s); safe delete is refused")
         }
         val relFile = snapshot.workspace.root.relativize(definition.file).normalize()
+        val sourceContent = snapshot.files.singleOrNull { it.path.normalize() == relFile.normalize() ||
+            snapshot.workspace.root.resolve(it.path).normalize() == definition.file.normalize() }?.content
+        val range = sourceContent?.let { deletionRange(it, symbol) }
+            ?: SourceRange(SourcePosition(definition.line, definition.character), SourcePosition(definition.endLine, definition.endCharacter))
         val edits = listOf(
-            TextEdit(SourceRange(SourcePosition(definition.line, definition.character), SourcePosition(definition.endLine, definition.endCharacter)), ""),
+            TextEdit(range, ""),
         )
         return PatchPlan(
             operation = "safeDelete",
