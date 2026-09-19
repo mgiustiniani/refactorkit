@@ -56,6 +56,32 @@ class CMovePlannerTest {
         assertEquals(PatchStatus.REFUSED, plan.status)
     }
 
+    @Test
+    fun moveEvidenceIsStructuralNotLanguageServer() {
+        // The move is planned from the snapshot's literal includes; no language-server
+        // operation produced this plan, so the evidence must not claim one.
+        val snapshot = snapshot(listOf(
+            SourceFile(Path.of("src/main.c"), "#include \"util.h\"\nint main(void) { return 0; }\n", "c"),
+            SourceFile(Path.of("src/util.h"), "#define UTIL_H\n", "c"),
+        ))
+        val plan = CMovePlanner().preview(snapshot, Path.of("src/util.h"), Path.of("src/inc/util.h"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        assertEquals(org.refactorkit.core.RefactoringEvidence.STRUCTURAL, plan.evidence)
+    }
+
+    @Test
+    fun movesWhenMacroIncludeCannotTargetMovedFile() {
+        // A macro-computed include that cannot resolve to the moved file must not block
+        // an unrelated, proven literal move.
+        val snapshot = snapshot(listOf(
+            SourceFile(Path.of("src/other.c"), "#include SOME_MACRO\n", "c"),
+            SourceFile(Path.of("src/main.c"), "#include \"util.h\"\n", "c"),
+            SourceFile(Path.of("src/util.h"), "#define UTIL_H\n", "c"),
+        ))
+        val plan = CMovePlanner().preview(snapshot, Path.of("src/util.h"), Path.of("src/inc/util.h"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+    }
+
     private fun snapshot(files: List<SourceFile>) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

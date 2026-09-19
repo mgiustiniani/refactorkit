@@ -71,7 +71,7 @@ class CMovePlanner {
             diagnosticsAfterPreview = emptyList(),
             warnings = listOf("Literal includes updated; macro-computed includes and build bindings are not rewritten."),
             riskLevel = RiskLevel.MEDIUM,
-            evidence = RefactoringEvidence.LANGUAGE_SERVER,
+            evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
 
@@ -89,8 +89,10 @@ class CMovePlanner {
             val directives = CIncludeDirectiveParser().parse(source.content)
             for (directive in directives) {
                 if (directive.kind == CIncludeKind.MACRO) {
-                    // Macro-computed includes cannot be proven safe to rewrite; conservative refusal.
-                    return null
+                    // Only a macro-computed include that could resolve to the moved file
+                    // blocks the move; unrelated macro includes are not false authority.
+                    if (macroIncludeCouldTarget(directive.target, oldPath)) return null
+                    continue
                 }
                 val includingDir = root.resolve(source.path.parent ?: Path.of("")).normalize()
                 val targetResolved = if (directive.kind == CIncludeKind.QUOTED) {
@@ -109,6 +111,21 @@ class CMovePlanner {
             }
         }
         return editsByFile
+    }
+
+    /**
+     * True when a macro-computed include plausibly targets [targetPath].
+     *
+     * The macro name is the only evidence available for a computed include; it is
+     * compared against the target basename and its include-guard spelling, so an
+     * unrelated macro never blocks a proven literal move.
+     */
+    private fun macroIncludeCouldTarget(macroName: String, targetPath: Path): Boolean {
+        val name = targetPath.fileName?.toString().orEmpty()
+        val stem = name.substringBeforeLast('.', name)
+        val normalizedMacro = macroName.uppercase().replace("_", "")
+        val candidates = listOf(name, stem).map { it.uppercase().replace("_", "").replace(".", "") }
+        return candidates.any { it.isNotEmpty() && normalizedMacro.contains(it) }
     }
 
     private fun isCSourceOrHeader(path: Path): Boolean {
