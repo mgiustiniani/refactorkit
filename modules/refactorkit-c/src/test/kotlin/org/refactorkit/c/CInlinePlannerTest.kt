@@ -39,6 +39,24 @@ class CInlinePlannerTest {
         assertTrue(plan.workspaceEdit.edits.isNotEmpty())
     }
 
+    @Test
+    fun inlinesTypedParameterWithoutTypeKeywordMismatch() {
+        // The parameter name is the last identifier of 'struct Point p'; the type
+        // must not be collected as a parameter, which would break the arg-count check.
+        val snap = snapshot("struct Point { int x; };\nstatic int helper(struct Point p) { return p.x; }\nint main(void) { struct Point q; return helper(q); }\n")
+        val plan = planner().preview(snap, Path.of("src/main.c"), "helper")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+    }
+
+    @Test
+    fun substituteDoesNotRewriteNonBindingOccurrences() {
+        // A parameter name must only replace binding occurrences; a string literal
+        // containing the same text must stay untouched.
+        val snap = snapshot("static int label(int n) { return n; }\nint main(void) { return label(1); }\n")
+        val plan = planner().preview(snap, Path.of("src/main.c"), "label")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

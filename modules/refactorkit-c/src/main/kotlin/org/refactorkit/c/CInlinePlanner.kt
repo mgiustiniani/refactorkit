@@ -128,14 +128,32 @@ class CInlinePlanner {
     }
 
     private fun parseParams(tokens: List<Tok>, openIndex: Int, closeIndex: Int): List<String> {
+        // The parameter list is split on top-level commas; each parameter's name is
+        // its last identifier, so a type, 'struct'/'union', qualifiers and '*' are not
+        // mistaken for parameters.
         val params = mutableListOf<String>()
         var i = openIndex + 1
+        var depth = 0
+        var current = mutableListOf<String>()
+        val groups = mutableListOf<MutableList<String>>()
         while (i < closeIndex) {
             val t = tokens[i]
-            if (t.type == CTokenType.IDENTIFIER && t.text !in TYPE_KEYWORDS) {
-                params += t.text
+            when (t.text) {
+                "(" -> depth++
+                ")" -> depth--
+            }
+            if (depth == 0 && t.text == ",") {
+                groups += current
+                current = mutableListOf()
+            } else {
+                current += t.text
             }
             i++
+        }
+        if (current.isNotEmpty()) groups += current
+        for (group in groups) {
+            val name = group.lastOrNull { it.matches(IDENTIFIER) && it !in TYPE_KEYWORDS && it != "void" }
+            if (name != null) params += name
         }
         return params
     }
