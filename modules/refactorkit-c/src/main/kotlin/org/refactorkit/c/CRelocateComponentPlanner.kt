@@ -69,7 +69,7 @@ class CRelocateComponentPlanner {
             diagnosticsAfterPreview = emptyList(),
             warnings = listOf("Literal includes updated; macro-computed includes and build bindings are not rewritten."),
             riskLevel = RiskLevel.MEDIUM,
-            evidence = RefactoringEvidence.LANGUAGE_SERVER,
+            evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
 
@@ -79,13 +79,19 @@ class CRelocateComponentPlanner {
         for (source in snapshot.files) {
             if (source.languageId !in setOf("c", "cpp", "objective-c")) continue
             val directives = CIncludeDirectiveParser().parse(source.content)
+            val includingDir = root.resolve(source.path.parent ?: Path.of("")).normalize()
             for (directive in directives) {
-                val oldTarget = root.resolve(source.path.parent ?: Path.of("")).resolve(directive.target).normalize()
-                val match = moved.entries.firstOrNull { (oldFile, _) ->
-                    oldFile.normalize() == oldTarget.normalize() || directive.target == oldFile.fileName.toString()
-                } ?: continue
+                // Resolve quoted includes relative to the including file and angled
+                // includes relative to the workspace root; never fall back to basename.
+                val oldTarget = if (directive.kind == CIncludeKind.QUOTED) {
+                    includingDir.resolve(directive.target).normalize()
+                } else {
+                    root.resolve(directive.target).normalize()
+                }
+                val match = moved.entries.firstOrNull { (oldFile, _) -> oldFile.normalize() == oldTarget.normalize() } ?: continue
                 val newFile = moved[match.key]!!
-                val newTarget = root.relativize(newFile).toString().replace('\\', '/')
+                // The rewritten path is relative to the including file's directory.
+                val newTarget = includingDir.relativize(newFile).toString().replace('\\', '/')
                 val lineText = source.content.lines().getOrNull(directive.line - 1) ?: continue
                 val idx = lineText.indexOf(directive.target)
                 if (idx < 0) continue
