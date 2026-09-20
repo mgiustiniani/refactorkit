@@ -41,8 +41,6 @@ import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.WorkspaceSnapshotComposer
 import org.refactorkit.c.CRefactoringFacade
-import org.refactorkit.c.CCompilerDiagnostics
-import org.refactorkit.c.CDiagnosticsResult
 import org.refactorkit.c.ClangSemanticToolchain
 import org.refactorkit.c.ClangToolchainDiscoverer
 import org.refactorkit.c.ClangToolchainDiscovery
@@ -1769,22 +1767,9 @@ class DaemonSession(
     }
 
     private fun cDiagnosticsGate(toolchain: ClangSemanticToolchain): DiagnosticsGate =
-        DiagnosticsGate.enabled("clang-exact-v1") { candidate ->
-            val sources = candidate.files.filter { it.languageId in setOf("c", "cpp", "objective-c") }
-            require(sources.isNotEmpty()) {
-                "clang.diagnosticsSourcesEmpty: no C-family sources in the candidate snapshot"
-            }
-            val diagnostics = CCompilerDiagnostics(toolchain).let { analyzer ->
-                sources.flatMap { source ->
-                    when (val result = analyzer.analyze(candidate, source.path)) {
-                        is CDiagnosticsResult.Available -> result.diagnostics
-                        is CDiagnosticsResult.Unavailable ->
-                            error("${result.diagnostic.code}: ${result.diagnostic.message}")
-                    }
-                }
-            }
-            diagnostics
-        }
+        // Thin delegation: the C facade owns the exact-version diagnostics gate, so the
+        // daemon does not duplicate the clang analysis or its unavailable-vs-clean rule.
+        CRefactoringFacade(toolchain).diagnosticsGate()
 
     private fun discoverCToolchain(p: JsonObject): ClangSemanticToolchain {
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
@@ -2927,6 +2912,9 @@ class DaemonSession(
         private val SCRIPT_EXTENSIONS = mapOf(
             "ts" to "typescript", "tsx" to "typescript",
             "js" to "javascript", "jsx" to "javascript",
+            // C is the admitted 0.8.0 language: its sources/headers must enter the
+            // workspace inventory so c.preview runs against the real scanner snapshot.
+            "c" to "c", "h" to "c",
         )
 
         private val DAEMON_METHODS = listOf(
