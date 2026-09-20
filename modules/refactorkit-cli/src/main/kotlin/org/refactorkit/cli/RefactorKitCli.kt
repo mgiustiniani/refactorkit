@@ -135,6 +135,7 @@ class RefactorKitCli(
             "java"            -> cmdJava(args.drop(1))
             "typescript"      -> cmdTypeScript(args.drop(1))
             "kotlin"          -> cmdKotlin(args.drop(1))
+            "c"               -> cmdC(args.drop(1))
             "recipe"          -> cmdRecipe(args.drop(1))
             "outline"         -> cmdOutline(args.drop(1))
             "search"          -> cmdSearch(args.drop(1))
@@ -823,6 +824,81 @@ class RefactorKitCli(
         } catch (failure: Exception) {
             val refusalCode = ((failure as? JsonRpcException)?.data as? JsonObject)?.get("refusalCode")?.jsonPrimitive?.content
             System.err.println("TypeScript semantic command failed${refusalCode?.let { " [$it]" }.orEmpty()}: ${failure.message}")
+            1
+        } finally {
+            session.close()
+        }
+    }
+
+    /**
+     * C CLI surface, coherent with the C operation catalogue.
+     *
+     * Operations are delegated to the daemon's `c.preview` route so the CLI stays a
+     * thin transport: it does not reimplement C planner rules. The explicit clang
+     * toolchain (`--clang`, `--clangd`, `--clang-format`) is required, and apply uses
+     * the retained pending plan and its diagnostics gate.
+     */
+    private fun cmdC(args: List<String>): Int {
+        val operation = args.firstOrNull()
+        val catalogue = mapOf(
+            "rename" to "renameSymbol",
+            "rename-prefix" to "renamePrefix",
+            "move" to "moveSource",
+            "format" to "formatFile",
+            "organize-includes" to "organizeIncludes",
+            "safe-delete" to "safeDelete",
+            "change-signature" to "changeSignature",
+            "extract" to "extractExpression",
+            "inline" to "inlineFunction",
+            "relocate" to "relocateComponent",
+        )
+        if (operation == null || operation !in catalogue) {
+            System.err.println("c requires a subcommand: ${catalogue.keys.joinToString(", ")}")
+            return 2
+        }
+        val parsed = parseOptions(args.drop(1))
+        val clang = parsed.options["clang"] ?: run { System.err.println("--clang required"); return 2 }
+        val clangd = parsed.options["clangd"] ?: run { System.err.println("--clangd required"); return 2 }
+        val clangFormat = parsed.options["clang-format"] ?: run { System.err.println("--clang-format required"); return 2 }
+        val arguments = buildJsonObject {
+            parsed.options["symbol"]?.let { put("symbol", it) }
+            parsed.options["to"]?.let { put("newName", it) }
+            parsed.options["file"]?.let { put("file", it) }
+            parsed.options["target"]?.let { put("target", it) }
+            parsed.options["component-dir"]?.let { put("componentDir", it) }
+            parsed.options["new-dir"]?.let { put("newDir", it) }
+            parsed.options["temp-name"]?.let { put("tempName", it) }
+            parsed.options["old-param"]?.let { put("oldParam", it) }
+            parsed.options["new-param"]?.let { put("newParam", it) }
+            parsed.options["start-line"]?.let { put("startLine", it) }
+            parsed.options["start-char"]?.let { put("startChar", it) }
+            parsed.options["end-line"]?.let { put("endLine", it) }
+            parsed.options["end-char"]?.let { put("endChar", it) }
+        }
+        val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
+        val session = semanticSessionFactory()
+        return try {
+            session.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
+            val preview = session.dispatch("c.preview", buildJsonObject {
+                put("operation", catalogue.getValue(operation))
+                put("arguments", arguments)
+                put("clang", clang)
+                put("clangd", clangd)
+                put("clangFormat", clangFormat)
+            })
+            val result = if ("apply" in parsed.flags) {
+                session.dispatch("refactor.apply", buildJsonObject {
+                    put("planId", preview.jsonObject.getValue("planId").jsonPrimitive.content)
+                })
+            } else preview
+            println(semanticJson.encodeToString(result))
+            if (result.jsonObject.getValue("status").jsonPrimitive.content in setOf("PREVIEW", "applied")) 0 else 1
+        } catch (failure: JsonRpcException) {
+            // Invalid params and structured refusals are distinct from internal errors.
+            System.err.println("C command refused${failure.message?.let { ": $it" }.orEmpty()}")
+            1
+        } catch (failure: Exception) {
+            System.err.println("C command failed: ${failure.message}")
             1
         } finally {
             session.close()

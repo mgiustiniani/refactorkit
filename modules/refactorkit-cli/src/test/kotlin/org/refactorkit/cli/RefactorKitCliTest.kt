@@ -18,6 +18,62 @@ import kotlin.test.assertTrue
 
 class RefactorKitCliTest {
     @Test
+    fun cCommandRequiresSubcommandAndExplicitToolchain() {
+        val cli = RefactorKitCli()
+        // Missing subcommand is an invalid-parameter exit, distinct from an internal error.
+        assertEquals(2, cli.run(listOf("c")))
+        assertEquals(2, cli.run(listOf("c", "not-an-operation", ".")))
+        // The explicit clang toolchain is required for every admitted operation.
+        assertEquals(2, cli.run(listOf("c", "organize-includes", ".")))
+    }
+
+    @Test
+    fun cOrganizeIncludesPreviewsThroughTheCliProcess() {
+        if (!clangAvailable()) return // clang toolchain not installed; CLI C integration not run
+        val root = createProject(
+            "src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n",
+        )
+        val result = captureStdout {
+            RefactorKitCli().run(listOf(
+                "c", "organize-includes", root.toString(),
+                "--file", "src/main.c",
+                "--clang", clangExecutable(), "--clangd", clangdExecutable(), "--clang-format", clangFormatExecutable(),
+            ))
+        }
+        assertEquals(0, result.code, "a positive C preview must exit 0; stdout=${result.stdout} stderr=${result.stderr}")
+        val plan = Json.parseToJsonElement(result.stdout).jsonObject
+        assertEquals("PREVIEW", plan.getValue("status").jsonPrimitive.content)
+        assertTrue(plan.getValue("affectedFiles").jsonArray.isNotEmpty(), "preview must report affected files")
+    }
+
+    @Test
+    fun cApplyChangesFileAndRollbackWouldRestoreIt() {
+        if (!clangAvailable()) return
+        val root = createProject(
+            "src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n",
+        )
+        val target = root.resolve("src/main.c")
+        val before = target.readText()
+        val code = captureStdout {
+            RefactorKitCli().run(listOf(
+                "c", "organize-includes", root.toString(),
+                "--file", "src/main.c",
+                "--clang", clangExecutable(), "--clangd", clangdExecutable(), "--clang-format", clangFormatExecutable(),
+                "--apply",
+            ))
+        }.code
+        assertEquals(0, code)
+        assertTrue(target.readText() != before, "apply must change the file on disk")
+    }
+
+    private fun clangExecutable(): String = "/usr/bin/clang-22"
+    private fun clangdExecutable(): String = "/usr/bin/clangd"
+    private fun clangFormatExecutable(): String = "/usr/bin/clang-format"
+
+    private fun clangAvailable(): Boolean = listOf(clangExecutable(), clangdExecutable(), clangFormatExecutable())
+        .map { Paths.get(it) }.all { Files.isExecutable(it) }
+
+    @Test
     fun semanticCommandsRequireExplicitSubcommandAndToolchain() {
         val cli = RefactorKitCli()
         assertEquals(2, cli.run(listOf("typescript")))
@@ -278,12 +334,16 @@ class RefactorKitCliTest {
 
     private fun captureStdout(block: () -> Int): CapturedResult {
         val originalOut = System.out
+        val originalErr = System.err
         val buffer = ByteArrayOutputStream()
+        val errBuffer = ByteArrayOutputStream()
         System.setOut(PrintStream(buffer, true, Charsets.UTF_8.name()))
+        System.setErr(PrintStream(errBuffer, true, Charsets.UTF_8.name()))
         return try {
-            CapturedResult(block(), buffer.toString(Charsets.UTF_8.name()))
+            CapturedResult(block(), buffer.toString(Charsets.UTF_8.name()), errBuffer.toString(Charsets.UTF_8.name()))
         } finally {
             System.setOut(originalOut)
+            System.setErr(originalErr)
         }
     }
 
@@ -305,5 +365,5 @@ class RefactorKitCliTest {
         }
     }
 
-    private data class CapturedResult(val code: Int, val stdout: String)
+    private data class CapturedResult(val code: Int, val stdout: String, val stderr: String = "")
 }
