@@ -194,6 +194,30 @@ class CRefactoringFacadeTest {
         assertEquals(setOf(Path.of("main.c")), plan.affectedFiles)
     }
 
+    @Test
+    fun previewRefusesMissingArgumentsInsteadOfThrowing() {
+        val plan = facade().preview(snapshot("int x;\n"), "renameSymbol", mapOf("symbol" to "x"))
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("newName") || plan.summary.contains("Missing"))
+    }
+
+    @Test
+    fun previewRefusesUnknownOperationInsteadOfThrowing() {
+        val plan = facade().preview(snapshot("int x;\n"), "notAnOperation", emptyMap())
+        assertEquals(PatchStatus.REFUSED, plan.status)
+    }
+
+    @Test
+    fun relocateComponentReadsComponentDirArgument() {
+        val snap = ProjectSnapshot(
+            Workspace(Path.of("/workspace")),
+            emptyList(),
+            listOf(SourceFile(Path.of("src/component/a.c"), "int a(void) { return 1; }\n", "c")),
+        )
+        val plan = facade().preview(snap, "relocateComponent", mapOf("componentDir" to "src/component", "newDir" to "src/other"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

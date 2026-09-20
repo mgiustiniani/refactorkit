@@ -119,8 +119,8 @@ class CRefactoringFacade(
         val file = args["file"]?.let(Path::of)
         return when (operation) {
             "renameSymbol" -> {
-                val symbol = args["symbol"] ?: error("Missing arguments.symbol")
-                val newName = args["newName"] ?: error("Missing arguments.newName")
+                val symbol = args["symbol"] ?: return missingArgument(snapshot, operation, "arguments.symbol")
+                val newName = args["newName"] ?: return missingArgument(snapshot, operation, "arguments.newName")
                 val resolved = resolveSymbol(snapshot, symbol)
                 when (resolved) {
                     is SymbolResolution.Found ->
@@ -129,15 +129,18 @@ class CRefactoringFacade(
                 }
             }
             "renamePrefix" -> renamePrefix.preview(snapshot, parseMapping(args))
-            "moveSource" -> move.preview(snapshot, file ?: error("Missing arguments.file"), Path.of(args["target"] ?: error("Missing arguments.target")))
-            "formatFile" -> format.formatWholeFile(snapshot, file ?: error("Missing arguments.file")).toPlan(snapshot, "formatFile", file ?: error("Missing arguments.file"))
-            "organizeIncludes" -> organizeIncludes.preview(snapshot, file ?: error("Missing arguments.file"))
-            "safeDelete" -> safeDelete.preview(snapshot, args["symbol"] ?: error("Missing arguments.symbol"))
-            "changeSignature" -> signature.renameParameter(snapshot, file ?: error("Missing arguments.file"), args["oldParam"] ?: error("Missing arguments.oldParam"), args["newParam"] ?: error("Missing arguments.newParam"))
-            "extractExpression" -> extract.preview(snapshot, file ?: error("Missing arguments.file"), parseRange(args), args["tempName"] ?: "tmp")
-            "inlineFunction" -> inline.preview(snapshot, file ?: error("Missing arguments.file"), args["symbol"] ?: error("Missing arguments.symbol"))
-            "relocateComponent" -> relocate.preview(snapshot, file ?: error("Missing arguments.componentDir"), Path.of(args["newDir"] ?: error("Missing arguments.newDir")))
-            else -> error("Unknown C operation: $operation")
+            "moveSource" -> move.preview(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"), Path.of(args["target"] ?: return missingArgument(snapshot, operation, "arguments.target")))
+            "formatFile" -> format.formatWholeFile(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file")).toPlan(snapshot, "formatFile", file ?: return missingArgument(snapshot, operation, "arguments.file"))
+            "organizeIncludes" -> organizeIncludes.preview(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"))
+            "safeDelete" -> safeDelete.preview(snapshot, args["symbol"] ?: return missingArgument(snapshot, operation, "arguments.symbol"))
+            "changeSignature" -> signature.renameParameter(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"), args["oldParam"] ?: return missingArgument(snapshot, operation, "arguments.oldParam"), args["newParam"] ?: return missingArgument(snapshot, operation, "arguments.newParam"))
+            "extractExpression" -> {
+                val range = parseRange(args) ?: return invalidRange(snapshot, operation)
+                extract.preview(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"), range, args["tempName"] ?: "tmp")
+            }
+            "inlineFunction" -> inline.preview(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"), args["symbol"] ?: return missingArgument(snapshot, operation, "arguments.symbol"))
+            "relocateComponent" -> relocate.preview(snapshot, args["componentDir"]?.let(Path::of) ?: return missingArgument(snapshot, operation, "arguments.componentDir"), Path.of(args["newDir"] ?: return missingArgument(snapshot, operation, "arguments.newDir")))
+            else -> unknownOperation(snapshot, operation)
         }
     }
 
@@ -214,13 +217,31 @@ class CRefactoringFacade(
         return mapping
     }
 
-    private fun parseRange(args: Map<String, String>): SourceRange {
-        val startLine = args["startLine"]?.toIntOrNull() ?: error("Missing arguments.startLine")
-        val startChar = args["startChar"]?.toIntOrNull() ?: error("Missing arguments.startChar")
-        val endLine = args["endLine"]?.toIntOrNull() ?: error("Missing arguments.endLine")
-        val endChar = args["endChar"]?.toIntOrNull() ?: error("Missing arguments.endChar")
+    private fun parseRange(args: Map<String, String>): SourceRange? {
+        val startLine = args["startLine"]?.toIntOrNull() ?: return null
+        val startChar = args["startChar"]?.toIntOrNull() ?: return null
+        val endLine = args["endLine"]?.toIntOrNull() ?: return null
+        val endChar = args["endChar"]?.toIntOrNull() ?: return null
         return SourceRange(SourcePosition(startLine, startChar), SourcePosition(endLine, endChar))
     }
+
+    private fun missingArgument(snapshot: ProjectSnapshot, operation: String, argument: String) =
+        refusedDiagnostic(snapshot, operation, "c.missingArgument", "Missing $argument")
+
+    private fun invalidRange(snapshot: ProjectSnapshot, operation: String) =
+        refusedDiagnostic(snapshot, operation, "c.invalidRange", "Invalid or missing extract range arguments")
+
+    private fun unknownOperation(snapshot: ProjectSnapshot, operation: String) =
+        refusedDiagnostic(snapshot, operation, "c.unknownOperation", "Unknown C operation: $operation")
+
+    private fun refusedDiagnostic(snapshot: ProjectSnapshot, operation: String, code: String, message: String) =
+        refused(snapshot, operation, listOf(Diagnostic(
+            message = message,
+            severity = Diagnostic.Severity.ERROR,
+            code = code,
+            evidence = DiagnosticEvidence.STRUCTURAL,
+            category = DiagnosticCategory.SAFETY,
+        )))
 
     private data class Location(val file: Path, val line: Int, val character: Int)
 
