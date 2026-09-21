@@ -41,6 +41,11 @@ import org.refactorkit.core.RollbackPreflightGuard
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceRefreshCoordinator
 import org.refactorkit.core.WorkspaceSnapshotComposer
+import org.refactorkit.c.CRefactoringFacade
+import org.refactorkit.c.ClangSemanticToolchain
+import org.refactorkit.c.ClangToolchainDiscoverer
+import org.refactorkit.c.ClangToolchainDiscovery
+import org.refactorkit.c.ClangToolchainRequest
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
@@ -272,13 +277,16 @@ class McpSession(
             add(tool("available_refactorings", "List bounded operation families; applicability still requires a semantic preview.",
                 required = emptyList(),
                 props = mapOf("symbol" to "string: fully-qualified symbol name (required for Java)",
-                    "languageId" to "string: java | typescript | javascript (default java)")))
+                    "languageId" to "string: java | kotlin | typescript | javascript | c (default java)")))
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete | sourceFileRelocation | extractFunction | extractConstant | inlineVariable | moveDeclaration | projectReferenceMigration | recipe",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete | sourceFileRelocation | extractFunction | extractConstant | inlineVariable | moveDeclaration | projectReferenceMigration | recipe | renamePrefix | moveSource | organizeIncludes | changeSignature | extractExpression | inlineFunction | relocateComponent",
                     "symbol" to "string: fully-qualified symbol name",
-                    "languageId" to "string: java | kotlin | typescript | javascript (default java)",
+                    "languageId" to "string: java | kotlin | typescript | javascript | c (default java); c requires clang/clangd/clangFormat",
+                    "clang" to "string: explicit clang executable path (required for languageId=c)",
+                    "clangd" to "string: explicit clangd executable path (required for languageId=c)",
+                    "clangFormat" to "string: explicit clang-format executable path (required for languageId=c)",
                     "expectedSnapshotHash" to "string: required for Kotlin mutations and advanced TypeScript/JavaScript previews",
                     "semanticLease" to "string: required for Kotlin mutations and advanced TypeScript/JavaScript previews",
                     "arguments" to "object: operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)",
@@ -770,6 +778,17 @@ class McpSession(
     private fun toolAvailableRefactorings(args: JsonObject): String {
         val language = args.string("languageId") ?: "java"
         if (language in setOf("typescript", "javascript")) return TypeScriptRefactoringProtocol.catalogue(requireSemanticAdapter(language)).toString()
+        if (language == "c") return "Available C refactorings:\n" +
+            "- renameSymbol: rename one compiler-proven C symbol and its binding-matched references\n" +
+            "- renamePrefix: rename an explicit mapping of compiler-proven C API symbols\n" +
+            "- moveSource: move a C source/header and update proven literal includes\n" +
+            "- formatFile: format one C file with the explicit clang-format\n" +
+            "- organizeIncludes: organize one C include block, preserving comments\n" +
+            "- safeDelete: delete a C symbol only with proven absence of uses\n" +
+            "- changeSignature: rename a C function parameter (fully-prototyped, non-variadic)\n" +
+            "- extractExpression: extract a scalar C expression to a const local temporary\n" +
+            "- inlineFunction: inline a single-use static/extern C function\n" +
+            "- relocateComponent: move a C component directory and update literal includes"
         val symbolId = args.string("symbol") ?: missing("symbol")
         return "Available refactorings for $symbolId:\n" +
             "- renameClass: rename to a new simple name\n" +
@@ -786,6 +805,65 @@ class McpSession(
             "- moveDeclaration: move one supported public Kotlin/JVM type to a different package\n" +
             "- safeDelete: delete if no references exist\n" +
             "- organizeImports: organize one Java or compiler-proven Kotlin import block"
+    }
+
+    /**
+     * C preview through the library C facade. The explicit clang toolchain comes from the
+     * request, and the returned pending plan carries the C diagnostics gate so apply stays
+     * gated; the MCP transport holds no C planner rules of its own.
+     */
+    private fun cPreview(
+        snap: ProjectSnapshot,
+        operation: String,
+        symbol: String?,
+        opArgs: Map<String, String>,
+        args: JsonObject,
+    ): PatchPlan {
+        val toolchain = discoverCToolchain(args)
+        val facade = CRefactoringFacade(toolchain)
+        val cOperation = when (operation) {
+            "renameSymbol" -> "renameSymbol"
+            "renamePrefix" -> "renamePrefix"
+            "moveSource" -> "moveSource"
+            "formatFile" -> "formatFile"
+            "organizeIncludes" -> "organizeIncludes"
+            "safeDelete" -> "safeDelete"
+            "changeSignature" -> "changeSignature"
+            "extractExpression" -> "extractExpression"
+            "inlineFunction" -> "inlineFunction"
+            "relocateComponent" -> "relocateComponent"
+            else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown C operation: $operation")
+        }
+        val resolvedArgs = opArgs + (symbol?.let { mapOf("symbol" to it) } ?: emptyMap())
+        try {
+            facade.startFor(snap, cOperation)
+            // The pending plan is inserted by the shared preview path so the C diagnostics
+            // gate is retained consistently; this helper only computes the plan.
+            return facade.preview(snap, cOperation, resolvedArgs)
+        } finally {
+            facade.close()
+        }
+    }
+
+    private fun cDiagnosticsGate(toolchain: ClangSemanticToolchain): DiagnosticsGate =
+        // Thin delegation: the C facade owns the exact-version clang gate.
+        CRefactoringFacade(toolchain).diagnosticsGate()
+
+    private fun discoverCToolchain(args: JsonObject): ClangSemanticToolchain {
+        val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val request = ClangToolchainRequest(
+            workspaceRoot = root,
+            clangExecutable = args.string("clang")?.let(Paths::get),
+            clangdExecutable = args.string("clangd")?.let(Paths::get),
+            clangFormatExecutable = args.string("clangFormat")?.let(Paths::get),
+        )
+        return when (val discovery = ClangToolchainDiscoverer().discover(request)) {
+            is ClangToolchainDiscovery.Available -> discovery.toolchain
+            is ClangToolchainDiscovery.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                discovery.diagnostics.joinToString("; ") { it.message },
+            )
+        }
     }
 
     private fun moveClassPromotionAttempt(args: Map<String, String>): JavaMoveClassPromotionAttemptMetadata =
@@ -813,8 +891,10 @@ class McpSession(
         val snap = requireSnapshot()
 
         val semanticOwner = if (languageId in setOf("typescript", "javascript") && operation != "renameSymbol") requireSemanticAdapter(languageId) else null
-        val retainedGate = semanticOwner?.diagnosticsGate()
-        val plan = if (semanticOwner != null) {
+        val retainedGate = if (languageId == "c") cDiagnosticsGate(discoverCToolchain(args)) else semanticOwner?.diagnosticsGate()
+        val plan = if (languageId == "c") {
+            cPreview(snap, operation, symbol, opArgs, args)
+        } else if (semanticOwner != null) {
             val request = RefactoringRequest(operation, symbolId = symbol?.let { org.refactorkit.core.SymbolId(it) }, arguments = opArgs, snapshot = snap)
             if (operation == "recipe") ManagedRecipePreview.preview(request, ManagedRecipeContext(snap, semanticOwner, requireNotNull(retainedGate)),
                 args.string("expectedSnapshotHash"), args.string("semanticLease"), semanticLeases[languageId])
@@ -1527,6 +1607,9 @@ class McpSession(
         private val SCRIPT_EXTENSIONS = mapOf(
             "ts" to "typescript", "tsx" to "typescript",
             "js" to "javascript", "jsx" to "javascript",
+            // C is the admitted 0.8.0 language: its sources/headers must enter the
+            // MCP workspace inventory so C previews run against the real snapshot.
+            "c" to "c", "h" to "c",
         )
         private val JSON_SCHEMA_TYPES = setOf("string", "number", "integer", "boolean", "object", "array")
         private val IGNORED_RESOURCE_DIRS = setOf("build", "target", ".gradle", ".git", ".refactorkit")
