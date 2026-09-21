@@ -48,6 +48,48 @@ class LspSessionTest {
     }
 
     @Test
+    fun cDocumentsAreRecognizedButEditorEditsAreRefusedByOwnership() {
+        val root = createProject("src/main.c" to "int main(void) { return 0; }\n")
+        val session = LspSession()
+        session.dispatch("initialize", initializeParams(root))
+        val uri = Paths.get(root).resolve("src/main.c").toUri().toString()
+        // A C document is recognized (didOpen accepted), but editor-managed mutations are refused.
+        session.dispatch("textDocument/didOpen", buildJsonObject {
+            put("textDocument", buildJsonObject {
+                put("uri", uri); put("version", 1); put("text", "int main(void) { return 0; }\n")
+            })
+        })
+        val rename = assertFailsWith<JsonRpcException> {
+            session.dispatch("textDocument/rename", buildJsonObject {
+                put("textDocument", buildJsonObject { put("uri", uri) })
+                put("position", buildJsonObject { put("line", 0); put("character", 4) })
+                put("newName", "run")
+            })
+        }
+        assertTrue(rename.message!!.contains("managed"), rename.message!!)
+        val codeAction = assertFailsWith<JsonRpcException> {
+            session.dispatch("textDocument/codeAction", buildJsonObject {
+                put("textDocument", buildJsonObject { put("uri", uri) })
+                put("range", buildJsonObject {
+                    put("start", buildJsonObject { put("line", 0); put("character", 0) })
+                    put("end", buildJsonObject { put("line", 0); put("character", 3) })
+                })
+                put("context", buildJsonObject { put("diagnostics", buildJsonArray { }) })
+            })
+        }
+        assertTrue(codeAction.message!!.contains("managed"), codeAction.message!!)
+    }
+
+    @Test
+    fun initializeDeclaresCAsManagedOnlyOwnership() {
+        val root = createProject("src/main.c" to "int main(void) { return 0; }\n")
+        val session = LspSession()
+        val result = session.dispatch("initialize", initializeParams(root)) as JsonObject
+        val ownership = result["capabilities"]!!.jsonObject["experimental"]!!.jsonObject["refactorkitSemanticOwnership"]!!.jsonObject
+        assertTrue(ownership["c"]!!.jsonPrimitive.content.contains("managed"), ownership["c"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun initializeAdvertisesCodeActionsSemanticTokensAndDiagnostics() {
         val root = createProject(
             "src/main/java/com/example/Foo.java" to "package com.example;\npublic class Foo {}\n",

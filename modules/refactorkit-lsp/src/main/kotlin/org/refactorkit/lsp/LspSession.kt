@@ -181,6 +181,9 @@ class LspSession {
                         put("kotlin", "refactorkit-external-compiler-read-only-via-cli-daemon-mcp")
                         put("typescript", "client-managed-native-lsp")
                         put("javascript", "client-managed-native-lsp")
+                        // C mutations are managed RefactorKit commands only; the LSP never
+                        // promises WAL/rollback for editor-applied C edits.
+                        put("c", "refactorkit-managed-clang-semantic-via-cli-daemon-mcp-lsp")
                         put("managedMutationSurfaces", buildJsonArray {
                             add(JsonPrimitive("cli")); add(JsonPrimitive("daemon")); add(JsonPrimitive("mcp"))
                         })
@@ -309,6 +312,7 @@ class LspSession {
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
+        if (file.languageId == "c") return JsonNull // editor-managed C rename is not offered; use managed commands
         val symbol = adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol ?: return JsonNull
         return buildJsonObject {
             put("range", rangeJson(
@@ -325,6 +329,10 @@ class LspSession {
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
+        if (file.languageId == "c") throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "C mutations are managed RefactorKit commands (cli/daemon/mcp); the LSP does not offer editor-applied C rename",
+        )
         val symbol = adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol ?: return JsonNull
         val plan = when (symbol.kind) {
             org.refactorkit.core.Symbol.Kind.METHOD,
@@ -343,6 +351,10 @@ class LspSession {
         val fileUri = params?.obj("textDocument")?.string("uri") ?: return JsonArray(emptyList())
         val snap = snapshot ?: return JsonArray(emptyList())
         val file = fileForUri(snap, fileUri) ?: return JsonArray(emptyList())
+        if (file.languageId == "c") throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "C code actions are managed RefactorKit commands (cli/daemon/mcp); the LSP does not offer editor-applied C edits",
+        )
         if (file.languageId != "java") return JsonArray(emptyList())
         val relPath = file.path.toString()
         val actions = mutableListOf<JsonObject>()
@@ -516,6 +528,10 @@ class LspSession {
         }
         val snap = snapshot ?: return buildJsonObject { put("kind", "full"); put("items", JsonArray(emptyList())) }
         val file = fileForUri(snap, fileUri) ?: return buildJsonObject { put("kind", "full"); put("items", JsonArray(emptyList())) }
+        if (file.languageId == "c") throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "C diagnostics require an explicit clang toolchain and are managed RefactorKit commands (cli/daemon/mcp); the LSP does not report editor C diagnostics",
+        )
         if (file.languageId != "java") return buildJsonObject { put("kind", "full"); put("items", JsonArray(emptyList())) }
         val items = diagnosticsForFile(snap, file.path)
         return buildJsonObject {
@@ -529,6 +545,10 @@ class LspSession {
         val snap = snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val file = fileForUri(snap, uri)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Java source not found: $uri")
+        if (file.languageId == "c") throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS,
+            "C formatting is a managed RefactorKit command; the LSP does not offer editor-applied C formatting",
+        )
         if (file.languageId != "java") return JsonArray(emptyList())
         val plan = JavaFormatFilePlanner(adapter).preview(snap, file.path)
         if (plan.status == PatchStatus.REFUSED) {
@@ -955,6 +975,7 @@ class LspSession {
             ) {
                 "ts", "tsx" -> "typescript"
                 "js", "jsx" -> "javascript"
+                "c", "h" -> "c"
                 else -> "java"
             }
             files[document.path] = SourceFile(document.path, document.content, languageId)
@@ -978,7 +999,7 @@ class LspSession {
         }
         val relative = root.relativize(absolute)
         val extension = relative.fileName.toString().substringAfterLast('.', "").lowercase()
-        if (extension !in setOf("java", "ts", "tsx", "js", "jsx")) {
+        if (extension !in setOf("java", "ts", "tsx", "js", "jsx", "c", "h")) {
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unsupported LSP document type: $uri")
         }
         return relative
