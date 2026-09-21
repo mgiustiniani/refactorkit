@@ -95,10 +95,15 @@ class CInlinePlanner {
             val bodyCloseIndex = matchingBrace(tokens, bodyOpenIndex) ?: continue
             val bodyText = tokens.subList(bodyOpenIndex + 1, bodyCloseIndex).map { it.text }.joinToString(" ")
             val body = parseBody(bodyText)
+            // The removal must span the whole declaration including the storage/type
+            // prefix, so no 'static int ' residue is left behind.
+            var startIdx = i
+            while (startIdx > 0 && tokens[startIdx - 1].line == t.line) startIdx--
+            val declarationStart = tokens[startIdx]
             return Definition(
                 params = params,
                 body = body,
-                startLine = t.line, startChar = t.startChar,
+                startLine = declarationStart.line, startChar = declarationStart.startChar,
                 endLine = tokens[bodyCloseIndex].line, endChar = tokens[bodyCloseIndex].endChar,
             )
         }

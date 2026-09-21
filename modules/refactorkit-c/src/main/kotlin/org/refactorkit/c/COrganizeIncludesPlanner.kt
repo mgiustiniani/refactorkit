@@ -114,24 +114,22 @@ class COrganizeIncludesPlanner {
 
     private fun buildEdits(content: String, directives: List<CIncludeDirective>, kept: List<CIncludeDirective>): List<TextEdit> {
         val lines = content.lines()
-        val removeLines = directives.filterNot { d -> kept.any { k -> k.line == d.line && k.target == d.target && k.kind == d.kind } }
         val edits = mutableListOf<TextEdit>()
-        for (d in removeLines) {
-            val lineText = lines.getOrNull(d.line - 1) ?: continue
-            val start = SourcePosition(d.line - 1, 0)
-            val end = SourcePosition(d.line - 1, lineText.length)
-            edits += TextEdit(SourceRange(start, end), "")
-        }
-        // Reorder the kept block: replace the first kept line with the sorted block.
-        // Any trailing comment on an include line is preserved on the rewritten line.
-        val firstKept = kept.firstOrNull() ?: return edits
+        // Reorder by replacing the whole contiguous include block (first..last include
+        // line) with the sorted block, so no kept include line is left duplicated.
+        val includeLines = directives.map { it.line - 1 }.sorted()
+        if (includeLines.isEmpty()) return edits
+        val firstInclude = includeLines.first()
+        val lastInclude = includeLines.last()
+        val lastLineText = lines.getOrNull(lastInclude) ?: return edits
         val sortedBlock = kept.joinToString("\n") { directive ->
             val original = lines.getOrNull(directive.line - 1) ?: ""
-            val trailing = trailingComment(original)
-            includeText(directive) + trailing
+            trailingComment(original).let { includeText(directive) + it }
         }
-        val firstLineText = lines.getOrNull(firstKept.line - 1) ?: return edits
-        edits += TextEdit(SourceRange(SourcePosition(firstKept.line - 1, 0), SourcePosition(firstKept.line - 1, firstLineText.length)), sortedBlock)
+        edits += TextEdit(
+            SourceRange(SourcePosition(firstInclude, 0), SourcePosition(lastInclude, lastLineText.length)),
+            sortedBlock,
+        )
         return edits
     }
 
