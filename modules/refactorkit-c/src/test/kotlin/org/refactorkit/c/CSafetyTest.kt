@@ -19,6 +19,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /** Resource/hostile-input and crash-rollback checks for the bounded C planners. */
@@ -65,6 +66,62 @@ class CSafetyTest {
         )
         assertTrue(outcome is ManagedRollbackOutcome.RolledBack, "rollback should succeed")
         assertEquals(content, Files.readString(mainC), "file should be restored after rollback")
+    }
+
+    @Test
+    fun refusesApplyWithoutApprovalWritesNoJournalAndKeepsWorkspace() {
+        val workspace = Files.createTempDirectory("refactorkit-c-prewal")
+        val mainC = workspace.resolve("main.c")
+        val content = "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n"
+        Files.writeString(mainC, content)
+        val snap = ProjectSnapshot(
+            Workspace(workspace), emptyList(), listOf(SourceFile(Path.of("main.c"), content, "c")),
+        )
+        val plan = COrganizeIncludesPlanner().preview(snap, Path.of("main.c"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+
+        val result = PatchEngine(workspace).apply(
+            plan, snap, ApplyAuthorization.missing("c-safety"), DiagnosticsGate.disabled("c-safety"),
+        )
+        assertTrue(result is ApplyResult.Refused, "apply without approval must be refused")
+        // Pre-WAL refusal: no journal record is written and no workspace byte changes.
+        val log = TransactionLog(workspace.resolve(".refactorkit/transactions"))
+        assertTrue(log.listRecords().isEmpty(), "pre-WAL refusal must not write a journal record")
+        assertEquals(content, Files.readString(mainC), "pre-WAL refusal must not touch the workspace")
+    }
+
+    @Test
+    fun detectsRollbackConflictAfterExternalMutation() {
+        val workspace = Files.createTempDirectory("refactorkit-c-conflict")
+        val mainC = workspace.resolve("main.c")
+        val content = "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n"
+        Files.writeString(mainC, content)
+        val snap = ProjectSnapshot(
+            Workspace(workspace), emptyList(), listOf(SourceFile(Path.of("main.c"), content, "c")),
+        )
+        val plan = COrganizeIncludesPlanner().preview(snap, Path.of("main.c"))
+        val engine = PatchEngine(workspace)
+        val applied = engine.apply(
+            plan, snap, ApplyAuthorization.explicit("c-safety"), DiagnosticsGate.disabled("c-safety"),
+        )
+        val transaction = (applied as? ApplyResult.Applied)?.transaction
+        assertTrue(transaction != null, "apply should succeed")
+
+        // A consumer edits the file after apply; the post-image no longer matches.
+        val externalMutation = "// edited by hand\n" + Files.readString(mainC)
+        Files.writeString(mainC, externalMutation)
+
+        val log = TransactionLog(workspace.resolve(".refactorkit/transactions"))
+        val outcome = ManagedRollbackExecutor(log, engine).execute(
+            transaction.id.value,
+            RollbackLookupVisibility.JOURNAL_RECORD,
+            RollbackMode.NORMAL,
+            RollbackPreflightGuard<Nothing> { RollbackPreflightDecision.Allow },
+        )
+        // A real conflict is refused, not a nominal restore that overwrites the edit.
+        assertTrue(outcome is ManagedRollbackOutcome.Refused, "rollback must detect the post-image conflict")
+        assertNotEquals(content, Files.readString(mainC), "conflicting rollback must not silently restore stale bytes")
+        assertEquals(externalMutation, Files.readString(mainC), "the external mutation must be preserved after a refused rollback")
     }
 
     private fun snapshot(content: String) = ProjectSnapshot(
