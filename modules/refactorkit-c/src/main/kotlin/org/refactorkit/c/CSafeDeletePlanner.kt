@@ -139,12 +139,26 @@ class CSafeDeletePlanner(
         if (symbol.isBlank() || !symbol.matches(IDENTIFIER)) {
             return refused(snapshot, "Invalid symbol name: '$symbol'")
         }
-        val definition = findDefinition(snapshot, symbol)
+        val seed = findDefinition(snapshot, symbol)
             ?: return refused(snapshot, "Symbol '$symbol' has no definition in this snapshot")
-        if (definition.externOrPublic) {
+        if (seed.externOrPublic) {
             return refused(snapshot, "Symbol '$symbol' is extern/public; a binary or external consumer is unavailable, so deletion is refused")
         }
-        val references = when (val result = client.references(definition.file, definition.line, definition.character)) {
+        // Canonicalize the token seed to clangd's binding-matched declaration. If clangd
+        // cannot confirm a single declaration, the deletion target is not proven and the
+        // operation is refused rather than trusting a token-coincidence position.
+        val resolved = when (val res = client.definition(seed.file, seed.line, seed.character)) {
+            is CClangdSemanticResult.Found -> res.definition
+            is CClangdSemanticResult.NotFound -> return refused(
+                snapshot,
+                "clangd could not resolve a declaration for '$symbol'; safe delete is refused",
+            )
+            is CClangdSemanticResult.Refused -> return refused(
+                snapshot,
+                "clangd refused to resolve '$symbol': ${res.diagnostics.firstOrNull()?.message ?: "unavailable"}",
+            )
+        }
+        val references = when (val result = client.references(resolved.file, resolved.startLine, resolved.startCharacter)) {
             is CReferenceResult.Unavailable -> return refused(
                 snapshot,
                 "Semantic reference analysis for '$symbol' is unavailable; safe delete is refused",
@@ -152,18 +166,18 @@ class CSafeDeletePlanner(
             is CReferenceResult.NotFound -> emptyList()
             is CReferenceResult.Found -> result.references
         }.filter { ref ->
-            !(ref.file.normalize() == definition.file.normalize() &&
-                ref.startLine >= definition.line && ref.startLine <= definition.endLine &&
-                ref.startCharacter >= definition.character && ref.endCharacter <= definition.endCharacter)
+            !(ref.file.normalize() == resolved.file.normalize() &&
+                ref.startLine >= resolved.startLine && ref.startLine <= resolved.endLine &&
+                ref.startCharacter >= resolved.startCharacter && ref.endCharacter <= resolved.endCharacter)
         }
         if (references.isNotEmpty()) {
             return refused(snapshot, "Symbol '$symbol' has ${references.size} semantic reference(s); safe delete is refused")
         }
-        val relFile = snapshot.workspace.root.relativize(definition.file).normalize()
+        val relFile = snapshot.workspace.root.relativize(resolved.file).normalize()
         val sourceContent = snapshot.files.singleOrNull { it.path.normalize() == relFile.normalize() ||
-            snapshot.workspace.root.resolve(it.path).normalize() == definition.file.normalize() }?.content
+            snapshot.workspace.root.resolve(it.path).normalize() == resolved.file.normalize() }?.content
         val range = sourceContent?.let { deletionRange(it, symbol) }
-            ?: SourceRange(SourcePosition(definition.line, definition.character), SourcePosition(definition.endLine, definition.endCharacter))
+            ?: SourceRange(SourcePosition(resolved.startLine, resolved.startCharacter), SourcePosition(resolved.endLine, resolved.endCharacter))
         val edits = listOf(
             TextEdit(range, ""),
         )
