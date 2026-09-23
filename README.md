@@ -49,11 +49,17 @@ adapters through Clojure and global all-language acceptance are complete. Java i
 the reference and widest catalogue, while other mature ecosystems target
 equivalent semantic safety and idiomatic depth.
 
-The next planned release is **0.8.0 dedicated to C, before Python**. C is not yet
-implemented or qualified by this planning update. **Multi-host qualification is
-scheduled at 1.0.0**; interim releases must still qualify their actually shipped
-platform and all local safety, diagnostics, transaction and artifact gates. Other
-hosts remain **NOT VERIFIED**. See the [C release plan](docs/releases/v0.8.0-plan.md).
+The next planned release is **0.8.0 dedicated to C, before Python**. A bounded
+`refactorkit-c` module is implemented on Linux x86-64 only (toolchain/compilation
+database/header models, symbol identity/navigation/diagnostics and the rename,
+format, move, rename-prefix, change-signature, extract, inline, safe-delete,
+organize-includes and relocate-component planners, plus the daemon, CLI, MCP and
+LSP surfaces); these are implementation slices with deterministic and
+clang-toolchain-gated tests, **not** full operation/surface qualification, and
+0.8.0 is **not published**. **Multi-host qualification is scheduled at 1.0.0**;
+interim releases must still qualify their actually shipped platform and all local
+safety, diagnostics, transaction and artifact gates. Other hosts remain **NOT
+VERIFIED**. See the [C release plan](docs/releases/v0.8.0-plan.md).
 
 ## Self-contained runtime platforms
 

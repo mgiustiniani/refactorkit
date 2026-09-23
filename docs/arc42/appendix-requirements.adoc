@@ -13,19 +13,27 @@ integrated status; the long-range link:../releases/v1.0.0-plan.md[roadmap] retai
 all target languages and their relative order, with later version numbers
 explicitly unassigned rather than silently renumbered.
 
-*Planning, not capability promotion:* initial targets are Linux x86-64, ISO
-C11/C17 and Clang/clangd/clang-format 22.1.8. Only version probes have run; C
-adapter/tooling integration, semantic behavior, native packaging and operation
-qualification are pending. The catalogue covers toolchain/build/header models,
-identity/navigation/diagnostics, rename/format/moves/prefix/signature/extract/
-inline/safe-delete/includes/component relocation, public surfaces and local
-release acceptance. C++/Objective-C are not dependencies of the C release.
+*In-progress bounded implementation, not release qualification:* initial targets
+are Linux x86-64, ISO C11/C17 and Clang/clangd/clang-format 22.1.8. A bounded
+`refactorkit-c` module is implemented on that single platform and covers the
+toolchain/compilation-database/header models, symbol identity/navigation/
+diagnostics, rename/format/move/rename-prefix/change-signature/extract/inline/
+safe-delete/organize-includes/component-relocation planners, and the daemon, CLI,
+MCP and LSP surfaces. These are bounded implementation slices carrying
+deterministic golden and toolchain-gated tests; they are **not** full operation/
+surface semantic qualification, and full C10-C17 acceptance, native packaging and
+0.8.0 publication remain pending. The catalogue covers toolchain/build/header
+models, identity/navigation/diagnostics, rename/format/moves/prefix/signature/
+extract/inline/safe-delete/includes/component relocation, public surfaces and
+local release acceptance. C++/Objective-C are not dependencies of the C release.
 
 Reuse core safety/process/model infrastructure. Every managed mutation still
 requires preview, exact semantic/snapshot/configuration authority, diagnostics,
 approval, WAL/apply/rollback and independent artifact acceptance. Unknown build
 origins or preprocessor/consumer coverage cannot become complete authority.
 Client-managed native LSP edits retain their separate ownership and limitations.
+The bounded C toolchain/configuration/usage/refusal/recovery surface is documented
+in link:../c-language.md[the C language guide], a satellite of this appendix.
 
 Other hosts remain *NOT VERIFIED*, not PASS, and are not an interim 0.x gate.
 The actual 1.0.0 candidate must qualify every advertised platform. No current CI
