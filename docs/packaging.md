@@ -376,6 +376,32 @@ runs signed-selector and managed format/apply/rollback smoke, verifies source
 restoration, generates checksum/SBOM/attestations, and uploads release inputs. A
 separate job verifies all checksums and publishes one release.
 
+## 0.8.0 C candidate package (Linux x86-64, not published)
+
+The 0.8.0 candidate is packaged for the single shipped platform only, from the
+candidate revision, with the same pipeline (packageCliRuntime then
+:modules:refactorkit-cli:refactorkitRuntimeZip):
+
+- The package embeds a jlink runtime (runtime/bin/java) and the launcher execs
+  that absolute path, so it runs with no global Java: verified by running the
+  packaged scan with JAVA_HOME unset and with a poisoned java first on PATH that
+  is never invoked.
+- scripts/verify-runtime-archive.py --platform linux-x86_64 verifies the checksum,
+  extracts safely, and executes the packaged MCP launcher (initialize, tools/list,
+  EOF shutdown).
+- The candidate bundles refactorkit-c, but the C module ships as bounded
+  implementation slices: C10-C17 operation/surface qualification is not
+  established, so no C release row is claimed by this package.
+- The external Clang toolchain (reference 22.1.8) is configured explicitly, not
+  bundled: a version-only probe is not semantic qualification and no toolchain is
+  auto-installed.
+- The candidate keeps the source/build version 0.7.0 on purpose; the 0.8.0 bump
+  belongs to release preparation/publication, not the candidate build.
+- SPDX and attestations are release/CI-gated (anchore/sbom-action, actions/attest-*
+  on a tag) and are not produced or claimed for a local candidate. Other hosts
+  remain NOT VERIFIED. Publication is a separate, explicitly authorized step after
+  independent review and download verification.
+
 ## Notes
 
 - The application bytecode still targets Java 8 where configured by the root build.
