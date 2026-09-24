@@ -39,6 +39,16 @@ class COrganizeIncludesPlannerTest {
     }
 
     @Test
+    fun refusesNonContiguousIncludeBlock() {
+        // A declaration between two include directives must not be dropped by the
+        // reorder replacement; the operation is refused instead of corrupting the file.
+        val snap = snapshot("#include <stdlib.h>\nint counter;\n#include <stdio.h>\nint main(void) { return 0; }\n")
+        val plan = planner().preview(snap, Path.of("src/main.c"))
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("not contiguous"), "expected contiguity refusal, got: ${plan.summary}")
+    }
+
+    @Test
     fun refusesOrderSensitiveQuotedIncludes() {
         // Quoted includes can be order-sensitive; sorting without proof is refused.
         val snap = snapshot("#include \"b.h\"\n#include \"a.h\"\nint main(void) { return 0; }\n")

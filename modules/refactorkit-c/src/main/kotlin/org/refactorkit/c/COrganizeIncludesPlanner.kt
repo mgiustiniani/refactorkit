@@ -50,6 +50,12 @@ class COrganizeIncludesPlanner {
         if (kept.size == directives.size && directives.zip(kept).all { (a, b) -> a.line == b.line && a.target == b.target }) {
             return refused(snapshot, "Includes are already organized; no change needed")
         }
+        // Reordering replaces the first..last include span with the sorted block. If a
+        // non-blank, non-include line sits inside that span it would be dropped, so the
+        // operation is refused instead of silently deleting intervening code.
+        includeBlockForeignCode(source.content, directives)?.let { message ->
+            return refused(snapshot, message)
+        }
         val edits = buildEdits(source.content, directives, kept)
         return PatchPlan(
             operation = "organizeIncludes",
@@ -75,6 +81,27 @@ class COrganizeIncludesPlanner {
             if (!seen.add(key)) return true
         }
         return false
+    }
+
+    /**
+     * Returns a refusal message when a non-blank, non-include line sits between the first
+     * and last include directive (the reordering would drop it), or null when the block is
+     * safe to replace.
+     */
+    private fun includeBlockForeignCode(content: String, directives: List<CIncludeDirective>): String? {
+        if (directives.isEmpty()) return null
+        val lines = content.lines()
+        val includeLines = directives.map { it.line - 1 }.toHashSet()
+        val first = includeLines.minOrNull() ?: return null
+        val last = includeLines.maxOrNull() ?: return null
+        for (index in first..last) {
+            if (index in includeLines) continue
+            val trimmed = lines.getOrNull(index)?.trim() ?: continue
+            if (trimmed.isNotEmpty()) {
+                return "Include directives are not contiguous; line '${trimmed}' would be dropped by reordering"
+            }
+        }
+        return null
     }
 
     private fun isMacroTarget(target: String): Boolean =
