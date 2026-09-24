@@ -212,11 +212,16 @@ class CInlinePlanner {
     }
 
     private fun substitute(expr: String, params: List<String>, args: List<String>): String {
-        var result = expr
-        for (i in params.indices) {
-            result = result.replace(Regex("\\b${params[i]}\\b"), args.getOrElse(i) { params[i] })
+        if (params.isEmpty()) return expr
+        // Single simultaneous pass: each parameter occurrence maps directly to its own
+        // argument. Sequential per-parameter replacement would corrupt swapped or
+        // overlapping arguments (e.g. renaming a->b then b->a turns a+b into a+a).
+        val alternation = params.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }
+        val pattern = Regex("\\b($alternation)\\b")
+        return pattern.replace(expr) { match ->
+            val idx = params.indexOf(match.groupValues[1])
+            args.getOrElse(idx) { match.value }
         }
-        return result
     }
 
     private fun tokensWithOffsets(text: String): List<Tok> {

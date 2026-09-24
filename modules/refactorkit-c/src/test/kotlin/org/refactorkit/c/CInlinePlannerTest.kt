@@ -4,6 +4,7 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.Workspace
+import org.refactorkit.core.WorkspaceEditSimulator
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,6 +56,22 @@ class CInlinePlannerTest {
         val snap = snapshot("static int label(int n) { return n; }\nint main(void) { return label(1); }\n")
         val plan = planner().preview(snap, Path.of("src/main.c"), "label")
         assertEquals(PatchStatus.PREVIEW, plan.status)
+    }
+
+    @Test
+    fun substituteHandlesSwappedArgumentsAtomically() {
+        // Passing the caller's 'b' and 'a' into (a, b) must inline to 'b - a'. A
+        // sequential per-parameter replacement would corrupt it to 'a - a'.
+        val snap = snapshot(
+            "static int sub(int a, int b) { return a - b; }\n" +
+                "int main(void) { int a = 1; int b = 2; return sub(b, a); }\n",
+        )
+        val plan = planner().preview(snap, Path.of("src/main.c"), "sub")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val applied = WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
+        val result = applied.files.single { it.path.toString() == "src/main.c" }.content
+        assertTrue(result.contains("b - a"), "swapped arguments must inline to 'b - a'; got: $result")
+        assertTrue(!result.contains("a - a"), "sequential substitution corrupted the result; got: $result")
     }
 
     private fun snapshot(content: String) = ProjectSnapshot(
