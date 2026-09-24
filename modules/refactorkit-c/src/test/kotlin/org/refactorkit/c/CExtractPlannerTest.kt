@@ -71,6 +71,16 @@ class CExtractPlannerTest {
         assertEquals("long", type)
     }
 
+    @Test
+    fun refusesTempNameCollisionWithExistingDeclaration() {
+        // Declaring 'tmp' again in the same scope would be a C redefinition; the extract
+        // must refuse rather than emit code that cannot compile.
+        val content = "int compute(int x) { int tmp = 0; int y = x + 1; return y; }\n"
+        val plan = planner().preview(snapshot(content), Path.of("src/main.c"), range(0, 42, 0, 47), "tmp")
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("collides"), "expected collision refusal, got: " + plan.summary)
+    }
+
     private fun snapshot(content: String = "int compute(int x) { int y = x + 1; return y; }\n") = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

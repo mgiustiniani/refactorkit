@@ -45,6 +45,11 @@ class CExtractPlanner {
             return refused(snapshot, "Extracted expression is in a macro/goto/longjmp context")
         }
         val type = inferType(source.content, range, expression) ?: return refused(snapshot, "Could not infer the expression type from its context")
+        // A temporary name that already declares an identifier in the enclosing scope would
+        // produce a redefinition, so the extraction is refused rather than emitting broken code.
+        if (findDeclaredType(source.content, range.start.line, tempName) != null) {
+            return refused(snapshot, "Temporary name '$tempName' collides with an existing declaration in scope")
+        }
         val statementRange = enclosingStatementRange(source.content, range) ?: return refused(snapshot, "Could not locate the enclosing statement")
         val declaration = "const $type $tempName = $expression;"
         val edits = listOf(
