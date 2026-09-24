@@ -81,6 +81,21 @@ class CSignaturePlannerTest {
         assertTrue(analysis.message.contains("not found in the function signature"))
     }
 
+    @Test
+    fun refusesAmbiguousParameterAcrossSignatures() {
+        // The same parameter name in two function signatures must not silently rename the
+        // first match; the target is ambiguous and the operation is refused.
+        val content = "int foo(int x) { return x + 1; }\nint bar(int x) { return x - 1; }\n"
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(SourceFile(Path.of("src/main.c"), content, "c")),
+        )
+        val analysis = CSignaturePlanner(toolchain()).analyzeSignature(snap, Path.of("src/main.c"), "x")
+        assertIs<CSignaturePlanner.SignatureAnalysis.Refused>(analysis)
+        assertTrue(analysis.message.contains("ambiguous"), "expected ambiguity refusal, got: ${analysis.message}")
+    }
+
     private fun snapshot() = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

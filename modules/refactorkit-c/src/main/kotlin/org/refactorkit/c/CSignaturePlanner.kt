@@ -118,6 +118,10 @@ class CSignaturePlanner(
             ?: return SignatureAnalysis.Refused("File '$file' is not part of the snapshot")
         val text = source.content
         val lines = text.lines()
+        // Collect every candidate signature line that declares paramName as a parameter.
+        // A single unambiguous signature is required; silently renaming the first match
+        // could target the wrong function when the same parameter name recurs.
+        val candidates = mutableListOf<SignatureAnalysis>()
         for (lineIndex in lines.indices) {
             val line = lines[lineIndex]
             val open = line.indexOf('(')
@@ -134,13 +138,23 @@ class CSignaturePlanner(
                 param.split(' ').lastOrNull()?.replace("*", "")?.trim() == paramName
             }
             if (paramIndex < 0) continue
-            if (isVariadic) return SignatureAnalysis.Refused("Variadic function signature cannot be safely renamed")
-            if (isOldStyle) return SignatureAnalysis.Refused("Old-style (K&R) signature cannot be safely renamed")
             val char = line.indexOf(paramName, open + 1)
             if (char < 0) continue
-            return SignatureAnalysis.Found(lineIndex, char, paramIndex, params.size)
+            candidates += when {
+                isVariadic -> SignatureAnalysis.Refused("Variadic function signature cannot be safely renamed")
+                isOldStyle -> SignatureAnalysis.Refused("Old-style (K&R) signature cannot be safely renamed")
+                else -> SignatureAnalysis.Found(lineIndex, char, paramIndex, params.size)
+            }
         }
-        return SignatureAnalysis.Refused("Parameter '$paramName' was not found in the function signature")
+        if (candidates.isEmpty()) {
+            return SignatureAnalysis.Refused("Parameter '$paramName' was not found in the function signature")
+        }
+        if (candidates.size > 1) {
+            return SignatureAnalysis.Refused(
+                "Parameter '$paramName' appears in ${candidates.size} function signatures; the target is ambiguous",
+            )
+        }
+        return candidates.single()
     }
 
     internal sealed interface SignatureAnalysis {
