@@ -72,10 +72,37 @@ class CRelocateComponentPlannerTest {
         )
         val plan = planner().preview(snap, Path.of("src/component"), Path.of("src/other"))
         assertEquals(PatchStatus.PREVIEW, plan.status)
-        val modifies = plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
-        val mainEdits = modifies.filter { it.path == Path.of("src/component/main.c") }
-        assertTrue(mainEdits.isEmpty() || mainEdits.flatMap { it.textEdits }.none { it.newText.contains("src/other/a.h") },
+        // The rewrite is recorded under the destination path so it composes after the rename.
+        val mainEdits = plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
+            .filter { it.path == Path.of("src/other/main.c") }
+            .flatMap { it.textEdits }
+        assertTrue(mainEdits.all { it.newText == "a.h" },
+            "a same-directory include must stay relative 'a.h'; got: " + mainEdits.map { it.newText })
+        assertTrue(mainEdits.none { it.newText.startsWith("/") || it.newText.contains("src/other/") },
             "a same-directory include must not become a root-relative path")
+    }
+
+    @Test
+    fun rewritesExternalConsumerIncludeAndApplies() {
+        // An external consumer pointing into the component must be rewritten when the
+        // component moves; applying the composed plan updates the consumer file.
+        val snap = snapshot(
+            listOf(
+                SourceFile(Path.of("src/app.c"), "#include \"component/a.h\"\nint app(void) { return 0; }\n", "c"),
+                SourceFile(Path.of("src/component/a.h"), "#define A_H\n", "c"),
+            ),
+        )
+        val plan = planner().preview(snap, Path.of("src/component"), Path.of("src/other"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val appEdits = plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>()
+            .filter { it.path == Path.of("src/app.c") }.flatMap { it.textEdits }
+        assertTrue(appEdits.any { it.newText == "other/a.h" },
+            "the external include must be rewritten to the new relative path; got: " + appEdits.map { it.newText })
+        val applied = org.refactorkit.core.WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
+        val appResult = applied.files.single { it.path.toString() == "src/app.c" }.content
+        assertTrue(appResult.contains("#include \"other/a.h\""), "applied consumer must reference the new path; got: $appResult")
+        val movedHeader = applied.files.single { it.path.toString() == "src/other/a.h" }.content
+        assertTrue(movedHeader.contains("#define A_H"), "moved header content must be preserved; got: $movedHeader")
     }
 
     @Test

@@ -80,6 +80,10 @@ class CRelocateComponentPlanner {
             if (source.languageId !in setOf("c", "cpp", "objective-c")) continue
             val directives = CIncludeDirectiveParser().parse(source.content)
             val includingDir = root.resolve(source.path.parent ?: Path.of("")).normalize()
+            // When the including file is itself relocated, the rewritten target must be
+            // relative to its destination directory, not its current one.
+            val includerDest = moved[source.path.normalize()] ?: source.path.normalize()
+            val newIncludingDir = root.resolve(includerDest.parent ?: Path.of("")).normalize()
             for (directive in directives) {
                 // Resolve quoted includes relative to the including file and angled
                 // includes relative to the workspace root; never fall back to basename.
@@ -88,16 +92,22 @@ class CRelocateComponentPlanner {
                 } else {
                     root.resolve(directive.target).normalize()
                 }
-                val match = moved.entries.firstOrNull { (oldFile, _) -> oldFile.normalize() == oldTarget.normalize() } ?: continue
-                val newFile = moved[match.key]!!
-                // The rewritten path is relative to the including file's directory.
-                val newTarget = includingDir.relativize(newFile).toString().replace('\\', '/')
+                // Compare in one coordinate space: the snapshot may carry relative file
+                // paths while the workspace root is absolute, so resolve the moved file
+                // against the root before matching (otherwise rewrites would be a silent no-op).
+                val match = moved.entries.firstOrNull { (oldFile, _) -> root.resolve(oldFile).normalize() == oldTarget.normalize() } ?: continue
+                val newFile = root.resolve(moved[match.key]!!).normalize()
+                // The rewritten path is relative to the including file's destination directory.
+                val newTarget = newIncludingDir.relativize(newFile).toString().replace('\\', '/')
                 val lineText = source.content.lines().getOrNull(directive.line - 1) ?: continue
                 val idx = lineText.indexOf(directive.target)
                 if (idx < 0) continue
                 val start = SourcePosition(directive.line - 1, idx)
                 val end = SourcePosition(directive.line - 1, idx + directive.target.length)
-                editsByFile.getOrPut(source.path.normalize()) { mutableListOf() } += TextEdit(SourceRange(start, end), newTarget)
+                // A file that is itself relocated must have its content edit recorded under
+                // the destination path so it applies after the rename (Rename then Modify(new)).
+                val editKey = moved[source.path.normalize()] ?: source.path.normalize()
+                editsByFile.getOrPut(editKey) { mutableListOf() } += TextEdit(SourceRange(start, end), newTarget)
             }
         }
         return editsByFile.mapValues { it.value.toList() }
