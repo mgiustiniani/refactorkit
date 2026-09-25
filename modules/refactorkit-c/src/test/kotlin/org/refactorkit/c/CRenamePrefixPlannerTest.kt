@@ -62,6 +62,21 @@ class CRenamePrefixPlannerTest {
         assertEquals(Path.of("src/main.c"), resolution.occurrence.file)
     }
 
+    @Test
+    fun resolveOccurrenceSeedsAtTokenColumnNotFirstSubstring() {
+        // fooPrefix shares the 'foo' prefix; the standalone foo token sits at column 16,
+        // but a naive first-substring indexOf would seed at column 4 (inside fooPrefix).
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(SourceFile(Path.of("src/main.c"), "int fooPrefix = foo;\n", "c")),
+        )
+        val resolution = CRenamePrefixPlanner(toolchain()).resolveOccurrence(snap, "foo")
+        assertIs<CRenamePrefixPlanner.OccurrenceResolution.Found>(resolution)
+        assertEquals(0, resolution.occurrence.line)
+        assertEquals(16, resolution.occurrence.character, "seed must use the foo token column, not the fooPrefix substring")
+    }
+
     private fun snapshot() = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

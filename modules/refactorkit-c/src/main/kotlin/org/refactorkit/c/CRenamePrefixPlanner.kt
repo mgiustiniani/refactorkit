@@ -140,9 +140,11 @@ class CRenamePrefixPlanner(
             val tokens = CTokenizer().tokenize(source.content)
             for (token in tokens) {
                 if (token.type != CTokenType.IDENTIFIER || token.text != name) continue
-                val lineText = source.content.lines().getOrNull(token.line - 1) ?: continue
-                val idx = lineText.indexOf(name)
-                if (idx >= 0) candidates += Occurrence(source.path.normalize(), token.line - 1, idx)
+                // Seed at the token's own column, not the first substring of the name in
+                // the line: a preceding longer identifier sharing the name as a prefix
+                // (e.g. foo_prefix on the same line as foo) would otherwise yield a wrong
+                // seed position and bind clangd to the wrong symbol.
+                candidates += Occurrence(source.path.normalize(), token.line - 1, token.column)
             }
         }
         val distinctFiles = candidates.map { it.file }.distinct()

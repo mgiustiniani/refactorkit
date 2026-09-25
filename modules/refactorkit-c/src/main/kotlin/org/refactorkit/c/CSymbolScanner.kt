@@ -6,22 +6,24 @@ class CTokenizer {
         val tokens = mutableListOf<CToken>()
         var i = 0
         var line = 1
+        // Index just after the most recent newline, so a token's column is (start - lineStart).
+        var lineStart = 0
         val n = text.length
         while (i < n) {
             val ch = text[i]
             when {
                 ch.isWhitespace() -> {
-                    if (ch == '\n') line++
+                    if (ch == '\n') { line++; lineStart = i + 1 }
                     i++
                 }
                 ch == '/' && i + 1 < n && text[i + 1] == '/' -> {
                     while (i < n && text[i] != '\n') i++
-                    line++
+                    if (i < n) { line++; lineStart = i + 1; i++ }
                 }
                 ch == '/' && i + 1 < n && text[i + 1] == '*' -> {
                     i += 2
                     while (i < n && !(text[i] == '*' && i + 1 < n && text[i + 1] == '/')) {
-                        if (text[i] == '\n') line++
+                        if (text[i] == '\n') { line++; lineStart = i + 1 }
                         i++
                     }
                     i += 2
@@ -35,21 +37,21 @@ class CTokenizer {
                         i++
                     }
                     i++
-                    tokens += CToken(CTokenType.STRING, text.substring(start, minOf(i, n)), line)
+                    tokens += CToken(CTokenType.STRING, text.substring(start, minOf(i, n)), line, start - lineStart)
                 }
                 ch.isLetter() || ch == '_' -> {
                     val start = i
                     while (i < n && (text[i].isLetterOrDigit() || text[i] == '_')) i++
-                    tokens += CToken(CTokenType.IDENTIFIER, text.substring(start, i), line)
+                    tokens += CToken(CTokenType.IDENTIFIER, text.substring(start, i), line, start - lineStart)
                 }
                 ch.isDigit() -> {
                     val start = i
                     while (i < n && (text[i].isDigit() || text[i] == '.' || text[i] == 'x' || text[i] == 'X' ||
                         text[i] in 'a'..'f' || text[i] in 'A'..'F')) i++
-                    tokens += CToken(CTokenType.NUMBER, text.substring(start, i), line)
+                    tokens += CToken(CTokenType.NUMBER, text.substring(start, i), line, start - lineStart)
                 }
                 else -> {
-                    tokens += CToken(CTokenType.PUNCTUATION, ch.toString(), line)
+                    tokens += CToken(CTokenType.PUNCTUATION, ch.toString(), line, i - lineStart)
                     i++
                 }
             }
@@ -59,7 +61,8 @@ class CTokenizer {
 }
 
 enum class CTokenType { IDENTIFIER, NUMBER, STRING, PUNCTUATION }
-data class CToken(val type: CTokenType, val text: String, val line: Int)
+/** A lexical token with its 1-based [line] and 0-based [column] (start offset within the line). */
+data class CToken(val type: CTokenType, val text: String, val line: Int, val column: Int)
 
 /** Bounded structural C symbol scanner. Produces per-TU symbol identities. */
 class CSymbolScanner(
