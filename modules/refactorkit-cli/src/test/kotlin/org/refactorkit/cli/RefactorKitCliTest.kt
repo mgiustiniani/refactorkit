@@ -47,23 +47,30 @@ class RefactorKitCliTest {
     }
 
     @Test
-    fun cApplyChangesFileAndRollbackWouldRestoreIt() {
+    fun cApplyChangesFileAndRollbackRestoresOriginalBytes() {
         if (!clangAvailable()) return
         val root = createProject(
             "src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n",
         )
         val target = root.resolve("src/main.c")
         val before = target.readText()
-        val code = captureStdout {
+        val apply = captureStdout {
             RefactorKitCli().run(listOf(
                 "c", "organize-includes", root.toString(),
                 "--file", "src/main.c",
                 "--clang", clangExecutable(), "--clangd", clangdExecutable(), "--clang-format", clangFormatExecutable(),
                 "--apply",
             ))
-        }.code
-        assertEquals(0, code)
+        }
+        assertEquals(0, apply.code, "apply must exit 0; stdout=${apply.stdout} stderr=${apply.stderr}")
         assertTrue(target.readText() != before, "apply must change the file on disk")
+        val transactionId = Json.parseToJsonElement(apply.stdout).jsonObject
+            .getValue("transactionId").jsonPrimitive.content
+        val rollback = captureStdout {
+            RefactorKitCli().run(listOf("patch", "rollback", transactionId, "--root", root.toString()))
+        }
+        assertEquals(0, rollback.code, "rollback must exit 0; stdout=${rollback.stdout} stderr=${rollback.stderr}")
+        assertEquals(before, target.readText(), "rollback must restore the exact original bytes")
     }
 
     private fun clangExecutable(): String = "/usr/bin/clang-22"

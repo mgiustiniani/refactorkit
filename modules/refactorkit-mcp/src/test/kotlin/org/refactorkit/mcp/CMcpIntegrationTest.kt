@@ -8,8 +8,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -111,6 +113,74 @@ class CMcpIntegrationTest {
         val text = contentText(result)
         assertTrue(text.contains("Status   : PREVIEW"), text)
         assertTrue(text.contains("Affected : 1 file(s)"), text)
+        session.close()
+    }
+
+    private fun previewOrganizeIncludes(session: McpSession, root: String): String =
+        contentText(session.dispatch("tools/call", buildJsonObject {
+            put("name", "preview_refactoring")
+            put("arguments", buildJsonObject {
+                put("operation", "organizeIncludes")
+                put("languageId", "c")
+                put("arguments", buildJsonObject { put("file", "src/main.c") })
+                put("clang", clang.toString())
+                put("clangd", clangd.toString())
+                put("clangFormat", clangFormat.toString())
+            })
+        }) as JsonObject)
+
+    @Test
+    fun cApplyAndRollbackThroughMcpSession() {
+        if (!clangAvailable()) return // clang toolchain not installed; MCP C integration not run
+        val root = createProject("src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n")
+        val rootPath = Paths.get(root)
+        val original = rootPath.resolve("src/main.c").readText()
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val preview = previewOrganizeIncludes(session, root)
+        val planId = Regex("Plan ID\\s+: (\\S+)").find(preview)!!.groupValues[1]
+
+        val applied = contentText(session.dispatch("tools/call", buildJsonObject {
+            put("name", "apply_refactoring")
+            put("arguments", buildJsonObject { put("planId", planId) })
+        }) as JsonObject)
+        assertTrue(applied.contains("Applied successfully"), applied)
+        val transactionId = Regex("Transaction ID: (\\S+)").find(applied)!!.groupValues[1]
+        assertTrue(rootPath.resolve("src/main.c").readText() != original, "apply must change the file")
+
+        val rolled = contentText(session.dispatch("tools/call", buildJsonObject {
+            put("name", "rollback_refactoring")
+            put("arguments", buildJsonObject { put("transactionId", transactionId) })
+        }) as JsonObject)
+        assertTrue(rolled.contains("Rolled back"), rolled)
+        assertEquals(original, rootPath.resolve("src/main.c").readText(), "rollback must restore exact bytes")
+        session.close()
+    }
+
+    @Test
+    fun cStalePlanRejectedThroughMcp() {
+        if (!clangAvailable()) return
+        val root = createProject("src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n")
+        val rootPath = Paths.get(root)
+        val session = McpSession()
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", "project_scan")
+            put("arguments", buildJsonObject { put("root", root) })
+        })
+        val preview = previewOrganizeIncludes(session, root)
+        val planId = Regex("Plan ID\\s+: (\\S+)").find(preview)!!.groupValues[1]
+
+        // Mutate the workspace after the preview so the snapshot hash no longer matches.
+        rootPath.resolve("src/main.c").writeText("#include <stdlib.h>\nint main(void) { return 0; }\n")
+
+        val applied = contentText(session.dispatch("tools/call", buildJsonObject {
+            put("name", "apply_refactoring")
+            put("arguments", buildJsonObject { put("planId", planId) })
+        }) as JsonObject)
+        assertTrue(applied.contains("Apply refused") && applied.contains("Project changed since preview"), applied)
         session.close()
     }
 }

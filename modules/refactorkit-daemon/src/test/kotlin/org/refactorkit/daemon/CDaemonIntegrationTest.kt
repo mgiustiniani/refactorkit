@@ -6,6 +6,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -115,10 +116,80 @@ class CDaemonIntegrationTest {
         ).jsonObject
         val planId = plan["planId"]!!.jsonPrimitive.content
 
-        session.dispatch("refactor.apply", params("planId" to planId))
-        val applied = rootPath.resolve("src/main.c").readText()
-        assertTrue(applied != original, "apply must change the file")
+        val applied = session.dispatch("refactor.apply", params("planId" to planId)) as JsonObject
+        val transactionId = applied["transactionId"]!!.jsonPrimitive.content
+        assertEquals("applied", applied["status"]!!.jsonPrimitive.content)
+        assertTrue(rootPath.resolve("src/main.c").readText() != original, "apply must change the file")
 
+        // Rollback must restore the exact original bytes, not merely report success.
+        val rolledBack = session.dispatch("patch.rollback", params("transactionId" to transactionId)) as JsonObject
+        assertEquals("rolledBack", rolledBack["status"]!!.jsonPrimitive.content)
+        assertEquals(original, rootPath.resolve("src/main.c").readText(), "rollback must restore exact bytes")
+        session.close()
+    }
+
+    @Test
+    fun cStalePlanRejectedAfterExternalMutation() {
+        if (!clangAvailable()) return
+        val root = createProject(
+            "src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val plan = session.dispatch(
+            "c.preview",
+            buildJsonObject {
+                put("operation", "organizeIncludes")
+                put("arguments", buildJsonObject { put("file", "src/main.c") })
+                toolchainParams().forEach { (k, v) -> put(k, v) }
+            },
+        ).jsonObject
+        val planId = plan["planId"]!!.jsonPrimitive.content
+
+        // Mutate the workspace after the preview so the snapshot hash no longer matches.
+        rootPath.resolve("src/main.c").writeText("#include <stdlib.h>\nint main(void) { return 0; }\n")
+
+        val error = assertFailsWith<JsonRpcException> {
+            session.dispatch("refactor.apply", params("planId" to planId))
+        }
+        assertEquals(JsonRpcErrorCodes.SNAPSHOT_CHANGED, error.code)
+        assertTrue(error.message!!.contains("Project changed since preview"),
+            "a stale C plan must be rejected; got: ${error.message}")
+        session.close()
+    }
+
+    @Test
+    fun cRollbackConflictAfterExternalMutation() {
+        if (!clangAvailable()) return
+        val root = createProject(
+            "src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n",
+        )
+        val rootPath = Paths.get(root)
+        val session = DaemonSession()
+        session.dispatch("project.open", params("root" to root))
+        val plan = session.dispatch(
+            "c.preview",
+            buildJsonObject {
+                put("operation", "organizeIncludes")
+                put("arguments", buildJsonObject { put("file", "src/main.c") })
+                toolchainParams().forEach { (k, v) -> put(k, v) }
+            },
+        ).jsonObject
+        val planId = plan["planId"]!!.jsonPrimitive.content
+        val applied = session.dispatch("refactor.apply", params("planId" to planId)) as JsonObject
+        val transactionId = applied["transactionId"]!!.jsonPrimitive.content
+
+        // Externally mutate the applied file so rollback detects a conflict rather than
+        // silently overwriting the caller's newer content.
+        rootPath.resolve("src/main.c").writeText("// external edit\n#include <stdio.h>\nint main(void) { return 0; }\n")
+
+        val conflict = assertFailsWith<JsonRpcException> {
+            session.dispatch("patch.rollback", params("transactionId" to transactionId))
+        }
+        assertEquals(JsonRpcErrorCodes.ROLLBACK_CONFLICT, conflict.code)
+        assertTrue(rootPath.resolve("src/main.c").readText().contains("external edit"),
+            "a rollback conflict must not overwrite the external change")
         session.close()
     }
 }
