@@ -220,8 +220,22 @@ class CInlinePlanner {
         val pattern = Regex("\\b($alternation)\\b")
         return pattern.replace(expr) { match ->
             val idx = params.indexOf(match.groupValues[1])
-            args.getOrElse(idx) { match.value }
+            wrapArgIfNeeded(args.getOrElse(idx) { match.value })
         }
+    }
+
+    /**
+     * Parenthesize a substituted argument unless it is a single atom (identifier,
+     * numeric or string literal). Substituting a compound expression such as 'a + b'
+     * into a larger body like 'x * x' without parentheses would silently change
+     * operator precedence (a + b * x rather than (a + b) * x).
+     */
+    private fun wrapArgIfNeeded(arg: String): String {
+        val trimmed = arg.trim()
+        val tokens = CTokenizer().tokenize(trimmed)
+        val isAtom = tokens.size == 1 &&
+            tokens[0].type in setOf(CTokenType.IDENTIFIER, CTokenType.NUMBER, CTokenType.STRING)
+        return if (isAtom) trimmed else "($trimmed)"
     }
 
     private fun tokensWithOffsets(text: String): List<Tok> {

@@ -74,6 +74,22 @@ class CInlinePlannerTest {
         assertTrue(!result.contains("a - a"), "sequential substitution corrupted the result; got: $result")
     }
 
+    @Test
+    fun inlinesCompoundArgumentWithParentheses() {
+        // sq(a + b) with body 'x * x' must inline to (a + b) * (a + b). Substituting the
+        // compound argument without parentheses silently drops precedence to a + b * a + b.
+        val snap = snapshot(
+            "static int sq(int x) { return x * x; }\n" +
+                "int main(void) { int a = 1; int b = 2; return sq(a + b); }\n",
+        )
+        val plan = planner().preview(snap, Path.of("src/main.c"), "sq")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val applied = WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
+        val result = applied.files.single { it.path.toString() == "src/main.c" }.content
+        assertTrue(result.contains("(a+b)"), "compound argument must be parenthesized; got: $result")
+        assertTrue(!result.contains("a+b *"), "unparenthesized substitution drops precedence; got: $result")
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),
