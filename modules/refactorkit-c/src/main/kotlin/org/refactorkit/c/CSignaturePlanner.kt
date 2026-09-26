@@ -128,22 +128,29 @@ class CSignaturePlanner(
             if (open < 0) continue
             val close = line.indexOf(')', open)
             if (close < 0) continue
-            val paramsText = line.substring(open + 1, close).trim()
-            if (paramsText.isEmpty() || paramsText == "void") continue
-            val params = paramsText.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            if (params.isEmpty()) continue
-            val isVariadic = params.any { it == "..." || it.startsWith("...") }
-            val isOldStyle = params.any { it.split(' ').size < 2 && !it.startsWith("...") }
-            val paramIndex = params.indexOfFirst { param ->
-                param.split(' ').lastOrNull()?.replace("*", "")?.trim() == paramName
-            }
+            val region = line.substring(open + 1, close)
+            val segments = topLevelParamSegments(region)
+            if (segments.isEmpty()) continue
+            val segTexts = segments.map { region.substring(it).trim() }
+            // The parameter name is the declarator token: the last whitespace-separated
+            // token of the segment, with pointer/type qualifiers stripped.
+            val names = segTexts.map { it.split(' ').lastOrNull()?.replace("*", "")?.trim() ?: "" }
+            val paramIndex = names.indexOf(paramName)
             if (paramIndex < 0) continue
-            val char = line.indexOf(paramName, open + 1)
-            if (char < 0) continue
+            val isVariadic = segTexts.any { it == "..." || it.startsWith("...") }
+            val isOldStyle = segTexts.any { !it.startsWith("...") && it.split(' ').size < 2 }
+            // Seed at the parameter's own declarator position within its segment, not the
+            // first substring of paramName in the line: an earlier parameter whose type or
+            // name contains paramName (e.g. 'ext' before 'x') would otherwise bind clangd
+            // to the wrong declarator and rename the wrong parameter.
+            val seg = segments[paramIndex]
+            val localIdx = region.substring(seg).lastIndexOf(paramName)
+            if (localIdx < 0) continue
+            val char = open + 1 + seg.first + localIdx
             candidates += when {
                 isVariadic -> SignatureAnalysis.Refused("Variadic function signature cannot be safely renamed")
                 isOldStyle -> SignatureAnalysis.Refused("Old-style (K&R) signature cannot be safely renamed")
-                else -> SignatureAnalysis.Found(lineIndex, char, paramIndex, params.size)
+                else -> SignatureAnalysis.Found(lineIndex, char, paramIndex, segments.size)
             }
         }
         if (candidates.isEmpty()) {
@@ -160,6 +167,28 @@ class CSignaturePlanner(
     internal sealed interface SignatureAnalysis {
         data class Found(val line: Int, val character: Int, val paramIndex: Int, val paramCount: Int) : SignatureAnalysis
         data class Refused(val message: String) : SignatureAnalysis
+    }
+
+    /**
+     * Splits a parameter region into top-level segments (respecting nested () and [])
+     * and drops blank segments, returning their ranges within [region].
+     */
+    private fun topLevelParamSegments(region: String): List<IntRange> {
+        val segments = mutableListOf<IntRange>()
+        var depth = 0
+        var start = 0
+        for (k in region.indices) {
+            when (region[k]) {
+                '(', '[' -> depth++
+                ']', ')' -> depth--
+                ',' -> if (depth == 0) {
+                    if (region.substring(start, k).isNotBlank()) segments += start until k
+                    start = k + 1
+                }
+            }
+        }
+        if (region.substring(start, region.length).isNotBlank()) segments += start until region.length
+        return segments
     }
 
     private data class Occurrence(val file: Path, val line: Int, val character: Int)

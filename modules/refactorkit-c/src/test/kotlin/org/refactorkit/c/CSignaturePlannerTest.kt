@@ -49,6 +49,26 @@ class CSignaturePlannerTest {
     }
 
     @Test
+    fun resolvesParameterAtItsOwnPositionNotEarlierSubstring() {
+        // 'x' occurs inside the earlier parameter 'ext'; the seed must bind to the real
+        // x parameter (paramIndex 1) at its own declarator position, not the substring
+        // inside 'ext'. A naive first-substring indexOf would seed inside 'ext'.
+        val content = "int compute(int ext, int x) { return ext + x; }\n"
+        val snap = ProjectSnapshot(
+            workspace = Workspace(Path.of("/workspace")),
+            modules = emptyList(),
+            files = listOf(SourceFile(Path.of("src/main.c"), content, "c")),
+        )
+        val analysis = CSignaturePlanner(toolchain()).analyzeSignature(snap, Path.of("src/main.c"), "x")
+        assertIs<CSignaturePlanner.SignatureAnalysis.Found>(analysis)
+        assertEquals(1, analysis.paramIndex)
+        val line = content.lines()[analysis.line]
+        assertEquals('x', line[analysis.character])
+        assertTrue(!line[analysis.character - 1].isLetterOrDigit(),
+            "seed must start a standalone token, not sit inside 'ext'; got line=${line}")
+    }
+
+    @Test
     fun refusesVariadicSignature() {
         val content = "int f(int a, ...) { return a; }\n"
         val snap = ProjectSnapshot(
