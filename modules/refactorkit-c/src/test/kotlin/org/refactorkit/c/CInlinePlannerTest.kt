@@ -90,6 +90,24 @@ class CInlinePlannerTest {
         assertTrue(!result.contains("a+b *"), "unparenthesized substitution drops precedence; got: $result")
     }
 
+    @Test
+    fun removesMultiLineDeclarationHeaderWithoutResidue() {
+        // The storage/type prefix may sit on a line above the function name. The removal
+        // must span the whole header; a line-equality walk-back left 'static int' behind.
+        val snap = snapshot(
+            "static int\n" +
+                "sq(int x) { return x * x; }\n" +
+                "int main(void) { return sq(2); }\n",
+        )
+        val plan = planner().preview(snap, Path.of("src/main.c"), "sq")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val applied = WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
+        val result = applied.files.single { it.path.toString() == "src/main.c" }.content
+        assertTrue(!result.contains("static int"), "multi-line header must be fully removed; got: $result")
+        assertTrue(result.contains("2 * 2"), "the single call must be inlined; got: $result")
+        assertTrue(!result.contains("sq("), "definition and call must both be gone; got: $result")
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),
