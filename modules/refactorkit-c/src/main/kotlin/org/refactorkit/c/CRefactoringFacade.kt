@@ -185,7 +185,9 @@ class CRefactoringFacade(
             for (token in tokens) {
                 if (token.type != CTokenType.IDENTIFIER || token.text != symbol) continue
                 val line = token.line - 1
-                val char = file.content.lines().getOrNull(token.line - 1)?.indexOf(symbol) ?: 0
+                // Use the token's own column; a first-substring indexOf(symbol) would
+                // seed into an earlier identifier that merely contains the symbol name.
+                val char = token.column
                 candidates += Location(file.path.normalize(), line, char)
             }
         }

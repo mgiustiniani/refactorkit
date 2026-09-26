@@ -222,19 +222,13 @@ class CSafeDeletePlanner(
                     (prev != null && prev.type == CTokenType.IDENTIFIER && prev.text in TYPE_KEYWORDS)
                 if (isFunction || isVariable) {
                     val line = t.line - 1 // 0-based for clangd and SourcePosition
-                    val char = lineStartCharacter(file.content, t.line, symbol)
+                    val char = t.column // token's own column, not a first-substring match
                     val absFile = snapshot.workspace.root.resolve(file.path).normalize()
                     return Definition(absFile, line, char, line, lineEndCharacter(file.content, t.line), externOrPublic)
                 }
             }
         }
         return null
-    }
-
-    private fun lineStartCharacter(content: String, line: Int, symbol: String): Int {
-        val lineText = content.lines().getOrNull(line - 1) ?: return 0
-        val idx = lineText.indexOf(symbol)
-        return if (idx >= 0) idx else 0
     }
 
     private fun lineEndCharacter(content: String, line: Int): Int {
