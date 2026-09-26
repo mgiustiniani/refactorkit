@@ -27,6 +27,29 @@ class CMovePlannerTest {
     }
 
     @Test
+    fun updatesMovedFileOutgoingSiblingInclude() {
+        // a.h includes sibling b.h; moving a.h to src/other must re-relativize its own
+        // include to ../lib/b.h, otherwise the moved file points at a nonexistent path.
+        val snap = snapshot(
+            listOf(
+                SourceFile(Path.of("src/lib/a.h"), "#include \"b.h\"\n#define A_H\n", "c"),
+                SourceFile(Path.of("src/lib/b.h"), "#define B_H\n", "c"),
+            ),
+        )
+        val plan = CMovePlanner().preview(snap, Path.of("src/lib/a.h"), Path.of("src/other/a.h"))
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val edits = plan.workspaceEdit.edits
+        assertTrue(edits.any { it is FileEdit.Rename && it.newPath == Path.of("src/other/a.h") }, "must rename the moved file")
+        val modify = edits.filterIsInstance<FileEdit.Modify>().single { it.path == Path.of("src/other/a.h") }
+        assertTrue(modify.textEdits.any { it.newText == "../lib/b.h" },
+            "outgoing include must be re-relativized; got: " + modify.textEdits.map { it.newText })
+        val applied = org.refactorkit.core.WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
+        val moved = applied.files.single { it.path.toString() == "src/other/a.h" }.content
+        assertTrue(moved.contains("#include \"../lib/b.h\""), "applied moved file must reference the sibling by the new relative path; got: $moved")
+        assertTrue(applied.files.any { it.path.toString() == "src/lib/b.h" }, "the sibling must stay in place")
+    }
+
+    @Test
     fun refusesCollisionWithExistingFile() {
         val snapshot = snapshot(listOf(
             SourceFile(Path.of("src/main.c"), "int x;\n", "c"),

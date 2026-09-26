@@ -87,6 +87,9 @@ class CMovePlanner {
         for (source in snapshot.files) {
             if (source.languageId !in setOf("c", "cpp", "objective-c")) continue
             val directives = CIncludeDirectiveParser().parse(source.content)
+            val includingDir = root.resolve(source.path.parent ?: Path.of("")).normalize()
+            val isMovedSource = source.path.normalize() == oldPath
+            val movedFileNewDir = root.resolve(newPath.parent ?: Path.of("")).normalize()
             for (directive in directives) {
                 if (directive.kind == CIncludeKind.MACRO) {
                     // Only a macro-computed include that could resolve to the moved file
@@ -94,20 +97,32 @@ class CMovePlanner {
                     if (macroIncludeCouldTarget(directive.target, oldPath)) return null
                     continue
                 }
-                val includingDir = root.resolve(source.path.parent ?: Path.of("")).normalize()
                 val targetResolved = if (directive.kind == CIncludeKind.QUOTED) {
                     includingDir.resolve(directive.target).normalize()
                 } else {
                     root.resolve(directive.target).normalize()
                 }
-                if (targetResolved != oldResolved) continue
-                val newTarget = includingDir.relativize(newResolved).toString().replace('\\', '/')
                 val lineText = source.content.lines().getOrNull(directive.line - 1) ?: continue
                 val idx = lineText.indexOf(directive.target)
                 if (idx < 0) continue
                 val start = SourcePosition(directive.line - 1, idx)
                 val end = SourcePosition(directive.line - 1, idx + directive.target.length)
-                editsByFile.getOrPut(source.path.normalize()) { mutableListOf() } += TextEdit(SourceRange(start, end), newTarget)
+                if (targetResolved == oldResolved) {
+                    // Inbound: a consumer's include points at the moved file.
+                    val newTarget = includingDir.relativize(newResolved).toString().replace('\\', '/')
+                    editsByFile.getOrPut(source.path.normalize()) { mutableListOf() } += TextEdit(SourceRange(start, end), newTarget)
+                } else if (isMovedSource && directive.kind == CIncludeKind.QUOTED &&
+                    snapshot.files.any { root.resolve(it.path).normalize() == targetResolved }
+                ) {
+                    // Outbound: the moved file's own quoted include resolves to a sibling
+                    // that stays behind. After the move the same spelling would point at a
+                    // nonexistent path, so re-relativize it against the destination directory.
+                    val newTarget = movedFileNewDir.relativize(targetResolved).toString().replace('\\', '/')
+                    if (newTarget != directive.target) {
+                        // Record under the destination path so it applies after the rename.
+                        editsByFile.getOrPut(newPath) { mutableListOf() } += TextEdit(SourceRange(start, end), newTarget)
+                    }
+                }
             }
         }
         return editsByFile
