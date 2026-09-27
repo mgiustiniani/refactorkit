@@ -281,7 +281,7 @@ class McpSession(
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete | sourceFileRelocation | extractFunction | extractConstant | inlineVariable | moveDeclaration | projectReferenceMigration | recipe | renamePrefix | moveSource | organizeIncludes | changeSignature | extractExpression | inlineFunction | relocateComponent",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete | sourceFileRelocation | extractFunction | extractConstant | inlineVariable | moveDeclaration | projectReferenceMigration | recipe | renamePrefix | moveSource | organizeIncludes | changeSignature | extractExpression | inlineFunction | inlineLocalVariable | relocateComponent",
                     "symbol" to "string: fully-qualified symbol name",
                     "languageId" to "string: java | kotlin | typescript | javascript | c (default java); c requires clang/clangd/clangFormat",
                     "clang" to "string: explicit clang executable path (required for languageId=c)",
@@ -788,6 +788,7 @@ class McpSession(
             "- changeSignature: rename a C function parameter (fully-prototyped, non-variadic)\n" +
             "- extractExpression: extract a scalar C expression to a const local temporary\n" +
             "- inlineFunction: inline a single-use static/extern C function\n" +
+            "- inlineLocalVariable: inline a single-use literal C scalar local\n" +
             "- relocateComponent: move a C component directory and update literal includes"
         val symbolId = args.string("symbol") ?: missing("symbol")
         return "Available refactorings for $symbolId:\n" +
@@ -831,6 +832,7 @@ class McpSession(
             "changeSignature" -> "changeSignature"
             "extractExpression" -> "extractExpression"
             "inlineFunction" -> "inlineFunction"
+            "inlineLocalVariable" -> "inlineLocalVariable"
             "relocateComponent" -> "relocateComponent"
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown C operation: $operation")
         }

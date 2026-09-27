@@ -108,6 +108,41 @@ class CInlinePlannerTest {
         assertTrue(!result.contains("sq("), "definition and call must both be gone; got: $result")
     }
 
+    @Test
+    fun inlinesSingleUseLiteralLocal() {
+        val snap = snapshot("int main(void) { int x = 5; return x; }\n")
+        val plan = planner().inlineLocal(snap, Path.of("src/main.c"), "x")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val applied = WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
+        val result = applied.files.single { it.path.toString() == "src/main.c" }.content
+        assertTrue(result.contains("return 5"), "the literal must replace the single use; got: $result")
+        assertTrue(!result.contains("int x") && !result.contains("x"), "the local must be fully removed; got: $result")
+    }
+
+    @Test
+    fun refusesLocalWithMultipleUses() {
+        val snap = snapshot("int main(void) { int x = 5; return x + x; }\n")
+        val plan = planner().inlineLocal(snap, Path.of("src/main.c"), "x")
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("declared once and used once"), plan.summary)
+    }
+
+    @Test
+    fun refusesLocalInitializerThatReferencesIdentifiers() {
+        val snap = snapshot("int main(void) { int y = 3; int x = y; return x; }\n")
+        val plan = planner().inlineLocal(snap, Path.of("src/main.c"), "x")
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("immutability cannot be proven"), plan.summary)
+    }
+
+    @Test
+    fun refusesLocalWhoseAddressIsTaken() {
+        val snap = snapshot("int main(void) { int x = 5; return &x; }\n")
+        val plan = planner().inlineLocal(snap, Path.of("src/main.c"), "x")
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("address taken"), plan.summary)
+    }
+
     private fun snapshot(content: String) = ProjectSnapshot(
         workspace = Workspace(Path.of("/workspace")),
         modules = emptyList(),

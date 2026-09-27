@@ -75,6 +75,108 @@ class CInlinePlanner {
         )
     }
 
+    /**
+     * Inline a single-use scalar local variable whose initializer is a literal
+     * expression (no identifiers, no side effects): replace its one read with the
+     * initializer and remove the declaration. Provably safe because a literal cannot
+     * change between the declaration and the use. Everything less clearly safe (more
+     * than one use, an address-taken or write position, a non-scalar declaration, or an
+     * initializer that reads mutable state) is refused.
+     */
+    fun inlineLocal(snapshot: ProjectSnapshot, file: Path, name: String): PatchPlan {
+        if (name.isBlank() || !name.matches(IDENTIFIER)) {
+            return refusedLocal(snapshot, "Invalid variable name: '$name'")
+        }
+        val source = snapshot.files.singleOrNull { it.path.normalize() == file.normalize() }
+            ?: return refusedLocal(snapshot, "Source file not found")
+        if (source.languageId !in setOf("c", "cpp", "objective-c")) {
+            return refusedLocal(snapshot, "Inline currently supports C sources only")
+        }
+        val tokens = tokensWithOffsets(source.content)
+        val occurrences = tokens.withIndex()
+            .filter { (_, t) -> t.type == CTokenType.IDENTIFIER && t.text == name }
+            .map { it.index }
+        if (occurrences.size != 2) {
+            return refusedLocal(snapshot, "Variable '$name' must be declared once and used once; found ${occurrences.size} occurrences")
+        }
+        val declIdx = occurrences.firstOrNull { isScalarDeclaration(tokens, it) }
+            ?: return refusedLocal(snapshot, "Variable '$name' has no scalar 'type $name = ...' declaration")
+        val useIdx = occurrences.first { it != declIdx }
+        if (useIdx < declIdx) return refusedLocal(snapshot, "Variable '$name' is used before its declaration")
+        if (isScalarDeclaration(tokens, useIdx)) {
+            return refusedLocal(snapshot, "Variable '$name' is declared more than once")
+        }
+        if (writesHere(tokens, useIdx)) {
+            return refusedLocal(snapshot, "Variable '$name' is written or has its address taken at its use site; cannot inline")
+        }
+        val eqIdx = declIdx + 1
+        if (tokens.getOrNull(eqIdx)?.text != "=") {
+            return refusedLocal(snapshot, "Variable '$name' declaration has no initializer")
+        }
+        val semiIdx = (eqIdx + 1 until tokens.size).firstOrNull { tokens[it].text == ";" }
+            ?: return refusedLocal(snapshot, "Could not locate the declaration terminator for '$name'")
+        val exprTokens = tokens.subList(eqIdx + 1, semiIdx)
+        if (exprTokens.isEmpty()) return refusedLocal(snapshot, "Variable '$name' has no initializer")
+        if (exprTokens.any { it.type == CTokenType.IDENTIFIER }) {
+            return refusedLocal(snapshot, "Initializer of '$name' references identifiers; immutability cannot be proven")
+        }
+        val expr = exprTokens.joinToString(" ") { it.text }.trim()
+        if (expr.isBlank() || expr.hasSideEffects()) {
+            return refusedLocal(snapshot, "Variable '$name' initializer is blank or has side effects")
+        }
+        var startIdx = declIdx
+        while (startIdx > 0) {
+            val prev = tokens[startIdx - 1].text
+            if (prev == ";" || prev == "}" || prev == "{") break
+            startIdx--
+        }
+        val declStart = tokens[startIdx]
+        val semi = tokens[semiIdx]
+        val useTok = tokens[useIdx]
+        val replacement = wrapArgIfNeeded(expr)
+        val edits = listOf(
+            TextEdit(SourceRange(SourcePosition(useTok.line, useTok.startChar), SourcePosition(useTok.line, useTok.endChar)), replacement),
+            TextEdit(SourceRange(SourcePosition(declStart.line, declStart.startChar), SourcePosition(semi.line, semi.endChar)), ""),
+        )
+        return PatchPlan(
+            operation = "inlineLocalVariable",
+            status = PatchStatus.PREVIEW,
+            snapshotHash = snapshot.hash,
+            confidence = 1.0,
+            requiresUserApproval = true,
+            summary = "Inline single-use scalar local '$name' and remove its declaration in $file",
+            affectedFiles = setOf(file.normalize()),
+            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(file.normalize(), edits))),
+            diagnosticsBefore = emptyList(),
+            diagnosticsAfterPreview = emptyList(),
+            warnings = listOf("Inlined a single-use literal local; the declaration is removed because the initializer is a literal and the single use is a pure read."),
+            riskLevel = RiskLevel.MEDIUM,
+            evidence = RefactoringEvidence.STRUCTURAL,
+        )
+    }
+
+    private fun isScalarDeclaration(tokens: List<Tok>, index: Int): Boolean {
+        val prev = tokens.getOrNull(index - 1)
+        val next = tokens.getOrNull(index + 1)
+        return prev != null && prev.type == CTokenType.IDENTIFIER && prev.text in TYPE_KEYWORDS && next?.text == "="
+    }
+
+    /** True when the token at [index] is written to (assignment, compound-assign, ++/-- or &). */
+    private fun writesHere(tokens: List<Tok>, index: Int): Boolean {
+        val p1 = tokens.getOrNull(index - 1)?.text
+        val p2 = tokens.getOrNull(index - 2)?.text
+        val n1 = tokens.getOrNull(index + 1)?.text
+        val n2 = tokens.getOrNull(index + 2)?.text
+        val n3 = tokens.getOrNull(index + 3)?.text
+        return p1 == "&" ||
+            (p1 == "+" && p2 == "+") || (p1 == "-" && p2 == "-") ||
+            (n1 == "+" && n2 == "+") || (n1 == "-" && n2 == "-") ||
+            (n1 == "=" && n2 != "=") ||
+            (n1 in setOf("+", "-", "*", "/", "%", "^", "|", "&") && n2 == "=") ||
+            (n1 == "<" && n2 == "<" && n3 == "=") ||
+            (n1 == ">" && n2 == ">" && n3 == "=")
+    }
+
     private fun parseDefinition(tokens: List<Tok>, name: String): Definition? {
         for (i in tokens.indices) {
             val t = tokens[i]
@@ -268,6 +370,22 @@ class CInlinePlanner {
         }
         return result
     }
+
+    private fun refusedLocal(snapshot: ProjectSnapshot, message: String) = PatchPlan(
+        operation = "inlineLocalVariable",
+        status = PatchStatus.REFUSED,
+        snapshotHash = snapshot.hash,
+        confidence = 0.0,
+        requiresUserApproval = false,
+        summary = message,
+        affectedFiles = emptySet(),
+        workspaceEdit = WorkspaceEdit(),
+        diagnosticsBefore = emptyList(),
+        diagnosticsAfterPreview = emptyList(),
+        warnings = listOf(message),
+        riskLevel = RiskLevel.HIGH,
+        evidence = RefactoringEvidence.STRUCTURAL,
+    )
 
     private fun refused(snapshot: ProjectSnapshot, message: String) = PatchPlan(
         operation = "inlineFunction",

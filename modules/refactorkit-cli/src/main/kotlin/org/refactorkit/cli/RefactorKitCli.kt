@@ -850,6 +850,7 @@ class RefactorKitCli(
             "change-signature" to "changeSignature",
             "extract" to "extractExpression",
             "inline" to "inlineFunction",
+            "inline-local" to "inlineLocalVariable",
             "relocate" to "relocateComponent",
         )
         if (operation == null || operation !in catalogue) {

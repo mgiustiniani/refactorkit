@@ -139,6 +139,7 @@ class CRefactoringFacade(
                 extract.preview(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"), range, args["tempName"] ?: "tmp")
             }
             "inlineFunction" -> inline.preview(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"), args["symbol"] ?: return missingArgument(snapshot, operation, "arguments.symbol"))
+            "inlineLocalVariable" -> inline.inlineLocal(snapshot, file ?: return missingArgument(snapshot, operation, "arguments.file"), args["symbol"] ?: return missingArgument(snapshot, operation, "arguments.symbol"))
             "relocateComponent" -> relocate.preview(snapshot, args["componentDir"]?.let(Path::of) ?: return missingArgument(snapshot, operation, "arguments.componentDir"), Path.of(args["newDir"] ?: return missingArgument(snapshot, operation, "arguments.newDir")))
             else -> unknownOperation(snapshot, operation)
         }

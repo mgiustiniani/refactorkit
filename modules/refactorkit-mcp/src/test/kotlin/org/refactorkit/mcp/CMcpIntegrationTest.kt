@@ -51,6 +51,7 @@ class CMcpIntegrationTest {
         val text = contentText(result)
         assertTrue(text.contains("renamePrefix"), text)
         assertTrue(text.contains("relocateComponent"), text)
+        assertTrue(text.contains("inlineLocalVariable"), "the C catalogue must advertise inlineLocalVariable; got: $text")
         session.close()
     }
 
