@@ -128,11 +128,30 @@ class CInlinePlannerTest {
     }
 
     @Test
-    fun refusesLocalInitializerThatReferencesIdentifiers() {
+    fun inlinesIdentifierLocalWithoutInterveningWrite() {
         val snap = snapshot("int main(void) { int y = 3; int x = y; return x; }\n")
         val plan = planner().inlineLocal(snap, Path.of("src/main.c"), "x")
+        assertEquals(PatchStatus.PREVIEW, plan.status)
+        val applied = WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
+        val result = applied.files.single { it.path.toString() == "src/main.c" }.content
+        assertTrue(result.contains("return y"), "the identifier initializer must inline; got: $result")
+        assertTrue(!result.contains("int x"), "the local must be removed; got: $result")
+    }
+
+    @Test
+    fun refusesLocalWhenIdentifierWrittenBeforeUse() {
+        val snap = snapshot("int main(void) { int y = 3; int x = y; y = 4; return x; }\n")
+        val plan = planner().inlineLocal(snap, Path.of("src/main.c"), "x")
         assertEquals(PatchStatus.REFUSED, plan.status)
-        assertTrue(plan.summary.contains("immutability cannot be proven"), plan.summary)
+        assertTrue(plan.summary.contains("written or has its address taken"), plan.summary)
+    }
+
+    @Test
+    fun refusesLocalWhenCallBetweenDeclarationAndUse() {
+        val snap = snapshot("int main(void) { int y = 3; int x = y; foo(); return x; }\n")
+        val plan = planner().inlineLocal(snap, Path.of("src/main.c"), "x")
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertTrue(plan.summary.contains("A call occurs"), plan.summary)
     }
 
     @Test

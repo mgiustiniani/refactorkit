@@ -117,12 +117,28 @@ class CInlinePlanner {
             ?: return refusedLocal(snapshot, "Could not locate the declaration terminator for '$name'")
         val exprTokens = tokens.subList(eqIdx + 1, semiIdx)
         if (exprTokens.isEmpty()) return refusedLocal(snapshot, "Variable '$name' has no initializer")
-        if (exprTokens.any { it.type == CTokenType.IDENTIFIER }) {
-            return refusedLocal(snapshot, "Initializer of '$name' references identifiers; immutability cannot be proven")
-        }
         val expr = exprTokens.joinToString(" ") { it.text }.trim()
         if (expr.isBlank() || expr.hasSideEffects()) {
             return refusedLocal(snapshot, "Variable '$name' initializer is blank or has side effects")
+        }
+        // A literal-only initializer is always safe. If it reads identifiers, require
+        // that none of them is written or has its address taken between the declaration
+        // and the use, and that no call (which could mutate through a pointer) appears in
+        // that region; otherwise the inlined value could differ from the declared one.
+        val exprIdents = exprTokens
+            .filter { it.type == CTokenType.IDENTIFIER && it.text !in TYPE_KEYWORDS }
+            .map { it.text }
+            .toSet()
+        if (exprIdents.isNotEmpty()) {
+            for (k in (semiIdx + 1) until useIdx) {
+                val tok = tokens[k]
+                if (tok.text == "(" && tokens.getOrNull(k - 1)?.type == CTokenType.IDENTIFIER) {
+                    return refusedLocal(snapshot, "A call occurs between the declaration and use of '$name'; immutability cannot be proven")
+                }
+                if (tok.type == CTokenType.IDENTIFIER && tok.text in exprIdents && writesHere(tokens, k)) {
+                    return refusedLocal(snapshot, "An initializer identifier of '$name' is written or has its address taken before the use; immutability cannot be proven")
+                }
+            }
         }
         var startIdx = declIdx
         while (startIdx > 0) {
