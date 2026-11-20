@@ -47,7 +47,7 @@ class ClangArtifactInputCapture(maxFileBytes: Int = 512 * 1024 * 1024) {
                 bytes.size.toLong() != before.size()) {
                 return unavailable("changed", "Native artifact changed during capture")
             }
-            when (val readout = CElfDynamicInputs.read(bytes, limits)) {
+            when (val readout = CElfDynamicInputs.readOwned(bytes, limits)) {
                 is CElfDynamicInputReadout.Found -> ClangArtifactCaptureResult.Captured(role,
                     ClangToolchainFileEvidence(role.evidenceRole, path, readout.facts.sha256, bytes.size.toLong()), readout.facts)
                 is CElfDynamicInputReadout.Refused -> unavailable(readout.reason.name.lowercase(),

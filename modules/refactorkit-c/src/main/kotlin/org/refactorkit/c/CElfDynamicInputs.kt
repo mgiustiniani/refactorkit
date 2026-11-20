@@ -47,9 +47,15 @@ internal data class CElfInputLimits(
 
 /** Pure declarations only; native artifact capture and actual loader resolution are separate. */
 internal object CElfDynamicInputs {
-    fun read(source: ByteArray, limits: CElfInputLimits = CElfInputLimits()): CElfDynamicInputReadout = try {
+    fun read(source: ByteArray, limits: CElfInputLimits = CElfInputLimits()): CElfDynamicInputReadout {
+        if (source.size > limits.maxFileBytes) return CElfDynamicInputReadout.Refused(CElfInputRefusal.INPUT_LIMIT)
+        return readOwned(source.copyOf(), limits)
+    }
+
+    /** Decodes a privately acquired buffer. The caller must keep it unshared until the read finishes. */
+    fun readOwned(source: ByteArray, limits: CElfInputLimits): CElfDynamicInputReadout = try {
         if (source.size > limits.maxFileBytes) reject(CElfInputRefusal.INPUT_LIMIT)
-        CElfDynamicInputReadout.Found(Decoder(source.copyOf(), limits).decode())
+        CElfDynamicInputReadout.Found(Decoder(source, limits).decode())
     } catch (failure: Rejected) { CElfDynamicInputReadout.Refused(failure.reason) }
       catch (_: IllegalArgumentException) { CElfDynamicInputReadout.Refused(CElfInputRefusal.INVALID_ELF) }
 
