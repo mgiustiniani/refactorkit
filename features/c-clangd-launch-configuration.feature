@@ -109,3 +109,17 @@ Feature: Admit C semantic process configuration before launching clangd
       | absent alternate under link | startup refused  |
       | alternate parent linked live| currency refused |
       | root ancestor linked live   | currency refused |
+
+  @REQ-C-CLANGD-LAUNCH-001#managed-c-rename-preserves-the-configuration-refusal
+  Scenario Outline: Managed C rename preserves the configuration refusal
+    Given an owned C compilation database points to an absent include directory
+    When "<surface>" requests the managed C rename preview
+    Then the managed preview returns the clangd configuration refusal
+    And the refused rename leaves the compilation inputs and journal untouched
+
+    Examples:
+      | surface |
+      | CLI     |
+      | daemon  |
+      | LSP     |
+      | MCP     |

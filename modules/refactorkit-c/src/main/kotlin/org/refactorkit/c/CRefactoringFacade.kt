@@ -425,11 +425,21 @@ class CRefactoringFacade(
 
     /** Preview through the bounded managed-apply authority required by editor surfaces. */
     fun previewForManagedApply(snapshot: ProjectSnapshot, operation: String, args: Map<String, String>): PatchPlan {
-        if (operation == "renamePrefix") {
-            return previewPrefix(snapshot, parseMapping(args), startSemanticSession = true)
+        return try {
+            if (operation == "renamePrefix") {
+                previewPrefix(snapshot, parseMapping(args), startSemanticSession = true)
+            } else {
+                startFor(snapshot, operation)
+                preview(snapshot, operation, args)
+            }
+        } catch (failure: CClangdConfigurationException) {
+            val diagnostic = failure.diagnostic
+            val planOperation = if (operation == "renamePrefix") "renameCSymbolPrefix" else operation
+            refused(snapshot, planOperation, listOf(diagnostic)).copy(
+                refusalCode = diagnostic.code,
+                diagnosticsAfterPreview = listOf(diagnostic),
+            )
         }
-        startFor(snapshot, operation)
-        return preview(snapshot, operation, args)
     }
 
     private fun previewPrefix(snapshot: ProjectSnapshot, mapping: Map<String, String>, startSemanticSession: Boolean): PatchPlan {

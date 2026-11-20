@@ -14614,6 +14614,22 @@ independent review, runtime/downloaded-public-asset verification and publication
 remain unqualified. Source/build remains 0.7.0/API 0.2. The sealed private M2
 candidate a6f1b30e is unchanged and predates this C implementation.
 
+[[c16-clangd-managed-configuration-refusal-2026-11-20]]
+=== Managed C preview preserves compiler configuration refusals
+
+The managed C facade converts the existing typed clangd configuration
+diagnostic to a refused plan with zero affected files. CLI returns its
+structured refusal code, daemon and LSP return `PLAN_REFUSED` with
+`refusalCode`, and MCP returns a refused plan with the same reason.
+A compilation database with an absent include directory reproduces and
+verifies the boundary for each surface, including preservation of the
+original bytes and absence of transaction state.
+
+The exact Story is
+`REQ-C-CLANGD-LAUNCH-001#managed-c-rename-preserves-the-configuration-refusal`.
+Evidence is under
+`.refactorkit/runs/v080-c16-clangd-configuration-refusal-20261120-r001/`.
+
 [[c03-compilation-record-main-qualification-2026-11-13]]
 === C03 compilation record encoding, field types and path identity (2026-11-13)
 
