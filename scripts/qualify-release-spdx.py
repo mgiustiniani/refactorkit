@@ -7,6 +7,7 @@ import argparse
 import copy
 import hashlib
 import importlib.util
+from io import BytesIO
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -23,6 +24,11 @@ SCHEMA_COMMIT = 'aadf3b0b8dbbabdb4d880b0fc714255fea436ff7'
 ROOT_PREFIX = 'SPDXRef-RefactorKitRuntime-'
 INVENTORY_KIND = 'refactorkit.archive-inventory/v1'
 MAX_JSON = 32 * 1024 * 1024
+JNA_PUBLISHER_LICENSE = 'Apache-2.0 OR LGPL-2.1-or-later'
+JNA_RELEASE_COORDINATES = {
+    ('net.java.dev.jna', 'jna', '5.19.1'),
+    ('net.java.dev.jna', 'jna-platform', '5.19.1'),
+}
 
 
 class Refused(RuntimeError):
@@ -249,7 +255,37 @@ def resolved_components(manifest, inventory, version):
     return by_path
 
 
-def add_runtime_coordinates(result, inventory, manifest, version, distribution):
+def add_jna_publisher_license(package, archive, path, expected_sha256):
+    """Transcribe the publisher notice from the verified JNA release member."""
+    unavailable = 'SPDX_JNA_LICENSE_DECLARATION_UNAVAILABLE'
+    try:
+        with zipfile.ZipFile(archive) as distribution:
+            member = distribution.getinfo('refactorkit/' + path)
+            require(member.file_size <= 16 * 1024 * 1024 and not member.flag_bits & 1, unavailable)
+            payload = distribution.read(member)
+        require(hashlib.sha256(payload).hexdigest() == expected_sha256, 'SPDX_RUNTIME_COMPONENT_DIGEST_MISMATCH')
+        with zipfile.ZipFile(BytesIO(payload)) as jar:
+            notices = [entry for entry in jar.infolist() if entry.filename == 'META-INF/LICENSE']
+            require(len(notices) == 1, unavailable)
+            notice = notices[0]
+            require(notice.file_size <= 64 * 1024 and not notice.flag_bits & 1 and
+                    stat.S_IFMT(notice.external_attr >> 16) in (0, stat.S_IFREG), unavailable)
+            content = jar.read(notice)
+    except (KeyError, zipfile.BadZipFile, OSError, EOFError, NotImplementedError):
+        raise Refused(unavailable) from None
+    prefix = b'SPDX-License-Identifier:'
+    declarations = [line.lstrip()[len(prefix):].strip() for line in content.splitlines() if line.lstrip().startswith(prefix)]
+    require(declarations == [JNA_PUBLISHER_LICENSE.encode('ascii')], unavailable)
+
+    observation = (f'Publisher declaration from META-INF/LICENSE (SHA-256 {hashlib.sha256(content).hexdigest()}). '
+                   f'Upstream scanner licenseConcluded: {package.get("licenseConcluded", "NOASSERTION")}. '
+                   'Independent distribution license review is pending.')
+    package['licenseDeclared'] = JNA_PUBLISHER_LICENSE
+    package['licenseConcluded'] = 'NOASSERTION'
+    package['licenseComments'] = '\n'.join(filter(None, [package.get('licenseComments'), observation]))
+
+
+def add_runtime_coordinates(result, inventory, manifest, version, distribution, archive):
     by_path = resolved_components(manifest, inventory, version)
     packages = result['packages']
     detected = {}
@@ -284,6 +320,8 @@ def add_runtime_coordinates(result, inventory, manifest, version, distribution):
                        'checksums': [{'algorithm': algorithm, 'checksumValue': row[algorithm.lower()]}
                                      for algorithm in ('SHA256', 'SHA1')], 'externalRefs': [purl]}
             packages.append(package)
+        if (coords['group'], coords['artifact'], coords['version']) in JNA_RELEASE_COORDINATES:
+            add_jna_publisher_license(package, archive, path, row['sha256'])
         relation = {'spdxElementId': distribution, 'relatedSpdxElement': package['SPDXID'],
                     'relationshipType': 'CONTAINS'}
         result['relationships'].append(relation)
@@ -323,7 +361,7 @@ def assemble(document, inventory, archive, version, archive_sha, upstream_sha, c
         result['creationInfo']['creators'].append(creator)
     if components is not None:
         manifest, manifest_sha = components
-        add_runtime_coordinates(result, inventory, manifest, version, identity)
+        add_runtime_coordinates(result, inventory, manifest, version, identity, archive)
         package['comment'] += '\nGradle component manifest SHA256=' + manifest_sha
     return result
 

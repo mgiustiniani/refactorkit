@@ -21,12 +21,25 @@ internal class SpdxRuntimeCoordinatesFixture(private val condition: String) : Au
     private val manifest = directory.resolve("components.json")
     private val assembled = directory.resolve("assembled.json")
     private val receipt = directory.resolve("receipt.json")
-    private val documentedJar = jar("detected")
+    private val publisherArtifact = when (condition) {
+        "JNA Platform publisher declaration" -> "jna-platform"
+        "JNA publisher declaration", "JNA notice absent", "JNA notice declares another license",
+        "JNA declaration edited after assembly" -> "jna"
+        else -> null
+    }
+    private val detectedArtifact = publisherArtifact ?: "example"
+    private val detectedVersion = if (publisherArtifact != null) "5.19.1" else "1"
+    private val publisherNotice = when {
+        publisherArtifact == null || condition == "JNA notice absent" -> null
+        condition == "JNA notice declares another license" -> "SPDX-License-Identifier: Apache-2.0\n"
+        else -> "SPDX-License-Identifier: Apache-2.0 OR LGPL-2.1-or-later\n"
+    }
+    private val documentedJar = jar("detected", publisherNotice)
     private val missingJar = jar("omitted")
-    private val detectedPath = "lib/example-1.jar"
+    private val detectedPath = "lib/$detectedArtifact-$detectedVersion.jar"
     private val omittedPath = "lib/omitted-2.jar"
     private val rawPackages = mutableListOf(
-        detected("SPDXRef-Example", "example", hash(documentedJar, "SHA-1")),
+        detected("SPDXRef-Example", detectedArtifact, hash(documentedJar, "SHA-1")),
         detected("SPDXRef-Nested", "nested", hash(jar("nested"), "SHA-1")),
     )
     private var images = emptyMap<Path, String>()
@@ -58,7 +71,7 @@ internal class SpdxRuntimeCoordinatesFixture(private val condition: String) : Au
             put("sourceVersion", "0.8.0")
             put("configuration", ":modules:refactorkit-cli:runtimeClasspath")
             putJsonArray("components") {
-                add(component(detectedPath, "example", documentedJar))
+                add(component(detectedPath, detectedArtifact, documentedJar))
                 if (condition != "component missing from manifest") add(component(omittedPath, "omitted", missingJar))
             }
         }.toString())
@@ -73,15 +86,24 @@ internal class SpdxRuntimeCoordinatesFixture(private val condition: String) : Au
             assertContains(text, "pkg:maven/org.example/example@1")
             Files.writeString(assembled, text.replace("pkg:maven/org.example/example@1", "pkg:maven/fabricated/example@1"))
         }
+        if (condition == "JNA declaration edited after assembly") {
+            val document = read(assembled)
+            val packages = document.getValue("packages").jsonArray.map { item ->
+                val row = item.jsonObject
+                if (row["SPDXID"]?.jsonPrimitive?.content != "SPDXRef-Example") row
+                else JsonObject(row + ("licenseDeclared" to JsonPrimitive("Apache-2.0")))
+            }
+            Files.writeString(assembled, JsonObject(document + ("packages" to JsonArray(packages))).toString())
+        }
         invoke("verify", "--spdx", assembled.toString(), "--upstream-spdx", raw.toString(), "--receipt", receipt.toString())
     }
 
     fun verify(expected: String) {
-        if (expected != "verified runtime coordinates") {
+        if (expected !in setOf("verified runtime coordinates", "verified publisher declaration")) {
             assertEquals(1, exit, stderr)
             assertEquals(expected, Json.parseToJsonElement(stderr).jsonObject.getValue("code").jsonPrimitive.content)
             assertFalse(Files.exists(receipt))
-            assertEquals(condition == "normalized metadata changed", Files.exists(assembled))
+            assertEquals(expected == "SPDX_COMPONENT_METADATA_CHANGED", Files.exists(assembled))
             return
         }
         assertEquals(0, exit, stderr)
@@ -94,8 +116,20 @@ internal class SpdxRuntimeCoordinatesFixture(private val condition: String) : Au
         val packages = read(assembled).getValue("packages").jsonArray.map { it.jsonObject }
         val original = rawPackages.first()
         val updated = packages.single { it.getValue("SPDXID").jsonPrimitive.content == "SPDXRef-Example" }
-        assertEquals(original - "externalRefs", updated - "externalRefs")
-        assertEquals("pkg:maven/org.example/example@1", purl(updated))
+        if (expected == "verified publisher declaration") {
+            val changed = setOf("externalRefs", "licenseDeclared", "licenseConcluded", "licenseComments")
+            assertEquals(original - changed, updated - changed)
+            assertEquals("pkg:maven/net.java.dev.jna/$detectedArtifact@5.19.1", purl(updated))
+            assertEquals("Apache-2.0 OR LGPL-2.1-or-later", updated.getValue("licenseDeclared").jsonPrimitive.content)
+            assertEquals("NOASSERTION", updated.getValue("licenseConcluded").jsonPrimitive.content)
+            val comments = updated.getValue("licenseComments").jsonPrimitive.content
+            assertContains(comments, "META-INF/LICENSE")
+            assertContains(comments, hash(checkNotNull(publisherNotice).toByteArray()))
+            assertContains(comments, "Apache-2.0 AND LGPL-2.1-only")
+        } else {
+            assertEquals(original - "externalRefs", updated - "externalRefs")
+            assertEquals("pkg:maven/org.example/example@1", purl(updated))
+        }
         assertTrue(packages.contains(rawPackages.last()))
         val omitted = packages.single { it.getValue("name").jsonPrimitive.content == "omitted" }
         assertEquals("pkg:maven/org.example/omitted@2", purl(omitted))
@@ -114,11 +148,16 @@ internal class SpdxRuntimeCoordinatesFixture(private val condition: String) : Au
     private fun detected(identity: String, name: String, digest: String) = buildJsonObject {
         put("SPDXID", identity)
         put("name", name)
-        put("versionInfo", "1")
+        put("versionInfo", if (name == publisherArtifact) detectedVersion else "1")
         put("sourceInfo", "acquired package info from installed java archive: /$detectedPath")
         put("downloadLocation", "NOASSERTION")
         put("filesAnalyzed", false)
-        put("licenseDeclared", "Apache-2.0")
+        if (name == publisherArtifact) {
+            put("licenseDeclared", "NOASSERTION")
+            put("licenseConcluded", "Apache-2.0 AND LGPL-2.1-only")
+        } else {
+            put("licenseDeclared", "Apache-2.0")
+        }
         putJsonArray("checksums") {
             add(buildJsonObject { put("algorithm", "SHA1"); put("checksumValue", digest) })
         }
@@ -137,9 +176,14 @@ internal class SpdxRuntimeCoordinatesFixture(private val condition: String) : Au
         put("sha1", hash(bytes, "SHA-1"))
         putJsonObject("coordinates") {
             put("kind", "module")
-            put("group", if (condition == "malformed coordinates") "org/invalid" else "org.example")
+            val group = when {
+                condition == "malformed coordinates" -> "org/invalid"
+                name == publisherArtifact -> "net.java.dev.jna"
+                else -> "org.example"
+            }
+            put("group", group)
             put("artifact", name)
-            put("version", if (name == "example") "1" else "2")
+            put("version", if (path == detectedPath) detectedVersion else "2")
         }
     }
 
@@ -169,9 +213,12 @@ internal class SpdxRuntimeCoordinatesFixture(private val condition: String) : Au
     private fun hash(bytes: ByteArray, algorithm: String = "SHA-256") = MessageDigest.getInstance(algorithm)
         .digest(bytes).joinToString("") { "%02x".format(it) }
 
-    private fun jar(text: String): ByteArray {
+    private fun jar(text: String, notice: String? = null): ByteArray {
         val bytes = ByteArrayOutputStream()
-        ZipOutputStream(bytes).use { it.add("fixture.txt", text.toByteArray()) }
+        ZipOutputStream(bytes).use { zip ->
+            zip.add("fixture.txt", text.toByteArray())
+            notice?.let { zip.add("META-INF/LICENSE", it.toByteArray()) }
+        }
         return bytes.toByteArray()
     }
 

@@ -20251,6 +20251,17 @@ javax.inject. The upstream document retains its original digest. Proof:
 .refactorkit/runs/c17-spdx-runtime-coordinates-20261119-r001/.
 Source authority and release qualification are covered separately.
 
+For JNA and JNA Platform 5.19.1, the qualifier reads the published declaration
+from the checksum-matched release JAR. It records the notice checksum and
+the original scanner observation, with an unchanged upstream SPDX digest.
+The assembled document reports `Apache-2.0 OR LGPL-2.1-or-later` as declared
+and leaves the license conclusion unresolved for independent review. The
+Story `REQ-C17-SPDX-COMPONENT-IDENTITY-001#spdx-retains-verified-jna-publisher-declarations`
+covers both components, missing and conflicting notices, and tampering after
+assembly. The canonical Linux archive verified all 225 files and 50 resolved
+JARs. Evidence is under
+`.refactorkit/runs/v080-c17-jna-publisher-declaration-20261120-r001/`.
+
 
 [[c17-spdx-source-owned-replay-2026-11-19]]
 === Source-owned component replay for v0.8 release binding

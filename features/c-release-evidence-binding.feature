@@ -246,6 +246,22 @@ Feature: Bind the v0.8 Linux asset to its actual source and captured native evid
       | malformed coordinates          | SPDX_RUNTIME_COMPONENTS_INVALID      |
 
 
+  @REQ-C17-SPDX-COMPONENT-IDENTITY-001#spdx-retains-verified-jna-publisher-declarations
+  Scenario Outline: SPDX retains verified JNA publisher declarations
+    Given a release SPDX coordinate fixture has "<case>"
+    When SPDX qualification reconciles the supplied runtime resolution
+    Then the SPDX coordinate qualification reports "<outcome>"
+    And the coordinate fixture preserves its archive and original metadata
+
+    Examples:
+      | case                                | outcome                                    |
+      | JNA publisher declaration           | verified publisher declaration             |
+      | JNA Platform publisher declaration  | verified publisher declaration             |
+      | JNA notice absent                   | SPDX_JNA_LICENSE_DECLARATION_UNAVAILABLE   |
+      | JNA notice declares another license | SPDX_JNA_LICENSE_DECLARATION_UNAVAILABLE   |
+      | JNA declaration edited after assembly | SPDX_COMPONENT_METADATA_CHANGED           |
+
+
   @REQ-C17-SPDX-SOURCE-BINDING-001#release-binding-replays-the-source-owned-gradle-component-manifest
   Scenario Outline: Release binding replays the source-owned Gradle component manifest
     Given a v0.8 release evidence binding fixture has "<case>"
