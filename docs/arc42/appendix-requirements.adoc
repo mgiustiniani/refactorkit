@@ -13,6 +13,22 @@ integrated status; the long-range link:../releases/v1.0.0-plan.md[roadmap] retai
 all target languages and their relative order, with later version numbers
 explicitly unassigned rather than silently renumbered.
 
+[[c17-linux-review-candidate-2026-11-20]]
+The *C17 Linux review candidate* captured on 2026-11-20 was built from
+source revision `cb6e188231c1bbbbe83ff6f96fb7747df71dce65` for Linux
+x86-64. The selected C04–C15 packaged matrix passed 319 cases, including 24
+read-only navigation cases and 48 C06 local-binding cases. The C06 report
+reconciliation preserves the runner exit and checks the archived protocol
+traces, source digests and independent Clang controls. Separate C02 and C03
+packaged results cover the toolchain, processes and compilation model.
+The link:../releases/v0.8.0-progress.md#linux-candidate-verification--2026-11-20[completion register]
+links the results and identifies the archive.
+
+The two permanent context goldens await separate numeric overrides under
+AGENTS §18.6. Full final-source regression, same-platform hosted CI,
+independent review of distribution, and draft and public download
+verification remain open. Other hosts remain *NOT VERIFIED* for 0.8.0.
+
 [[c17-pinned-producer-authority-2026-11-18]]
 *C17 pinned producer authority (2026-11-18):* the existing release-binding Story
 vocabulary is reused for six producer-authority cases. Five original runs bound
@@ -11696,6 +11712,21 @@ source-set facts; no RefactorKit DTO change is currently identified. The complet
 M2 IDE matrix and broader Maven inheritance/default cases remain actionable.
 Existing ownership stays with `refactorkit-java` for Maven evidence and the daemon
 for DTO projection; no duplicate requirement is introduced.
+
+The existing Java context requirement now covers a same-POM Failsafe profile
+whose integration-test roots, literal plugin version, execution and JVM
+settings agree with the effective Maven model. The provider attributes explicit
+selectors and matching local descriptor defaults to the profile. A direct,
+inherited or managed competing declaration remains partial. The five-case
+Story `REQ-JAVA-PROJECT-CONTEXT-001#active-failsafe-profile-binds-test-jvm-facts-to-its-execution`
+passed through v7 and its opt-in selection endpoint. It verifies the explicit
+JVM and its separate toolchain prerequisite, descriptor defaults, profile
+deactivation, overlap with a base plugin and an unresolved argLine. Fourteen
+existing Maven cases also passed. The provider reads the models and local
+descriptor metadata without executing Maven. The
+link:../java-project-context-protocol.md#effective-maven-test-jvm-settings-schema-v7[protocol guide]
+describes the qualified shape. Receipts are under
+`.refactorkit/runs/ide-maven-profile-failsafe-jvm-20261120-r001/`.
 
 === Java 27 context schema bound and source-analysis blocker — 2026-10-29
 

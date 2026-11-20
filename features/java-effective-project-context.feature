@@ -1401,3 +1401,18 @@ Feature: Expose snapshot-bound Java effective project context to integration con
       | inherited build JVM          | test             | build-jvm           | complete     |
       | test toolchain selection     | test             | toolchain           | unavailable  |
       | unresolved test JVM          | test             | unresolved          | unavailable  |
+
+  @REQ-JAVA-PROJECT-CONTEXT-001#active-failsafe-profile-binds-test-jvm-facts-to-its-execution
+  Scenario Outline: Active Failsafe profile binds test JVM facts to its execution
+    Given a Maven Failsafe JVM profile fixture "<shape>"
+    When provider-qualified Java context v7 is requested for module "app" source-set "<sourceSet>"
+    Then Maven profile Failsafe JVM facts report "<outcome>"
+    And context acquisition preserves project bytes and executes no build or debugger
+
+    Examples:
+      | shape                       | sourceSet        | outcome                |
+      | explicit profile JVM        | integration-test | explicit executable    |
+      | profile descriptor defaults | integration-test | build JVM default      |
+      | inactive profile            | test             | absent integration set |
+      | competing direct plugin     | integration-test | partial configuration  |
+      | unresolved profile argLine  | integration-test | partial configuration  |

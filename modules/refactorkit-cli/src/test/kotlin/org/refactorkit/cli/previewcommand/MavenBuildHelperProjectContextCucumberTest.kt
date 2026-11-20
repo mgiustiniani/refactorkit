@@ -44,6 +44,7 @@ import org.junit.platform.suite.api.Suite
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-test-jvm-settings-inherit-from-one-literal-workspace-parent or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-test-jvm-build-model-retains-per-execution-selection or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-test-executions-expose-the-selected-jvm-with-bounded-provenance or " +
+        "@REQ-JAVA-PROJECT-CONTEXT-001#active-failsafe-profile-binds-test-jvm-facts-to-its-execution or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-reactor-annotation-processor-context-projects-workspace-outputs-and-generated-sources or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-reactor-annotation-processor-context-refreshes-after-workspace-output-materializes or " +
         "@REQ-JAVA-27-SEMANTIC-ANALYSIS-001#maven-java-27-definition-and-class-rename-refuse-unqualified-source-analysis or " +

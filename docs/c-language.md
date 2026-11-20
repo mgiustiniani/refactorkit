@@ -4,9 +4,10 @@ Authority boundary: this is a **bounded satellite** of the integrated
 architecture narrative in
 [`docs/arc42/appendix-requirements.adoc`](arc42/appendix-requirements.adoc) and
 [`docs/arc42/04-solution-strategy.adoc`](arc42/04-solution-strategy.adoc). It
-records the *current* C capability surface targeting one platform for qualification.
-It does **not** change the source/build version (`0.7.0`), the API (`0.2`), any
-tag/asset, or the sealed `0.7.0` receipts.
+records the current C capabilities for the `0.8.0` Linux x86-64 candidate.
+The build identifies itself as `0.8.0` and retains API `0.2`.
+See the [qualification status](arc42/appendix-requirements.adoc#c17-linux-review-candidate-2026-11-20)
+and the [published 0.7.0 acceptance](releases/v0.7.0-acceptance.md).
 
 ## Scope and platform qualification
 

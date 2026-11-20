@@ -2,6 +2,7 @@ package org.refactorkit.java
 
 import org.apache.maven.model.Dependency
 import org.apache.maven.model.Model
+import org.apache.maven.model.Plugin
 import org.apache.maven.model.Repository
 import org.apache.maven.model.building.DefaultModelBuilderFactory
 import org.apache.maven.model.building.DefaultModelBuildingRequest
@@ -13,6 +14,7 @@ import org.apache.maven.model.building.FileModelSource
 import org.apache.maven.model.building.ModelSource
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion
 import org.apache.maven.artifact.versioning.VersionRange
+import org.codehaus.plexus.util.xml.Xpp3Dom
 import org.refactorkit.core.BuildAnnotationProcessorConfiguration
 import org.refactorkit.core.BuildArtifactCoordinates
 import org.refactorkit.core.BuildCompilerOption
@@ -926,6 +928,8 @@ internal class MavenEffectiveReactorBuilder(
         )
         val integrationTestJvmContextFact = mavenTestJvmContext(
             workspaceRoot, pom, model, effective.inputs, "maven-failsafe-plugin",
+            sourceDirectories.declarations.filter(MavenSourceRootDeclaration::integrationTest)
+                .map(MavenSourceRootDeclaration::profileId).distinct().singleOrNull(),
         )
         modelInputs += testJvmContextFact.modelInputs
         modelInputs += integrationTestJvmContextFact.modelInputs
@@ -1558,18 +1562,37 @@ internal class MavenEffectiveReactorBuilder(
         value.isNotEmpty() && value.length <= limit && "\${" !in value && "@{" !in value &&
             value.none { it.isISOControl() }
 
-    /**
-     * Projects only explicitly declared, same-POM Surefire/Failsafe JVM settings.
-     * Parent, plugin-management, and profile layers are detected but not merged
-     * here; those shapes remain partial until their effective origin can be proven.
-     * This reads Maven models only and never resolves or executes test plugins.
-     */
+    private fun matchesProfiledFailsafeExecution(declared: Plugin, effective: Plugin): Boolean {
+        val version = declared.version?.trim()
+        val declaredExecution = declared.executions.orEmpty().singleOrNull() ?: return false
+        val effectiveExecution = effective.executions.orEmpty().singleOrNull() ?: return false
+        return literalPluginVersion(version) && version == effective.version?.trim() &&
+            !declaredExecution.id.isNullOrBlank() && declaredExecution.id == effectiveExecution.id &&
+            declaredExecution.phase == "integration-test" && declaredExecution.phase == effectiveExecution.phase &&
+            "integration-test" in declaredExecution.goals && declaredExecution.goals == effectiveExecution.goals &&
+            matchesProfiledJvmSettings(declared.configuration, effective.configuration) &&
+            matchesProfiledJvmSettings(declaredExecution.configuration, effectiveExecution.configuration)
+    }
+
+    private fun matchesProfiledJvmSettings(declared: Any?, effective: Any?): Boolean {
+        if (declared == null || effective == null) return declared == effective
+        val raw = declared as? Xpp3Dom ?: return false
+        val merged = effective as? Xpp3Dom ?: return false
+        if (raw.attributeNames.isNotEmpty() || merged.attributeNames.isNotEmpty()) return false
+        val jvmSettings = setOf("forkCount", "forkMode", "reuseForks", "argLine", "jvm", "jdkToolchain")
+        val expected = raw.children.filter { it.name in jvmSettings }
+        return expected.map(Xpp3Dom::getName).distinct().size == expected.size &&
+            expected == merged.children.filter { it.name in jvmSettings }
+    }
+
+    /** Projects JVM facts from a proven declaration without resolving or executing Maven plugins. */
     private fun mavenTestJvmContext(
         workspaceRoot: Path,
         pom: Path,
         effectiveModel: Model,
         effectiveInputs: Set<Path>,
         pluginArtifactId: String,
+        integrationProfileId: String? = null,
     ): MavenTestJvmContextFact {
         val model = readRawModel(pom) ?: return MavenTestJvmContextFact(
             BuildFactAvailability.UNAVAILABLE,
@@ -1620,14 +1643,26 @@ internal class MavenEffectiveReactorBuilder(
             }
             return currentModel.parent != null
         }
-        val uncertainInheritedOrigin = inheritedTestJvmConfiguration() &&
+        val inheritedConfiguration = inheritedTestJvmConfiguration()
+        val uncertainInheritedOrigin = inheritedConfiguration &&
             parentVersionOrigin == null && inheritedPluginDeclaration == null
-        val uncertainOrigin = uncertainInheritedOrigin || managedPlugins.isNotEmpty() || profiledPlugins.isNotEmpty()
+        val profiledPlugin = if (pluginArtifactId == "maven-failsafe-plugin" && integrationProfileId != null &&
+            SAFE_PROFILE_ID.matches(integrationProfileId) && directPlugins.isEmpty() && managedPlugins.isEmpty() &&
+            !inheritedConfiguration && profiledPlugins.size == 1 &&
+            effectiveModel.build?.pluginManagement?.plugins.orEmpty().none(::isTarget)
+        ) {
+            val effectivePlugin = effectiveModel.build?.plugins.orEmpty().singleOrNull(::isTarget)
+            model.profiles.orEmpty().singleOrNull { it.id == integrationProfileId }?.build?.plugins.orEmpty()
+                .singleOrNull(::isTarget)?.takeIf { effectivePlugin != null && matchesProfiledFailsafeExecution(it, effectivePlugin) }
+        } else null
+        val uncertainOrigin = uncertainInheritedOrigin || managedPlugins.isNotEmpty() ||
+            (profiledPlugins.isNotEmpty() && profiledPlugin == null)
         val refusalCode = "java.context.mavenTestJvmConfigurationIncomplete"
         val pluginId = "org.apache.maven.plugins:$pluginArtifactId"
         val pluginCandidates = when {
             directPlugins.isNotEmpty() -> directPlugins
             inheritedPluginDeclaration != null -> listOf(inheritedPluginDeclaration.plugin)
+            profiledPlugin != null -> listOf(profiledPlugin)
             else -> emptyList()
         }
 
@@ -1757,6 +1792,7 @@ internal class MavenEffectiveReactorBuilder(
         for (plugin in pluginCandidates.take(8)) {
             val isSurefire = pluginArtifactId == "maven-surefire-plugin"
             val inheritedPlugin = directPlugins.isEmpty() && inheritedPluginDeclaration != null
+            val profileId = integrationProfileId.takeIf { plugin === profiledPlugin }
             val targetExecutions = plugin.executions.orEmpty().filter { execution ->
                 if (isSurefire) "test" in execution.goals else "integration-test" in execution.goals || "verify" in execution.goals
             }
@@ -1802,6 +1838,8 @@ internal class MavenEffectiveReactorBuilder(
                 val relativeParent = workspaceRoot.toAbsolutePath().normalize().relativize(parentPath)
                     .toString().replace('\\', '/')
                 "inherited-parent:$relativeParent:build/plugins/$pluginDisplayId/configuration"
+            } else if (profileId != null) {
+                "pom.xml:profiles/$profileId/build/plugins/$pluginDisplayId/configuration"
             } else "pom.xml:build/plugins/$pluginDisplayId/configuration"
             collect(plugin.configuration, pluginConfigurationOrigin)
             selectedExecution?.let { execution ->
@@ -1814,6 +1852,9 @@ internal class MavenEffectiveReactorBuilder(
             val directVersion = declaredVersion?.takeIf(::literalPluginVersion)
             val versionOrigin = when {
                 inheritedPlugin -> requireNotNull(inheritedPluginDeclaration).versionOrigin
+                profileId != null && directVersion != null -> MavenTestJvmPluginVersionOrigin(
+                    directVersion, pom, "module-profile:$profileId",
+                )
                 directVersion != null -> MavenTestJvmPluginVersionOrigin(directVersion, pom, "module-plugin")
                 declaredVersion != null -> null
                 else -> parentVersionOrigin

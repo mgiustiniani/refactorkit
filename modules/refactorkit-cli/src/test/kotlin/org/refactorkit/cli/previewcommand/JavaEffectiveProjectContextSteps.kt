@@ -2820,6 +2820,84 @@ class JavaEffectiveProjectContextSteps {
         baseline = contents(owned)
     }
 
+    @Given("a Maven Failsafe JVM profile fixture {string}")
+    fun mavenFailsafeJvmProfileFixture(shape: String) {
+        val owned = Files.createTempDirectory("rk-maven-failsafe-test-jvm-profile-")
+        container = owned
+        root = owned.resolve("reactor")
+        val repository = Files.createDirectory(owned.resolve("empty-maven-repository"))
+        writeTestJvmPluginDescriptor(repository, "maven-failsafe-plugin", "3.5.4", "integration-test")
+        writeMavenFailsafeJvmProfileFixture(root, shape, buildTestExecutable())
+        val active = DaemonSession()
+        session = active
+        previousHash = active.dispatch("project.open", buildJsonObject {
+            put("root", root.toString())
+            put("mavenRepository", repository.toString())
+            put(if (shape == "inactive profile") "inactiveMavenProfiles" else "activeMavenProfiles",
+                buildJsonArray { add("quality") })
+        }).jsonObject.getValue("snapshotHash").jsonPrimitive.content
+        baseline = contents(owned)
+    }
+
+    @Then("Maven profile Failsafe JVM facts report {string}")
+    fun verifyMavenFailsafeJvmProfile(outcome: String) {
+        fun integrationSet(payload: JsonObject): JsonObject? {
+            assertEquals("available", payload.getValue("status").jsonPrimitive.content, payload.toString())
+            val app = payload.getValue("modules").jsonArray.map { it.jsonObject }
+                .single { it.getValue("id").jsonPrimitive.content == "app" }
+            return sourceSets(app).values.singleOrNull { it.getValue("kind").jsonPrimitive.content == "integration-test" }
+        }
+        val legacySet = integrationSet(response)
+        if (outcome == "absent integration set") {
+            assertEquals(null, legacySet)
+            return
+        }
+        val legacy = assertNotNull(legacySet).getValue("mavenTestJvm").jsonObject
+        val availability = legacy.getValue("availability").jsonPrimitive.content
+        if (outcome == "partial configuration") {
+            assertEquals("partial", availability)
+            assertEquals("java.context.mavenTestJvmConfigurationIncomplete", legacy.getValue("refusalCode").jsonPrimitive.content)
+            return
+        }
+        assertEquals("complete", availability, "An active profile's proven execution requires complete JVM facts")
+        val oldExecution = legacy.getValue("executions").jsonArray.single().jsonObject
+        assertEquals("profile-integration", oldExecution.getValue("executionId").jsonPrimitive.content)
+        assertEquals("3.5.4", oldExecution.getValue("pluginVersion").jsonPrimitive.content)
+        assertEquals("forked", oldExecution.getValue("mode").jsonPrimitive.content)
+        assertEquals(JsonNull, legacy.getValue("refusalCode"))
+        val enrichedResponse = requireNotNull(session).dispatch("project.context.v7.testJvmSelection", buildJsonObject {
+            put("expectedSnapshotHash", previousHash)
+            put("expectedContextHash", response.getValue("contextHash"))
+            put("sdkHome", System.getProperty("java.home"))
+            put("providerId", "maven-effective-v1")
+            put("moduleId", "app")
+            put("sourceSetKind", "integration-test")
+        }).jsonObject
+        assertEquals(response.getValue("contextHash"), enrichedResponse.getValue("contextHash"))
+        val enriched = assertNotNull(integrationSet(enrichedResponse)).getValue("mavenTestJvm").jsonObject
+            .getValue("executions").jsonArray.single().jsonObject
+        assertEquals(oldExecution, JsonObject(enriched - "jvmSelection"))
+        val selection = enriched.getValue("jvmSelection").jsonObject
+        assertEquals("complete", selection.getValue("availability").jsonPrimitive.content)
+        val origin = selection.getValue("origin").jsonPrimitive.content
+        if (outcome == "explicit executable") {
+            assertEquals("explicit-executable", selection.getValue("kind").jsonPrimitive.content)
+            assertEquals(buildTestExecutable(), selection.getValue("executable").jsonPrimitive.content)
+            assertTrue(origin.contains("profiles/quality/") && origin.endsWith("/executions/profile-integration/configuration/jvm"), origin)
+            assertEquals("-Dprofile.failsafe=true", enriched.getValue("effectiveArgLineTemplate").jsonPrimitive.content)
+            val prerequisite = selection.getValue("toolchainPrerequisite").jsonObject
+            assertEquals("java.context.mavenTestJvmToolchainUnresolved", prerequisite.getValue("refusalCode").jsonPrimitive.content)
+            assertEquals(mapOf("version" to "1.8", "vendor" to "temurin"),
+                prerequisite.getValue("requirements").jsonObject.mapValues { it.value.jsonPrimitive.content })
+        } else {
+            assertEquals("build JVM default", outcome)
+            assertEquals("build-jvm", selection.getValue("kind").jsonPrimitive.content)
+            assertTrue(origin.startsWith("plugin-default:module-profile:quality:"), origin)
+            assertEquals("", enriched.getValue("effectiveArgLineTemplate").jsonPrimitive.content)
+            assertEquals(JsonNull, selection.getValue("toolchainPrerequisite"))
+        }
+    }
+
     @Given("a Maven reactor with distinct app and library Failsafe test scopes")
     fun moduleBoundMavenFailsafeFixture() {
         val owned = Files.createTempDirectory("rk-maven-failsafe-app-library-")

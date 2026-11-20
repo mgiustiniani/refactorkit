@@ -115,6 +115,12 @@ parent POM, with no matching child declaration, parent chain, profile or
 `pluginManagement` merge. The effective child model must retain exactly that
 plugin/version. Failsafe executions inherited from that parent are associated
 only with child integration-test roots whose ownership is independently proven.
+An integration-test source set can also receive complete JVM facts from one
+same-POM Failsafe profile. The effective model and the source-root declaration
+must identify that profile and agree with its literal plugin version, named
+integration-test execution, phase, goals and JVM settings. A competing base,
+inherited or managed declaration keeps the facts partial. Origins identify the
+profile POM layer.
 Each execution reports its plugin version, execution, goals/phase, mode,
 origin-bearing `forkCount`/`forkMode`/`reuseForks` and `argLine` settings,
 completeness, and a typed refusal. Parent-file origins are explicit. Late tokens
@@ -124,9 +130,10 @@ lifecycle code.
 For Maven `jar` packaging, v7 also identifies the built-in Surefire lifecycle
 binding when the POM has no direct Surefire declaration: it reports the structured
 `default-test` execution, goal `test`, and phase `test`. Plugin defaults may complete
-the JVM fact only when a literal version is declared directly or is inherited from
-one workspace-contained immediate parent `pluginManagement` entry that contains
-only that version; the effective model must agree. RefactorKit then reads the
+the JVM fact when the effective model agrees with a literal version in a direct
+declaration, the qualified local Failsafe profile, or one workspace-contained
+immediate parent `pluginManagement` entry that contains only that version.
+RefactorKit then reads the
 matching local plugin JAR without executing it. Its `META-INF/maven/plugin.xml`
 must match the exact group, artifact, version and goal; the JAR is a no-follow regular
 file within the configured local repository, and its SHA-256 is bound as an effective
