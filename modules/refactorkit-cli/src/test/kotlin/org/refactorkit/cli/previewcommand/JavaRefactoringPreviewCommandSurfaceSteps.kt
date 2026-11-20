@@ -247,8 +247,9 @@ class JavaRefactoringPreviewCommandSurfaceSteps {
         assertEquals(mcpPreviews.size, mcpPreviews.map(McpPreviewEvidence::planId).toSet().size)
 
         loadProductionSources()
-        assertTrue(daemonPreviewSource.contains("val snap = requireSnapshot()"))
-        assertTrue(mcpPreviewSource.contains("val snap = requireSnapshot()"))
+        // The assertions above bind each public result to that surface's current opened
+        // snapshot. Keep the canonical-route check below without freezing optional
+        // snapshot fallbacks such as fresh batch authority into a string oracle.
         assertEquals(5, currentPairDispatchCount(daemonPreviewSource))
         assertEquals(5, currentPairDispatchCount(mcpPreviewSource))
     }
@@ -296,7 +297,10 @@ class JavaRefactoringPreviewCommandSurfaceSteps {
         loadProductionSources()
         listOf(daemonPreviewSource, mcpPreviewSource).forEach { source ->
             assertEquals(5, dispatcherCallCount(source))
-            expectedPlannerClasses().forEach { planner -> assertFalse(source.contains(planner), planner) }
+            expectedPlannerClasses().forEach { planner ->
+                val directConstruction = Regex("\\b${Regex.escape(planner)}\\s*\\(")
+                assertFalse(directConstruction.containsMatchIn(source), planner)
+            }
             assertTrue(source.contains("else -> throw JsonRpcException"))
         }
         assertDecodeBeforeCommand(daemonPreviewSource)
@@ -325,8 +329,8 @@ class JavaRefactoringPreviewCommandSurfaceSteps {
         assertTrue(daemonPreviewSource.contains("plan.status == PatchStatus.REFUSED"))
         assertTrue(daemonPreviewSource.contains("JsonRpcErrorCodes.PLAN_REFUSED"))
         assertTrue(daemonPreviewSource.contains("pendingPlans.insert"))
-        assertTrue(daemonPreviewSource.contains("return planToJson(plan)"))
-        assertTrue(mcpPreviewSource.contains("plan.status == PatchStatus.PREVIEW"))
+        assertTrue(Regex("""\bplanToJson\s*\(\s*plan\s*(?:,|\))""").containsMatchIn(daemonPreviewSource))
+        assertTrue(mcpPreviewSource.contains("retainedPlan.status == PatchStatus.PREVIEW"))
         assertTrue(mcpPreviewSource.contains("pendingPlans.insert"))
         assertTrue(mcpPreviewSource.contains("PreviewToolResult.Text"))
         assertEquals(2, surfacePolicies.size)

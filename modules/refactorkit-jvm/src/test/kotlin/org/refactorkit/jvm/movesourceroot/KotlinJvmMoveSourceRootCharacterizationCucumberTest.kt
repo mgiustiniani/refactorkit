@@ -13,7 +13,8 @@ import org.junit.platform.suite.api.Suite
  * baseline 4557c45). The feature is GREEN-start: the production JavaMoveSourceRootPlanner
  * already exists in the Java adapter, so this suite asserts the real behavior rather than
  * inventing it (truthful characterization, anti-fake). It covers 1 successful whole-root
- * rename-only move plus the 11 deterministic typed refusals asserted as Examples data.
+ * rename-only move, 11 deterministic typed refusals asserted as Examples data, and a focused
+ * JPMS refusal when no configured SDK authority is supplied.
  *
  * GLUE is scoped to org.refactorkit.jvm.movesourceroot, a distinct package from every other
  * refusal slice, so the shared refusal When/Then step regexes never collide into cross-slice

@@ -65,9 +65,11 @@ data class TransactionJournalRecord(
     val history: List<JournalEvent> = emptyList(),
     val updatedAt: Instant = Instant.now(),
     val failure: String? = null,
+    val authorityAttributes: Map<String, String> = emptyMap(),
 ) {
     companion object {
         const val CURRENT_SCHEMA_VERSION = 8
+        const val AUTHORITY_SCHEMA_VERSION = 9
     }
 }
 
@@ -89,6 +91,7 @@ internal data class TransactionJournalDto(
     val updatedAt: String,
     val failure: String? = null,
     val checksum: String? = null,
+    val authorityAttributes: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -116,7 +119,8 @@ private val canonicalJournalJson = Json { prettyPrint = false; encodeDefaults = 
 
 internal fun TransactionJournalRecord.toJson(): String {
     val unsigned = TransactionJournalDto(
-        schemaVersion = TransactionJournalRecord.CURRENT_SCHEMA_VERSION,
+        schemaVersion = if (authorityAttributes.isEmpty()) TransactionJournalRecord.CURRENT_SCHEMA_VERSION
+            else TransactionJournalRecord.AUTHORITY_SCHEMA_VERSION,
         implementationVersion = implementationVersion,
         apiVersion = apiVersion,
         transaction = transaction.toDto(),
@@ -131,6 +135,7 @@ internal fun TransactionJournalRecord.toJson(): String {
         history = history.map { JournalEventDto(it.state.name, it.at.toString(), it.detail) },
         updatedAt = updatedAt.toString(),
         failure = failure,
+        authorityAttributes = authorityAttributes.toSortedMap(),
         checksum = null,
     )
     return journalJson.encodeToString(unsigned.copy(checksum = checksum(unsigned)))
@@ -138,7 +143,7 @@ internal fun TransactionJournalRecord.toJson(): String {
 
 internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
     val dto = journalJson.decodeFromString<TransactionJournalDto>(json)
-    require(dto.schemaVersion in 1..TransactionJournalRecord.CURRENT_SCHEMA_VERSION) {
+    require(dto.schemaVersion in 1..TransactionJournalRecord.AUTHORITY_SCHEMA_VERSION) {
         "Unsupported transaction journal schema: ${dto.schemaVersion}"
     }
     if (dto.schemaVersion >= 2) {
@@ -178,6 +183,7 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
         history = dto.history.map { JournalEvent(JournalState.valueOf(it.state), Instant.parse(it.at), it.detail) },
         updatedAt = Instant.parse(dto.updatedAt),
         failure = dto.failure,
+        authorityAttributes = java.util.Collections.unmodifiableMap(LinkedHashMap(dto.authorityAttributes)),
     )
 }
 
@@ -206,7 +212,7 @@ private fun FileImageDto.toDomain() = FileImage(
 )
 
 private fun legacyV2Checksum(dto: TransactionJournalDto): String {
-    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto.copy(checksum = null)).jsonObject
+    val current = canonicalJournalObject(dto.copy(checksum = null))
     val legacy = JsonObject(
         current.filterKeys { it !in setOf(
             "implementationVersion", "apiVersion", "preSnapshotHash", "postSnapshotHash", "history",
@@ -220,7 +226,7 @@ private fun legacyV2Checksum(dto: TransactionJournalDto): String {
 }
 
 private fun legacyV3Checksum(dto: TransactionJournalDto): String {
-    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto.copy(checksum = null)).jsonObject
+    val current = canonicalJournalObject(dto.copy(checksum = null))
     val legacy = JsonObject(current.mapValues { (key, value) ->
         if (key == "preImages" || key == "postImages") {
             removeImageMetadata(value, "lastModifiedMillis", "ownerName", "groupName", "userDefinedAttributes", "aclEntries")
@@ -230,7 +236,7 @@ private fun legacyV3Checksum(dto: TransactionJournalDto): String {
 }
 
 private fun legacyV4Checksum(dto: TransactionJournalDto): String {
-    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto.copy(checksum = null)).jsonObject
+    val current = canonicalJournalObject(dto.copy(checksum = null))
     val legacy = JsonObject(current.mapValues { (key, value) ->
         if (key == "preImages" || key == "postImages") {
             removeImageMetadata(value, "ownerName", "groupName", "userDefinedAttributes", "aclEntries")
@@ -240,7 +246,7 @@ private fun legacyV4Checksum(dto: TransactionJournalDto): String {
 }
 
 private fun legacyV5Checksum(dto: TransactionJournalDto): String {
-    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto.copy(checksum = null)).jsonObject
+    val current = canonicalJournalObject(dto.copy(checksum = null))
     val legacy = JsonObject(current.mapValues { (key, value) ->
         if (key == "preImages" || key == "postImages") {
             removeImageMetadata(value, "userDefinedAttributes", "aclEntries")
@@ -250,7 +256,7 @@ private fun legacyV5Checksum(dto: TransactionJournalDto): String {
 }
 
 private fun legacyV6Checksum(dto: TransactionJournalDto): String {
-    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto.copy(checksum = null)).jsonObject
+    val current = canonicalJournalObject(dto.copy(checksum = null))
     val legacy = JsonObject(current.mapValues { (key, value) ->
         if (key == "preImages" || key == "postImages") removeImageMetadata(value, "aclEntries") else value
     })
@@ -258,7 +264,7 @@ private fun legacyV6Checksum(dto: TransactionJournalDto): String {
 }
 
 private fun legacyV7Checksum(dto: TransactionJournalDto): String {
-    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto.copy(checksum = null)).jsonObject
+    val current = canonicalJournalObject(dto.copy(checksum = null))
     val legacy = JsonObject(current.mapValues { (key, value) ->
         if (key == "preImages" || key == "postImages") removeImageMetadata(value) else value
     })
@@ -311,8 +317,13 @@ internal fun stagingOwnershipFromJson(content: String, record: TransactionJourna
     }
 }
 
+private fun canonicalJournalObject(dto: TransactionJournalDto): JsonObject {
+    val current = canonicalJournalJson.encodeToJsonElement(TransactionJournalDto.serializer(), dto).jsonObject
+    return if (dto.schemaVersion >= 9) current else JsonObject(current.filterKeys { it != "authorityAttributes" })
+}
+
 private fun checksum(dto: TransactionJournalDto): String =
-    sha256(canonicalJournalJson.encodeToString(dto))
+    sha256(canonicalJournalJson.encodeToString(JsonObject.serializer(), canonicalJournalObject(dto)))
 
 private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray(Charsets.UTF_8))

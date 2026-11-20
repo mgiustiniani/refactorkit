@@ -28,6 +28,7 @@ internal class TypeScriptPackagedSurface(
     private val runtime: Path,
     private val workspace: Path,
     private val sourceClasspath: String? = null,
+    private val sourceMcp: Boolean = false,
 ) : AutoCloseable {
     private val manager = ExternalSemanticProcessManager()
     private val io = Executors.newSingleThreadExecutor()
@@ -42,13 +43,15 @@ internal class TypeScriptPackagedSurface(
     private val javaExecutable = runtime.resolve(if (sourceClasspath == null) "runtime/bin/java" else "bin/java")
 
     init {
+        require(!sourceMcp || sourceClasspath != null)
         require(runtime.isAbsolute && Files.isExecutable(javaExecutable))
         if (sourceClasspath == null) require(Files.isExecutable(runtime.resolve("bin/refactorkit")))
         Files.createDirectories(evidence)
         if (sourceClasspath != null) {
             // An argument file retains the exact test classpath without relaxing process argument bounds.
             val quotedClasspath = sourceClasspath.replace("\\", "\\\\").replace("\"", "\\\"")
-            Files.writeString(evidence.resolve("source-java.args"), "-cp\n\"$quotedClasspath\"\norg.refactorkit.daemon.RefactorKitDaemonKt\n")
+            val mainClass = if (sourceMcp) "org.refactorkit.mcp.RefactorKitMcpKt" else "org.refactorkit.daemon.RefactorKitDaemonKt"
+            Files.writeString(evidence.resolve("source-java.args"), "-cp\n\"$quotedClasspath\"\n$mainClass\n")
             println("Source-child wire evidence (not packaged): $evidence")
         }
     }
@@ -58,7 +61,7 @@ internal class TypeScriptPackagedSurface(
     }
 
     private fun launch(name: String, arguments: List<String> = emptyList()): ManagedSemanticProcess {
-        if (sourceClasspath != null) require(name == "refactorkit-daemon" && arguments.isEmpty())
+        if (sourceClasspath != null) require(name == (if (sourceMcp) "refactorkit-mcp" else "refactorkit-daemon") && arguments.isEmpty())
         val child = manager.launch(SemanticProcessSpec(
             "public-${processes.size}", if (sourceClasspath == null) runtime.resolve("bin/$name") else javaExecutable,
             if (sourceClasspath == null) arguments else listOf("@${evidence.resolve("source-java.args")}"), workspace,
@@ -146,6 +149,8 @@ internal class TypeScriptPackagedSurface(
 
     fun killApplying(planId: String, committed: () -> Boolean) {
         val child = requireNotNull(persistent)
+        val handle = ProcessHandle.of(child.provenance.pid).orElseThrow()
+        val descendants = handle.descendants().use { it.toList() }
         val request = buildJsonObject {
             put("jsonrpc", "2.0"); put("id", ++sequence); put("method", "refactor.apply")
             put("params", buildJsonObject { put("planId", planId) })
@@ -159,11 +164,10 @@ internal class TypeScriptPackagedSurface(
             check(child.isAlive && System.nanoTime() < deadline) { "No committed module image before exit/deadline" }
             Thread.sleep(1)
         }
-        val handle = ProcessHandle.of(child.provenance.pid).orElseThrow()
-        val descendants = handle.descendants().use { it.toList() }
-        // This is an external crash, not a graceful session shutdown or a production test seam.
+        // The Maven apply runs in-process. Signal the daemon before descendant cleanup can
+        // let the remaining staged files commit.
+        check(handle.destroyForcibly()) { "Could not signal the daemon during apply" }
         descendants.asReversed().forEach { it.destroyForcibly() }
-        handle.destroyForcibly()
         check(child.awaitExit(10_000))
         child.close()
         val descendantDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)

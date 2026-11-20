@@ -77,7 +77,7 @@ internal object QualificationOracle {
     val approvedChangeSha256: String = string("approvedChangeSha256")
     val version: String = string("version")
     // V070-RELEASE-VERSION-TRANSITION-001: frozen oracle bytes keep their historical version.
-    val releaseVersion: String = "0.7.0"
+    val releaseVersion: String = "0.8.0"
     val cliPreviewStdoutSha256: String = string("cliPreviewStdoutSha256")
     val cliPreviewStdoutBytes: Int = document.getValue("cliPreviewStdoutBytes").jsonPrimitive.int
     val operation: String = string("operation")

@@ -9,6 +9,8 @@ import org.refactorkit.java.JavaProjectScanner
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Path
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.security.Permission
 import java.util.Base64
 import kotlin.io.path.invariantSeparatorsPathString
@@ -156,6 +158,9 @@ internal class ResultPreviewBoundarySecurityManager(
 ) : SecurityManager() {
     private val workspace = workspaceRoot.toAbsolutePath().normalize()
     private val fixture = fixtureRoot.toAbsolutePath().normalize()
+    private val engineDirectory = workspace.resolve(".refactorkit")
+    // An absent directory may be probed for source-model discovery, never read as engine data.
+    private val engineDirectoryWasAbsent = Files.notExists(engineDirectory, LinkOption.NOFOLLOW_LINKS)
     val violations = mutableListOf<String>()
 
     override fun checkPermission(permission: Permission?) = Unit
@@ -166,7 +171,8 @@ internal class ResultPreviewBoundarySecurityManager(
         when {
             path.startsWith(installedRoot) -> block("installed-read", path)
             path.startsWith(fixture) -> block("fixture-read", path)
-            path.startsWith(workspace.resolve(".refactorkit")) -> block("engine-read", path)
+            path.startsWith(engineDirectory) && !(path == engineDirectory && engineDirectoryWasAbsent) ->
+                block("engine-read", path)
             path.startsWith(repositoryRoot) && !isBuildInfrastructure(path) -> block("repository-read", path)
         }
     }

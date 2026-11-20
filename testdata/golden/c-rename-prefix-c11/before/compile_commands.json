@@ -1,0 +1,1 @@
+[{"directory":"__GOLDEN_WORKSPACE__","file":"main.c","arguments":["__GOLDEN_CLANG__","-std=c11","-c","main.c"]}]

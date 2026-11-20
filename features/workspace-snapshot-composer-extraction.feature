@@ -53,6 +53,22 @@ Feature: Preserve daemon and MCP workspace snapshots through one bounded compose
     And workspace, modules, classpath evidence, pre-existing build models, and auxiliary files retain their exact authoritative base values
     And repeating composition with identical port evidence returns equal canonical content and hash without a clock, UUID, or composer identity
 
+  @REQ-WORKSPACE-SNAPSHOT-COMPOSER-002#auxiliary-to-source-promotion-requires-identical-captured-bytes
+  Scenario Outline: Auxiliary to source promotion requires identical captured bytes
+    Given snapshot composition captures an auxiliary and inventory overlap with "<condition>"
+    When the inventory-first composer reconciles captured classifications
+    Then composition reports "<outcome>" with exact source auxiliary and attacher facts
+    And captured composition inputs remain immutable
+
+    Examples:
+      | condition            | outcome                      |
+      | identical JavaScript | promoted once                |
+      | normalized overlap   | promoted once                |
+      | changed bytes        | input changed before attach  |
+      | identical TypeScript | promoted once                |
+      | empty inventory      | base identity retained       |
+      | disjoint inventory   | auxiliary retained           |
+
   @REQ-WORKSPACE-SNAPSHOT-COMPOSER-003
   Scenario: Each call attaches conditional evidence once before its optional current final evidence
     Given three non-empty composition calls supply these language-neutral ports for that call only:
@@ -90,7 +106,7 @@ Feature: Preserve daemon and MCP workspace snapshots through one bounded compose
       | TypeScript-configured conditional evidence attacher | 3   | E_conditional |
       | current Kotlin-configured final evidence attacher | 4     | E_final       |
 
-  @REQ-WORKSPACE-SNAPSHOT-COMPOSER-005
+  @REQ-WORKSPACE-SNAPSHOT-COMPOSER-005 @REQ-WORKSPACE-SNAPSHOT-COMPOSER-005#adoption-centralizes-composition-only-for-daemon-and-mcp
   Scenario: Adoption centralizes composition only for daemon and MCP
     Given the shared composer is a stateless service in core with primary-scan, source-inventory, conditional-evidence, and optional-final-evidence ports supplied per call
     And daemon and MCP retain the exact script-extension configuration in their adapter or surface wiring rather than in core

@@ -65,6 +65,12 @@ data class SourceFile(
     val languageId: String,
 )
 
+/** Ephemeral language-provider authority. Workspace identity and analysis identity are separate. */
+interface SemanticAnalysisAuthority {
+    val providerId: String
+    val identitySha256: String
+}
+
 data class ProjectSnapshot(
     val workspace: Workspace,
     val modules: List<Module>,
@@ -74,6 +80,7 @@ data class ProjectSnapshot(
     val classpathEvidence: List<ClasspathEvidence> = emptyList(),
     val buildModels: List<BuildModel> = emptyList(),
     val auxiliaryFiles: List<SourceFile> = emptyList(),
+    val semanticAnalysisAuthority: SemanticAnalysisAuthority? = null,
 ) {
     init {
         require(buildModels.map(BuildModel::providerId).distinct().size == buildModels.size) {
@@ -154,6 +161,9 @@ data class ProjectSnapshot(
                 }
                 model.modules.sortedBy(BuildModule::id).forEach { buildModule ->
                     digest.update("buildModule\u0000${buildModule.id}\u0000${buildModule.name}\u0000${buildModule.root}\u0000".toByteArray(Charsets.UTF_8))
+                    buildModule.coordinates?.let { coordinates ->
+                        digest.update("buildModuleCoordinates\u0000${coordinates.groupId}\u0000${coordinates.artifactId}\u0000${coordinates.version}\u0000".toByteArray(Charsets.UTF_8))
+                    }
                     buildModule.attributes.toSortedMap().forEach { (key, value) ->
                         digest.update("buildModuleAttribute\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
                     }
@@ -177,6 +187,51 @@ data class ProjectSnapshot(
                         }
                         sourceSet.attributes.toSortedMap().forEach { (key, value) ->
                             digest.update("sourceSetAttribute\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
+                        }
+                        sourceSet.sourceRootEvidence.sortedWith(
+                            compareBy<BuildSourceRootEvidence> { it.path.toString() }
+                                .thenBy { it.pluginId.orEmpty() }.thenBy { it.executionId.orEmpty() }
+                                .thenBy { it.profileId.orEmpty() },
+                        ).forEach { evidence ->
+                            digest.update(
+                                "sourceRootEvidence\u0000${evidence.path}\u0000${evidence.origin}\u0000${evidence.providerId}\u0000".toByteArray(Charsets.UTF_8),
+                            )
+                            digest.update(
+                                "${evidence.descriptorPath}\u0000${evidence.profileId}\u0000${evidence.pluginId}\u0000${evidence.executionId}\u0000${evidence.goal}\u0000${evidence.phase}\u0000${evidence.availability}\u0000".toByteArray(Charsets.UTF_8),
+                            )
+                        }
+                        sourceSet.compilerOptions.forEach { option ->
+                            digest.update(
+                                "compilerOption\u0000${option.name}\u0000${option.value}\u0000${option.origin}\u0000${option.redacted}\u0000".toByteArray(Charsets.UTF_8),
+                            )
+                        }
+                        digest.update(
+                            "compilerOptionsAvailability\u0000${sourceSet.compilerOptionsAvailability}\u0000${sourceSet.compilerOptionsRefusalCode}\u0000".toByteArray(Charsets.UTF_8),
+                        )
+                        digest.update(
+                            "resolvedArtifactAvailability\u0000${sourceSet.resolvedArtifactAvailability}\u0000${sourceSet.resolvedArtifactRefusalCode}\u0000".toByteArray(Charsets.UTF_8),
+                        )
+                        sourceSet.resolvedArtifacts.sortedBy { it.path.toString() }.forEach { artifact ->
+                            digest.update(
+                                "resolvedArtifact\u0000${artifact.path}\u0000${artifact.coordinates.groupId}\u0000${artifact.coordinates.artifactId}\u0000${artifact.coordinates.version}\u0000${artifact.extension}\u0000${artifact.classifier}\u0000${artifact.scope}\u0000${artifact.transitive}\u0000".toByteArray(Charsets.UTF_8),
+                            )
+                        }
+                        sourceSet.annotationProcessors?.let { processors ->
+                            digest.update("annotationProcessors\u0000${processors.availability}\u0000${processors.mode}\u0000${processors.refusalCode}\u0000".toByteArray(Charsets.UTF_8))
+                            processors.processorPath.sortedBy { it.path.toString() }.forEach { artifact ->
+                                digest.update(
+                                    "processorPath\u0000${artifact.path}\u0000${artifact.coordinates.groupId}\u0000${artifact.coordinates.artifactId}\u0000${artifact.coordinates.version}\u0000${artifact.extension}\u0000${artifact.classifier}\u0000${artifact.transitive}\u0000".toByteArray(Charsets.UTF_8),
+                                )
+                            }
+                            processors.processorPathEntries.forEach { path ->
+                                digest.update("processorPathEntry\u0000$path\u0000".toByteArray(Charsets.UTF_8))
+                            }
+                            processors.processorNames.sorted().forEach { name ->
+                                digest.update("processorName\u0000$name\u0000".toByteArray(Charsets.UTF_8))
+                            }
+                            processors.options.toSortedMap().forEach { (key, value) ->
+                                digest.update("processorOption\u0000$key\u0000$value\u0000".toByteArray(Charsets.UTF_8))
+                            }
                         }
                     }
                 }
@@ -562,7 +617,93 @@ data class PatchPlan(
     val evidence: RefactoringEvidence = RefactoringEvidence.STRUCTURAL,
     val refusalCode: String? = null,
     val authorityLease: OperationAuthorityLease? = null,
+    val referenceAnalysis: PlanReferenceAnalysis? = null,
+    val managedWriteEligible: Boolean = true,
 )
+
+/** Completeness is always relative to the explicit scope carried by the analysis. */
+enum class PlanReferenceCompleteness { COMPLETE, INCOMPLETE, UNRESOLVED }
+
+/** Stable, language-neutral reference categories carried by refactoring plans. */
+enum class PlanReferenceKind(val id: String) {
+    SYMBOL("symbol"),
+    FRAMEWORK_ENTITY_PROPERTY("framework.entity-property"),
+    CONFIGURATION_VALUE("configuration.value"),
+}
+
+/** Source/resource family containing a reference location. */
+enum class PlanReferenceResourceKind(val id: String) {
+    SOURCE("source"),
+    SOURCE_ANNOTATION_STRING("java.annotation-string"),
+    XML("xml"),
+    YAML("yaml"),
+    PROPERTIES("properties"),
+    BUILD_DESCRIPTOR("build-descriptor"),
+    GENERATED_SOURCE("generated-source"),
+    OTHER("other"),
+}
+
+/** Extensible, namespaced origin identifier, for example `spring-data.query-jpql`. */
+@JvmInline
+value class PlanReferenceProvenance(val value: String) {
+    init {
+        require(value.matches(Regex("[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+"))) {
+            "reference provenance must be a namespaced stable identifier"
+        }
+    }
+}
+
+/** Language-neutral envelope for typed references that contributed to a plan. */
+class PlanReferenceAnalysis(
+    val schemaVersion: String,
+    val scope: String,
+    val completeness: PlanReferenceCompleteness,
+    val completeProject: Boolean,
+    val managedWriteAuthority: String,
+    references: Collection<PlanReferenceEvidence>,
+    warnings: Collection<String> = emptyList(),
+) {
+    private val referenceState = Collections.unmodifiableList(ArrayList(references))
+    private val warningState = Collections.unmodifiableList(ArrayList(warnings))
+
+    val references: List<PlanReferenceEvidence> get() = referenceState
+    val warnings: List<String> get() = warningState
+
+    init {
+        require(schemaVersion.isNotBlank() && scope.isNotBlank()) { "reference-analysis identity is incomplete" }
+        require(managedWriteAuthority.isNotBlank()) { "reference-analysis write authority is missing" }
+    }
+
+    override fun equals(other: Any?): Boolean = other is PlanReferenceAnalysis &&
+        schemaVersion == other.schemaVersion && scope == other.scope && completeness == other.completeness &&
+        completeProject == other.completeProject && managedWriteAuthority == other.managedWriteAuthority &&
+        referenceState == other.referenceState && warningState == other.warningState
+
+    override fun hashCode(): Int = listOf(
+        schemaVersion, scope, completeness, completeProject, managedWriteAuthority, referenceState, warningState,
+    ).hashCode()
+
+    override fun toString(): String = "PlanReferenceAnalysis(scope=$scope, completeness=$completeness, " +
+        "completeProject=$completeProject, managedWriteAuthority=$managedWriteAuthority, " +
+        "references=${referenceState.size})"
+}
+
+/** A snapshot-bound, typed non-Java-source reference used by a refactoring plan. */
+data class PlanReferenceEvidence(
+    val languageId: String,
+    val kind: PlanReferenceKind,
+    val targetOwner: String,
+    val targetMember: String,
+    val location: SourceLocation,
+    val resourceKind: PlanReferenceResourceKind,
+    val provenance: PlanReferenceProvenance,
+    val completeness: PlanReferenceCompleteness,
+) {
+    init {
+        require(languageId.isNotBlank()) { "reference language is missing" }
+        require(targetOwner.isNotBlank() && targetMember.isNotBlank()) { "reference target is incomplete" }
+    }
+}
 
 enum class ApprovalKind {
     EXPLICIT_APPLY,
@@ -623,6 +764,7 @@ data class Symbol(
         METHOD,
         FUNCTION,
         FIELD,
+        RECORD_COMPONENT,
         PROPERTY,
         VARIABLE,
         CONSTANT,
@@ -668,6 +810,8 @@ data class RefactoringDescriptor(
     val id: String,
     val label: String,
     val riskLevel: RiskLevel,
+    /** Exact registered authority when the adapter can make an explicit claim. */
+    val capability: LanguageCapability? = null,
 )
 
 data class RefactoringRequest(

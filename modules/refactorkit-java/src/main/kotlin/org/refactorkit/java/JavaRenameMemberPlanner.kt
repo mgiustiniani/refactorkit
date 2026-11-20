@@ -1,5 +1,6 @@
 package org.refactorkit.java
 
+import org.eclipse.jdt.core.dom.Modifier
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
@@ -69,6 +70,19 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             return refused(snapshot, "renameMember", "Generated source cannot be rewritten: ${ownerFile.path} ($reason)")
         }
 
+        val hasKotlinSources = snapshot.files.any { it.languageId == "kotlin" || it.path.toString().endsWith(".kt") }
+
+        // An exact signed selector is resolved by JDT, including declarations
+        // which a line-oriented member prescan cannot represent.
+        if (memberSelector.contains('(')) {
+            return previewSignedJdtRename(snapshot, ownerFqn, memberSelector, oldMemberName, newMemberName, hasKotlinSources)
+        }
+        if (hasKotlinSources) return unprovedKotlinConsumers(snapshot)
+
+        if (ownerSymbol.kind == Symbol.Kind.RECORD) {
+            previewJdtRecordComponentRename(snapshot, ownerFqn, oldMemberName, newMemberName)?.let { return it }
+        }
+
         // ── find member(s) ───────────────────────────────────────────────────
         val members = index.symbols.filter { sym ->
             sym.name == oldMemberName &&
@@ -79,9 +93,16 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             return refused(snapshot, "renameMember", "Member '$oldMemberName' not found in $ownerFqn")
         }
 
-        if (memberSelector.contains('(')) {
-            return previewSignedJdtRename(snapshot, ownerFqn, memberSelector, oldMemberName, newMemberName)
-        }
+        val frameworkReferenceEvidence = if (members.singleOrNull()?.kind == Symbol.Kind.FIELD) {
+            JavaFrameworkReferenceAnalyzer().analyzeEntityPropertyRename(
+                snapshot,
+                ownerFqn,
+                ownerSymbol.location.path,
+                oldMemberName,
+                newMemberName,
+            )
+        } else null
+
         if (members.singleOrNull()?.kind == Symbol.Kind.FIELD) {
             if (index.symbols.any { symbol ->
                     symbol.id.value.substringBeforeLast('#', "") == ownerFqn &&
@@ -91,7 +112,9 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             ) {
                 return refused(snapshot, "renameMember", "Field target already exists: $ownerFqn#$newMemberName")
             }
-            previewJdtFieldRename(snapshot, ownerFqn, oldMemberName, newMemberName)?.let { return it }
+            previewJdtFieldRename(
+                snapshot, ownerFqn, oldMemberName, newMemberName, frameworkReferenceEvidence,
+            )?.let { return it }
         }
 
         val warnings = mutableListOf<String>()
@@ -115,11 +138,12 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
                 (ownerPkg.isNotEmpty() && file.content.contains(ownerPkgStar)) ||
                 (ownerPkg.isNotEmpty() && filePkg == ownerPkg) ||
                 file.content.contains(ownerFqn) ||
-                file.content.contains(ownerSimple)
+                file.content.contains(ownerSimple) ||
+                frameworkReferenceEvidence?.editsByPath?.containsKey(file.path) == true
 
             if (!inScope) continue
 
-            val textEdits = mutableListOf<TextEdit>()
+            val textEdits = frameworkReferenceEvidence?.editsByPath?.get(file.path).orEmpty().toMutableList()
             val covered = mutableSetOf<Int>()
 
             // Replace member name occurrences, excluding the class name itself
@@ -147,6 +171,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
 
         val memberKind = members.first().kind.name.lowercase()
         warnings += "Reflection, Spring event/listener names, Jackson property names, and annotation-processor output are NOT updated. Review manually."
+        frameworkReferenceEvidence?.referenceAnalysis?.warnings?.let(warnings::addAll)
 
         return PatchPlan(
             operation = "renameMember",
@@ -158,8 +183,14 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             affectedFiles = affectedPaths,
             workspaceEdit = WorkspaceEdit(edits),
             warnings = warnings,
-            riskLevel = if (members.size > 1) RiskLevel.MEDIUM else RiskLevel.LOW,
+            riskLevel = when {
+                frameworkReferenceEvidence != null -> RiskLevel.HIGH
+                members.size > 1 -> RiskLevel.MEDIUM
+                else -> RiskLevel.LOW
+            },
             evidence = RefactoringEvidence.LEXICAL_FALLBACK,
+            referenceAnalysis = frameworkReferenceEvidence?.referenceAnalysis,
+            managedWriteEligible = frameworkReferenceEvidence == null,
         )
     }
 
@@ -176,6 +207,15 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         riskLevel = RiskLevel.HIGH,
     )
 
+    private fun unprovedKotlinConsumers(snapshot: ProjectSnapshot): PatchPlan = refused(
+        snapshot,
+        "renameMember",
+        "Java member rename requires compiler-proven closure of Kotlin consumers in this workspace",
+    ).copy(
+        refusalCode = "java.renameMember.kotlinConsumerClosureUnavailable",
+        managedWriteEligible = false,
+    )
+
     private fun isValidJavaIdentifier(name: String): Boolean {
         if (name.isEmpty()) return false
         if (!name[0].isLetter() && name[0] != '_' && name[0] != '$') return false
@@ -187,6 +227,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         ownerFqn: String,
         oldMemberName: String,
         newMemberName: String,
+        frameworkReferenceEvidence: JavaFrameworkFieldRenameEvidence?,
     ): PatchPlan? {
         val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
         if (analysis.warnings.isNotEmpty()) return null
@@ -214,6 +255,138 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
                 reference.bindingKey == bindingKey && reference.symbolKind == JdtJavaSemanticSymbolKind.FIELD
             }
             .forEach { reference -> addEdit(reference.path, reference.sourceRange) }
+        frameworkReferenceEvidence?.editsByPath?.forEach { (path, textEdits) ->
+            textEdits.forEach { edit -> editsByPath.getOrPut(path) { mutableListOf() } += edit }
+        }
+        val edits = editsByPath.map { (path, textEdits) ->
+            FileEdit.Modify(
+                path,
+                textEdits.distinctBy { "${it.range.start.line}:${it.range.start.character}:${it.range.end.line}:${it.range.end.character}" }
+                    .sortedWith(compareBy({ it.range.start.line }, { it.range.start.character })),
+            )
+        }
+        val warnings = buildList {
+            add("JDT binding selected exact field $ownerFqn#$oldMemberName; edits were generated from JDT declaration/reference ranges.")
+            add("Reflection, serialization names, framework strings, and annotation-processor output are NOT updated. Review manually.")
+            frameworkReferenceEvidence?.referenceAnalysis?.warnings?.let(::addAll)
+        }
+        return PatchPlan(
+            operation = "renameMember",
+            status = PatchStatus.PREVIEW,
+            snapshotHash = snapshot.hash,
+            confidence = 0.95,
+            requiresUserApproval = true,
+            summary = "Rename field '$oldMemberName' → '$newMemberName' in $ownerFqn using JDT binding evidence. ${editsByPath.size} file(s) affected.",
+            affectedFiles = editsByPath.keys,
+            workspaceEdit = WorkspaceEdit(edits),
+            warnings = warnings,
+            riskLevel = if (frameworkReferenceEvidence == null) RiskLevel.LOW else RiskLevel.HIGH,
+            evidence = RefactoringEvidence.JDT_BINDING,
+            referenceAnalysis = frameworkReferenceEvidence?.referenceAnalysis,
+            managedWriteEligible = frameworkReferenceEvidence == null,
+        )
+    }
+
+    private fun previewJdtRecordComponentRename(
+        snapshot: ProjectSnapshot,
+        ownerFqn: String,
+        oldMemberName: String,
+        newMemberName: String,
+    ): PatchPlan? {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        if (analysis.warnings.isNotEmpty()) {
+            return refused(
+                snapshot,
+                "renameMember",
+                "Record member rename for $ownerFqn requires clean JDT semantic evidence; ${analysis.warnings.size} parse/classpath warning(s) were reported.",
+            )
+        }
+        val candidates = analysis.symbols.filter { symbol ->
+            symbol.ownerQualifiedName == ownerFqn &&
+                symbol.simpleName == oldMemberName &&
+                symbol.kind == JdtJavaSemanticSymbolKind.RECORD_COMPONENT
+        }
+        if (candidates.isEmpty()) return null
+        val component = candidates.singleOrNull() ?: return refused(
+            snapshot,
+            "renameMember",
+            "Record component selector $ownerFqn#$oldMemberName did not resolve to exactly one JDT component; found ${candidates.size}.",
+        )
+        val componentBindingKey = component.bindingKey?.takeUnless(String::isBlank)
+            ?: return refused(snapshot, "renameMember", "Record component $ownerFqn#$oldMemberName has no JDT binding key.")
+        val componentIndex = component.recordComponentIndex
+            ?: return refused(snapshot, "renameMember", "Record component $ownerFqn#$oldMemberName has no source-order identity.")
+        if (component.recovered || component.evidence != JdtJavaSemanticEvidence.JDT_BINDING) {
+            return refused(snapshot, "renameMember", "Record component $ownerFqn#$oldMemberName does not have an unrecovered JDT binding.")
+        }
+        val declarationFile = snapshot.files.singleOrNull { it.path == component.path }
+            ?: return refused(snapshot, "renameMember", "Record component declaration file is missing or ambiguous: ${component.path}")
+        JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
+            return refused(snapshot, "renameMember", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)")
+        }
+        val targetConflict = analysis.symbols.any { symbol ->
+            symbol.ownerQualifiedName == ownerFqn && symbol.simpleName == newMemberName && when (symbol.kind) {
+                JdtJavaSemanticSymbolKind.RECORD_COMPONENT,
+                JdtJavaSemanticSymbolKind.FIELD -> true
+                JdtJavaSemanticSymbolKind.METHOD -> symbol.memberSignature == "$newMemberName()"
+                else -> false
+            }
+        }
+        if (targetConflict) {
+            return refused(snapshot, "renameMember", "Record component target already exists: $ownerFqn#$newMemberName")
+        }
+
+        val accessors = analysis.symbols.filter { symbol ->
+            symbol.ownerQualifiedName == ownerFqn &&
+                symbol.simpleName == oldMemberName &&
+                symbol.kind == JdtJavaSemanticSymbolKind.METHOD &&
+                symbol.memberSignature == "$oldMemberName()"
+        }
+        val accessor = accessors.singleOrNull() ?: return refused(
+            snapshot,
+            "renameMember",
+            "Record component accessor $ownerFqn#$oldMemberName() did not resolve to exactly one JDT method; found ${accessors.size}.",
+        )
+        val accessorBindingKey = accessor.bindingKey?.takeUnless(String::isBlank)
+            ?: return refused(snapshot, "renameMember", "Record component accessor $ownerFqn#$oldMemberName() has no JDT binding key.")
+        if (accessor.recovered) {
+            return refused(snapshot, "renameMember", "Record component accessor $ownerFqn#$oldMemberName() has a recovered JDT binding.")
+        }
+
+        val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
+        fun addEdit(path: Path, range: org.refactorkit.core.SourceRange) {
+            editsByPath.getOrPut(path) { mutableListOf() } += TextEdit(range, newMemberName)
+        }
+        addEdit(component.path, component.sourceRange)
+        analysis.references.filter { reference ->
+            reference.bindingKey == componentBindingKey && reference.symbolKind == JdtJavaSemanticSymbolKind.RECORD_COMPONENT
+        }.forEach { reference -> addEdit(reference.path, reference.sourceRange) }
+        addEdit(accessor.path, accessor.sourceRange)
+        analysis.references.filter { reference ->
+            reference.bindingKey == accessorBindingKey && reference.symbolKind == JdtJavaSemanticSymbolKind.METHOD
+        }.forEach { reference -> addEdit(reference.path, reference.sourceRange) }
+
+        val canonicalConstructors = analysis.methods.filter { method ->
+            method.constructor && method.canonicalConstructor &&
+                method.qualifiedName.startsWith("$ownerFqn#<init>(") && method.path == component.path
+        }
+        val canonicalKeys = canonicalConstructors.mapTo(mutableSetOf()) { it.bindingKey }
+        val componentParameters = analysis.parameters.filter { parameter ->
+            parameter.methodBindingKey in canonicalKeys && parameter.index == componentIndex
+        }
+        if (canonicalConstructors.isNotEmpty() && componentParameters.size != canonicalConstructors.size) {
+            return refused(
+                snapshot,
+                "renameMember",
+                "Record component $ownerFqn#$oldMemberName is missing a canonical-constructor parameter binding.",
+            )
+        }
+        componentParameters.forEach { parameter ->
+            addEdit(parameter.path, parameter.sourceRange)
+            analysis.bindingUses.filter { use -> use.bindingKey == parameter.parameterBindingKey && use.path == parameter.path }
+                .forEach { use -> addEdit(use.path, use.sourceRange) }
+        }
+
         val edits = editsByPath.map { (path, textEdits) ->
             FileEdit.Modify(
                 path,
@@ -227,14 +400,14 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             snapshotHash = snapshot.hash,
             confidence = 0.95,
             requiresUserApproval = true,
-            summary = "Rename field '$oldMemberName' → '$newMemberName' in $ownerFqn using JDT binding evidence. ${editsByPath.size} file(s) affected.",
+            summary = "Rename record component '$oldMemberName' → '$newMemberName' in $ownerFqn, including its canonical constructor and accessor. ${editsByPath.size} file(s) affected.",
             affectedFiles = editsByPath.keys,
             workspaceEdit = WorkspaceEdit(edits),
             warnings = listOf(
-                "JDT binding selected exact field $ownerFqn#$oldMemberName; edits were generated from JDT declaration/reference ranges.",
-                "Reflection, serialization names, framework strings, and annotation-processor output are NOT updated. Review manually.",
+                "JDT binding selected exact record component $ownerFqn#$oldMemberName and coordinated its declaration, canonical-constructor parameter, accessor, and binding-matched references.",
+                "Record component rename changes the public accessor and canonical constructor API. Reflection, serialization names, framework strings, and annotation-processor output are NOT updated; review manually.",
             ),
-            riskLevel = RiskLevel.LOW,
+            riskLevel = RiskLevel.MEDIUM,
             evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
@@ -245,6 +418,7 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
         memberSelector: String,
         oldMemberName: String,
         newMemberName: String,
+        hasKotlinSources: Boolean,
     ): PatchPlan {
         val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
         if (analysis.warnings.isNotEmpty()) {
@@ -291,6 +465,16 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
                 "renameMember",
                 "Signed member selector $ownerFqn#$memberSelector belongs to an override family containing declarations outside the scanned source workspace; source-only propagation is unsafe.",
             )
+        }
+
+        if (hasKotlinSources) {
+            // Java access rules close the exact private method within its declaring Java source.
+            val method = analysis.methods.singleOrNull { it.bindingKey == bindingKey }
+            if (familyBindingKeys.size != 1 || candidate.recovered || method == null ||
+                method.evidence != JdtJavaSemanticEvidence.JDT_BINDING || !Modifier.isPrivate(method.modifiers)
+            ) {
+                return unprovedKotlinConsumers(snapshot)
+            }
         }
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
@@ -364,10 +548,11 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
 
     companion object {
         private val TYPE_KINDS = setOf(Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.ENUM, Symbol.Kind.RECORD, Symbol.Kind.ANNOTATION)
-        private val MEMBER_KINDS = setOf(Symbol.Kind.METHOD, Symbol.Kind.FIELD, Symbol.Kind.CONSTRUCTOR)
+        private val MEMBER_KINDS = setOf(Symbol.Kind.METHOD, Symbol.Kind.FIELD, Symbol.Kind.RECORD_COMPONENT, Symbol.Kind.CONSTRUCTOR)
         private val JDT_MEMBER_KINDS = setOf(
             JdtJavaSemanticSymbolKind.METHOD,
             JdtJavaSemanticSymbolKind.FIELD,
+            JdtJavaSemanticSymbolKind.RECORD_COMPONENT,
             JdtJavaSemanticSymbolKind.CONSTRUCTOR,
         )
     }

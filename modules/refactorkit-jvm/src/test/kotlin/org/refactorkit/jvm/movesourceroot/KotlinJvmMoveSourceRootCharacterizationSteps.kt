@@ -133,8 +133,10 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
             }
 
             "a root path traverses a symbolic link" -> {
+                val captured = requireNotNull(snapshot)
                 Files.createSymbolicLink(requireNotNull(fixtureRoot).resolve("destination/src"), requireNotNull(fixtureRoot).resolve("source/src"))
-                preview(FROM, TO)
+                // Exercise the planner boundary against captured authority, not a fresh scanner refusal.
+                plan = JavaMoveSourceRootPlanner(JavaLanguageAdapter()).preview(captured, FROM, TO)
             }
 
             "a compilation unit package declaration does not match its root-relative path" -> {
@@ -190,6 +192,16 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
                 ))
                 val emptyRepo = temporaryDirectory("rk-jvm-move-sourceroot-cp-repo")
                 preview(FROM, TO, scanner = JavaProjectScanner(localMavenRepository = emptyRepo))
+            }
+
+            "JPMS analysis requires configured SDK authority" -> {
+                createFile(
+                    "source/src/main/java/module-info.java",
+                    "module example.shared.module { exports example.shared; }\n",
+                )
+                val scanner = JavaProjectScanner()
+                snapshot = scanner.scan(requireNotNull(fixtureRoot))
+                plan = JavaMoveSourceRootPlanner(JavaLanguageAdapter()).preview(requireNotNull(snapshot), FROM, TO)
             }
 
             else -> error("Unknown condition: '$condition'")
@@ -267,7 +279,7 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
     fun planListsEveryAffectedPath() {
         val p = requireNotNull(plan)
         val expected = expectedRenames().flatMap { listOf(it.path, it.newPath) }.toSet()
-        assertEquals(6, expected.size, "three independently authored compilation units have six distinct paths")
+        assertEquals(4, expected.size, "two independently authored compilation units have four distinct paths")
         assertEquals(expected, p.affectedFiles, "affectedFiles must list exactly the authored source and destination paths")
     }
 
@@ -312,7 +324,6 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
     private fun expectedRenames(): List<FileEdit.Rename> = listOf(
         "example/shared/SharedValue.java",
         "example/shared/package-info.java",
-        "module-info.java",
     ).map { relative -> FileEdit.Rename(FROM.resolve(relative), TO.resolve(relative)) }
 
     private fun primaryTypeIdentity(file: SourceFile): String? {
@@ -345,7 +356,6 @@ class KotlinJvmMoveSourceRootCharacterizationSteps {
         Files.createDirectories(source.resolve("example/shared"))
         Files.writeString(source.resolve("example/shared/SharedValue.java"), "package example.shared;\npublic record SharedValue(String value) {}\n")
         Files.writeString(source.resolve("example/shared/package-info.java"), "@Deprecated\npackage example.shared;\n")
-        Files.writeString(source.resolve("module-info.java"), "module example.shared.module { exports example.shared; }\n")
         return root
     }
 

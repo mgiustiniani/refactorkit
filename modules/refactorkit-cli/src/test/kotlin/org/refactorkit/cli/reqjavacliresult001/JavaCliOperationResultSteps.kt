@@ -135,7 +135,9 @@ class JavaCliOperationResultSteps {
                 .toAbsolutePath().normalize()
             installedExecutable = installedRoot.resolve("bin/refactorkit").normalize()
             sourceBuiltCodeLocation = codeLocation(RefactorKitCli::class.java)
-            temporaryRoot = Files.createTempDirectory("req-java-cli-result-001-").toAbsolutePath().normalize()
+            // Keep disposable scanner ancestry outside the repository-read tripwire.
+            temporaryRoot = Files.createTempDirectory(Path.of("/tmp").toRealPath(), "req-java-cli-result-001-")
+                .toAbsolutePath().normalize()
             machineRoot = temporaryRoot.resolve("machine-result").normalize()
             humanRoot = temporaryRoot.resolve("human-compatibility").normalize()
         } catch (failure: Throwable) {
@@ -174,9 +176,9 @@ class JavaCliOperationResultSteps {
         }
     }
 
-    @Given("the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
+    @Given("the source-built RefactorKit 0.8.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
     fun sourceBuiltRuntimeIsQualified() {
-        assertEquals("0.7.0", RefactorKitVersion.VERSION)
+        assertEquals("0.8.0", RefactorKitVersion.VERSION)
         assertEquals(21, Runtime.version().feature())
         assertTrue(System.getProperty("os.name").contains("Linux", ignoreCase = true))
         assertTrue(System.getProperty("os.arch").isNotBlank())
@@ -240,6 +242,8 @@ class JavaCliOperationResultSteps {
 
     @Given("every scan, plan, invocation, and observation is confined to its declared disposable root, while the permanent fixture remains read-only")
     fun confineInteractions() {
+        assertFalse(temporaryRoot.startsWith(repositoryRoot))
+        assertFalse(repositoryRoot.startsWith(temporaryRoot))
         assertTrue(machineRoot.startsWith(temporaryRoot))
         assertTrue(humanRoot.startsWith(temporaryRoot))
         assertFalse(fixtureRoot.startsWith(temporaryRoot))
@@ -893,7 +897,7 @@ class JavaCliOperationResultSteps {
         if (excludeEngine && (relative == ENGINE_DIRECTORY || relative.startsWith("$ENGINE_DIRECTORY/"))) return true
         if (!repositoryProtected || relative == ".") return false
         val parts = relative.split('/')
-        if (parts.any { it in setOf(".git", ".gradle", "build") }) return true
+        if (parts.any { it in setOf(".git", ".gradle", ".refactorkit", "build") }) return true
         return relative == "docs/requirements/evidence" || relative.startsWith("docs/requirements/evidence/")
     }
 
@@ -992,10 +996,10 @@ class JavaCliOperationResultSteps {
         )
         // Preserve the original feature digest: only these exact, single metadata spans may evolve.
         val releaseMetadata = mapOf(
-            "  This qualification is limited to source-built RefactorKit 0.7.0 on local Linux, JDK 21, and the current CPU architecture.\n" +
+            "  This qualification is limited to source-built RefactorKit 0.8.0 on local Linux, JDK 21, and the current CPU architecture.\n" +
                 "  V070-RELEASE-VERSION-TRANSITION-001 changes only version metadata, not the preview oracle or release-parity exclusions.\n" to
                 "  This qualification is limited to source-built RefactorKit 0.7.0-SNAPSHOT on local Linux, JDK 21, and the current CPU architecture.\n",
-            "    Given the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture\n" to
+            "    Given the source-built RefactorKit 0.8.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture\n" to
                 "    Given the source-built RefactorKit 0.7.0-SNAPSHOT CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture\n",
         )
         releaseMetadata.forEach { (current, historical) ->

@@ -5,9 +5,9 @@ Ability: Discover the exact public Java CLI command catalogue without entering a
   This qualification is limited to the exact source-built version in each scenario on local Linux, JDK 21, and the current CPU architecture.
   The version-only transition is governed by V070-RELEASE-VERSION-TRANSITION-001; it does not qualify package or release parity.
 
-  @REQ-JAVA-CLI-CATALOG-001 @functional-requirement @non-functional-requirement @implemented-and-validated
+  @REQ-JAVA-CLI-CATALOG-001 @REQ-JAVA-CLI-CATALOG-001#source-built-discovery-reports-the-closed-deterministic-java-command-catalogue-and-nothing-else @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: Source-built discovery reports the closed deterministic Java command catalogue and nothing else
-    Given the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
+    Given the source-built RefactorKit 0.8.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
     And the installed RefactorKit executable is guarded by an invocation tripwire and is neither selected nor invoked
     And the v1 command-catalogue contract admits exactly these fields in this order:
       | scope     | position | field             | JSON type     |
@@ -50,7 +50,7 @@ Ability: Discover the exact public Java CLI command catalogue without entering a
       | java rename-module             | refactorkit java rename-module --old-module-dir <dir> --new-module-dir <dir> [--new-artifact-id <id>] [--root <path>] [--apply]                                                                                                                                                                                                                                                                                                                               |
     And help, exact catalogue membership, and actual public-parser reachability agree for those three routes
     And help does not claim dependency rewrite coordinates are unconditionally required for "java move-across-maven-modules"
-    And every existing human-oriented parser and command behavior remains compatible, with no requirement-owned change outside the additive truthful top-level help lines
+    And every existing human-oriented parser and command behavior remains compatible, allowing separately qualified CLI output and C-route help lines alongside the additive truthful Java catalogue lines
     And "refactorkit capabilities" matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema
     And the capabilities output contains none of "commands", "operation", "aliases", "modes", "mutationAuthority", "jsonSupport", "stability", or "requiredArguments" as command-catalogue fields
     And no invocation opens or scans a workspace, creates a preview or plan, acquires a workspace lock, creates a WAL or transaction, edits a file, mutates an installation, or invokes the installed executable
@@ -63,9 +63,9 @@ Ability: Discover the exact public Java CLI command catalogue without entering a
       | non-Java command inventory or other language capability work             |
       | Windows, macOS, another CPU architecture, another JDK, or release parity |
 
-  @REQ-JAVA-CLI-CATALOG-002 @functional-requirement @non-functional-requirement @implemented-and-validated
+  @REQ-JAVA-CLI-CATALOG-002 @REQ-JAVA-CLI-CATALOG-002#default-discovery-reports-exact-catalogue-v2-while-explicit-selection-preserves-exact-v1 @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: Default discovery reports exact catalogue v2 while explicit selection preserves exact v1
-    Given the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
+    Given the source-built RefactorKit 0.8.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture
     And the installed RefactorKit executable is guarded by invocation, lookup, and no-follow mutation tripwires and is neither selected, invoked, nor modified
     And workspace opening, scanning, planning, locking, WAL, transaction, editing, and installation mutation boundaries are instrumented fail-closed
     And separate closed v1 and v2 validators are available without treating either version as the other

@@ -5,6 +5,7 @@ import org.refactorkit.core.FileEdit
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.Symbol
 import org.refactorkit.core.TextEdit
@@ -19,8 +20,9 @@ import java.util.Comparator
  *
  * Supported operations:
  * - rename one JDT-bound method parameter, with exact signed overload selection;
- * - bounded lexical add/remove/reorder rows retained as experimental compatibility
- *   operations until their JDT-backed replacements are independently qualified.
+ * - bounded JDT-backed parameter reorder, with call-site evaluation-order guards;
+ * - bounded JDT-backed add, remove, and parameter-type rows whose managed
+ *   authority is qualified operation-by-operation.
  *
  * Every result is preview-only until explicitly applied through PatchEngine.
  */
@@ -208,6 +210,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
             warnings = listOf("Only the exact JDT parameter type range changes; call arguments remain byte-identical."),
             riskLevel = RiskLevel.MEDIUM,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 
@@ -324,6 +327,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
             warnings = listOf("Declaration and call-site argument lists are exact JDT-bound ranges."),
             riskLevel = RiskLevel.MEDIUM,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 
@@ -468,6 +472,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
                 "All editable source declarations and call locations remain one connected staged JDT family.",
             ),
             riskLevel = RiskLevel.HIGH,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 
@@ -503,6 +508,12 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         }
         if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
             return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
+        }
+        if (selection.analysis.methodReferenceUses.any { it.methodBindingKey == selection.method.bindingKey }) {
+            return refused(snapshot, operation, "Method-reference evaluation order cannot be preserved by parameter reordering")
+        }
+        reorderCallSiteRefusal(snapshot, selection.analysis, selection.invocations)?.let {
+            return refused(snapshot, operation, it)
         }
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
@@ -550,6 +561,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
             warnings = listOf("Declaration and call-site argument lists are exact JDT-bound ranges."),
             riskLevel = RiskLevel.MEDIUM,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 
@@ -580,6 +592,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         }
         if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
             return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
+        }
+        removedArgumentRefusal(snapshot, selection.analysis, selection.invocations, removeIndex)?.let {
+            return refused(snapshot, operation, it)
         }
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
@@ -626,8 +641,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             affectedFiles = affected,
             workspaceEdit = WorkspaceEdit(fileEdits),
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
-            warnings = listOf("JDT remove-parameter declaration and call sites are exact bindings; method references and hierarchy/public boundaries remain refused."),
+            warnings = listOf("JDT remove-parameter declaration and call sites are exact bindings; removed arguments must be literals or exact local/parameter reads, while method references and public/hierarchy boundaries remain refused."),
             riskLevel = RiskLevel.MEDIUM,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 
@@ -698,7 +714,8 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         return PatchPlan(operation = operation, status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash, confidence = 0.94, requiresUserApproval = true,
             summary = "Change parameter index $index to '$newType' across ${methods.size} JDT-connected declarations; ${calls.size} calls remain bound.",
             affectedFiles = fileEdits.map { it.path }.toSet(), workspaceEdit = WorkspaceEdit(fileEdits), diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
-            warnings = listOf("Public hierarchy change accepted explicit external-consumer risk."), riskLevel = RiskLevel.HIGH)
+            warnings = listOf("Public hierarchy change accepted explicit external-consumer risk."), riskLevel = RiskLevel.HIGH,
+            evidence = RefactoringEvidence.JDT_BINDING)
     }
 
     private fun previewReorderParameterHierarchy(
@@ -739,6 +756,11 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         val names = methods.map { it.qualifiedName }.toSet()
         val calls = selection.analysis.invocations.filter { it.methodQualifiedName in names }
         if (calls.any { it.argumentRanges.size != indexes.size }) return refused(snapshot, operation, "Hierarchy invocation evidence is incomplete")
+        val methodKeys = methods.map { it.bindingKey }.toSet()
+        if (selection.analysis.methodReferenceUses.any { it.methodBindingKey in methodKeys }) {
+            return refused(snapshot, operation, "Hierarchy method-reference evaluation order cannot be preserved by parameter reordering")
+        }
+        reorderCallSiteRefusal(snapshot, selection.analysis, calls)?.let { return refused(snapshot, operation, it) }
         val edits = linkedMapOf<Path, MutableList<TextEdit>>()
         methods.forEach { method ->
             val source = sources.getValue(method.path)
@@ -779,7 +801,8 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         return PatchPlan(operation = operation, status = PatchStatus.PREVIEW, snapshotHash = snapshot.hash, confidence = 0.94,
             requiresUserApproval = true, summary = "Reorder ${methods.size} JDT-connected declarations and ${calls.size} bound call site(s).",
             affectedFiles = fileEdits.map { it.path }.toSet(), workspaceEdit = WorkspaceEdit(fileEdits), diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
-            warnings = listOf("Public hierarchy change accepted explicit external-consumer risk."), riskLevel = RiskLevel.HIGH)
+            warnings = listOf("Public hierarchy change accepted explicit external-consumer risk."), riskLevel = RiskLevel.HIGH,
+            evidence = RefactoringEvidence.JDT_BINDING)
     }
 
     private fun previewRemoveParameterHierarchy(
@@ -835,6 +858,9 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         val invocations = selection.analysis.invocations.filter { it.methodQualifiedName in familyNames }
         if (invocations.any { it.argumentRanges.size != selection.parameters.size }) {
             return refused(snapshot, operation, "Hierarchy invocation evidence is incomplete")
+        }
+        removedArgumentRefusal(snapshot, selection.analysis, invocations, selectedIndex)?.let {
+            return refused(snapshot, operation, it)
         }
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         familyMethods.forEach { method ->
@@ -897,6 +923,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             diagnosticsAfterPreview = diagnosticsAfter(snapshot, fileEdits),
             warnings = listOf("Public hierarchy change accepted explicit external-consumer risk."),
             riskLevel = RiskLevel.HIGH,
+            evidence = RefactoringEvidence.JDT_BINDING,
         )
     }
 
@@ -945,6 +972,82 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         val parameters = analysis.parameters.filter { it.methodQualifiedName == method.qualifiedName }.sortedBy { it.index }
         val invocations = analysis.invocations.filter { it.methodQualifiedName == method.qualifiedName }
         return JdtMethodSelection(analysis, method, symbol, file, parameters, invocations) to null
+    }
+
+    private fun reorderCallSiteRefusal(
+        snapshot: ProjectSnapshot,
+        analysis: JdtJavaSemanticAnalysisResult,
+        invocations: List<JdtJavaSemanticInvocation>,
+    ): String? {
+        for (invocation in invocations) {
+            if (invocation.evidence != JdtJavaSemanticEvidence.JDT_BINDING) {
+                return "Call-site evaluation order is not backed by complete JDT bindings"
+            }
+            val source = snapshot.files.singleOrNull { it.path == invocation.path }
+                ?: return "Call-site evaluation order is unknown because a bound source file is missing"
+            val argumentList = sourceText(source.content, invocation.argumentListRange)
+            if (argumentList.contains("//") || argumentList.contains("/*")) {
+                return "Call-site argument comments cannot be preserved by the bounded parameter reorder"
+            }
+            if (invocation.argumentRanges.withIndex().any { (index, range) ->
+                    !isOrderIndependentReorderArgument(
+                        source,
+                        range,
+                        analysis,
+                        invocation.argumentLiteralFlags.getOrNull(index) == true,
+                    )
+                }) {
+                return "Call-site evaluation order could change for an argument expression; only literals and exact JDT-bound local/parameter reads are supported"
+            }
+        }
+        return null
+    }
+
+    private fun removedArgumentRefusal(
+        snapshot: ProjectSnapshot,
+        analysis: JdtJavaSemanticAnalysisResult,
+        invocations: List<JdtJavaSemanticInvocation>,
+        removedIndex: Int,
+    ): String? {
+        for (invocation in invocations) {
+            if (invocation.evidence != JdtJavaSemanticEvidence.JDT_BINDING) {
+                return "Removed call-site argument is not backed by complete JDT bindings"
+            }
+            val source = snapshot.files.singleOrNull { it.path == invocation.path }
+                ?: return "Removed call-site argument is unknown because a bound source file is missing"
+            val argumentList = sourceText(source.content, invocation.argumentListRange)
+            if (argumentList.contains("//") || argumentList.contains("/*")) {
+                return "Call-site argument comments cannot be preserved by bounded parameter removal"
+            }
+            val range = invocation.argumentRanges.getOrNull(removedIndex)
+                ?: return "JDT invocation does not contain the selected argument at index $removedIndex"
+            if (!isOrderIndependentReorderArgument(
+                    source,
+                    range,
+                    analysis,
+                    invocation.argumentLiteralFlags.getOrNull(removedIndex) == true,
+                )
+            ) {
+                return "Removed call-site argument may have observable effects; only literals and exact JDT-bound local/parameter reads are supported"
+            }
+        }
+        return null
+    }
+
+    private fun isOrderIndependentReorderArgument(
+        source: org.refactorkit.core.SourceFile,
+        range: org.refactorkit.core.SourceRange,
+        analysis: JdtJavaSemanticAnalysisResult,
+        sideEffectFreeLiteral: Boolean,
+    ): Boolean {
+        if (sideEffectFreeLiteral) return true
+        val expression = sourceText(source.content, range).trim()
+        if (!expression.matches(Regex("[A-Za-z_$][A-Za-z0-9_$]*"))) return false
+        val use = analysis.bindingUses.singleOrNull {
+            it.path == source.path && it.sourceRange == range && !it.isImport
+        } ?: return false
+        return use.evidence == JdtJavaSemanticEvidence.JDT_BINDING && !use.recovered &&
+            use.symbolQualifiedName == null && use.jvmIdentity == null
     }
 
     private fun boundedJdtSignatureRisk(

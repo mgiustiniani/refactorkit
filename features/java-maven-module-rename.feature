@@ -7,7 +7,7 @@ Business Need: Rename one proven direct-child Maven module without widening writ
   This first executable backlog row uses only the direct JVM library boundary and one permanent fixture shape.
   The Java adapter owns immutable Maven planning evidence; the existing PatchEngine and transaction journal retain all mutation and rollback authority.
 
-  @REQ-JAVA-MAVEN-MODULE-RENAME-001 @functional-requirement @implemented-and-validated
+  @REQ-JAVA-MAVEN-MODULE-RENAME-001 @REQ-JAVA-MAVEN-MODULE-RENAME-001#an-explicit-direct-child-directory-and-artifact-rename-commits-once-and-rolls-back-exactly @functional-requirement @implemented-and-validated
   Scenario: An explicit direct-child directory and artifact rename commits once and rolls back exactly
     Given the declared permanent fixture is "testdata/acceptance/java-maven-move-class-authority-20-modules"
     And its root POM is the sole aggregator with exactly 20 unique direct literal module entries, each naming a non-aggregator JAR child with one POM
@@ -18,6 +18,39 @@ Business Need: Rename one proven direct-child Maven module without widening writ
     And the harness creates one pristine workspace and one fresh refusal-probe workspace per probe as no-follow disposable byte copies of the permanent fixture
     And copying refuses every symbolic link, preserves every relative regular-file byte and directory path kind, and never writes through or back to the permanent fixture
     And before library use the harness records manifest "M0", the expected source and auxiliary path inventories, and the absence of ".refactorkit"
+      | kind      | relative path                                                                                          |
+      | source    | catalog-acceptance/src/test/java/com/acme/catalog/acceptance/ProductLifecycleSteps.java               |
+      | source    | catalog-decoy/src/main/java/com/acme/decoy/Product.java                                                |
+      | source    | catalog-generated-support/target/generated-sources/catalog-metadata/com/acme/catalog/generated/GeneratedCatalogMarker.java |
+      | source    | catalog-model/src/main/java/com/acme/catalog/legacy/Product.java                                        |
+      | source    | catalog-pricing/src/main/java/com/acme/catalog/pricing/CatalogPrice.java                               |
+      | source    | catalog-storefront/src/main/java/com/acme/catalog/storefront/ProductTile.java                          |
+      | source    | reporting-unrelated/src/main/java/com/acme/reporting/ProductReport.java                                |
+      | auxiliary | pom.xml                                                                                                |
+      | auxiliary | catalog-common/pom.xml                                                                                 |
+      | auxiliary | catalog-generated-support/pom.xml                                                                      |
+      | auxiliary | catalog-inventory/pom.xml                                                                              |
+      | auxiliary | catalog-shipping/pom.xml                                                                               |
+      | auxiliary | catalog-search/pom.xml                                                                                 |
+      | auxiliary | catalog-recommendations/pom.xml                                                                        |
+      | auxiliary | catalog-admin/pom.xml                                                                                  |
+      | auxiliary | catalog-batch/pom.xml                                                                                  |
+      | auxiliary | customer-model/pom.xml                                                                                 |
+      | auxiliary | customer-notifications/pom.xml                                                                         |
+      | auxiliary | order-model/pom.xml                                                                                    |
+      | auxiliary | order-processing/pom.xml                                                                               |
+      | auxiliary | payment-contract/pom.xml                                                                               |
+      | auxiliary | reporting-core/pom.xml                                                                                 |
+      | auxiliary | reporting-unrelated/pom.xml                                                                            |
+      | auxiliary | catalog-model/pom.xml                                                                                  |
+      | auxiliary | catalog-pricing/pom.xml                                                                                |
+      | auxiliary | catalog-storefront/pom.xml                                                                             |
+      | auxiliary | catalog-acceptance/pom.xml                                                                            |
+      | auxiliary | catalog-decoy/pom.xml                                                                                  |
+      | auxiliary | catalog-acceptance/.refactorkit-expected-source-inventory.properties                                   |
+      | auxiliary | catalog-generated-support/.refactorkit-generated-root-inventory.properties                            |
+      | auxiliary | catalog-acceptance/src/test/resources/features/product-lifecycle.feature                              |
+      | auxiliary | fixture-libs/provenance/src/com/acme/fixture/external/PriceAuthority.java                              |
     And every scanner, planner, diagnostic, apply, journal, and rollback call is confined to its declared disposable root and explicitly fixture-local repository
     And Maven and wrapper execution, lifecycle goals, plugins, annotation processors, generators, user or global settings, mirrors, proxies, servers, credentials, credential helpers, and network requests are denied and instrumented
     When a direct caller independently invokes the real public JavaProjectScanner scan and JavaRenameMavenModulePlanner preview for each fresh refusal probe:
@@ -44,7 +77,7 @@ Business Need: Rename one proven direct-child Maven module without widening writ
     Then both results are PatchStatus "PREVIEW" for operation "java.renameMavenModule", require separate explicit user approval, and carry immutable snapshot-bound origin, destination-absence, staged-reactor, and diagnostic evidence
     And caller-held and exposed collection mutation attempts cannot alter transient StageFacts, GateExpectation, ReactorView, ModuleView, or SourceSetView evidence
     And every real JavaRenameMavenModulePlanner call in this scenario obtains POM structure and exact element-text ranges only through a maintained non-executing XML parser with DTD processing and external general and parameter entity resolution disabled
-    And no such planner call uses a hand-written XML tokenizer/parser or serializes a POM; parser-reported ranges authorize only the hash-bound raw element-text replacements listed below
+    And no such planner call uses a hand-written XML tokenizer or parser or serializes a POM; parser-reported ranges authorize only the hash-bound raw element-text replacements listed below
     And each normalized non-overlapping WorkspaceEdit has exactly these five ordered FileEdit entries and no others:
       | order | FileEdit | path                                                               | exact source range | exact new text  | new path                                                            |
       | 1     | Modify   | catalog-model/pom.xml                                              | 9:14-9:27         | catalog-domain  |                                                                     |
@@ -59,7 +92,7 @@ Business Need: Rename one proven direct-child Maven module without widening writ
       | catalog-model/pom.xml                                                | catalog-domain/pom.xml                                                | 397; d954a47ec44e429cbc94a4e0d5e5fc65fc006ab3335a2b5a26e45d2e7f03088e  | 398; e9a34b04e5d408a9f2f6444a30ed118d8dd2d88bf880e67ff297f296092ca17b  |
       | catalog-pricing/pom.xml                                              | catalog-pricing/pom.xml                                               | 3337; 88c4ffdf826165d119fe278bdc8946d75bbd76b2784c0e476cbf4f2ae06f9ecc | 3338; 10831298857e61c7f054200c046a277a29467f5d0cddc34f17c800c776fe307f |
       | catalog-model/src/main/java/com/acme/catalog/legacy/Product.java    | catalog-domain/src/main/java/com/acme/catalog/legacy/Product.java    | 94; 7bb9043767dbc5b61b34670812eed2c948eb6f0aca065a2cb76e28183573f663    | 94; 7bb9043767dbc5b61b34670812eed2c948eb6f0aca065a2cb76e28183573f663    |
-    And only the three authorized element-text ranges differ; every other XML and source byte, including the parent artifact, namespace syntax, whitespace, line endings, comments, processing instructions, unknown elements, and `${project.version}` text, is preserved
+    And only the three authorized element-text ranges differ; every other XML and source byte, including the parent artifact, namespace syntax, whitespace, line endings, comments, processing instructions, unknown elements, and "${project.version}" text, is preserved
     And the staged path-kind image preserves the pre-existing now-empty "catalog-model" directory hierarchy, creates only the corresponding "catalog-domain" hierarchy for the two moved regular files, and changes no other non-engine path kind
     And the ordered edit produces one complete staged reactor "R1" with 20 direct children, root "catalog-domain" at coordinate com.acme.refactorkit.fixture:catalog-domain:1.0.0 with JAR packaging, one root module entry "catalog-domain" in the original list position, and the catalog-pricing dependency resolved to that exact coordinate
     And staged source and auxiliary inventories are complete, every other reactor module, coordinate, dependency, source set, and child-relative path equals "R0", and transitive consumers receive no POM edit

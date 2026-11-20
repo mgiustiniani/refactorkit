@@ -64,6 +64,17 @@ Module paths are workspace-relative (`.` for the root); outside-workspace module
 roots are redacted. A checked-in schema-key snapshot prevents accidental shape
 drift.
 
+Gradle rows with provider-qualified identity include workspace-relative `buildRoot`
+and Gradle `projectPath`, alongside their stable qualified `id`. This identity is
+present both in `buildModels[].modules` and in the top-level `modules` list used by
+project enumerators. A top-level row receives these fields only when exactly one
+build-model module owns its root; ambiguous ownership leaves the identity fields
+null. Consumers can identify included-build projects before requesting source-set
+context. The ID uses the same
+[Gradle composite identity](java-project-context-protocol.md#explicit-effective-gradle-synchronization)
+as `project.context` v3. Capability discovery advertises
+`gradleCompositeBuildIdentity` for this projection.
+
 Provider identities include `maven-effective-v1`, `gradle-declarative-v1`,
 `java-conventional-v1`, and `typescript-config-declarative-v1`. Project open and
 all post-apply/rollback rescans preserve `.ts`, `.tsx`, `.js`, and `.jsx` beside
@@ -104,12 +115,34 @@ Unsupported language/provider definition/reference rows remain refused until
 their implementations qualify. They never fall back to
 fabricated lexical semantics.
 
+An unhandled request-handler failure is isolated to its request. The daemon
+returns a JSON-RPC `INTERNAL_ERROR` response for ordinary exceptions and
+non-fatal JVM errors, then keeps the session worker available for queued
+requests. `VirtualMachineError` and `ThreadDeath` are rethrown because the JVM
+may not be able to recover safely; process liveness is not guaranteed after
+those fatal conditions.
+
 Java `definition` requires `languageId=java`, a saved-snapshot source authority,
 workspace-relative path and exact zero-based UTF-16 position. Eclipse JDT bindings
 return zero or one exact source location and lazily publish the bounded
 `java-jdt-bindings-v1` partition. Analysis is cached for two exact snapshots,
 limited to 10,000 Java files and 256 MiB aggregate UTF-8 source, and cooperatively cancellable between compilation
-units. Java `hover` returns the exact selected range, binding-derived Java
+units. A Java cursor on a resolved Kotlin JVM declaration without qualified
+source mapping yields `status: "refused"` and
+`error.code: "java.definitionKotlinSourceUnqualified"`. For an evaluated Gradle
+source set, callers may supply `kotlinDefinitionToolchain` alongside `javaContext`
+on a saved Java definition request. `server.capabilities` advertises support as
+`features.kotlinDefinitionToolchain: true` on `intelligence.query`. Clients can
+check this flag before sending the optional field with the absolute `jdkHome`,
+`compilerJar` and `compilerClasspath` paths for the qualified Kotlin compiler.
+The daemon uses a disposable compilation of the saved source set with the
+evaluated module name. The bound class must come from the unique declared Kotlin
+output and match the fresh class bytes before the exact JVM declaration can
+supply a Kotlin source location. Ambiguous origins and changed binaries return
+`java.definitionKotlinBinaryAmbiguous` and `java.definitionKotlinBinaryDrift`.
+The response keeps the Java binding provider and includes the compiler and binary
+evidence in `provenanceHash`. The opt-in only applies to this read-only query.
+Java `hover` returns the exact selected range, binding-derived Java
 signature, qualified identity, bounded Javadoc and warning-derived completeness.
 Java `references` uses the same authority, accepts `includeDeclaration`
 (default `true`) and a limit up to 1,000, and returns deterministic locations with
@@ -207,6 +240,105 @@ The additive `languageId=jvm` route deterministically combines Java JDT and Kotl
 K2 rows for the saved snapshot, tags each row with its owning language and retains
 a concise `kotlin.toolchainNotConfigured` root when Kotlin inputs are unavailable;
 see `docs/requirements/mixed-jvm-diagnostics.md`.
+
+For standalone Java diagnostics, optional `jdkHome` is the explicitly selected
+project SDK; CLI uses `--jdk-home`. SDK27 has separately qualified native API
+diagnostics for source/target8,17,25 on Maven and evaluated Gradle9.8.1; release17
+still selects API17, including declared plain Java. This does not enable source27
+analysis. V2-v5 SDK API-profile values include27 while their source-level bound
+remains25; closed property sets and API versions are unchanged. Legacy source26
+acquisition returns `java.context.sourceLevelUnsupported`; v6/v7 retain their
+independent metadata/semantic policies. See [SDK27 authority](arc42/appendix-requirements.adoc#java-sdk27-native-api-provider-matrix-2026-11-14).
+ SDK21/25 with complete `source=8,target=8`
+compiler facts uses native SDK APIs, while `--release 8` retains API8. The runtime
+property/environment fallback remains available for historical release analysis;
+it does not authorize source/target compilation without an explicit project SDK.
+Missing explicit source/target SDK emits `java.platform.explicitJdkRequired`;
+custom system/compiler facts emit `java.platform.compilerApiUnqualified` rather
+than clean diagnostics or derivative type-resolution errors. Compiler SDK pins
+must match the selected SDK. Java module filtering excludes unrelated providers,
+including TypeScript projects with the same module name.
+
+Maven auxiliary inputs that also occur in generic source inventory are promoted
+to one source classification only when captured contents agree. Different captured
+contents fail with the existing source-capture `INPUT_CHANGED` classification
+before evidence attachers; files and unrelated auxiliary metadata are retained.
+This repairs project.open on Maven workspaces containing report JavaScript.
+No IDE-specific exclusion, build, processor or user-code execution is introduced.
+
+Exact local qualification and limits:
+`.refactorkit/runs/java-diagnostics-sdk-selection-r001/handoff.json`, linked to
+[ARC42 SDK diagnostics](arc42/appendix-requirements.adoc#java-standalone-diagnostics-sdk-selection-2026-11-14).
+No wire field/version changes: diagnostics still returns its existing structured
+array. The original library Path-based method remains compatible; the additional
+typed selection separates project SDK from release fallback.
+
+SDK-source and dependency-source declaration navigation now have separate bounded
+qualification for source8 with SDK21/25 APIs. They select the owning Java source
+set's API profile independently of consumer grammar, including flat roots shared
+with JavaScript. Exact JRT module/class provenance, binary/source identity,
+archive integrity and closed editor-frame guards remain required. Historical
+release8 sources on SDK21 remain unavailable; a missing src.zip remains unavailable.
+No request field, schema or capability flag was added. Immutable runtime paths,
+checksums, source/runtime tests and the old/new comparison are recorded in
+`.refactorkit/runs/java-sdk-source-api-selector-r003/handoff.json`; integrated
+authority is [ARC42](arc42/appendix-requirements.adoc#java-source-navigation-api-profile-2026-11-14).
+Consumer acceptance and broader source/target, Gradle and resource matrices remain
+open. A subsequent candidate qualifies Java compiler diagnostics over immutable
+editor drafts through `intelligence.query` with `languageId: "java"`,
+`kind: "diagnostics"`, the existing `javaContext` and `sourceAuthority` frame.
+Discover `javaImmutableEditorOverlayDiagnostics` in that method's feature flags.
+`diagnostics.v2` continues to accept TypeScript/JavaScript only.
+
+The new result has `coverage: "compiler-errors"`, `complete`, `items`, `total`,
+`provenanceHash` and `analyzedSourceCount`, plus the existing snapshot/generation,
+context/platform/provider-snapshot and exact document version/content attestations.
+Items have error severity, code/message and UTF16 path/range locations. Analysis
+uses all captured Java: saved sources plus supplied draft replacements. Thus
+`analyzedSourceCount` may exceed the number of draft documents. Clients must capture
+all open unsaved Java buffers and discard results if the draft set or its versions/
+content change; buffers never communicated cannot be attested by the server.
+Compiler-error completeness does not include lint warnings or project-build parity.
+
+Optional `limit` must be an integer in 1..500. Count/message budgets refuse with
+`java.diagnostics.limitExceeded`, without partial items or a complete assertion.
+Stale frames and changed SDK/context retain typed refusals. Queued cancellation
+retains JSON-RPC `REQUEST_CANCELLED` (-32800), clears registration and permits
+request-ID reuse. Saved and editor diagnostics now report cross-file duplicate
+native TYPE identities within one Java module/source set; separate modules and
+main/test compilations remain separate. The route never builds or runs user code.
+
+Exact candidate, real messages, limits and qualification:
+`.refactorkit/runs/java-editor-sdk-diagnostics-r002/handoff.json`, with authority in
+[ARC42 editor diagnostics](arc42/appendix-requirements.adoc#java-editor-compiler-diagnostics-2026-11-14)
+and [cross-source collisions](arc42/appendix-requirements.adoc#java-editor-cross-source-type-collisions-2026-11-14).
+Local qualification is complete; independent IDE/native/GUI acceptance is pending.
+No default installation or full M2/0.8 promotion is implied.
+
+After an explicitly authorized Gradle sync, the evaluated Java source-set and
+compiler generated-output roots now populate `sourceRootEvidence`. Every root
+has exact provider, source-set and installed `java`/`java-base` plugin ownership;
+`executionId` is the corresponding `JavaCompile` task path as metadata, not task
+execution. Normal roots use `build-plugin` origin; roots reported as generated by
+Gradle use `generated`. Source-root coverage, uniqueness, origin and task/source-set
+agreement are validated before publishing the model. Unknown/inconsistent exports
+refuse `gradle.sync.sourceRootProvenanceUnavailable`; partial ownership retains
+`java.context.sourceRootProvenanceIncomplete` at diagnostics. No directory-name
+heuristic or consumer-side reconstruction supplies authority.
+
+The new qualified candidate supports the bounded Gradle 9.8.1/SDK21,25 source8/
+target8 and release8 editor cells, custom and pre-existing generated inputs. Its qualification
+runs no JavaCompile task; editor queries do not re-evaluate Gradle. Reacquire the
+snapshot/context after sync: the authoritative model now includes provenance,
+so its hashes can differ from the preceding candidate. A changed build with a
+pinned generation retains `intelligence.indexStale` before the Java context check.
+
+Exact immutable paths, SHA256, messages and limits:
+`.refactorkit/runs/java-gradle-source-root-provenance-r003/handoff.json`.
+[ARC42 Gradle provenance](arc42/appendix-requirements.adoc#gradle-evaluated-source-root-provenance-2026-11-14)
+owns integrated status. No new public wire key, capability flag, API/source version or
+default installation changes. Independent IDE acceptance and full 0.8 remain open.
+
 
 For Java/Maven `moveClass`, the operation-specific dispatcher admits exact JDT
 plans, returns REQ-003 non-managed guidance for bounded enumerable authority
@@ -479,3 +611,208 @@ See [Integration contracts](integration-contracts.md),
 [External class importer](external-class-importer.md),
 [Resource limits](resource-limits.md), and
 [Transactionality audit](transactionality-audit.md).
+
+## C compiler declaration search
+
+After `project.open`, `symbol.search` accepts `languageId=c`, an explicit
+`expectedSnapshotHash` from that open response, and configured `clang`, `clangd`
+and `clangFormat` executable paths. The qualified examples use Clang tooling
+22.1.8 and complete captured C11/C17 translation-unit contexts.
+
+```json
+{"jsonrpc":"2.0","id":31,"method":"symbol.search","params":{"languageId":"c","query":"value","expectedSnapshotHash":"<project.open snapshotHash>","clang":"/qualified/usr/bin/clang-22","clangd":"/qualified/usr/bin/clangd","clangFormat":"/qualified/usr/bin/clang-format","limit":100}}
+```
+
+The existing result array contains the usual id/name/kind/file/line and a
+zero-based character, plus `cKind`, `lookupSpace`, `linkage`, `translationUnit`,
+`providerId`, `evidence=compiler`, `completeness=declarations`, `snapshotHash`,
+`compilationContextHash`, `queryTotal` and `queryTruncated`. Lines remain
+one-based on this legacy route. Typedefs/enumerators belong to ordinary space;
+tags, members and labels remain separate. Header observations remain per TU.
+Search limits are 1..200 (default 200), query length at most 512 characters.
+Source/configuration changes and unavailable compiler input are errors rather
+than successful empty searches. The separate C navigation routes below reuse
+this acquisition. C routing through `intelligence.query` remains unavailable.
+
+Authority and qualified boundaries: [ARC42](arc42/appendix-requirements.adoc#c04-compiler-search-main-qualification-2026-11-13).
+This protocol section owns caller syntax; ARC42 owns integrated acceptance.
+
+
+## C compiler definitions and references
+
+After the C search above, pass one returned opaque `c-decl:<64 hex>` ID to
+`symbol.definition` or `symbol.references`, with `languageId=c`, the same
+`expectedSnapshotHash` and explicit `clang`, `clangd`, `clangFormat` paths.
+Names and source positions are not substitutes for this ID. Reopen/rescan and
+search again after project changes.
+
+```json
+{"jsonrpc":"2.0","id":32,"method":"symbol.definition","params":{"languageId":"c","symbol":"<c-decl ID from symbol.search>","expectedSnapshotHash":"<same project.open snapshotHash>","clang":"/qualified/usr/bin/clang-22","clangd":"/qualified/usr/bin/clangd","clangFormat":"/qualified/usr/bin/clang-format"}}
+```
+
+`symbol.definition` returns one object whose `id` identifies the actual target
+declaration; `requestedSymbolId` retains the caller's ID. `symbol.references`
+returns an array of spelled reference locations. It accepts `includeDeclaration`
+(boolean, default false) and `limit` (integer 1..200, default 200). Each returned
+reference has `queryTotal`/`queryTruncated`; a known unused binding can have no
+references. Declaration sites and use sites remain distinct by default.
+
+Locations use workspace-relative `file`, one-based `line`/`endLine` and
+zero-based `character`/`endCharacter`, with an exclusive end. Results retain
+`cKind`, `lookupSpace`, `linkage`, selected/target `translationUnit`, actual
+observed `translationUnits`, snapshot/context hashes, `compilerVersion` and
+`compilerSha256`. Provider is `clang.c-navigation.v1`, evidence is `compiler`
+and completeness is `captured-family`; it does not imply all configurations.
+
+An absent valid ID is `c.navigation.symbolNotFound` (`SYMBOL_NOT_FOUND`).
+Stale expected snapshots, changed captured inputs and unsupported/ambiguous
+families are errors (`c.navigation.snapshotStale`, `.snapshotChanged`,
+`.familyUnavailable` or `.definitionAmbiguous`), never empty success. The
+qualified Story covers a function, typedef, named struct field and source
+parameter in captured standalone C11/C17 contexts, database drift and an unknown
+ID. Other contexts/families require separate qualification.
+
+MCP `symbol_definition` and `symbol_references` accept the same arguments after
+`project_scan`/`symbol_search`; successful JSON is returned in their legacy text
+content. Tool failures use the existing `isError` response. Qualification here
+is in-process session dispatch, with framed stdio and packaged execution open.
+Authority: [ARC42 checkpoint](arc42/appendix-requirements.adoc#c04-navigation-main-qualification-2026-11-13).
+This section owns caller syntax; ARC42 owns integrated acceptance.
+
+
+## Owned source capture during project startup
+
+`project.open` validates ownership of the root and its ancestors before
+inspecting the transaction journal, without reading source contents. Its
+generic C/header/TypeScript/JavaScript inventory now uses the same core source
+reader as the C structural scanner. The reader uses descriptor-relative,
+NOFOLLOW reads and strict UTF-8. Its default caps are 25,000 entries, depth 64,
+4,096 sources, 2 MiB/source and 64 MiB total source bytes; API startup uses those
+defaults. A failed inventory returns no partial source snapshot.
+
+An owned-source refusal returns PLAN_REFUSED, with
+`data.refusalCode=workspace.sourceCapture.unavailable` and
+`data.sourceCaptureFailure`, such as SYMBOLIC_LINK, INVALID_UTF8 or
+FILE_BYTES_EXCEEDED. MCP `project_scan` returns the existing `isError=true`
+envelope with `workspace.sourceCapture.unavailable: <cause>` in its text.
+No compiler/SDK is required for these structural ownership checks. On a failed
+fresh open, no project summary or transaction is created. A successful open may
+retain normal index/session metadata.
+
+Qualified examples include mixed C/header/TypeScript sources on both surfaces,
+an external source link, a symbolic root, invalid UTF-8 and a source over the
+default size limit. The profile requires SecureDirectoryStream and stable file
+identities; other filesystem providers are unavailable rather than silently
+falling back to path-following reads.
+
+After journal inspection, daemon and MCP acquire the complete owned generic
+inventory before invoking the authoritative Java scanner. Existing Java/Kotlin
+source links therefore refuse before a path-based JVM read is attempted. The
+old composer entry point keeps its original contract for other library callers.
+Root paths are limited to 256 normalized absolute components, independently of
+workspace-relative depth 64; overflow reports DEPTH_EXCEEDED. Native evidence
+accepts exactly 256 and refuses 257. The Java base scanner now captures JVM
+source text through the same owned reader, restricted to its modeled source
+roots with shared limits. A file/directory changed to a link after the generic
+inventory therefore still refuses. Generated roots selected by the model are
+included even below generic ignored directories. Missing modeled directories
+remain optional; roots outside the workspace report OWNERSHIP_UNAVAILABLE.
+Model discovery and auxiliary metadata reads retain separate policies; broader
+concurrent metadata and configuration/provider closure remain unqualified.
+See [JVM source acquisition](arc42/appendix-requirements.adoc#c03-jvm-source-main-qualification-2026-11-13).
+See [the later checkpoint](arc42/appendix-requirements.adoc#c03-inventory-order-main-qualification-2026-11-13).
+Authority: [ARC42 checkpoint](arc42/appendix-requirements.adoc#c03-owned-generic-main-qualification-2026-11-13).
+This section owns caller errors; ARC42 owns integrated qualification.
+
+Compilation database provider/snapshot IO now also uses descriptor-relative,
+strict UTF-8 acquisition with its original 8 MiB limit. Root CMake input retains
+512 KiB and refuses ancestor links. Unavailable input cannot become new captured
+build authority; this does not change the caller error contract above or qualify
+all auxiliary IO. See [input acquisition evidence](arc42/appendix-requirements.adoc#c03-owned-aux-main-qualification-2026-11-13).
+
+
+## Explicit C SDK inputs for managed previews
+
+For the bounded SDK-type workspace-header field profile, daemon `c.preview`
+accepts optional top-level `readOnlySdks`. Each object has exactly three string
+fields: absolute normalized external `root`, caller-declared `provenance`, and
+caller-declared `license`. The array has at most eight entries; omit it for
+legacy empty SDK scope. Existing discovery policy validates root ownership,
+metadata and the bounded closed header tree. SDKs remain readonly inputs.
+
+```json
+{"jsonrpc":"2.0","id":41,"method":"c.preview","params":{"operation":"renameSymbol","clang":"/qualified/usr/bin/clang-22","clangd":"/qualified/usr/bin/clangd","clangFormat":"/qualified/usr/bin/clang-format","readOnlySdks":[{"root":"/opt/example-sdk","provenance":"caller:example-sdk-build","license":"LicenseRef-ProjectSdk"}],"arguments":{"symbol":"raw_count","newName":"scaled_count","file":"include/api.h","line":2,"character":14}}}
+```
+
+MCP `preview_refactoring` accepts the same field alongside `languageId: "c"`,
+tool paths, operation and operation-specific `arguments`. Its tools/list schema
+advertises the bounded array and nested required strings. A malformed SDK value
+is not discarded: daemon returns INVALID_PARAMS (-32602), with
+`error.data.refusalCode = "c.sdkConfigurationInvalid"` and a `field` location;
+MCP returns `isError: true` with compatible text and `structuredContent.error`
+containing the typed code/message/data; [MCP caller contract](integration-contracts.md#mcp-typed-sdk-tool-errors).
+Root/metadata/tree admission failures retain existing discovery refusals.
+Provenance/license declarations do not independently verify licensing.
+
+Apply uses the retained plan and SDK-bound diagnostics gate. An SDK change after
+preview refuses without WAL even when the workspace snapshot is unchanged;
+resending a new SDK declaration at Apply does not refresh the plan's authority.
+Rollback uses the existing transaction ID. Qualified C11/C17 daemon/MCP cases
+cover exact field/designator/member images and preserve unrelated SDK fields,
+workspace fields, comments and strings. Six cases/24 steps, fresh C716, daemon64,
+MCP32 and 19 prior native controls/76 steps pass.
+
+This section owns bounded caller syntax;
+[ARC42 owns integrated acceptance](arc42/appendix-requirements.adoc#c03-sdk-public-managed-2026-11-15).
+Evidence: `.refactorkit/runs/c03-sdk-public-managed-r001/archive-audit.json`
+and `public-sdk-matrix.json`. CLI SDK input now forwards the same field via
+`--read-only-sdks '<json-array>'`; [CLI syntax and bounds](c-language.md#cli-sdk-json)
+have separate native6/24 and19-control evidence. Managed LSP now accepts the same
+SDK array in its preview command; [LSP caller syntax](integration-contracts.md#c-sdk-inputs-for-managed-lsp-commands)
+has separate native6/24, LspSession23 and13-control evidence. Remaining malformed-JSON
+boundaries, read/provider propagation, other managed SDK families and broader
+platform SDK forms remain `actionable`; full original C02-C17/release stays open.
+Private delivered runtimes retain older C code; no install/publication follows.
+
+
+## C readonly SDK query locations
+
+C `symbol.search`, `symbol.definition` and `symbol.references` accept optional
+`readOnlySdks` using the existing [SDK array contract](#explicit-c-sdk-inputs-for-managed-previews).
+Pass the same SDK declarations, tool paths and expected workspace snapshot to
+search and navigation. MCP equivalents advertise this array in tools/list;
+successful payloads remain JSON in the existing text content.
+
+SDK contexts add `sdkInputsIdentity` to results and `uri`, `sourceOwnership`
+(`WORKSPACE`/`SDK`) and `readOnly` to locations. Workspace `file` remains relative;
+SDK `file` is its real absolute header path and `uri` is the real file URI. SDK
+locations include `sdk` with `root`, `identity`, `provenance`, `license`; the last
+two fields are caller declarations. SDK bytes are readonly and never patch
+ownership. Legacy one-based lines/zero-based characters/exclusive ends remain.
+
+SDK IDs bind captured SDK identity. After an SDK change, a prior SDK declaration
+ID returns `c.navigation.symbolNotFound`; search again for current IDs. Missing
+SDK input refuses rather than returning no references. A workspace snapshot hash
+alone does not cover external SDK changes. Without SDK configuration the legacy
+workspace-only JSON shape remains unchanged.
+
+Six native daemon/MCP/CLI C11/C17 cases pass 24 steps: typedef/field locations,
+SDK identity drift and missing inputs. Fresh C726/MCP32 and 19 old native cases
+pass. [ARC42 owns bounded acceptance](arc42/appendix-requirements.adoc#c04-sdk-queries-2026-11-15).
+Evidence: `.refactorkit/runs/c04-sdk-queries-r001/archive-audit.json` and matrix.
+Broader SDK families/configurations, direct SDK document cursors and platform
+SDK layouts remain `actionable`; full original C02-C17/release remain open.
+[Standard LSP workspace-to-SDK query contract](integration-contracts.md#c-workspace-cursor-navigation-to-sdk-locations).
+
+
+### C managed preview provider
+
+A successful `c.preview` response identifies its language adapter with
+`provider.name = "refactorkit-c"`. The `provider.version` is the RefactorKit
+build version. The CLI projects the same preview response for `refactorkit c`
+operations. The [CMake surface Story](../features/c-cmake-single-tu-managed-surface.feature)
+covers the daemon method and the CLI.
+
+The daemon lists `c.preview` in `server.capabilities` as experimental, with
+`requiresProject: true` and `writesWorkspace: false`. Open a project before
+requesting a preview. Applying a retained plan uses `refactor.apply`.

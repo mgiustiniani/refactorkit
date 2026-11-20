@@ -3,7 +3,12 @@ package org.refactorkit.core
 /** Versioned defensive limits for local stdio protocol surfaces. */
 object ProtocolLimits {
     const val MAX_REQUEST_BYTES = 1_048_576
+    const val MAX_DAEMON_RESPONSE_BYTES = 2_097_152
+    /** Aggregate stdout/stderr budget for one RefactorKit CLI process invocation. */
+    const val MAX_CLI_OUTPUT_BYTES = 2_097_152
     const val MAX_LSP_FRAME_BYTES = 1_048_576
+    const val MAX_LSP_RESPONSE_BYTES = 2_097_152
+    const val MAX_MCP_RESPONSE_BYTES = 2_097_152
     const val MAX_PENDING_PLANS = 128
     const val MAX_DAEMON_QUEUED_REQUESTS = 256
     const val MAX_SYMBOL_RESULTS = 200

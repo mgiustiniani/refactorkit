@@ -1,0 +1,617 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.org/schemas/api-0.2-project-context-v1.json",
+  "title": "RefactorKit API 0.2 project.context response v1",
+  "description": "Wire authority for the readonly Java context DTO. ARC42 owns integrated status. Gradle remains partial. This context is not mutation authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "snapshotHash",
+    "contextHash",
+    "sdk",
+    "providers",
+    "modules",
+    "buildEvidence",
+    "selectedSource",
+    "analysis",
+    "refusal"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "java-project-context-v1"
+    },
+    "status": {
+      "enum": [
+        "available",
+        "partial",
+        "refused"
+      ]
+    },
+    "snapshotHash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contextHash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sdk": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sdk"
+      },
+      "maxItems": 18
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/provider"
+      },
+      "maxItems": 16
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/module"
+      },
+      "maxItems": 1024
+    },
+    "buildEvidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      },
+      "maxItems": 16384
+    },
+    "selectedSource": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sourceAssociation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "analysis": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/analysis"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "refusal": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/refusal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind",
+        "fingerprint"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "kind": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        }
+      }
+    },
+    "sdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "home",
+        "sourceRelease",
+        "platformRelease",
+        "identitySha256",
+        "releaseMetadataSha256",
+        "signatureArchive",
+        "signatureArchiveSha256"
+      ],
+      "properties": {
+        "home": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "sourceRelease": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 25
+        },
+        "platformRelease": {
+          "type": "integer",
+          "minimum": 8
+        },
+        "identitySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "releaseMetadataSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "signatureArchive": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "signatureArchiveSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerId",
+        "status",
+        "strategy",
+        "buildCodeExecution",
+        "credentialsAccess",
+        "networkAccess",
+        "diagnostics"
+      ],
+      "properties": {
+        "providerId": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "partial",
+            "offline-missing",
+            "unavailable",
+            "execution-refused"
+          ]
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "buildCodeExecution": {
+          "type": "string"
+        },
+        "credentialsAccess": {
+          "type": "string"
+        },
+        "networkAccess": {
+          "type": "string"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500
+        }
+      }
+    },
+    "classpathEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "providerId",
+        "moduleId",
+        "sourceSetId",
+        "dependencyScope",
+        "fingerprint"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "moduleId": {
+          "type": "string"
+        },
+        "sourceSetId": {
+          "type": "string"
+        },
+        "dependencyScope": {
+          "anyOf": [
+            {
+              "enum": [
+                "compile",
+                "provided",
+                "runtime",
+                "test",
+                "system",
+                "custom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "moduleId",
+        "scope"
+      ],
+      "properties": {
+        "moduleId": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "compile",
+            "provided",
+            "runtime",
+            "test",
+            "system",
+            "custom"
+          ]
+        }
+      }
+    },
+    "sourceSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "sourceLevel",
+        "release",
+        "sourceRoots",
+        "generatedSourceRoots",
+        "outputDirectories",
+        "analysisSourceRoots",
+        "compileClasspath",
+        "runtimeClasspath",
+        "moduleDependencies"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "main",
+            "test",
+            "integration-test",
+            "custom"
+          ]
+        },
+        "sourceLevel": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 25
+        },
+        "release": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 25
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceRoots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 256
+        },
+        "generatedSourceRoots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 256
+        },
+        "outputDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 256
+        },
+        "analysisSourceRoots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 16384
+        },
+        "compileClasspath": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/classpathEntry"
+          },
+          "maxItems": 4096
+        },
+        "runtimeClasspath": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/classpathEntry"
+          },
+          "maxItems": 4096
+        },
+        "moduleDependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependency"
+          },
+          "maxItems": 1024
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerId",
+        "id",
+        "name",
+        "root",
+        "sourceSets"
+      ],
+      "properties": {
+        "providerId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "sourceSets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceSet"
+          },
+          "maxItems": 64
+        }
+      }
+    },
+    "sourceAssociation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "symbol",
+        "moduleId",
+        "sourceSetId",
+        "sourceRoot",
+        "generated",
+        "bindingKey",
+        "evidence"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "moduleId": {
+          "type": "string"
+        },
+        "sourceSetId": {
+          "type": "string"
+        },
+        "sourceRoot": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "generated": {
+          "type": "boolean"
+        },
+        "bindingKey": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "enum": [
+            "JDT_BINDING",
+            "SOURCE_ROOT_OWNERSHIP"
+          ]
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "snapshotHash",
+        "platformIdentitiesByRelease",
+        "warningCount"
+      ],
+      "properties": {
+        "backend": {
+          "const": "eclipse-jdt"
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "platformIdentitiesByRelease": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "warningCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "refused"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "contextHash": {
+            "type": "null"
+          },
+          "sdk": {
+            "maxItems": 0
+          },
+          "providers": {
+            "maxItems": 0
+          },
+          "modules": {
+            "maxItems": 0
+          },
+          "buildEvidence": {
+            "maxItems": 0
+          },
+          "selectedSource": {
+            "type": "null"
+          },
+          "analysis": {
+            "type": "null"
+          },
+          "refusal": {
+            "$ref": "#/$defs/refusal"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "snapshotHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "contextHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "refusal": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "available"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sdk": {
+            "minItems": 1
+          },
+          "providers": {
+            "minItems": 1
+          },
+          "analysis": {
+            "$ref": "#/$defs/analysis"
+          }
+        }
+      }
+    }
+  ]
+}

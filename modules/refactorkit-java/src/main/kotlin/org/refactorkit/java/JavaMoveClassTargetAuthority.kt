@@ -181,6 +181,11 @@ internal data class JavaMoveClassSemanticSelection(
     val excludedWarningSourceSets: Set<MoveAuthoritySourceSet>,
 )
 
+internal data class JavaMoveClassBindingCheck(
+    val selection: JavaMoveClassSemanticSelection? = null,
+    val missingGradleOutputs: Set<MoveAuthoritySourceSet> = emptySet(),
+)
+
 internal data class JavaMoveClassOfflineAuthorityPrepared(
     val snapshot: ProjectSnapshot,
     val symbolFqn: String,
@@ -217,6 +222,7 @@ internal data class JavaMoveClassDiagnosticIdentityDriftEvidence(
 
 internal object JavaMoveClassTargetAuthorityEvaluator {
     private const val MAVEN_PROVIDER = "maven-effective-v1"
+    private const val GRADLE_PROVIDER = "gradle-effective-v1"
     private const val LEASE_KIND = "java.maven.moveClass.targetScoped.v1"
     private const val PROVIDER_CONFIGURATION =
         "eclipse-jdt-core:3.44.0|AST:JLS25|resolveBindings=true|bindingsRecovery=true|statementsRecovery=true"
@@ -689,33 +695,75 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
         snapshot: ProjectSnapshot,
         symbolFqn: String,
         declarationPath: Path,
-    ): JavaMoveClassSemanticSelection? {
-        val closure = observerClosure(snapshot, declarationPath, setOf(BuildModelStatus.AVAILABLE)) ?: return null
-        if (closure.model.modules.any { it.attributes["java.dependencyGraph.status"] != "complete" }) return null
+    ): JavaMoveClassBindingCheck {
+        val incomplete = JavaMoveClassBindingCheck()
+        val closure = observerClosure(snapshot, declarationPath, setOf(BuildModelStatus.AVAILABLE)) ?: return incomplete
+        if (!hasCompleteDependencyClosure(closure.model)) return incomplete
         val analysis = analyzeOverlay(snapshot)
         val warningSourceSets = analysis.warnings.map { warning ->
-            sourceSet(snapshot, closure.model, warning.path) ?: return null
+            sourceSet(snapshot, closure.model, warning.path) ?: return incomplete
         }
-        if (warningSourceSets.any { it in closure.sourceSets }) return null
+        val observerWarnings = analysis.warnings.zip(warningSourceSets).filter { (_, owner) -> owner in closure.sourceSets }
+        if (observerWarnings.isNotEmpty()) {
+            val missing = if (observerWarnings.all { (warning, _) -> warning.category == JdtJavaDiagnosticCategory.TYPE_RESOLUTION }) {
+                missingGradleProjectOutputs(snapshot, closure.model, observerWarnings.map { (_, owner) -> owner }.toSet())
+            } else emptySet()
+            return JavaMoveClassBindingCheck(missingGradleOutputs = missing)
+        }
         val target = analysis.symbols.singleOrNull { symbol ->
             symbol.qualifiedName == symbolFqn && symbol.kind in MOVEABLE_KINDS &&
                 symbol.path == declarationPath && symbol.bindingKey != null && !symbol.recovered
-        } ?: return null
+        } ?: return incomplete
         val bindingKey = requireNotNull(target.bindingKey)
         val references = analysis.references.filter { reference ->
             reference.bindingKey == bindingKey && reference.path != declarationPath && !reference.recovered
         }
         val referenceSourceSets = references.map { reference ->
-            sourceSet(snapshot, closure.model, reference.path) ?: return null
+            sourceSet(snapshot, closure.model, reference.path) ?: return incomplete
         }
-        if (referenceSourceSets.any { it !in closure.sourceSets }) return null
-        return JavaMoveClassSemanticSelection(
+        if (referenceSourceSets.any { it !in closure.sourceSets }) return incomplete
+        return JavaMoveClassBindingCheck(JavaMoveClassSemanticSelection(
             analysis,
             target,
             references,
             closure,
             warningSourceSets.toSet() - closure.sourceSets,
-        )
+        ))
+    }
+
+    /** Reports only missing producer outputs in the evaluated compile closure of failing JDT observers. */
+    private fun missingGradleProjectOutputs(
+        snapshot: ProjectSnapshot,
+        model: BuildModel,
+        failingObservers: Set<MoveAuthoritySourceSet>,
+    ): Set<MoveAuthoritySourceSet> {
+        if (model.providerId != GRADLE_PROVIDER || snapshot.semanticAnalysisAuthority !is JavaContextAuthority) return emptySet()
+        val root = snapshot.workspace.root
+        fun absolute(path: Path) = root.resolve(path).normalize()
+        val missing = snapshot.classpathEvidence.asSequence()
+            .filter { it.kind == ClasspathEvidenceKind.ENTRY && it.fingerprint == "missing" }
+            .map { absolute(it.path) }.toSet()
+        if (missing.isEmpty()) return emptySet()
+        val modules = model.modules.associateBy(BuildModule::id)
+        val javaSourceSets = snapshot.files.asSequence().filter { it.languageId == "java" }
+            .mapNotNull { sourceSet(snapshot, model, it.path) }.toSet()
+        return failingObservers.flatMapTo(linkedSetOf()) { observer ->
+            val module = modules.getValue(observer.moduleId)
+            val selected = module.sourceSets.single { it.id == observer.sourceSetId }
+            JavaBuildSourceSetContextResolver.resolve(model, module, selected).compileClasspath
+                .groupBy { MoveAuthoritySourceSet(it.moduleId, it.sourceSetId) }
+                .filter { (owner, entries) ->
+                    if (owner !in javaSourceSets) return@filter false
+                    val producer = modules.getValue(owner.moduleId)
+                    val sourceSet = producer.sourceSets.single { it.id == owner.sourceSetId }
+                    val owned = sourceSet.outputDirectories.map(::absolute).toMutableSet()
+                    if (sourceSet.kind == SourceSetKind.MAIN) {
+                        producer.attributes["gradle.mainArtifact"]?.takeIf(String::isNotBlank)?.let { owned.add(absolute(Path.of(it))) }
+                    }
+                    val outputs = entries.map { absolute(it.path) }.filter { it in owned }
+                    outputs.isNotEmpty() && outputs.all { it in missing }
+                }.keys
+        }
     }
 
     private fun structuralBlockers(
@@ -1413,7 +1461,9 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
         allowedStatuses: Set<BuildModelStatus>,
     ): MoveAuthorityObserverClosure? {
         val targetOwnership = snapshot.owningBuildSourceRoots(declarationPath).singleOrNull() ?: return null
-        if (targetOwnership.providerId != MAVEN_PROVIDER || targetOwnership.modelStatus !in allowedStatuses) return null
+        if (targetOwnership.providerId !in setOf(MAVEN_PROVIDER, GRADLE_PROVIDER) ||
+            targetOwnership.modelStatus !in allowedStatuses
+        ) return null
         val model = snapshot.buildModels.singleOrNull { it.providerId == targetOwnership.providerId }
             ?.takeIf { it.status in allowedStatuses } ?: return null
         val owner = MoveAuthoritySourceSet(targetOwnership.module.id, targetOwnership.sourceSet.id)
@@ -1435,6 +1485,17 @@ internal object JavaMoveClassTargetAuthorityEvaluator {
             }
         }
         return MoveAuthorityObserverClosure(model, owner, closure)
+    }
+
+    private fun hasCompleteDependencyClosure(model: BuildModel): Boolean = when (model.providerId) {
+        MAVEN_PROVIDER -> model.modules.all { it.attributes["java.dependencyGraph.status"] == "complete" }
+        GRADLE_PROVIDER -> model.attributes["strategy"] == "gradle-evaluated-v1" &&
+            model.modules.all { module ->
+                module.attributes["java.buildModel.status"] == "available" &&
+                    module.sourceSets.isNotEmpty() &&
+                    module.sourceSets.all { it.attributes["classpathClosure"] == "resolved" }
+            }
+        else -> false
     }
 
     internal fun sourceSet(

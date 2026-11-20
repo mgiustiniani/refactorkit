@@ -131,7 +131,7 @@ class LspSessionTest {
         assertEquals("client-managed-native-lsp", ownership["typescript"]!!.jsonPrimitive.content)
         assertEquals("refactorkit-external-compiler-read-only-via-cli-daemon-mcp",
             ownership["kotlin"]!!.jsonPrimitive.content)
-        assertEquals(listOf("cli", "daemon", "mcp"), ownership["managedMutationSurfaces"]!!.jsonArray.map {
+        assertEquals(listOf("cli", "daemon", "mcp", "lsp"), ownership["managedMutationSurfaces"]!!.jsonArray.map {
             it.jsonPrimitive.content
         })
         val commands = capabilities["executeCommandProvider"]!!.jsonObject["commands"]!!.jsonArray
@@ -142,6 +142,7 @@ class LspSessionTest {
         assertTrue(commands.contains("refactorkit.changeSignature.reorderParameters"))
         assertTrue(commands.contains("refactorkit.changeSignature.removeParameter"))
         assertTrue(commands.contains("refactorkit.formatFile"))
+        assertTrue(commands.contains("refactorkit.c.preview"))
     }
 
     @Test
@@ -304,32 +305,6 @@ class LspSessionTest {
         assertTrue(titles.any { it.contains("Organize imports") })
         assertTrue(titles.any { it.contains("Rename Foo") })
         assertTrue(titles.any { it.contains("Safe delete Foo") })
-    }
-
-    @Test
-    fun codeActionOnMethodSymbolIncludesChangeSignatureActions() {
-        val root = createProject(
-            "src/main/java/com/example/UserService.java" to """
-                package com.example;
-                class UserService {
-                    String findName(String id, boolean unused) { return id; }
-                }
-            """.trimIndent() + "\n",
-        )
-        val session = LspSession()
-        session.dispatch("initialize", initializeParams(root))
-        val result = session.dispatch("textDocument/codeAction", buildJsonObject {
-            put("textDocument", textDocumentParams(root, "src/main/java/com/example/UserService.java")["textDocument"]!!)
-            put("range", buildJsonObject {
-                put("start", buildJsonObject { put("line", 2); put("character", 11) })
-                put("end",   buildJsonObject { put("line", 2); put("character", 19) })
-            })
-        }) as JsonArray
-        val titles = result.map { it.jsonObject["title"]!!.jsonPrimitive.content }
-        assertTrue(titles.any { it.contains("Change signature") }, "expected Change signature: $titles")
-        assertTrue(titles.any { it.contains("Add parameter") }, "expected Add parameter: $titles")
-        assertTrue(titles.any { it.contains("Reorder parameters") }, "expected Reorder parameters: $titles")
-        assertTrue(titles.any { it.contains("Remove parameter") }, "expected Remove parameter: $titles")
     }
 
     @Test

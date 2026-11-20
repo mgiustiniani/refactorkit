@@ -2,6 +2,11 @@
 
 Status: active, product-critical, release-blocking J1 requirement.
 
+Architecture authority: [ARC42 Java/Maven Diagnostics Authority](../arc42/08-crosscutting-concepts.adoc#java-maven-diagnostics-authority).
+The bounded JPMS refusal Story is
+[java-maven-ownership-jpms-authority.feature](../../features/java-maven-ownership-jpms-authority.feature);
+it does not authorize successful JPMS ownership moves.
+
 ## Purpose
 
 `java.moveAcrossMavenModules` moves proven Java ownership between modules of one
@@ -30,6 +35,13 @@ FQCNs, imports and public binary identity. Materialized files are also checked b
 containing root was not declared generated. Spring, Jakarta/JPA and Jackson
 annotations across the complete moved root plus exact quoted moved FQCNs in other
 tracked files elevate the plan to high risk with deterministic locations/warnings.
+
+Named JPMS roots require project SDK authority for module-path diagnostics. If
+that authority is absent, `java.moveAcrossMavenModules` returns a `REFUSED` plan
+with `java.context.sdkRequired`, no workspace edits, no approval authority, and
+no transaction. This is a fail-closed refusal row only; SDK-backed JPMS module
+identity, readability, exports, module-path semantics, and successful ownership
+moves remain unqualified.
 
 ## RPK-JAVA-OWN-002 — Explicit POM intent
 
@@ -287,6 +299,18 @@ projection, origin/range evidence, staged model, diagnostics, and returned
 cache, service lifecycle, or durable store. The existing transaction journal
 remains the WAL and exact apply/rollback record; `PatchEngine` remains the only
 managed mutation authority.
+
+### Consumer-reported lifecycle interleaving — 2026-10-21
+
+On a disposable Maven module-rename fixture, the consumer reports that after
+Apply, `mvn -o verify` succeeds and creates `core/target/**`. Normal rollback is
+refused while those outputs exist. After the consumer removes the outputs,
+rollback and offline verification of the restored reactor succeed. This is an
+observed interaction between generated build outputs and rollback eligibility;
+no cause has been attributed. The existing direct-library Story does not run a
+Maven lifecycle between Apply and rollback, so this
+observation does not change that Story's bounded status or qualify lifecycle
+interleaving as supported.
 
 ### Explicitly excluded from the first row
 

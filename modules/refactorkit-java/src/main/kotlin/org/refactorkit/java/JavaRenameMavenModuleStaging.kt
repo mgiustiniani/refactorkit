@@ -182,7 +182,7 @@ internal object JavaRenameMavenModuleStaging {
         }
     }
 
-    private fun rehydrateSemanticSnapshot(
+    internal fun rehydrateSemanticSnapshot(
         candidate: ProjectSnapshot,
         rebuilt: ProjectSnapshot,
     ): ProjectSnapshot {
@@ -226,6 +226,19 @@ internal object JavaRenameMavenModuleStaging {
                         outputDirectories = sourceSet.outputDirectories.map { rebasePath(it, fromRoot, toRoot) },
                         classpathEntries = sourceSet.classpathEntries.map { rebasePath(it, fromRoot, toRoot) },
                         runtimeClasspathEntries = sourceSet.runtimeClasspathEntries.map { rebasePath(it, fromRoot, toRoot) },
+                        resolvedArtifacts = sourceSet.resolvedArtifacts.map { artifact ->
+                            artifact.copy(path = rebasePath(artifact.path, fromRoot, toRoot))
+                        },
+                        annotationProcessors = sourceSet.annotationProcessors?.let { processors ->
+                            processors.copy(
+                                processorPath = processors.processorPath.map { artifact ->
+                                    artifact.copy(path = rebasePath(artifact.path, fromRoot, toRoot))
+                                },
+                                processorPathEntries = processors.processorPathEntries.map {
+                                    rebasePath(it, fromRoot, toRoot)
+                                },
+                            )
+                        },
                         attributes = rebaseAttributes(sourceSet.attributes, fromRoot, toRoot),
                     ) },
                 ) },

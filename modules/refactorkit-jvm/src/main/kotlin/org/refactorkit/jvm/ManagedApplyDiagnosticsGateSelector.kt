@@ -6,6 +6,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaCreateMavenModulePlanner
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaRenameMavenModulePlanner
 import org.refactorkit.kotlin.KotlinLanguageAdapter
@@ -73,6 +74,11 @@ object ManagedApplyDiagnosticsGateSelector {
         providerFunctions: ManagedApplyDiagnosticsProviderFunctions,
     ): DiagnosticsGate = when (languageId) {
         "java" -> when (plan.operation) {
+            JavaCreateMavenModulePlanner.OPERATION -> DiagnosticsGate.lazyAuthoritative(
+                JavaCreateMavenModulePlanner.DIAGNOSTICS_GATE_ID,
+            ) {
+                JavaCreateMavenModulePlanner().diagnosticsGate(plan)
+            }
             JavaRenameMavenModulePlanner.OPERATION -> DiagnosticsGate.lazyAuthoritative(
                 JavaRenameMavenModulePlanner.DIAGNOSTICS_GATE_ID,
             ) {

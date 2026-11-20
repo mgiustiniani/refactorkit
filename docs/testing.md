@@ -5,8 +5,11 @@ See AGENTS.md §18 for the authoritative testing rules.
 Status: implementation-informed after `v0.2.0-beta` P1/P2 golden tests,
 initial P3 safety tests, initial P4 daemon/MCP contract tests, hardened P4 LSP
 command-contract coverage, focused P6 external-importer hardening, and P7
-packaging/release-verification progress. The current golden suite contains 23
-cases covering shipped patch-producing operations.
+packaging/release-verification progress. The Java examples below cover shipped
+patch-producing operations. The 2026-11-18 corpus has 40 requests, including 14
+C requests whose native acceptance is qualified separately below. This document
+describes test execution; [ARC42](arc42/appendix-requirements.adoc) owns integrated
+requirement and release status.
 
 Every Gradle `Test` worker uses bounded repository-local temporary storage below
 `build/test-tmp/<module>` for both `java.io.tmpdir` and `TMPDIR`. A saturated host
@@ -110,7 +113,7 @@ testdata/golden/
 ### Run from CLI
 
 ```bash
-# Run all cases
+# Run Java-only custom corpora without native selectors
 refactorkit test-golden
 
 # Run one case
@@ -120,15 +123,84 @@ refactorkit test-golden rename-class-user-manager
 refactorkit test-golden --golden-dir path/to/golden
 ```
 
+The repository corpus contains C fixtures. Running that full corpus requires
+explicit paths to all three already qualified native tools:
+
+```bash
+refactorkit test-golden \
+  --clang "$C_TOOLS/usr/bin/clang-22" \
+  --clangd "$C_TOOLS/usr/bin/clangd" \
+  --clang-format "$C_TOOLS/usr/bin/clang-format"
+```
+
+`C_TOOLS` is the caller's selected Clang 22.1.8 toolchain root. The command does
+not discover tools on PATH or install them. CI supplies the verified
+`REFACTORKIT_C_QUALIFICATION_TOOLCHAIN` exported by its native bootstrap.
+
+### Native C fixtures
+
+C goldens require exactly one root or `build/compile_commands.json` in `before/`,
+with an argument-array command and explicit C11/C17 standard for each TU. The
+tokens `__GOLDEN_WORKSPACE__` and `__GOLDEN_CLANG__` are materialized only inside
+these database files. Include the expected database in `after/` too; relocation
+leaves it unchanged because database regeneration is a separate caller action.
+
+| Case | Operation | Native evidence |
+|------|-----------|-----------------|
+| `c-rename-prefix-c11` | `renamePrefix` | Explicit C11 mapping, exact images and rollback. |
+| `c-rename-prefix-c17` | `renamePrefix` | Explicit C17 mapping, exact images and rollback. |
+| `c-extract` | `extractExpression` | Existing positive scalar extraction with C17 context. |
+| `c-inline` | `inlineFunction` | Native preview exposes a stale leading blank line in the expected image; correction pending the numeric slice override. |
+| `c-organize-includes` | `organizeIncludes` | Existing positive standard-header pair ordering with C17 context. |
+| `c-relocate` | `relocateComponent` | Two TUs, root literal STATIC CMake binding, exact move and rollback. |
+| `c-rename-symbol` | `c.renameSymbol` | Bound prototype/definition/call rename; comment, string and unrelated-symbol decoys remain unchanged. |
+| `c-format-file` | `c.formatFile` | Exact whole-file formatting with captured builtin LLVM style. |
+| `c-change-signature-rename-parameter` | `c.changeSignature` | Bound family rename preserving an unrelated parameter. |
+| `c-change-signature-add-parameter` | `c.addParameter` | Explicit caller expression inserted in prototype, definition and call. |
+| `c-change-signature-reorder-parameters` | `c.reorderParameters` | Declaration/caller mapping with distinct prototype and definition names. |
+| `c-inline-local` | `c.inlineLocalVariable` | One compiler-bound literal initializer/read. |
+| `c-safe-delete` | `c.safeDelete` | Unreferenced file-static function deletion with exact rollback. |
+| `c-extract-statements` | `c.extractStatements` | Exact UTF-8 selection, two helper inputs and one output. |
+
+Prefix requests encode explicit pairs as `arguments.mapping`, for example
+`"calculate=compute,load_item=read_item"`; prefix text matching is not inferred.
+Successful C qualification requires managed C preview/Apply, independent expected
+images and exact rollback with approval/journal evidence. Missing tools or
+compiler context are typed refusals, never a clean Java diagnostics result.
+The harness control Story also checks an actual compiler error and retained Java
+behavior. These fixture cells do not qualify all C operations or a release.
+The previous exact CI golden shell command was executed locally on all 32 requests:
+31 pass; only the stale inline expected-image line fails. This is recorded in
+`.refactorkit/runs/c17-golden-ci-selectors-r001/verification.json`; it is not a
+remote CI pass. No failing request was excluded.
+Eight additional permanent operation goldens each pass a separately admitted
+four-step native Story. All 13 exact golden scenario identities are registered
+in the default filter (20 expanded cases, including the known inline failure).
+The current controls pass 870 C/daemon/MCP/Testkit module tests without skips,
+19 of the 20 default-selected golden Story cases, and 39 of the 40 packaged
+goldens. Both failures are the same known inline expected-image blank line;
+neither corpus is declared green. All 2,019 captured sources remain unchanged
+during the 503.9-second source control run. Reports are under
+`.refactorkit/runs/c17-golden-final-controls-20261118-r001/`. The other CLI cases
+were outside this focused selection. Project-style and CMake source-move golden
+previews pass on the current-source package but remain outside this corpus until
+their explicit 10-file per-slice override is approved.
+Authority and evidence:
+[ARC42 native golden status](arc42/appendix-requirements.adoc#c17-native-golden-authority-2026-11-16).
+
 ### Run from Gradle
 
 ```bash
 ./gradlew goldenTest
-# Equivalent focused module task:
+# Equivalent module task (Java/model tests and request discovery):
 ./gradlew :modules:refactorkit-testkit:test
 ```
 
-### Current 23 golden cases
+These Gradle aliases run the existing Testkit tests. Use the CLI command above
+for the complete corpus and selected native C toolchain; request discovery alone
+does not execute a native golden.
+
+### Historical Java golden examples
 
 | Case name | Operation | Status | Coverage focus |
 |-----------|-----------|--------|----------------|

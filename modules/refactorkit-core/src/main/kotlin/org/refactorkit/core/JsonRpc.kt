@@ -1,10 +1,19 @@
 package org.refactorkit.core
 
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 data class JsonRpcRequest(
@@ -14,13 +23,51 @@ data class JsonRpcRequest(
     val params: JsonElement? = null,
 )
 
-@Serializable
+@Serializable(with = JsonRpcResponseSerializer::class)
 data class JsonRpcResponse(
     val jsonrpc: String = "2.0",
     val id: JsonElement? = null,
     val result: JsonElement? = null,
     val error: JsonRpcError? = null,
 )
+
+/** Retains the original nullable response decoding and its descriptor. */
+@Serializable
+@SerialName("org.refactorkit.core.JsonRpcResponse")
+private data class JsonRpcResponseFields(
+    val jsonrpc: String = "2.0",
+    val id: JsonElement? = null,
+    val result: JsonElement? = null,
+    val error: JsonRpcError? = null,
+)
+
+/** The protocol envelope is independent of optional-null/default payload settings. */
+private object JsonRpcResponseSerializer : KSerializer<JsonRpcResponse> {
+    override val descriptor: SerialDescriptor = JsonRpcResponseFields.serializer().descriptor
+
+    override fun serialize(encoder: Encoder, value: JsonRpcResponse) {
+        val jsonEncoder = encoder as? JsonEncoder
+            ?: throw SerializationException("JSON-RPC responses require a JSON encoder")
+        if (value.error != null && value.result != null && value.result != JsonNull) {
+            throw SerializationException("JSON-RPC response cannot contain both a result and an error")
+        }
+        jsonEncoder.encodeJsonElement(buildJsonObject {
+            put("jsonrpc", value.jsonrpc)
+            put("id", value.id ?: JsonNull)
+            val error = value.error
+            if (error != null) {
+                put("error", jsonEncoder.json.encodeToJsonElement(JsonRpcError.serializer(), error))
+            } else {
+                put("result", value.result ?: JsonNull)
+            }
+        })
+    }
+
+    override fun deserialize(decoder: Decoder): JsonRpcResponse {
+        val fields = decoder.decodeSerializableValue(JsonRpcResponseFields.serializer())
+        return JsonRpcResponse(fields.jsonrpc, fields.id, fields.result, fields.error)
+    }
+}
 
 @Serializable
 data class JsonRpcError(

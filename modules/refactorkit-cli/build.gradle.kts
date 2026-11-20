@@ -48,11 +48,15 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(project(":modules:refactorkit-lsp"))
     testImplementation(project(":modules:refactorkit-mcp"))
+    testImplementation(project(":modules:refactorkit-c")) // C Story glue reuses the existing Cucumber CLI runner.
+    testImplementation(testFixtures(project(":modules:refactorkit-c"))) // Internal, bounded C process-response seams.
     testImplementation(kotlin("test"))
     testImplementation("io.cucumber:cucumber-java:7.20.1")
     testImplementation("io.cucumber:cucumber-junit-platform-engine:7.20.1")
     testImplementation("org.junit.platform:junit-platform-suite:1.11.2")
 }
+
+apply(from = rootProject.file("scripts/runtime-component-manifest.gradle"))
 
 sourceSets.test {
     resources.srcDir(rootProject.file("features"))
@@ -94,6 +98,25 @@ tasks.named<JavaExec>("run") {
 
 tasks.test {
     useJUnitPlatform()
+    // The integrated CLI Cucumber matrix retains large source, protocol and
+    // packaged-runtime fixtures within one worker. The default 512 MiB heap
+    // reproducibly exhausts memory before the selected suite completes.
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    listOf("cucumber.filter.name", "refactorkit.c.glibcResolutionEvidence").forEach { key ->
+        providers.systemProperty(key).orNull?.let { systemProperty(key, it) }
+    }
+    // This packaged-runtime Story is selected by packagedJavaQueryContextSessionTest,
+    // which supplies the distribution root; keep it out of the generic source test.
+    val defaultCucumberFilterTags = layout.projectDirectory.file("src/test/resources/cucumber-filter-tags.txt").asFile.readText().trim()
+    systemProperty(
+        "cucumber.filter.tags",
+        providers.systemProperty("cucumber.filter.tags").orElse(defaultCucumberFilterTags).get(),
+    )
+    doFirst {
+        systemProperty("refactorkit.lsp.test.classpath", sourceSets.getByName("test").runtimeClasspath.asPath)
+        systemProperty("refactorkit.mcp.test.classpath", sourceSets.getByName("test").runtimeClasspath.asPath)
+    }
     // Optional real CLI/NDJSON boundary for the existing TypeScript Stories; never implicit.
     listOf("refactorkit.ts.packaged.root", "refactorkit.ts.packaged.evidence").forEach { key ->
         providers.systemProperty(key).orNull?.let { systemProperty(key, it) }
@@ -107,7 +130,16 @@ tasks.test {
 val runtimeModules = providers.gradleProperty("refactorkit.runtime.modules")
     .orElse("java.se,jdk.compiler,jdk.httpserver,jdk.unsupported,jdk.zipfs")
 
-val packageDir = layout.buildDirectory.dir("package/refactorkit")
+val packageDir = layout.dir(
+    providers.gradleProperty("refactorkit.package.dir").map { value ->
+        File(value).also { require(it.isAbsolute) { "refactorkit.package.dir must be an absolute path" } }
+    },
+).orElse(layout.buildDirectory.dir("package/refactorkit"))
+val packageArchiveDir = layout.dir(
+    providers.gradleProperty("refactorkit.package.archive.dir").map { value ->
+        File(value).also { require(it.isAbsolute) { "refactorkit.package.archive.dir must be an absolute path" } }
+    },
+).orElse(layout.buildDirectory.dir("distributions"))
 val runtimeDir = layout.buildDirectory.dir("jlink/runtime")
 val bundledLauncherDir = layout.buildDirectory.dir("generated/bundled-launchers")
 val bundledJavaPlatformDir = layout.buildDirectory.dir("generated/java-platform/jdk")
@@ -209,6 +241,18 @@ tasks.register("writeBundledLaunchers") {
             """.trimMargin(),
         )
         mcpUnix.setExecutable(true)
+        val lspUnix = out.resolve("refactorkit-lsp")
+        lspUnix.writeText(
+            """
+            |#!/usr/bin/env sh
+            |set -e
+            |APP_HOME="${'$'}(CDPATH= cd -- "${'$'}(dirname -- "${'$'}0")/.." && pwd)"
+            |exec "${'$'}APP_HOME/runtime/bin/java" -Drefactorkit.java.platform.home="${'$'}APP_HOME/runtime" -cp "${'$'}APP_HOME/lib/*" org.refactorkit.lsp.RefactorKitLspKt "${'$'}@"
+            |
+            """.trimMargin(),
+        )
+        lspUnix.setExecutable(true)
+
 
         out.resolve("refactorkit.bat").writeText(
             """
@@ -226,6 +270,16 @@ tasks.register("writeBundledLaunchers") {
             |setlocal
             |set "APP_HOME=%~dp0.."
             |"%APP_HOME%\runtime\bin\java.exe" -Drefactorkit.java.platform.home="%APP_HOME%\runtime" -cp "%APP_HOME%\lib\*" org.refactorkit.daemon.RefactorKitDaemonKt %*
+            |exit /b %ERRORLEVEL%
+            |
+            """.trimMargin(),
+        )
+        out.resolve("refactorkit-lsp.bat").writeText(
+            """
+            |@echo off
+            |setlocal
+            |set "APP_HOME=%~dp0.."
+            |"%APP_HOME%\runtime\bin\java.exe" -Drefactorkit.java.platform.home="%APP_HOME%\runtime" -cp "%APP_HOME%\lib\*" org.refactorkit.lsp.RefactorKitLspKt %*
             |exit /b %ERRORLEVEL%
             |
             """.trimMargin(),
@@ -279,6 +333,7 @@ tasks.register("refactorkitRuntimeDist") {
         out.resolve("bin/refactorkit").setExecutable(true)
         out.resolve("bin/refactorkit-daemon").setExecutable(true)
         out.resolve("bin/refactorkit-mcp").setExecutable(true)
+        out.resolve("bin/refactorkit-lsp").setExecutable(true)
         println("Self-contained RefactorKit CLI package: ${out.absolutePath}")
     }
 }
@@ -328,6 +383,71 @@ tasks.register<Test>("packagedMavenMoveClassAuthorityTest") {
         junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/packagedMavenMoveClassAuthorityTest"))
         html.required.set(true)
         html.outputLocation.set(layout.buildDirectory.dir("reports/tests/packagedMavenMoveClassAuthorityTest"))
+    }
+}
+
+tasks.register<Test>("packagedGradleCompositeRepeatSyncTest") {
+    group = "verification"
+    description = "Run the repeated Gradle composite identity Story against the packaged daemon process."
+    dependsOn("refactorkitRuntimeDist", "testClasses")
+    inputs.dir(packageDir)
+        .withPropertyName("packagedRuntime")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform()
+    maxParallelForks = 1
+    filter {
+        includeTestsMatching("org.refactorkit.cli.previewcommand.JavaGradle8111EffectiveContextCucumberTest")
+    }
+    systemProperty(
+        "cucumber.filter.name",
+        "Aggregate Gradle context retains qualified workspace identities across repeated sync",
+    )
+    systemProperty("cucumber.plugin", "json:${layout.buildDirectory.file("reports/cucumber/packaged-gradle-composite-repeat-sync.json").get().asFile.absolutePath}")
+    systemProperty("refactorkit.gradle.composite.package.root", packageDir.get().asFile.absolutePath)
+
+    reports {
+        junitXml.required.set(true)
+        junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/packagedGradleCompositeRepeatSyncTest"))
+        html.required.set(true)
+        html.outputLocation.set(layout.buildDirectory.dir("reports/tests/packagedGradleCompositeRepeatSyncTest"))
+    }
+}
+
+tasks.register<Test>("packagedJavaQueryContextSessionTest") {
+    group = "verification"
+    description = "Run the IDE Java query-session continuity Story through the packaged daemon process."
+    dependsOn("refactorkitRuntimeDist", "testClasses")
+    inputs.dir(packageDir)
+        .withPropertyName("packagedRuntime")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file("features/java-query-context-authority.feature"))
+    inputs.file(file("src/test/kotlin/org/refactorkit/cli/previewcommand/JavaQueryContextAuthoritySteps.kt"))
+
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform()
+    maxParallelForks = 1
+    filter {
+        includeTestsMatching("org.refactorkit.cli.previewcommand.JavaPreviewCommandSurfaceCucumberTest")
+    }
+    systemProperty(
+        "cucumber.filter.name",
+        "Java query sequence keeps its daemon session in packaged runtime after reactor context acquisition",
+    )
+    systemProperty(
+        "cucumber.plugin",
+        "pretty, json:${layout.buildDirectory.file("reports/cucumber/packaged-java-query-context-session.json").get().asFile.absolutePath}",
+    )
+    systemProperty("refactorkit.gradle.composite.package.root", packageDir.get().asFile.absolutePath)
+
+    reports {
+        junitXml.required.set(true)
+        junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/packagedJavaQueryContextSessionTest"))
+        html.required.set(true)
+        html.outputLocation.set(layout.buildDirectory.dir("reports/tests/packagedJavaQueryContextSessionTest"))
     }
 }
 
@@ -470,7 +590,7 @@ tasks.register<Test>("javaNavigationTest") {
     inputs.dir(packageDir)
 }
 
-tasks.named("check") { dependsOn("javaNavigationTest") }
+tasks.named("check") { dependsOn("javaNavigationTest", "packagedJavaQueryContextSessionTest") }
 
 tasks.register<Exec>("smokePackagedCli") {
     group = "verification"
@@ -517,7 +637,7 @@ tasks.register<Zip>("refactorkitRuntimeZip") {
     dependsOn("refactorkitRuntimeDist")
 
     archiveFileName.set("refactorkit-runtime.zip")
-    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    destinationDirectory.set(packageArchiveDir)
     from(packageDir) {
         into("refactorkit")
     }
@@ -532,6 +652,7 @@ tasks.register<Zip>("refactorkitRuntimeZip") {
         if (path == "refactorkit/bin/refactorkit" ||
             path == "refactorkit/bin/refactorkit-daemon" ||
             path == "refactorkit/bin/refactorkit-mcp" ||
+            path == "refactorkit/bin/refactorkit-lsp" ||
             path.startsWith("refactorkit/runtime/bin/") ||
             path == "refactorkit/runtime/lib/jexec" ||
             path == "refactorkit/runtime/lib/jspawnhelper"

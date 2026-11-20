@@ -27,10 +27,10 @@ def mark_stage(name: str) -> None:
 
 
 class Daemon:
-    def __init__(self, launcher: Path):
+    def __init__(self, launcher: Path, *, cwd=None, env=None, stderr=subprocess.DEVNULL):
         command = (["cmd.exe", "/d", "/s", "/c", str(launcher)] if os.name == "nt" else [str(launcher)])
         self.process = subprocess.Popen(
-            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, cwd=cwd, env=env,
             text=True, encoding="utf-8",
         )
         self.responses: queue.Queue[str | None] = queue.Queue()
@@ -53,7 +53,7 @@ class Daemon:
         self.process.stdin.flush()
         return self.next_id
 
-    def receive(self, request_id: int, timeout: float = 120) -> dict:
+    def receive_reply(self, request_id: int, timeout: float = 120) -> dict:
         try:
             raw = self.responses.get(timeout=timeout)
         except queue.Empty as error:
@@ -61,7 +61,13 @@ class Daemon:
         if raw is None:
             raise AssertionError(f"daemon exited before response {request_id}")
         response = json.loads(raw)
-        if response.get("id") != request_id or response.get("error") is not None:
+        if response.get("id") != request_id:
+            raise AssertionError(f"unexpected daemon response: {response}")
+        return response
+
+    def receive(self, request_id: int, timeout: float = 120) -> dict:
+        response = self.receive_reply(request_id, timeout)
+        if response.get("error") is not None:
             raise AssertionError(f"daemon request failed: {response}")
         return response["result"]
 

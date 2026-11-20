@@ -2,6 +2,7 @@ package org.refactorkit.c
 
 import org.refactorkit.core.BuildLanguageEvidence
 import org.refactorkit.core.BuildLanguageFacet
+import org.refactorkit.core.BuildCompilationUnit
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModelDiagnostic
 import org.refactorkit.core.BuildModelProvider
@@ -11,7 +12,10 @@ import org.refactorkit.core.BuildModule
 import org.refactorkit.core.BuildSourceSet
 import org.refactorkit.core.ProtocolPath
 import org.refactorkit.core.SourceSetKind
-import java.nio.file.Files
+import org.refactorkit.core.OwnedSourceCaptureException
+import org.refactorkit.core.OwnedSourceCaptureFailure
+import org.refactorkit.core.OwnedSourceInventoryReader
+import org.refactorkit.core.OwnedWorkspaceTextReadout
 import java.nio.file.Path
 
 /**
@@ -26,19 +30,28 @@ class CCompilationDatabaseProvider(
 
     override fun discover(request: BuildModelRequest): BuildModel {
         val workspace = request.workspaceRoot.toAbsolutePath().normalize()
-        val databasePath = findCompilationDatabase(workspace)
-        if (databasePath == null) {
-            return unavailable(listOf(BuildModelDiagnostic(
-                "c.compilationDatabaseMissing",
-                "compile_commands.json was not found in the workspace",
-            )), "")
+        var captured: Pair<Path, String>? = null
+        for (path in listOf(Path.of("compile_commands.json"), Path.of("build/compile_commands.json"))) {
+            val input = try {
+                OwnedSourceInventoryReader.readWorkspaceTextInput(workspace, path,
+                    CCompilationDatabasePolicy.DEFAULT_MAX_DATABASE_BYTES.toInt())
+            } catch (failure: OwnedSourceCaptureException) {
+                val code = if (failure.code == OwnedSourceCaptureFailure.FILE_BYTES_EXCEEDED)
+                    "c.compilationDatabaseLimit" else "c.compilationDatabaseRead"
+                return unavailable(listOf(BuildModelDiagnostic(code,
+                    if (code == "c.compilationDatabaseLimit") "compile_commands.json exceeds ${CCompilationDatabasePolicy.DEFAULT_MAX_DATABASE_BYTES} bytes"
+                    else "compile_commands.json could not be acquired: ${failure.code.name}")), "")
+            }
+            when (input) {
+                OwnedWorkspaceTextReadout.Absent -> Unit
+                is OwnedWorkspaceTextReadout.Captured -> { captured = path to input.content; break }
+            }
         }
-        val bytes = runCatching { Files.readAllBytes(databasePath) }.getOrElse {
-            return unavailable(listOf(BuildModelDiagnostic(
-                "c.compilationDatabaseRead",
-                "compile_commands.json could not be read",
-            )), "")
-        }
+        val selected = captured ?: return unavailable(listOf(BuildModelDiagnostic(
+            "c.compilationDatabaseMissing", "compile_commands.json was not found in the workspace",
+        )), "")
+        val databasePath = workspace.resolve(selected.first)
+        val bytes = selected.second.toByteArray(Charsets.UTF_8)
         val discovery = parser.parse(workspace, bytes)
         if (discovery is CCompilationDatabaseDiscovery.Refused) {
             return unavailable(discovery.diagnostics.map {
@@ -103,8 +116,35 @@ class CCompilationDatabaseProvider(
                         compilerId = "clang",
                         sourceVersion = standards.firstOrNull(),
                         targetVersion = targets.firstOrNull(),
-                        evidence = BuildLanguageEvidence.DECLARED,
+                        evidence = if (conflictingStandard || conflictingTarget || missingStandard > 0)
+                            BuildLanguageEvidence.PARTIAL else BuildLanguageEvidence.DECLARED,
                     )),
+                    compilationUnits = units.map { unit ->
+                        val sourceFile = workspace.relativize(unit.file)
+                        val workingDirectory = workspace.relativize(unit.directory)
+                        val fingerprint = BuildCompilationUnit.fingerprint(
+                            sourceFile = sourceFile,
+                            workingDirectory = workingDirectory,
+                            arguments = unit.arguments,
+                            output = unit.output,
+                        )
+                        BuildCompilationUnit(
+                            id = "tu-${BuildCompilationUnit.fingerprint(sourceFile, workingDirectory, emptyList(), null).take(32)}",
+                            sourceFile = sourceFile,
+                            workingDirectory = workingDirectory,
+                            arguments = unit.arguments,
+                            output = unit.output,
+                            languageFacets = listOf(BuildLanguageFacet(
+                                languageId = "c",
+                                platformId = "native",
+                                sourceVersion = unit.standard,
+                                targetVersion = unit.target,
+                                evidence = if (unit.standard == null) BuildLanguageEvidence.PARTIAL
+                                    else BuildLanguageEvidence.DECLARED,
+                            )),
+                            configurationFingerprint = fingerprint,
+                        )
+                    },
                 )),
                 attributes = linkedMapOf(
                     "backend" to "captured-compilation-database",
@@ -145,7 +185,7 @@ class CCompilationDatabaseProvider(
         "networkAccess" to "denied",
         "providerVersion" to "1",
         // Each build-provider capability is declared separately (C03).
-        "perUnitFlags" to "denied",
+        "perUnitFlags" to "declared",
         "standard" to "declared",
         "defines" to "declared",
         "includes" to "declared",
@@ -154,14 +194,6 @@ class CCompilationDatabaseProvider(
         "includeGraph" to "declared",
         "ownership" to "declared",
     )
-
-    private fun findCompilationDatabase(workspace: Path): Path? {
-        val candidates = listOf(
-            workspace.resolve("compile_commands.json"),
-            workspace.resolve("build").resolve("compile_commands.json"),
-        )
-        return candidates.firstOrNull { Files.isRegularFile(it) }
-    }
 
     companion object {
         const val PROVIDER_ID = "c-compilation-database-v1"

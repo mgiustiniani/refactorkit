@@ -12,11 +12,15 @@ import kotlin.test.assertTrue
 internal class BorrowedCompilerArtifacts(private val toolchain: KotlinSemanticToolchain) {
     fun assertSharedAndUnchanged() {
         val configured = System.getProperty("kotlin.compiler.test.classpath").split(File.pathSeparator)
-            .map { Path.of(it).toAbsolutePath().normalize() }.toSet()
+            .map { Path.of(it).toAbsolutePath().normalize() }
         assertEquals(8, toolchain.compilerClasspath.size)
         assertTrue(toolchain.compilerJar in toolchain.compilerClasspath)
         for (artifact in toolchain.compilerClasspath) {
-            assertTrue(artifact.toAbsolutePath().normalize() in configured,
+            val borrowedFromConfiguredClasspath = configured.any { candidate ->
+                Files.exists(candidate, java.nio.file.LinkOption.NOFOLLOW_LINKS) &&
+                    runCatching { Files.isSameFile(candidate, artifact) }.getOrDefault(false)
+            }
+            assertTrue(borrowedFromConfiguredClasspath,
                 "Fixture copied a compiler artifact instead of borrowing the configured input: $artifact")
             val evidence = toolchain.provenance.evidence.single { it.path == artifact }
             assertEquals(evidence.size, Files.size(artifact))

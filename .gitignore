@@ -13,3 +13,6 @@ __pycache__/
 .refactorkit/transactions/
 .refactorkit/workspace.lock
 .refactorkit/runs/
+/.refactorkit/candidates/
+/.refactorkit/toolchains/
+/.gradle-tmp/

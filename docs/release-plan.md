@@ -1,6 +1,7 @@
 # RefactorKit release roadmap
 
-Status: active.
+Status: active. [ARC42](arc42/04-solution-strategy.adoc) owns the integrated
+release strategy. This roadmap summarizes published releases and development plans.
 
 RefactorKit uses the `0.x` series to build and validate a deep multi-language
 refactoring platform without a deadline-driven stable freeze. The first stable
@@ -16,11 +17,13 @@ IDE-grade acceptance gates are satisfied.
 | `v0.3.0` | JDT analysis foundation, explicit version/API metadata, capability discovery and compatibility policy |
 | `v0.4.0` | Transaction hardening, exact Java diagnostics and managed integration parity |
 | `v0.5.0` | Native runtime matrix, Build Model SPI and bounded multi-language kernel |
+| `v0.6.2` | Managed TypeScript/JavaScript semantic foundation |
+| `v0.7.0` | Bounded Java/TypeScript/Kotlin and recovery qualification on Linux x86-64 |
 
 Published tags are immutable. Historical detailed plans remain under
 `docs/releases/`.
 
-## Latest release line
+## Published release lines
 
 ### `v0.6.2` — managed TypeScript/JavaScript semantic foundation
 
@@ -38,44 +41,35 @@ Acceptance and migration evidence are recorded in
 TypeScript move/import/signature/extraction/recipe operations are explicitly
 post-`v0.6.0` scope.
 
+### `v0.7.0` — Kotlin and JVM interoperability
+
+The published Linux x86-64 release adds bounded compiler-backed Kotlin behavior
+and Java/Kotlin interoperability. See the
+[release acceptance](releases/v0.7.0-acceptance.md) and
+[Kotlin development plan](releases/v0.7.0-plan.md) for the exact scope.
+
 ## Active development line
 
-### `0.7.0-SNAPSHOT` — Kotlin and JVM interoperability
+### `0.8.0` — C and shared Clang foundations
 
-Active plan: [`docs/releases/v0.7.0-plan.md`](releases/v0.7.0-plan.md).
+The [C release plan](releases/v0.8.0-plan.md) covers C11 and C17 on Linux x86-64.
+The [progress register](releases/v0.8.0-progress.md) records completed slices and
+the remaining qualification before publication. API `0.2` is the compatibility
+baseline.
 
-The `0.7.x` band adds a compiler/Analysis API-backed Kotlin adapter, validates the
-Build Model SPI against a second JVM language, establishes conservative
-Java/Kotlin semantic boundaries, completes deferred advanced TypeScript work and
-continues Java catalogue depth. No Kotlin mutation becomes supported without
-native compiler-backed preview, exact diagnostics, managed apply, WAL and
-rollback evidence.
+[ADR 0009](adr/0009-supreme-multilanguage-v1-roadmap.adoc) records the approved
+decision to deliver C before Python and defer multi-host qualification to
+`1.0.0`. Interim releases qualify the platform they ship.
 
 ## Long-range 0.x sequence
 
-Planning bands are directional rather than deadlines. A language may span more
-than one minor release and advances only when its semantic and safety evidence is
-credible. Java depth continues in every band.
+The [1.0 roadmap](releases/v1.0.0-plan.md) defines the language sequence after
+`0.8.0`. Later minor versions remain unassigned. Java depth continues in every
+band.
 
-| Band | Primary focus |
-|---|---|
-| `0.5.x` | Native Windows/macOS self-contained runtime matrix; completed Java 21 Maven reactor/source-ownership reference slice; Build Model SPI and Maven/Gradle productionization; multi-language adapter kernel, external semantic-process manager, real structural parsing and generalized evidence |
-| `0.6.x` | TypeScript and JavaScript deep adapter |
-| `0.7.x` | Kotlin and Java/Kotlin interoperability |
-| `0.8.x` | Python deep adapter |
-| `0.9.x` | Go deep adapter |
-| `0.10.x` | Scala 2/3 and JVM interoperability |
-| `0.11.x` | C/C++/Objective-C Clang platform, component relocation and Apple runtime boundaries |
-| `0.12.x` | Swift, SwiftPM/Xcode model and Objective-C interoperability |
-| `0.13.x` | Groovy, Gradle Groovy DSL and Spock |
-| `0.14.x` | C# Roslyn solution/refactoring platform |
-| `0.15.x` | Rust and Cargo/rust-analyzer platform |
-| `1.0` development | Clojure and global all-language stabilization |
-
-Active plan: [`docs/releases/v0.7.0-plan.md`](releases/v0.7.0-plan.md).
-ADR 0010 records offline effective build models, typed cascade suppression,
-source-identity/ownership separation, and the Build Model SPI gate added after the
-Java 21 Maven/Magrathea acceptance slice.
+[ADR 0010](adr/0010-offline-build-models-and-source-ownership.adoc) records
+offline effective build models, typed cascade suppression, source ownership
+and the Build Model SPI gate after Java 21 Maven/Magrathea acceptance.
 
 The order can change through an explicit roadmap decision. Equivalent quality
 means idiomatic IDE-grade capability, not identical operations for unlike

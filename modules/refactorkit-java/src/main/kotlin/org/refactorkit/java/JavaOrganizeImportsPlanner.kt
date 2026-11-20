@@ -31,7 +31,25 @@ import java.nio.file.Paths
 class JavaOrganizeImportsPlanner {
 
     fun preview(snapshot: ProjectSnapshot, filePaths: List<Path>): PatchPlan {
-        val generated = filePaths.mapNotNull { path ->
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val selectedPaths = linkedSetOf<Path>()
+        for (requested in filePaths) {
+            val absolute = (if (requested.isAbsolute) requested else root.resolve(requested)).normalize()
+            if (!absolute.startsWith(root)) {
+                return refuseSelection(snapshot, "java.pathOutsideWorkspace",
+                    "Import selection is outside the workspace: $requested")
+            }
+            val relative = root.relativize(absolute)
+            val source = snapshot.files.singleOrNull { it.path == relative }
+                ?: return refuseSelection(snapshot, "java.sourceFileNotFound",
+                    "Import selection is not a source file in the snapshot: $relative")
+            if (source.languageId != "java") {
+                return refuseSelection(snapshot, "java.unsupportedSourceLanguage",
+                    "Import selection requires a Java source file: $relative")
+            }
+            selectedPaths.add(relative)
+        }
+        val generated = selectedPaths.mapNotNull { path ->
             snapshot.files.find { it.path == path }?.let { file ->
                 JavaGeneratedSourcePolicy.reason(file)?.let { reason -> file.path to reason }
             }
@@ -62,7 +80,7 @@ class JavaOrganizeImportsPlanner {
         var semanticFiles = 0
         var fallbackFiles = 0
 
-        for (relativePath in filePaths) {
+        for (relativePath in selectedPaths) {
             val file = snapshot.files.find { it.path == relativePath } ?: continue
             val hasFileWarnings = analysis.warnings.any { it.path == file.path }
             val bindingUses = if (hasFileWarnings) null else analysis.bindingUses.filter { it.path == file.path }
@@ -103,6 +121,20 @@ class JavaOrganizeImportsPlanner {
         preview(snapshot, listOf(relativePath))
 
     // ── private ──────────────────────────────────────────────────────────────
+
+    private fun refuseSelection(snapshot: ProjectSnapshot, code: String, message: String): PatchPlan = PatchPlan(
+        operation = "organizeImports",
+        status = PatchStatus.REFUSED,
+        snapshotHash = snapshot.hash,
+        confidence = 0.0,
+        requiresUserApproval = false,
+        summary = message,
+        affectedFiles = emptySet(),
+        workspaceEdit = WorkspaceEdit(),
+        diagnosticsBefore = listOf(Diagnostic(message, Diagnostic.Severity.ERROR, code = code)),
+        refusalCode = code,
+        riskLevel = RiskLevel.HIGH,
+    )
 
     private fun organizeFile(
         file: SourceFile,

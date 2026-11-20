@@ -1,4 +1,6 @@
 # language: en
+# ARC42 authority and current status: docs/arc42/appendix-requirements.adoc#JavaIdeSemanticRenameReconciliation.
+# This feature owns REQ-JAVA-RENAME-FIELD-CHAR-001 and REQ-JAVA-RENAME-RECORD-COMPONENT-001. Dirty-buffer qualification remains separate.
 @partial
 Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall back to a lexical rename when JDT evidence is unclean, and refuse invalid, generated, and conflicting requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
@@ -33,6 +35,10 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
   and the general lexical renameMember fallback for fields. The signed method and override
   family path implemented by previewSignedJdtRename is a SEPARATE catalogue row
   C-RENAME-METHOD and is NOT covered here. This feature stays focused on FIELD rename only.
+
+  The final scenario is a separate requirement, REQ-JAVA-RENAME-RECORD-COMPONENT-001. It
+  covers record-component rename through the existing renameMember operation, including
+  canonical-constructor parameters and compiler-generated accessor references.
 
   Characterization RED-deferral (truthful, anti-fake): production already implements the
   planner JavaRenameMemberPlanner in the Java adapter, so this feature begins GREEN and
@@ -131,3 +137,24 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
       | Generated source cannot be rewritten: Generated.java (source header identifies generated code) | the owner declaration source header identifies generated code |
       | Member 'amount' not found in com.example.UserService | no member with the old member name is declared in the owner type |
       | Field target already exists: com.example.UserService#total | the owner type already declares a field with the new member name |
+
+  # Separate requirement: record-component rename coordinates the source-visible record shape
+  @REQ-JAVA-RENAME-RECORD-COMPONENT-001 @functional-requirement
+  Scenario: A record component rename updates its canonical constructor and generated accessor references
+    Given a Java 21 source-level workspace snapshot containing a record component, canonical constructor, and same-named unrelated field
+    And the JDT binding analysis is clean with no parse or classpath warnings
+    And JDT binds the record component, canonical constructor parameter, and generated accessor
+    When the caller requests a renameMember preview for that member with a valid new name
+    Then the adapter returns a PREVIEW patch plan for the operation renameMember
+    And the plan carries confidence 0.95
+    And the plan evidence is JDT_BINDING
+    And the plan risk is MEDIUM
+    And the plan produces the exact record-component post-image and leaves the unrelated field unchanged
+
+  # Scenario 7: static Spring Data JPQL property references are previewed with an explicit incomplete closure
+  @REQ-JAVA-RENAME-FIELD-CHAR-001 @functional-requirement @scenario-spring-data-jpql-property-reference
+  Scenario: A static Spring Data JPQL property reference is included in an entity field rename preview
+    Given a JPA entity field whose property is referenced by a static Spring Data JPQL query
+    When the caller requests a renameMember preview for that owner-bound field with a valid new field name
+    Then the typed reference analysis lists the exact JPQL property locations and the preview edits only those property tokens
+    And the reference set is incomplete, risk is HIGH, and managed apply is refused before workspace mutation

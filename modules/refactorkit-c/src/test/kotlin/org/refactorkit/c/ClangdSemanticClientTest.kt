@@ -38,10 +38,10 @@ class ClangdSemanticClientTest {
     @Test
     fun parsesReferencesLocations() {
         val client = ClangdSemanticClient(toolchain())
-        val refs = client.parseLocations("""[
+        val refs = kotlin.test.assertNotNull(client.parseLocations("""[
             {"uri":"file:///workspace/src/main.c","range":{"start":{"line":3,"character":10},"end":{"line":3,"character":20}}},
             {"uri":"file:///workspace/src/util.c","range":{"start":{"line":7,"character":0},"end":{"line":7,"character":7}}}
-        ]""")
+        ]"""))
         assertEquals(2, refs.size)
         assertEquals(Path.of("/workspace/src/util.c"), refs[1].file)
         assertEquals(7, refs[1].startLine)

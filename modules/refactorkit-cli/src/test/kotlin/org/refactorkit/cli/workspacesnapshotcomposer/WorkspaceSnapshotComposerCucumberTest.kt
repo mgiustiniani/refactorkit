@@ -13,7 +13,7 @@ import org.junit.platform.suite.api.Suite
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.cli.workspacesnapshotcomposer")
 @ConfigurationParameter(
     key = FILTER_TAGS_PROPERTY_NAME,
-    value = "@REQ-WORKSPACE-SNAPSHOT-COMPOSER-001 or " +
+    value = "@REQ-WORKSPACE-SNAPSHOT-COMPOSER-002#auxiliary-to-source-promotion-requires-identical-captured-bytes or @REQ-WORKSPACE-SNAPSHOT-COMPOSER-001 or " +
         "@REQ-WORKSPACE-SNAPSHOT-COMPOSER-002 or " +
         "@REQ-WORKSPACE-SNAPSHOT-COMPOSER-003 or " +
         "@REQ-WORKSPACE-SNAPSHOT-COMPOSER-004 or " +

@@ -1,0 +1,411 @@
+{
+  "duplicateExpressionGroups": [],
+  "glueRoots": [
+    "org.refactorkit.cli.previewcommand"
+  ],
+  "projectRoot": ".",
+  "recommendations": [
+    "Reuse compatible effective glue before creating a step definition.",
+    "Move stateless/common vocabulary behind explicit shared glue roots and scenario-scoped context.",
+    "Resolve every effective-runner ambiguity before implementation.",
+    "Do not create a runner or leaf glue package solely to isolate one scenario."
+  ],
+  "runnerAmbiguities": [],
+  "runners": [
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "JavaRefactoringPreviewCommandSurfaceCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "JavaGradle8111EffectiveContextCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "JavaGradle8111JpmsInferenceCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "JavaGradle8111JpmsAggregateCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "MavenBuildHelperProjectContextCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "JavaInlineOperationsDaemonCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+      "source": "annotation"
+    }
+  ],
+  "schemaVersion": "bdd-jvm-project-analysis-v1",
+  "selectedScenario": {
+    "exampleTags": [
+      [
+        "@REQ-C-CMAKE-INCLUDE-FLAG-ORIGIN-001",
+        "@functional-requirement",
+        "@partial"
+      ]
+    ],
+    "expandedCaseCount": 6,
+    "featurePath": ".c-cmake-include-flag-origin.post-edit.feature",
+    "featureSha256": "6870dc51fbd364dbbd9994835f43d971c2c29cd7b1327a5739dce2bd1dad1cc6",
+    "inventory": [
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "an isolated CMake include-flag fixture in state {string}",
+            "keyword": "Given",
+            "language": "KOTLIN",
+            "line": 49,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "CCMakeIncludeFlagOriginSteps.kt"
+          }
+        ],
+        "step": "an isolated CMake include-flag fixture in state \"<state>\"",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaRefactoringPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      },
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "that include-flag fixture previews its main translation unit move",
+            "keyword": "When",
+            "language": "KOTLIN",
+            "line": 125,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "CCMakeIncludeFlagOriginSteps.kt"
+          }
+        ],
+        "step": "that include-flag fixture previews its main translation unit move",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaRefactoringPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      },
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "its CMake include-flag disposition is {string}",
+            "keyword": "Then",
+            "language": "KOTLIN",
+            "line": 147,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "CCMakeIncludeFlagOriginSteps.kt"
+          }
+        ],
+        "step": "its CMake include-flag disposition is \"<disposition>\"",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaRefactoringPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      },
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "its retained no-include flag policy permits exact rollback or no WAL",
+            "keyword": "Then",
+            "language": "KOTLIN",
+            "line": 169,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "CCMakeIncludeFlagOriginSteps.kt"
+          }
+        ],
+        "step": "its retained no-include flag policy permits exact rollback or no WAL",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaRefactoringPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      }
+    ],
+    "inventoryCounts": {
+      "ambiguous": 0,
+      "exactReuse": 4,
+      "newRequired": 0,
+      "sharedReuseCandidates": 0
+    },
+    "line": 24,
+    "requirementId": "REQ-C-CMAKE-INCLUDE-FLAG-ORIGIN-001",
+    "scenarioId": "REQ-C-CMAKE-INCLUDE-FLAG-ORIGIN-001#a-cmake-project-in-include-flag-state-has-disposition-authority",
+    "scenarioName": "A CMake project in include-flag <state> has <disposition> authority",
+    "steps": [
+      "an isolated CMake include-flag fixture in state \"<state>\"",
+      "that include-flag fixture previews its main translation unit move",
+      "its CMake include-flag disposition is \"<disposition>\"",
+      "its retained no-include flag policy permits exact rollback or no WAL"
+    ],
+    "tags": [
+      "@REQ-C-CMAKE-INCLUDE-FLAG-ORIGIN-001",
+      "@functional-requirement",
+      "@partial"
+    ]
+  },
+  "summary": {
+    "duplicateOccurrenceCount": 0,
+    "duplicatedExpressionCount": 0,
+    "glueRootCount": 1,
+    "javaStepDefinitionCount": 0,
+    "kotlinStepDefinitionCount": 762,
+    "runnerAmbiguityCount": 0,
+    "runnerCount": 7,
+    "stepDefinitionCount": 762,
+    "uniqueExpressionCount": 762
+  }
+}

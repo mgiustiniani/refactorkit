@@ -103,15 +103,47 @@ private fun readUntilDoubleCrLf(input: InputStream): String? {
 }
 
 private fun writeLspMessage(output: OutputStream, json: Json, response: org.refactorkit.core.JsonRpcResponse) {
-    writeRawLspMessage(output, json.encodeToString(response).toByteArray(Charsets.UTF_8))
+    val encoded = json.encodeToString(response).toByteArray(Charsets.UTF_8)
+    if (encoded.size <= ProtocolLimits.MAX_LSP_RESPONSE_BYTES) {
+        writeRawLspMessage(output, encoded)
+        return
+    }
+
+    val message = "LSP response exceeds ${ProtocolLimits.MAX_LSP_RESPONSE_BYTES} bytes"
+    val error = errorResponse(response.id, JsonRpcErrorCodes.INTERNAL_ERROR, message)
+    val bounded = json.encodeToString(error).toByteArray(Charsets.UTF_8)
+    val safeError = if (bounded.size <= ProtocolLimits.MAX_LSP_RESPONSE_BYTES) {
+        bounded
+    } else {
+        json.encodeToString(errorResponse(JsonNull, JsonRpcErrorCodes.INTERNAL_ERROR, message))
+            .toByteArray(Charsets.UTF_8)
+    }
+    writeRawLspMessage(output, safeError)
 }
 
 private fun writeLspNotification(output: OutputStream, json: Json, method: String, params: JsonElement) {
     val notification = JsonRpcRequest(method = method, params = params)
-    writeRawLspMessage(output, json.encodeToString(notification).toByteArray(Charsets.UTF_8))
+    val encoded = json.encodeToString(notification).toByteArray(Charsets.UTF_8)
+    if (encoded.size <= ProtocolLimits.MAX_LSP_RESPONSE_BYTES) {
+        writeRawLspMessage(output, encoded)
+    } else {
+        val warning = JsonRpcRequest(
+            method = "window/logMessage",
+            params = kotlinx.serialization.json.JsonObject(mapOf(
+                "type" to kotlinx.serialization.json.JsonPrimitive(2),
+                "message" to kotlinx.serialization.json.JsonPrimitive(
+                    "RefactorKit omitted an oversized LSP notification",
+                ),
+            )),
+        )
+        writeRawLspMessage(output, json.encodeToString(warning).toByteArray(Charsets.UTF_8))
+    }
 }
 
 private fun writeRawLspMessage(output: OutputStream, body: ByteArray) {
+    require(body.size <= ProtocolLimits.MAX_LSP_RESPONSE_BYTES) {
+        "LSP output frame exceeds ${ProtocolLimits.MAX_LSP_RESPONSE_BYTES} bytes"
+    }
     val header = "Content-Length: ${body.size}\r\n\r\n".toByteArray(Charsets.UTF_8)
     synchronized(output) {
         output.write(header)

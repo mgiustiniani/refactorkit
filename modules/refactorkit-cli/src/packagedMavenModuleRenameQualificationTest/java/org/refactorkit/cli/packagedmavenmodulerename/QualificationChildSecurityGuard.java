@@ -9,16 +9,19 @@ import java.net.SocketPermission;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.LinkPermission;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.Permission;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Properties;
 
 /**
@@ -32,6 +35,8 @@ public final class QualificationChildSecurityGuard {
     static final String POLICY_VERSION = "packaged-story-bdd-jdk21-v1";
     static final String PROPERTY_PREFIX = "refactorkit.qualification.guard.";
     static final String INSTALLED_MARKER = "REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLED";
+    private static final int REQUIRED_JAVA_FEATURE = 21;
+    private static final String ALL_FILES_PERMISSION_NAME = "<<ALL FILES>>";
 
     private QualificationChildSecurityGuard() {
     }
@@ -40,12 +45,12 @@ public final class QualificationChildSecurityGuard {
         try {
             Configuration configuration = Configuration.load();
             int javaFeature = javaFeature();
-            if (javaFeature != 21) {
+            if (javaFeature != REQUIRED_JAVA_FEATURE) {
                 throw new IllegalStateException("The packaged qualification child guard requires JDK 21 exactly");
             }
             FailClosedSecurityManager guard = new FailClosedSecurityManager(configuration);
             System.setSecurityManager(guard);
-            if (System.getSecurityManager() != guard) {
+            if (!Objects.equals(System.getSecurityManager(), guard)) {
                 throw new IllegalStateException("The packaged qualification child guard was not installed");
             }
 
@@ -134,14 +139,15 @@ public final class QualificationChildSecurityGuard {
             }
             String tokenHash = attestation.getProperty("tokenSha256");
             System.err.println(INSTALLED_MARKER + " policyVersion=" + POLICY_VERSION + " tokenSha256=" + tokenHash);
-        } catch (Throwable failure) {
+        } catch (IOException | NoSuchAlgorithmException | InvalidPathException
+                 | SecurityException | IllegalStateException | UnsupportedOperationException failure) {
             System.err.println("REFRACTORKIT_QUALIFICATION_CHILD_GUARD_INSTALLATION_FAILED: " + failure);
             failure.printStackTrace(System.err);
             throw new IllegalStateException("Fail-closed packaged qualification child guard installation failed", failure);
         }
     }
 
-    private static boolean expectDenied(String subject, CheckedAction action) throws Exception {
+    private static boolean expectDenied(String subject, CheckedAction action) throws IOException {
         try {
             action.run();
         } catch (SecurityException expected) {
@@ -194,11 +200,11 @@ public final class QualificationChildSecurityGuard {
             : "java";
     }
 
-    private static String pathSha256(Path path) throws Exception {
+    private static String pathSha256(Path path) throws NoSuchAlgorithmException {
         return sha256(path.toAbsolutePath().normalize().toString().getBytes(StandardCharsets.UTF_8));
     }
 
-    private static String sha256(byte[] bytes) throws Exception {
+    private static String sha256(byte[] bytes) throws NoSuchAlgorithmException {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
         StringBuilder value = new StringBuilder(digest.length * 2);
         for (byte item : digest) {
@@ -209,7 +215,7 @@ public final class QualificationChildSecurityGuard {
 
     @FunctionalInterface
     private interface CheckedAction {
-        void run() throws Exception;
+        void run() throws IOException;
     }
 
     private static final class Configuration {
@@ -468,7 +474,7 @@ public final class QualificationChildSecurityGuard {
         }
 
         private Path normalizedPath(String rawPath) {
-            if ("<<ALL FILES>>".equals(rawPath)) {
+            if (ALL_FILES_PERMISSION_NAME.equals(rawPath)) {
                 deny("unbounded filesystem authority");
             }
             Path path = FileSystems.getDefault().getPath(rawPath);

@@ -139,6 +139,14 @@ internal class GradleDeclarativeModelBuilder {
         }
         val declaredSourceLevel = detectDeclaredSourceLevel(text)
         val sourceLevel = declaredSourceLevel ?: 8
+        val sourceLevelRefusal = declaredSourceLevel?.let { level ->
+            JavaProjectSourceLevelPolicy.resolve(null, level.toString()) as? JavaProjectSourceLevelDecision.Refused
+        }
+        val sourceLevelEvidence = when {
+            declaredSourceLevel == null -> "default"
+            sourceLevelRefusal != null -> "unsupported"
+            else -> "declared"
+        }
         val kotlinJvm = KOTLIN_JVM_PLUGIN.containsMatchIn(text)
         val kotlinPlatform = when {
             KOTLIN_ANDROID_PLUGIN.containsMatchIn(text) -> "android"
@@ -195,7 +203,14 @@ internal class GradleDeclarativeModelBuilder {
                 moduleDependencies = dependencies[name].orEmpty().distinct(),
                 attributes = buildMap {
                     put("java.sourceLevel", sourceLevel.toString())
-                    put("java.sourceLevelEvidence", if (declaredSourceLevel == null) "default" else "declared")
+                    put("java.sourceLevelEvidence", sourceLevelEvidence)
+                    if (declaredSourceLevel != null) {
+                        put("java.sourceLevel.status", if (sourceLevelRefusal == null) "available" else "unavailable")
+                    }
+                    sourceLevelRefusal?.let { refusal ->
+                        put("java.sourceLevel.refusalCode", refusal.code)
+                        put("java.sourceLevel.message", refusal.message)
+                    }
                     put("visibility", if (kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST)) "test" else "main")
                     put("kotlin.platform", kotlinPlatform)
                     kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
@@ -209,8 +224,11 @@ internal class GradleDeclarativeModelBuilder {
                         sourceVersion = sourceLevel.toString(),
                         targetVersion = sourceLevel.toString(),
                         targetRuntimeVersion = sourceLevel.toString(),
-                        evidence = if (declaredSourceLevel == null) BuildLanguageEvidence.DERIVED
-                        else BuildLanguageEvidence.DECLARED,
+                        evidence = when {
+                            sourceLevelRefusal != null -> BuildLanguageEvidence.UNSUPPORTED
+                            declaredSourceLevel == null -> BuildLanguageEvidence.DERIVED
+                            else -> BuildLanguageEvidence.DECLARED
+                        },
                     ))
                     if (roots.any { "/kotlin" in "/${it.toString().replace('\\', '/')}/" }) add(BuildLanguageFacet(
                         languageId = "kotlin",
@@ -243,9 +261,17 @@ internal class GradleDeclarativeModelBuilder {
                         "Gradle source-root declarations escaped the workspace"
                     },
                     "java.sourceLevel" to sourceLevel.toString(),
-                    "java.sourceLevelEvidence" to if (declaredSourceLevel == null) "default" else "declared",
+                    "java.sourceLevelEvidence" to sourceLevelEvidence,
                     "kotlin.platform" to kotlinPlatform,
-                ),
+                ) + buildMap {
+                    if (declaredSourceLevel != null) {
+                        put("java.sourceLevel.status", if (sourceLevelRefusal == null) "available" else "unavailable")
+                    }
+                    sourceLevelRefusal?.let { refusal ->
+                        put("java.sourceLevel.refusalCode", refusal.code)
+                        put("java.sourceLevel.message", refusal.message)
+                    }
+                },
             ),
             diagnostics,
         )
@@ -276,7 +302,7 @@ internal class GradleDeclarativeModelBuilder {
     )
 
     private fun detectDeclaredSourceLevel(text: String): Int? = SOURCE_LEVEL_PATTERNS.firstNotNullOfOrNull { pattern ->
-        pattern.find(text)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 8..25 }
+        pattern.find(text)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     private fun detectKotlinJvmTarget(text: String): String? = KOTLIN_JVM_TARGET_PATTERNS.firstNotNullOfOrNull { pattern ->
@@ -288,7 +314,7 @@ internal class GradleDeclarativeModelBuilder {
     }
 
     private fun String.normalizeJvmLevel(): String? = trim().removePrefix("1.").toIntOrNull()
-        ?.takeIf { it in 8..25 }?.toString()
+        ?.takeIf { it >= 1 }?.toString()
 
     private fun configurationSourceSet(configuration: String): String = when {
         configuration.startsWith("test") -> "test"

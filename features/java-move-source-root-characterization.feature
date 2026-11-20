@@ -61,3 +61,11 @@ Ability: Move one complete non-generated Java source root with rename-only edits
       | sourceRoot.diagnosticsRegression | the relocation introduces a new compiler diagnostic |
       | buildModel.unavailable | post-image diagnostics cannot be produced |
       | classpath.unavailable | a regression diagnostic reports an unavailable classpath |
+
+  @REQ-JAVA-MOVE-SOURCE-ROOT-CHAR-001 @functional-requirement @scenario-jpms-source-root-requires-explicit-sdk
+  Scenario: A JPMS source-root move refuses without explicit configured SDK authority
+    Given a Java workspace with a recognized non-generated main source root
+    When the caller requests a moveSourceRoot preview under the condition JPMS analysis requires configured SDK authority
+    Then the adapter returns a REFUSED patch plan carrying the typed refusal code java.context.sdkRequired
+    And the refusal grants no approval and no managed-write eligibility
+    And the refusal leaves an empty WorkspaceEdit, an empty affected-file set, and no pending actionable plan

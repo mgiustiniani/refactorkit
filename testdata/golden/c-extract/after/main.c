@@ -1,2 +1,1 @@
-const int tmp = x + 1;
-int compute(int x) { int y = tmp; return y; }
+int compute(int x) { const int tmp = x + 1; int y = tmp; return y; }

@@ -1,5 +1,14 @@
 # Patch engine
 
+Protected authority-bearing rollback restores the exact checksum-bound journal
+pre-snapshot. Diagnostics of that reconstructed original snapshot are its baseline;
+errors moved or removed by forward apply can therefore be restored. The engine
+still evaluates the committed snapshot for compensation, rejects any inverse with
+a different original hash, and compares staged/restored semantic results exactly.
+Forward apply keeps its existing regression gate. Java SDK and source-set policy
+remain owned by the Java authority provider. This bounded patch-model document
+links to the integrated [ARC42 requirements](arc42/appendix-requirements.adoc).
+
 See AGENTS.md for the authoritative architecture and implementation rules.
 
 ## Stable v1 edit scope

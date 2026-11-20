@@ -41,15 +41,32 @@ internal class DaemonRequestScheduler(
     @Synchronized
     fun submit(request: JsonRpcRequest) {
         check(running.get()) { "daemon request scheduler is closed" }
+        val params = request.params as? JsonObject
+        val query = request.method == "intelligence.query"
+        val requestId = if (query) params?.string("requestId") else null
+        if (isEntryPointQuery(request)) {
+            if (!DaemonResponseEncoder.validEntryPointRpcId(request.id)) {
+                if (!isNotification(request)) publish(request, errorResponse(
+                    kotlinx.serialization.json.JsonNull, JsonRpcErrorCodes.INVALID_REQUEST,
+                    "Entry-point RPC id must be a string or number within 1024 encoded UTF-8 bytes",
+                ))
+                return
+            }
+            val semanticId = params?.get("requestId") as? JsonPrimitive
+            if (semanticId?.isString != true || requestId.isNullOrBlank() ||
+                requestId.length > ProtocolLimits.MAX_DIAGNOSTICS_REQUEST_ID_CHARS) {
+                if (!isNotification(request)) publish(request, errorResponse(
+                    request.id, JsonRpcErrorCodes.INVALID_PARAMS, "Entry-point requestId is missing or exceeds its bound",
+                ))
+                return
+            }
+        }
         if (queue.size >= ProtocolLimits.MAX_DAEMON_QUEUED_REQUESTS) {
-            if (!isNotification(request)) respond(errorResponse(
+            if (!isNotification(request)) publish(request, errorResponse(
                 request.id, JsonRpcErrorCodes.INVALID_REQUEST, "Daemon request queue capacity exceeded",
             ))
             return
         }
-        val params = request.params as? JsonObject
-        val query = request.method == "intelligence.query"
-        val requestId = if (query) params?.string("requestId") else null
         val cancellation = CancellationSource()
         val task = ScheduledRequest(
             request = request,
@@ -62,7 +79,7 @@ internal class DaemonRequestScheduler(
         )
         if (!query) barrierGroup++
         if (requestId != null && registrations.putIfAbsent(requestId, task) != null) {
-            if (!isNotification(request)) respond(errorResponse(
+            if (!isNotification(request)) publish(request, errorResponse(
                 request.id, JsonRpcErrorCodes.INVALID_REQUEST, "Duplicate active intelligence requestId: $requestId",
             ))
             return
@@ -75,7 +92,7 @@ internal class DaemonRequestScheduler(
         task.cancellation.cancel()
         if (queue.remove(task)) {
             registrations.remove(requestId, task)
-            if (!isNotification(task.request)) respond(cancelledResponse(task.request))
+            if (!isNotification(task.request)) publish(task.request, cancelledResponse(task.request))
         }
         return true
     }
@@ -96,9 +113,17 @@ internal class DaemonRequestScheduler(
                 errorResponse(request.id, failure)
             } catch (_: Exception) {
                 errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, "Internal error")
+            } catch (fatal: VirtualMachineError) {
+                throw fatal
+            } catch (fatal: ThreadDeath) {
+                throw fatal
+            } catch (_: Throwable) {
+                // A non-fatal Error from one provider must not silently kill the
+                // single worker and strand every later request in this session.
+                errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, "Internal error")
             }
             task.semanticRequestId?.let { registrations.remove(it, task) }
-            if (!isNotification(request)) respond(response)
+            if (!isNotification(request)) publish(request, response)
         }
     }
 
@@ -109,6 +134,13 @@ internal class DaemonRequestScheduler(
         worker.join(2_000)
         queue.clear()
         registrations.clear()
+    }
+
+    private fun isEntryPointQuery(request: JsonRpcRequest): Boolean =
+        request.method == "intelligence.query" && (request.params as? JsonObject)?.string("kind") == "entryPoints"
+
+    private fun publish(request: JsonRpcRequest, response: JsonRpcResponse) {
+        respond(if (isEntryPointQuery(request)) DaemonResponseEncoder.boundEntryPointResponse(response) else response)
     }
 
     private fun priority(value: String?): Int = when (value ?: "interactive") {

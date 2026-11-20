@@ -62,7 +62,7 @@ class CGoldenTest {
         val snap = snapshotFrom(case.beforeDir)
         val args = requestFrom(case.requestFile).arguments
         val plan = CInlinePlanner().preview(snap, Path(args.getValue("file")), args.getValue("symbol"))
-        assertPlan(case, snap, plan)
+        assertPlan(case, snap, plan, case.dir.resolve("after-structural"))
     }
 
     @Test
@@ -81,9 +81,10 @@ class CGoldenTest {
      * image exists, that applying the plan to `before/` reproduces every after
      * file exactly.
      */
-    private fun assertPlan(case: GoldenCase, snap: ProjectSnapshot, plan: PatchPlan) {
+    private fun assertPlan(
+        case: GoldenCase, snap: ProjectSnapshot, plan: PatchPlan, afterDir: Path = case.dir.resolve("after"),
+    ) {
         assertEquals(expectedStatus(case.expectedPlanFile), plan.status, "${case.name} status")
-        val afterDir = case.dir.resolve("after")
         if (!Files.isDirectory(afterDir)) return
         val applied = WorkspaceEditSimulator.apply(snap, plan.workspaceEdit)
         val expected = collectFiles(afterDir)

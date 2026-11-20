@@ -39,7 +39,9 @@ fun ProjectSnapshot.exactBuildSourceRootOwnerships(root: Path): List<BuildSource
 /** Longest-prefix source ownership for a workspace-relative file or directory. */
 fun ProjectSnapshot.owningBuildSourceRoots(path: Path): List<BuildSourceRootOwnership> {
     val normalized = path.normalize()
-    val candidates = buildSourceRootOwnerships().filter { normalized.startsWith(it.root) }
-    val longest = candidates.maxOfOrNull { it.root.nameCount } ?: return emptyList()
-    return candidates.filter { it.root.nameCount == longest }
+    if (normalized.isAbsolute || normalized.startsWith("..")) return emptyList()
+    fun depth(root: Path): Int = if (root.toString().isEmpty()) 0 else root.nameCount
+    val candidates = buildSourceRootOwnerships().filter { it.root.toString().isEmpty() || normalized.startsWith(it.root) }
+    val longest = candidates.maxOfOrNull { depth(it.root) } ?: return emptyList()
+    return candidates.filter { depth(it.root) == longest }
 }

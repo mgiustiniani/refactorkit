@@ -3,16 +3,26 @@ package org.refactorkit.java
 import org.eclipse.jdt.core.JavaCore
 import org.eclipse.jdt.core.compiler.IProblem
 import org.eclipse.jdt.core.dom.AST
+import org.eclipse.jdt.core.dom.ASTNode
 import org.eclipse.jdt.core.dom.ASTParser
 import org.eclipse.jdt.core.dom.ASTVisitor
+import org.eclipse.jdt.core.dom.Annotation
+import org.eclipse.jdt.core.dom.AnonymousClassDeclaration
 import org.eclipse.jdt.core.dom.AnnotationTypeDeclaration
 import org.eclipse.jdt.core.dom.AnnotationTypeMemberDeclaration
 import org.eclipse.jdt.core.dom.ClassInstanceCreation
 import org.eclipse.jdt.core.dom.CreationReference
 import org.eclipse.jdt.core.dom.CompilationUnit
 import org.eclipse.jdt.core.dom.ConstructorInvocation
+import org.eclipse.jdt.core.dom.BooleanLiteral
+import org.eclipse.jdt.core.dom.CharacterLiteral
+import org.eclipse.jdt.core.dom.Expression
+import org.eclipse.jdt.core.dom.NullLiteral
+import org.eclipse.jdt.core.dom.NumberLiteral
+import org.eclipse.jdt.core.dom.ParenthesizedExpression
 import org.eclipse.jdt.core.dom.EnumDeclaration
 import org.eclipse.jdt.core.dom.ExpressionMethodReference
+import org.eclipse.jdt.core.dom.FieldAccess
 import org.eclipse.jdt.core.dom.FieldDeclaration
 import org.eclipse.jdt.core.dom.IBinding
 import org.eclipse.jdt.core.dom.IMethodBinding
@@ -22,14 +32,20 @@ import org.eclipse.jdt.core.dom.IVariableBinding
 import org.eclipse.jdt.core.dom.SimpleName
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration
 import org.eclipse.jdt.core.dom.SuperConstructorInvocation
+import org.eclipse.jdt.core.dom.SuperFieldAccess
 import org.eclipse.jdt.core.dom.SuperMethodInvocation
+import org.eclipse.jdt.core.dom.StringLiteral
 import org.eclipse.jdt.core.dom.MethodDeclaration
 import org.eclipse.jdt.core.dom.MethodInvocation
 import org.eclipse.jdt.core.dom.Modifier
 import org.eclipse.jdt.core.dom.RecordDeclaration
+import org.eclipse.jdt.core.dom.TextBlock
+import org.eclipse.jdt.core.dom.ThisExpression
 import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.eclipse.jdt.core.dom.TypeMethodReference
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
+import org.eclipse.core.runtime.NullProgressMonitor
+import org.eclipse.core.runtime.OperationCanceledException
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModule
 import org.refactorkit.core.BuildSourceSet
@@ -45,6 +61,11 @@ import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Files
 import java.nio.file.Path
 
+internal sealed interface JdtBoundCompilationUnitResolution<out T> {
+    data class Available<T>(val value: T) : JdtBoundCompilationUnitResolution<T>
+    data class Refused(val message: String) : JdtBoundCompilationUnitResolution<Nothing>
+}
+
 /**
  * Early Eclipse JDT-backed analysis prototype for the v0.3.0 line.
  *
@@ -53,6 +74,169 @@ import java.nio.file.Path
  * into planners and covered by semantic tests.
  */
 class JdtJavaSemanticAnalyzer {
+    /** Run a bounded operation while the exact source-set/JDK JDT bindings remain open. */
+    internal fun <T> withBoundCompilationUnit(
+        snapshot: ProjectSnapshot,
+        filePath: Path,
+        action: (CompilationUnit, BuildSourceSet) -> T,
+    ): JdtBoundCompilationUnitResolution<T> {
+        val authority = snapshot.semanticAnalysisAuthority as? JavaContextAuthority
+            ?: return JdtBoundCompilationUnitResolution.Refused(
+                "Binding-aware extraction requires an SDK-bound Java project context.",
+            )
+        val file = snapshot.files.singleOrNull { it.path.normalize() == filePath.normalize() }
+            ?: return JdtBoundCompilationUnitResolution.Refused("The selected Java source is absent from the bound snapshot.")
+        val ownership = snapshot.owningJavaBuildSourceRoots(file.path).singleOrNull()
+            ?: return JdtBoundCompilationUnitResolution.Refused(
+                "The selected Java source has no unique effective build source-set owner.",
+            )
+        if (ownership.generated || ownership.modelStatus != org.refactorkit.core.BuildModelStatus.AVAILABLE) {
+            return JdtBoundCompilationUnitResolution.Refused(
+                "Binding-aware extraction requires a non-generated source in an available build model.",
+            )
+        }
+        val model = snapshot.buildModels.singleOrNull { it.providerId == ownership.providerId }
+            ?: return JdtBoundCompilationUnitResolution.Refused("The selected source-set provider is ambiguous.")
+        val sourceSet = ownership.sourceSet
+        if (sourceSet.attributes["java.classpath.status"] == "unavailable") {
+            return JdtBoundCompilationUnitResolution.Refused("The selected source-set compile classpath is unavailable.")
+        }
+        val release = when (val decision = JavaProjectSourceLevelPolicy.resolve(
+            sourceSet.attributes["java.release"], sourceSet.attributes["java.sourceLevel"],
+        )) {
+            is JavaProjectSourceLevelDecision.Supported -> decision.sourceLevel
+            is JavaProjectSourceLevelDecision.Refused ->
+                return JdtBoundCompilationUnitResolution.Refused("${decision.code}: ${decision.message}")
+        }
+        val apiProfile = try { JavaSourceSetPlatformContext.profile(sourceSet, authority.platforms) }
+            catch (failure: JavaContextAuthorityException) {
+                return JdtBoundCompilationUnitResolution.Refused("${failure.code}: ${failure.message}")
+            }
+        val platform = authority.platforms[apiProfile]
+            ?: return JdtBoundCompilationUnitResolution.Refused("The selected Java $release platform is not attested.")
+        val environment = try {
+            JavaBuildSourceSetContextResolver.resolve(model, ownership.module, sourceSet)
+        } catch (_: Exception) {
+            return JdtBoundCompilationUnitResolution.Refused("The selected source-set compile environment is unavailable.")
+        }
+        val workspace = snapshot.workspace.root.toAbsolutePath().normalize()
+        fun absolute(path: Path): Path = (if (path.isAbsolute) path else workspace.resolve(path)).toAbsolutePath().normalize()
+        if (environment.sourceRoots.none { absolute(file.path).startsWith(absolute(it)) }) {
+            return JdtBoundCompilationUnitResolution.Refused(
+                "The selected source is outside its effective source-set roots.",
+            )
+        }
+        val sourceRoots = environment.sourceRoots.map(::absolute)
+            .filter(Files::isDirectory).distinct().toTypedArray()
+        if (sourceRoots.isEmpty()) {
+            return JdtBoundCompilationUnitResolution.Refused("The selected source-set source roots are unavailable.")
+        }
+        val classpath = environment.classpathEntries.map(::absolute).filter(Files::exists).distinct().toTypedArray()
+        return try {
+            authority.requireCurrent()
+            JavaReleasePlatformClasspath.materialize(platform).use { platformClasspath ->
+                JdtClasspathResourceScope().use { resources ->
+                    val unit = try {
+                        parse(
+                            file,
+                            sourceRoots.map(Path::toString).toTypedArray(),
+                            classpath.map(Path::toString).toTypedArray(),
+                            release,
+                            platform,
+                            platformClasspath,
+                            resources,
+                        )
+                    } catch (_: Exception) {
+                        return JdtBoundCompilationUnitResolution.Refused(
+                            "JDT could not resolve the selected source with its attested Java $release environment.",
+                        )
+                    }
+                    if (unit.problems.any { it.isError && it.id and IProblem.Syntax != 0 }) {
+                        return JdtBoundCompilationUnitResolution.Refused(
+                            "The selected Java source has syntax errors; binding-aware extraction is refused.",
+                        )
+                    }
+                    val value = action(unit, sourceSet)
+                    authority.requireCurrent()
+                    JdtBoundCompilationUnitResolution.Available(value)
+                }
+            }
+        } catch (failure: JavaContextAuthorityException) {
+            JdtBoundCompilationUnitResolution.Refused("The SDK-bound Java project context is stale: ${failure.message.orEmpty()}")
+        } catch (_: Exception) {
+            JdtBoundCompilationUnitResolution.Refused(
+                "The attested JDT analysis environment could not be kept available for extraction.",
+            )
+        }
+    }
+
+    /** Resolve an attested in-memory dependency source with the existing SDK/parser backend. */
+    fun dependencySourceDeclarations(
+        file: SourceFile, sourceRoots: List<Path>, classpath: List<Path>,
+        platform: JavaReleasePlatformAuthority, cancellation: SemanticCancellationToken,
+        platformModuleName: String? = null,
+    ): JdtJavaSourceDeclarations = JavaReleasePlatformClasspath.materialize(platform).use { projection ->
+        JdtClasspathResourceScope().use declarations@ { resources ->
+            if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
+            val unit = parse(file, sourceRoots.filter { Files.isDirectory(it) }.map(Path::toString).toTypedArray(),
+                classpath.filter { Files.exists(it) }.map(Path::toString).toTypedArray(), platform.release, platform, projection, resources,
+                platformModuleName, cancellation = cancellation)
+            val ambiguous = unit.problems.any { it.id in setOf(IProblem.DuplicateMethod, IProblem.DuplicateMethodErasure,
+                IProblem.DuplicateField, IProblem.DuplicateTypes, IProblem.MethodNameClash, IProblem.MethodNameClashHidden) }
+            val invalidSyntax = unit.problems.any { it.isError && it.id and IProblem.Syntax != 0 }
+            if (ambiguous || invalidSyntax) return@declarations JdtJavaSourceDeclarations(emptyList(), emptySet(), emptySet(),
+                if (ambiguous) JdtJavaSourceDeclarationStatus.AMBIGUOUS else JdtJavaSourceDeclarationStatus.UNAVAILABLE)
+            val declarations = mutableListOf<JdtJavaSourceDeclaration>()
+            val owners = mutableSetOf<String>()
+            val implicitIdentities = mutableSetOf<JdtJavaJvmIdentity>()
+            fun completeType(type: ITypeBinding): Boolean = !type.isRecovered && !type.erasure.isRecovered &&
+                (!type.isArray || !type.elementType.isRecovered)
+            fun add(node: org.eclipse.jdt.core.dom.ASTNode, name: SimpleName, binding: IBinding?) {
+                if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
+                if (binding == null || binding.isRecovered || binding.key.isNullOrBlank() ||
+                    node.flags and (org.eclipse.jdt.core.dom.ASTNode.MALFORMED or org.eclipse.jdt.core.dom.ASTNode.RECOVERED) != 0) return
+                if (binding is IMethodBinding && (binding.parameterTypes.any { !completeType(it) } ||
+                    (!binding.isConstructor && !completeType(binding.returnType)))) return
+                if (binding is IVariableBinding && !completeType(binding.type)) return
+                if (platformModuleName != null) {
+                    val owner = when (binding) { is ITypeBinding -> binding; is IMethodBinding -> binding.declaringClass; is IVariableBinding -> binding.declaringClass; else -> null }
+                    if (owner?.module?.name != platformModuleName) return
+                }
+                val identity = jvmIdentity(binding) ?: return
+                val sourceModifiers = if (binding is ITypeBinding) {
+                    (binding.modifiers and 0x6200.inv()) or
+                        (if (binding.isInterface || binding.isAnnotation) 0x0200 else 0) or
+                        (if (binding.isAnnotation) 0x2000 else 0) or (if (binding.isEnum) 0x4000 else 0)
+                } else binding.modifiers
+                declarations += JdtJavaSourceDeclaration(identity, rangeFor(unit, node.startPosition, node.length),
+                    rangeFor(unit, name.startPosition, name.length), binding.key, sourceModifiers)
+                if (identity.kind == JdtJavaJvmIdentityKind.TYPE) {
+                    owners += identity.ownerBinaryName
+                    (binding as ITypeBinding).declaredMethods.filter { !it.isRecovered &&
+                        (it.isDefaultConstructor || it.isSyntheticRecordMethod || it.isSynthetic) &&
+                        it.parameterTypes.all(::completeType) && (it.isConstructor || completeType(it.returnType)) }
+                        .mapNotNullTo(implicitIdentities, ::jvmIdentity)
+                }
+            }
+            unit.accept(object : ASTVisitor() {
+                override fun visit(node: TypeDeclaration): Boolean { add(node, node.name, node.resolveBinding()); return true }
+                override fun visit(node: EnumDeclaration): Boolean { add(node, node.name, node.resolveBinding()); return true }
+                override fun visit(node: RecordDeclaration): Boolean { add(node, node.name, node.resolveBinding()); return true }
+                override fun visit(node: AnnotationTypeDeclaration): Boolean { add(node, node.name, node.resolveBinding()); return true }
+                override fun visit(node: MethodDeclaration): Boolean { add(node, node.name, node.resolveBinding()); return true }
+                override fun visit(node: AnnotationTypeMemberDeclaration): Boolean { add(node, node.name, node.resolveBinding()); return true }
+                override fun visit(node: VariableDeclarationFragment): Boolean {
+                    if (node.parent is FieldDeclaration) add(node.parent, node.name, node.resolveBinding())
+                    return true
+                }
+                override fun visit(node: org.eclipse.jdt.core.dom.EnumConstantDeclaration): Boolean {
+                    add(node, node.name, node.resolveVariable()); return true
+                }
+            })
+            JdtJavaSourceDeclarations(declarations, owners, implicitIdentities)
+        }
+    }
+
     /** API 0.2 entry point retained while ephemeral binary evidence remains additive. */
     fun analyze(
         snapshot: ProjectSnapshot,
@@ -68,27 +252,62 @@ class JdtJavaSemanticAnalyzer {
         snapshot: ProjectSnapshot,
         cancellation: SemanticCancellationToken,
         additionalClasspathEntries: List<Path>,
-    ): JdtJavaSemanticAnalysisResult = analyzeInternal(snapshot, cancellation, additionalClasspathEntries, emptyMap(), emptyMap())
+    ): JdtJavaSemanticAnalysisResult {
+        val configured = snapshot.semanticAnalysisAuthority
+            ?: return try {
+                analyzeInternal(snapshot, cancellation, additionalClasspathEntries, emptyMap(), emptyMap())
+            } catch (failure: JdtJpmsAnalysisException) {
+                throw JavaContextAuthorityException(failure.code, failure.message.orEmpty())
+            }
+        require(configured is JavaContextAuthority) { "Unsupported Java semantic analysis authority" }
+        configured.requireCurrent()
+        return when (val resolution = analyzeAuthoritatively(snapshot, configured.platforms, cancellation, additionalClasspathEntries)) {
+            is JdtAuthoritativeJavaAnalysisResolution.Available -> resolution.analysis
+            is JdtAuthoritativeJavaAnalysisResolution.Refused -> throw JavaContextAuthorityException(resolution.code, resolution.message)
+        }
+    }
 
     fun analyzeAuthoritatively(
         snapshot: ProjectSnapshot,
         platformAuthorities: Map<Int, JavaReleasePlatformAuthority>,
         cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+        additionalClasspathEntries: List<Path> = emptyList(),
     ): JdtAuthoritativeJavaAnalysisResolution {
         val requiredReleases = snapshot.files.filter { it.languageId == "java" }.map { file ->
+            val compatibilityOwner = snapshot.modules
+                .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
+                .maxByOrNull { module -> module.root.nameCount }
+            compatibilityOwner?.languageSettings?.get("java.sourceLevel.refusalCode")?.let { code ->
+                return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                    code,
+                    compatibilityOwner.languageSettings["java.sourceLevel.message"]
+                        ?: "The declared Java source/API level is unavailable or unsupported",
+                )
+            }
             val owner = findBuildOwner(snapshot, file.path)
                 ?: return JdtAuthoritativeJavaAnalysisResolution.Refused(
                     "java.diagnostics.sourceSetUnavailable",
                     "Java source has no unique authoritative build source-set owner",
                 )
-            owner.second.sourceSets.filter { sourceSet ->
-                sourceSet.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) }
-            }.maxByOrNull { sourceSet -> sourceSet.sourceRoots.maxOfOrNull(Path::getNameCount) ?: 0 }
-                ?.attributes?.get("java.release")?.toIntOrNull()
-                ?: return JdtAuthoritativeJavaAnalysisResolution.Refused(
-                    "java.platform.explicitJdkRequired",
-                    "Java source set has no effective Maven --release; an explicit qualified JDK platform is required",
-                )
+            val sourceSet = snapshot.owningJavaBuildSourceRoots(file.path).singleOrNull()?.sourceSet
+            if (sourceSet == null) return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                "java.platform.explicitJdkRequired",
+                "Java source set has no effective source level; an explicit qualified JDK platform is required",
+            )
+            when (val decision = JavaProjectSourceLevelPolicy.resolve(
+                sourceSet.attributes["java.release"], sourceSet.attributes["java.sourceLevel"],
+            )) {
+                is JavaProjectSourceLevelDecision.Supported -> Unit
+                is JavaProjectSourceLevelDecision.Refused -> return JdtAuthoritativeJavaAnalysisResolution.Refused(decision.code, decision.message)
+            }
+            val profile = try { JavaSourceSetPlatformContext.profile(sourceSet, platformAuthorities) }
+                catch (failure: JavaContextAuthorityException) {
+                    return JdtAuthoritativeJavaAnalysisResolution.Refused(failure.code, failure.message.orEmpty())
+                }
+            if (platformAuthorities[profile] == null) return JdtAuthoritativeJavaAnalysisResolution.Refused(
+                "java.platform.authorityUnavailable", "No Java $profile API platform authority was configured",
+            )
+            profile
         }.toSet()
         val rebound = requiredReleases.associateWith { release ->
             val configured = platformAuthorities[release]
@@ -96,7 +315,7 @@ class JdtJavaSemanticAnalyzer {
                     "java.platform.authorityUnavailable",
                     "No Java $release platform authority was configured",
                 )
-            val current = JavaReleasePlatformAuthorityResolver().resolve(configured.platformHome, release)
+            val current = JavaReleasePlatformAuthorityResolver().revalidate(configured)
             val authority = (current as? JavaReleasePlatformResolution.Available)?.authority
                 ?: return JdtAuthoritativeJavaAnalysisResolution.Refused(
                     (current as JavaReleasePlatformResolution.Refused).code,
@@ -117,12 +336,16 @@ class JdtJavaSemanticAnalyzer {
             )
         }
         val result = try {
-            analyzeInternal(snapshot, cancellation, emptyList(), rebound, projections)
+            analyzeInternal(snapshot, cancellation, additionalClasspathEntries, rebound, projections)
+        } catch (failure: JavaContextAuthorityException) {
+            return JdtAuthoritativeJavaAnalysisResolution.Refused(failure.code, failure.message.orEmpty())
+        } catch (failure: JdtJpmsAnalysisException) {
+            return JdtAuthoritativeJavaAnalysisResolution.Refused(failure.code, failure.message.orEmpty())
         } finally {
             projections.values.forEach(JavaReleasePlatformClasspath::close)
         }
         rebound.forEach { (release, configured) ->
-            val after = JavaReleasePlatformAuthorityResolver().resolve(configured.platformHome, release)
+            val after = JavaReleasePlatformAuthorityResolver().revalidate(configured)
             if ((after as? JavaReleasePlatformResolution.Available)?.authority?.identitySha256 != configured.identitySha256) {
                 return JdtAuthoritativeJavaAnalysisResolution.Refused(
                     "java.platform.evidenceDrift",
@@ -140,6 +363,7 @@ class JdtJavaSemanticAnalyzer {
         platformAuthorities: Map<Int, JavaReleasePlatformAuthority>,
         platformClasspaths: Map<Int, JavaReleasePlatformClasspath>,
     ): JdtJavaSemanticAnalysisResult = JdtClasspathResourceScope().use { classpathResources ->
+        val buildEnvironments = mutableMapOf<String, JavaBuildSourceSetContext>()
         val fileAnalyses = snapshot.files
             .filter { it.languageId == "java" }
             .map { file ->
@@ -147,9 +371,23 @@ class JdtJavaSemanticAnalyzer {
                 val owner = snapshot.modules
                     .filter { module -> module.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
                     .maxByOrNull { module -> module.root.nameCount }
+                owner?.languageSettings?.get("java.sourceLevel.refusalCode")?.let { code ->
+                    throw JavaContextAuthorityException(
+                        code,
+                        owner.languageSettings["java.sourceLevel.message"]
+                            ?: "The declared Java source/API level is unavailable or unsupported",
+                    )
+                }
                 val buildOwner = findBuildOwner(snapshot, file.path)
                     ?: owner?.let { findCompatibilityBuildOwner(snapshot.buildModels, it) }
-                val buildEnvironment = buildOwner?.let { buildSemanticEnvironment(file, it.first, it.second) }
+                val buildEnvironment = buildOwner?.let { (model, buildModule) ->
+                    val sourceSet = snapshot.owningJavaBuildSourceRoots(file.path).singleOrNull()?.sourceSet
+                        ?: selectedBuildSourceSet(file, buildModule)
+                    val key = JavaEffectiveProjectContextProvider.key(model.providerId, buildModule.id, sourceSet.id)
+                    buildEnvironments.getOrPut(key) {
+                        buildSemanticEnvironment(snapshot, model, buildModule, sourceSet, platformAuthorities)
+                    }
+                }
                 val isTestSource = buildEnvironment?.testSource ?: owner?.let { module ->
                     (module.testSourceRoots + module.generatedTestSourceRoots).any {
                         file.path.normalize().startsWith(it.normalize())
@@ -184,12 +422,21 @@ class JdtJavaSemanticAnalyzer {
                     .map { snapshot.workspace.root.resolve(it).toAbsolutePath().normalize().toString() }
                     .filter { Files.exists(Path.of(it)) }
                     .distinct().toTypedArray()
-                val sourceLevel = buildEnvironment?.sourceLevel
-                    ?: owner?.languageSettings?.get("java.sourceLevel")?.toIntOrNull()?.coerceIn(8, 25)
-                    ?: 25
+                val sourceLevel = buildEnvironment?.sourceLevel ?: owner?.let { module ->
+                    requireSupportedJavaProjectSourceLevel(
+                        module.languageSettings["java.release"], module.languageSettings["java.sourceLevel"],
+                    )
+                } ?: JavaProjectSourceLevelPolicy.DEFAULT_SOURCE_LEVEL
+                val apiProfile = if (platformAuthorities.isEmpty()) sourceLevel else {
+                    val sourceSet = snapshot.owningJavaBuildSourceRoots(file.path).singleOrNull()?.sourceSet
+                        ?: throw JavaContextAuthorityException("java.diagnostics.sourceSetUnavailable", "No unique API profile owner")
+                    JavaSourceSetPlatformContext.profile(sourceSet, platformAuthorities)
+                }
                 analyzeFileWithReferences(
                     file, sourceRoots, classpathEntries, sourceLevel,
-                    platformAuthorities[sourceLevel], platformClasspaths[sourceLevel], classpathResources,
+                    platformAuthorities[apiProfile], platformClasspaths[apiProfile], classpathResources, cancellation,
+                    buildEnvironment?.jpms ?: JavaJpmsSourceSetContext.NOT_APPLICABLE,
+                    buildEnvironment?.compilerOptions.orEmpty(),
                 )
             }
         if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
@@ -234,6 +481,9 @@ class JdtJavaSemanticAnalyzer {
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
                     recovered = raw.recovered,
                     jvmIdentity = raw.jvmIdentity,
+                    typeBindingKey = raw.typeBindingKey,
+                    typeQualifiedName = raw.typeQualifiedName,
+                    isKotlinBinaryOwner = raw.isKotlinBinaryOwner,
                 )
             }
         }
@@ -242,6 +492,7 @@ class JdtJavaSemanticAnalyzer {
         val methods = fileAnalyses.flatMap { it.methods }
         val invocations = fileAnalyses.flatMap { it.invocations }
         val methodReferences = fileAnalyses.flatMap { it.methodReferences }
+        val methodReferenceUses = fileAnalyses.flatMap { it.methodReferenceUses }
         val overrideRelations = buildOverrideRelations(
             fileAnalyses.flatMap { it.methodBindings },
             fileAnalyses.flatMap { it.inheritances },
@@ -257,19 +508,23 @@ class JdtJavaSemanticAnalyzer {
             methods = methods,
             invocations = invocations,
             methodReferences = methodReferences,
+            methodReferenceUses = methodReferenceUses,
+            entryPointSources = fileAnalyses.mapNotNull { it.entryPointSource },
+            typeInheritance = fileAnalyses.flatMap { it.inheritances }.map { relation ->
+                JdtJavaSemanticTypeInheritance(
+                    relation.subtypeQualifiedName,
+                    relation.supertypeQualifiedName,
+                    relation.subtypeBindingKey,
+                    relation.supertypeBindingKey,
+                    JdtJavaSemanticEvidence.JDT_BINDING,
+                )
+            },
             snapshotHash = snapshot.hash,
         )
     }
 
-    private data class BuildSemanticEnvironment(
-        val testSource: Boolean,
-        val sourceRoots: List<Path>,
-        val classpathEntries: List<Path>,
-        val sourceLevel: Int,
-    )
-
     private fun findBuildOwner(snapshot: ProjectSnapshot, path: Path): Pair<BuildModel, BuildModule>? {
-        val ownership = snapshot.owningBuildSourceRoots(path).singleOrNull() ?: return null
+        val ownership = snapshot.owningJavaBuildSourceRoots(path).singleOrNull() ?: return null
         val model = snapshot.buildModels.singleOrNull { it.providerId == ownership.providerId } ?: return null
         return model to ownership.module
     }
@@ -281,84 +536,43 @@ class JdtJavaSemanticAnalyzer {
         }.firstOrNull()
 
     private fun buildSemanticEnvironment(
-        file: SourceFile,
+        snapshot: ProjectSnapshot,
         model: BuildModel,
         owner: BuildModule,
-    ): BuildSemanticEnvironment {
-        val selectedSet = owner.sourceSets.filter { sourceSet ->
-            sourceSet.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) }
-        }.maxByOrNull { sourceSet -> sourceSet.sourceRoots.maxOfOrNull { it.nameCount } ?: 0 }
-            ?: owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
-        val testSource = selectedSet?.kind in setOf(SourceSetKind.TEST, SourceSetKind.INTEGRATION_TEST) ||
-            selectedSet?.attributes?.get("visibility") == "test"
-        val mainSet = owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
-        data class PendingDependency(val targetModuleId: String, val effectiveScope: DependencyScope)
-        val byId = model.modules.associateBy(BuildModule::id)
-        val visible = linkedMapOf<String, Pair<BuildModule, DependencyScope?>>()
-        visible[owner.id] = owner to null
-        val pending = ArrayDeque(selectedSet?.moduleDependencies.orEmpty().map {
-            PendingDependency(it.targetModuleId, it.scope)
-        })
-        while (pending.isNotEmpty()) {
-            val candidate = pending.removeFirst()
-            if (!isScopeVisible(candidate.effectiveScope, testSource) || candidate.targetModuleId in visible) continue
-            val dependency = byId[candidate.targetModuleId] ?: continue
-            visible[candidate.targetModuleId] = dependency to candidate.effectiveScope
-            dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
-                ?.moduleDependencies.orEmpty().forEach { child ->
-                    deriveTransitiveScope(candidate.effectiveScope, child.scope)?.let { scope ->
-                        pending += PendingDependency(child.targetModuleId, scope)
-                    }
-                }
+        selectedSet: BuildSourceSet,
+        platformAuthorities: Map<Int, JavaReleasePlatformAuthority>,
+    ): JavaBuildSourceSetContext {
+        val environment = JavaBuildSourceSetContextResolver.resolve(model, owner, selectedSet)
+        val selectedSourceRoots = selectedSet.sourceRoots
+        val hasModuleDescriptor = snapshot.files.any { source ->
+            source.languageId == "java" && source.path.fileName?.toString() == "module-info.java" &&
+                selectedSourceRoots.any { snapshot.workspace.root.resolve(source.path).startsWith(snapshot.workspace.root.resolve(it)) }
         }
-        val sourceRoots = buildList {
-            mainSet?.let { addAll(it.sourceRoots) }
-            if (selectedSet != null && selectedSet != mainSet) addAll(selectedSet.sourceRoots)
-            visible.values.filter { it.first != owner }.forEach { (dependency, _) ->
-                dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { addAll(it.sourceRoots) }
-            }
-        }.distinct()
-        val classpathEntries = buildList {
-            selectedSet?.let { addAll(it.classpathEntries) }
-            visible.values.filter { it.first != owner }.forEach { (dependency, scope) ->
-                dependency.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.let { main ->
-                    val includeRuntime = testSource || scope in setOf(
-                        DependencyScope.PROVIDED,
-                        DependencyScope.RUNTIME,
-                        DependencyScope.TEST,
-                    )
-                    addAll(if (includeRuntime) main.runtimeClasspathEntries else main.classpathEntries)
-                }
-            }
-        }.distinct()
-        val sourceLevel = selectedSet?.attributes?.get("java.sourceLevel")?.toIntOrNull()?.coerceIn(8, 25) ?: 25
-        return BuildSemanticEnvironment(testSource, sourceRoots, classpathEntries, sourceLevel)
+        val modulePathOption = Regex("(?:^|\\s)(?:--module-path|-p)(?:=|\\s|$)")
+        val hasModulePathOption = selectedSet.compilerOptions.any { option -> modulePathOption.containsMatchIn(option.value) }
+        if (!hasModuleDescriptor && !hasModulePathOption) return environment
+        val authority = platformAuthorities[JavaSourceSetPlatformContext.profile(selectedSet, platformAuthorities)]
+            ?: throw JdtJpmsAnalysisException(
+                "java.context.sdkRequired",
+                "JPMS semantic analysis requires configured SDK authority for source set ${selectedSet.id}",
+            )
+        val jpms = JavaJpmsProjectContextResolver.resolve(
+            snapshot,
+            owner.root,
+            selectedSet,
+            selectedSet.compilerOptions,
+            selectedSet.compilerOptionsAvailability,
+            selectedSourceRoots,
+            authority.platformHome,
+        )
+        return environment.copy(jpms = jpms)
     }
 
-    private fun isScopeVisible(scope: DependencyScope, testSource: Boolean): Boolean =
-        if (testSource) scope != DependencyScope.CUSTOM
-        else scope in setOf(DependencyScope.COMPILE, DependencyScope.PROVIDED, DependencyScope.SYSTEM)
-
-    private fun deriveTransitiveScope(parent: DependencyScope, child: DependencyScope): DependencyScope? = when (parent) {
-        DependencyScope.COMPILE -> when (child) {
-            DependencyScope.COMPILE -> DependencyScope.COMPILE
-            DependencyScope.RUNTIME -> DependencyScope.RUNTIME
-            else -> null
-        }
-        DependencyScope.PROVIDED -> when (child) {
-            DependencyScope.COMPILE, DependencyScope.RUNTIME -> DependencyScope.PROVIDED
-            else -> null
-        }
-        DependencyScope.RUNTIME -> when (child) {
-            DependencyScope.COMPILE, DependencyScope.RUNTIME -> DependencyScope.RUNTIME
-            else -> null
-        }
-        DependencyScope.TEST -> when (child) {
-            DependencyScope.COMPILE, DependencyScope.RUNTIME -> DependencyScope.TEST
-            else -> null
-        }
-        else -> null
-    }
+    private fun selectedBuildSourceSet(file: SourceFile, owner: BuildModule): BuildSourceSet = owner.sourceSets
+        .filter { sourceSet -> sourceSet.sourceRoots.any { file.path.normalize().startsWith(it.normalize()) } }
+        .maxByOrNull { sourceSet -> sourceSet.sourceRoots.maxOfOrNull { it.nameCount } ?: 0 }
+        ?: owner.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }
+        ?: BuildSourceSet("compatibility-main", SourceSetKind.MAIN)
 
     private fun visibleModules(owner: Module, modules: List<Module>, testSource: Boolean): List<Module> {
         val byName = modules.associateBy(Module::name)
@@ -380,10 +594,11 @@ class JdtJavaSemanticAnalyzer {
                 file,
                 emptyArray(),
                 emptyArray(),
-                sourceLevel.coerceIn(8, 25),
+                requireSupportedJavaProjectSourceLevel(null, sourceLevel.toString()),
                 null,
                 null,
                 classpathResources,
+                SemanticCancellationToken.NONE,
             ).symbols
         }
 
@@ -395,8 +610,12 @@ class JdtJavaSemanticAnalyzer {
         platformAuthority: JavaReleasePlatformAuthority?,
         platformClasspath: JavaReleasePlatformClasspath?,
         classpathResources: JdtClasspathResourceScope,
+        cancellation: SemanticCancellationToken,
+        jpmsContext: JavaJpmsSourceSetContext = JavaJpmsSourceSetContext.NOT_APPLICABLE,
+        compilerOptions: List<org.refactorkit.core.BuildCompilerOption> = emptyList(),
     ): FileAnalysis {
-        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+        if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
+        if (file.languageId != "java") return FileAnalysis(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         val compilationUnit = parse(
             file,
             sourceRoots,
@@ -405,6 +624,9 @@ class JdtJavaSemanticAnalyzer {
             platformAuthority,
             platformClasspath,
             classpathResources,
+            jpmsContext = jpmsContext,
+            compilerOptions = compilerOptions,
+            cancellation = cancellation,
         )
         val packageName = compilationUnit.`package`?.name?.fullyQualifiedName ?: JavaPackageUtil.extractPackage(file.content)
         val symbols = mutableListOf<JdtJavaSemanticSymbol>()
@@ -416,8 +638,48 @@ class JdtJavaSemanticAnalyzer {
         val methods = mutableListOf<JdtJavaSemanticMethod>()
         val invocations = mutableListOf<JdtJavaSemanticInvocation>()
         val methodReferences = mutableListOf<JdtJavaSemanticMethodReference>()
+        val methodReferenceUses = mutableListOf<JdtJavaSemanticMethodReferenceUse>()
+        val entryPointMethods = mutableListOf<JavaNativeMainMethod>()
+        val entryPointTypes = mutableListOf<JavaNativeEntryPointType>()
+        var entryPointSyntaxComplete = true
+        var entryPointVisitedNodes = 0
+        val kotlinBinaryOwners = mutableMapOf<ITypeBinding, Boolean>()
+
+        fun isKotlinBinaryOwner(binding: IBinding?): Boolean {
+            if (binding == null || binding.isRecovered) return false
+            val owner = when (binding) {
+                is ITypeBinding -> binding.typeDeclaration
+                is IMethodBinding -> binding.methodDeclaration.declaringClass?.typeDeclaration
+                is IVariableBinding -> binding.variableDeclaration.declaringClass?.typeDeclaration
+                else -> null
+            } ?: return false
+            if (owner.isFromSource || owner.isRecovered) return false
+            return kotlinBinaryOwners.getOrPut(owner) {
+                owner.annotations.any { annotation ->
+                    val type = annotation.annotationType
+                    type != null && !type.isRecovered && type.qualifiedName == "kotlin.Metadata"
+                }
+            }
+        }
 
         compilationUnit.accept(object : ASTVisitor() {
+            override fun preVisit(node: ASTNode) {
+                if (++entryPointVisitedNodes % 256 == 0 && cancellation.isCancellationRequested())
+                    throw JdtJavaAnalysisCancelledException()
+                if (node.flags and (ASTNode.MALFORMED or ASTNode.RECOVERED) != 0) entryPointSyntaxComplete = false
+                if (entryPointTypes.size <= 16_384) {
+                    val type = when (node) {
+                        is TypeDeclaration -> JavaEntryPointNativeProjection.type(file, node, node.resolveBinding())
+                        is EnumDeclaration -> JavaEntryPointNativeProjection.type(file, node, node.resolveBinding())
+                        is RecordDeclaration -> JavaEntryPointNativeProjection.type(file, node, node.resolveBinding())
+                        is AnnotationTypeDeclaration -> JavaEntryPointNativeProjection.type(file, node, node.resolveBinding())
+                        is AnonymousClassDeclaration -> JavaEntryPointNativeProjection.type(file, node, node.resolveBinding())
+                        else -> null
+                    }
+                    if (type != null) entryPointTypes += type
+                }
+            }
+
             override fun visit(node: TypeDeclaration): Boolean {
                 val binding = node.resolveBinding()
                 val typeSymbol = symbol(
@@ -434,9 +696,10 @@ class JdtJavaSemanticAnalyzer {
                     memberSignature = null,
                     jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
+                    isAbstract = binding?.let { Modifier.isAbstract(it.modifiers) },
                 )
                 symbols += typeSymbol
-                inheritances += typeInheritanceRecords(node, packageName, typeSymbol.qualifiedName)
+                inheritances += typeInheritanceRecords(node, packageName, typeSymbol.qualifiedName, typeSymbol.bindingKey)
                 ownerStack += typeSymbol.qualifiedName
                 return true
             }
@@ -461,6 +724,7 @@ class JdtJavaSemanticAnalyzer {
                     memberSignature = null,
                     jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
+                    isAbstract = binding?.let { Modifier.isAbstract(it.modifiers) },
                 )
                 symbols += annotationSymbol
                 ownerStack += annotationSymbol.qualifiedName
@@ -487,8 +751,10 @@ class JdtJavaSemanticAnalyzer {
                     memberSignature = null,
                     jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
+                    isAbstract = binding?.let { Modifier.isAbstract(it.modifiers) },
                 )
                 symbols += enumSymbol
+                inheritances += enumInheritanceRecords(node, packageName, enumSymbol.qualifiedName, enumSymbol.bindingKey)
                 ownerStack += enumSymbol.qualifiedName
                 return true
             }
@@ -513,9 +779,50 @@ class JdtJavaSemanticAnalyzer {
                     memberSignature = null,
                     jvmIdentity = jvmIdentity(binding),
                     documentation = node.javadoc?.toString(),
+                    isAbstract = binding?.let { Modifier.isAbstract(it.modifiers) },
                 )
                 symbols += recordSymbol
-                inheritances += recordInheritanceRecords(node, packageName, recordSymbol.qualifiedName)
+                inheritances += recordInheritanceRecords(node, packageName, recordSymbol.qualifiedName, recordSymbol.bindingKey)
+                node.recordComponents().filterIsInstance<SingleVariableDeclaration>().forEachIndexed { index, component ->
+                    val componentBinding = component.resolveBinding()?.variableDeclaration
+                    val componentName = component.name.identifier
+                    symbols += symbol(
+                        file = file,
+                        compilationUnit = compilationUnit,
+                        packageName = packageName,
+                        ownerQualifiedName = recordSymbol.qualifiedName,
+                        simpleName = componentName,
+                        kind = JdtJavaSemanticSymbolKind.RECORD_COMPONENT,
+                        startPosition = component.name.startPosition,
+                        bindingQualifiedName = bindingQualifiedName(componentBinding),
+                        bindingKey = componentBinding?.key,
+                        bindingRecovered = componentBinding?.isRecovered == true,
+                        memberSignature = null,
+                        jvmIdentity = jvmIdentity(componentBinding),
+                        recordComponentIndex = index,
+                    )
+                    val generatedAccessor = binding?.declaredMethods?.singleOrNull { method ->
+                        method.name == componentName && method.parameterTypes.isEmpty() &&
+                            !method.isConstructor
+                    }
+                    if (generatedAccessor != null) {
+                        symbols += symbol(
+                            file = file,
+                            compilationUnit = compilationUnit,
+                            packageName = packageName,
+                            ownerQualifiedName = recordSymbol.qualifiedName,
+                            simpleName = componentName,
+                            kind = JdtJavaSemanticSymbolKind.METHOD,
+                            startPosition = component.name.startPosition,
+                            bindingQualifiedName = generatedAccessor.qualifiedName(),
+                            bindingKey = generatedAccessor.methodDeclaration.key,
+                            bindingRecovered = generatedAccessor.isRecovered,
+                            memberSignature = "$componentName()",
+                            hoverSignature = "generated accessor $componentName()",
+                            jvmIdentity = jvmIdentity(generatedAccessor),
+                        )
+                    }
+                }
                 ownerStack += recordSymbol.qualifiedName
                 return true
             }
@@ -544,6 +851,7 @@ class JdtJavaSemanticAnalyzer {
                     jvmIdentity = jvmIdentity(binding),
                     hoverSignature = "${node.type} ${node.name.identifier}()",
                     documentation = node.javadoc?.toString(),
+                    isAbstract = binding?.let { Modifier.isAbstract(it.modifiers) },
                 )
                 symbols += memberSymbol
                 if (binding != null) methodBindings += MethodBindingRecord(memberSymbol, binding)
@@ -553,6 +861,8 @@ class JdtJavaSemanticAnalyzer {
             override fun visit(node: MethodDeclaration): Boolean {
                 val owner = ownerStack.lastOrNull() ?: JavaPackageUtil.fqn(packageName, file.path.fileName.toString().removeSuffix(".java"))
                 val binding = node.resolveBinding()
+                if (!node.isConstructor && node.name.identifier == "main")
+                    entryPointMethods += JavaEntryPointNativeProjection.method(file, node, binding)
                 val signature = methodSignature(node, binding)
                 val methodSymbol = symbol(
                     file = file,
@@ -569,8 +879,15 @@ class JdtJavaSemanticAnalyzer {
                     jvmIdentity = jvmIdentity(binding),
                     hoverSignature = methodHoverSignature(node, binding),
                     documentation = node.javadoc?.toString(),
+                    isAbstract = binding?.let { Modifier.isAbstract(it.modifiers) },
                 )
-                symbols += methodSymbol
+                val accessorPlaceholder = symbols.indexOfFirst { existing ->
+                    existing.kind == JdtJavaSemanticSymbolKind.METHOD &&
+                        existing.bindingKey == methodSymbol.bindingKey &&
+                        existing.path == methodSymbol.path &&
+                        existing.ownerQualifiedName == methodSymbol.ownerQualifiedName
+                }
+                if (accessorPlaceholder >= 0) symbols[accessorPlaceholder] = methodSymbol else symbols += methodSymbol
                 if (binding != null && !node.isConstructor) {
                     methodBindings += MethodBindingRecord(methodSymbol, binding)
                 }
@@ -586,6 +903,10 @@ class JdtJavaSemanticAnalyzer {
                         constructor = node.isConstructor,
                         modifiers = node.modifiers,
                         evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                        canonicalConstructor = binding.isCanonicalConstructor,
+                        declarationRange = rangeFor(compilationUnit, node.startPosition, node.length),
+                        staticModifierInsertionOffset = privateModifierEndOffset(node),
+                        makeStaticRefusal = makeStaticRefusal(node),
                     )
                 }
                 node.parameters().filterIsInstance<SingleVariableDeclaration>().forEachIndexed { index, parameter ->
@@ -610,57 +931,82 @@ class JdtJavaSemanticAnalyzer {
 
             override fun visit(node: MethodInvocation): Boolean {
                 val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                val callerBinding = enclosingMethodBinding(node)
                 val bounds = parenthesisInterior(file.content, node.name.startPosition + node.name.length)
                     ?: return true
+                val arguments = node.arguments().filterIsInstance<Expression>()
                 invocations += JdtJavaSemanticInvocation(
                     methodQualifiedName = binding.qualifiedName(),
                     methodBindingKey = binding.key,
+                    callerMethodQualifiedName = callerBinding?.qualifiedName(),
+                    methodJvmIdentity = jvmIdentity(binding),
+                    callerMethodBindingKey = callerBinding?.key,
+                    callerMethodJvmIdentity = callerBinding?.let(::jvmIdentity),
+                    methodBindingRecovered = binding.isRecovered,
+                    callerBindingRecovered = callerBinding?.isRecovered == true,
                     path = file.path,
                     nameRange = rangeFor(compilationUnit, node.name.startPosition, node.name.length),
                     argumentListRange = rangeFor(compilationUnit, bounds.first, bounds.last - bounds.first + 1),
-                    argumentRanges = node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map {
+                    argumentRanges = arguments.map {
                         rangeFor(compilationUnit, it.startPosition, it.length)
                     },
+                    argumentLiteralFlags = arguments.map(::isSideEffectFreeJavaLiteral),
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                    receiverKind = if (node.expression == null) JdtJavaInvocationReceiverKind.IMPLICIT else JdtJavaInvocationReceiverKind.EXPLICIT,
                 )
                 return true
             }
 
             override fun visit(node: SuperMethodInvocation): Boolean {
                 val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                val callerBinding = enclosingMethodBinding(node)
                 val bounds = parenthesisInterior(file.content, node.name.startPosition + node.name.length)
                     ?: return true
+                val arguments = node.arguments().filterIsInstance<Expression>()
                 invocations += JdtJavaSemanticInvocation(
                     methodQualifiedName = binding.qualifiedName(),
                     methodBindingKey = binding.key,
+                    callerMethodQualifiedName = callerBinding?.qualifiedName(),
+                    methodJvmIdentity = jvmIdentity(binding),
+                    callerMethodBindingKey = callerBinding?.key,
+                    callerMethodJvmIdentity = callerBinding?.let(::jvmIdentity),
+                    methodBindingRecovered = binding.isRecovered,
+                    callerBindingRecovered = callerBinding?.isRecovered == true,
                     path = file.path,
                     nameRange = rangeFor(compilationUnit, node.name.startPosition, node.name.length),
                     argumentListRange = rangeFor(compilationUnit, bounds.first, bounds.last - bounds.first + 1),
-                    argumentRanges = node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map {
+                    argumentRanges = arguments.map {
                         rangeFor(compilationUnit, it.startPosition, it.length)
                     },
+                    argumentLiteralFlags = arguments.map(::isSideEffectFreeJavaLiteral),
                     evidence = JdtJavaSemanticEvidence.JDT_BINDING,
+                    receiverKind = JdtJavaInvocationReceiverKind.SUPER,
                 )
                 return true
             }
 
             override fun visit(node: TypeMethodReference): Boolean {
                 val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
-                if (!Modifier.isStatic(binding.modifiers)) return true
-                methodReferences += semanticMethodReference(compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.STATIC_METHOD)
+                methodReferenceUses += semanticMethodReferenceUse(compilationUnit, file, binding, node.startPosition, node.length)
+                if (Modifier.isStatic(binding.modifiers)) methodReferences += semanticMethodReference(
+                    compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.STATIC_METHOD,
+                )
                 return true
             }
 
             override fun visit(node: ExpressionMethodReference): Boolean {
                 val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
-                if (!Modifier.isStatic(binding.modifiers)) return true
-                methodReferences += semanticMethodReference(compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.STATIC_METHOD)
+                methodReferenceUses += semanticMethodReferenceUse(compilationUnit, file, binding, node.startPosition, node.length)
+                if (Modifier.isStatic(binding.modifiers)) methodReferences += semanticMethodReference(
+                    compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.STATIC_METHOD,
+                )
                 return true
             }
 
             override fun visit(node: CreationReference): Boolean {
                 val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
                 methodReferences += semanticMethodReference(compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.CONSTRUCTOR)
+                methodReferenceUses += semanticMethodReferenceUse(compilationUnit, file, binding, node.startPosition, node.length)
                 return true
             }
 
@@ -703,6 +1049,9 @@ class JdtJavaSemanticAnalyzer {
                     isImport = true,
                     recovered = binding?.isRecovered == true,
                     jvmIdentity = jvmIdentity(binding),
+                    typeBindingKey = typeDefinitionBinding(binding)?.key,
+                    typeQualifiedName = typeDefinitionBinding(binding)?.qualifiedName?.takeIf(String::isNotBlank),
+                    isKotlinBinaryOwner = isKotlinBinaryOwner(binding),
                 )
                 return false
             }
@@ -712,7 +1061,8 @@ class JdtJavaSemanticAnalyzer {
                 val bounds = parenthesisInterior(file.content, node.type.startPosition + node.type.length)
                 if (bounds != null) invocations += constructorInvocation(
                     compilationUnit, file, binding, node.type.startPosition, node.type.length, bounds,
-                    node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map { it.startPosition to it.length },
+                    node.arguments().filterIsInstance<Expression>(),
+                    enclosingMethodBinding(node),
                 )
                 rawReferences += RawReference(
                     simpleName = binding.declaringClass?.name ?: node.type.toString(),
@@ -724,6 +1074,9 @@ class JdtJavaSemanticAnalyzer {
                     isImport = false,
                     recovered = binding.isRecovered,
                     jvmIdentity = jvmIdentity(binding),
+                    typeBindingKey = typeDefinitionBinding(binding)?.key,
+                    typeQualifiedName = typeDefinitionBinding(binding)?.qualifiedName?.takeIf(String::isNotBlank),
+                    isKotlinBinaryOwner = isKotlinBinaryOwner(binding),
                 )
                 return true
             }
@@ -733,7 +1086,8 @@ class JdtJavaSemanticAnalyzer {
                 val bounds = parenthesisInterior(file.content, node.startPosition)
                 if (bounds != null) invocations += constructorInvocation(
                     compilationUnit, file, binding, node.startPosition, minOf(4, node.length), bounds,
-                    node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map { it.startPosition to it.length },
+                    node.arguments().filterIsInstance<Expression>(),
+                    enclosingMethodBinding(node),
                 )
                 return true
             }
@@ -743,7 +1097,8 @@ class JdtJavaSemanticAnalyzer {
                 val bounds = parenthesisInterior(file.content, node.startPosition)
                 if (bounds != null) invocations += constructorInvocation(
                     compilationUnit, file, binding, node.startPosition, minOf(5, node.length), bounds,
-                    node.arguments().filterIsInstance<org.eclipse.jdt.core.dom.Expression>().map { it.startPosition to it.length },
+                    node.arguments().filterIsInstance<Expression>(),
+                    enclosingMethodBinding(node),
                 )
                 return true
             }
@@ -761,6 +1116,9 @@ class JdtJavaSemanticAnalyzer {
                     isImport = false,
                     recovered = binding?.isRecovered == true,
                     jvmIdentity = jvmIdentity(binding),
+                    typeBindingKey = typeDefinitionBinding(binding)?.key,
+                    typeQualifiedName = typeDefinitionBinding(binding)?.qualifiedName?.takeIf(String::isNotBlank),
+                    isKotlinBinaryOwner = isKotlinBinaryOwner(binding),
                 )
                 return true
             }
@@ -785,7 +1143,8 @@ class JdtJavaSemanticAnalyzer {
                     evidence = JdtJavaSemanticEvidence.JDT_PARSE,
                 )
             }
-        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances, parameters, methods, invocations, methodReferences)
+        return FileAnalysis(symbols, rawReferences, warnings, methodBindings, inheritances, parameters, methods, invocations, methodReferences, methodReferenceUses,
+            JavaNativeEntryPointSource(file.path, entryPointSyntaxComplete && warnings.isEmpty(), entryPointMethods, entryPointTypes))
     }
 
     private fun declarationBindingKey(binding: IBinding?): String? = when (binding) {
@@ -793,6 +1152,18 @@ class JdtJavaSemanticAnalyzer {
         is IMethodBinding -> binding.methodDeclaration.key
         is IVariableBinding -> binding.variableDeclaration.key
         else -> binding?.key
+    }
+
+    private fun typeDefinitionBinding(binding: IBinding?): ITypeBinding? {
+        val selected = when (binding) {
+            is ITypeBinding -> binding
+            is IVariableBinding -> binding.type
+            is IMethodBinding -> if (binding.isConstructor) binding.declaringClass else binding.returnType
+            else -> null
+        } ?: return null
+        val element = if (selected.isArray) selected.elementType else selected
+        if (element.isRecovered || element.isPrimitive || element.isTypeVariable || element.isWildcardType) return null
+        return element.typeDeclaration.takeUnless { it.isRecovered || it.key.isNullOrBlank() }
     }
 
     private fun bindingQualifiedName(binding: IBinding?): String? = when (binding) {
@@ -974,6 +1345,17 @@ class JdtJavaSemanticAnalyzer {
         kind = kind, evidence = JdtJavaSemanticEvidence.JDT_BINDING,
     )
 
+    private fun semanticMethodReferenceUse(
+        compilationUnit: CompilationUnit,
+        file: SourceFile,
+        binding: IMethodBinding,
+        start: Int,
+        length: Int,
+    ) = JdtJavaSemanticMethodReferenceUse(
+        methodQualifiedName = binding.qualifiedName(), methodBindingKey = binding.key,
+        path = file.path, sourceRange = rangeFor(compilationUnit, start, length),
+    )
+
     private fun constructorInvocation(
         compilationUnit: CompilationUnit,
         file: SourceFile,
@@ -981,22 +1363,122 @@ class JdtJavaSemanticAnalyzer {
         nameStart: Int,
         nameLength: Int,
         bounds: IntRange,
-        arguments: List<Pair<Int, Int>>,
+        arguments: List<Expression>,
+        callerMethodBinding: IMethodBinding?,
     ): JdtJavaSemanticInvocation = JdtJavaSemanticInvocation(
         methodQualifiedName = binding.qualifiedName(),
         methodBindingKey = binding.key,
+        callerMethodQualifiedName = callerMethodBinding?.qualifiedName(),
+        methodJvmIdentity = jvmIdentity(binding),
+        callerMethodBindingKey = callerMethodBinding?.key,
+        callerMethodJvmIdentity = callerMethodBinding?.let(::jvmIdentity),
+        methodBindingRecovered = binding.isRecovered,
+        callerBindingRecovered = callerMethodBinding?.isRecovered == true,
         path = file.path,
         nameRange = rangeFor(compilationUnit, nameStart, nameLength),
         argumentListRange = rangeFor(compilationUnit, bounds.first, bounds.last - bounds.first + 1),
-        argumentRanges = arguments.map { (start, length) -> rangeFor(compilationUnit, start, length) },
+        argumentRanges = arguments.map { rangeFor(compilationUnit, it.startPosition, it.length) },
+        argumentLiteralFlags = arguments.map(::isSideEffectFreeJavaLiteral),
         evidence = JdtJavaSemanticEvidence.JDT_BINDING,
     )
+
+    private fun isSideEffectFreeJavaLiteral(expression: Expression): Boolean = when (expression) {
+        is ParenthesizedExpression -> isSideEffectFreeJavaLiteral(expression.expression)
+        is BooleanLiteral, is CharacterLiteral, is NullLiteral, is NumberLiteral, is StringLiteral, is TextBlock -> true
+        else -> false
+    }
 
     private fun IMethodBinding.qualifiedName(): String {
         val owner = declaringClass?.qualifiedName.orEmpty()
         val canonicalName = if (isConstructor) "<init>" else name
         val signature = "$canonicalName(${parameterTypes.joinToString(",") { it.qualifiedName.takeIf(String::isNotBlank) ?: it.name }})"
         return "$owner#$signature"
+    }
+
+    private fun enclosingMethodBinding(node: org.eclipse.jdt.core.dom.ASTNode): IMethodBinding? {
+        var ancestor = node.parent
+        while (ancestor != null) {
+            if (ancestor is MethodDeclaration) return ancestor.resolveBinding()?.methodDeclaration
+            ancestor = ancestor.parent
+        }
+        return null
+    }
+
+    private fun privateModifierEndOffset(node: MethodDeclaration): Int =
+        node.modifiers().filterIsInstance<Modifier>().singleOrNull { it.isPrivate }
+            ?.let { it.startPosition + it.length }
+            ?: node.name.startPosition
+
+    /** A deliberately narrow, binding-backed subset for the first makeStatic slice. */
+    private fun makeStaticRefusal(node: MethodDeclaration): String? {
+        if (node.isConstructor) return "Constructors cannot be made static"
+        if (!Modifier.isPrivate(node.modifiers)) return "Only private methods are supported"
+        if (Modifier.isStatic(node.modifiers)) return "Method is already static"
+        if (Modifier.isSynchronized(node.modifiers)) return "Synchronized methods are not supported because static conversion changes the monitor"
+        if (node.modifiers().any { it is Annotation }) return "Annotated methods are not supported because framework semantics may depend on instance methods"
+        if (node.body == null) return "Methods without a body are not supported"
+        val owner = node.parent as? TypeDeclaration
+            ?: return "Only methods declared directly in an ordinary Java class are supported"
+        if (owner.isInterface || owner.parent !is CompilationUnit) {
+            return "Only top-level ordinary Java classes are supported"
+        }
+
+        val targetBindingKey = node.resolveBinding()?.methodDeclaration?.key
+        var refusal: String? = null
+        node.body.accept(object : ASTVisitor() {
+            override fun visit(node: TypeDeclaration): Boolean = false
+            override fun visit(node: EnumDeclaration): Boolean = false
+            override fun visit(node: RecordDeclaration): Boolean = false
+            override fun visit(node: AnnotationTypeDeclaration): Boolean = false
+            override fun visit(node: AnonymousClassDeclaration): Boolean = false
+
+            override fun visit(node: ThisExpression): Boolean {
+                refusal = "Method body uses this"
+                return false
+            }
+
+            override fun visit(node: SuperMethodInvocation): Boolean {
+                refusal = "Method body uses super"
+                return false
+            }
+
+            override fun visit(node: SuperFieldAccess): Boolean {
+                refusal = "Method body uses super"
+                return false
+            }
+
+            override fun visit(node: MethodInvocation): Boolean {
+                val binding = node.resolveMethodBinding()
+                if (binding == null || binding.isRecovered) {
+                    refusal = "Method body contains an unresolved method invocation"
+                } else if (binding.methodDeclaration.key != targetBindingKey && !Modifier.isStatic(binding.modifiers) &&
+                    (node.expression == null || node.expression is ThisExpression)) {
+                    refusal = "Method body calls an instance method through its receiver"
+                }
+                return refusal == null
+            }
+
+            override fun visit(node: FieldAccess): Boolean {
+                val binding = node.resolveFieldBinding()
+                if (binding == null || binding.isRecovered) {
+                    refusal = "Method body contains an unresolved field access"
+                } else if (!Modifier.isStatic(binding.modifiers) && node.expression is ThisExpression) {
+                    refusal = "Method body reads instance state through this"
+                }
+                return refusal == null
+            }
+
+            override fun visit(node: SimpleName): Boolean {
+                val binding = node.resolveBinding()
+                if (binding is IVariableBinding && binding.isField && !Modifier.isStatic(binding.modifiers)) {
+                    val isQualifiedFieldName = (node.parent is FieldAccess && (node.parent as FieldAccess).name === node) ||
+                        (node.parent is org.eclipse.jdt.core.dom.QualifiedName && (node.parent as org.eclipse.jdt.core.dom.QualifiedName).name === node)
+                    if (!isQualifiedFieldName) refusal = "Method body reads an instance field implicitly"
+                }
+                return refusal == null
+            }
+        })
+        return refusal
     }
 
     private fun IMethodBinding.isOverrideCandidate(): Boolean =
@@ -1014,32 +1496,144 @@ class JdtJavaSemanticAnalyzer {
         node: TypeDeclaration,
         packageName: String,
         subtypeQualifiedName: String,
+        subtypeBindingKey: String?,
     ): List<TypeInheritanceRecord> {
-        val superTypes = mutableListOf<String>()
+        val superTypes = mutableListOf<Pair<String, String?>>()
         node.superclassType?.let { type ->
-            superTypes += type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
+            val binding = type.resolveBinding()?.typeDeclaration?.takeUnless { it.isRecovered }
+            val name = binding?.qualifiedName?.takeIf(String::isNotBlank)
                 ?: qualifyTypeName(packageName, type.toString())
+            superTypes += name to binding?.key
         }
         node.superInterfaceTypes().forEach { rawType ->
             val type = rawType as? org.eclipse.jdt.core.dom.Type ?: return@forEach
-            superTypes += type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
+            val binding = type.resolveBinding()?.typeDeclaration?.takeUnless { it.isRecovered }
+            val name = binding?.qualifiedName?.takeIf(String::isNotBlank)
                 ?: qualifyTypeName(packageName, type.toString())
+            superTypes += name to binding?.key
         }
-        return superTypes.distinct().map { TypeInheritanceRecord(subtypeQualifiedName, it) }
+        return superTypes.distinct().map { (name, key) ->
+            TypeInheritanceRecord(subtypeQualifiedName, name, subtypeBindingKey, key)
+        }
     }
 
     private fun recordInheritanceRecords(
         node: RecordDeclaration,
         packageName: String,
         subtypeQualifiedName: String,
+        subtypeBindingKey: String?,
     ): List<TypeInheritanceRecord> = node.superInterfaceTypes().mapNotNull { rawType ->
         val type = rawType as? org.eclipse.jdt.core.dom.Type ?: return@mapNotNull null
-        type.resolveBinding()?.qualifiedName?.takeIf { it.isNotBlank() }
+        val binding = type.resolveBinding()?.typeDeclaration?.takeUnless { it.isRecovered }
+        val name = binding?.qualifiedName?.takeIf(String::isNotBlank)
             ?: qualifyTypeName(packageName, type.toString())
-    }.distinct().map { TypeInheritanceRecord(subtypeQualifiedName, it) }
+        name to binding?.key
+    }.distinct().map { (name, key) ->
+        TypeInheritanceRecord(subtypeQualifiedName, name, subtypeBindingKey, key)
+    }
+
+    private fun enumInheritanceRecords(
+        node: EnumDeclaration,
+        packageName: String,
+        subtypeQualifiedName: String,
+        subtypeBindingKey: String?,
+    ): List<TypeInheritanceRecord> = node.superInterfaceTypes().mapNotNull { rawType ->
+        val type = rawType as? org.eclipse.jdt.core.dom.Type ?: return@mapNotNull null
+        val binding = type.resolveBinding()?.typeDeclaration?.takeUnless { it.isRecovered }
+        val name = binding?.qualifiedName?.takeIf(String::isNotBlank)
+            ?: qualifyTypeName(packageName, type.toString())
+        TypeInheritanceRecord(subtypeQualifiedName, name, subtypeBindingKey, binding?.key)
+    }.distinct()
 
     private fun qualifyTypeName(packageName: String, name: String): String =
         if (name.contains('.')) name else JavaPackageUtil.fqn(packageName, name)
+
+    /** Whole-file association requires an actual parsed namespace/owner, independently of member ranges. */
+    fun hasPlatformSourceOwner(
+        file: SourceFile,
+        identity: JdtJavaJvmIdentity,
+        release: Int,
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
+    ): Boolean {
+        if (!JavaParserReleaseSupport.supportsRelease(release)) return false
+        val parser = ASTParser.newParser(AST.getJLSLatest())
+        parser.setKind(ASTParser.K_COMPILATION_UNIT); parser.setSource(file.content.toCharArray())
+        parser.setCompilerOptions(JavaCore.getOptions().also { JavaCore.setComplianceOptions(if (release == 8) "1.8" else release.toString(), it) })
+        val unit = createAst(parser, cancellation)
+        if (unit.problems.any { it.isError && it.id and IProblem.Syntax != 0 }) return false
+        if (unit.getPackage()?.name?.fullyQualifiedName.orEmpty() != identity.ownerBinaryName.substringBeforeLast('.', "")) return false
+        val top = identity.ownerBinaryName.substringAfterLast('.').substringBefore('$')
+        val owners = unit.types().filterIsInstance<org.eclipse.jdt.core.dom.AbstractTypeDeclaration>().filter { it.name.identifier == top }
+        return owners.size == 1 && owners.single().flags and org.eclipse.jdt.core.dom.ASTNode.MALFORMED == 0
+    }
+
+    /** Exact binary origin from the same selected-SDK parser, never inferred from a type name. */
+    fun platformBinarySelection(file: SourceFile, sourceRoots: List<Path>, classpath: List<Path>,
+                                platform: JavaReleasePlatformAuthority, position: SourcePosition,
+                                cancellation: SemanticCancellationToken): List<JdtJavaPlatformBinary> =
+        platformBinarySelection(file, sourceRoots, classpath, platform, position, cancellation, platform.release)
+
+    fun platformBinarySelection(file: SourceFile, sourceRoots: List<Path>, classpath: List<Path>,
+                                platform: JavaReleasePlatformAuthority, position: SourcePosition,
+                                cancellation: SemanticCancellationToken, sourceLevel: Int): List<JdtJavaPlatformBinary> =
+        JavaReleasePlatformClasspath.materialize(platform).use { projection -> JdtClasspathResourceScope().use { resources ->
+            val unit = parse(file, sourceRoots.filter(Files::isDirectory).map(Path::toString).toTypedArray(),
+                classpath.filter(Files::exists).map(Path::toString).toTypedArray(), sourceLevel, platform, projection, resources,
+                cancellation = cancellation)
+            val found = mutableListOf<JdtJavaPlatformBinary>()
+            fun capture(binding: IBinding?, start: Int, length: Int) {
+                if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
+                val range = rangeFor(unit, start, length)
+                if (position < range.start || position >= range.end || binding == null || binding.isRecovered) return
+                val identity = jvmIdentity(binding) ?: return
+                val owner = when (binding) { is ITypeBinding -> binding; is IMethodBinding -> binding.methodDeclaration.declaringClass
+                    is IVariableBinding -> binding.variableDeclaration.declaringClass; else -> null }?.typeDeclaration ?: return
+                if (owner.isRecovered) return
+                // Qualified DOM bridge, as with the standalone resolver/platform bridges.
+                val field = owner.javaClass.getDeclaredField("binding").apply { isAccessible = true }
+                val binary = field.get(owner) as? org.eclipse.jdt.internal.compiler.lookup.BinaryTypeBinding ?: return
+                val entry = String(binary.fileName ?: return)
+                val origin = binary.path ?: return
+                if (origin.scheme != "jrt" || origin.authority != null || origin.query != null || origin.fragment != null) return
+                val module = origin.path?.removePrefix("/")?.substringBefore('/')
+                    ?.takeIf { it.matches(Regex("[A-Za-z][A-Za-z0-9_.]*")) } ?: return
+                if (entry != identity.ownerBinaryName.replace('.', '/') + ".class" || origin.path != "/$module/$entry") return
+                // Java 8 grammar need not expose a module binding. The native binary
+                // origin still names the exact JRT module; never derive it from a package.
+                val domModule = owner.module?.name
+                val compilerModule = binary.module()
+                if (sourceLevel >= 9 && (domModule != module || compilerModule.isUnnamed())) return
+                if (!domModule.isNullOrEmpty() && domModule != module) return
+                if (!compilerModule.isUnnamed() && String(compilerModule.moduleName) != module) return
+                found += JdtJavaPlatformBinary(identity, module, entry, origin.toString())
+            }
+            unit.accept(object : ASTVisitor() {
+                override fun visit(node: SimpleName): Boolean { capture(node.resolveBinding(), node.startPosition, node.length); return true }
+                override fun visit(node: ClassInstanceCreation): Boolean { capture(node.resolveConstructorBinding(), node.type.startPosition, node.type.length); return true }
+            })
+            found.distinct()
+        } }
+
+    private fun preparePlatformSourceModule(parser: ASTParser, moduleName: String) {
+        val field = ASTParser::class.java.getDeclaredField("unitResolver").apply { isAccessible = true }
+        val original = field.get(parser) as org.eclipse.jdt.internal.core.dom.ICompilationUnitResolver
+        field.set(parser, java.lang.reflect.Proxy.newProxyInstance(original.javaClass.classLoader,
+            arrayOf(org.eclipse.jdt.internal.core.dom.ICompilationUnitResolver::class.java)) { _, method, arguments ->
+            val prepared = arguments?.clone()
+            prepared?.indices?.forEach { index ->
+                val unit = prepared[index] as? org.eclipse.jdt.internal.compiler.env.ICompilationUnit ?: return@forEach
+                prepared[index] = java.lang.reflect.Proxy.newProxyInstance(unit.javaClass.classLoader,
+                    arrayOf(org.eclipse.jdt.internal.compiler.env.ICompilationUnit::class.java)) { _, member, values ->
+                    when (member.name) {
+                        "getModuleName" -> moduleName.toCharArray()
+                        "module" -> (values!![0] as org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment).getModule(moduleName.toCharArray())
+                        else -> try { member.invoke(unit, *(values ?: emptyArray())) } catch (e: java.lang.reflect.InvocationTargetException) { throw e.cause ?: e }
+                    }
+                }
+            }
+            try { method.invoke(original, *(prepared ?: emptyArray())) } catch (e: java.lang.reflect.InvocationTargetException) { throw e.cause ?: e }
+        })
+    }
 
     private fun parse(
         file: SourceFile,
@@ -1049,8 +1643,16 @@ class JdtJavaSemanticAnalyzer {
         platformAuthority: JavaReleasePlatformAuthority?,
         platformClasspath: JavaReleasePlatformClasspath?,
         classpathResources: JdtClasspathResourceScope,
+        platformModuleName: String? = null,
+        jpmsContext: JavaJpmsSourceSetContext = JavaJpmsSourceSetContext.NOT_APPLICABLE,
+        compilerOptions: List<org.refactorkit.core.BuildCompilerOption> = emptyList(),
+        cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): CompilationUnit {
-        val parser = ASTParser.newParser(AST.JLS25)
+        if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
+        require(JavaParserReleaseSupport.supportsRelease(sourceLevel)) {
+            "Java $sourceLevel is not supported by the installed JDT parser and compiler"
+        }
+        val parser = ASTParser.newParser(AST.getJLSLatest())
         parser.setKind(ASTParser.K_COMPILATION_UNIT)
         parser.setSource(file.content.toCharArray())
         val packageName = JavaPackageUtil.extractPackage(file.content)
@@ -1062,20 +1664,51 @@ class JdtJavaSemanticAnalyzer {
         val compliance = if (sourceLevel == 8) JavaCore.VERSION_1_8 else sourceLevel.toString()
         parser.setCompilerOptions(JavaCore.getOptions().also { options ->
             JavaCore.setComplianceOptions(compliance, options)
-            if (platformAuthority != null) options[JavaCore.COMPILER_RELEASE] = JavaCore.ENABLED
+            if (platformAuthority != null) options[JavaCore.COMPILER_RELEASE] =
+                if (platformAuthority.release == sourceLevel) JavaCore.ENABLED else JavaCore.DISABLED
         })
         val effectiveClasspath = if (platformAuthority == null) classpathEntries else {
             requireNotNull(platformClasspath).environmentPaths.map(Path::toString).toTypedArray() + classpathEntries
         }
-        if (sourceRoots.isNotEmpty() || effectiveClasspath.isNotEmpty()) {
-            parser.setEnvironment(effectiveClasspath, sourceRoots, null, platformAuthority == null)
-        }
+        // Even a source-only workspace needs the running JVM system library for
+        // bindings such as java.lang.String. Omitting setEnvironment for empty
+        // project paths makes JDT fall back to an unconfigured workspace VM and
+        // can fail with "Missing system library" in library/daemon use.
+        parser.setEnvironment(effectiveClasspath, sourceRoots, null, platformAuthority == null)
         parser.setResolveBindings(true)
         parser.setBindingsRecovery(true)
         parser.setStatementsRecovery(true)
         classpathResources.prepare(parser)
+        val projectModuleName = JdtJpmsClasspath.prepare(
+            parser,
+            classpathResources,
+            sourceRoots,
+            sourceLevel,
+            compilerOptions,
+            jpmsContext,
+        )
         platformClasspath?.prepare(parser)
-        return parser.createAST(null) as CompilationUnit
+        if (platformModuleName != null && projectModuleName != null && platformModuleName != projectModuleName) {
+            throw JdtJpmsAnalysisException(
+                "java.context.jpmsSemanticAnalysisUnavailable",
+                "The selected source requires conflicting project and platform module identities",
+            )
+        }
+        (projectModuleName ?: platformModuleName)?.let { preparePlatformSourceModule(parser, it) }
+        return createAst(parser, cancellation)
+    }
+
+    private fun createAst(parser: ASTParser, cancellation: SemanticCancellationToken): CompilationUnit {
+        val monitor = object : NullProgressMonitor() {
+            override fun isCanceled(): Boolean = super.isCanceled() || cancellation.isCancellationRequested()
+        }
+        return try {
+            parser.createAST(monitor) as CompilationUnit
+        } catch (_: OperationCanceledException) {
+            throw JdtJavaAnalysisCancelledException()
+        }.also {
+            if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
+        }
     }
 
     private fun symbol(
@@ -1093,13 +1726,16 @@ class JdtJavaSemanticAnalyzer {
         hoverSignature: String? = null,
         documentation: String? = null,
         jvmIdentity: JdtJavaJvmIdentity? = null,
+        recordComponentIndex: Int? = null,
+        isAbstract: Boolean? = null,
     ): JdtJavaSemanticSymbol {
         val qualifiedName = bindingQualifiedName
             ?.takeIf { it.isNotBlank() }
             ?: when (kind) {
                 JdtJavaSemanticSymbolKind.METHOD,
                 JdtJavaSemanticSymbolKind.CONSTRUCTOR -> "${ownerQualifiedName ?: JavaPackageUtil.fqn(packageName, simpleName)}#${memberSignature ?: simpleName}"
-                JdtJavaSemanticSymbolKind.FIELD -> "${ownerQualifiedName ?: JavaPackageUtil.fqn(packageName, simpleName)}#$simpleName"
+                JdtJavaSemanticSymbolKind.FIELD,
+                JdtJavaSemanticSymbolKind.RECORD_COMPONENT -> "${ownerQualifiedName ?: JavaPackageUtil.fqn(packageName, simpleName)}#$simpleName"
                 else -> ownerQualifiedName?.let { "$it.$simpleName" } ?: JavaPackageUtil.fqn(packageName, simpleName)
             }
         return JdtJavaSemanticSymbol(
@@ -1122,6 +1758,8 @@ class JdtJavaSemanticAnalyzer {
             },
             recovered = bindingRecovered,
             jvmIdentity = jvmIdentity,
+            recordComponentIndex = recordComponentIndex,
+            isAbstract = isAbstract,
         )
     }
 
@@ -1218,6 +1856,8 @@ class JdtJavaSemanticAnalyzer {
         val methods: List<JdtJavaSemanticMethod>,
         val invocations: List<JdtJavaSemanticInvocation>,
         val methodReferences: List<JdtJavaSemanticMethodReference>,
+        val methodReferenceUses: List<JdtJavaSemanticMethodReferenceUse>,
+        val entryPointSource: JavaNativeEntryPointSource? = null,
     )
 
     private data class MethodBindingRecord(
@@ -1228,6 +1868,8 @@ class JdtJavaSemanticAnalyzer {
     private data class TypeInheritanceRecord(
         val subtypeQualifiedName: String,
         val supertypeQualifiedName: String,
+        val subtypeBindingKey: String?,
+        val supertypeBindingKey: String?,
     )
 
     private data class RawReference(
@@ -1240,6 +1882,9 @@ class JdtJavaSemanticAnalyzer {
         val isImport: Boolean,
         val recovered: Boolean,
         val jvmIdentity: JdtJavaJvmIdentity? = null,
+        val typeBindingKey: String? = null,
+        val typeQualifiedName: String? = null,
+        val isKotlinBinaryOwner: Boolean = false,
     )
 }
 
@@ -1273,7 +1918,11 @@ class JdtJavaSemanticAnalysisResult(
     invocations: List<JdtJavaSemanticInvocation> = emptyList(),
     methodReferences: List<JdtJavaSemanticMethodReference> = emptyList(),
     val snapshotHash: String = "",
+    typeInheritance: List<JdtJavaSemanticTypeInheritance> = emptyList(),
+    methodReferenceUses: List<JdtJavaSemanticMethodReferenceUse> = emptyList(),
+    entryPointSources: List<JavaNativeEntryPointSource> = emptyList(),
 ) {
+    private val entryPointSourceState = detachedSemanticList(entryPointSources)
     private val symbolState = detachedSemanticList(symbols)
     private val referenceState = detachedSemanticList(references)
     private val warningState = detachedSemanticList(warnings)
@@ -1289,11 +1938,22 @@ class JdtJavaSemanticAnalysisResult(
             nameRange = invocation.nameRange,
             argumentListRange = invocation.argumentListRange,
             argumentRanges = invocation.argumentRanges,
+            argumentLiteralFlags = invocation.argumentLiteralFlags,
             evidence = invocation.evidence,
+            callerMethodQualifiedName = invocation.callerMethodQualifiedName,
+            receiverKind = invocation.receiverKind,
+            methodJvmIdentity = invocation.methodJvmIdentity,
+            callerMethodBindingKey = invocation.callerMethodBindingKey,
+            callerMethodJvmIdentity = invocation.callerMethodJvmIdentity,
+            methodBindingRecovered = invocation.methodBindingRecovered,
+            callerBindingRecovered = invocation.callerBindingRecovered,
         )
     })
     private val methodReferenceState = detachedSemanticList(methodReferences)
+    private val methodReferenceUseState = detachedSemanticList(methodReferenceUses)
+    private val typeInheritanceState = detachedSemanticList(typeInheritance)
 
+    val entryPointSources: List<JavaNativeEntryPointSource> get() = detachedSemanticList(entryPointSourceState)
     val symbols: List<JdtJavaSemanticSymbol> get() = detachedSemanticList(symbolState)
     val references: List<JdtJavaSemanticReference> get() = detachedSemanticList(referenceState)
     val warnings: List<JdtJavaSemanticWarning> get() = detachedSemanticList(warningState)
@@ -1303,18 +1963,20 @@ class JdtJavaSemanticAnalysisResult(
     val methods: List<JdtJavaSemanticMethod> get() = detachedSemanticList(methodState)
     val invocations: List<JdtJavaSemanticInvocation> get() = detachedSemanticList(invocationState)
     val methodReferences: List<JdtJavaSemanticMethodReference> get() = detachedSemanticList(methodReferenceState)
+    val methodReferenceUses: List<JdtJavaSemanticMethodReferenceUse> get() = detachedSemanticList(methodReferenceUseState)
+    val typeInheritance: List<JdtJavaSemanticTypeInheritance> get() = detachedSemanticList(typeInheritanceState)
 
     fun copy(snapshotHash: String = this.snapshotHash): JdtJavaSemanticAnalysisResult =
         JdtJavaSemanticAnalysisResult(
             symbolState, referenceState, warningState, overrideRelationState, bindingUseState, parameterState,
-            methodState, invocationState, methodReferenceState, snapshotHash,
+            methodState, invocationState, methodReferenceState, snapshotHash, typeInheritanceState, methodReferenceUseState, entryPointSourceState,
         )
 
     override fun toString(): String = "JdtJavaSemanticAnalysisResult(" +
         "symbols=${symbolState.size}, references=${referenceState.size}, warnings=${warningState.size}, " +
         "overrideRelations=${overrideRelationState.size}, bindingUses=${bindingUseState.size}, " +
         "parameters=${parameterState.size}, methods=${methodState.size}, invocations=${invocationState.size}, " +
-        "methodReferences=${methodReferenceState.size}, snapshotHash=$snapshotHash)"
+        "methodReferences=${methodReferenceState.size}, typeInheritance=${typeInheritanceState.size}, snapshotHash=$snapshotHash)"
 }
 
 private fun <T> detachedSemanticList(source: Collection<T>): List<T> =
@@ -1329,6 +1991,10 @@ data class JdtJavaSemanticMethod(
     val constructor: Boolean,
     val modifiers: Int,
     val evidence: JdtJavaSemanticEvidence,
+    val canonicalConstructor: Boolean = false,
+    val declarationRange: SourceRange? = null,
+    val staticModifierInsertionOffset: Int? = null,
+    val makeStaticRefusal: String? = null,
 )
 
 class JdtJavaSemanticInvocation(
@@ -1339,10 +2005,22 @@ class JdtJavaSemanticInvocation(
     val argumentListRange: SourceRange,
     argumentRanges: List<SourceRange>,
     val evidence: JdtJavaSemanticEvidence,
+    argumentLiteralFlags: List<Boolean> = emptyList(),
+    val callerMethodQualifiedName: String? = null,
+    val receiverKind: JdtJavaInvocationReceiverKind = JdtJavaInvocationReceiverKind.IMPLICIT,
+    val methodJvmIdentity: JdtJavaJvmIdentity? = null,
+    val callerMethodBindingKey: String? = null,
+    val callerMethodJvmIdentity: JdtJavaJvmIdentity? = null,
+    val methodBindingRecovered: Boolean = false,
+    val callerBindingRecovered: Boolean = false,
 ) {
     private val argumentRangeState = detachedSemanticList(argumentRanges)
+    private val argumentLiteralFlagState = detachedSemanticList(argumentLiteralFlags)
     val argumentRanges: List<SourceRange> get() = detachedSemanticList(argumentRangeState)
+    val argumentLiteralFlags: List<Boolean> get() = detachedSemanticList(argumentLiteralFlagState)
 }
+
+enum class JdtJavaInvocationReceiverKind { IMPLICIT, EXPLICIT, SUPER }
 
 data class JdtJavaSemanticMethodReference(
     val methodQualifiedName: String,
@@ -1354,6 +2032,13 @@ data class JdtJavaSemanticMethodReference(
 )
 
 enum class JdtJavaSemanticMethodReferenceKind { STATIC_METHOD, CONSTRUCTOR }
+
+data class JdtJavaSemanticMethodReferenceUse(
+    val methodQualifiedName: String,
+    val methodBindingKey: String,
+    val path: Path,
+    val sourceRange: SourceRange,
+)
 
 data class JdtJavaSemanticParameter(
     val methodQualifiedName: String,
@@ -1384,6 +2069,8 @@ data class JdtJavaSemanticSymbol(
     val evidence: JdtJavaSemanticEvidence,
     val recovered: Boolean = false,
     val jvmIdentity: JdtJavaJvmIdentity? = null,
+    val recordComponentIndex: Int? = null,
+    val isAbstract: Boolean? = null,
 )
 
 data class JdtJavaSemanticReference(
@@ -1411,7 +2098,26 @@ data class JdtJavaSemanticBindingUse(
     val evidence: JdtJavaSemanticEvidence,
     val recovered: Boolean = false,
     val jvmIdentity: JdtJavaJvmIdentity? = null,
+    val typeBindingKey: String? = null,
+    val typeQualifiedName: String? = null,
+    val isKotlinBinaryOwner: Boolean = false,
 ) {
+    constructor(
+        simpleName: String,
+        path: Path,
+        line: Int,
+        sourceRange: SourceRange,
+        bindingKey: String,
+        symbolQualifiedName: String?,
+        isImport: Boolean,
+        evidence: JdtJavaSemanticEvidence,
+        recovered: Boolean,
+        jvmIdentity: JdtJavaJvmIdentity?,
+        typeBindingKey: String?,
+        typeQualifiedName: String?,
+    ) : this(simpleName, path, line, sourceRange, bindingKey, symbolQualifiedName, isImport, evidence,
+        recovered, jvmIdentity, typeBindingKey, typeQualifiedName, false)
+
     /** API 0.2 compatibility constructor retained while qualified binary identity is additive. */
     constructor(
         simpleName: String,
@@ -1447,6 +2153,14 @@ data class JdtJavaSemanticOverrideRelation(
     val evidence: JdtJavaSemanticEvidence,
 )
 
+data class JdtJavaSemanticTypeInheritance(
+    val subtypeQualifiedName: String,
+    val supertypeQualifiedName: String,
+    val subtypeBindingKey: String?,
+    val supertypeBindingKey: String?,
+    val evidence: JdtJavaSemanticEvidence,
+)
+
 enum class JdtJavaSemanticSymbolKind {
     CLASS,
     INTERFACE,
@@ -1455,6 +2169,7 @@ enum class JdtJavaSemanticSymbolKind {
     ANNOTATION,
     METHOD,
     FIELD,
+    RECORD_COMPONENT,
     CONSTRUCTOR,
 }
 

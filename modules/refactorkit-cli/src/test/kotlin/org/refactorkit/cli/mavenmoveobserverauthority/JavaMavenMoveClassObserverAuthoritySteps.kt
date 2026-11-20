@@ -269,7 +269,8 @@ class JavaMavenMoveClassObserverAuthoritySteps {
 
         val feature = Files.readString(workspaceRoot.resolve(NON_JAVA_FEATURE_PATH))
         assertTrue(countOccurrences(feature, PRODUCT_FQN) >= 1)
-        assertTrue(NON_JAVA_FEATURE_PATH !in baselineSnapshot.trackedFiles.map { it.path })
+        assertTrue(NON_JAVA_FEATURE_PATH !in baselineSnapshot.files.map { it.path })
+        assertTrue(NON_JAVA_FEATURE_PATH in baselineSnapshot.auxiliaryFiles.map { it.path })
     }
 
     @When("the eligible binding-clean move is previewed and applied")

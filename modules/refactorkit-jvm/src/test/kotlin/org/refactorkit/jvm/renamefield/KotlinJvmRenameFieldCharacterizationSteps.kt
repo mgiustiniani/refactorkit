@@ -5,21 +5,35 @@ import io.cucumber.java.Scenario
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.ApplyAuthorization
+import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.PatchEngine
+import org.refactorkit.core.PlanReferenceCompleteness
+import org.refactorkit.core.PlanReferenceKind
+import org.refactorkit.core.PlanReferenceResourceKind
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TextEdit
+import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameMemberPlanner
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
 import org.refactorkit.java.JdtJavaSemanticSymbolKind
+import org.refactorkit.daemon.DaemonSession
 import org.refactorkit.jvm.refusals.KotlinJvmRefusalScenarioContext
 import java.nio.file.Files
 import java.nio.file.Path
@@ -28,6 +42,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -110,6 +125,79 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
         declarationPath = STANDARD_DECLARATION
     }
 
+    @Given("^a JPA entity field whose property is referenced by a static Spring Data JPQL query$")
+    fun jpaEntityFieldWithStaticSpringDataQuery() {
+        val root = temporaryDirectory("rk-jvm-renamefield-framework-query")
+        writePom(root, "src/main/java")
+        write(
+            root,
+            "src/main/java/jakarta/persistence/Entity.java",
+            "package jakarta.persistence; public @interface Entity {}\n",
+        )
+        write(
+            root,
+            "src/main/java/org/springframework/data/jpa/repository/Query.java",
+            "package org.springframework.data.jpa.repository; public @interface Query { String value(); }\n",
+        )
+        write(
+            root,
+            "src/main/java/com/example/User.java",
+            "package com.example;\nimport jakarta.persistence.Entity;\n@Entity\npublic class User { private String amount; }\n",
+        )
+        write(
+            root,
+            "src/main/java/com/example/UserRepository.java",
+            "package com.example;\n" +
+                "import org.springframework.data.jpa.repository.Query;\n" +
+                "public interface UserRepository {\n" +
+                "    @Query(\"select u.amount from User u where u.amount is not null\")\n" +
+                "    String findAmount();\n" +
+                "}\n",
+        )
+        fixtureRoot = root
+        snapshot = JavaProjectScanner().scan(root)
+        assertTrue(requireNotNull(snapshot).buildModels.isNotEmpty(), "fixture must yield a real build model")
+        symbolFqnWithMember = "com.example.User#amount"
+        newMemberName = "renamed"
+        declarationPath = Path.of("src/main/java/com/example/User.java")
+    }
+
+    @Given("^a Java 21 source-level workspace snapshot containing a record component, canonical constructor, and same-named unrelated field$")
+    fun workspaceWithRecordComponentAndSameNamedField() {
+        val root = temporaryDirectory("rk-jvm-renamefield-record-component")
+        writePom(root, "src/main/java", javaRelease = 21)
+        write(
+            root,
+            "src/main/java/com/example/Point.java",
+            """package com.example;
+                |public record Point(int x, int y) {
+                |    public Point(int x, int y) { this.x = x; this.y = y; }
+                |    public int squared() { return x * x + y * y; }
+                |}
+                |""".trimMargin(),
+        )
+        write(
+            root,
+            "src/main/java/com/example/PointClient.java",
+            """package com.example;
+                |public class PointClient { public int read(Point point) { return point.x(); } }
+                |""".trimMargin(),
+        )
+        write(
+            root,
+            "src/main/java/com/example/Other.java",
+            """package com.example;
+                |public class Other { int x; int read(Other other) { return other.x; } }
+                |""".trimMargin(),
+        )
+        fixtureRoot = root
+        snapshot = JavaProjectScanner().scan(root)
+        assertTrue(requireNotNull(snapshot).buildModels.isNotEmpty(), "fixture must yield a real build model")
+        symbolFqnWithMember = "com.example.Point#x"
+        newMemberName = "renamedX"
+        declarationPath = Path.of("src/main/java/com/example/Point.java")
+    }
+
     @Given("^the JDT binding analysis is clean with no parse or classpath warnings$")
     fun jdtBindingCleanNoWarnings() {
         val snap = requireNotNull(snapshot)
@@ -117,6 +205,45 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
         assertTrue(
             analysis.warnings.isEmpty(),
             "expected clean JDT binding, got warnings: ${analysis.warnings.map { it.message }}",
+        )
+    }
+
+    @Given("^JDT binds the record component, canonical constructor parameter, and generated accessor$")
+    fun jdtBindsRecordComponentConstructorParameterAndAccessor() {
+        val analysis = JdtJavaSemanticAnalyzer().analyze(requireNotNull(snapshot))
+        val component = analysis.symbols.singleOrNull { symbol ->
+            symbol.ownerQualifiedName == "com.example.Point" &&
+                symbol.simpleName == "x" &&
+                symbol.kind == JdtJavaSemanticSymbolKind.RECORD_COMPONENT
+        }
+        assertNotNull(component, "expected an exact JDT record-component symbol")
+        assertNotNull(component.bindingKey, "expected a record-component binding key")
+        assertEquals(0, component.recordComponentIndex, "the component must retain its canonical constructor position")
+        val constructor = analysis.methods.singleOrNull { method ->
+            method.constructor && method.canonicalConstructor && method.qualifiedName.startsWith("com.example.Point#<init>(")
+        }
+        assertNotNull(constructor, "expected the canonical constructor binding")
+        assertTrue(
+            analysis.parameters.any { parameter ->
+                parameter.methodBindingKey == constructor.bindingKey && parameter.index == 0 && parameter.name == "x"
+            },
+            "expected the component's exact canonical-constructor parameter binding",
+        )
+        val accessor = analysis.symbols.singleOrNull { symbol ->
+            symbol.ownerQualifiedName == "com.example.Point" &&
+                symbol.simpleName == "x" &&
+                symbol.kind == JdtJavaSemanticSymbolKind.METHOD &&
+                symbol.memberSignature == "x()"
+        }
+        assertNotNull(accessor, "expected the generated record accessor binding")
+        assertNotNull(accessor.bindingKey, "expected a generated accessor binding key")
+        assertTrue(
+            analysis.references.any { reference ->
+                reference.path == Path.of("src/main/java/com/example/PointClient.java") &&
+                    reference.bindingKey == accessor.bindingKey &&
+                    reference.symbolKind == JdtJavaSemanticSymbolKind.METHOD
+            },
+            "expected the accessor call site to resolve to the generated accessor binding",
         )
     }
 
@@ -252,6 +379,31 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
         assertEquals(RiskLevel.LOW, requireNotNull(plan).riskLevel, requireNotNull(plan).toString())
     }
 
+    @Then("^the plan produces the exact record-component post-image and leaves the unrelated field unchanged$")
+    fun recordComponentPlanProducesExactPostImageAndPreservesOtherField() {
+        val snap = requireNotNull(snapshot)
+        val currentPlan = requireNotNull(plan)
+        val point = Path.of("src/main/java/com/example/Point.java")
+        val client = Path.of("src/main/java/com/example/PointClient.java")
+        val unrelated = Path.of("src/main/java/com/example/Other.java")
+        assertTrue(currentPlan.workspaceEdit.edits.all { it is FileEdit.Modify }, "record-component rename must not move files")
+        assertEquals(setOf(point, client), currentPlan.affectedFiles, "only the component declaration and its accessor call site are affected")
+        val expected = snap.trackedFiles.associate { it.path to it.content }.toMutableMap()
+        expected[point] = """package com.example;
+            |public record Point(int renamedX, int y) {
+            |    public Point(int renamedX, int y) { this.renamedX = renamedX; this.y = y; }
+            |    public int squared() { return renamedX * renamedX + y * y; }
+            |}
+            |""".trimMargin()
+        expected[client] = """package com.example;
+            |public class PointClient { public int read(Point point) { return point.renamedX(); } }
+            |""".trimMargin()
+        val staged = WorkspaceEditSimulator.apply(snap, currentPlan.workspaceEdit)
+        val actual = staged.trackedFiles.associate { it.path to it.content }
+        assertEquals(expected, actual, "complete post-image coordinates the component, constructor, and generated accessor")
+        assertEquals(snap.files.single { it.path == unrelated }.content, actual[unrelated], "same-named unrelated field is unchanged")
+    }
+
     @Then("^the plan risk is MEDIUM$")
     fun planRiskMedium() {
         assertEquals(RiskLevel.MEDIUM, requireNotNull(plan).riskLevel, requireNotNull(plan).toString())
@@ -260,6 +412,84 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
     @Then("^the plan risk is HIGH$")
     fun planRiskHigh() {
         assertEquals(RiskLevel.HIGH, requireNotNull(plan).riskLevel, requireNotNull(plan).toString())
+    }
+
+    @Then("^the typed reference analysis lists the exact JPQL property locations and the preview edits only those property tokens$")
+    fun typedQueryReferencesAreExactAndIncludedInPreview() {
+        val snap = requireNotNull(snapshot)
+        val currentPlan = requireNotNull(plan)
+        val report = currentPlan.referenceAnalysis ?: error(
+            "entity-field plan must expose typed reference analysis; status=${currentPlan.status}, " +
+                "summary=${currentPlan.summary}, warnings=${currentPlan.warnings}",
+        )
+        assertEquals("java-spring-data-jpql-static-property-path-v1", report.scope)
+        assertEquals(PlanReferenceCompleteness.INCOMPLETE, report.completeness)
+        assertEquals(false, report.completeProject)
+        assertEquals("none", report.managedWriteAuthority)
+        val queryPath = Path.of("src/main/java/com/example/UserRepository.java")
+        val query = snap.files.single { it.path == queryPath }.content
+        val first = query.indexOf("u.amount") + 2
+        val second = query.lastIndexOf("u.amount") + 2
+        val expectedRanges = listOf(first, second).map { TextEdits.rangeForOffset(query, it, "amount".length) }
+        val references = report.references
+        assertEquals(2, references.size, "both static JPQL property paths must be reported")
+        assertTrue(references.all {
+            it.languageId == "java" && it.kind == PlanReferenceKind.FRAMEWORK_ENTITY_PROPERTY &&
+                it.targetOwner == "com.example.User" && it.targetMember == "amount" &&
+                it.resourceKind == PlanReferenceResourceKind.SOURCE_ANNOTATION_STRING &&
+                it.provenance.value == "spring-data.query-jpql" &&
+                it.completeness == PlanReferenceCompleteness.COMPLETE && it.location.path == queryPath
+        }, "reference evidence must identify the owner, property, resource, provenance, and exact locations: $references")
+        assertEquals(expectedRanges.sortedBy { it.start.character }, references.map { it.location.range })
+        val queryEdit = currentPlan.workspaceEdit.edits.filterIsInstance<FileEdit.Modify>().single { it.path == queryPath }
+        assertEquals(expectedRanges.sortedBy { it.start.character }, queryEdit.textEdits.map { it.range })
+        assertTrue(queryEdit.textEdits.all { it.newText == "renamed" })
+        val postImage = WorkspaceEditSimulator.apply(snap, currentPlan.workspaceEdit).trackedFiles.single { it.path == queryPath }.content
+        assertEquals(query.replace("u.amount", "u.renamed"), postImage, "only the two JPQL property tokens should change")
+    }
+
+    @Then("^the reference set is incomplete, risk is HIGH, and managed apply is refused before workspace mutation$")
+    fun incompleteReferenceSetRefusesManagedApply() {
+        val snap = requireNotNull(snapshot)
+        val currentPlan = requireNotNull(plan)
+        assertEquals(RiskLevel.HIGH, currentPlan.riskLevel, currentPlan.toString())
+        assertTrue(!currentPlan.managedWriteEligible, "incomplete framework references must disable managed Apply")
+        val root = requireNotNull(fixtureRoot)
+        val before = snap.trackedFiles.associate { it.path to it.content }
+        val result = PatchEngine(root).apply(
+            currentPlan,
+            snap,
+            ApplyAuthorization.explicit("gherkin-framework-reference-test"),
+            DiagnosticsGate.disabled("gherkin-framework-reference-test"),
+        )
+        val refused = assertIs<ApplyResult.Refused>(result)
+        assertTrue(refused.diagnostics.any { it.code == "referenceAnalysis.incomplete" }, refused.toString())
+        assertEquals(before, snap.trackedFiles.associate { it.path to it.content }, "the scanned source snapshot must remain unchanged")
+        assertEquals(
+            before,
+            JavaProjectScanner().scan(root).trackedFiles.associate { it.path to it.content },
+            "managed apply refusal must leave all on-disk source bytes unchanged",
+        )
+
+        DaemonSession().use { daemon ->
+            daemon.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
+            val preview = daemon.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "renameMember")
+                put("languageId", "java")
+                put("symbol", "com.example.User#amount")
+                put("arguments", buildJsonObject { put("newName", "renamed") })
+            }).jsonObject
+            assertEquals("INELIGIBLE", preview.getValue("managedWriteEligibility").jsonPrimitive.content)
+            val protocolAnalysis = preview.getValue("referenceAnalysis").jsonObject
+            assertEquals("INCOMPLETE", protocolAnalysis.getValue("completeness").jsonPrimitive.content)
+            assertEquals(false, protocolAnalysis.getValue("completeProject").jsonPrimitive.content.toBoolean())
+            val protocolReferences = protocolAnalysis.getValue("references").jsonArray
+            assertEquals(2, protocolReferences.size, "daemon plan JSON must expose both exact framework references")
+            assertTrue(protocolReferences.all {
+                it.jsonObject.getValue("kind").jsonPrimitive.content == "framework.entity-property" &&
+                    it.jsonObject.getValue("provenance").jsonPrimitive.content == "spring-data.query-jpql"
+            }, protocolReferences.toString())
+        }
     }
 
     // ------------------------------------------------------------ Scenario 1 Thens
@@ -643,13 +873,17 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
         return root
     }
 
-    private fun writePom(root: Path, sourceDir: String) {
+    private fun writePom(root: Path, sourceDir: String, javaRelease: Int? = null) {
+        val compilerRelease = javaRelease?.let {
+            "<properties><maven.compiler.release>$it</maven.compiler.release></properties>"
+        }.orEmpty()
         write(
             root,
             "pom.xml",
             """
             <project><modelVersion>4.0.0</modelVersion>
               <groupId>example</groupId><artifactId>rename</artifactId><version>1</version>
+              $compilerRelease
               <build><sourceDirectory>$sourceDir</sourceDirectory></build>
             </project>
             """.trimIndent(),

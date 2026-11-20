@@ -1,0 +1,549 @@
+{
+  "id": "0x55a13c3e5a08",
+  "kind": "TranslationUnitDecl",
+  "loc": {},
+  "range": {
+    "begin": {},
+    "end": {}
+  },
+  "inner": [
+    {
+      "id": "0x55a13c3e6608",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__int128_t",
+      "type": {
+        "qualType": "__int128"
+      },
+      "inner": [
+        {
+          "id": "0x55a13c3e5fd0",
+          "kind": "BuiltinType",
+          "type": {
+            "qualType": "__int128"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0x55a13c3e6678",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__uint128_t",
+      "type": {
+        "qualType": "unsigned __int128"
+      },
+      "inner": [
+        {
+          "id": "0x55a13c3e5ff0",
+          "kind": "BuiltinType",
+          "type": {
+            "qualType": "unsigned __int128"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0x55a13c3e6988",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__NSConstantString",
+      "type": {
+        "qualType": "struct __NSConstantString_tag"
+      },
+      "inner": [
+        {
+          "id": "0x55a13c3e6950",
+          "kind": "RecordType",
+          "type": {
+            "qualType": "struct __NSConstantString_tag"
+          },
+          "decl": {
+            "id": "0x55a13c3e66d0",
+            "kind": "RecordDecl",
+            "name": "__NSConstantString_tag"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0x55a13c3e6288",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__builtin_ms_va_list",
+      "type": {
+        "qualType": "char *"
+      },
+      "inner": [
+        {
+          "id": "0x55a13c3e6240",
+          "kind": "PointerType",
+          "type": {
+            "qualType": "char *"
+          },
+          "inner": [
+            {
+              "id": "0x55a13c3e5ab0",
+              "kind": "BuiltinType",
+              "type": {
+                "qualType": "char"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0x55a13c3e6598",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__builtin_va_list",
+      "type": {
+        "qualType": "struct __va_list_tag[1]"
+      },
+      "inner": [
+        {
+          "id": "0x55a13c3e6540",
+          "kind": "ConstantArrayType",
+          "type": {
+            "qualType": "struct __va_list_tag[1]"
+          },
+          "size": 1,
+          "inner": [
+            {
+              "id": "0x55a13c3e6500",
+              "kind": "RecordType",
+              "type": {
+                "qualType": "struct __va_list_tag"
+              },
+              "decl": {
+                "id": "0x55a13c3e62e0",
+                "kind": "RecordDecl",
+                "name": "__va_list_tag"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0x55a13c44f150",
+      "kind": "RecordDecl",
+      "loc": {
+        "offset": 7,
+        "file": "include/api.h",
+        "line": 1,
+        "col": 8,
+        "tokLen": 13,
+        "includedFrom": {
+          "file": "src/read_meter.c"
+        }
+      },
+      "range": {
+        "begin": {
+          "offset": 0,
+          "col": 1,
+          "tokLen": 6,
+          "includedFrom": {
+            "file": "src/read_meter.c"
+          }
+        },
+        "end": {
+          "offset": 63,
+          "line": 4,
+          "col": 1,
+          "tokLen": 1,
+          "includedFrom": {
+            "file": "src/read_meter.c"
+          }
+        }
+      },
+      "name": "meter_reading",
+      "tagUsed": "struct",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "id": "0x55a13c44f1e8",
+          "kind": "FieldDecl",
+          "loc": {
+            "offset": 31,
+            "line": 2,
+            "col": 9,
+            "tokLen": 9,
+            "includedFrom": {
+              "file": "src/read_meter.c"
+            }
+          },
+          "range": {
+            "begin": {
+              "offset": 27,
+              "col": 5,
+              "tokLen": 3,
+              "includedFrom": {
+                "file": "src/read_meter.c"
+              }
+            },
+            "end": {
+              "offset": 31,
+              "col": 9,
+              "tokLen": 9,
+              "includedFrom": {
+                "file": "src/read_meter.c"
+              }
+            }
+          },
+          "name": "raw_count",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "id": "0x55a13c44f250",
+          "kind": "FieldDecl",
+          "loc": {
+            "offset": 50,
+            "line": 3,
+            "col": 9,
+            "tokLen": 11,
+            "includedFrom": {
+              "file": "src/read_meter.c"
+            }
+          },
+          "range": {
+            "begin": {
+              "offset": 46,
+              "col": 5,
+              "tokLen": 3,
+              "includedFrom": {
+                "file": "src/read_meter.c"
+              }
+            },
+            "end": {
+              "offset": 50,
+              "col": 9,
+              "tokLen": 11,
+              "includedFrom": {
+                "file": "src/read_meter.c"
+              }
+            }
+          },
+          "name": "calibration",
+          "type": {
+            "qualType": "int"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0x55a13c44f2a0",
+      "kind": "RecordDecl",
+      "loc": {
+        "offset": 73,
+        "line": 5,
+        "col": 8,
+        "tokLen": 13,
+        "includedFrom": {
+          "file": "src/read_meter.c"
+        }
+      },
+      "range": {
+        "begin": {
+          "offset": 66,
+          "col": 1,
+          "tokLen": 6,
+          "includedFrom": {
+            "file": "src/read_meter.c"
+          }
+        },
+        "end": {
+          "offset": 104,
+          "col": 39,
+          "tokLen": 1,
+          "includedFrom": {
+            "file": "src/read_meter.c"
+          }
+        }
+      },
+      "name": "other_reading",
+      "tagUsed": "struct",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "id": "0x55a13c44f338",
+          "kind": "FieldDecl",
+          "loc": {
+            "offset": 93,
+            "col": 28,
+            "tokLen": 9,
+            "includedFrom": {
+              "file": "src/read_meter.c"
+            }
+          },
+          "range": {
+            "begin": {
+              "offset": 89,
+              "col": 24,
+              "tokLen": 3,
+              "includedFrom": {
+                "file": "src/read_meter.c"
+              }
+            },
+            "end": {
+              "offset": 93,
+              "col": 28,
+              "tokLen": 9,
+              "includedFrom": {
+                "file": "src/read_meter.c"
+              }
+            }
+          },
+          "name": "raw_count",
+          "type": {
+            "qualType": "int"
+          }
+        }
+      ]
+    },
+    {
+      "id": "0x55a13c44f4c8",
+      "kind": "FunctionDecl",
+      "loc": {
+        "offset": 128,
+        "line": 6,
+        "col": 22,
+        "tokLen": 10,
+        "includedFrom": {
+          "file": "src/read_meter.c"
+        }
+      },
+      "range": {
+        "begin": {
+          "offset": 107,
+          "col": 1,
+          "tokLen": 6,
+          "includedFrom": {
+            "file": "src/read_meter.c"
+          }
+        },
+        "end": {
+          "offset": 143,
+          "col": 37,
+          "tokLen": 1,
+          "includedFrom": {
+            "file": "src/read_meter.c"
+          }
+        }
+      },
+      "name": "read_meter",
+      "mangledName": "read_meter",
+      "type": {
+        "qualType": "struct meter_reading (void)"
+      }
+    },
+    {
+      "id": "0x55a13c44f658",
+      "kind": "FunctionDecl",
+      "loc": {
+        "offset": 38,
+        "file": "src/read_meter.c",
+        "line": 2,
+        "col": 22,
+        "tokLen": 10
+      },
+      "range": {
+        "begin": {
+          "offset": 17,
+          "col": 1,
+          "tokLen": 6
+        },
+        "end": {
+          "offset": 130,
+          "line": 4,
+          "col": 1,
+          "tokLen": 1
+        }
+      },
+      "previousDecl": "0x55a13c44f4c8",
+      "name": "read_meter",
+      "mangledName": "read_meter",
+      "type": {
+        "qualType": "struct meter_reading (void)"
+      },
+      "inner": [
+        {
+          "id": "0x55a13c44f930",
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": {
+              "offset": 55,
+              "line": 2,
+              "col": 39,
+              "tokLen": 1
+            },
+            "end": {
+              "offset": 130,
+              "line": 4,
+              "col": 1,
+              "tokLen": 1
+            }
+          },
+          "inner": [
+            {
+              "id": "0x55a13c44f920",
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": {
+                  "offset": 61,
+                  "line": 3,
+                  "col": 5,
+                  "tokLen": 6
+                },
+                "end": {
+                  "offset": 127,
+                  "col": 71,
+                  "tokLen": 1
+                }
+              },
+              "inner": [
+                {
+                  "id": "0x55a13c44f908",
+                  "kind": "ImplicitCastExpr",
+                  "range": {
+                    "begin": {
+                      "offset": 68,
+                      "col": 12,
+                      "tokLen": 1
+                    },
+                    "end": {
+                      "offset": 127,
+                      "col": 71,
+                      "tokLen": 1
+                    }
+                  },
+                  "type": {
+                    "qualType": "struct meter_reading"
+                  },
+                  "valueCategory": "prvalue",
+                  "castKind": "LValueToRValue",
+                  "inner": [
+                    {
+                      "id": "0x55a13c44f8d8",
+                      "kind": "CompoundLiteralExpr",
+                      "range": {
+                        "begin": {
+                          "offset": 68,
+                          "col": 12,
+                          "tokLen": 1
+                        },
+                        "end": {
+                          "offset": 127,
+                          "col": 71,
+                          "tokLen": 1
+                        }
+                      },
+                      "type": {
+                        "qualType": "struct meter_reading"
+                      },
+                      "valueCategory": "lvalue",
+                      "inner": [
+                        {
+                          "id": "0x55a13c44f888",
+                          "kind": "InitListExpr",
+                          "range": {
+                            "begin": {
+                              "offset": 91,
+                              "col": 35,
+                              "tokLen": 1
+                            },
+                            "end": {
+                              "offset": 127,
+                              "col": 71,
+                              "tokLen": 1
+                            }
+                          },
+                          "type": {
+                            "qualType": "struct meter_reading"
+                          },
+                          "valueCategory": "prvalue",
+                          "inner": [
+                            {
+                              "id": "0x55a13c44f778",
+                              "kind": "IntegerLiteral",
+                              "range": {
+                                "begin": {
+                                  "offset": 124,
+                                  "col": 68,
+                                  "tokLen": 2
+                                },
+                                "end": {
+                                  "offset": 124,
+                                  "col": 68,
+                                  "tokLen": 2
+                                }
+                              },
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "valueCategory": "prvalue",
+                              "value": "42"
+                            },
+                            {
+                              "id": "0x55a13c44f718",
+                              "kind": "IntegerLiteral",
+                              "range": {
+                                "begin": {
+                                  "offset": 108,
+                                  "col": 52,
+                                  "tokLen": 1
+                                },
+                                "end": {
+                                  "offset": 108,
+                                  "col": 52,
+                                  "tokLen": 1
+                                }
+                              },
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "valueCategory": "prvalue",
+                              "value": "1"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -48,7 +48,7 @@ Feature: Preserve Java refactoring preview planning through one typed command bo
     And no incomplete or unknown generic request is reclassified as a daemon or MCP protocol failure by the typed boundary
     And no typed command is constructed until the generic decoder has produced every required typed value
 
-  @REQ-JAVA-PREVIEW-COMMAND-003
+  @REQ-JAVA-PREVIEW-COMMAND-003#daemon-and-mcp-keep-distinct-surface-policy-around-the-same-typed-dispatch
   Scenario: Daemon and MCP keep distinct surface policy around the same typed dispatch
     Given daemon JSON-RPC and MCP each receive every admitted Java operation "renameClass, renameMember, moveSourceRoot, organizeImports, safeDelete"
     And before constructing a command each surface retains this existing policy:

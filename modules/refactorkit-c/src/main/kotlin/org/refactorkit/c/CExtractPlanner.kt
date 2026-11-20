@@ -17,8 +17,8 @@ import java.nio.file.Path
 
 /**
  * Bounded C expression extraction: a scalar expression (no side effects) is
- * extracted to a `const` local temporary, with the type inferred from the
- * enclosing assignment target's declared type.
+ * extracted to a `const` local temporary. Assignment-target type alone is
+ * not the selected expression's type; unsupported conversions are refused.
  *
  * Refusals cover side-effectful expressions (calls, volatile, writes,
  * increment/decrement), macro ranges, goto/longjmp/setjmp contexts,
@@ -38,6 +38,9 @@ class CExtractPlanner {
         }
         val expression = extractExpression(source.content, range) ?: return refused(snapshot, "Selected range is not a single expression")
         if (expression.isBlank()) return refused(snapshot, "Selected expression is blank")
+        if (expression.any { it in setOf(';', '{', '}') }) {
+            return refused(snapshot, "Selection contains a statement boundary, not one complete expression")
+        }
         if (hasSideEffects(expression)) {
             return refused(snapshot, "Extracted expression has side effects (call, volatile, write, increment/decrement)")
         }
@@ -45,6 +48,10 @@ class CExtractPlanner {
             return refused(snapshot, "Extracted expression is in a macro/goto/longjmp context")
         }
         val type = inferType(source.content, range, expression) ?: return refused(snapshot, "Could not infer the expression type from its context")
+        // The assignment target can be double while an operand of integer division
+        // is int. Without compiler-backed expression types, moving an operand to a
+        // double temporary changes arithmetic (5 / 2 -> 5.0 / 2).
+        if (type != "int") return refused(snapshot, "Expression type and conversion are unproven for '$type' assignment target")
         // A temporary name that already declares an identifier in the enclosing scope would
         // produce a redefinition, so the extraction is refused rather than emitting broken code.
         if (findDeclaredType(source.content, range.start.line, tempName) != null) {
@@ -52,23 +59,26 @@ class CExtractPlanner {
         }
         val statementRange = enclosingStatementRange(source.content, range) ?: return refused(snapshot, "Could not locate the enclosing statement")
         val declaration = "const $type $tempName = $expression;"
+        val linePrefix = source.content.lines()[statementRange.start.line].take(statementRange.start.character)
+        val insertion = if (linePrefix.any { !it.isWhitespace() }) "$declaration "
+            else "$declaration\n$linePrefix"
         val edits = listOf(
-            TextEdit(SourceRange(statementRange.start, statementRange.start), declaration + "\n"),
+            TextEdit(SourceRange(statementRange.start, statementRange.start), insertion),
             TextEdit(range, tempName),
         )
         return PatchPlan(
             operation = "extractExpression",
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 1.0,
+            confidence = 0.5,
             requiresUserApproval = true,
             summary = "Extract expression to const temporary '$tempName' in $file",
             affectedFiles = setOf(file.normalize()),
             workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(file.normalize(), edits))),
             diagnosticsBefore = emptyList(),
             diagnosticsAfterPreview = emptyList(),
-            warnings = listOf("Extracted a scalar expression to a const temporary; type inferred from the enclosing assignment."),
-            riskLevel = RiskLevel.MEDIUM,
+            warnings = listOf("Bounded extraction preview; general expression type, control-flow and effect preservation remain unqualified."),
+            riskLevel = RiskLevel.HIGH,
             evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
@@ -154,10 +164,13 @@ class CExtractPlanner {
     }
 
     private fun enclosingStatementRange(content: String, range: SourceRange): SourceRange? {
+        if (range.start.line != range.end.line) return null
         val line = content.lines().getOrNull(range.start.line) ?: return null
-        val start = line.indexOfFirst { !it.isWhitespace() }
-        if (start < 0) return null
-        val end = line.indexOf(';')
+        val prefix = line.take(range.start.character)
+        val boundary = maxOf(prefix.lastIndexOf(';'), prefix.lastIndexOf('{'), prefix.lastIndexOf('}'))
+        val start = ((boundary + 1) until range.start.character).firstOrNull { !line[it].isWhitespace() }
+            ?: return null
+        val end = line.indexOf(';', range.end.character)
         if (end < 0) return null
         return SourceRange(SourcePosition(range.start.line, start), SourcePosition(range.start.line, end + 1))
     }

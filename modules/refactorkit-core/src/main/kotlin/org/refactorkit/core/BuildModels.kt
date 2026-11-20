@@ -84,6 +84,219 @@ enum class BuildLanguageEvidence {
     UNSUPPORTED,
 }
 
+/** Availability of an optional build fact; absence is never conflated with an empty value. */
+enum class BuildFactAvailability {
+    COMPLETE,
+    NOT_DECLARED,
+    PARTIAL,
+    UNAVAILABLE,
+    AMBIGUOUS,
+}
+
+enum class BuildSourceRootOrigin {
+    CONVENTIONAL,
+    BUILD_DESCRIPTOR,
+    BUILD_PLUGIN,
+    GENERATED,
+}
+
+data class BuildSourceRootEvidence(
+    val path: Path,
+    val origin: BuildSourceRootOrigin,
+    val providerId: String,
+    val descriptorPath: Path? = null,
+    val profileId: String? = null,
+    val pluginId: String? = null,
+    val executionId: String? = null,
+    val goal: String? = null,
+    val phase: String? = null,
+    val availability: BuildFactAvailability = BuildFactAvailability.COMPLETE,
+) {
+    init {
+        require(isSafeRelativeBuildPath(path)) { "source-root evidence must use a safe workspace-relative path" }
+        require(descriptorPath == null || isSafeRelativeBuildPath(descriptorPath)) {
+            "source-root descriptor evidence must use a safe workspace-relative path"
+        }
+        require(providerId.isNotBlank() && providerId.length <= 128) { "source-root provider ID is invalid" }
+        require(listOfNotNull(profileId, pluginId, executionId, goal, phase).all {
+            it.isNotBlank() && it.length <= 256 && '\u0000' !in it
+        }) { "source-root provenance detail is invalid" }
+    }
+}
+
+data class BuildArtifactCoordinates(
+    val groupId: String,
+    val artifactId: String,
+    val version: String,
+) {
+    init {
+        require(listOf(groupId, artifactId, version).all { it.isNotBlank() && it.length <= 512 && '\u0000' !in it }) {
+            "artifact coordinates must be non-blank and bounded"
+        }
+    }
+}
+
+data class BuildResolvedArtifact(
+    val path: Path,
+    val coordinates: BuildArtifactCoordinates,
+    val extension: String = "jar",
+    val classifier: String? = null,
+    val scope: DependencyScope? = null,
+    val transitive: Boolean = false,
+) {
+    init {
+        require(extension.isNotBlank() && extension.length <= 64 && '\u0000' !in extension) {
+            "artifact extension is invalid"
+        }
+        require(classifier == null || classifier.isNotBlank() && classifier.length <= 256 && '\u0000' !in classifier) {
+            "artifact classifier is invalid"
+        }
+    }
+}
+
+data class BuildCompilerOption(
+    val name: String,
+    val value: String,
+    val origin: String,
+    val redacted: Boolean = false,
+) {
+    init {
+        require(name.isNotBlank() && name.length <= 256 && '\u0000' !in name) { "compiler option name is invalid" }
+        require(value.length <= 16_384 && '\u0000' !in value) { "compiler option value is invalid" }
+        require(origin.isNotBlank() && origin.length <= 512 && '\u0000' !in origin) { "compiler option origin is invalid" }
+    }
+}
+
+/** Effective Gradle/Javac module-path inference for one source set. */
+data class BuildJpmsModulePathFact(
+    val availability: BuildFactAvailability,
+    val inferenceEnabled: Boolean? = null,
+    val entries: List<Path> = emptyList(),
+    val origin: String? = null,
+) {
+    init {
+        require(entries.size <= 256 && entries.distinct().size == entries.size) {
+            "inferred JPMS module-path entries must be bounded and unique"
+        }
+        require(availability != BuildFactAvailability.COMPLETE || inferenceEnabled != null) {
+            "complete JPMS module-path facts require an effective inference setting"
+        }
+        require(inferenceEnabled != false || entries.isEmpty()) {
+            "disabled JPMS module-path inference cannot contain inferred entries"
+        }
+        require(origin == null || origin.isNotBlank() && origin.length <= 512 && '\u0000' !in origin) {
+            "JPMS module-path provenance is invalid"
+        }
+    }
+}
+
+/** Snapshot of one compile-database translation unit; arguments are inert captured data. */
+data class BuildCompilationUnit(
+    val id: String,
+    val sourceFile: Path,
+    val workingDirectory: Path,
+    val arguments: List<String>,
+    val output: String? = null,
+    val languageFacets: List<BuildLanguageFacet> = emptyList(),
+    val configurationFingerprint: String,
+) {
+    init {
+        require(ID.matches(id)) { "compilation-unit ID is invalid" }
+        require(isSafeRelativeBuildPath(sourceFile) && isSafeRelativeBuildPath(workingDirectory) &&
+            ProtocolPath.serialize(sourceFile).length <= MAX_PATH_LENGTH &&
+            ProtocolPath.serialize(workingDirectory).length <= MAX_PATH_LENGTH) {
+            "compilation-unit paths must be safe workspace-relative paths"
+        }
+        require(arguments.isNotEmpty() && arguments.size <= MAX_ARGUMENTS) {
+            "compilation-unit arguments must be non-empty and bounded"
+        }
+        require(arguments.all { it.length <= MAX_ARGUMENT_LENGTH && '\u0000' !in it } &&
+            capturedBytes <= MAX_CAPTURE_BYTES) {
+            "compilation-unit arguments exceed the bounded capture limit"
+        }
+        require(output == null || output.length <= MAX_ARGUMENT_LENGTH && '\u0000' !in output) {
+            "compilation-unit output is invalid"
+        }
+        require(languageFacets.size <= 32 && languageFacets.map(BuildLanguageFacet::languageId).distinct().size == languageFacets.size) {
+            "compilation-unit language facets must be unique and bounded"
+        }
+        require(FINGERPRINT.matches(configurationFingerprint)) {
+            "compilation-unit configuration fingerprint must be a SHA-256 digest"
+        }
+        require(configurationFingerprint == fingerprint(sourceFile, workingDirectory, arguments, output)) {
+            "compilation-unit configuration fingerprint does not match its captured invocation"
+        }
+    }
+
+    val capturedBytes: Long
+        get() = arguments.sumOf { it.toByteArray(Charsets.UTF_8).size.toLong() } +
+            (output?.toByteArray(Charsets.UTF_8)?.size?.toLong() ?: 0L)
+
+    companion object {
+        private val ID = Regex("[A-Za-z][A-Za-z0-9._:-]{0,255}")
+        private val FINGERPRINT = Regex("[a-f0-9]{64}")
+        const val MAX_ARGUMENTS = 512
+        const val MAX_PATH_LENGTH = 4_096
+        const val MAX_ARGUMENT_LENGTH = 8 * 1024 * 1024
+        const val MAX_CAPTURE_BYTES = 8 * 1024 * 1024
+
+        /** Hashes the exact inert invocation and its workspace-relative identity using length-delimited UTF-8 fields. */
+        fun fingerprint(
+            sourceFile: Path,
+            workingDirectory: Path,
+            arguments: List<String>,
+            output: String?,
+        ): String {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            fun field(value: String?) {
+                val bytes = value?.toByteArray(Charsets.UTF_8)
+                val length = bytes?.size ?: -1
+                digest.update(byteArrayOf(
+                    (length ushr 24).toByte(), (length ushr 16).toByte(),
+                    (length ushr 8).toByte(), length.toByte(),
+                ))
+                if (bytes != null) digest.update(bytes)
+            }
+            field("refactorkit.build-compilation-unit.v1")
+            field(ProtocolPath.serialize(sourceFile))
+            field(ProtocolPath.serialize(workingDirectory))
+            field(output)
+            field(arguments.size.toString())
+            arguments.forEach(::field)
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+    }
+}
+
+/** Explicit annotation-processing facts only; providers must not execute processors to discover them. */
+data class BuildAnnotationProcessorConfiguration(
+    val availability: BuildFactAvailability,
+    val processorPath: List<BuildResolvedArtifact> = emptyList(),
+    val processorPathEntries: List<Path> = emptyList(),
+    val processorNames: List<String> = emptyList(),
+    val options: Map<String, String> = emptyMap(),
+    val mode: String? = null,
+    val refusalCode: String? = null,
+) {
+    init {
+        require(processorPath.size <= 256 && processorPathEntries.size <= 256 && processorNames.size <= 256 && options.size <= 256) {
+            "annotation processor metadata exceeds its bounded limit"
+        }
+        require(processorNames.all { it.isNotBlank() && it.length <= 512 && '\u0000' !in it }) {
+            "annotation processor name is invalid"
+        }
+        require(options.all { (key, value) ->
+            key.isNotBlank() && key.length <= 512 && '\u0000' !in key && value.length <= 16_384 && '\u0000' !in value
+        }) { "annotation processor option is invalid" }
+        require(mode == null || mode.isNotBlank() && mode.length <= 128 && '\u0000' !in mode) {
+            "annotation processor mode is invalid"
+        }
+        require(refusalCode == null || refusalCode.matches(Regex("[A-Za-z][A-Za-z0-9._-]{0,127}"))) {
+            "annotation processor refusal code is invalid"
+        }
+    }
+}
+
 /** Typed, defensively detached language projection inside a language-neutral build source set. */
 class BuildLanguageFacet(
     val languageId: String,
@@ -169,6 +382,16 @@ data class BuildSourceSet(
     val moduleDependencies: List<BuildDependency> = emptyList(),
     val attributes: Map<String, String> = emptyMap(),
     val languageFacets: List<BuildLanguageFacet> = emptyList(),
+    val sourceRootEvidence: List<BuildSourceRootEvidence> = emptyList(),
+    val compilerOptions: List<BuildCompilerOption> = emptyList(),
+    val compilerOptionsAvailability: BuildFactAvailability = BuildFactAvailability.UNAVAILABLE,
+    val compilerOptionsRefusalCode: String? = null,
+    val resolvedArtifacts: List<BuildResolvedArtifact> = emptyList(),
+    val resolvedArtifactAvailability: BuildFactAvailability = BuildFactAvailability.UNAVAILABLE,
+    val resolvedArtifactRefusalCode: String? = null,
+    val annotationProcessors: BuildAnnotationProcessorConfiguration? = null,
+    val compilationUnits: List<BuildCompilationUnit> = emptyList(),
+    val jpmsModulePath: BuildJpmsModulePathFact? = null,
 ) {
     init {
         require(id.isNotBlank()) { "source-set ID must not be blank" }
@@ -182,6 +405,34 @@ data class BuildSourceSet(
         require(languageFacets.map(BuildLanguageFacet::languageId).distinct().size == languageFacets.size) {
             "language facets must have unique language IDs within a source set"
         }
+        require(compilationUnits.size <= 4_096 &&
+            compilationUnits.map(BuildCompilationUnit::id).distinct().size == compilationUnits.size &&
+            compilationUnits.map(BuildCompilationUnit::sourceFile).distinct().size == compilationUnits.size) {
+            "compilation units must be bounded and unique by ID and source file"
+        }
+        require(compilationUnits.sumOf(BuildCompilationUnit::capturedBytes) <= BuildCompilationUnit.MAX_CAPTURE_BYTES) {
+            "source-set compilation-unit arguments exceed the bounded capture limit"
+        }
+        require(sourceRootEvidence.size <= 4_096 && sourceRootEvidence.all { it.path in sourceRoots }) {
+            "source-root evidence must refer only to declared roots and remain bounded"
+        }
+        require(compilerOptions.size <= 1_024) { "compiler option count exceeds the bounded source-set limit" }
+        require(compilerOptionsRefusalCode == null || compilerOptionsRefusalCode.matches(Regex("[A-Za-z][A-Za-z0-9._-]{0,127}"))) {
+            "compiler option refusal code is invalid"
+        }
+        require(resolvedArtifactRefusalCode == null || resolvedArtifactRefusalCode.matches(Regex("[A-Za-z][A-Za-z0-9._-]{0,127}"))) {
+            "artifact-coordinate refusal code is invalid"
+        }
+        require(resolvedArtifacts.size <= 16_384 && resolvedArtifacts.map(BuildResolvedArtifact::path).distinct().size == resolvedArtifacts.size) {
+            "resolved artifact evidence must be unique by path and remain bounded"
+        }
+        require(resolvedArtifacts.all { it.path in classpathEntries || it.path in runtimeClasspathEntries ||
+            annotationProcessors?.processorPath?.any { processor -> processor.path == it.path } == true }) {
+            "resolved artifacts must be owned by a compile, runtime or processor path"
+        }
+        require(jpmsModulePath == null || jpmsModulePath.entries.all { it in classpathEntries }) {
+            "inferred JPMS module-path entries must be owned by the source-set compile classpath"
+        }
     }
 }
 
@@ -191,6 +442,7 @@ data class BuildModule(
     val root: Path,
     val sourceSets: List<BuildSourceSet>,
     val attributes: Map<String, String> = emptyMap(),
+    val coordinates: BuildArtifactCoordinates? = null,
 ) {
     init {
         require(id.isNotBlank()) { "build module ID must not be blank" }

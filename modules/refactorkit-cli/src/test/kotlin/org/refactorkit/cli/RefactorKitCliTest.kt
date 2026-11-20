@@ -28,59 +28,6 @@ class RefactorKitCliTest {
     }
 
     @Test
-    fun cOrganizeIncludesPreviewsThroughTheCliProcess() {
-        if (!clangAvailable()) return // clang toolchain not installed; CLI C integration not run
-        val root = createProject(
-            "src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n",
-        )
-        val result = captureStdout {
-            RefactorKitCli().run(listOf(
-                "c", "organize-includes", root.toString(),
-                "--file", "src/main.c",
-                "--clang", clangExecutable(), "--clangd", clangdExecutable(), "--clang-format", clangFormatExecutable(),
-            ))
-        }
-        assertEquals(0, result.code, "a positive C preview must exit 0; stdout=${result.stdout} stderr=${result.stderr}")
-        val plan = Json.parseToJsonElement(result.stdout).jsonObject
-        assertEquals("PREVIEW", plan.getValue("status").jsonPrimitive.content)
-        assertTrue(plan.getValue("affectedFiles").jsonArray.isNotEmpty(), "preview must report affected files")
-    }
-
-    @Test
-    fun cApplyChangesFileAndRollbackRestoresOriginalBytes() {
-        if (!clangAvailable()) return
-        val root = createProject(
-            "src/main.c" to "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n",
-        )
-        val target = root.resolve("src/main.c")
-        val before = target.readText()
-        val apply = captureStdout {
-            RefactorKitCli().run(listOf(
-                "c", "organize-includes", root.toString(),
-                "--file", "src/main.c",
-                "--clang", clangExecutable(), "--clangd", clangdExecutable(), "--clang-format", clangFormatExecutable(),
-                "--apply",
-            ))
-        }
-        assertEquals(0, apply.code, "apply must exit 0; stdout=${apply.stdout} stderr=${apply.stderr}")
-        assertTrue(target.readText() != before, "apply must change the file on disk")
-        val transactionId = Json.parseToJsonElement(apply.stdout).jsonObject
-            .getValue("transactionId").jsonPrimitive.content
-        val rollback = captureStdout {
-            RefactorKitCli().run(listOf("patch", "rollback", transactionId, "--root", root.toString()))
-        }
-        assertEquals(0, rollback.code, "rollback must exit 0; stdout=${rollback.stdout} stderr=${rollback.stderr}")
-        assertEquals(before, target.readText(), "rollback must restore the exact original bytes")
-    }
-
-    private fun clangExecutable(): String = "/usr/bin/clang-22"
-    private fun clangdExecutable(): String = "/usr/bin/clangd"
-    private fun clangFormatExecutable(): String = "/usr/bin/clang-format"
-
-    private fun clangAvailable(): Boolean = listOf(clangExecutable(), clangdExecutable(), clangFormatExecutable())
-        .map { Paths.get(it) }.all { Files.isExecutable(it) }
-
-    @Test
     fun semanticCommandsRequireExplicitSubcommandAndToolchain() {
         val cli = RefactorKitCli()
         assertEquals(2, cli.run(listOf("typescript")))

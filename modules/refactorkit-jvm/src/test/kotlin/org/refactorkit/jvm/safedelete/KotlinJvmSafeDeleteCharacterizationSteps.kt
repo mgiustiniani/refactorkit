@@ -1,16 +1,30 @@
 package org.refactorkit.jvm.safedelete
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import io.cucumber.java.After
 import io.cucumber.java.Scenario
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.ApplyAuthorization
+import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.JsonRpcErrorCodes
+import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.TransactionLog
+import org.refactorkit.daemon.DaemonSession
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaLexer
 import org.refactorkit.java.JavaPackageUtil
@@ -18,6 +32,7 @@ import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaSafeDeletePlanner
 import org.refactorkit.java.JdtJavaSemanticAnalyzer
 import org.refactorkit.java.JdtJavaSemanticSymbolKind
+import org.refactorkit.mcp.McpSession
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -73,6 +88,19 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
 
     private var symbolFqn: String? = null
     private var declarationPath: Path? = null
+    private var daemonSession: DaemonSession? = null
+    private var managedApplyFailure: Throwable? = null
+    private var mcpApplyFailure: Throwable? = null
+    private var managedApplyResult: JsonObject? = null
+    private var managedApplyWorkspaceImage: Map<Path, String>? = null
+    private var daemonCapabilities: JsonObject? = null
+    private var daemonPreviewResponse: JsonObject? = null
+    private var mcpPreviewStructuredContent: JsonObject? = null
+    private var safeDeleteManagedContext: JsonObject? = null
+    private var safeDeleteManagedPlanId: String? = null
+    private var safeDeleteManagedSnapshotHash: String? = null
+    private var safeDeleteManagedProjectImage: Map<Path, String>? = null
+    private var safeDeleteManagedTransactionId: String? = null
 
     private val adapter = JavaLanguageAdapter()
     private val planner = JavaSafeDeletePlanner(adapter)
@@ -88,6 +116,432 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
         assertTrue(requireNotNull(snapshot).buildModels.isNotEmpty(), "fixture must yield a real build model")
         symbolFqn = "com.example.Legacy"
         declarationPath = STANDARD_DECLARATION
+    }
+
+    @Given("^a clean Maven reactor with an unused Java type referenced only from its root aggregator POM$")
+    fun cleanReactorWithAggregatorOnlyLiteralReference() {
+        val root = temporaryDirectory("rk-jvm-safedelete-aggregator-pom")
+        write(root, "pom.xml", """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>fixtures</groupId><artifactId>reactor</artifactId><version>1.0.0</version>
+              <packaging>pom</packaging>
+              <properties>
+                <maven.compiler.release>17</maven.compiler.release>
+                <fixture.safeDeleteTarget>fixtures.unrelated.Unused</fixture.safeDeleteTarget>
+              </properties>
+              <modules><module>unrelated</module></modules>
+            </project>
+        """.trimIndent())
+        write(root, "unrelated/pom.xml", """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <parent>
+                <groupId>fixtures</groupId><artifactId>reactor</artifactId><version>1.0.0</version>
+                <relativePath>../pom.xml</relativePath>
+              </parent>
+              <artifactId>unrelated</artifactId>
+            </project>
+        """.trimIndent())
+        write(root, "unrelated/src/main/java/fixtures/unrelated/Unused.java", """
+            package fixtures.unrelated;
+
+            public final class Unused {
+            }
+        """.trimIndent() + "\n")
+        fixtureRoot = root
+        snapshot = JavaProjectScanner().scan(root)
+        val scanned = requireNotNull(snapshot)
+        val module = scanned.modules.singleOrNull { it.languageSettings["java.maven.pomPath"] == "unrelated/pom.xml" }
+        assertNotNull(module, "the child module must belong to the captured Maven reactor")
+        assertEquals("available", module.languageSettings["java.buildModel.status"])
+        assertTrue(
+            scanned.auxiliaryFiles.any { it.path == Path.of("pom.xml") && it.languageId == "maven-pom" },
+            "the root aggregator POM must be captured as a Maven text input",
+        )
+        symbolFqn = "fixtures.unrelated.Unused"
+        declarationPath = Path.of("unrelated/src/main/java/fixtures/unrelated/Unused.java")
+    }
+
+    @Given("^an available two-module Maven reactor has a package-private Java type with no source or text consumers$")
+    fun availableTwoModuleReactorWithUnusedPackagePrivateType() {
+        val root = temporaryDirectory("rk-jvm-safedelete-managed-maven")
+        val compilerPlugin = """
+            <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.11.0</version>
+              <configuration><release>17</release><proc>none</proc></configuration>
+            </plugin>
+        """.trimIndent()
+        write(root, "pom.xml", """
+            <project xmlns="http://maven.apache.org/POM/4.0.0">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>fixtures</groupId><artifactId>orbit-reactor</artifactId><version>1.0.0</version><packaging>pom</packaging>
+              <modules><module>app</module><module>sibling</module></modules>
+              <build><plugins>$compilerPlugin</plugins></build>
+            </project>
+        """.trimIndent() + "\n")
+        for (module in listOf("app", "sibling")) {
+            write(root, "$module/pom.xml", """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <parent><groupId>fixtures</groupId><artifactId>orbit-reactor</artifactId><version>1.0.0</version><relativePath>../pom.xml</relativePath></parent>
+                  <artifactId>$module</artifactId>
+                </project>
+            """.trimIndent() + "\n")
+        }
+        write(root, "app/src/main/java/fixtures/orbit/Orphan.java", """
+            package fixtures.orbit;
+
+            final class Orphan {
+            }
+        """.trimIndent() + "\n")
+        write(root, "sibling/src/main/java/fixtures/other/Unrelated.java", """
+            package fixtures.other;
+
+            final class Unrelated {
+            }
+        """.trimIndent() + "\n")
+
+        fixtureRoot = root
+        snapshot = JavaProjectScanner().scan(root)
+        symbolFqn = "fixtures.orbit.Orphan"
+        declarationPath = Path.of("app/src/main/java/fixtures/orbit/Orphan.java")
+        val scanned = requireNotNull(snapshot)
+        assertEquals(listOf("available"), scanned.buildModels.map { it.status.name.lowercase() })
+        assertEquals(2, scanned.modules.size, "both Java-bearing Maven modules must be in the snapshot")
+        assertEquals("0", scanned.buildModels.single().attributes["java.safeDelete.textReferenceScan.binaryInputs"])
+    }
+
+    @Given("^a two-module Maven reactor contains a package-private Java type and an opaque binary resource$")
+    fun twoModuleReactorWithOpaqueBinaryResource() {
+        availableTwoModuleReactorWithUnusedPackagePrivateType()
+        val root = requireNotNull(fixtureRoot)
+        val binary = root.resolve("app/src/main/resources/META-INF/opaque-index.bin")
+        binary.parent.createDirectories()
+        Files.write(binary, byteArrayOf(0x52, 0x4b, 0x00, 0x01, 0x7f))
+        snapshot = JavaProjectScanner().scan(root)
+        val scanned = requireNotNull(snapshot)
+        assertEquals("complete", scanned.buildModels.single().attributes["java.safeDelete.textReferenceScan.status"])
+        assertEquals("1", scanned.buildModels.single().attributes["java.safeDelete.textReferenceScan.binaryInputs"])
+    }
+
+    @Given("^a two-module Maven reactor contains a package-private Java type and an unmodeled input$")
+    fun twoModuleReactorWithUnmodeledInput() {
+        availableTwoModuleReactorWithUnusedPackagePrivateType()
+        val root = requireNotNull(fixtureRoot)
+        write(root, "external/Orphan.mapping", "type=fixtures.orbit.Orphan\n")
+        snapshot = JavaProjectScanner().scan(root)
+        val scanned = requireNotNull(snapshot)
+        val modelAttributes = scanned.buildModels.single().attributes
+        assertEquals("complete", modelAttributes["java.safeDelete.textReferenceScan.status"])
+        assertEquals("0", modelAttributes["java.safeDelete.textReferenceScan.binaryInputs"])
+        assertEquals("1", modelAttributes["java.safeDelete.textReferenceScan.unmodeledInputs"])
+    }
+
+    @When("^the IDE requests safeDelete for fixtures\\.orbit\\.Orphan with an SDK-bound daemon context$")
+    fun ideRequestsManagedSafeDeleteWithSdkContext() {
+        val root = requireNotNull(fixtureRoot)
+        val daemon = DaemonSession()
+        daemonSession = daemon
+        val opened = daemon.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+        val initialHash = opened.getValue("snapshotHash").jsonPrimitive.content
+        safeDeleteManagedSnapshotHash = initialHash
+        safeDeleteManagedProjectImage = projectImage(root)
+        val context = daemon.dispatch("project.context", buildJsonObject {
+            put("expectedSnapshotHash", initialHash)
+            put("sdkHome", System.getProperty("java.home"))
+        }).jsonObject
+        assertEquals("available", context.getValue("status").jsonPrimitive.content, context.toString())
+        val authority = buildJsonObject {
+            put("sdkHome", System.getProperty("java.home"))
+            put("expectedContextHash", context.getValue("contextHash").jsonPrimitive.content)
+            put("contextSchemaVersion", context.getValue("schemaVersion").jsonPrimitive.content)
+        }
+        safeDeleteManagedContext = authority
+
+        val unbound = daemon.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "safeDelete")
+            put("languageId", "java")
+            put("symbol", requireNotNull(symbolFqn))
+            put("expectedSnapshotHash", initialHash)
+        }).jsonObject
+        assertEquals("PREVIEW", unbound.getValue("status").jsonPrimitive.content)
+        val unboundApply = runCatching {
+            daemon.dispatch("refactor.apply", buildJsonObject {
+                put("planId", unbound.getValue("planId").jsonPrimitive.content)
+                put("expectedSnapshotHash", initialHash)
+            })
+        }.exceptionOrNull()
+        assertManagedApplyRefusal("unbound daemon", unboundApply, "java.safeDelete.referenceClosureIncomplete")
+
+        val preview = daemon.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "safeDelete")
+            put("languageId", "java")
+            put("symbol", requireNotNull(symbolFqn))
+            put("expectedSnapshotHash", initialHash)
+            put("javaContext", authority)
+        }).jsonObject
+        daemonPreviewResponse = preview
+        safeDeleteManagedPlanId = preview.getValue("planId").jsonPrimitive.content
+        assertEquals("PREVIEW", preview.getValue("status").jsonPrimitive.content, preview.toString())
+    }
+
+    @When("^the IDE previews safeDelete for fixtures\\.orbit\\.Orphan with an SDK-bound daemon context$")
+    fun idePreviewsSafeDeleteWithOpaqueBinaryResource() {
+        val root = requireNotNull(fixtureRoot)
+        val daemon = DaemonSession()
+        daemonSession = daemon
+        val opened = daemon.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+        val hash = opened.getValue("snapshotHash").jsonPrimitive.content
+        safeDeleteManagedSnapshotHash = hash
+        safeDeleteManagedProjectImage = projectImage(root)
+        val context = daemon.dispatch("project.context", buildJsonObject {
+            put("expectedSnapshotHash", hash)
+            put("sdkHome", System.getProperty("java.home"))
+        }).jsonObject
+        assertEquals("available", context.getValue("status").jsonPrimitive.content, context.toString())
+        val authority = buildJsonObject {
+            put("sdkHome", System.getProperty("java.home"))
+            put("expectedContextHash", context.getValue("contextHash").jsonPrimitive.content)
+            put("contextSchemaVersion", context.getValue("schemaVersion").jsonPrimitive.content)
+        }
+        safeDeleteManagedContext = authority
+        daemonPreviewResponse = daemon.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "safeDelete")
+            put("languageId", "java")
+            put("symbol", requireNotNull(symbolFqn))
+            put("expectedSnapshotHash", hash)
+            put("javaContext", authority)
+        }).jsonObject
+        safeDeleteManagedPlanId = requireNotNull(daemonPreviewResponse)
+            .getValue("planId").jsonPrimitive.content
+    }
+
+    @Then("^RefactorKit reports the binary resource as outside semantic closure and grants no Apply authority$")
+    fun binaryResourceKeepsClosureIncomplete() {
+        val preview = requireNotNull(daemonPreviewResponse)
+        val analysis = preview.getValue("referenceAnalysis").jsonObject
+        assertEquals("complete", analysis.getValue("status").jsonPrimitive.content)
+        assertEquals("incomplete", analysis.getValue("referenceClosure").jsonPrimitive.content)
+        assertEquals("none", analysis.getValue("managedApplyAuthority").jsonPrimitive.content)
+        assertEquals(false, analysis.getValue("completeProject").jsonPrimitive.content.toBoolean())
+        assertEquals(requireNotNull(safeDeleteManagedSnapshotHash), analysis.getValue("snapshotHash").jsonPrimitive.content)
+        assertEquals("PREVIEW", preview.getValue("status").jsonPrimitive.content)
+        assertEquals(requireNotNull(safeDeleteManagedProjectImage), projectImage(requireNotNull(fixtureRoot)))
+    }
+
+    @Then("^RefactorKit reports an unmodeled workspace input and grants no Apply authority$")
+    fun unmodeledWorkspaceInputKeepsClosureIncomplete() {
+        val preview = requireNotNull(daemonPreviewResponse)
+        val analysis = preview.getValue("referenceAnalysis").jsonObject
+        assertEquals("complete", analysis.getValue("status").jsonPrimitive.content)
+        assertEquals("incomplete", analysis.getValue("referenceClosure").jsonPrimitive.content)
+        assertEquals("none", analysis.getValue("managedApplyAuthority").jsonPrimitive.content)
+        assertEquals(false, analysis.getValue("completeProject").jsonPrimitive.content.toBoolean())
+        assertEquals(requireNotNull(safeDeleteManagedSnapshotHash), analysis.getValue("snapshotHash").jsonPrimitive.content)
+        val modelAttributes = requireNotNull(snapshot).buildModels.single().attributes
+        assertEquals("1", modelAttributes["java.safeDelete.textReferenceScan.unmodeledInputs"])
+        assertEquals("PREVIEW", preview.getValue("status").jsonPrimitive.content)
+        assertEquals(requireNotNull(safeDeleteManagedProjectImage), projectImage(requireNotNull(fixtureRoot)))
+    }
+
+    @io.cucumber.java.en.And("^managed Apply is refused without changing the reactor or transaction log$")
+    fun managedApplyIsRefusedForOpaqueBinaryResource() {
+        val root = requireNotNull(fixtureRoot)
+        val failure = runCatching {
+            requireNotNull(daemonSession).dispatch("refactor.apply", buildJsonObject {
+                put("planId", requireNotNull(safeDeleteManagedPlanId))
+                put("expectedSnapshotHash", requireNotNull(safeDeleteManagedSnapshotHash))
+                put("javaContext", requireNotNull(safeDeleteManagedContext))
+            })
+        }.exceptionOrNull()
+        assertManagedApplyRefusal("binary-resource daemon", failure, "java.safeDelete.referenceClosureIncomplete")
+        assertEquals(requireNotNull(safeDeleteManagedProjectImage), projectImage(root))
+        assertEquals(0, TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().size)
+        assertTrue(!Files.exists(root.resolve(".refactorkit/workspace.lock")))
+        assertTrue(!Files.exists(root.resolve(".refactorkit/transactions")))
+    }
+
+    @Then("^RefactorKit reports complete snapshot-bound Maven closure and managed Apply authority only for this preview$")
+    fun refactorkitReportsBoundMavenClosureForPreview() {
+        val preview = requireNotNull(daemonPreviewResponse)
+        val analysis = preview.getValue("referenceAnalysis").jsonObject
+        assertEquals("complete", analysis.getValue("status").jsonPrimitive.content)
+        assertEquals("maven-reactor-complete", analysis.getValue("referenceClosure").jsonPrimitive.content)
+        assertEquals("snapshot-bound", analysis.getValue("managedApplyAuthority").jsonPrimitive.content)
+        assertEquals(true, analysis.getValue("completeProject").jsonPrimitive.content.toBoolean())
+        assertEquals(requireNotNull(safeDeleteManagedSnapshotHash), analysis.getValue("snapshotHash").jsonPrimitive.content)
+        assertEquals("HIGH", preview.getValue("riskLevel").jsonPrimitive.content)
+        assertTrue(preview.getValue("confidence").jsonPrimitive.content.toDouble() > 0.0)
+
+        val capabilities = requireNotNull(daemonSession).dispatch("server.capabilities", buildJsonObject { }).jsonObject
+        val safeDeleteCapability = capabilities.getValue("javaContextRefactoring").jsonObject
+            .getValue("operationCapabilities").jsonArray.map { it.jsonObject }
+            .single { it.getValue("operation").jsonPrimitive.content == "safeDelete" }
+            .getValue("referenceAnalysis").jsonObject
+        assertEquals("conditional-snapshot-bound", safeDeleteCapability.getValue("managedApplyAuthority").jsonPrimitive.content)
+        assertEquals(false, safeDeleteCapability.getValue("completeProject").jsonPrimitive.content.toBoolean())
+        assertEquals("PREVIEW", preview.getValue("status").jsonPrimitive.content)
+        assertEquals(requireNotNull(safeDeleteManagedProjectImage), projectImage(requireNotNull(fixtureRoot)))
+    }
+
+    @io.cucumber.java.en.And("^a stale Apply is refused, then exact Apply and rollback restore the full reactor image$")
+    fun staleApplyIsRefusedThenExactApplyRollsBack() {
+        val root = requireNotNull(fixtureRoot)
+        val daemon = requireNotNull(daemonSession)
+        val originalPom = Files.readString(root.resolve("app/pom.xml"))
+        write(root, "app/pom.xml", originalPom + "<!-- stale preview input -->\n")
+        val staleFailure = runCatching {
+            daemon.dispatch("refactor.apply", buildJsonObject {
+                put("planId", requireNotNull(safeDeleteManagedPlanId))
+                put("expectedSnapshotHash", requireNotNull(safeDeleteManagedSnapshotHash))
+                put("javaContext", requireNotNull(safeDeleteManagedContext))
+            })
+        }.exceptionOrNull()
+        val stale = staleFailure as? JsonRpcException
+            ?: error("stale Apply did not return a structured refusal: $staleFailure")
+        assertEquals("java.context.snapshotStale", stale.data?.jsonObject?.get("refusalCode")?.jsonPrimitive?.content)
+        assertTrue(Files.exists(root.resolve(requireNotNull(declarationPath))))
+        write(root, "app/pom.xml", originalPom)
+
+        val opened = daemon.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+        val restoredHash = opened.getValue("snapshotHash").jsonPrimitive.content
+        assertEquals(requireNotNull(safeDeleteManagedSnapshotHash), restoredHash)
+        val contextResponse = daemon.dispatch("project.context", buildJsonObject {
+            put("expectedSnapshotHash", restoredHash)
+            put("sdkHome", System.getProperty("java.home"))
+        }).jsonObject
+        assertEquals("available", contextResponse.getValue("status").jsonPrimitive.content, contextResponse.toString())
+        val authority = buildJsonObject {
+            put("sdkHome", System.getProperty("java.home"))
+            put("expectedContextHash", contextResponse.getValue("contextHash").jsonPrimitive.content)
+            put("contextSchemaVersion", contextResponse.getValue("schemaVersion").jsonPrimitive.content)
+        }
+        val preview = daemon.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "safeDelete")
+            put("languageId", "java")
+            put("symbol", requireNotNull(symbolFqn))
+            put("expectedSnapshotHash", restoredHash)
+            put("javaContext", authority)
+        }).jsonObject
+        assertEquals("snapshot-bound", preview.getValue("referenceAnalysis").jsonObject
+            .getValue("managedApplyAuthority").jsonPrimitive.content)
+        val applied = daemon.dispatch("refactor.apply", buildJsonObject {
+            put("planId", preview.getValue("planId").jsonPrimitive.content)
+            put("expectedSnapshotHash", restoredHash)
+            put("javaContext", authority)
+        }).jsonObject
+        assertEquals("applied", applied.getValue("status").jsonPrimitive.content.lowercase())
+        assertTrue(!Files.exists(root.resolve(requireNotNull(declarationPath))))
+        val transactionId = applied.getValue("transactionId").jsonPrimitive.content
+        safeDeleteManagedTransactionId = transactionId
+        val postHash = applied.getValue("snapshotHash").jsonPrimitive.content
+        val rolledBack = daemon.dispatch("patch.rollback", buildJsonObject {
+            put("transactionId", transactionId)
+            put("expectedSnapshotHash", postHash)
+            put("javaContext", authority)
+        }).jsonObject
+        assertEquals("rolledback", rolledBack.getValue("status").jsonPrimitive.content
+            .lowercase().replace("_", "").replace("-", ""), rolledBack.toString())
+        assertEquals(requireNotNull(safeDeleteManagedProjectImage), projectImage(root))
+        assertTrue(Files.exists(root.resolve(requireNotNull(declarationPath))))
+    }
+
+    @Given("^the project contains an unresolved dynamic class-loading consumer with no literal target name$")
+    fun projectContainsUnresolvedDynamicClassLoadingConsumer() {
+        val root = requireNotNull(fixtureRoot)
+        write(
+            root,
+            "src/main/java/com/example/DynamicTypeLoader.java",
+            """
+            package com.example;
+
+            public final class DynamicTypeLoader {
+                public Class<?> load(String configuredTypeName) throws ClassNotFoundException {
+                    return Class.forName(configuredTypeName);
+                }
+            }
+            """.trimIndent() + "\n",
+        )
+        snapshot = JavaProjectScanner().scan(root)
+        assertEquals(0, jdtReferenceCount(requireNotNull(snapshot), requireNotNull(symbolFqn), requireNotNull(declarationPath)))
+        val plan = planner.preview(requireNotNull(snapshot), requireNotNull(symbolFqn))
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        assertTrue(plan.warnings.any { it.contains("dynamic references are not resolved") }, plan.warnings.toString())
+    }
+
+    @Given("^a captured workspace text input of type \"([^\"]+)\" references the selected type at \"([^\"]+)\"$")
+    fun workspaceTextInputReferencesType(surface: String, relativePath: String) {
+        val root = requireNotNull(fixtureRoot)
+        val content = when (surface) {
+            "maven" -> {
+                val pomPath = root.resolve(relativePath)
+                val pom = String(Files.readAllBytes(pomPath), Charsets.UTF_8)
+                pom.replace(
+                    "</project>",
+                    "  <properties><safeDelete.target>com.example.Legacy</safeDelete.target></properties>\n</project>",
+                )
+            }
+            "gradle" -> "ext.safeDeleteTarget = \"com.example.Legacy\"\n"
+            "xml" -> "<hibernate-mapping><class name=\"com.example.Legacy\"/></hibernate-mapping>\n"
+            "yaml" -> "entity: com.example.Legacy\n"
+            "sql" -> "-- query for com.example.Legacy\nselect * from Legacy;\n"
+            "service" -> "com.example.LegacyAdapter\n"
+            else -> error("Unknown project text surface: '$surface'")
+        }
+        write(root, relativePath, content)
+        snapshot = JavaProjectScanner().scan(root)
+        val targetPath = Path.of(relativePath)
+        val captured = requireNotNull(snapshot).auxiliaryFiles.singleOrNull { it.path == targetPath }
+        assertNotNull(captured, "$relativePath must be retained as a captured workspace text input")
+        assertTrue(captured.content.contains("Legacy"), "$relativePath must contain the selected type name")
+    }
+
+    @Given("^workspace text-reference scan evidence is (.+)$")
+    fun workspaceTextReferenceScanEvidence(coverage: String) {
+        val root = requireNotNull(fixtureRoot)
+        val scanned = requireNotNull(snapshot)
+        when (coverage) {
+            "over-budget" -> {
+                write(root, "src/main/resources/oversized.yml", "x".repeat(1_048_577))
+                snapshot = JavaProjectScanner().scan(root)
+                val states = requireNotNull(snapshot).buildModels.mapNotNull {
+                    it.attributes["java.safeDelete.textReferenceScan.status"]
+                }.distinct()
+                assertEquals(listOf("incomplete"), states, "the oversized text input must make scan coverage incomplete")
+            }
+            "missing" -> {
+                snapshot = scanned.copy(buildModels = scanned.buildModels.map { model ->
+                    model.copy(attributes = model.attributes - setOf(
+                        "java.safeDelete.textReferenceScan.status",
+                        "java.safeDelete.textReferenceScan.version",
+                    ))
+                })
+                assertTrue(
+                    requireNotNull(snapshot).buildModels.none {
+                        "java.safeDelete.textReferenceScan.status" in it.attributes
+                    },
+                    "the fixture must remove the scanner completeness proof",
+                )
+            }
+            else -> error("Unknown text-reference scan coverage: '$coverage'")
+        }
+    }
+
+    @Given("^workspace text-reference coverage is hidden by a symbolic link$")
+    fun workspaceTextReferenceCoverageHiddenBySymbolicLink() {
+        val root = requireNotNull(fixtureRoot)
+        val externalRoot = temporaryDirectory("rk-jvm-safedelete-external-text")
+        val externalInput = externalRoot.resolve("legacy-reference.yml")
+        write(externalRoot, "legacy-reference.yml", "entity: com.example.Legacy\n")
+        val link = root.resolve("src/main/resources/external-reference.yml")
+        link.parent.createDirectories()
+        Files.createSymbolicLink(link, externalInput)
+
+        snapshot = JavaProjectScanner().scan(root)
+        val states = requireNotNull(snapshot).buildModels.mapNotNull {
+            it.attributes["java.safeDelete.textReferenceScan.status"]
+        }.distinct()
+        assertEquals(listOf("incomplete"), states, "a workspace symlink must invalidate text-reference coverage")
     }
 
     // ------------------------------------------------------------ Scenario 1 Given
@@ -248,6 +702,145 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
         previewUnderCondition(requireNotNull(condition))
     }
 
+    @When("^the caller previews and applies safeDelete through the daemon and MCP$")
+    fun previewAndApplySafeDeleteThroughManagedSurfaces() {
+        val root = requireNotNull(fixtureRoot)
+        managedApplyWorkspaceImage = workspaceImage(root)
+        val daemon = DaemonSession()
+        daemonSession = daemon
+        val opened = daemon.dispatch("project.open", buildJsonObject {
+            put("root", root.toString())
+        }).jsonObject
+        daemonCapabilities = daemon.dispatch("server.capabilities", buildJsonObject { }).jsonObject
+        val preview = daemon.dispatch("refactor.preview", buildJsonObject {
+            put("operation", "safeDelete")
+            put("languageId", "java")
+            put("symbol", requireNotNull(symbolFqn))
+            put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+        }).jsonObject
+        daemonPreviewResponse = preview
+        assertEquals("PREVIEW", preview.getValue("status").jsonPrimitive.content, preview.toString())
+        val applyResult = runCatching {
+            daemon.dispatch("refactor.apply", buildJsonObject {
+                put("planId", preview.getValue("planId").jsonPrimitive.content)
+                put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+            }).jsonObject
+        }
+        managedApplyResult = applyResult.getOrNull()
+        managedApplyFailure = applyResult.exceptionOrNull()
+
+        McpSession().use { mcp ->
+            mcpToolCall(mcp, "project_scan", buildJsonObject { put("root", root.toString()) })
+            val mcpPreview = mcpToolCall(mcp, "preview_refactoring", buildJsonObject {
+                put("operation", "safeDelete")
+                put("languageId", "java")
+                put("symbol", requireNotNull(symbolFqn))
+            })
+            mcpPreviewStructuredContent = mcpPreview["structuredContent"]?.jsonObject
+            val previewText = mcpToolText(mcpPreview)
+            assertTrue(previewText.contains("Status   : PREVIEW"), previewText)
+            val mcpPlanId = Regex("Plan ID\\s*:\\s*(\\S+)").find(previewText)?.groupValues?.get(1)
+                ?: error("MCP safeDelete preview omitted plan ID: $previewText")
+            val mcpApply = runCatching {
+                mcpToolCall(mcp, "apply_refactoring", buildJsonObject { put("planId", mcpPlanId) })
+            }
+            mcpApplyFailure = mcpApply.exceptionOrNull()
+        }
+    }
+
+    @Then("^managed Apply is refused with code \"([^\"]+)\"$")
+    fun managedApplyIsRefusedWithCode(expectedCode: String) {
+        assertTrue(managedApplyResult == null, "managed Apply unexpectedly succeeded: $managedApplyResult")
+        assertManagedApplyRefusal("daemon", managedApplyFailure, expectedCode)
+        assertManagedApplyRefusal("MCP", mcpApplyFailure, expectedCode)
+    }
+
+    private fun assertManagedApplyRefusal(surface: String, failure: Throwable?, expectedCode: String) {
+        val refusal = failure as? JsonRpcException
+            ?: error("$surface managed Apply did not return a structured JSON-RPC refusal: $failure")
+        assertEquals(JsonRpcErrorCodes.PLAN_VALIDATION_FAILED, refusal.code, "$surface: ${refusal.message}")
+        val data = requireNotNull(refusal.data).jsonObject
+        assertEquals(expectedCode, data.getValue("refusalCode").jsonPrimitive.content, surface)
+    }
+
+    private fun mcpToolCall(session: McpSession, name: String, arguments: JsonObject): JsonObject =
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", name)
+            put("arguments", arguments)
+        }).jsonObject
+
+    private fun mcpToolText(result: JsonObject): String = result.getValue("content").jsonArray.single()
+        .jsonObject.getValue("text").jsonPrimitive.content
+
+    @io.cucumber.java.en.And("^workspace files and transaction metadata remain unchanged$")
+    fun workspaceAndTransactionMetadataRemainUnchanged() {
+        val root = requireNotNull(fixtureRoot)
+        assertEquals(requireNotNull(managedApplyWorkspaceImage), workspaceImage(root))
+        assertEquals(0, TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().size)
+        assertTrue(!Files.exists(root.resolve(".refactorkit/workspace.lock")))
+        assertTrue(!Files.exists(root.resolve(".refactorkit/transactions")))
+    }
+
+    @io.cucumber.java.en.And("^daemon and MCP expose only snapshot-bound workspace-text analysis without Apply authority$")
+    fun daemonAndMcpExposeReadOnlyTextAnalysis() {
+        val capabilities = requireNotNull(daemonCapabilities).getValue("javaContextRefactoring").jsonObject
+        val safeDeleteCapability = capabilities.getValue("operationCapabilities").jsonArray
+            .map { it.jsonObject }
+            .single { it.getValue("operation").jsonPrimitive.content == "safeDelete" }
+            .getValue("referenceAnalysis").jsonObject
+        assertEquals("java-safe-delete-reference-analysis-v1", safeDeleteCapability.getValue("schemaVersion").jsonPrimitive.content)
+        assertEquals("workspace-text-v1", safeDeleteCapability.getValue("scope").jsonPrimitive.content)
+        assertEquals("referenceAnalysis", safeDeleteCapability.getValue("resultField").jsonPrimitive.content)
+        assertEquals("conditional-snapshot-bound", safeDeleteCapability.getValue("managedApplyAuthority").jsonPrimitive.content)
+        assertEquals(false, safeDeleteCapability.getValue("completeProject").jsonPrimitive.content.toBoolean())
+
+        val daemon = requireNotNull(daemonPreviewResponse)
+        val daemonAnalysis = daemon.getValue("referenceAnalysis").jsonObject
+        assertReferenceAnalysisIsReadOnly(daemonAnalysis, requireNotNull(daemon.getValue("snapshot").jsonObject.getValue("hash").jsonPrimitive.content))
+
+        val mcpAnalysis = requireNotNull(mcpPreviewStructuredContent).getValue("referenceAnalysis").jsonObject
+        assertReferenceAnalysisIsReadOnly(mcpAnalysis, daemonAnalysis.getValue("snapshotHash").jsonPrimitive.content)
+
+        val incompleteSnapshot = requireNotNull(snapshot).copy(buildModels = emptyList())
+        val incompleteAnalysis = org.refactorkit.java.JavaSafeDeleteReferenceAnalysis.from(incompleteSnapshot)
+        assertEquals(org.refactorkit.java.JavaSafeDeleteReferenceAnalysis.Status.INCOMPLETE, incompleteAnalysis.status)
+        assertEquals(null, incompleteAnalysis.inputCount)
+        assertEquals(null, incompleteAnalysis.verifiedBytes)
+        assertEquals(incompleteSnapshot.hash, incompleteAnalysis.snapshotHash)
+        assertEquals("none", incompleteAnalysis.managedApplyAuthority)
+        assertEquals(false, incompleteAnalysis.completeProject)
+
+        val completeSnapshot = requireNotNull(snapshot)
+        val sourceModel = completeSnapshot.buildModels.first()
+        val missingScanCountModel = sourceModel.copy(
+            attributes = sourceModel.attributes - setOf(
+                "java.safeDelete.textReferenceScan.inputs",
+                "java.safeDelete.textReferenceScan.bytes",
+            ),
+        )
+        val inconsistentSnapshot = completeSnapshot.copy(buildModels = listOf(missingScanCountModel))
+        val inconsistentAnalysis = org.refactorkit.java.JavaSafeDeleteReferenceAnalysis.from(inconsistentSnapshot)
+        assertEquals(org.refactorkit.java.JavaSafeDeleteReferenceAnalysis.Status.INCOMPLETE, inconsistentAnalysis.status)
+        assertEquals(null, inconsistentAnalysis.inputCount)
+        assertEquals(null, inconsistentAnalysis.verifiedBytes)
+        assertEquals(inconsistentSnapshot.hash, inconsistentAnalysis.snapshotHash)
+        assertEquals("none", inconsistentAnalysis.managedApplyAuthority)
+        assertEquals(false, inconsistentAnalysis.completeProject)
+    }
+
+    private fun assertReferenceAnalysisIsReadOnly(analysis: JsonObject, expectedSnapshotHash: String) {
+        assertEquals("java-safe-delete-reference-analysis-v1", analysis.getValue("schemaVersion").jsonPrimitive.content)
+        assertEquals("safeDelete", analysis.getValue("operation").jsonPrimitive.content)
+        assertEquals("workspace-text-v1", analysis.getValue("scope").jsonPrimitive.content)
+        assertEquals("complete", analysis.getValue("status").jsonPrimitive.content)
+        assertTrue(analysis.getValue("inputCount").jsonPrimitive.content.toInt() > 0, analysis.toString())
+        assertTrue(analysis.getValue("verifiedBytes").jsonPrimitive.content.toLong() > 0L, analysis.toString())
+        assertEquals(expectedSnapshotHash, analysis.getValue("snapshotHash").jsonPrimitive.content)
+        assertEquals("none", analysis.getValue("managedApplyAuthority").jsonPrimitive.content)
+        assertEquals(false, analysis.getValue("completeProject").jsonPrimitive.content.toBoolean())
+        assertEquals("incomplete", analysis.getValue("referenceClosure").jsonPrimitive.content)
+    }
+
     // ------------------------------------------------------------ PREVIEW Thens
 
     @Then("^the adapter returns a PREVIEW patch plan for the operation safeDelete$")
@@ -317,6 +910,33 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
         assertEquals(decl, edit.path, "expected the Delete on the declaration file")
     }
 
+    @io.cucumber.java.en.And("^the review-only proposal identifies \"([^\"]+)\" and PatchEngine refuses Apply with \"([^\"]+)\" before mutation$")
+    fun reviewOnlyProposalCannotBeApplied(pomPath: String, refusalCode: String) {
+        val root = requireNotNull(fixtureRoot)
+        val snap = requireNotNull(snapshot)
+        val p = requireNotNull(plan)
+        val warning = p.warnings.singleOrNull {
+            it.contains("Review-only proposal:") && it.contains("complete project-wide reference analysis is not advertised")
+        }
+        assertNotNull(warning, "expected an explicit project-wide-analysis boundary warning: ${p.warnings}")
+        assertTrue(Regex("${Regex.escape(pomPath)}:[1-9][0-9]*").containsMatchIn(warning), warning)
+        assertTrue(p.warnings.none { it.startsWith("Forced delete:") }, "unforced review proposal must not claim force: ${p.warnings}")
+
+        val before = workspaceImage(root)
+        val result = PatchEngine(root).apply(
+            p,
+            snap,
+            ApplyAuthorization.explicit("story-bdd"),
+            DiagnosticsGate.disabled("story-bdd"),
+        )
+        val refused = result as? ApplyResult.Refused
+            ?: error("PatchEngine unexpectedly applied a review-only plan: $result")
+        assertTrue(refused.diagnostics.any { it.code == refusalCode }, refused.diagnostics.toString())
+        assertEquals(before, workspaceImage(root), "review-only Apply must preserve workspace bytes")
+        assertTrue(!Files.exists(root.resolve(".refactorkit/workspace.lock")), "refusal must happen before workspace locking")
+        assertTrue(!Files.exists(root.resolve(".refactorkit/transactions")), "refusal must not create transaction metadata")
+    }
+
     // ------------------------------------------------------------ Scenario 1 Thens
 
     @Then("^the plan reports the adapter diagnostics computed after the declaration file is removed from the snapshot$")
@@ -337,15 +957,15 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
         )
     }
 
-    @Then("^the plan warns that build configuration \\(pom.xml, build.gradle\\) is not scanned for references$")
-    fun planWarnsBuildConfigNotScanned() {
+    @Then("^the plan warns that captured workspace text inputs are scanned for literal target names only$")
+    fun planWarnsCapturedTextInputsAreLiteralOnly() {
         val p = requireNotNull(plan)
         assertTrue(
             p.warnings.any {
-                it.contains("Build configuration") && it.contains("pom.xml") &&
-                    it.contains("build.gradle") && it.contains("not scanned")
+                it.contains("Captured workspace text inputs were scanned for literal target type names") &&
+                    it.contains("dynamic references are not resolved")
             },
-            "expected the build-config-not-scanned warning: ${p.warnings}",
+            "expected the bounded workspace-text-reference warning: ${p.warnings}",
         )
     }
 
@@ -740,6 +1360,17 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
         return Files.createTempDirectory(base, prefix).also(temporaryDirectories::add)
     }
 
+    private fun workspaceImage(root: Path): Map<Path, String> = Files.walk(root).use { files ->
+        files.toList().filter(Files::isRegularFile)
+            .associate { path -> root.relativize(path) to Files.readString(path) }
+    }
+
+    private fun projectImage(root: Path): Map<Path, String> = Files.walk(root).use { files ->
+        files.toList().filter(Files::isRegularFile)
+            .filter { !root.relativize(it).normalize().startsWith(Path.of(".refactorkit")) }
+            .associate { path -> root.relativize(path) to Files.readString(path) }
+    }
+
     private fun deleteNoFollow(root: Path) {
         if (!root.exists()) return
         Files.walk(root).use { stream -> stream.toList() }
@@ -757,6 +1388,9 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
         observedRefusals.forEach { lines += "  ${it.declaredMessage} -> ${it.actualMessage} (${it.status})" }
         plan?.let { lines += "  plan:${it.status} operation=${it.operation} confidence=${it.confidence} risk=${it.riskLevel}" }
         Files.write(report, lines, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+
+        daemonSession?.close()
+        daemonSession = null
 
         var cleanupFailure: Throwable? = null
         temporaryDirectories.asReversed().forEach { directory ->

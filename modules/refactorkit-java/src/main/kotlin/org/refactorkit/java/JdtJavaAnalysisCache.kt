@@ -25,6 +25,8 @@ data class JdtJavaAnalysisCacheStatus(
 /** Session-owned bounded cache; no JDT compiler object crosses the snapshot key. */
 class JdtJavaAnalysisCache(
     private val maxEntries: Int = 2,
+    private val maxJavaSourceFiles: Int = MAX_JAVA_SOURCE_FILES,
+    private val maxJavaSourceBytes: Long = MAX_JAVA_SOURCE_BYTES,
     private val analyze: (ProjectSnapshot, SemanticCancellationToken) -> JdtJavaSemanticAnalysisResult =
         { snapshot, cancellation -> JdtJavaSemanticAnalyzer().analyze(snapshot, cancellation) },
 ) {
@@ -33,7 +35,11 @@ class JdtJavaAnalysisCache(
     private var misses = 0L
     private var crossSnapshotHits = 0L
 
-    init { require(maxEntries in 1..8) { "JDT cache entry limit is invalid" } }
+    init {
+        require(maxEntries in 1..8) { "JDT cache entry limit is invalid" }
+        require(maxJavaSourceFiles in 1..MAX_JAVA_SOURCE_FILES) { "JDT source file limit is invalid" }
+        require(maxJavaSourceBytes in 1..MAX_JAVA_SOURCE_BYTES) { "JDT source byte limit is invalid" }
+    }
 
     @Synchronized
     fun get(
@@ -41,6 +47,7 @@ class JdtJavaAnalysisCache(
         cancellation: SemanticCancellationToken = SemanticCancellationToken.NONE,
     ): JdtJavaCachedAnalysis {
         if (cancellation.isCancellationRequested()) throw JdtJavaAnalysisCancelledException()
+        (snapshot.semanticAnalysisAuthority as? JavaContextAuthority)?.requireCurrent()
         val semanticInputHash = semanticInputHash(snapshot)
         entries[semanticInputHash]?.let { cached ->
             hits++
@@ -52,14 +59,14 @@ class JdtJavaAnalysisCache(
         }
         val javaSources = snapshot.files.filter { it.languageId == "java" }
         val javaFiles = javaSources.size
-        if (javaFiles > MAX_JAVA_SOURCE_FILES) throw JdtJavaAnalysisLimitException(
-            "JDT analysis exceeds $MAX_JAVA_SOURCE_FILES Java source files",
+        if (javaFiles > maxJavaSourceFiles) throw JdtJavaAnalysisLimitException(
+            "JDT analysis exceeds $maxJavaSourceFiles Java source files",
         )
         var javaBytes = 0L
         javaSources.forEach { source ->
             javaBytes += source.content.toByteArray(Charsets.UTF_8).size
-            if (javaBytes > MAX_JAVA_SOURCE_BYTES) throw JdtJavaAnalysisLimitException(
-                "JDT analysis exceeds $MAX_JAVA_SOURCE_BYTES UTF-8 source bytes",
+            if (javaBytes > maxJavaSourceBytes) throw JdtJavaAnalysisLimitException(
+                "JDT analysis exceeds $maxJavaSourceBytes UTF-8 source bytes",
             )
         }
         misses++
@@ -101,7 +108,9 @@ class JdtJavaAnalysisCache(
                         model.attributes["ecosystem"] in setOf("typescript", "javascript")
                 },
             )
-            return semantic.hash
+            return snapshot.semanticAnalysisAuthority?.let {
+                sha256("${semantic.hash}\n${it.providerId}\n${it.identitySha256}")
+            } ?: semantic.hash
         }
 
         private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")

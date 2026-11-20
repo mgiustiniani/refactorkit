@@ -6,7 +6,6 @@ import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.java.JavaChangeSignaturePlanner
-import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaMoveClassPlanner
 import org.refactorkit.java.JavaOrganizeImportsPlanner
@@ -68,7 +67,7 @@ class AgentSimulationTest {
         assertFalse(plan.diagnosticsAfterPreview.any { it.severity == Diagnostic.Severity.ERROR })
         val before = fileTree(root)
         val applyResult = PatchEngine(root).apply(plan, snapshot)
-        assertIs<ApplyResult.Applied>(applyResult)
+        assertIs<ApplyResult.Applied>(applyResult, "$caseName must be eligible for managed apply before rollback coverage: $applyResult")
         assertTrue(fileTree(root) != before, "Apply should mutate the workspace")
         val rollbackResult = PatchEngine(root).rollback(applyResult.transaction)
         assertIs<ApplyResult.Applied>(rollbackResult)
@@ -78,7 +77,7 @@ class AgentSimulationTest {
     // ── rollback coverage for release-plan mutating operations ────────────────
 
     @Test
-    fun scenarioRepresentativeMutatingOperationsRollbackToBeforeState() {
+    fun scenarioManagedMutatingOperationsRollbackToBeforeState() {
         val cases = listOf(
             rollbackCase("renameMember") {
                 val root = project(
@@ -97,14 +96,8 @@ class AgentSimulationTest {
                 val snap = scanner.scan(root)
                 Triple(root, JavaSafeDeletePlanner(adapter).preview(snap, "com.example.UnusedTool"), snap)
             },
-            rollbackCase("extractMethod") {
-                val root = project(
-                    "src/main/java/com/example/Worker.java" to
-                        "package com.example;\n\npublic class Worker {\n    public void run() {\n        System.out.println(\"start\");\n        System.out.println(\"done\");\n    }\n}\n",
-                )
-                val snap = scanner.scan(root)
-                Triple(root, JavaExtractMethodPlanner().preview(snap, java.nio.file.Paths.get("src/main/java/com/example/Worker.java"), 5, 6, "logSteps"), snap)
-            },
+            // Lexical extract-method compatibility previews are review-only. Its binding-backed
+            // managed apply/rollback route is covered by java-extract-method-characterization.feature.
             rollbackCase("changeSignature.renameParameter") {
                 val root = project(
                     "src/main/java/com/example/Calculator.java" to

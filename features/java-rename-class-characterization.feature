@@ -1,4 +1,6 @@
 # language: en
+# ARC42 authority and current status: docs/arc42/appendix-requirements.adoc#JavaIdeSemanticRenameReconciliation.
+# This feature is the executable source for REQ-JAVA-RENAME-CLASS-CHAR-001. Its nested-type case is a saved-snapshot story; IDE dirty-buffer qualification remains separate.
 @partial
 Ability: Rename a Java class, interface, enum, or record type exactly with JDT binding evidence and refuse invalid, generated, and conflicting requests with deterministic real messages
   As a RefactorKit caller on a Java workspace
@@ -9,7 +11,10 @@ Ability: Rename a Java class, interface, enum, or record type exactly with JDT b
   (REQ-JAVA-J1-CATALOGUE-APPROVED-001): the Java operation renameClass must accept a
   renameable type and produce a PREVIEW patch plan for the operation renameClass. The
   supported shape is a Java class, interface, enum, record, or annotation whose declaration
-  file is non-generated and whose JDT binding is clean. The successful plan carries
+  file is non-generated and whose JDT binding is clean. Nested types are renamed in place:
+  their enclosing source file stays at its current path, and only the selected type binding,
+  its constructors, and references proven to target it are edited. A nested rename requires
+  clean JDT evidence; it must not fall back to lexical replacement. The successful top-level plan carries
   confidence 0.96, requiresUserApproval true, evidence JDT_BINDING, an affected-file set
   listing the declaration file, every referencing file, and the new file, and a WorkspaceEdit
   that combines the JDT source-range modifications with one FileEdit.Rename that moves the
@@ -49,6 +54,17 @@ Ability: Rename a Java class, interface, enum, or record type exactly with JDT b
     And the plan carries a WorkspaceEdit that combines the JDT source-range modifications and one FileEdit.Rename from the declaration file to the new file name
     And the plan warns that the JDT type binding was selected and that declaration, constructor, and reference edits use exact JDT source ranges
     And the plan warns that string literals and comments are NOT scanned and that reflection and annotation processor output require manual review
+
+  # Scenario: a nested type is renamed by binding without renaming its enclosing source file
+  @REQ-JAVA-RENAME-CLASS-CHAR-001 @functional-requirement
+  Scenario: A nested type rename updates binding references without renaming its enclosing source file
+    Given a Java workspace snapshot containing a nested type and a same-named unrelated type
+    And the JDT binding analysis is clean and resolves the type binding with no error warnings
+    When the caller requests a renameClass preview from the current fully qualified type name to a valid new simple name
+    Then the adapter returns a PREVIEW patch plan for the operation renameClass
+    And the plan evidence is JDT_BINDING
+    And the plan leaves the declaration path unchanged and contains no FileEdit.Rename
+    And the plan edits the selected nested type and only references bound to it
 
   # Scenario 2: framework annotation findings elevate risk to HIGH and add framework warnings
   @REQ-JAVA-RENAME-CLASS-CHAR-001 @functional-requirement

@@ -1,6 +1,9 @@
 # Recipe engine
 
 See AGENTS.md for the authoritative architecture and implementation rules.
+The [ARC42 requirements appendix](arc42/appendix-requirements.adoc) owns integrated
+architecture/status. [Java package-migration requirements](requirements/java-package-migration.md)
+own `movePackage` behavior and the unqualified Java provider/IDE integration gate.
 
 ## Current MVP behavior
 
@@ -58,6 +61,8 @@ Safety behavior:
 Limitations:
 
 - recipe parameters are string-substituted templates only;
+- the internal `movePackage` recipe step has no stable Java provider/IDE route;
+  the experimental recipe runner and planner tests do not qualify an IDE action;
 - validation hooks are limited to built-in step validation and `runDiagnostics`;
 - recipe-wide rollback follows the standard conflict-safe `PatchEngine` policy;
 - whole-file replacement edits are currently used when reducing staged content to

@@ -8,23 +8,25 @@ import kotlin.test.assertTrue
 
 /** Real clangd integration: launches clangd and resolves a definition. */
 class ClangdSemanticIntegrationTest {
-    private val clangd = Path.of("/usr/bin/clangd")
-
     @Test
     fun resolvesDefinitionWithRealClangd() {
-        if (!Files.isExecutable(clangd)) return // clangd not installed; integration not run
         val workspace = Files.createTempDirectory("refactorkit-clangd")
         val mainC = workspace.resolve("main.c")
         Files.writeString(mainC, "int compute(int x) { return x + 1; }\nint main(void) { return compute(2); }\n")
-        val toolchain = ClangSemanticToolchain(
-            clangExecutable = Path.of("/usr/bin/clang"),
-            clangdExecutable = clangd,
-            clangFormatExecutable = Path.of("/usr/bin/clang-format"),
-            provenance = ClangToolchainProvenance(
-                clangVersion = "22.1.8", clangdVersion = "22.1.8", clangFormatVersion = "22.1.8",
-                targetTriple = "x86_64-pc-linux-gnu", resourceDir = "/usr/lib/clang/22", evidence = emptyList(),
-            ),
+        val configured = System.getProperty("refactorkit.c.qualificationToolchain")?.let(Path::of)
+        val bin = configured?.resolve("usr/bin") ?: Path.of("/usr/bin")
+        val request = ClangToolchainRequest(
+            workspaceRoot = workspace,
+            clangExecutable = configured?.resolve("usr/bin/clang-22") ?: bin.resolve("clang"),
+            clangdExecutable = configured?.resolve("usr/bin/clangd") ?: bin.resolve("clangd"),
+            clangFormatExecutable = configured?.resolve("usr/bin/clang-format") ?: bin.resolve("clang-format"),
         )
+        if (!Files.isExecutable(request.clangdExecutable)) return // clangd not installed; integration not run
+        val toolchain = when (val discovery = ClangToolchainDiscoverer().discover(request)) {
+            is ClangToolchainDiscovery.Available -> discovery.toolchain
+            is ClangToolchainDiscovery.Refused -> if (configured == null) return else
+                error("Configured native Clang authority was refused: ${discovery.diagnostics}")
+        }
         ClangdSemanticClient(toolchain).use { client ->
             client.start(workspace)
             assertTrue(client.didOpen(mainC, Files.readString(mainC)))

@@ -12,10 +12,17 @@ import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.AuthoritativeDiagnosticsEvaluation
 import org.refactorkit.core.AuthoritativeDiagnosticsProvider
 import org.refactorkit.core.BuildDependency
+import org.refactorkit.core.BuildAnnotationProcessorConfiguration
+import org.refactorkit.core.BuildArtifactCoordinates
+import org.refactorkit.core.BuildCompilerOption
+import org.refactorkit.core.BuildFactAvailability
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModelDiagnostic
 import org.refactorkit.core.BuildModelStatus
 import org.refactorkit.core.BuildModule
+import org.refactorkit.core.BuildResolvedArtifact
+import org.refactorkit.core.BuildSourceRootEvidence
+import org.refactorkit.core.BuildSourceRootOrigin
 import org.refactorkit.core.BuildSourceSet
 import org.refactorkit.core.ClasspathEvidence
 import org.refactorkit.core.ClasspathEvidenceKind
@@ -163,11 +170,11 @@ class AuthoritativeDiagnosticsEvaluationSteps {
         assertEquals(1, world.s0.classpathEvidence.count { it.path.isAbsolute })
     }
 
-    @Given("each provider result is constructed from caller-owned mutable collections with a distinct sentinel at every captured semantic boundary:")
+    @Given("each provider result is constructed from caller-owned mutable collections with a distinct sentinel at every mutable collection boundary and complete hash-bound build facts:")
     fun callerOwnedMutableSemanticBoundaries(table: DataTable) {
         assertEquals(
             DETACHMENT_BOUNDARIES,
-            table.asMaps().map { it.getValue("caller-owned collection boundary") },
+            table.asMaps().map { it.getValue("captured semantic boundary") },
         )
         deepDetachmentRequired = true
         assertEquals(0, authoritativeTrace.size, "The provider remains lazy until PatchEngine.apply")
@@ -942,7 +949,7 @@ class AuthoritativeDiagnosticsEvaluationSteps {
             "detachment.sentinel.buildModule.$modelIndex.$moduleIndex",
             "sentinel",
         ) { it.snapshot.buildModels[modelIndex].modules[moduleIndex].attributes }
-        return BuildModule(source.id, source.name, source.root, sourceSets, attributes)
+        return BuildModule(source.id, source.name, source.root, sourceSets, attributes, source.coordinates)
     }
 
     private fun mutableBuildSourceSet(
@@ -1001,6 +1008,70 @@ class AuthoritativeDiagnosticsEvaluationSteps {
             "detachment.sentinel.sourceSet.$modelIndex.$moduleIndex.$sourceSetIndex",
             "sentinel",
         ) { it.snapshot.buildModels[modelIndex].modules[moduleIndex].sourceSets[sourceSetIndex].attributes }
+        val sourceRootEvidence = source.sourceRootEvidence.toMutableList()
+        probes += listProbe(
+            "BuildSourceSet[$prefix].sourceRootEvidence",
+            sourceRootEvidence,
+            source.sourceRootEvidence.first(),
+            exposed { it.sourceRootEvidence },
+        )
+        val compilerOptions = source.compilerOptions.toMutableList()
+        probes += listProbe(
+            "BuildSourceSet[$prefix].compilerOptions",
+            compilerOptions,
+            BuildCompilerOption("--detachment-sentinel", "true", "synthetic-test"),
+            exposed { it.compilerOptions },
+        )
+        val resolvedArtifacts = source.resolvedArtifacts.toMutableList()
+        probes += listProbe(
+            "BuildSourceSet[$prefix].resolvedArtifacts",
+            resolvedArtifacts,
+            source.resolvedArtifacts.first(),
+            exposed { it.resolvedArtifacts },
+        )
+        val annotationProcessors = source.annotationProcessors?.let { processors ->
+            val processorPath = processors.processorPath.toMutableList()
+            probes += listProbe(
+                "BuildSourceSet[$prefix].annotationProcessors.processorPath",
+                processorPath,
+                processors.processorPath.first(),
+                { it.snapshot.buildModels[modelIndex].modules[moduleIndex].sourceSets[sourceSetIndex]
+                    .annotationProcessors?.processorPath.orEmpty() },
+            )
+            val processorPathEntries = processors.processorPathEntries.toMutableList()
+            probes += listProbe(
+                "BuildSourceSet[$prefix].annotationProcessors.processorPathEntries",
+                processorPathEntries,
+                processors.processorPathEntries.first(),
+                { it.snapshot.buildModels[modelIndex].modules[moduleIndex].sourceSets[sourceSetIndex]
+                    .annotationProcessors?.processorPathEntries.orEmpty() },
+            )
+            val processorNames = processors.processorNames.toMutableList()
+            probes += listProbe(
+                "BuildSourceSet[$prefix].annotationProcessors.processorNames",
+                processorNames,
+                processors.processorNames.first(),
+                { it.snapshot.buildModels[modelIndex].modules[moduleIndex].sourceSets[sourceSetIndex]
+                    .annotationProcessors?.processorNames.orEmpty() },
+            )
+            val processorOptions = processors.options.toMutableMap()
+            probes += mapProbe(
+                "BuildSourceSet[$prefix].annotationProcessors.options",
+                processorOptions,
+                "detachment.sentinel.processor.$modelIndex.$moduleIndex.$sourceSetIndex",
+                "sentinel",
+            ) { it.snapshot.buildModels[modelIndex].modules[moduleIndex].sourceSets[sourceSetIndex]
+                .annotationProcessors?.options.orEmpty() }
+            BuildAnnotationProcessorConfiguration(
+                availability = processors.availability,
+                processorPath = processorPath,
+                processorPathEntries = processorPathEntries,
+                processorNames = processorNames,
+                options = processorOptions,
+                mode = processors.mode,
+                refusalCode = processors.refusalCode,
+            )
+        }
         return BuildSourceSet(
             id = source.id,
             kind = source.kind,
@@ -1011,6 +1082,14 @@ class AuthoritativeDiagnosticsEvaluationSteps {
             runtimeClasspathEntries = runtimeClasspathEntries,
             moduleDependencies = moduleDependencies,
             attributes = attributes,
+            sourceRootEvidence = sourceRootEvidence,
+            compilerOptions = compilerOptions,
+            compilerOptionsAvailability = source.compilerOptionsAvailability,
+            compilerOptionsRefusalCode = source.compilerOptionsRefusalCode,
+            resolvedArtifacts = resolvedArtifacts,
+            resolvedArtifactAvailability = source.resolvedArtifactAvailability,
+            resolvedArtifactRefusalCode = source.resolvedArtifactRefusalCode,
+            annotationProcessors = annotationProcessors,
         )
     }
 
@@ -1086,6 +1165,7 @@ class AuthoritativeDiagnosticsEvaluationSteps {
         root = source.root,
         sourceSets = immutableList(source.sourceSets.map(::freezeBuildSourceSet)),
         attributes = immutableMap(source.attributes),
+        coordinates = source.coordinates?.copy(),
     )
 
     private fun freezeBuildSourceSet(source: BuildSourceSet): BuildSourceSet = BuildSourceSet(
@@ -1098,6 +1178,25 @@ class AuthoritativeDiagnosticsEvaluationSteps {
         runtimeClasspathEntries = immutableList(source.runtimeClasspathEntries),
         moduleDependencies = immutableList(source.moduleDependencies),
         attributes = immutableMap(source.attributes),
+        sourceRootEvidence = immutableList(source.sourceRootEvidence.map { it.copy() }),
+        compilerOptions = immutableList(source.compilerOptions.map { it.copy() }),
+        compilerOptionsAvailability = source.compilerOptionsAvailability,
+        compilerOptionsRefusalCode = source.compilerOptionsRefusalCode,
+        resolvedArtifacts = immutableList(source.resolvedArtifacts.map { artifact ->
+            artifact.copy(coordinates = artifact.coordinates.copy())
+        }),
+        resolvedArtifactAvailability = source.resolvedArtifactAvailability,
+        resolvedArtifactRefusalCode = source.resolvedArtifactRefusalCode,
+        annotationProcessors = source.annotationProcessors?.let { processors ->
+            processors.copy(
+                processorPath = immutableList(processors.processorPath.map { artifact ->
+                    artifact.copy(coordinates = artifact.coordinates.copy())
+                }),
+                processorPathEntries = immutableList(processors.processorPathEntries),
+                processorNames = immutableList(processors.processorNames),
+                options = immutableMap(processors.options),
+            )
+        },
     )
 
     private fun freezeDiagnostics(source: List<Diagnostic>): List<Diagnostic> = immutableList(
@@ -1693,8 +1792,35 @@ class AuthoritativeDiagnosticsEvaluationSteps {
                     runtimeClasspathEntries = immutableList(externalClasspath),
                     moduleDependencies = immutableList(BuildDependency(moduleId, DependencyScope.COMPILE)),
                     attributes = immutableMap(mapOf("modelRevision" to revision, "release" to "21")),
+                    sourceRootEvidence = immutableList(BuildSourceRootEvidence(
+                        path = Path.of("src/main/java"),
+                        origin = BuildSourceRootOrigin.CONVENTIONAL,
+                        providerId = "synthetic-build",
+                        descriptorPath = Path.of("pom.xml"),
+                    )),
+                    compilerOptions = immutableList(BuildCompilerOption("--release", "21", "synthetic-build")),
+                    compilerOptionsAvailability = BuildFactAvailability.COMPLETE,
+                    resolvedArtifacts = immutableList(BuildResolvedArtifact(
+                        externalClasspath,
+                        BuildArtifactCoordinates("example.external", "classpath", "1.0"),
+                        scope = DependencyScope.COMPILE,
+                    )),
+                    resolvedArtifactAvailability = BuildFactAvailability.COMPLETE,
+                    annotationProcessors = BuildAnnotationProcessorConfiguration(
+                        availability = BuildFactAvailability.COMPLETE,
+                        processorPath = immutableList(BuildResolvedArtifact(
+                            externalClasspath,
+                            BuildArtifactCoordinates("example.processor", "processor", "1.0"),
+                            scope = DependencyScope.CUSTOM,
+                        )),
+                        processorPathEntries = immutableList(externalClasspath),
+                        processorNames = immutableList("example.processor.MetadataProcessor"),
+                        options = immutableMap(mapOf("synthetic.option" to revision)),
+                        mode = "compile",
+                    ),
                 )),
                 attributes = immutableMap(mapOf("modelRevision" to revision, "kind" to "synthetic")),
+                coordinates = BuildArtifactCoordinates("example.synthetic", moduleId, "1.0"),
             )),
             diagnostics = immutableList(BuildModelDiagnostic(
                 code = "synthetic.build.$revision",
@@ -2021,7 +2147,12 @@ class AuthoritativeDiagnosticsEvaluationSteps {
             "ProjectSnapshot classpathEvidence and buildModels",
             "each BuildModel's modules, diagnostics, and attributes collections",
             "each BuildModule's sourceSets and attributes collections",
+            "each BuildModule's immutable coordinates identity value",
             "each BuildSourceSet's sourceRoots, generatedSourceRoots, outputDirectories, classpathEntries, runtimeClasspathEntries, moduleDependencies, and attributes collections",
+            "each BuildSourceSet's sourceRootEvidence, compilerOptions, and resolvedArtifacts collections",
+            "each BuildSourceSet's compilerOptionsAvailability, compilerOptionsRefusalCode, resolvedArtifactAvailability, and resolvedArtifactRefusalCode values",
+            "each BuildSourceSet annotationProcessors processorPath, processorPathEntries, processorNames, and options collections",
+            "each BuildSourceSet annotationProcessors availability, mode, and refusalCode values",
             "the diagnostics input list and every caller-owned fields map supplied to DiagnosticDetails",
         )
         val REQUIRED_MUTATION_LABELS = listOf(
@@ -2059,6 +2190,13 @@ class AuthoritativeDiagnosticsEvaluationSteps {
             "BuildSourceSet[0,0,0].runtimeClasspathEntries",
             "BuildSourceSet[0,0,0].moduleDependencies",
             "BuildSourceSet[0,0,0].attributes",
+            "BuildSourceSet[0,0,0].sourceRootEvidence",
+            "BuildSourceSet[0,0,0].compilerOptions",
+            "BuildSourceSet[0,0,0].resolvedArtifacts",
+            "BuildSourceSet[0,0,0].annotationProcessors.processorPath",
+            "BuildSourceSet[0,0,0].annotationProcessors.processorPathEntries",
+            "BuildSourceSet[0,0,0].annotationProcessors.processorNames",
+            "BuildSourceSet[0,0,0].annotationProcessors.options",
             "AuthoritativeDiagnosticsEvaluation.diagnostics",
             "Diagnostic[0].details.fields",
         )

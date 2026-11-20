@@ -59,6 +59,11 @@ class JavaCliCommandCatalogSteps {
         val operation: String,
     )
 
+    private data class FileDigest(
+        val size: Long,
+        val sha256: String,
+    )
+
     private lateinit var repositoryRoot: Path
     private lateinit var installedRoot: Path
     private lateinit var installedExecutable: Path
@@ -96,7 +101,7 @@ class JavaCliCommandCatalogSteps {
         }
     }
 
-    @Given("the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
+    @Given("the source-built RefactorKit 0.8.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture")
     fun establishSourceBuiltRuntime() {
         repositoryRoot = locateRepositoryRoot()
         installedRoot = Path.of(System.getProperty("user.home"), ".local", "share", "refactorkit")
@@ -104,7 +109,7 @@ class JavaCliCommandCatalogSteps {
         installedExecutable = installedRoot.resolve("bin/refactorkit")
         sourceBuiltCodeLocation = codeLocation(RefactorKitCli::class.java)
 
-        assertEquals("0.7.0", RefactorKitVersion.VERSION)
+        assertEquals("0.8.0", RefactorKitVersion.VERSION)
         assertTrue(System.getProperty("os.name").contains("Linux", ignoreCase = true))
         assertEquals(21, Runtime.version().feature())
         assertTrue(System.getProperty("os.arch").isNotBlank())
@@ -406,20 +411,41 @@ class JavaCliCommandCatalogSteps {
         assertFalse(usage.contains("--to <root> --dependency-pom"))
     }
 
-    @Then("every existing human-oriented parser and command behavior remains compatible, with no requirement-owned change outside the additive truthful top-level help lines")
+    @Then("every existing human-oriented parser and command behavior remains compatible, allowing separately qualified CLI output and C-route help lines alongside the additive truthful Java catalogue lines")
     fun humanHelpAndParserBehaviorRemainCompatible() {
-        // Retain frozen bytes; project only the approved T5 and release-version metadata deltas.
+        // Retain frozen bytes; project only the approved T5/version deltas and independently qualified CLI help additions.
         val baselineLines = pinnedHelp.toString(Charsets.UTF_8).split('\n').flatMap { line ->
             when (line) {
+                LEGACY_GOLDEN_USAGE -> listOf(line, C_GOLDEN_SELECTOR_NOTE)
                 LEGACY_TYPESCRIPT_USAGE -> listOf(TYPESCRIPT_CATALOGUE_USAGE, TYPESCRIPT_REFACTOR_USAGE)
                 "RefactorKit 0.7.0-SNAPSHOT  deterministic refactoring engine" ->
-                    listOf("RefactorKit 0.7.0  deterministic refactoring engine")
+                    listOf("RefactorKit 0.8.0  deterministic refactoring engine")
                 else -> listOf(line)
             }
         }
         val actualLines = helpInvocation.stdoutText().split('\n')
         val baselineOutsideRequirement = baselineLines.filterNot { it.trim() == LEGACY_MOVE_USAGE }
-        val actualOutsideRequirement = actualLines.filterNot { it.trim() in REQUIREMENT_OWNED_HELP_LINES }
+        val outputLimitNotice = "Output is limited to ${String.format(java.util.Locale.ROOT, "%,d", org.refactorkit.core.ProtocolLimits.MAX_CLI_OUTPUT_BYTES)} UTF-8 bytes across stdout and stderr per invocation."
+        val separatelyQualifiedHelpLines = CROSS_REQUIREMENT_HELP_LINES + outputLimitNotice + OUTPUT_LIMIT_ERROR_NOTICE
+        separatelyQualifiedHelpLines.forEach { line ->
+            assertEquals(1, actualLines.count { it.trim() == line }, "independently qualified help line must appear exactly once")
+        }
+        val actualOutsideRequirement = buildList {
+            var skipSeparatorAfterExternalHelp = false
+            actualLines.forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed in REQUIREMENT_OWNED_HELP_LINES || trimmed in separatelyQualifiedHelpLines) {
+                    skipSeparatorAfterExternalHelp = true
+                    return@forEach
+                }
+                if (line.isBlank() && skipSeparatorAfterExternalHelp) {
+                    skipSeparatorAfterExternalHelp = false
+                    return@forEach
+                }
+                add(line)
+                if (line.isNotBlank()) skipSeparatorAfterExternalHelp = false
+            }
+        }
         assertEquals(baselineOutsideRequirement, actualOutsideRequirement)
 
         assertEquals("create-module requires --module-name\n", routeProbes.getValue("java create-module").stderrText())
@@ -657,8 +683,8 @@ class JavaCliCommandCatalogSteps {
                 entries[manifestPath(relative)] = when {
                     Files.isSymbolicLink(file) -> "symlink:${Files.readSymbolicLink(file)}"
                     attrs.isRegularFile -> {
-                        val bytes = Files.readAllBytes(file)
-                        "file:${bytes.size}:${permissions(file)}:${sha256(bytes)}"
+                        val digest = sha256(file)
+                        "file:${digest.size}:${permissions(file)}:${digest.sha256}"
                     }
                     else -> "other:${permissions(file)}"
                 }
@@ -677,6 +703,23 @@ class JavaCliCommandCatalogSteps {
 
     private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
         .digest(bytes).joinToString("") { byte -> "%02x".format(byte) }
+
+    private fun sha256(path: Path): FileDigest {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(64 * 1024)
+        var size = 0L
+        Files.newInputStream(path).use { input ->
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                if (read == 0) continue
+                size += read.toLong()
+                digest.update(buffer, 0, read)
+            }
+        }
+        val hex = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+        return FileDigest(size, hex)
+    }
 
     private fun codeLocation(type: Class<*>): Path {
         val uri: URI = assertNotNull(type.protectionDomain.codeSource?.location).toURI()
@@ -700,15 +743,19 @@ class JavaCliCommandCatalogSteps {
     private companion object {
         const val CATALOGUE_SCHEMA = "refactorkit.cli-command-catalog/v1"
         const val CAPABILITIES_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-k5-candidate-a8cc8f03c496.json"
+            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-v080-candidate-bbb6cd29e23a.json"
         const val HELP_FIXTURE =
             "org/refactorkit/cli/reqjavaclicatalog001/help-k5-candidate-56d503763b94.txt"
-        const val PINNED_CAPABILITIES_SHA256 = "a8cc8f03c496d7b48edb307e52e83358fbc34aa53205a68687b17e3cbb9325e3"
+        const val PINNED_CAPABILITIES_SHA256 = "bbb6cd29e23a4bd1c13ffc711a6cf5e498c0705b0e396141f51ca9ad62fdef32"
         const val PINNED_HELP_SHA256 = "56d503763b94b513cdfe370a117a48786a7b669312bb30f911e3308591fe5a54"
         const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v1-guard/v1"
         const val PROBE_MODE = "probe"
         const val INVOKE_MODE = "invoke"
         const val PROCESS_TIMEOUT_SECONDS = 30L
+        const val LEGACY_GOLDEN_USAGE =
+            "  refactorkit test-golden       [<case-name>]                          [--golden-dir <path>]"
+        const val C_GOLDEN_SELECTOR_NOTE =
+            "    C goldens require --clang <exe> --clangd <exe> --clang-format <exe> and an explicit fixture compilation database"
         const val LEGACY_TYPESCRIPT_USAGE =
             "  refactorkit typescript <search|definition|references|diagnostics|diagnostics-v2|rename> <root> --node <path> --language-server-package <dir> --typescript-package <dir> [--language typescript|javascript] [--request-id <id>] [--apply]"
         const val TYPESCRIPT_CATALOGUE_USAGE =
@@ -755,6 +802,19 @@ class JavaCliCommandCatalogSteps {
             EXPECTED_MOVE_USAGE,
             "refactorkit java rename-module --old-module-dir <dir> --new-module-dir <dir> [--new-artifact-id <id>] [--root <path>] [--apply]",
         )
+        val CROSS_REQUIREMENT_HELP_LINES = setOf(
+            "refactorkit c symbols <root> [--query <text>] [--limit <n>] [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c definition <root> --symbol <c-decl:id> [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c references <root> --symbol <c-decl:id> [--include-declaration] [--limit <n>] [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c rename <root> --symbol <name> --to <name> --file <path> --line <n> --character <n> [--read-only-sdks <json-array>] [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c rename-prefix <root> --mapping <old=new[,old=new...]> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c change-signature <root> --operation reorder-parameters --file <path.c> --symbol <function> --order <original-indices> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c change-signature <root> --operation add-parameter --file <path.c> --symbol <function> --name <parameter> --position <ordinal> --argument-expression <expr> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c extract <root> --file <path.c> --start-line <zero-based-line> --start-char <UTF-16-column> --end-line <zero-based-line> --end-char <UTF-16-column> [--temp-name <name>] [--operation extract-expression] [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c extract <root> --operation extract-statements --file <path.c> --symbol <function> --helper-name <name> --start-byte <offset> --end-byte <exclusive-offset> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
+        )
+        const val OUTPUT_LIMIT_ERROR_NOTICE =
+            "If exceeded, all command output is discarded and cli.outputLimitExceeded is written to stderr."
         val REPOSITORY_MANIFEST_EXCLUDED_DIRECTORIES = setOf(".git", ".gradle", "build")
         val EXPECTED_EXCLUSIONS = listOf(
             "refactorkit.cli-result/v1 operation-result envelopes",

@@ -80,9 +80,20 @@ class JavaMoveSourceRootPlanner(private val adapter: JavaLanguageAdapter = JavaL
             return refused(snapshot, "sourceRoot.destinationCollision", "Destination collision(s): ${collisions.joinToString()}")
         }
         val edit = WorkspaceEdit(renames)
-        val before = adapter.diagnostics(snapshot)
-        val after = runCatching { adapter.diagnostics(WorkspaceEditSimulator.apply(snapshot, edit)) }
-            .getOrElse { return refused(snapshot, "buildModel.unavailable", "Post-image diagnostics unavailable") }
+        val before = try {
+            adapter.diagnostics(snapshot)
+        } catch (failure: JavaContextAuthorityException) {
+            return refused(snapshot, failure.code, failure.message.orEmpty())
+        } catch (failure: Exception) {
+            return refused(snapshot, "buildModel.unavailable", "Current diagnostics unavailable: ${failure.message}")
+        }
+        val after = try {
+            adapter.diagnostics(WorkspaceEditSimulator.apply(snapshot, edit))
+        } catch (failure: JavaContextAuthorityException) {
+            return refused(snapshot, failure.code, failure.message.orEmpty(), before)
+        } catch (failure: Exception) {
+            return refused(snapshot, "buildModel.unavailable", "Post-image diagnostics unavailable: ${failure.message}", before)
+        }
         val regressions = diagnosticRegressions(before, after)
         if (regressions.isNotEmpty()) {
             val code = if (regressions.any { it.code in setOf("buildModel.unavailable", "classpath.unavailable") }) {

@@ -457,7 +457,7 @@ def verify_mcp_stdio(
                     stream.close()
 
 
-def execute_extracted(root: pathlib.Path, platform: str) -> None:
+def execute_extracted(root: pathlib.Path, platform: str, expected_version: str | None = None) -> None:
     windows = platform.startswith("windows-")
     launcher = root / "refactorkit" / "bin" / ("refactorkit.bat" if windows else "refactorkit")
     command = [str(launcher), "version"]
@@ -468,6 +468,8 @@ def execute_extracted(root: pathlib.Path, platform: str) -> None:
     result = subprocess.run(command, text=True, capture_output=True, timeout=60, env=environment)
     if result.returncode != 0 or "RefactorKit" not in result.stdout or "API" not in result.stdout:
         raise AssertionError(f"extracted launcher failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
+    if expected_version is not None and result.stdout.strip() != f"RefactorKit {expected_version} (API 0.2)":
+        raise AssertionError("extracted runtime version differs from the release version")
 
     mcp_launcher = root / "refactorkit" / "bin" / ("refactorkit-mcp.bat" if windows else "refactorkit-mcp")
     mcp_command = [str(mcp_launcher)]
@@ -483,6 +485,7 @@ def main() -> int:
     parser.add_argument("checksum", type=pathlib.Path)
     parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
     parser.add_argument("--no-execute", action="store_true")
+    parser.add_argument("--expected-version")
     args = parser.parse_args()
     verify_checksum(args.archive, args.checksum)
     with zipfile.ZipFile(args.archive) as archive:
@@ -495,7 +498,10 @@ def main() -> int:
             archive.extractall(root)
             restore_archive_permissions(root, entries)
             if not args.no_execute:
-                execute_extracted(root, args.platform)
+                if args.expected_version is None:
+                    execute_extracted(root, args.platform)
+                else:
+                    execute_extracted(root, args.platform, args.expected_version)
     print(f"Runtime archive verified: {args.archive.name} ({args.platform})")
     return 0
 

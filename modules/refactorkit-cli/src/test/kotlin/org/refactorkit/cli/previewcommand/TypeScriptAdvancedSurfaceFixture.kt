@@ -314,7 +314,7 @@ internal class TypeScriptAdvancedSurfaceFixture(private val surface: String) : A
         val ownership = capabilities.getValue("experimental").jsonObject.getValue("refactorkitSemanticOwnership").jsonObject
         assertEquals("client-managed-native-lsp", ownership.getValue("typescript").jsonPrimitive.content)
         assertEquals("client-managed-native-lsp", ownership.getValue("javascript").jsonPrimitive.content)
-        assertEquals(setOf("cli", "daemon", "mcp"), ownership.getValue("managedMutationSurfaces").jsonArray.map { it.jsonPrimitive.content }.toSet())
+        assertEquals(setOf("cli", "daemon", "mcp", "lsp"), ownership.getValue("managedMutationSurfaces").jsonArray.map { it.jsonPrimitive.content }.toSet())
         assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, requireNotNull(lspRefusal).code)
         assertTrue(requireNotNull(lspRefusal).message.orEmpty().contains("Unknown command"), lspRefusal.toString())
         assertEquals(before, image())

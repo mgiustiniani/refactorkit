@@ -450,7 +450,7 @@ External Maven traversal is descriptor-closed for each source-set projection and
 
 Effective Maven `--release R` for Java 8 through Java 25 requires immutable, licensed, integrity-verified, hash-attested, SBOM-covered Java SE platform signatures for exactly `R`. Source grammar/compliance and compiler release flags are necessary but insufficient. The host JDK and reduced jlink runtime are never silent substitutes. A source-only/no-release configuration must identify an independently qualified JDK platform or make the affected source set unavailable.
 
-Generated source is visible only when safely declared and already materialized. Discovery does not implicitly execute Maven, wrappers, lifecycle goals, plugins, annotation processors, credential helpers/settings credentials, or other project code. Offline/no-network remains the default under ADRs 0010 and 0011. Unnamed/classpath Maven reactors are the first qualification slice; named JPMS/module-path reactors return typed unsupported/unavailable until a dedicated complete slice proves module identity, readability, exports, and module-path semantics.
+Generated source is visible only when safely declared and already materialized. Discovery does not implicitly execute Maven, wrappers, lifecycle goals, plugins, annotation processors, credential helpers/settings credentials, or other project code. Offline/no-network remains the default under ADRs 0010 and 0011. Unnamed/classpath Maven reactors are the first qualification slice; named JPMS/module-path reactors return typed unsupported/unavailable until a dedicated complete slice proves module identity, readability, exports, and module-path semantics. In `java.moveAcrossMavenModules`, absent project SDK authority is normalized to the typed `java.context.sdkRequired` refusal before edit or transaction authority is granted. The bounded behavior and its remaining success boundary are specified in link:../requirements/java-maven-ownership-migration.md[REQ-JAVA-MAVEN-OWNERSHIP-001] and exercised by link:../../features/java-maven-ownership-jpms-authority.feature[its JPMS refusal Story].
 
 Authoritative diagnostic results bind the exact workspace snapshot, overlay/disk mode, Build Model/classpath evidence, source-set and impact closure, Java release/platform signatures, and provider identity/configuration. Default mutation policy rejects introduced or changed errors; strict mode additionally requires zero staged errors. Global source-set authority still blocks on any unavailable affected environment, including baseline unavailability. ADR 0012 defines one narrower, operation-specific Maven `moveClass` mode described below; it never removes the typed `OFFLINE_MISSING` state or claims global authority. Provider failure, evidence drift, or truncation that may hide blockers fails closed. Post-apply and rollback diagnostics attest the committed and restored snapshots respectively.
 
@@ -859,6 +859,23 @@ Typed `BuildLanguageFacet` values carry language, platform, compiler, source/tar
 == Java Analysis and Refactoring
 
 Eclipse JDT Core 3.44 uses JLS25 ASTs with per-module compliance from hash-bound `java.sourceLevel` settings. Maven release/source properties and Gradle toolchain/source compatibility are detected; build descriptors are fingerprinted so post-preview changes invalidate apply. Unconfigured scanned projects default to Java 8, and acceptance covers representative Java 8, 11, 17, 21, and 25 syntax. Maven/Gradle project dependencies are hash-bound; each JDT parse sees only its owning module and transitive declared dependencies, preventing unrelated sibling modules from supplying accidental bindings. Stable operation authority is inventoried in `docs/java-capabilities.md`.
+
+Provider-backed project context is a separate metadata contract. The v6/v7
+context schemas capture compiler options and selected JDK platform/API evidence
+for GA Java 26 and 27 even when the installed JDT parser has not been qualified
+for the declared source level. Such metadata never implies Java 27 parsing,
+bindings, diagnostics, or refactoring support: semantic symbol selection stays
+typed as `java.context.sourceAnalysisUnqualified`. Maven reactor source-level
+refusals also stay independent from classpath availability; an unsupported JDT
+level must not erase otherwise available module dependencies, source roots, or
+provider metadata. The multi-module Java 27 Maven Story, direct packaged-daemon
+smoke and `release-no-bundle` native IDE Maven and Gradle scenarios pass for this
+metadata-only boundary. Both native scenarios preserve project inputs and keep
+semantic analysis explicitly unqualified; the Gradle scenario also builds and
+runs the project and passes its tests. A bundled IDE and Java 27
+parser/refactoring qualification remain separate open evidence. See the
+[Java project-context protocol](../java-project-context-protocol.md) and the
+[v0.8.0 progress record](../releases/v0.8.0-progress.md).
 
 This implementation-informed syntax/compliance baseline is not Maven `--release` API authority. Compliance alone cannot select the exact historical Java SE type/member/module surface, and a running reduced jlink image can omit APIs that belong to the requested release. The active product-critical authority target is ADR 0012 and `RPK-JAVA-DIAG-001..007`; first release-platform rows are implemented, but no complete release-aware Java/Maven diagnostics implementation is claimed here.
 

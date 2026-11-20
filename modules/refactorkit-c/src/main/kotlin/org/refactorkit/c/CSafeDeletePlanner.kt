@@ -22,8 +22,9 @@ import java.nio.file.Path
 class CSafeDeletePlanner(
     private val toolchain: ClangSemanticToolchain,
     private val processManager: ExternalSemanticProcessManager = ExternalSemanticProcessManager(),
+    private val runtimeProvider: ClangToolchainRuntimeProvider = ClangToolchainRuntimeCapture(),
 ) : AutoCloseable {
-    private val client = ClangdSemanticClient(toolchain, processManager)
+    private val client = ClangdSemanticClient(toolchain, processManager, runtimeProvider = runtimeProvider)
     private var started = false
     private var startFailure: String? = null
 
@@ -32,7 +33,9 @@ class CSafeDeletePlanner(
      *
      * The range spans the whole declaration from the first storage/type token to the
      * terminating `;` (or the closing `}` of a function body), so no `static int` prefix
-     * and no multiline body is left behind. Returns null when no definition is found.
+     * and no multiline body is left behind. Returns null when the range is ambiguous,
+     * including another declaration on the same line; null must never be converted
+     * into a partial-name deletion.
      */
     internal fun deletionRange(content: String, symbol: String): SourceRange? {
         val tokens = CTokenizer().tokenize(content)
@@ -49,23 +52,29 @@ class CSafeDeletePlanner(
             if (!isFunction && !isVariable) continue
 
             val startLine = declarationStartLine(tokens, i)
-            val startChar = declarationStartChar(lines, startLine, i, tokens)
-            if (isFunction) {
-                val open = tokens.getOrNull(i + 1) ?: continue
-                val closeParen = matchingToken(tokens, i + 1, "(", ")") ?: continue
-                val afterParams = tokens.getOrNull(closeParen + 1)
-                if (afterParams != null && afterParams.text == "{") {
-                    val bodyClose = matchingToken(tokens, closeParen + 1, "{", "}") ?: continue
-                    val endLine = tokens[bodyClose].line - 1
-                    val endChar = (lines.getOrNull(endLine)?.length ?: 0)
-                    return SourceRange(SourcePosition(startLine, startChar), SourcePosition(endLine, endChar))
+            val startChar = declarationStartChar(lines, startLine)
+            // Line-based range inference cannot safely separate a preceding declaration
+            // or a same-line comment from this symbol's storage/type prefix.
+            if (tokens.take(i).any { it.line - 1 == startLine && it.text in setOf(";", "{", "}") }) return null
+            if (tokens.firstOrNull { it.line - 1 == startLine }?.column != startChar) return null
+            val endToken = if (isFunction) {
+                val closeParen = matchingToken(tokens, i + 1, "(", ")") ?: return null
+                when (tokens.getOrNull(closeParen + 1)?.text) {
+                    "{" -> tokens[matchingToken(tokens, closeParen + 1, "{", "}") ?: return null]
+                    ";" -> tokens[closeParen + 1]
+                    else -> return null
                 }
-                val endLine = tokens[closeParen].line - 1
-                val endChar = semicolonEndChar(lines, tokens, closeParen)
-                return SourceRange(SourcePosition(startLine, startChar), SourcePosition(endLine, endChar))
+            } else {
+                val terminator = (i + 1 until tokens.size).firstOrNull {
+                    tokens[it].text in setOf(";", "{", "}")
+                } ?: return null
+                if (tokens[terminator].text != ";" || tokens.subList(i + 1, terminator).any { it.text == "," }) return null
+                tokens[terminator]
             }
-            val endLine = t.line - 1
-            val endChar = semicolonEndChar(lines, tokens, i)
+            val endLine = endToken.line - 1
+            val endChar = endToken.column + endToken.text.length
+            val endLineText = lines.getOrNull(endLine) ?: return null
+            if (endChar > endLineText.length || endLineText.substring(endChar).isNotBlank()) return null
             return SourceRange(SourcePosition(startLine, startChar), SourcePosition(endLine, endChar))
         }
         return null
@@ -85,24 +94,24 @@ class CSafeDeletePlanner(
         return tokens[start].line - 1
     }
 
-    private fun declarationStartChar(lines: List<String>, startLine: Int, symbolIndex: Int, tokens: List<CToken>): Int {
+    private fun declarationStartChar(lines: List<String>, startLine: Int): Int {
         val lineText = lines.getOrNull(startLine) ?: return 0
         val first = lineText.indexOfFirst { !it.isWhitespace() }
         return if (first >= 0) first else 0
     }
 
-    private fun semicolonEndChar(lines: List<String>, tokens: List<CToken>, fromIndex: Int): Int {
-        var j = fromIndex + 1
-        while (j < tokens.size) {
-            if (tokens[j].text == ";") {
-                val line = tokens[j].line - 1
-                val lineText = lines.getOrNull(line) ?: return 0
-                return lineText.length
-            }
-            j++
+    private fun hasConditionalPreprocessorBranch(content: String): Boolean {
+        // Backslash-newline splicing happens before preprocessing tokenization.
+        val logicalLines = content
+            .replace("??=", "#") // C11/C17 trigraph spelling of the directive marker
+            .replace("??/", "\\") // trigraph backslash participates in line splicing
+            .replace("%:", "#") // C digraph spelling of the directive marker
+            .replace("\\\r\n", " ")
+            .replace("\\\n", " ")
+        val tokensByLine = CTokenizer().tokenize(logicalLines).groupBy { it.line }
+        return tokensByLine.values.any { tokens ->
+            tokens.firstOrNull()?.text == "#" && tokens.getOrNull(1)?.text in CONDITIONAL_DIRECTIVES
         }
-        val line = tokens[fromIndex].line - 1
-        return lines.getOrNull(line)?.length ?: 0
     }
 
     private fun matchingToken(tokens: List<CToken>, openIndex: Int, open: String, close: String): Int? {
@@ -118,7 +127,12 @@ class CSafeDeletePlanner(
 
     fun start(snapshot: ProjectSnapshot) {
         require(!started) { "C safe-delete planner is already started" }
-        client.start(snapshot.workspace.root)
+        try {
+            client.start(snapshot.workspace.root)
+        } catch (failure: CClangdConfigurationException) {
+            startFailure = failure.message ?: "clangd configuration is unavailable"
+            return
+        }
         val opened = snapshot.files
             .filter { it.languageId in setOf("c", "cpp", "objective-c") }
             .sortedBy { it.path.toString() }
@@ -135,7 +149,6 @@ class CSafeDeletePlanner(
     fun startFailure(): String? = startFailure
 
     fun preview(snapshot: ProjectSnapshot, symbol: String): PatchPlan {
-        if (!started) return refused(snapshot, startFailure ?: "C safe-delete planner is not started")
         if (symbol.isBlank() || !symbol.matches(IDENTIFIER)) {
             return refused(snapshot, "Invalid symbol name: '$symbol'")
         }
@@ -144,6 +157,24 @@ class CSafeDeletePlanner(
         if (seed.externOrPublic) {
             return refused(snapshot, "Symbol '$symbol' is extern/public; a binary or external consumer is unavailable, so deletion is refused")
         }
+        val seedSource = snapshot.files.singleOrNull {
+            snapshot.workspace.root.resolve(it.path).normalize() == seed.file.normalize()
+        }?.content ?: return refused(snapshot, "Could not prove the exact deletion range for '$symbol'; safe delete is refused")
+        // clangd observes one active preprocessor configuration at a time. A
+        // conditional branch in this translation unit can hide references in
+        // another configuration, so that view is not complete deletion evidence.
+        if (hasConditionalPreprocessorBranch(seedSource)) {
+            return refused(
+                snapshot,
+                "Conditional preprocessor branches leave the complete reference/configuration set unavailable; safe delete is refused",
+            )
+        }
+        // An ambiguous textual range is sufficient to refuse before semantic
+        // definition/reference queries; an isolated range still needs clangd proof.
+        if (deletionRange(seedSource, symbol) == null) {
+            return refused(snapshot, "Could not prove the exact deletion range for '$symbol'; safe delete is refused")
+        }
+        if (!started) return refused(snapshot, startFailure ?: "C safe-delete planner is not started")
         // Canonicalize the token seed to clangd's binding-matched declaration. If clangd
         // cannot confirm a single declaration, the deletion target is not proven and the
         // operation is refused rather than trusting a token-coincidence position.
@@ -177,7 +208,7 @@ class CSafeDeletePlanner(
         val sourceContent = snapshot.files.singleOrNull { it.path.normalize() == relFile.normalize() ||
             snapshot.workspace.root.resolve(it.path).normalize() == resolved.file.normalize() }?.content
         val range = sourceContent?.let { deletionRange(it, symbol) }
-            ?: SourceRange(SourcePosition(resolved.startLine, resolved.startCharacter), SourcePosition(resolved.endLine, resolved.endCharacter))
+            ?: return refused(snapshot, "Could not prove the exact deletion range for '$symbol'; safe delete is refused")
         val edits = listOf(
             TextEdit(range, ""),
         )
@@ -261,6 +292,7 @@ class CSafeDeletePlanner(
 
     companion object {
         private val IDENTIFIER = Regex("^[A-Za-z_][A-Za-z0-9_]*$")
+        private val CONDITIONAL_DIRECTIVES = setOf("if", "ifdef", "ifndef", "elif", "else", "endif")
         private val TYPE_KEYWORDS = setOf(
             "int", "char", "long", "short", "unsigned", "signed", "float", "double", "void", "_Bool",
             "const", "volatile", "static", "extern", "register", "auto", "inline", "restrict",

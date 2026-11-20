@@ -1,0 +1,1 @@
+{"operation":"c.extractStatements","arguments":{"file":"main.c","symbol":"calculate","helperName":"computeTotal","startByte":"41","endByte":"84"}}

@@ -4,6 +4,7 @@ import org.refactorkit.core.ClasspathEvidence
 import org.refactorkit.core.ClasspathEvidenceKind
 import org.refactorkit.core.Module
 import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.OwnedSourceInventoryReader
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceSetKind
 import org.refactorkit.core.Workspace
@@ -21,12 +22,25 @@ import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.readText
 
+internal const val JAVA_SAFE_DELETE_TEXT_SCAN_VERSION_KEY = "java.safeDelete.textReferenceScan.version"
+internal const val JAVA_SAFE_DELETE_TEXT_SCAN_STATUS_KEY = "java.safeDelete.textReferenceScan.status"
+internal const val JAVA_MAVEN_MODEL_POM_INPUT_COUNT_KEY = "java.maven.modelPomInput.count"
+internal const val JAVA_MAVEN_MODEL_POM_INPUT_PREFIX = "java.maven.modelPomInput."
+internal const val JAVA_SAFE_DELETE_TEXT_SCAN_INPUTS_KEY = "java.safeDelete.textReferenceScan.inputs"
+internal const val JAVA_SAFE_DELETE_TEXT_SCAN_BYTES_KEY = "java.safeDelete.textReferenceScan.bytes"
+internal const val JAVA_SAFE_DELETE_TEXT_SCAN_BINARY_INPUTS_KEY = "java.safeDelete.textReferenceScan.binaryInputs"
+internal const val JAVA_SAFE_DELETE_TEXT_SCAN_UNMODELED_INPUTS_KEY = "java.safeDelete.textReferenceScan.unmodeledInputs"
+private const val JAVA_SAFE_DELETE_TEXT_SCAN_VERSION = "workspace-text-v1"
+private const val SAFE_DELETE_TEXT_LANGUAGE_ID = "java-safe-delete-text"
+
 class JavaProjectScanner(
     private val allowNetworkDependencyResolution: Boolean = false,
     private val localMavenRepository: Path = Path.of(System.getProperty("user.home"), ".m2", "repository"),
     private val activeMavenProfiles: Set<String> = emptySet(),
     private val inactiveMavenProfiles: Set<String> = emptySet(),
     private val selectedMavenDescriptorAuthority: MavenSelectedDescriptorAuthorityContext? = null,
+    private val effectiveGradleModelProvider: ((Path) -> org.refactorkit.core.BuildModel?)? = null,
+    private val effectiveGradleEvidenceProvider: ((Path) -> List<ClasspathEvidence>)? = null,
 ) {
     fun scan(root: Path): ProjectSnapshot = scanInternal(root, includeBuildModels = true)
 
@@ -35,12 +49,13 @@ class JavaProjectScanner(
 
     private fun scanInternal(root: Path, includeBuildModels: Boolean): ProjectSnapshot {
         val normalizedRoot = root.toAbsolutePath().normalize()
+        DeclaredJavaProjectProvider().captureIfDeclared(normalizedRoot, includeBuildModels)?.let { return it }
         val discoveredModuleRoots = detectModuleRoots(normalizedRoot)
         val pomFiles = findBuildFiles(normalizedRoot, "pom.xml")
         val gradleBuildModel = if (
             findBuildFiles(normalizedRoot, "build.gradle").isNotEmpty() ||
             findBuildFiles(normalizedRoot, "build.gradle.kts").isNotEmpty()
-        ) GradleDeclarativeModelBuilder().build(normalizedRoot) else null
+        ) effectiveGradleModelProvider?.invoke(normalizedRoot) ?: GradleDeclarativeModelBuilder().build(normalizedRoot) else null
         val mavenReactor = if (pomFiles.isNotEmpty()) {
             MavenEffectiveReactorBuilder(
                 localMavenRepository,
@@ -57,7 +72,10 @@ class JavaProjectScanner(
                 gradleBuildModel?.modules.orEmpty().map(org.refactorkit.core.BuildModule::root)
         )
             .distinct().sortedBy(Path::toString).ifEmpty { listOf(normalizedRoot) }
-        val moduleNames = moduleRoots.associateWith { moduleName(normalizedRoot, it) }
+        val moduleNames = moduleRoots.associateWith { moduleRoot ->
+            gradleBuildModel?.takeIf { it.providerId == "gradle-effective-v1" }?.modules
+                ?.firstOrNull { it.root == moduleRoot }?.id ?: moduleName(normalizedRoot, moduleRoot)
+        }
         val coordinateNames = mavenByRoot.values
             .filter { it.root in moduleRoots }
             .associate { it.coordinate to moduleNames.getValue(it.root) }
@@ -101,31 +119,42 @@ class JavaProjectScanner(
                     generatedRoot.any { component -> component.toString().contains(hint, ignoreCase = true) }
                 }
             }
-            val generatedMain = discoveredGeneratedMain - pluginTestGenerated.toSet()
-            val generatedTest = (explicitGeneratedTest + pluginTestGenerated).distinct()
+            val effectiveGradleSets = gradle?.sourceSets.orEmpty().takeIf { gradleBuildModel?.providerId == "gradle-effective-v1" }.orEmpty()
+            val generatedMain = (discoveredGeneratedMain - pluginTestGenerated.toSet() + effectiveGradleSets
+                .filter { it.kind == SourceSetKind.MAIN }.flatMap { it.generatedSourceRoots }.map(normalizedRoot::resolve)).distinct()
+            val generatedTest = (explicitGeneratedTest + pluginTestGenerated + effectiveGradleSets
+                .filter { it.kind == SourceSetKind.TEST }.flatMap { it.generatedSourceRoots }.map(normalizedRoot::resolve)).distinct()
             val sourceRoots = (effectiveMainRoots + effectiveTestRoots + gradleCustomRoots + generatedMain + generatedTest)
                 .map(normalizedRoot::relativize).distinct()
-            val conventionalMainOutputs = listOf(
+            val declaredMainOutputs = if (maven != null) listOfNotNull(maven.mainOutputDirectory) else listOf(
                 moduleRoot.resolve("target/classes"),
                 moduleRoot.resolve("build/classes/java/main"),
                 moduleRoot.resolve("build/classes/kotlin/main"),
-            ).filter { it.exists() && it.isDirectory() }
-            val conventionalTestOutputs = listOf(
+            )
+            val declaredTestOutputs = if (maven != null) listOfNotNull(maven.testOutputDirectory) else listOf(
                 moduleRoot.resolve("target/test-classes"),
                 moduleRoot.resolve("build/classes/java/test"),
                 moduleRoot.resolve("build/classes/kotlin/test"),
-            ).filter { it.exists() && it.isDirectory() }
+            )
+            val conventionalMainOutputs = declaredMainOutputs.filter { it.exists() && it.isDirectory() }
+            val conventionalTestOutputs = declaredTestOutputs.filter { it.exists() && it.isDirectory() }
             val localEntries = localJarEntries(moduleRoot) + declaredClasspathEntries(moduleRoot)
             val mainClasspath = if (maven?.modelFailure == null && maven != null) {
                 (conventionalMainOutputs.map(normalizedRoot::relativize) + maven.mainArtifacts).distinct()
+            } else if (gradleBuildModel?.providerId == "gradle-effective-v1" && gradle != null) {
+                gradle.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.classpathEntries.orEmpty()
             } else {
                 (conventionalMainOutputs + localEntries).map(normalizedRoot::relativize).distinct()
             }
             val mainRuntimeClasspath = if (maven?.modelFailure == null && maven != null) {
                 (conventionalMainOutputs.map(normalizedRoot::relativize) + maven.runtimeArtifacts).distinct()
+            } else if (gradleBuildModel?.providerId == "gradle-effective-v1" && gradle != null) {
+                gradle.sourceSets.firstOrNull { it.kind == SourceSetKind.MAIN }?.runtimeClasspathEntries.orEmpty()
             } else mainClasspath
             val testClasspath = if (maven?.modelFailure == null && maven != null) {
-                (mainClasspath + mainRuntimeClasspath + conventionalTestOutputs.map(normalizedRoot::relativize) + maven.testArtifacts).distinct()
+                ((conventionalTestOutputs + conventionalMainOutputs).map(normalizedRoot::relativize) + maven.testArtifacts).distinct()
+            } else if (gradleBuildModel?.providerId == "gradle-effective-v1" && gradle != null) {
+                gradle.sourceSets.firstOrNull { it.kind == SourceSetKind.TEST }?.classpathEntries.orEmpty()
             } else {
                 (mainClasspath + conventionalTestOutputs.map(normalizedRoot::relativize)).distinct()
             }
@@ -137,13 +166,35 @@ class JavaProjectScanner(
                 ?: gradleMainDependencies.ifEmpty { detectModuleDependencies(moduleRoot, legacyIdentities) }
             val testDependencies = maven?.takeIf { it.modelFailure == null }?.testDependencies?.mapNotNull(coordinateNames::get)
                 ?: gradleTestDependencies.ifEmpty { mainDependencies }
+            val mavenSourceLevelRefusal = maven?.unsupportedReleaseValue?.let { release ->
+                JavaProjectSourceLevelPolicy.resolve(release, null) as? JavaProjectSourceLevelDecision.Refused
+            } ?: maven?.unsupportedSourceLevelValue?.let { sourceLevel ->
+                JavaProjectSourceLevelPolicy.resolve(null, sourceLevel) as? JavaProjectSourceLevelDecision.Refused
+            }
             val sourceLevel = maven?.takeIf { it.modelFailure == null }?.sourceLevel
                 ?: gradle?.sourceSets?.firstOrNull { it.kind == SourceSetKind.MAIN }
                     ?.attributes?.get("java.sourceLevel")?.toIntOrNull()
                 ?: detectJavaSourceLevel(moduleRoot)
+            val sourceLevelRefusal = mavenSourceLevelRefusal ?:
+                (JavaProjectSourceLevelPolicy.resolve(null, sourceLevel.toString()) as? JavaProjectSourceLevelDecision.Refused)
             val languageSettings = buildMap {
                 put("java.sourceLevel", sourceLevel.toString())
+                sourceLevelRefusal?.let { refusal ->
+                    put("java.sourceLevel.status", "unavailable")
+                    put("java.sourceLevel.refusalCode", refusal.code)
+                    put("java.sourceLevel.message", refusal.message)
+                }
                 if (maven != null) {
+                    val reactorPoms = mavenReactor?.reactorPomFiles.orEmpty()
+                        .mapTo(hashSetOf()) { it.toAbsolutePath().normalize() }
+                    val effectiveModelPomInputs = maven.modelInputs.asSequence()
+                        .map { it.toAbsolutePath().normalize() }
+                        .filter { it in reactorPoms && it.startsWith(normalizedRoot) }
+                        .filterNot { it == moduleRoot.resolve("pom.xml").toAbsolutePath().normalize() }
+                        .map { normalizedRoot.relativize(it).toString().replace('\\', '/') }
+                        .distinct()
+                        .sorted()
+                        .toList()
                     put("java.buildSystem", "maven")
                     put("java.maven.groupId", maven.coordinate.groupId)
                     put("java.maven.artifactId", maven.coordinate.artifactId)
@@ -223,12 +274,31 @@ class JavaProjectScanner(
                         "java.maven.pomPath",
                         normalizedRoot.relativize(moduleRoot.resolve("pom.xml")).toString().replace('\\', '/'),
                     )
-                    put("java.buildModel.status", if (maven.modelFailure == null) "available" else "unavailable")
+                    put(JAVA_MAVEN_MODEL_POM_INPUT_COUNT_KEY, effectiveModelPomInputs.size.toString())
+                    effectiveModelPomInputs.forEachIndexed { index, path ->
+                        put("$JAVA_MAVEN_MODEL_POM_INPUT_PREFIX$index", path)
+                    }
+                    put("java.buildModel.status", when {
+                        maven.modelFailure != null -> "unavailable"
+                        maven.sourceRootFailure != null -> "partial"
+                        else -> "available"
+                    })
                     maven.modelFailure?.let { put("java.buildModel.message", it) }
-                    put("java.sourceLevel.status", if (maven.sourceLevel == null) "unavailable" else "available")
-                    if (maven.sourceLevel == null) put("java.sourceLevel.message", "Effective Maven source level could not be resolved")
+                    maven.sourceRootFailure?.let { put("java.buildModel.message", it) }
+                    when {
+                        sourceLevelRefusal != null -> Unit
+                        maven.sourceLevel == null -> {
+                            put("java.sourceLevel.status", "unavailable")
+                            put("java.sourceLevel.message", "Effective Maven source level could not be resolved")
+                        }
+                        else -> put("java.sourceLevel.status", "available")
+                    }
                     maven.releaseLevel?.let { put("java.release", it.toString()) }
-                    put("java.platformSelection", if (maven.releaseLevel == null) "explicit-jdk-required" else "maven-release")
+                    put("java.platformSelection", when {
+                        sourceLevelRefusal != null -> "unsupported"
+                        maven.releaseLevel == null -> "explicit-jdk-required"
+                        else -> "maven-release"
+                    })
                     put("kotlin.platform", if (maven.kotlinPluginConfigured) "jvm" else "unconfigured")
                     maven.kotlinJvmTarget?.let { put("kotlin.jvmTarget", it) }
                     maven.kotlinTargetJdk?.let { put("kotlin.targetJdk", it) }
@@ -397,16 +467,8 @@ class JavaProjectScanner(
                 testClasspathEntries = testClasspath,
                 mainDependencies = mainDependencies.distinct().sorted(),
                 testDependencies = (mainDependencies + testDependencies).distinct().sorted(),
-                mainOutputDirectories = listOf(
-                    moduleRoot.resolve("target/classes"),
-                    moduleRoot.resolve("build/classes/java/main"),
-                    moduleRoot.resolve("build/classes/kotlin/main"),
-                ).map(normalizedRoot::relativize),
-                testOutputDirectories = listOf(
-                    moduleRoot.resolve("target/test-classes"),
-                    moduleRoot.resolve("build/classes/java/test"),
-                    moduleRoot.resolve("build/classes/kotlin/test"),
-                ).map(normalizedRoot::relativize),
+                mainOutputDirectories = declaredMainOutputs.map(normalizedRoot::relativize),
+                testOutputDirectories = declaredTestOutputs.map(normalizedRoot::relativize),
             )
         }
         val initialByName = initialModules.associateBy(Module::name)
@@ -415,8 +477,7 @@ class JavaProjectScanner(
             return (module.mainDependencies + module.testDependencies).distinct().firstNotNullOfOrNull { dependencyName ->
                 val dependency = initialByName[dependencyName] ?: return@firstNotNullOfOrNull null
                 if (dependency.languageSettings["java.buildModel.status"] == "unavailable" ||
-                    dependency.languageSettings["java.classpath.status"] == "unavailable" ||
-                    dependency.languageSettings["java.sourceLevel.status"] == "unavailable") dependencyName
+                    dependency.languageSettings["java.classpath.status"] == "unavailable") dependencyName
                 else unavailableDependency(dependency, seen + module.name)
             }
         }
@@ -430,24 +491,34 @@ class JavaProjectScanner(
         }
 
         val sourceRoots = modules.flatMap { module -> module.sourceRoots.map(normalizedRoot::resolve) }.distinct()
-        val files = sourceRoots.flatMap { sourceRoot ->
-            if (!sourceRoot.exists()) emptyList() else Files.walk(sourceRoot).use { stream ->
-                stream
-                    .filter { path ->
-                        Files.isRegularFile(path) &&
-                            path.fileName.toString().substringAfterLast('.', "") in JVM_SOURCE_EXTENSIONS
-                    }
-                    .map { path ->
-                        val extension = path.fileName.toString().substringAfterLast('.', "")
-                        SourceFile(normalizedRoot.relativize(path), path.readText(), JVM_LANGUAGE_IDS.getValue(extension))
-                    }
-                    .collect(Collectors.toList())
-            }
-        }.distinctBy(SourceFile::path).sortedBy { it.path.toString() }
+        val files = OwnedSourceInventoryReader(
+            JVM_LANGUAGE_IDS, ignoredDirectories = emptySet(), allowMissingRoot = true,
+        ).captureSourceRoots(normalizedRoot, sourceRoots.map {
+            normalizedRoot.relativize(it.toAbsolutePath().normalize())
+        }).sources
 
         val systemPathArtifacts = mavenReactor?.modules?.values.orEmpty()
             .flatMap(MavenModuleModel::systemPathArtifacts).map { it.toAbsolutePath().normalize() }.toSet()
         val classpathEvidence = buildList {
+            addAll(effectiveGradleEvidenceProvider?.invoke(normalizedRoot).orEmpty())
+            gradleBuildModel?.takeIf { it.providerId == "gradle-effective-v1" }?.modules.orEmpty().flatMap { it.sourceSets }
+                .flatMap { it.classpathEntries + it.runtimeClasspathEntries }.distinct().forEach { path ->
+                    add(ClasspathEvidence.capture(normalizedRoot, path, ClasspathEvidenceKind.ENTRY))
+                }
+            gradleBuildModel?.takeIf { it.providerId == "gradle-effective-v1" }?.modules.orEmpty().forEach { module ->
+                module.sourceSets.flatMap { sourceSet ->
+                    compilerModulePathEntries(sourceSet.compilerOptions, module.root)
+                }.distinct().forEach { path ->
+                    add(ClasspathEvidence.capture(normalizedRoot, path, ClasspathEvidenceKind.ENTRY))
+                }
+                module.sourceSets.flatMap { sourceSet ->
+                    sourceSet.annotationProcessors?.let { processors ->
+                        processors.processorPathEntries + processors.processorPath.map { it.path }
+                    }.orEmpty()
+                }.distinct().forEach { path ->
+                    add(ClasspathEvidence.capture(normalizedRoot, path, ClasspathEvidenceKind.ENTRY))
+                }
+            }
             modules.flatMap(Module::classpathEntries).forEach { path ->
                 val kind = when {
                     path.isAbsolute && path.toAbsolutePath().normalize() in systemPathArtifacts ->
@@ -457,8 +528,21 @@ class JavaProjectScanner(
                 }
                 add(ClasspathEvidence.capture(normalizedRoot, path, kind))
             }
+            mavenReactor?.modules?.values.orEmpty().forEach { maven ->
+                (maven.mainAnnotationProcessors.processorPathEntries + maven.testAnnotationProcessors.processorPathEntries +
+                    maven.mainAnnotationProcessors.processorPath.map { it.path } +
+                    maven.testAnnotationProcessors.processorPath.map { it.path } +
+                    compilerModulePathEntries(maven.mainCompilerOptions, maven.root) +
+                    compilerModulePathEntries(maven.testCompilerOptions, maven.root))
+                    .distinct().forEach { path ->
+                        add(ClasspathEvidence.capture(normalizedRoot, path, ClasspathEvidenceKind.ENTRY))
+                    }
+            }
             moduleRoots.forEach { moduleRoot ->
-                conventionalOutputDirectories(moduleRoot).forEach { path ->
+                val declaredOutputs = mavenByRoot[moduleRoot]?.let { maven ->
+                    listOfNotNull(maven.mainOutputDirectory, maven.testOutputDirectory)
+                } ?: conventionalOutputDirectories(moduleRoot)
+                declaredOutputs.forEach { path ->
                     add(ClasspathEvidence.capture(normalizedRoot, normalizedRoot.relativize(path), ClasspathEvidenceKind.ENTRY))
                 }
                 localJarDirectories(moduleRoot).forEach { path ->
@@ -469,6 +553,11 @@ class JavaProjectScanner(
                 }
             }
             val reactorPoms = mavenReactor?.reactorPomFiles.orEmpty()
+            // Aggregator and parent POMs remain authoritative even without a source module.
+            reactorPoms.forEach { pom ->
+                add(ClasspathEvidence.capture(normalizedRoot, evidencePath(normalizedRoot, pom),
+                    ClasspathEvidenceKind.DECLARATION_FILE))
+            }
             mavenReactor?.modules?.values.orEmpty().flatMap { it.modelInputs }
                 .filterNot { it.toAbsolutePath().normalize() in reactorPoms }.forEach { input ->
                     val path = evidencePath(normalizedRoot, input)
@@ -501,13 +590,43 @@ class JavaProjectScanner(
                 readExpectedEvidence(evidence)?.let { content -> evidence to content }
             }
         }.distinctBy { it.first }.sortedBy { it.first.toString() }
-        val auxiliaryFiles = (
-            pomFiles.filter { it.startsWith(normalizedRoot) }.map { pom ->
+        val gradleKotlinScripts = listOf("settings.gradle.kts", "build.gradle.kts")
+            .flatMap { name -> findBuildFiles(normalizedRoot, name) }
+            .distinct().sortedBy(Path::toString)
+        val baseAuxiliaryFiles = (
+            (mavenReactor?.reactorPomFiles ?: pomFiles.toSet()).filter { it.startsWith(normalizedRoot) }.map { pom ->
                 SourceFile(normalizedRoot.relativize(pom), pom.readText(), "maven-pom")
+            } + gradleKotlinScripts.map { script ->
+                // Gradle Kotlin DSL is captured as a script host input, never as Kotlin/JVM source.
+                SourceFile(normalizedRoot.relativize(script), script.readText(), "kotlin")
             } + expectedEvidenceFiles.map { (evidence, content) ->
                 SourceFile(normalizedRoot.relativize(evidence), content, "refactorkit-expected-evidence")
             }
         ).sortedBy { it.path.toString() }
+        val safeDeleteTextScan = scanSafeDeleteTextInputs(
+            normalizedRoot,
+            files.mapTo(mutableSetOf()) { it.path.normalize() },
+            baseAuxiliaryFiles.mapTo(mutableSetOf()) { it.path.normalize() },
+            baseAuxiliaryFiles.filter { it.languageId == "maven-pom" || it.languageId == "kotlin" },
+        )
+        val auxiliaryFiles = (baseAuxiliaryFiles + safeDeleteTextScan.files)
+            .distinctBy { it.path.normalize() }
+            .sortedBy { it.path.toString() }
+        val safeDeleteTextScanAttributes = mapOf(
+            JAVA_SAFE_DELETE_TEXT_SCAN_VERSION_KEY to JAVA_SAFE_DELETE_TEXT_SCAN_VERSION,
+            JAVA_SAFE_DELETE_TEXT_SCAN_STATUS_KEY to if (safeDeleteTextScan.complete) "complete" else "incomplete",
+            JAVA_SAFE_DELETE_TEXT_SCAN_INPUTS_KEY to safeDeleteTextScan.inputCount.toString(),
+            JAVA_SAFE_DELETE_TEXT_SCAN_BYTES_KEY to safeDeleteTextScan.bytes.toString(),
+            JAVA_SAFE_DELETE_TEXT_SCAN_BINARY_INPUTS_KEY to safeDeleteTextScan.binaryInputCount.toString(),
+            JAVA_SAFE_DELETE_TEXT_SCAN_UNMODELED_INPUTS_KEY to safeDeleteTextScan.unmodeledInputCount.toString(),
+        )
+        val projectBuildModels = if (includeBuildModels) {
+            buildModels(modules, gradleBuildModel, mavenByRoot, normalizedRoot).map { model ->
+                model.copy(attributes = model.attributes + safeDeleteTextScanAttributes)
+            }
+        } else {
+            emptyList()
+        }
         return ProjectSnapshot(
             workspace = Workspace(normalizedRoot),
             modules = modules,
@@ -515,12 +634,182 @@ class JavaProjectScanner(
             sourceExtensions = ProjectSnapshot.inferSourceExtensions(files),
             ignoredDirectories = ProjectSnapshot.DEFAULT_IGNORED_DIRECTORIES,
             classpathEvidence = classpathEvidence,
-            buildModels = if (includeBuildModels) buildModels(modules, gradleBuildModel) else emptyList(),
+            buildModels = projectBuildModels,
             auxiliaryFiles = auxiliaryFiles,
         )
     }
 
-    private fun buildModels(modules: List<Module>, gradleBuildModel: org.refactorkit.core.BuildModel?) = modules
+    private fun scanSafeDeleteTextInputs(
+        workspaceRoot: Path,
+        sourcePaths: Set<Path>,
+        alreadyCapturedPaths: Set<Path>,
+        baseTextInputs: List<SourceFile>,
+    ): SafeDeleteTextScan {
+        val walk = runCatching {
+            Files.walk(workspaceRoot).use { stream ->
+                val paths = stream.filter { path ->
+                    path != workspaceRoot && !isIgnoredDirectory(workspaceRoot, path)
+                }.sorted().collect(Collectors.toList())
+                val hasSymbolicLinks = paths.any(Files::isSymbolicLink)
+                val candidates = paths.filter { path ->
+                    Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(path)
+                }.filter { path ->
+                    val relative = workspaceRoot.relativize(path).normalize()
+                    if (relative in sourcePaths || relative in alreadyCapturedPaths) return@filter false
+                    // Reserved snapshot-bound evidence is read only by its dedicated
+                    // bounded verifier. Never admit a rejected manifest through the
+                    // broader text scan as a generic auxiliary file.
+                    if (path.fileName.toString() in EXPECTED_EVIDENCE_MANIFEST_NAMES) return@filter false
+                    isResourcePath(relative) ||
+                        path.fileName.toString().substringAfterLast('.', "").lowercase() in
+                        SAFE_DELETE_TEXT_EXTENSIONS
+                }
+                val unmodeledInputCount = paths.count { path ->
+                    if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(path)) return@count false
+                    val relative = workspaceRoot.relativize(path).normalize()
+                    relative !in sourcePaths && relative !in alreadyCapturedPaths &&
+                        path.fileName.toString() !in EXPECTED_EVIDENCE_MANIFEST_NAMES &&
+                        !isResourcePath(relative) &&
+                        path.fileName.toString().substringAfterLast('.', "").lowercase() !in SAFE_DELETE_TEXT_EXTENSIONS
+                }
+                SafeDeleteTextWalk(candidates, hasSymbolicLinks, unmodeledInputCount)
+            }
+        }.getOrElse {
+            return SafeDeleteTextScan(
+                emptyList(), complete = false, inputCount = 0, bytes = 0, binaryInputCount = 0,
+                unmodeledInputCount = 0,
+            )
+        }
+
+        val candidates = walk.paths
+        var complete = candidates.size + baseTextInputs.size <= MAX_SAFE_DELETE_TEXT_INPUTS && !walk.hasSymbolicLinks
+        var totalBytes = 0L
+        var binaryInputCount = 0
+        val captured = mutableListOf<SourceFile>()
+        val orderedBaseInputs = baseTextInputs.sortedBy { it.path.toString() }
+        val baseInputsToVerify = orderedBaseInputs.take(MAX_SAFE_DELETE_TEXT_INPUTS)
+        for (input in baseInputsToVerify) {
+            val path = workspaceRoot.resolve(input.path).normalize()
+            val before = runCatching {
+                Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+            }.getOrNull()
+            if (before == null || before.size() > MAX_SAFE_DELETE_TEXT_INPUT_BYTES ||
+                totalBytes + before.size() > MAX_SAFE_DELETE_TEXT_TOTAL_BYTES
+            ) {
+                complete = false
+                continue
+            }
+            val read = readStableUtf8Text(path)
+            if (read == null) {
+                complete = false
+                continue
+            }
+            if (read.containsNul || read.content != input.content || totalBytes + read.bytes.size > MAX_SAFE_DELETE_TEXT_TOTAL_BYTES) {
+                complete = false
+                continue
+            }
+            totalBytes += read.bytes.size
+        }
+        val remainingInputSlots = (MAX_SAFE_DELETE_TEXT_INPUTS - baseInputsToVerify.size).coerceAtLeast(0)
+        for (path in candidates.take(remainingInputSlots)) {
+            val relative = workspaceRoot.relativize(path).normalize()
+            val before = runCatching {
+                Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+            }.getOrNull()
+            if (before == null || !before.isRegularFile || Files.isSymbolicLink(path)) {
+                complete = false
+                continue
+            }
+            if (before.size() > MAX_SAFE_DELETE_TEXT_INPUT_BYTES ||
+                totalBytes + before.size() > MAX_SAFE_DELETE_TEXT_TOTAL_BYTES
+            ) {
+                complete = false
+                continue
+            }
+            val read = readStableUtf8Text(path)
+            if (read == null) {
+                complete = false
+                continue
+            }
+            if (totalBytes + read.bytes.size > MAX_SAFE_DELETE_TEXT_TOTAL_BYTES) {
+                complete = false
+                continue
+            }
+            totalBytes += read.bytes.size
+            if (read.containsNul) {
+                // Binary resources are outside the textual reference model, but their input bytes
+                // still count against the scan budget. Keep their count in the snapshot so a
+                // semantic refactoring cannot mistake an unparsed binary resource for closure.
+                binaryInputCount++
+                continue
+            }
+            captured += SourceFile(relative, read.content, SAFE_DELETE_TEXT_LANGUAGE_ID)
+        }
+        val scannedInputCount = baseInputsToVerify.size + candidates.take(remainingInputSlots).size
+        return SafeDeleteTextScan(
+            captured.sortedBy { it.path.toString() }, complete, scannedInputCount, totalBytes, binaryInputCount,
+            walk.unmodeledInputCount,
+        )
+    }
+
+    private fun readStableUtf8Text(path: Path): SafeDeleteTextRead? {
+        val before = runCatching {
+            Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        }.getOrNull() ?: return null
+        if (!before.isRegularFile || Files.isSymbolicLink(path) || before.size() > MAX_SAFE_DELETE_TEXT_INPUT_BYTES) {
+            return null
+        }
+        val bytes = runCatching {
+            Files.newInputStream(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS).use { input ->
+                input.readNBytes(MAX_SAFE_DELETE_TEXT_INPUT_BYTES + 1)
+            }
+        }.getOrNull() ?: return null
+        if (bytes.size > MAX_SAFE_DELETE_TEXT_INPUT_BYTES) return null
+        val after = runCatching {
+            Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        }.getOrNull() ?: return null
+        if (before.fileKey() != after.fileKey() || before.size() != after.size() ||
+            before.lastModifiedTime() != after.lastModifiedTime()
+        ) return null
+        val content = runCatching {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes))
+                .toString()
+        }.getOrNull() ?: return null
+        return SafeDeleteTextRead(bytes, content, bytes.any { it == 0.toByte() })
+    }
+
+    private fun isResourcePath(path: Path): Boolean = path.any { it.toString().equals("resources", ignoreCase = true) }
+
+    private data class SafeDeleteTextScan(
+        val files: List<SourceFile>,
+        val complete: Boolean,
+        val inputCount: Int,
+        val bytes: Long,
+        val binaryInputCount: Int,
+        val unmodeledInputCount: Int,
+    )
+
+    private data class SafeDeleteTextWalk(
+        val paths: List<Path>,
+        val hasSymbolicLinks: Boolean,
+        val unmodeledInputCount: Int,
+    )
+
+    private data class SafeDeleteTextRead(
+        val bytes: ByteArray,
+        val content: String,
+        val containsNul: Boolean,
+    )
+
+    private fun buildModels(
+        modules: List<Module>,
+        gradleBuildModel: org.refactorkit.core.BuildModel?,
+        mavenModules: Map<Path, MavenModuleModel>,
+        workspaceRoot: Path,
+    ) = modules
         .groupBy { it.languageSettings["java.buildSystem"] ?: "conventional" }
         .toSortedMap()
         .map { (buildSystem, providerModules) ->
@@ -531,8 +820,10 @@ class JavaProjectScanner(
                         allowNetworkDependencyResolution,
                         activeMavenProfiles,
                         inactiveMavenProfiles,
+                        effectiveMavenModules = mavenModules,
+                        workspaceRoot = workspaceRoot,
                     )
-                "gradle" -> gradleBuildModel?.let { enrichGradleModel(it, providerModules) }
+                "gradle" -> gradleBuildModel?.let { if (it.providerId == "gradle-effective-v1") it else enrichGradleModel(it, providerModules) }
                     ?: GradleDeclarativeBuildModelProvider().project(providerModules)
                 else -> ConventionalJavaBuildModelProvider().project(providerModules)
             }
@@ -751,7 +1042,7 @@ class JavaProjectScanner(
                 ).mapNotNull { it.find(text)?.groupValues?.get(1)?.toJavaLevelOrNull() }
             }
         }
-        return candidates.firstOrNull { it in 8..25 } ?: 8
+        return candidates.firstOrNull() ?: 8
     }
 
     private fun String.resolveMavenValue(pom: String): String {
@@ -789,10 +1080,35 @@ class JavaProjectScanner(
 
     private fun isIgnoredDirectory(workspaceRoot: Path, path: Path): Boolean {
         val relative = workspaceRoot.relativize(path).toString().replace('\\', '/')
-        return relative.split('/').withIndex().any { (index, component) ->
-            component in setOf(".gradle", ".git", ".refactorkit") ||
-                (component in setOf("build", "target") && index > 0)
+        return relative.split('/').any { component ->
+            component in setOf(".gradle", ".git", ".refactorkit", "build", "target")
         }
+    }
+
+    private fun compilerModulePathEntries(options: List<org.refactorkit.core.BuildCompilerOption>, moduleRoot: Path): List<Path> {
+        val values = options.filter { it.name == "compilerArg" }.map(org.refactorkit.core.BuildCompilerOption::value)
+        val raw = buildList {
+            var index = 0
+            while (index < values.size) {
+                val value = values[index]
+                when {
+                    value in setOf("--module-path", "-p") -> {
+                        values.getOrNull(index + 1)?.let(::add)
+                        index++
+                    }
+                    value.startsWith("--module-path=") -> add(value.substringAfter('='))
+                    value.startsWith("-p=") -> add(value.substringAfter('='))
+                }
+                index++
+            }
+            options.filter { it.name == "compilerArgument" }.forEach { option ->
+                Regex("(?:--module-path|-p)\\s*(?:=|\\s)\\s*([^\\s]+)").find(option.value)?.groupValues?.getOrNull(1)?.let(::add)
+            }
+        }
+        return raw.flatMap { value -> value.split(java.io.File.pathSeparatorChar) }
+            .mapNotNull { value -> runCatching { Path.of(value) }.getOrNull() }
+            .map { path -> (if (path.isAbsolute) path else moduleRoot.resolve(path)).toAbsolutePath().normalize() }
+            .distinct()
     }
 
     companion object {
@@ -803,5 +1119,13 @@ class JavaProjectScanner(
             ".refactorkit-generated-root-inventory.properties",
         )
         private const val MAX_EXPECTED_EVIDENCE_BYTES = 16 * 1024
+        private const val MAX_SAFE_DELETE_TEXT_INPUTS = 8_192
+        private const val MAX_SAFE_DELETE_TEXT_INPUT_BYTES = 1_048_576
+        private const val MAX_SAFE_DELETE_TEXT_TOTAL_BYTES = 33_554_432L
+        private val SAFE_DELETE_TEXT_EXTENSIONS = setOf(
+            "cfg", "conf", "config", "cql", "ddl", "dml", "gradle", "groovy", "graphql",
+            "gql", "hql", "htm", "html", "ini", "java", "jpql", "js", "json", "kt", "kts",
+            "properties", "sql", "toml", "txt", "xml", "yaml", "yml",
+        )
     }
 }

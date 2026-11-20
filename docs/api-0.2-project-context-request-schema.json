@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.org/schemas/api-0.2-project-context-request.json",
+  "title": "RefactorKit API 0.2 project.context params",
+  "description": "SDK home is explicit per request. A module may be selected with exactly one sourceSetId or sourceSetKind; kind selection is resolved only within the requested provider/module and refuses when more than one row matches. Legacy module/source-set selectors must resolve to one provider row; providerId may be supplied with both selectors to disambiguate and produces the v3 response. requiredFacts can demand complete source-root provenance, compiler options, artifact coordinates, annotation-processor configuration, or JPMS context. Absolute Java paths belong to organize-imports; sourceRelativePath here is relative to a declared source root. ARC42 owns integrated status.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "expectedSnapshotHash"
+  ],
+  "properties": {
+    "expectedSnapshotHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "includeGradleBuildTreeProjectPaths": {
+      "type": "boolean",
+      "description": "Opt in to the evaluated composite project path on project.context.aggregate, provider-qualified project.context, or project.context.v7 when that method advertises gradleBuildTreeProjectPath. True on project.context requires providerId. Omission and false preserve the default response shape."
+    },
+    "expectedContextHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sdkHome": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "providerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "moduleId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "sourceSetId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "sourceSetKind": {
+      "enum": [
+        "main",
+        "test",
+        "integration-test",
+        "custom"
+      ]
+    },
+    "sourceRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "requiredFacts": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 5,
+      "items": {
+        "enum": [
+          "source-root-provenance",
+          "compiler-options",
+          "artifact-coordinates",
+          "annotation-processors",
+          "jpms"
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "not": {
+        "required": [
+          "sourceSetId",
+          "sourceSetKind"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "moduleId"
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "required": [
+              "sourceSetId"
+            ]
+          },
+          {
+            "required": [
+              "sourceSetKind"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "sourceSetId"
+            ]
+          },
+          {
+            "required": [
+              "sourceSetKind"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "moduleId"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "providerId"
+        ]
+      },
+      "then": {
+        "required": [
+          "moduleId"
+        ]
+      }
+    }
+  ]
+}

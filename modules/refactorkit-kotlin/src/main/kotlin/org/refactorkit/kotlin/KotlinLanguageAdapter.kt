@@ -80,7 +80,7 @@ class KotlinLanguageAdapter(
     override fun findReferences(symbolId: SymbolId): List<Reference> = emptyList()
 
     override fun diagnostics(project: ProjectSnapshot): List<Diagnostic> = when {
-        project.files.none { it.languageId == languageId() } -> emptyList()
+        project.trackedFiles.none { it.languageId == languageId() } -> emptyList()
         compilerDiagnostics == null -> listOf(compilerNotConfigured())
         else -> requireNotNull(compilerSession).analyze(project).diagnostics
     }

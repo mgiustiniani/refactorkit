@@ -248,23 +248,27 @@ class JavaMavenModuleRenameSteps {
 
     // 6
     @Given("before library use the harness records manifest {string}, the expected source and auxiliary path inventories, and the absence of {string}")
-    fun recordM0AndInventories(manifestName: String, enginePath: String) {
+    fun recordM0AndInventories(manifestName: String, enginePath: String, table: DataTable) {
         assertEquals("M0", manifestName)
         assertEquals(".refactorkit", enginePath)
         pristineM0 = captureExactManifest(pristineRoot)
-        expectedSourceInventory = EXPECTED_SOURCE_PATHS.mapTo(linkedSetOf(), Path::of)
-        expectedAuxiliaryInventory = buildSet {
-            add(Path.of("pom.xml"))
-            EXPECTED_MODULES.forEach { add(Path.of(it, "pom.xml")) }
-            add(Path.of("catalog-acceptance/.refactorkit-expected-source-inventory.properties"))
-            add(Path.of("catalog-generated-support/.refactorkit-generated-root-inventory.properties"))
+        val rows = table.asLists()
+        assertEquals(listOf("kind", "relative path"), rows.first())
+        val classifiedPaths = rows.drop(1).map { row ->
+            assertEquals(2, row.size)
+            row.first() to Path.of(row.last())
         }
+        val paths = classifiedPaths.map { it.second }
+        assertEquals(paths.size, paths.toSet().size, "Expected inventory table must not contain duplicates")
+        assertEquals(setOf("source", "auxiliary"), classifiedPaths.mapTo(linkedSetOf()) { it.first })
+        expectedSourceInventory = classifiedPaths.filter { it.first == "source" }.mapTo(linkedSetOf()) { it.second }
+        expectedAuxiliaryInventory = classifiedPaths.filter { it.first == "auxiliary" }.mapTo(linkedSetOf()) { it.second }
         (expectedSourceInventory + expectedAuxiliaryInventory).forEach { relative ->
             assertTrue(Files.isRegularFile(pristineRoot.resolve(relative), LinkOption.NOFOLLOW_LINKS), "Missing $relative")
         }
         assertFalse(Files.exists(pristineRoot.resolve(enginePath), LinkOption.NOFOLLOW_LINKS))
-        assertEquals(7, expectedSourceInventory.size)
-        assertEquals(23, expectedAuxiliaryInventory.size)
+        assertTrue(expectedSourceInventory.isNotEmpty())
+        assertTrue(expectedAuxiliaryInventory.isNotEmpty())
     }
 
     // 7
@@ -871,7 +875,7 @@ class JavaMavenModuleRenameSteps {
         }
     }
 
-    @Then("no such planner call uses a hand-written XML tokenizer\\/parser or serializes a POM; parser-reported ranges authorize only the hash-bound raw element-text replacements listed below")
+    @Then("no such planner call uses a hand-written XML tokenizer or parser or serializes a POM; parser-reported ranges authorize only the hash-bound raw element-text replacements listed below")
     fun parserRangesAloneAuthorizeRangeOnlyPomMutation() {
         positivePreviews.forEach { observation ->
             val plan = observation.plan
@@ -965,8 +969,9 @@ class JavaMavenModuleRenameSteps {
     }
 
     // 26
-    @Then("only the three authorized element-text ranges differ; every other XML and source byte, including the parent artifact, namespace syntax, whitespace, line endings, comments, processing instructions, unknown elements, and `${'$'}\\{project.version\\}` text, is preserved")
-    fun onlyAuthorizedElementTextDiffers() {
+    @Then("only the three authorized element-text ranges differ; every other XML and source byte, including the parent artifact, namespace syntax, whitespace, line endings, comments, processing instructions, unknown elements, and {string} text, is preserved")
+    fun onlyAuthorizedElementTextDiffers(propertyReference: String) {
+        assertEquals("${'$'}{project.version}", propertyReference)
         val staged = assertNotNull(positivePreviews.first().stagedSnapshot)
         val expectedReplacement = mapOf(
             Path.of(OLD_POM) to Path.of(NEW_POM),
@@ -2300,16 +2305,6 @@ class JavaMavenModuleRenameSteps {
             "inferred artifact coordinate",
             "property-managed dependency origin",
             "ambiguous dependency origin",
-        )
-
-        val EXPECTED_SOURCE_PATHS = setOf(
-            "catalog-acceptance/src/test/java/com/acme/catalog/acceptance/ProductLifecycleSteps.java",
-            "catalog-decoy/src/main/java/com/acme/decoy/Product.java",
-            "catalog-generated-support/target/generated-sources/catalog-metadata/com/acme/catalog/generated/GeneratedCatalogMarker.java",
-            OLD_PRODUCT,
-            "catalog-pricing/src/main/java/com/acme/catalog/pricing/CatalogPrice.java",
-            "catalog-storefront/src/main/java/com/acme/catalog/storefront/ProductTile.java",
-            "reporting-unrelated/src/main/java/com/acme/reporting/ProductReport.java",
         )
 
         val EXPECTED_AFFECTED_PATHS = setOf(

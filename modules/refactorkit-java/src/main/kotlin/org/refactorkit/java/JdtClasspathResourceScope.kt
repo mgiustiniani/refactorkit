@@ -29,7 +29,7 @@ internal class JdtClasspathResourceScope : AutoCloseable {
             ICompilationUnitResolver::class.java.classLoader,
             arrayOf(ICompilationUnitResolver::class.java),
         ) { _, method, arguments ->
-            captureArchives(arguments)
+            captureArchives(arguments.orEmpty().asIterable())
             try {
                 method.invoke(delegate, *(arguments ?: emptyArray()))
             } catch (failure: InvocationTargetException) {
@@ -39,14 +39,20 @@ internal class JdtClasspathResourceScope : AutoCloseable {
         field.set(parser, proxy)
     }
 
-    private fun captureArchives(arguments: Array<out Any?>?) {
-        arguments.orEmpty().forEach { argument ->
-            val values = argument as? List<*> ?: return@forEach
-            values.filterIsInstance<ClasspathJar>().forEach { archive ->
-                synchronized(this) {
-                    check(!closed) { "JDT supplied a classpath archive after its analysis scope closed" }
-                    if (identities.add(archive)) archives += archive
-                }
+    internal fun trackClasspaths(arguments: Iterable<*>) {
+        captureArchives(arguments)
+    }
+
+    private fun captureArchives(arguments: Iterable<*>) {
+        val found = arguments.flatMap { argument -> when (argument) {
+            is ClasspathJar -> listOf(argument)
+            is Iterable<*> -> argument.filterIsInstance<ClasspathJar>()
+            else -> emptyList()
+        } }
+        found.forEach { archive ->
+            synchronized(this) {
+                check(!closed) { "JDT supplied a classpath archive after its analysis scope closed" }
+                if (identities.add(archive)) archives += archive
             }
         }
     }

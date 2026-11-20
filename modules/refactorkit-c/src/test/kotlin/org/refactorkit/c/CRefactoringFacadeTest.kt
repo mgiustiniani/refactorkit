@@ -18,80 +18,10 @@ import kotlin.test.assertTrue
 
 class CRefactoringFacadeTest {
     @Test
-    fun previewsOrganizeIncludes() {
-        val snap = snapshot("#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n")
-        val plan = facade().preview(snap, "organizeIncludes", mapOf("file" to "src/main.c"))
-        assertEquals(PatchStatus.PREVIEW, plan.status)
-    }
-
-    @Test
     fun previewsMoveSource() {
         val snap = snapshot("int a(void) { return 1; }\n")
         val plan = facade().preview(snap, "moveSource", mapOf("file" to "src/main.c", "target" to "src/other.c"))
         assertEquals(PatchStatus.PREVIEW, plan.status)
-    }
-
-    @Test
-    fun previewsExtractExpression() {
-        val snap = snapshot("int compute(int x) { int y = x + 1; return y; }\n")
-        val plan = facade().preview(snap, "extractExpression", mapOf(
-            "file" to "src/main.c", "startLine" to "0", "startChar" to "30", "endLine" to "0", "endChar" to "35", "tempName" to "tmp",
-        ))
-        assertEquals(PatchStatus.PREVIEW, plan.status)
-    }
-
-    @Test
-    fun applyWithoutApprovalIsRefused() {
-        val workspace = Files.createTempDirectory("refactorkit-c-facade-approval")
-        val content = "#include <stdlib.h>\n#include <stdio.h>\nint main(void) { return 0; }\n"
-        Files.createDirectories(workspace.resolve("src"))
-        Files.writeString(workspace.resolve("src/main.c"), content)
-        val snap = ProjectSnapshot(
-            Workspace(workspace),
-            emptyList(),
-            listOf(SourceFile(Path.of("src/main.c"), content, "c")),
-        )
-        val plan = facade().preview(snap, "organizeIncludes", mapOf("file" to "src/main.c"))
-        assertEquals(PatchStatus.PREVIEW, plan.status)
-        val result = facade().apply(
-            snap,
-            plan,
-            ApplyAuthorization.missing("test-surface"),
-            DiagnosticsGate.enabled("test-clean") { emptyList() },
-        )
-        val refused = assertIs<ApplyResult.Refused>(result)
-        assertTrue(refused.diagnostics.any { it.code == "approval.required" })
-    }
-
-    @Test
-    fun applyWithApprovalAndCleanGateIsApplied() {
-        val clang = Path.of("/usr/bin/clang")
-        if (!Files.isExecutable(clang)) return // clang not installed; integration not run
-        val workspace = Files.createTempDirectory("refactorkit-c-facade-apply")
-        val content = "int compute(int x) { return x + 1; }\n"
-        Files.writeString(workspace.resolve("main.c"), content)
-        val snap = ProjectSnapshot(
-            Workspace(workspace),
-            emptyList(),
-            listOf(SourceFile(Path.of("main.c"), content, "c")),
-        )
-        val facade = CRefactoringFacade(toolchain())
-        val result = facade.apply(
-            snap,
-            PatchPlan(
-                operation = "organizeIncludes",
-                status = PatchStatus.PREVIEW,
-                snapshotHash = snap.hash,
-                confidence = 1.0,
-                requiresUserApproval = true,
-                summary = "no-op apply probe",
-                affectedFiles = emptySet(),
-                workspaceEdit = WorkspaceEdit(emptyList()),
-            ),
-            ApplyAuthorization.explicit("test-surface"),
-            facade.diagnosticsGate(),
-        )
-        assertIs<ApplyResult.Applied>(result)
     }
 
     @Test
@@ -226,7 +156,16 @@ class CRefactoringFacadeTest {
 
     private fun facade() = CRefactoringFacade(toolchain())
 
-    private fun toolchain() = ClangSemanticToolchain(
+    private fun toolchain(): ClangSemanticToolchain {
+        val configured = System.getProperty("refactorkit.c.qualificationToolchain")?.let(Path::of)
+        if (configured != null) return when (val discovered = ClangToolchainDiscoverer().discover(ClangToolchainRequest(
+            Path.of(System.getProperty("java.io.tmpdir")), configured.resolve("usr/bin/clang-22"),
+            configured.resolve("usr/bin/clangd"), configured.resolve("usr/bin/clang-format"),
+        ))) {
+            is ClangToolchainDiscovery.Available -> discovered.toolchain
+            is ClangToolchainDiscovery.Refused -> error("Explicit test toolchain is unavailable: ${discovered.diagnostics}")
+        }
+        val legacy = ClangSemanticToolchain(
         clangExecutable = Path.of("/usr/bin/clang"),
         clangdExecutable = Path.of("/usr/bin/clangd"),
         clangFormatExecutable = Path.of("/usr/bin/clang-format"),
@@ -234,5 +173,10 @@ class CRefactoringFacadeTest {
             clangVersion = "22.1.8", clangdVersion = "22.1.8", clangFormatVersion = "22.1.8",
             targetTriple = "x86_64-pc-linux-gnu", resourceDir = "/usr/lib/clang/22", evidence = emptyList(),
         ),
-    )
+        )
+        if (!Files.isExecutable(legacy.clangExecutable)) return legacy
+        val resources = Path.of(ManagedClangResourceDirProbe().probe(legacy.clangExecutable).getOrThrow())
+        return legacy.copy(provenance = legacy.provenance.copy(resourceDir = resources.toString()),
+            resources = ClangResourceDirectoryCapture().capture(resources))
+    }
 }

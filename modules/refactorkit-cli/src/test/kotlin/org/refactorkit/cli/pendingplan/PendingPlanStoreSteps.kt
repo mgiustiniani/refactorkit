@@ -759,10 +759,15 @@ class PendingPlanStoreSteps {
             }
         }
         val constructor = requireNotNull(selectedConstructor)
-        assertEquals(4, constructor.parameterCount)
+        assertTrue(constructor.parameterCount >= 4)
         assertEquals(org.refactorkit.core.DiagnosticsGate::class.java, constructor.parameterTypes[3])
+        assertTrue(constructor.parameterTypes.drop(3).none { it.isPrimitive })
         constructor.isAccessible = true
-        val payload = constructor.newInstance(plan, "kotlin", "retained-lease", null)
+        val constructorArguments = arrayOfNulls<Any?>(constructor.parameterCount)
+        constructorArguments[0] = plan
+        constructorArguments[1] = "kotlin"
+        constructorArguments[2] = "retained-lease"
+        val payload = constructor.newInstance(*constructorArguments)
         pendingStore(session).insert(plan.id, payload)
         return plan.id
     }

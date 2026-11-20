@@ -100,6 +100,14 @@ def verify(repository_root: Path) -> dict[str, object]:
         if token not in workflow:
             failures.append(f"dedicated native workflow token is missing: {name}")
 
+    # Historical native acceptance and prospective workflow selection have distinct authority.
+    interim_scope = bool(re.search(r"^  qualification-scope:[ \t]*$", workflow, re.MULTILINE))
+    prospective_scope = "INTERIM_LINUX" if interim_scope else "HISTORICAL_MULTIHOST"
+    prospective_platforms: list[str] = []
+    k1_tokens = {
+        name: token for name, token in REQUIRED_K1_NATIVE_WORKFLOW_TOKENS.items()
+        if not interim_scope or name not in {"windows-host", "macos-intel-host", "macos-arm-host"}
+    }
     k1_native_workflow = ""
     if K1_NATIVE_JOB_MARKER not in workflow:
         failures.append("dedicated K1/K2 native workflow job is missing")
@@ -111,9 +119,28 @@ def verify(repository_root: Path) -> dict[str, object]:
             maxsplit=1,
             flags=re.MULTILINE,
         )[0]
-        for name, token in REQUIRED_K1_NATIVE_WORKFLOW_TOKENS.items():
+        for name, token in k1_tokens.items():
             if token not in k1_native_workflow:
                 failures.append(f"dedicated K1/K2 native workflow token is missing: {name}")
+        matrix = re.search(
+            r"^      matrix:\n(?P<body>.*?)(?=^    runs-on:)",
+            k1_native_workflow, re.MULTILINE | re.DOTALL,
+        )
+        matrix_body = matrix.group("body") if matrix else ""
+        prospective_platforms = re.findall(r"^            platform: ([a-z0-9_-]+)$", matrix_body, re.MULTILINE)
+        if interim_scope:
+            admitted_matrix = (
+                "        include:\n"
+                "          - os: ubuntu-24.04\n"
+                "            platform: linux-x86_64\n"
+                "            gradle: ./gradlew\n"
+            )
+            if matrix_body != admitted_matrix:
+                failures.append("interim K1/K2 qualification matrix must select only linux-x86_64")
+            if not re.search(r"^    needs: qualification-scope$", k1_native_workflow, re.MULTILINE):
+                failures.append("interim K1/K2 job must depend on qualification-scope")
+            if re.search(r"^    (?:if|continue-on-error):", k1_native_workflow, re.MULTILINE):
+                failures.append("interim K1/K2 job must not override prerequisite or failure semantics")
 
     native_states = re.findall(
         r"^\| (?:Linux|Windows|macOS) \| [^|]+ \| public-CLI REQ-001 plus "
@@ -155,7 +182,9 @@ def verify(repository_root: Path) -> dict[str, object]:
         "closedRoadmapRowsVerified": sorted(CLOSED_PLAN_ROWS),
         "supportBoundariesVerified": sorted(REQUIRED_SUPPORT_CLAIMS),
         "nativeWorkflowTokensVerified": sorted(REQUIRED_NATIVE_WORKFLOW_TOKENS),
-        "k1NativeWorkflowTokensVerified": sorted(REQUIRED_K1_NATIVE_WORKFLOW_TOKENS),
+        "k1NativeWorkflowTokensVerified": sorted(k1_tokens),
+        "prospectiveK1HostScope": prospective_scope,
+        "prospectiveK1Platforms": prospective_platforms,
         "nativeRows": len(native_states),
         "nativeEvidenceState": native_state,
         "nativeParentRowsOpen": native_parent_rows_open,

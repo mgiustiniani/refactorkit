@@ -2,6 +2,8 @@ package org.refactorkit.daemon
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -9,6 +11,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcRequest
+import org.refactorkit.core.JsonRpcResponse
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.errorResponse
 import org.refactorkit.core.isNotification
@@ -31,7 +34,7 @@ fun main() {
     val reader = BufferedReader(InputStreamReader(System.`in`, Charsets.UTF_8))
     val out = PrintStream(System.out, true, Charsets.UTF_8)
     val writeResponse: (org.refactorkit.core.JsonRpcResponse) -> Unit = { response ->
-        synchronized(out) { out.println(json.encodeToString(response)) }
+        synchronized(out) { out.println(DaemonResponseEncoder.encode(response, json)) }
     }
     val scheduler = DaemonRequestScheduler(session, writeResponse)
 
@@ -76,5 +79,42 @@ fun main() {
     } finally {
         scheduler.close()
         session.close()
+    }
+}
+
+/** Applies the daemon's whole-frame response budget before writing to stdio. */
+object DaemonResponseEncoder {
+    const val ENTRY_POINTS_FRAME_BYTES = 1_048_576
+    const val ENTRY_POINTS_RPC_ID_BYTES = 1_024
+    private val entryPointJson = Json { encodeDefaults = true }
+
+    /** Encoded ID bytes, including JSON quoting/escaping; unrelated methods retain their contract. */
+    internal fun validEntryPointRpcId(id: JsonElement?): Boolean {
+        if (id == null || id is JsonNull) return true
+        if (id !is JsonPrimitive || (!id.isString && id.booleanOrNull != null)) return false
+        return entryPointJson.encodeToString(JsonElement.serializer(), id).toByteArray(Charsets.UTF_8).size <= ENTRY_POINTS_RPC_ID_BYTES
+    }
+
+    /** Include the NDJSON delimiter and bound errors as well as successful results. */
+    internal fun boundEntryPointResponse(response: JsonRpcResponse): JsonRpcResponse {
+        val encoded = entryPointJson.encodeToString(response) + System.lineSeparator()
+        if (encoded.toByteArray(Charsets.UTF_8).size <= ENTRY_POINTS_FRAME_BYTES) return response
+        return errorResponse(
+            if (validEntryPointRpcId(response.id)) response.id else JsonNull,
+            JsonRpcErrorCodes.INTERNAL_ERROR,
+            "Entry-point response exceeds its complete UTF-8 frame budget",
+            buildJsonObject { put("refusalCode", "java.entryPoints.responseLimit") },
+        )
+    }
+
+    fun encode(response: JsonRpcResponse, json: Json): String {
+        val encoded = json.encodeToString(response)
+        if (encoded.toByteArray(Charsets.UTF_8).size <= ProtocolLimits.MAX_DAEMON_RESPONSE_BYTES) return encoded
+        val refusal = errorResponse(
+            response.id,
+            JsonRpcErrorCodes.INTERNAL_ERROR,
+            "Daemon response exceeds ${ProtocolLimits.MAX_DAEMON_RESPONSE_BYTES} bytes",
+        )
+        return json.encodeToString(refusal)
     }
 }

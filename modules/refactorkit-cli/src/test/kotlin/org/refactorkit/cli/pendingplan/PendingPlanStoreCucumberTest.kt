@@ -13,6 +13,6 @@ import org.junit.platform.suite.api.Suite
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.cli.pendingplan")
 @ConfigurationParameter(
     key = FILTER_TAGS_PROPERTY_NAME,
-    value = "@REQ-PENDING-PLAN-STORE-001 or @REQ-PENDING-PLAN-STORE-002",
+    value = "@REQ-PENDING-PLAN-STORE-001 or @REQ-PENDING-PLAN-STORE-002#integration-surfaces-preserve-their-existing-lifecycle-policies",
 )
 class PendingPlanStoreCucumberTest

@@ -11,8 +11,8 @@ Feature: Evaluate authoritative snapshots and diagnostics for model-changing edi
     And an explicitly approved model-changing PatchPlan is bound to "S0" and normalizes without writing to exact staged file candidate "C1"
     And the language-neutral provider returns one immutable ProjectSnapshot and diagnostic multiset evaluated from that same supplied candidate
     And "S0" and each otherwise exact provider result include one explicitly declared external regular-file classpathEvidence whose fingerprint matches an engine-controlled no-follow recomputation from its current bytes for its path and kind
-    And each provider result is constructed from caller-owned mutable collections with a distinct sentinel at every captured semantic boundary:
-      | caller-owned collection boundary                                                                                                                                                       |
+    And each provider result is constructed from caller-owned mutable collections with a distinct sentinel at every mutable collection boundary and complete hash-bound build facts:
+      | captured semantic boundary                                                                                                                                                             |
       | ProjectSnapshot files, auxiliaryFiles, sourceExtensions, and ignoredDirectories                                                                                                        |
       | ProjectSnapshot modules                                                                                                                                                                 |
       | each Module's sourceRoots, mainSourceRoots, testSourceRoots, generatedSourceRoots, and generatedTestSourceRoots collections                                                             |
@@ -21,7 +21,12 @@ Feature: Evaluate authoritative snapshots and diagnostics for model-changing edi
       | ProjectSnapshot classpathEvidence and buildModels                                                                                                                                       |
       | each BuildModel's modules, diagnostics, and attributes collections                                                                                                                      |
       | each BuildModule's sourceSets and attributes collections                                                                                                                                |
+      | each BuildModule's immutable coordinates identity value                                                                                                                                |
       | each BuildSourceSet's sourceRoots, generatedSourceRoots, outputDirectories, classpathEntries, runtimeClasspathEntries, moduleDependencies, and attributes collections                    |
+      | each BuildSourceSet's sourceRootEvidence, compilerOptions, and resolvedArtifacts collections                                                                                            |
+      | each BuildSourceSet's compilerOptionsAvailability, compilerOptionsRefusalCode, resolvedArtifactAvailability, and resolvedArtifactRefusalCode values                                    |
+      | each BuildSourceSet annotationProcessors processorPath, processorPathEntries, processorNames, and options collections                                                                   |
+      | each BuildSourceSet annotationProcessors availability, mode, and refusalCode values                                                                                                     |
       | the diagnostics input list and every caller-owned fields map supplied to DiagnosticDetails                                                                                              |
     And immediately after constructing each AuthoritativeDiagnosticsEvaluation, the provider mutates every supplied collection and attempts the same sentinel changes through all outer and nested collections exposed by the returned value
     When the caller invokes the real public PatchEngine.apply with authoritative evaluation selected through the additive DiagnosticsGate boundary

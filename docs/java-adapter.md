@@ -1,7 +1,63 @@
 # Java adapter
 
+The effective Gradle provider preserves exported compile/runtime closure order and
+source-set ownership. For JDT source filename lookup, visible own-main roots precede
+test roots only when main outputs occur in that compile closure. Secondary test
+declarations in a same-named file must not hide the actual main declaration. This
+bounded adapter document links to [ARC42 requirements](arc42/appendix-requirements.adoc);
+the [Java context protocol](java-project-context-protocol.md) owns wire authority.
+
 See [Java stable capability matrix](java-capabilities.md) for the normative v1
 write-authority inventory.
+
+## Public effective project context
+
+The daemon's read-only `project.context` route exposes snapshot-bound provider,
+module, source-set, root, classpath and selected-source evidence. The
+[project-context feature](../features/java-effective-project-context.feature)
+now passes its six-case source-association Story on current source. It proves
+that `pkg.Runner` and secondary top-level `pkg.Peer` bind to
+`src/main/java/pkg/Runner.java`, while `pkg.Unrelated` binds to the same relative
+path under `src/test/java`; a materialized generated root keeps its generated
+owner. An unselected source and a stale build snapshot return typed refusals with
+no `selectedSource`. The positive response carries the exact source root, module,
+source set and JDT binding key.
+
+The Java 8 fixture has no module descriptor. JPMS is now `NOT_DECLARED` for
+explicit Java 1–8 targets without `module-info.java`, even when unrelated compiler
+option facts are incomplete; Java 9+ still requires complete options before the
+resolver declares JPMS absent. The focused Kotest Spec covers both boundaries.
+This closes the bounded RefactorKit source-association cell only. Broader
+provider/context completeness and native IDE payload-consumption acceptance stay
+open; [ARC42](arc42/appendix-requirements.adoc) remains the integrated status
+authority. JDI, build/run and editor markers stay with the IDE/JDK consumer.
+
+## Build output discovery
+
+Project discovery excludes undeclared project copies below `build` and `target` directories
+at the workspace root and inside nested modules. Their sources and Maven/Gradle
+descriptors do not contribute modules, captured build evidence, or snapshot
+identity. Materialized generated sources are still collected through the real
+module's recognized generated-source roots.
+
+An explicit module declaration in an effective Maven model admits that module
+even when its path contains `build` or `target`. Discovery follows declarations
+recursively, including selected profiles, without scanning unrelated descendants
+of those directories. Inactive profiles grant no exception. Admitted descriptors
+are captured as snapshot inputs; declarations outside the workspace, through
+symlink paths, or into `.git`, `.gradle`, or `.refactorkit` grant no exception.
+
+The [declared-module Story](../features/java-scan-declared-output-module.feature)
+has six locally passing cases for direct/nested modules and selected/inactive
+profiles. This preserves a Maven reactor whose destination module is `target`,
+including the daemon/MCP source-root move contract.
+
+The bounded [scanner Story](../features/java-scan-output-directory-exclusion.feature)
+has four locally passing cases, including generated Maven sources and unchanged
+snapshot/build evidence after copy edits. Its status remains `@partial`; this is
+source-built regression evidence, not release qualification. The
+[ARC42 requirements appendix](arc42/appendix-requirements.adoc) owns integrated
+architecture and requirement status.
 
 ## Compiler diagnostics
 
@@ -31,6 +87,20 @@ and ADR 0012.
 
 ## Evidence and apply authority
 
+Native SDK25/26 diagnostics retain explicit source-set ownership. A test compiler
+may implicitly load a main-source dependency and report its error with a different
+range. RefactorKit publishes that source's error from its explicit owning
+compilation group, preserving the original range. Independent errors with equal
+code and message remain distinct; this is not message-based deduplication.
+The provenance hash binds the explicit-source-set projection policy. Compiler
+input validation, full acquisition and main/test classpath separation remain in
+force. Six native release/source-target cases pass with independent javac oracles,
+repairs and test-only visibility controls; broader qualification remains bounded.
+The executable authority is
+`REQ-JAVA-PROJECT-CONTEXT-001#native-compiler-diagnostics-retain-explicit-source-set-ownership`;
+the [ARC42 appendix](arc42/appendix-requirements.adoc#native-diagnostic-source-ownership-2026-11-18)
+owns integrated status.
+
 Every Java compatibility plan classifies itself as `JDT_BINDING`, `STRUCTURAL`,
 or `LEXICAL_FALLBACK`. Exact type/member binding operations use `JDT_BINDING`;
 syntax-local transforms use `STRUCTURAL`. The low-level planner may still retain
@@ -50,6 +120,49 @@ expected/observed file evidence before WAL. Drift returns immutable structured
 root-declared active module POM produces result-owned
 `JavaMoveClassStructuralRefusal`; symlink or non-regular descriptor paths are not
 misclassified as ordinary missing files.
+
+`moveClass` resolves an existing target package against declared, non-generated
+Java source roots. For a new package, callers may explicitly select
+`arguments.targetModuleId`; `server.capabilities` publishes this contract under
+`javaContextRefactoring.operationCapabilities[operation=moveClass]`:
+
+```json
+{
+  "schemaVersion": "java-move-class-target-module-v1",
+  "argument": "targetModuleId",
+  "identity": "module-id-within-source-provider",
+  "requiresAvailableContext": true,
+  "sourceSetKind": "main",
+  "requiresUniqueNonGeneratedRoot": true
+}
+```
+
+The daemon requires an available explicit Java project context whenever
+`targetModuleId` is supplied. It resolves that ID only within the source module's
+available build-model provider and accepts exactly one declared, non-generated
+`main` source root. If the package already exists, its owner must match the
+selected module. The selection never creates or edits a build descriptor. Without
+an explicit module selection, an absent package keeps the legacy source-root
+destination.
+
+A cross-module move is admitted only when the destination has one exact owner in
+the same available supported build model, both roots are main source sets, the
+source and staged target resolve through JDT, and staged Java diagnostics
+introduce no errors. Staged binding retention compares non-import references per
+source file: JDT also reports imports as references, and a move may add imports
+while preserving every existing use. The preview reports before/after diagnostics
+and remains read-only. Ambiguous, mismatched, generated-only, unowned, or
+unavailable cross-module destinations are refused. The selected acceptance Story
+covers Maven only; other build providers and external consumers are not
+qualified.
+
+The IDE Product migration acceptance runs through daemon `project.open`,
+`project.context`, and `refactor.preview` on a six-module Maven fixture with
+compiled outputs and a generated source root. It moves
+`pkg.MigrateToLibrary` from `maven/app` into the existing `fixtures.library`
+package in `maven/library`. The regression confirms that the two original use
+references remain bound after staging even though JDT reports two additional
+import references.
 
 ## Java refactoring preview command boundary
 
@@ -132,7 +245,7 @@ remains workspace/model authority; module targeting filters after the active
 reactor, source-set dependency closure, and affected dependent-impact closure are
 constructed. No child request triggers implicit upward or outward discovery.
 
-Effective Maven `--release 8..25` requires immutable, licensed, SBOM-covered,
+Effective Maven `--release 8..26` requires immutable, licensed, SBOM-covered,
 hash-attested Java platform signatures. JDT grammar compliance and release flags
 alone are insufficient, and the host or reduced jlink runtime is never a silent
 substitute. Source-only/no-release configurations require an explicit qualified
@@ -150,8 +263,8 @@ classpath evidence, platform identity, source-set closure, and provider identity
 
 ## Source compatibility
 
-RefactorKit uses Eclipse JDT Core 3.44 with the JLS25 AST to parse Java source
-levels 8 through 25 while retaining Java 8-compatible target bytecode for the
+RefactorKit uses Eclipse JDT Core 3.47.0 with the JLS26 AST to parse Java source
+levels 8 through 26 while retaining Java 8-compatible target bytecode for the
 library contract. `JavaProjectScanner` builds Maven effective models with embedded Maven
 ModelBuilder, resolving relative parents, inherited/interpolated properties,
 compiler release/source, dependency management, imported BOMs, active-by-default
@@ -188,7 +301,15 @@ Maven/Gradle descriptors are independently fingerprinted as declaration evidence
 so a compliance change after preview refuses apply as `snapshot.classpathChanged`.
 JDT receives the detected compliance for each source module. Acceptance covers
 representative Java 8, 11, 17, 21, and 25 syntax, including Java 25 module-import
-declarations.
+declarations; separate provider-context acceptance exercises Java 26 syntax and
+binding for Maven and Gradle. Provider context v6/v7 separately exposes compiler
+and selected-JDK platform metadata through GA Java 26/27. Java 27 metadata does
+not qualify its parser or semantic operations: v7 may report owner-only source
+selection, while symbol analysis remains `java.context.sourceAnalysisUnqualified`.
+An unsupported parser level also remains separate from the actual classpath and
+reactor dependency graph, so metadata capture does not discard otherwise
+available Maven module edges. See [ARC42 Java context boundaries](arc42/08-crosscutting-concepts.adoc#java-analysis-and-refactoring)
+and the [ARC42 requirements appendix](arc42/appendix-requirements.adoc).
 
 
 See AGENTS.md for the authoritative initial architecture and implementation rules.

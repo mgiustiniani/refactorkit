@@ -16,8 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # V070-LOCAL-HOST-ACCEPTANCE-001: no other host is claimed verified for 0.7.0.
-        include: ${{ fromJSON(github.ref_name == 'v0.7.0' && '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' || '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
+        # V070-LOCAL-HOST-ACCEPTANCE-001 is historical; prospective 0.x tags also select Linux only.
+        # The stable matrix is admitted at 1.0.0, with fresh qualification on that candidate.
+        include: ${{ fromJSON((github.ref_name == 'v0.7.0' || startsWith(github.ref_name, 'v0.')) && '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' || '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -25,6 +26,18 @@ jobs:
         with:
           # Existing K5 finalizers require one visible source parent, as in the dedicated jobs.
           fetch-depth: ${{ github.ref_name == 'v0.7.0' && '2' || '1' }}
+
+      - name: Prepare the pinned Clang 22.1.8 C qualification toolchain
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: bash scripts/prepare-clang-qualification-toolchain.sh
+
+      - name: Prepare the pinned SPDX producer qualification input
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          python3 scripts/qualify-sbom-producer.py prepare --download --destination "$RUNNER_TEMP/refactorkit-syft-1.42.3"
+          echo "REFACTORKIT_SYFT_QUALIFICATION_TOOLCHAIN=$RUNNER_TEMP/refactorkit-syft-1.42.3" >> "$GITHUB_ENV"
 
       - name: Set up JDK 25 qualification input
         uses: actions/setup-java@v4
@@ -35,6 +48,42 @@ jobs:
       - name: Record JDK 25 qualification home
         shell: bash
         run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 8 LTS qualification input
+        if: startsWith(github.ref_name, 'v0.8.')
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Record JDK 8 LTS qualification home
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK8_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 11 LTS qualification input
+        if: startsWith(github.ref_name, 'v0.8.')
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Record JDK 11 LTS qualification home
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK11_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17 LTS qualification input
+        if: startsWith(github.ref_name, 'v0.8.')
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Record JDK 17 LTS qualification home
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK17_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
       - name: Set up JDK 21 build runtime
         uses: actions/setup-java@v4
@@ -59,8 +108,52 @@ jobs:
         working-directory: qualification/typescript-toolchain
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Install pinned protocol schema qualification packages without scripts
+        if: startsWith(github.ref_name, 'v0.8.')
+        working-directory: qualification/protocol-schema-toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Prepare the pinned Gradle 8.11.1 fixture input
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: bash scripts/prepare-gradle-8-11-1-fixture.sh
+
+      - name: Set up exact Gradle 9.8.1 fixture input
+        if: startsWith(github.ref_name, 'v0.8.')
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: '9.8.1'
+          cache-disabled: true
+
+      - name: Verify and export native fixture profile
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          mkdir -p .refactorkit/runs/ci-native-fixture-profile
+          python3 scripts/prepare-native-fixture-profile.py \
+            --java-scope lts \
+            --jdk8 "$REFACTORKIT_CI_JDK8_HOME" \
+            --jdk11 "$REFACTORKIT_CI_JDK11_HOME" \
+            --jdk17 "$REFACTORKIT_CI_JDK17_HOME" \
+            --jdk21 "$JAVA_HOME" \
+            --jdk25 "$REFACTORKIT_JAVA_25_HOME" \
+            --gradle98 "$(command -v gradle)" \
+            --node "$(command -v node)" \
+            --ajv-module "$GITHUB_WORKSPACE/qualification/protocol-schema-toolchain/node_modules/ajv" \
+            --candidate-root "$GITHUB_WORKSPACE/modules/refactorkit-cli/build/package/refactorkit" \
+            --github-env "$GITHUB_ENV" \
+            --evidence .refactorkit/runs/ci-native-fixture-profile/profile.json
+
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
+
+      - name: Upload verified native fixture profile
+        if: ${{ always() && startsWith(github.ref_name, 'v0.8.') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-fixture-profile-build-runtime-linux-x86_64
+          path: .refactorkit/runs/ci-native-fixture-profile/profile.json
+          if-no-files-found: error
 
       - name: Verify 0.7.0 source version before building
         if: github.ref_name == 'v0.7.0'
@@ -99,9 +192,28 @@ jobs:
           (out / 'boundary-home.gradle').write_text("allprojects { tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { if (project.name == 'refactorkit-cli') { systemProperty 'user.home', new File(rootProject.projectDir, '.refactorkit/runs/v070-release-ci/boundary-home').absolutePath } } }\n")
           (out / 'boundary-fixture.json').write_text(json.dumps({'path': str(launcher), 'sha256': hashlib.sha256(launcher.read_bytes()).hexdigest(), 'kind': 'authored inert non-selection fixture, not a product installation or acceptance subject', 'globalInstallationChanged': False}, indent=2))
 
+      - name: Capture exact v0.8 source and native qualification inputs
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          python3 scripts/bind-v080-release-evidence.py begin \
+            --sbom-producer "$REFACTORKIT_SYFT_QUALIFICATION_TOOLCHAIN/syft" \
+            --root "$GITHUB_WORKSPACE" --revision "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" \
+            --toolchain "$REFACTORKIT_C_QUALIFICATION_TOOLCHAIN" \
+            --profile "$GITHUB_WORKSPACE/.refactorkit/runs/ci-native-fixture-profile/profile.json" \
+            --output "$GITHUB_WORKSPACE/.refactorkit/runs/v080-release-ci/source-start.json"
+
       - name: Clean build and test
-        if: github.ref_name != 'v0.7.0'
+        if: ${{ github.ref_name != 'v0.7.0' && !startsWith(github.ref_name, 'v0.8.') }}
         run: ${{ matrix.gradle }} clean build --no-daemon
+
+      - name: Clean v0.8 build and complete standard regression
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew clean build goldenTest --no-daemon --no-build-cache --parallel --max-workers=4 --console=plain \
+            2>&1 | tee .refactorkit/runs/v080-release-ci/whole-build.log
 
       - name: Clean 0.7.0 build and complete standard regression
         if: github.ref_name == 'v0.7.0'
@@ -142,10 +254,13 @@ jobs:
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon
 
       - name: Native packaged authoritative Java diagnostics qualification
+        env:
+          REFACTORKIT_JAVA_SMOKE_SCOPE: ${{ startsWith(github.ref_name, 'v0.8.') && 'lts' || 'full' }}
         shell: python
         run: |
-          import subprocess, sys
-          subprocess.run([sys.executable, "scripts/smoke-packaged-java-authoritative-diagnostics.py"], check=True)
+          import os, subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-java-authoritative-diagnostics.py",
+                          "--java-scope", os.environ["REFACTORKIT_JAVA_SMOKE_SCOPE"]], check=True)
 
       - name: Native packaged real TypeScript qualification
         shell: python
@@ -269,11 +384,11 @@ jobs:
           init.write_text("allprojects { tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { if (project.name == 'refactorkit-cli') { systemProperty 'cucumber.filter.name', System.getProperty('refactorkit.scenario') } } }\n")
           wire = out / 'wire'
           assert not wire.exists() and not wire.is_symlink()
-          report = P('modules/refactorkit-cli/build/reports/cucumber/java-refactoring-preview-command-surface.json')
+          report = P('modules/refactorkit-cli/build/reports/cucumber/java-preview-command-surface.json')
           if report.exists() or report.is_symlink():
               assert report.is_file() and not report.is_symlink()
               report.unlink()  # Known generated full-build output is already preserved in whole/.
-          started = run('t5-i1-packaged', gradle + ['-I', str(init.resolve()), '-Drefactorkit.scenario='+pattern, '-Drefactorkit.ts.packaged.root='+str(root), '-Drefactorkit.ts.packaged.evidence='+str(wire.resolve()), ':modules:refactorkit-cli:cleanTest', ':modules:refactorkit-cli:test', '--tests', 'org.refactorkit.cli.previewcommand.JavaRefactoringPreviewCommandSurfaceCucumberTest'])
+          started = run('t5-i1-packaged', gradle + ['-I', str(init.resolve()), '-Drefactorkit.scenario='+pattern, '-Drefactorkit.ts.packaged.root='+str(root), '-Drefactorkit.ts.packaged.evidence='+str(wire.resolve()), ':modules:refactorkit-cli:cleanTest', ':modules:refactorkit-cli:test', '--tests', 'org.refactorkit.cli.previewcommand.JavaPreviewCommandSurfaceCucumberTest'])
           assert report.is_file() and not report.is_symlink() and report.stat().st_mtime_ns >= started
           shutil.copy2(report, out / 't5-i1-packaged.json')
           cases = [c for f in json.loads(report.read_text()) for c in f.get('elements', []) if c.get('type') == 'scenario']
@@ -329,6 +444,16 @@ jobs:
               "--platform", "${{ matrix.platform }}",
           ], check=True)
 
+      - name: Qualify managed C crash recovery on the v0.8 asset
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          python3 scripts/smoke-packaged-c-recovery.py \
+            --archive "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.zip" \
+            --checksum "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.zip.sha256" \
+            --toolchain "$REFACTORKIT_C_QUALIFICATION_TOOLCHAIN" \
+            --output .refactorkit/runs/v080-release-ci/c-recovery.json
+
       - name: Expand platform runtime for SBOM
         shell: python
         run: |
@@ -338,13 +463,83 @@ jobs:
           with zipfile.ZipFile(asset) as archive:
               archive.extractall("release-smoke")
 
-      - name: Generate platform SPDX SBOM
+      - name: Generate legacy platform SPDX SBOM
+        if: ${{ !startsWith(github.ref_name, 'v0.8.') }}
         uses: anchore/sbom-action@v0
         with:
           path: release-smoke/refactorkit
           format: spdx-json
-          output-file: refactorkit-runtime-${{ matrix.platform }}.spdx.json
+          output-file: ${{ startsWith(github.ref_name, 'v0.8.') && '.refactorkit/runs/v080-release-ci/upstream.spdx.json' || format('refactorkit-runtime-{0}.spdx.json', matrix.platform) }}
           upload-artifact: false
+
+      - name: Generate platform SPDX SBOM
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          python3 scripts/qualify-sbom-producer.py generate \
+            --producer "$REFACTORKIT_SYFT_QUALIFICATION_TOOLCHAIN/syft" \
+            --archive "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.zip" \
+            --runtime-root release-smoke/refactorkit \
+            --output .refactorkit/runs/v080-release-ci/upstream.spdx.json \
+            --receipt .refactorkit/runs/v080-release-ci/sbom-producer.json
+
+      - name: Record v0.8 Gradle runtime component identities
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          ./gradlew --offline --no-daemon --max-workers=2 :modules:refactorkit-cli:writeRuntimeComponentManifest \
+            "-Prefactorkit.runtime.components.output=$GITHUB_WORKSPACE/.refactorkit/runs/v080-release-ci/runtime-components.json"
+
+      - name: Complete and verify v0.8 SPDX schema and archive file inventory
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          python3 scripts/qualify-release-spdx.py assemble \
+            --archive "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.zip" \
+            --version "${GITHUB_REF_NAME#v}" \
+            --spdx .refactorkit/runs/v080-release-ci/upstream.spdx.json \
+            --runtime-components .refactorkit/runs/v080-release-ci/runtime-components.json \
+            --node "$REFACTORKIT_SCHEMA_NODE" --ajv-module "$REFACTORKIT_SCHEMA_AJV_MODULE" \
+            --output refactorkit-runtime-linux-x86_64.spdx.json
+          python3 scripts/qualify-release-spdx.py verify \
+            --archive "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.zip" \
+            --version "${GITHUB_REF_NAME#v}" --spdx refactorkit-runtime-linux-x86_64.spdx.json \
+            --upstream-spdx .refactorkit/runs/v080-release-ci/upstream.spdx.json \
+            --runtime-components .refactorkit/runs/v080-release-ci/runtime-components.json \
+            --node "$REFACTORKIT_SCHEMA_NODE" --ajv-module "$REFACTORKIT_SCHEMA_AJV_MODULE" \
+            --receipt .refactorkit/runs/v080-release-ci/spdx-qualification.json
+
+      - name: Bind v0.8 source, native reports, toolchain, runtime and SPDX
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: |
+          python3 scripts/bind-v080-release-evidence.py finish \
+            --root "$GITHUB_WORKSPACE" \
+            --start "$GITHUB_WORKSPACE/.refactorkit/runs/v080-release-ci/source-start.json" \
+            --archive "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.zip" \
+            --checksum "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.zip.sha256" \
+            --spdx refactorkit-runtime-linux-x86_64.spdx.json \
+            --spdx-receipt .refactorkit/runs/v080-release-ci/spdx-qualification.json \
+            --upstream-spdx .refactorkit/runs/v080-release-ci/upstream.spdx.json \
+            --build-log .refactorkit/runs/v080-release-ci/whole-build.log \
+            --c-recovery-evidence .refactorkit/runs/v080-release-ci/c-recovery.json \
+            --sbom-producer-receipt .refactorkit/runs/v080-release-ci/sbom-producer.json \
+            --runtime-components .refactorkit/runs/v080-release-ci/runtime-components.json \
+            --output "refactorkit-runtime-${GITHUB_REF_NAME#v}-linux-x86_64.release.json"
+
+      - name: Retain v0.8 source and native binding evidence
+        if: ${{ always() && startsWith(github.ref_name, 'v0.8.') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v080-source-native-binding-linux-x86_64
+          include-hidden-files: true
+          path: |
+            .refactorkit/runs/v080-release-ci/
+            .refactorkit/runs/ci-native-fixture-profile/profile.json
+            modules/*/build/test-results/
+            modules/*/build/reports/cucumber/
+            modules/refactorkit-cli/build/reports/c-qualification/
+          if-no-files-found: error
 
       - name: Bind 0.7.0 source, native gates, toolchains and SPDX to the asset
         if: github.ref_name == 'v0.7.0'
@@ -424,13 +619,52 @@ jobs:
             refactorkit-runtime-*-${{ matrix.platform }}.release.json
           if-no-files-found: error
 
+  review-v080-download:
+    name: Review Linux v0.8 download
+    if: startsWith(github.ref_name, 'v0.8.')
+    needs: build-runtime
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download the Linux v0.8 asset set
+        uses: actions/download-artifact@v4
+        with:
+          name: release-linux-x86_64
+          path: release-assets
+
+      - name: Verify Linux v0.8 asset attestations and execute the runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/verify-v080-downloaded-release.py \
+            --asset-dir release-assets --gh "$(command -v gh)" \
+            --repo "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --revision "$GITHUB_SHA" \
+            --receipt "$RUNNER_TEMP/v080-downloaded-release.json"
+
+      - name: Retain the Linux v0.8 download review
+        uses: actions/upload-artifact@v4
+        with:
+          name: v080-downloaded-asset-verification-linux-x86_64
+          path: ${{ runner.temp }}/v080-downloaded-release.json
+          if-no-files-found: error
+
   publish:
     name: Publish release
-    needs: build-runtime
+    needs: [build-runtime, review-v080-download]
+    if: ${{ !cancelled() && needs.build-runtime.result == 'success' && (!startsWith(github.ref_name, 'v0.8.') || needs.review-v080-download.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download all platform assets
         uses: actions/download-artifact@v4
@@ -492,13 +726,27 @@ jobs:
               ], check=True)
           PY
 
+      - name: Download the Linux v0.8 review receipt
+        if: startsWith(github.ref_name, 'v0.8.')
+        uses: actions/download-artifact@v4
+        with:
+          name: v080-downloaded-asset-verification-linux-x86_64
+          path: ${{ runner.temp }}/v080-download-review
+      - name: Match v0.8 draft assets to the reviewed download
+        if: startsWith(github.ref_name, 'v0.8.')
+        run: |
+          python3 scripts/verify-v080-downloaded-release.py \
+            --asset-dir release-assets \
+            --repo "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --revision "$GITHUB_SHA" \
+            --against-receipt "$RUNNER_TEMP/v080-download-review/v080-downloaded-release.json"
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          # Hold 0.7.0 until supplied-evidence review and independent asset download verification.
-          draft: ${{ github.ref_name == 'v0.7.0' }}
+          # Hold 0.7.0 and 0.8 candidates for independent evidence review and asset download verification.
+          draft: ${{ github.ref_name == 'v0.7.0' || startsWith(github.ref_name, 'v0.8.') }}
           prerelease: ${{ contains(github.ref_name, '-') }}
-          make_latest: ${{ (contains(github.ref_name, '-') || github.ref_name == 'v0.7.0') && 'false' || 'true' }}
+          make_latest: ${{ (contains(github.ref_name, '-') || github.ref_name == 'v0.7.0' || startsWith(github.ref_name, 'v0.8.')) && 'false' || 'true' }}
           body_path: RELEASE_NOTES.md
           files: |
             release-assets/*.zip

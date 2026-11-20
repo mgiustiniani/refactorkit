@@ -1,10 +1,7 @@
 package org.refactorkit.c
 
 import org.refactorkit.core.ProjectSnapshot
-import org.refactorkit.core.ProtocolPath
-import org.refactorkit.core.SourceFile
 import org.refactorkit.core.Workspace
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -19,38 +16,16 @@ import java.nio.file.Path
  * No external toolchain is invoked: this is the structural baseline consumed by
  * the golden harness when a request targets a C operation.
  */
-class CProjectScanner {
+class CProjectScanner(private val policy: CProjectScanPolicy = CProjectScanPolicy()) {
 
     fun scan(root: Path): ProjectSnapshot {
         val normalizedRoot = root.toAbsolutePath().normalize()
-        val paths = Files.walk(normalizedRoot).use { stream ->
-            stream.filter { Files.isRegularFile(it) }.map { it }.toList()
-        }
-        val sources = paths
-            .filter { isCSource(it) }
-            .map { path ->
-                val rel = ProtocolPath.serialize(normalizedRoot.relativize(path))
-                SourceFile(Path.of(rel), Files.readString(path), languageIdFor(path))
-            }
-            .sortedBy { it.path.toString() }
-        return ProjectSnapshot(Workspace(normalizedRoot), emptyList(), sources)
+        val inventory = CSourceSnapshotReader(policy).capture(normalizedRoot)
+        val sources = inventory.sources
+        val capturedBuildInputs = CCompilationSnapshotCapture.capture(
+            CMakeManifestCapture.capture(ProjectSnapshot(Workspace(normalizedRoot), emptyList(), sources)),
+        )
+        return CFormattingStyleSnapshot.capture(capturedBuildInputs, inventory.regularPaths)
     }
 
-    private fun languageIdFor(path: Path): String {
-        val name = path.fileName.toString().lowercase()
-        return when {
-            name.endsWith(".m") || name.endsWith(".mm") -> "objective-c"
-            name.endsWith(".cc") || name.endsWith(".cpp") || name.endsWith(".cxx") ||
-                name.endsWith(".hh") || name.endsWith(".hpp") || name.endsWith(".hxx") -> "cpp"
-            else -> "c"
-        }
-    }
-
-    private fun isCSource(path: Path): Boolean {
-        val name = path.fileName.toString().lowercase()
-        return name.endsWith(".c") || name.endsWith(".h") ||
-            name.endsWith(".cc") || name.endsWith(".cpp") || name.endsWith(".cxx") ||
-            name.endsWith(".hh") || name.endsWith(".hpp") || name.endsWith(".hxx") ||
-            name.endsWith(".m") || name.endsWith(".mm")
-    }
 }

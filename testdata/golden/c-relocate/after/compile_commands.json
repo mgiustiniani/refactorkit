@@ -1,0 +1,1 @@
+[{"directory":"__GOLDEN_WORKSPACE__","file":"src/component/a.c","arguments":["__GOLDEN_CLANG__","-std=c17","-c","src/component/a.c"]},{"directory":"__GOLDEN_WORKSPACE__","file":"src/component/sub/b.c","arguments":["__GOLDEN_CLANG__","-std=c17","-c","src/component/sub/b.c"]}]

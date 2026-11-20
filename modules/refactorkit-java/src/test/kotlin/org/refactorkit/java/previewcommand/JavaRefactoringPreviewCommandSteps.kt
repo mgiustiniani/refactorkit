@@ -23,6 +23,7 @@ import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditIdentity
 import org.refactorkit.java.ExistingJavaRefactoringPreviewPlannerInvoker
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRefactoringPreviewCommand
 import org.refactorkit.java.JavaRefactoringPreviewDispatcher
 import org.refactorkit.java.JavaRefactoringPreviewPlannerInvoker
@@ -40,6 +41,7 @@ import kotlin.io.path.writeText
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -158,11 +160,127 @@ class JavaRefactoringPreviewCommandSteps {
     private var beforeWorkspace: Map<String, String> = emptyMap()
     private var beforeProcess: ProcessActivity? = null
     private var beforeLock: LockState? = null
+    private lateinit var mavenOwnershipRoot: Path
+    private lateinit var mavenOwnershipSnapshot: ProjectSnapshot
+    private var mavenOwnershipPlan: PatchPlan? = null
+    private var mavenOwnershipFailure: Throwable? = null
+    private var mavenOwnershipTreeBefore: Map<String, String> = emptyMap()
+
+    private lateinit var inlineLiteralRoot: Path
+    private lateinit var inlineLiteralSnapshot: ProjectSnapshot
+    private lateinit var inlineLiteralPath: Path
+    private var inlineLiteralPlan: PatchPlan? = null
 
     @After
     fun deleteTemporaryWorkspaces() {
         temporaryRoots.asReversed().forEach(::deleteRecursively)
         temporaryRoots.clear()
+    }
+
+    @Given("the Java workspace contains a local int initialized by a literal and two reads")
+    fun javaWorkspaceContainsInlineableLiteralLocal() {
+        inlineLiteralRoot = temporaryWorkspace("inline-variable-literal")
+        inlineLiteralRoot.resolve("pom.xml").writeText(
+            """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>fixture</groupId><artifactId>inline-literal</artifactId><version>1</version>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+            </project>
+            """.trimIndent(),
+        )
+        inlineLiteralPath = Path.of("src/main/java/fixture/api/Calculator.java")
+        inlineLiteralRoot.resolve(inlineLiteralPath).apply {
+            parent.createDirectories()
+            writeText(
+                "package fixture.api;\n" +
+                    "public class Calculator {\n" +
+                    "    public int add() {\n" +
+                    "        int base = 7;\n" +
+                    "        return base + base;\n" +
+                    "    }\n" +
+                    "}\n",
+            )
+        }
+        inlineLiteralSnapshot = JavaProjectScanner().scan(inlineLiteralRoot)
+    }
+
+    @When("inlineVariable is previewed for that local in the saved Java file")
+    fun inlineVariableIsPreviewedForSavedLocal() {
+        inlineLiteralPlan = JavaLanguageAdapter().applyRefactoring(
+            RefactoringRequest(
+                operation = "inlineVariable",
+                arguments = mapOf("file" to inlineLiteralPath.toString(), "name" to "base"),
+                snapshot = inlineLiteralSnapshot,
+            ),
+        )
+    }
+
+    @Then("the preview produces this Java source:")
+    fun previewProducesInlineLiteralSource(expectedSource: String) {
+        val plan = requireNotNull(inlineLiteralPlan)
+        assertEquals("inlineVariable", plan.operation)
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.toString())
+        assertTrue(plan.requiresUserApproval, plan.toString())
+        assertEquals(setOf(inlineLiteralPath), plan.affectedFiles)
+        val modification = plan.workspaceEdit.edits.singleOrNull() as? FileEdit.Modify
+        assertNotNull(modification, "expected one previewed Java file modification")
+        assertEquals(inlineLiteralPath, modification.path)
+        val before = inlineLiteralSnapshot.files.single { it.path.normalize() == inlineLiteralPath.normalize() }
+        val actual = org.refactorkit.core.TextEdits.apply(before.content, modification.textEdits)
+        val expected = expectedSource.trimIndent().trimStart('\n').let { if (it.endsWith('\n')) it else "$it\n" }
+        assertEquals(expected, actual)
+        val beforeErrors = plan.diagnosticsBefore.filter { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR }
+            .map { "${it.code}|${it.message}|${it.location}" }.toSet()
+        val newErrors = plan.diagnosticsAfterPreview.filter { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR }
+            .map { "${it.code}|${it.message}|${it.location}" }.filterNot { it in beforeErrors }
+        assertTrue(newErrors.isEmpty(), "preview introduced diagnostics: $newErrors")
+        assertTrue(plan.warnings.isEmpty(), plan.warnings.joinToString())
+    }
+
+    @io.cucumber.java.en.Then("the Java adapter advertises inlineVariable as stable managed and applies then rolls back the preview")
+    fun inlineVariableCapabilityIsAdvertised() {
+        val capability = org.refactorkit.java.JavaAdapterRegistration.capability("inlineVariable")
+        assertNotNull(capability, "inlineVariable must be visible to capability-aware IDE consumers")
+        assertEquals(org.refactorkit.core.CapabilityStability.STABLE, capability.stability)
+        assertEquals(org.refactorkit.core.MutationAuthority.MANAGED_STABLE, capability.mutationAuthority)
+        assertTrue(org.refactorkit.java.JavaAdapterRegistration.descriptors().any { it.id == "inlineVariable" })
+
+        val plan = requireNotNull(inlineLiteralPlan)
+        val adapter = JavaLanguageAdapter()
+        val engine = org.refactorkit.core.PatchEngine(inlineLiteralRoot)
+        val applied = engine.apply(
+            plan,
+            inlineLiteralSnapshot,
+            org.refactorkit.core.ApplyAuthorization.explicit("java-inline-variable-literal-story"),
+            org.refactorkit.core.DiagnosticsGate.enabled("java-inline-variable-literal", adapter::diagnostics),
+        )
+        val transaction = (applied as? org.refactorkit.core.ApplyResult.Applied)?.transaction
+            ?: fail("managed PatchEngine apply was refused: $applied")
+        val expectedApplied = "package fixture.api;\n" +
+            "public class Calculator {\n" +
+            "    public int add() {\n" +
+            "        return 7 + 7;\n" +
+            "    }\n" +
+            "}\n"
+        assertEquals(expectedApplied, Files.readString(inlineLiteralRoot.resolve(inlineLiteralPath)))
+        assertTrue(
+            adapter.diagnostics(JavaProjectScanner().scan(inlineLiteralRoot)).none { it.severity == org.refactorkit.core.Diagnostic.Severity.ERROR },
+            "managed apply introduced Java errors",
+        )
+        val rollback = engine.rollback(transaction, org.refactorkit.core.RollbackMode.NORMAL)
+        assertTrue(rollback is org.refactorkit.core.ApplyResult.Applied, "normal rollback was refused: $rollback")
+        assertEquals(
+            "package fixture.api;\n" +
+                "public class Calculator {\n" +
+                "    public int add() {\n" +
+                "        int base = 7;\n" +
+                "        return base + base;\n" +
+                "    }\n" +
+                "}\n",
+            Files.readString(inlineLiteralRoot.resolve(inlineLiteralPath)),
+        )
+        assertEquals(inlineLiteralSnapshot.hash, JavaProjectScanner().scan(inlineLiteralRoot).hash)
     }
 
     @Given("one planning call supplies the exact immutable snapshot {string} and current Java adapter {string}")
@@ -209,6 +327,82 @@ class JavaRefactoringPreviewCommandSteps {
     @Then("no other Java planner is invoked")
     fun noOtherPlannerInvocation() {
         assertEquals(1, recordingInvoker.invocations.size)
+    }
+
+    @Given("an offline Maven reactor has a named source module and no configured project SDK")
+    fun offlineMavenReactorHasNamedSourceModuleWithoutSdk() {
+        mavenOwnershipRoot = temporaryWorkspace("maven-ownership-jpms")
+        writeMavenChildPom(mavenOwnershipRoot, "source")
+        writeMavenChildPom(mavenOwnershipRoot, "destination")
+        mavenOwnershipRoot.resolve("pom.xml").writeText(
+            """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>fixture</groupId><artifactId>root</artifactId><version>1</version><packaging>pom</packaging>
+              <properties><maven.compiler.release>21</maven.compiler.release></properties>
+              <modules><module>source</module><module>destination</module></modules>
+            </project>
+            """.trimIndent(),
+        )
+        val sourceRoot = mavenOwnershipRoot.resolve("source/src/main/java")
+        sourceRoot.createDirectories()
+        sourceRoot.resolve("module-info.java").writeText("module fixture.source { exports fixture.source; }\n")
+        sourceRoot.resolve("Service.java").also { path ->
+            path.parent.createDirectories()
+            path.writeText("package fixture.source; public class Service {}\n")
+        }
+        mavenOwnershipSnapshot = JavaProjectScanner(allowNetworkDependencyResolution = false).scan(mavenOwnershipRoot)
+        assertTrue(mavenOwnershipSnapshot.files.any { it.path == Path.of("source/src/main/java/module-info.java") })
+        mavenOwnershipTreeBefore = captureTree(mavenOwnershipRoot)
+    }
+
+    @When("java.moveAcrossMavenModules previews moving a source root from that reactor")
+    fun previewMavenOwnershipMoveWithoutSdk() {
+        val result = runCatching {
+            JavaLanguageAdapter().applyRefactoring(RefactoringRequest(
+                operation = "java.moveAcrossMavenModules",
+                arguments = mapOf(
+                    "from" to "source/src/main/java",
+                    "to" to "destination/src/main/java",
+                ),
+                snapshot = mavenOwnershipSnapshot,
+            ))
+        }
+        mavenOwnershipPlan = result.getOrNull()
+        mavenOwnershipFailure = result.exceptionOrNull()
+    }
+
+    @Then("the adapter returns a REFUSED plan with java.context.sdkRequired and no edit authority")
+    fun mavenOwnershipMoveReturnsTypedSdkRefusal() {
+        assertNull(mavenOwnershipFailure, "The adapter must translate authority failure into a typed refusal plan")
+        val plan = assertNotNull(mavenOwnershipPlan)
+        assertEquals("java.moveAcrossMavenModules", plan.operation)
+        assertEquals(PatchStatus.REFUSED, plan.status)
+        assertEquals("java.context.sdkRequired", plan.refusalCode)
+        assertTrue(plan.workspaceEdit.edits.isEmpty())
+        assertTrue(plan.affectedFiles.isEmpty())
+        assertFalse(plan.requiresUserApproval)
+        assertEquals(null, plan.authorityLease)
+    }
+
+    @io.cucumber.java.en.And("all reactor bytes remain unchanged and no transaction is created")
+    fun mavenOwnershipRefusalPreservesWorkspace() {
+        assertEquals(mavenOwnershipTreeBefore, captureTree(mavenOwnershipRoot))
+        assertFalse(Files.exists(mavenOwnershipRoot.resolve(".refactorkit/transactions")))
+    }
+
+    private fun writeMavenChildPom(root: Path, name: String) {
+        val moduleRoot = root.resolve(name)
+        moduleRoot.resolve("src/main/java").createDirectories()
+        moduleRoot.resolve("pom.xml").writeText(
+            """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <parent><groupId>fixture</groupId><artifactId>root</artifactId><version>1</version><relativePath>../pom.xml</relativePath></parent>
+              <artifactId>$name</artifactId>
+            </project>
+            """.trimIndent() + "\n",
+        )
     }
 
     @Then("the planner receives the same {string} snapshot instance and every command value exactly as supplied")

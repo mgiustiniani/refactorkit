@@ -8,6 +8,6 @@ package org.refactorkit.core
  */
 object RefactorKitVersion {
     const val NAME = "RefactorKit"
-    const val VERSION = "0.7.0"
+    const val VERSION = "0.8.0"
     const val API_VERSION = "0.2"
 }

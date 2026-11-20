@@ -22,6 +22,8 @@ import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
 import org.refactorkit.java.JavaGeneratedSourcePolicy
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaMovePackagePlanner
+import org.refactorkit.java.JavaMovePackageRequest
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
 import org.refactorkit.java.JavaMoveClassLexicalFallbackReviewEnvelope
 import org.refactorkit.java.JavaMoveClassOperationDispatcher
@@ -381,116 +383,8 @@ class RecipeEngine(
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private fun movePackagePlan(snap: ProjectSnapshot, fromPkg: String, toPkg: String): PatchPlan {
-        if (!isValidPackageName(fromPkg) || !isValidPackageName(toPkg)) {
-            return refusedPlan("movePackage", "Invalid Java package name: '$fromPkg' -> '$toPkg'.", snap)
-        }
-        if (fromPkg == toPkg) {
-            return refusedPlan("movePackage", "Source and target package are identical.", snap)
-        }
-        val packageRegex = Regex("(?m)^\\s*package\\s+${Regex.escape(fromPkg)}\\s*;")
-        val movedFiles = snap.files.filter { file ->
-            file.languageId == "java" && packageRegex.containsMatchIn(file.content) &&
-                JavaGeneratedSourcePolicy.reason(file) == null
-        }.sortedBy { it.path.toString() }
-        if (movedFiles.isEmpty()) {
-            return PatchPlan(
-                operation = "movePackage", snapshotHash = snap.hash, confidence = 1.0,
-                summary = "No exact-package Java compilation units to process.",
-                affectedFiles = emptySet(), workspaceEdit = WorkspaceEdit(),
-                evidence = RefactoringEvidence.STRUCTURAL,
-            )
-        }
-
-        val targetBySource = linkedMapOf<Path, Path>()
-        for (file in movedFiles) {
-            val target = packageTargetPath(file.path, fromPkg, toPkg)
-                ?: return refusedPlan(
-                    "movePackage",
-                    "Cannot safely derive a package path for ${file.path}; its path does not match $fromPkg.",
-                    snap,
-                )
-            targetBySource[file.path.normalize()] = target
-        }
-        val existing = snap.files.map { it.path.normalize() }.toSet()
-        val movingSources = targetBySource.keys
-        val conflict = targetBySource.values.firstOrNull { target ->
-            target in existing && target !in movingSources
-        }
-        if (conflict != null || targetBySource.values.toSet().size != targetBySource.size) {
-            return refusedPlan(
-                "movePackage",
-                "Target package conflict: ${conflict ?: "multiple units map to one target path"} already exists.",
-                snap,
-            )
-        }
-
-        val typeKinds = setOf(
-            org.refactorkit.core.Symbol.Kind.CLASS,
-            org.refactorkit.core.Symbol.Kind.INTERFACE,
-            org.refactorkit.core.Symbol.Kind.ENUM,
-            org.refactorkit.core.Symbol.Kind.RECORD,
-            org.refactorkit.core.Symbol.Kind.ANNOTATION,
-        )
-        val symbolKinds = adapter.buildSymbols(snap).symbols
-            .filter {
-                it.kind in typeKinds && it.location.path.normalize() in movingSources &&
-                    it.id.value.substringBeforeLast('.') == fromPkg
-            }
-            .groupingBy { it.kind.name.lowercase() }
-            .eachCount()
-        val declaredTypes = movedFiles.flatMap(::topLevelTypeNames).toSortedSet()
-        val qualifiedNames = declaredTypes.map { "$fromPkg.$it" to "$toPkg.$it" }
-        val sourcePathReferences = targetBySource.mapNotNull { (source, target) ->
-            val oldPath = source.toString().replace('\\', '/')
-            val newPath = target.toString().replace('\\', '/')
-            val marker = Regex("(?:^|/)src/(?:main|test)/java/").find(oldPath) ?: return@mapNotNull null
-            oldPath.substring(marker.range.first + if (oldPath[marker.range.first] == '/') 1 else 0) to
-                newPath.substring(marker.range.first + if (newPath[marker.range.first] == '/') 1 else 0)
-        }
-        val wildcardImport = Regex(
-            "(?m)^(\\s*import\\s+(?:static\\s+)?)${Regex.escape(fromPkg)}\\.(\\*\\s*;)",
-        )
-        val modifications = mutableListOf<FileEdit>()
-        for (file in snap.files.sortedBy { it.path.toString() }) {
-            if (file.languageId != "java" || JavaGeneratedSourcePolicy.reason(file) != null) continue
-            var after = file.content
-            if (file.path.normalize() in movingSources) {
-                after = packageRegex.replaceFirst(after, "package $toPkg;")
-            }
-            qualifiedNames.forEach { (oldName, newName) ->
-                after = after.replace(
-                    Regex("(?<![A-Za-z0-9_$])${Regex.escape(oldName)}(?![A-Za-z0-9_$])"),
-                    newName,
-                )
-            }
-            sourcePathReferences.forEach { (oldPath, newPath) -> after = after.replace(oldPath, newPath) }
-            after = after.replace("\"$fromPkg\"", "\"$toPkg\"")
-            after = wildcardImport.replace(after, "$1$toPkg.$2")
-            fullFileReplacement(file.path.normalize(), file.content, after)?.let(modifications::add)
-        }
-        val renames = targetBySource.entries.sortedBy { it.key.toString() }
-            .map { (source, target) -> FileEdit.Rename(source, target) }
-        val workspaceEdit = WorkspaceEdit(modifications + renames)
-        val packageInfoCount = movedFiles.count { it.path.fileName.toString() == "package-info.java" }
-        val kindSummary = symbolKinds.toSortedMap().entries.joinToString(", ") { "${it.key}=${it.value}" }
-            .ifBlank { "types=${declaredTypes.size}" }
-        return PatchPlan(
-            operation = "movePackage",
-            snapshotHash = snap.hash,
-            confidence = 0.92,
-            summary = "Move package $fromPkg -> $toPkg: units=${movedFiles.size}, " +
-                "$kindSummary, package-info=$packageInfoCount.",
-            affectedFiles = workspaceEdit.affectedFiles(),
-            workspaceEdit = workspaceEdit,
-            warnings = listOf(
-                "Java compilation units, imports, fully qualified references, exact package-name literals, and exact moved-unit source-path literals are in scope; other strings and build metadata are not migrated.",
-                "Generated sources and build outputs are excluded from mutation planning.",
-            ),
-            riskLevel = org.refactorkit.core.RiskLevel.MEDIUM,
-            evidence = RefactoringEvidence.STRUCTURAL,
-        )
-    }
+    private fun movePackagePlan(snap: ProjectSnapshot, fromPkg: String, toPkg: String): PatchPlan =
+        JavaMovePackagePlanner(adapter).preview(snap, JavaMovePackageRequest(fromPkg, toPkg))
 
     private fun importSurface(content: String): List<String> =
         content.lineSequence()
@@ -546,31 +440,6 @@ class RecipeEngine(
             diagnostic.message,
         ).joinToString("\u0000")
     }
-
-    private fun isValidPackageName(packageName: String): Boolean =
-        packageName.isNotBlank() && packageName.split('.').all { segment ->
-            segment.isNotEmpty() &&
-                (segment.first().isLetter() || segment.first() == '_' || segment.first() == '$') &&
-                segment.all { it.isLetterOrDigit() || it == '_' || it == '$' }
-        }
-
-    private fun packageTargetPath(path: Path, fromPkg: String, toPkg: String): Path? {
-        val parent = path.parent ?: return null
-        val parentSegments = (0 until parent.nameCount).map { parent.getName(it).toString() }
-        val oldSegments = fromPkg.split('.')
-        if (parentSegments.size < oldSegments.size || parentSegments.takeLast(oldSegments.size) != oldSegments) return null
-        var target = path.root ?: Path.of("")
-        parentSegments.dropLast(oldSegments.size).forEach { target = target.resolve(it) }
-        toPkg.split('.').forEach { target = target.resolve(it) }
-        return target.resolve(path.fileName).normalize()
-    }
-
-    private fun topLevelTypeNames(file: org.refactorkit.core.SourceFile): List<String> =
-        Regex("(?m)^(?:\\s*(?:public|protected|private|abstract|final|sealed|non-sealed|static|strictfp)\\s+)*" +
-            "(?:class|interface|enum|record|@interface)\\s+([A-Za-z_$][A-Za-z0-9_$]*)")
-            .findAll(file.content)
-            .map { it.groupValues[1] }
-            .toList()
 
     private fun composeRecipePlan(
         recipe: RecipeDefinition,

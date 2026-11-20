@@ -276,18 +276,26 @@ class KotlinToolchainDiscoverer(
             diagnostics += refusal("kotlin.jdkMetadataInvalid", "JDK release metadata cannot be read")
             return null
         }.toString(Charsets.UTF_8)
-        val entries = linkedMapOf<String, String>()
+        val seenNames = mutableSetOf<String>()
+        var javaVersion: String? = null
         for (line in text.lineSequence().filter(String::isNotBlank)) {
             val name = line.substringBefore('=', missingDelimiterValue = "")
             val raw = line.substringAfter('=', missingDelimiterValue = "")
-            if (!METADATA_KEY.matches(name) || raw.length !in 2..MAX_RELEASE_VALUE_CHARS ||
-                !raw.startsWith('"') || !raw.endsWith('"') || name in entries) {
+            if (!METADATA_KEY.matches(name) || raw.length !in 1..MAX_RELEASE_VALUE_CHARS || !seenNames.add(name)) {
                 diagnostics += refusal("kotlin.jdkMetadataInvalid", "JDK release metadata has invalid shape")
                 return null
             }
-            entries[name] = raw.removeSurrounding("\"")
+            if (name == "JAVA_VERSION") {
+                if (raw.length < 2 || !raw.startsWith('"') || !raw.endsWith('"')) {
+                    diagnostics += refusal("kotlin.jdkMetadataInvalid", "JDK release metadata has invalid shape")
+                    return null
+                }
+                javaVersion = raw.removeSurrounding("\"")
+            }
         }
-        val version = entries["JAVA_VERSION"]
+        // Vendor extension values are opaque and bounded; GraalVM, for example,
+        // publishes COMMIT_INFO as unquoted JSON in the release file.
+        val version = javaVersion
         if (version == null || !JAVA_VERSION.matches(version)) {
             diagnostics += refusal("kotlin.jdkMetadataInvalid", "JDK release metadata has no valid JAVA_VERSION")
             return null

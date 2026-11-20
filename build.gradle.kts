@@ -19,7 +19,7 @@ if (buildJdkFeature != 21) {
 
 allprojects {
     group = "org.refactorkit"
-    version = "0.7.0"
+    version = "0.8.0"
 }
 
 subprojects {
@@ -53,6 +53,51 @@ subprojects {
         doFirst { boundedTemp.get().asFile.mkdirs() }
         systemProperty("java.io.tmpdir", boundedTemp.get().asFile.absolutePath)
         environment("TMPDIR", boundedTemp.get().asFile.absolutePath)
+        if (project.path == ":modules:refactorkit-cli") {
+            val qualificationGradle = project.providers.environmentVariable("REFACTORKIT_GRADLE_EXECUTABLE")
+                .orElse(project.providers.provider {
+                    val launcher = if (System.getProperty("os.name").startsWith("Windows")) "gradle.bat" else "gradle"
+                    requireNotNull(gradle.gradleHomeDir).resolve("bin/$launcher").absolutePath
+                })
+            environment("REFACTORKIT_GRADLE_EXECUTABLE", qualificationGradle.get())
+        }
+        if (name == "test" && project.path in setOf(":modules:refactorkit-cli", ":modules:refactorkit-lsp")) {
+            val callerRuntime = project.providers.environmentVariable("REFACTORKIT_C_QUERY_CANDIDATE_ROOT")
+            val cli = rootProject.project(":modules:refactorkit-cli")
+            val ownedRuntime = cli.providers.gradleProperty("refactorkit.package.dir")
+                .orElse(cli.layout.buildDirectory.dir("package/refactorkit").map { it.asFile.absolutePath })
+            if (!callerRuntime.isPresent) dependsOn(":modules:refactorkit-cli:refactorkitRuntimeDist")
+            environment("REFACTORKIT_C_QUERY_CANDIDATE_ROOT", callerRuntime.orElse(ownedRuntime).get())
+            val evidenceKey = if (project.path == ":modules:refactorkit-cli")
+                "refactorkit.ts.packaged.evidence" else "refactorkit.c.lsp.packaged.evidence"
+            val evidence = project.providers.systemProperty(evidenceKey)
+                .orElse(project.layout.buildDirectory.dir("reports/runtime-wire/$name").map { it.asFile.absolutePath })
+            systemProperty(evidenceKey, evidence.get())
+            outputs.dir(evidence).withPropertyName("runtimeWireEvidence")
+            doFirst { file(evidence.get()).mkdirs() }
+        }
+        if (project.path in setOf(":modules:refactorkit-c", ":modules:refactorkit-cli")) {
+            project.providers.environmentVariable("REFACTORKIT_C_QUALIFICATION_TOOLCHAIN").orNull?.let {
+                systemProperty("refactorkit.c.qualificationToolchain", it)
+            }
+            // Ordinary source/CI tests retain native evidence without caller-only setup.
+            // Distinct task/module directories also prevent unrelated runs overwriting it.
+            mapOf(
+                "compilerRuntimeEvidence" to ("REFACTORKIT_C_COMPILER_RUNTIME_EVIDENCE" to "compiler-runtime"),
+                "formatterRuntimeEvidence" to ("REFACTORKIT_C_FORMATTER_RUNTIME_EVIDENCE" to "formatter-runtime"),
+                "runtimeDiscoveryEvidence" to ("REFACTORKIT_C_RUNTIME_DISCOVERY_EVIDENCE" to "runtime-discovery"),
+                "runtimeManifestEvidence" to ("REFACTORKIT_C_RUNTIME_MANIFEST_EVIDENCE" to "runtime-manifest"),
+            ).forEach { (key, selectors) ->
+                val (environmentKey, directory) = selectors
+                val property = "refactorkit.c.$key"
+                val destination = project.providers.environmentVariable(environmentKey)
+                    .orElse(project.layout.buildDirectory.dir("reports/c-qualification/$name/$directory")
+                        .map { it.asFile.absolutePath })
+                systemProperty(property, destination.get())
+                outputs.dir(destination).withPropertyName(key)
+                doFirst { file(destination.get()).mkdirs() }
+            }
+        }
     }
 
     // ── Static analysis plugins ──

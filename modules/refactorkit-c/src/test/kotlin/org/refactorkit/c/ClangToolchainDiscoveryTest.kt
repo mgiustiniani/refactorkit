@@ -22,6 +22,7 @@ class ClangToolchainDiscoveryTest {
                 Result.success("$it version 22.1.8\nTarget: x86_64-pc-linux-gnu")
             },
             resourceDirProbe = ClangResourceDirProbe { Result.success("/usr/lib/clang/22") },
+            runtimeProvider = SimulatedClangRuntimeProvider(),
         )
 
         val result = discoverer.discover(fixture.request())
@@ -48,7 +49,7 @@ class ClangToolchainDiscoveryTest {
         val discoverer = discoverer()
         val first = assertIs<ClangToolchainDiscovery.Available>(discoverer.discover(fixture.request())).toolchain
         val firstHash = first.provenance.evidence.single { it.role == "clang-executable" }.sha256
-        fixture.clang.writeText("changed clang")
+        fixture.clang.writeText("changed clang".padEnd(64, ' '))
 
         val second = assertIs<ClangToolchainDiscovery.Available>(discoverer.discover(fixture.request())).toolchain
         val secondHash = second.provenance.evidence.single { it.role == "clang-executable" }.sha256
@@ -69,9 +70,10 @@ class ClangToolchainDiscoveryTest {
         assertCodes(refused, "clang.workspaceToolchainRefused")
 
         val allowed = ClangToolchainDiscoverer(
-            ClangToolchainDiscoveryPolicy(allowWorkspaceLocalToolchain = true),
-            ClangVersionProbe { Result.success("$it version 22.1.8") },
-            ClangResourceDirProbe { Result.success("/usr/lib/clang/22") },
+            policy = ClangToolchainDiscoveryPolicy(allowWorkspaceLocalToolchain = true),
+            versionProbe = ClangVersionProbe { Result.success("$it version 22.1.8") },
+            resourceDirProbe = ClangResourceDirProbe { Result.success("/usr/lib/clang/22") },
+            runtimeProvider = SimulatedClangRuntimeProvider(),
         ).discover(fixture.request())
         assertIs<ClangToolchainDiscovery.Available>(allowed)
     }
@@ -81,15 +83,15 @@ class ClangToolchainDiscoveryTest {
         val fixture = fixture()
         assertCodes(ClangToolchainDiscoverer(versionProbe = ClangVersionProbe {
             Result.failure(IllegalStateException("probe failed"))
-        }, resourceDirProbe = resourceDirProbe()).discover(fixture.request()), "clang.versionProbeFailed")
+        }, resourceDirProbe = resourceDirProbe(), runtimeProvider = SimulatedClangRuntimeProvider()).discover(fixture.request()), "clang.versionProbeFailed")
 
         assertCodes(ClangToolchainDiscoverer(versionProbe = ClangVersionProbe {
             Result.success("$it version 19.1.0")
-        }, resourceDirProbe = resourceDirProbe()).discover(fixture.request()), "clang.versionUnsupported")
+        }, resourceDirProbe = resourceDirProbe(), runtimeProvider = SimulatedClangRuntimeProvider()).discover(fixture.request()), "clang.versionUnsupported")
 
         assertCodes(ClangToolchainDiscoverer(versionProbe = ClangVersionProbe {
             Result.success("$it version not-a-version")
-        }, resourceDirProbe = resourceDirProbe()).discover(fixture.request()), "clang.versionInvalid")
+        }, resourceDirProbe = resourceDirProbe(), runtimeProvider = SimulatedClangRuntimeProvider()).discover(fixture.request()), "clang.versionInvalid")
     }
 
     @Test
@@ -101,6 +103,7 @@ class ClangToolchainDiscoveryTest {
                 if (label == "clangd") Result.success("clangd version 21.0.0") else Result.success("$label version 22.1.8")
             },
             resourceDirProbe = resourceDirProbe(),
+        runtimeProvider = SimulatedClangRuntimeProvider(),
         )
         assertCodes(discoverer.discover(fixture.request()), "clang.toolchainMismatch")
     }
@@ -119,7 +122,7 @@ class ClangToolchainDiscoveryTest {
         oversized.clang.writeText(" ".repeat(33))
         assertCodes(ClangToolchainDiscoverer(smallPolicy, versionProbe = ClangVersionProbe {
             Result.success("$it version 22.1.8")
-        }, resourceDirProbe = resourceDirProbe()).discover(oversized.request()), "clang.toolchainFileLimit")
+        }, resourceDirProbe = resourceDirProbe(), runtimeProvider = SimulatedClangRuntimeProvider()).discover(oversized.request()), "clang.toolchainFileLimit")
     }
 
     @Test
@@ -159,6 +162,7 @@ class ClangToolchainDiscoveryTest {
         assertCodes(ClangToolchainDiscoverer(
             versionProbe = ClangVersionProbe { Result.success("$it version 22.1.8") },
             resourceDirProbe = ClangResourceDirProbe { Result.failure(IllegalStateException("resource-dir failed")) },
+            runtimeProvider = SimulatedClangRuntimeProvider(),
         ).discover(fixture.request()), "clang.resourceDirProbeFailed")
 
         val first = assertIs<ClangToolchainDiscovery.Available>(discoverer().discover(fixture.request())).toolchain
@@ -166,7 +170,7 @@ class ClangToolchainDiscoveryTest {
         assertTrue(identity.length == 64)
         assertEquals(identity, assertIs<ClangToolchainDiscovery.Available>(discoverer().discover(fixture.request())).toolchain.provenance.toolchainIdentity())
 
-        fixture.clang.writeText("changed clang")
+        fixture.clang.writeText("changed clang".padEnd(64, ' '))
         val changed = assertIs<ClangToolchainDiscovery.Available>(discoverer().discover(fixture.request())).toolchain
         assertNotEquals(identity, changed.provenance.toolchainIdentity())
     }
@@ -174,6 +178,7 @@ class ClangToolchainDiscoveryTest {
     private fun discoverer() = ClangToolchainDiscoverer(
         versionProbe = ClangVersionProbe { Result.success("$it version 22.1.8\nTarget: x86_64-pc-linux-gnu") },
         resourceDirProbe = resourceDirProbe(),
+        runtimeProvider = SimulatedClangRuntimeProvider(),
     )
 
     private fun resourceDirProbe() = ClangResourceDirProbe { Result.success("/usr/lib/clang/22") }
@@ -191,9 +196,9 @@ class ClangToolchainDiscoveryTest {
         val clang = base.resolve("clang")
         val clangd = base.resolve("clangd")
         val clangFormat = base.resolve("clang-format")
-        clang.writeText("fake clang")
-        clangd.writeText("fake clangd")
-        clangFormat.writeText("fake clang-format")
+        clang.writeText("fake clang".padEnd(64, ' '))
+        clangd.writeText("fake clangd".padEnd(64, ' '))
+        clangFormat.writeText("fake clang-format".padEnd(64, ' '))
         clang.toFile().setExecutable(true)
         clangd.toFile().setExecutable(true)
         clangFormat.toFile().setExecutable(true)

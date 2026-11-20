@@ -20,7 +20,7 @@ Feature: Retain pending plans in a bounded session store
     Then it changes only its in-memory references
     And it creates no workspace change, filesystem write, workspace lock, write-ahead-log record, managed transaction, or rollback evidence
 
-  @REQ-PENDING-PLAN-STORE-002
+  @REQ-PENDING-PLAN-STORE-002#integration-surfaces-preserve-their-existing-lifecycle-policies
   Scenario: Integration surfaces preserve their existing lifecycle policies
     Given the shared store exposes only insert, successful access-order lookup, remove, and clear
     When each surface replaces its private pending-plan map with a store owned by that session

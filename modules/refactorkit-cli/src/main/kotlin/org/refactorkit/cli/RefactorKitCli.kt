@@ -2,6 +2,7 @@ package org.refactorkit.cli
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -11,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
+import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.LanguageCapabilityProtocol
@@ -57,6 +59,7 @@ import org.refactorkit.kotlin.KotlinAdapterRegistration
 import org.refactorkit.kotlin.KotlinLanguageAdapter
 import org.refactorkit.testkit.GoldenTestLoader
 import org.refactorkit.testkit.GoldenTestRunner
+import org.refactorkit.testkit.CGoldenToolchainPaths
 import org.refactorkit.treesitter.GenericLocalRenamePlanner
 import org.refactorkit.treesitter.GenericProjectScanner
 import org.refactorkit.treesitter.GenericStructuralSearch
@@ -66,16 +69,108 @@ import org.refactorkit.webimporter.ExternalJavaClassImporter
 import org.refactorkit.webimporter.ImportRequest
 import org.refactorkit.webimporter.LicensePolicy
 import org.refactorkit.webimporter.SourceKind
-import java.nio.file.Path
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
+import java.io.PrintStream
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.UUID
 import kotlin.io.path.exists
 import kotlin.io.path.readText
 
 fun main(args: Array<String>) {
-    val code = RefactorKitCli().run(args.toList())
+    val code = CliProcessOutputBudget.execute { _, _ ->
+        RefactorKitCli().run(args.toList())
+    }
     if (code != 0) kotlin.system.exitProcess(code)
+}
+
+/** Bounds and atomically publishes the actual CLI process response. */
+private object CliProcessOutputBudget {
+    private const val OVERFLOW_EXIT_CODE = 1
+
+    fun execute(command: (PrintStream, PrintStream) -> Int): Int {
+        val originalOut = System.out
+        val originalErr = System.err
+        val capture = Capture(org.refactorkit.core.ProtocolLimits.MAX_CLI_OUTPUT_BYTES)
+        val capturedOut = PrintStream(capture.stdout, true, StandardCharsets.UTF_8.name())
+        val capturedErr = PrintStream(capture.stderr, true, StandardCharsets.UTF_8.name())
+        val commandCode = try {
+            System.setOut(capturedOut)
+            System.setErr(capturedErr)
+            command(capturedOut, capturedErr)
+        } catch (failure: Throwable) {
+            capturedErr.println("cli.executionFailed: ${failure.javaClass.simpleName}")
+            1
+        } finally {
+            System.setOut(originalOut)
+            System.setErr(originalErr)
+            capturedOut.flush()
+            capturedErr.flush()
+            capturedOut.close()
+            capturedErr.close()
+        }
+
+        if (capture.exceeded) {
+            originalErr.println(
+                "cli.outputLimitExceeded: combined stdout/stderr exceeded " +
+                    "${org.refactorkit.core.ProtocolLimits.MAX_CLI_OUTPUT_BYTES} UTF-8 bytes; output discarded",
+            )
+            originalErr.flush()
+            return OVERFLOW_EXIT_CODE
+        }
+
+        originalOut.write(capture.stdoutBytes())
+        originalOut.flush()
+        originalErr.write(capture.stderrBytes())
+        originalErr.flush()
+        return commandCode
+    }
+
+    private class Capture(private val maxBytes: Int) {
+        private val lock = Any()
+        private val outBytes = ByteArrayOutputStream()
+        private val errBytes = ByteArrayOutputStream()
+        private var acceptedBytes = 0
+        @Volatile var exceeded: Boolean = false
+            private set
+
+        val stdout: OutputStream = bounded(outBytes)
+        val stderr: OutputStream = bounded(errBytes)
+
+        fun stdoutBytes(): ByteArray = outBytes.toByteArray()
+        fun stderrBytes(): ByteArray = errBytes.toByteArray()
+
+        private fun bounded(destination: ByteArrayOutputStream): OutputStream = object : OutputStream() {
+            override fun write(value: Int) {
+                synchronized(lock) {
+                    if (exceeded) return
+                    if (acceptedBytes >= maxBytes) {
+                        exceeded = true
+                        return
+                    }
+                    destination.write(value)
+                    acceptedBytes++
+                }
+            }
+
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                require(offset >= 0 && length >= 0 && offset <= bytes.size - length)
+                if (length == 0) return
+                synchronized(lock) {
+                    if (exceeded) return
+                    if (length > maxBytes - acceptedBytes) {
+                        exceeded = true
+                        return
+                    }
+                    destination.write(bytes, offset, length)
+                    acceptedBytes += length
+                }
+            }
+        }
+    }
 }
 
 /** Reflection-only refusal probe; production construction always selects the no-fault path. */
@@ -98,12 +193,15 @@ class RefactorKitCli(
             moveClassGuidanceOutput
         }
 
+    private fun cliOut(): PrintStream = System.out
+    private fun cliErr(): PrintStream = System.err
+
     private val semanticJson = Json { prettyPrint = true }
     private val booleanOptions = setOf(
         "apply", "preview", "force", "approve", "acknowledge-warning", "stdin", "whole-word", "case-insensitive", "resolve-dependencies", "verbose",
         "all-identical-occurrences",
         "allow-workspace-local-toolchain", "allow-external-consumers", "allow-dynamic-references", "json",
-        "include-hierarchy", "accept-external-consumer-risk",
+        "include-hierarchy", "accept-external-consumer-risk", "include-declaration",
     )
 
     fun run(args: List<String>): Int {
@@ -141,7 +239,7 @@ class RefactorKitCli(
             "search"          -> cmdSearch(args.drop(1))
             "local-rename"    -> cmdLocalRename(args.drop(1))
             "test-golden"     -> cmdTestGolden(args.drop(1))
-            else -> { System.err.println("Unknown command: ${args.first()}"); printHelp(); 2 }
+            else -> { cliErr().println("Unknown command: ${args.first()}"); printHelp(); 2 }
         }
     }
 
@@ -151,12 +249,12 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val root = parsed.positionals.firstOrNull() ?: "."
         val path = Paths.get(root)
-        if (!path.exists()) { System.err.println("Path does not exist: $path"); return 1 }
+        if (!path.exists()) { cliErr().println("Path does not exist: $path"); return 1 }
         val snap = scanner(parsed.flags).scan(path)
-        println("Project : ${snap.workspace.root}")
-        println("Files   : ${snap.files.size}")
-        println("Modules : ${snap.modules.size}")
-        println("Snapshot: ${snap.hash}")
+        cliOut().println("Project : ${snap.workspace.root}")
+        cliOut().println("Files   : ${snap.files.size}")
+        cliOut().println("Modules : ${snap.modules.size}")
+        cliOut().println("Snapshot: ${snap.hash}")
         return 0
     }
 
@@ -166,20 +264,20 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val root = parsed.positionals.firstOrNull() ?: "."
         val path = Paths.get(root)
-        if (!path.exists()) { System.err.println("Path does not exist: $path"); return 1 }
+        if (!path.exists()) { cliErr().println("Path does not exist: $path"); return 1 }
         semanticSessionFactory().use { session ->
             session.dispatch("project.open", buildJsonObject { put("root", root) })
             val status = session.dispatch("index.status", null)
             if ("json" in parsed.flags) {
-                println(semanticJson.encodeToString(status))
+                cliOut().println(semanticJson.encodeToString(status))
             } else {
                 val value = status.jsonObject
-                println("Workspace index")
-                println("Snapshot : ${value.getValue("snapshotHash").jsonPrimitive.content}")
-                println("Generation: ${value.getValue("generation").jsonPrimitive.content}")
-                println("Sources  : ${value.getValue("sourceCount").jsonPrimitive.content}")
-                println("Symbols  : ${value.getValue("symbolCount").jsonPrimitive.content}")
-                println("Languages: ${value.getValue("languages")}")
+                cliOut().println("Workspace index")
+                cliOut().println("Snapshot : ${value.getValue("snapshotHash").jsonPrimitive.content}")
+                cliOut().println("Generation: ${value.getValue("generation").jsonPrimitive.content}")
+                cliOut().println("Sources  : ${value.getValue("sourceCount").jsonPrimitive.content}")
+                cliOut().println("Symbols  : ${value.getValue("symbolCount").jsonPrimitive.content}")
+                cliOut().println("Languages: ${value.getValue("languages")}")
             }
         }
         return 0
@@ -187,22 +285,22 @@ class RefactorKitCli(
 
     private fun cmdIntelligence(args: List<String>): Int {
         val operation = args.firstOrNull()
-            ?: run { System.err.println("intelligence requires search"); return 2 }
+            ?: run { cliErr().println("intelligence requires search"); return 2 }
         if (operation != "search") {
-            System.err.println("Unsupported intelligence operation: $operation")
+            cliErr().println("Unsupported intelligence operation: $operation")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
         val root = parsed.positionals.firstOrNull() ?: "."
         val path = Paths.get(root)
-        if (!path.exists()) { System.err.println("Path does not exist: $path"); return 1 }
+        if (!path.exists()) { cliErr().println("Path does not exist: $path"); return 1 }
         val kind = when (parsed.options["kind"] ?: "workspace-symbols") {
             "workspace-symbols", "workspaceSymbols" -> "workspaceSymbols"
             "document-symbols", "documentSymbols" -> "documentSymbols"
             "completion" -> "completion"
             "hover" -> "hover"
             "signature-help", "signatureHelp" -> "signatureHelp"
-            else -> run { System.err.println("Unknown intelligence query kind"); return 2 }
+            else -> run { cliErr().println("Unknown intelligence query kind"); return 2 }
         }
         semanticSessionFactory().use { session ->
             val opened = session.dispatch("project.open", buildJsonObject { put("root", root) }).jsonObject
@@ -217,21 +315,21 @@ class RefactorKitCli(
                 parsed.options["limit"]?.toIntOrNull()?.let { put("limit", it) }
             })
             if ("json" in parsed.flags) {
-                println(semanticJson.encodeToString(response))
+                cliOut().println(semanticJson.encodeToString(response))
                 return if (response.jsonObject["status"]?.jsonPrimitive?.content == "ready") 0 else 1
             }
             val value = response.jsonObject
             if (value["status"]?.jsonPrimitive?.content != "ready") {
                 val error = value["error"]?.jsonObject
-                System.err.println("${error?.get("code")?.jsonPrimitive?.content}: ${error?.get("message")?.jsonPrimitive?.content}")
+                cliErr().println("${error?.get("code")?.jsonPrimitive?.content}: ${error?.get("message")?.jsonPrimitive?.content}")
                 return 1
             }
             val items = value.getValue("items") as kotlinx.serialization.json.JsonArray
-            if (items.isEmpty()) println("No symbols found.") else items.forEach { item ->
+            if (items.isEmpty()) cliOut().println("No symbols found.") else items.forEach { item ->
                 val symbol = item.jsonObject
                 val location = symbol.getValue("location").jsonObject
                 val start = location.getValue("range").jsonObject.getValue("start").jsonObject
-                println(
+                cliOut().println(
                     "${symbol.getValue("symbolKind").jsonPrimitive.content}\t" +
                         "${symbol.getValue("name").jsonPrimitive.content}\t" +
                         "${location.getValue("path").jsonPrimitive.content}:" +
@@ -248,9 +346,9 @@ class RefactorKitCli(
     private fun cmdSymbols(args: List<String>): Int {
         val snap = scanFrom(positional(args, 0) ?: ".") ?: return 1
         val index = javaAdapter.buildSymbols(snap)
-        if (index.symbols.isEmpty()) { println("No symbols found."); return 0 }
+        if (index.symbols.isEmpty()) { cliOut().println("No symbols found."); return 0 }
         index.symbols.forEach { sym ->
-            println("${sym.kind}\t${sym.id.value}\t${sym.location.path}:${sym.location.range.start.line + 1}")
+            cliOut().println("${sym.kind}\t${sym.id.value}\t${sym.location.path}:${sym.location.range.start.line + 1}")
         }
         return 0
     }
@@ -260,23 +358,25 @@ class RefactorKitCli(
     private fun cmdDiagnostics(args: List<String>): Int {
         val parsed = parseOptions(args)
         val snap = scanFrom(parsed.positionals.firstOrNull() ?: ".", parsed.flags) ?: return 1
-        val platformHome = parsed.options["jdk-home"]
-            ?: System.getProperty("refactorkit.java.platform.home")
-            ?: System.getenv("REFACTORKIT_JAVA_PLATFORM_HOME")
-        val allDiagnostics = javaAdapter.authoritativeDiagnostics(
+        val platformSelection = org.refactorkit.java.JavaDiagnosticsPlatformSelection(
+            projectSdkHome = parsed.options["jdk-home"]?.let(Paths::get),
+            releaseFallbackHome = (System.getProperty("refactorkit.java.platform.home")
+                ?: System.getenv("REFACTORKIT_JAVA_PLATFORM_HOME"))?.let(Paths::get),
+        )
+        val allDiagnostics = javaAdapter.authoritativeDiagnosticsWithPlatformSelection(
             snap,
-            platformHome?.let(Paths::get),
+            platformSelection,
             verbose = "verbose" in parsed.flags,
         )
         val diags = try {
             parsed.options["module"]?.let { javaAdapter.filterDiagnosticsForModule(snap, allDiagnostics, it) }
                 ?: allDiagnostics
         } catch (failure: IllegalArgumentException) {
-            System.err.println(failure.message)
+            cliErr().println(failure.message)
             return 2
         }
-        if (diags.isEmpty()) { println("No diagnostics."); return 0 }
-        diags.forEach { println("${it.severity}${it.code?.let { code -> " [$code]" }.orEmpty()}: ${it.message}") }
+        if (diags.isEmpty()) { cliOut().println("No diagnostics."); return 0 }
+        diags.forEach { cliOut().println("${it.severity}${it.code?.let { code -> " [$code]" }.orEmpty()}: ${it.message}") }
         return if (diags.any { it.severity.name == "ERROR" }) 1 else 0
     }
 
@@ -284,11 +384,11 @@ class RefactorKitCli(
 
     private fun cmdReferences(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val symbol = parsed.options["symbol"] ?: run { System.err.println("--symbol required"); return 2 }
+        val symbol = parsed.options["symbol"] ?: run { cliErr().println("--symbol required"); return 2 }
         val snap = scanFrom(parsed.positionals.firstOrNull() ?: ".") ?: return 1
         val refs = javaAdapter.findReferences(snap, org.refactorkit.core.SymbolId(symbol))
-        if (refs.isEmpty()) { println("No references found for $symbol."); return 0 }
-        refs.forEach { ref -> println("${ref.location.path}:${ref.location.range.start.line + 1}") }
+        if (refs.isEmpty()) { cliOut().println("No references found for $symbol."); return 0 }
+        refs.forEach { ref -> cliOut().println("${ref.location.path}:${ref.location.range.start.line + 1}") }
         return 0
     }
 
@@ -296,20 +396,20 @@ class RefactorKitCli(
 
     private fun cmdDefinition(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val symbol = parsed.options["symbol"] ?: run { System.err.println("--symbol required"); return 2 }
+        val symbol = parsed.options["symbol"] ?: run { cliErr().println("--symbol required"); return 2 }
         val snap = scanFrom(parsed.positionals.firstOrNull() ?: ".") ?: return 1
         return when (val lookup = javaAdapter.lookupSymbol(snap, org.refactorkit.core.SymbolId(symbol))) {
             is JavaSymbolLookupResult.Found -> {
                 val location = lookup.symbol.location
-                println("${location.path}:${location.range.start.line + 1}")
+                cliOut().println("${location.path}:${location.range.start.line + 1}")
                 0
             }
             JavaSymbolLookupResult.NotFound -> {
-                println("Symbol not found: $symbol")
+                cliOut().println("Symbol not found: $symbol")
                 1
             }
             is JavaSymbolLookupResult.AnalysisUnavailable -> {
-                System.err.println(
+                cliErr().println(
                     "java.definition.analysisIncomplete: signed definition unavailable " +
                         "(${lookup.warningCount} semantic warning(s)); " +
                         "${lookup.firstWarningPath}:${lookup.firstWarningLine + 1}: ${lookup.firstWarningMessage}",
@@ -323,16 +423,16 @@ class RefactorKitCli(
 
     private fun cmdRename(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val symbol = parsed.options["symbol"] ?: run { System.err.println("rename requires --symbol"); return 2 }
-        val newName = parsed.options["to"] ?: run { System.err.println("rename requires --to"); return 2 }
+        val symbol = parsed.options["symbol"] ?: run { cliErr().println("rename requires --symbol"); return 2 }
+        val newName = parsed.options["to"] ?: run { cliErr().println("rename requires --to"); return 2 }
         val root = parsed.positionals.firstOrNull() ?: "."
         val snap = scanFrom(root) ?: return 1
         val plan = JavaRenameClassPlanner(javaAdapter).preview(snap, symbol, newName)
         val renderer = PatchPreviewRenderer(snap.workspace.root)
-        println(renderer.render(plan))
+        cliOut().println(renderer.render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -340,15 +440,15 @@ class RefactorKitCli(
 
     private fun cmdRenameMember(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val symbol = parsed.options["symbol"] ?: run { System.err.println("rename-member requires --symbol <FQN#member>"); return 2 }
-        val newName = parsed.options["to"] ?: run { System.err.println("rename-member requires --to <newName>"); return 2 }
+        val symbol = parsed.options["symbol"] ?: run { cliErr().println("rename-member requires --symbol <FQN#member>"); return 2 }
+        val newName = parsed.options["to"] ?: run { cliErr().println("rename-member requires --to <newName>"); return 2 }
         val root = parsed.positionals.firstOrNull() ?: "."
         val snap = scanFrom(root) ?: return 1
         val plan = JavaRenameMemberPlanner(javaAdapter).preview(snap, symbol, newName)
-        println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snap.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -357,14 +457,14 @@ class RefactorKitCli(
     private fun cmdExtractMethod(args: List<String>): Int {
         val parsed = parseOptions(args)
         val file = parsed.options["file"] ?: parsed.positionals.firstOrNull()
-            ?: run { System.err.println("extract-method requires --file <path>"); return 2 }
+            ?: run { cliErr().println("extract-method requires --file <path>"); return 2 }
         val startLine = parsed.options["start-line"]?.toIntOrNull()
-            ?: run { System.err.println("extract-method requires --start-line <1-based line>"); return 2 }
+            ?: run { cliErr().println("extract-method requires --start-line <1-based line>"); return 2 }
         val endLine = parsed.options["end-line"]?.toIntOrNull()
-            ?: run { System.err.println("extract-method requires --end-line <1-based line>"); return 2 }
+            ?: run { cliErr().println("extract-method requires --end-line <1-based line>"); return 2 }
         val methodName = parsed.options["method-name"]
             ?: parsed.options["name"]
-            ?: run { System.err.println("extract-method requires --method-name <name>"); return 2 }
+            ?: run { cliErr().println("extract-method requires --method-name <name>"); return 2 }
         val root = parsed.options["root"] ?: "."
         val snap = scanFrom(root) ?: return 1
         val rootPath = snap.workspace.root
@@ -373,10 +473,10 @@ class RefactorKitCli(
             try { rootPath.relativize(filePath.toAbsolutePath().normalize()) } catch (_: Exception) { filePath }
         } else filePath
         val plan = JavaExtractMethodPlanner().preview(snap, relativeFile, startLine, endLine, methodName)
-        println(PatchPreviewRenderer(rootPath).render(plan))
+        cliOut().println(PatchPreviewRenderer(rootPath).render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -386,7 +486,7 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val operation = parsed.options["operation"] ?: "rename-parameter"
         val symbol = parsed.options["symbol"]
-            ?: run { System.err.println("change-signature requires --symbol <FQN#method>"); return 2 }
+            ?: run { cliErr().println("change-signature requires --symbol <FQN#method>"); return 2 }
         val root = parsed.positionals.firstOrNull() ?: parsed.options["root"] ?: "."
         val snap = scanFrom(root) ?: return 1
         val planner = JavaChangeSignaturePlanner(javaAdapter)
@@ -394,11 +494,11 @@ class RefactorKitCli(
             "rename-parameter", "renameParameter", "changeSignature.renameParameter" -> {
                 val oldName = parsed.options["old-name"]
                     ?: parsed.options["old-param"]
-                    ?: run { System.err.println("change-signature rename-parameter requires --old-name <param>"); return 2 }
+                    ?: run { cliErr().println("change-signature rename-parameter requires --old-name <param>"); return 2 }
                 val newName = parsed.options["new-name"]
                     ?: parsed.options["new-param"]
                     ?: parsed.options["to"]
-                    ?: run { System.err.println("change-signature rename-parameter requires --new-name <param>"); return 2 }
+                    ?: run { cliErr().println("change-signature rename-parameter requires --new-name <param>"); return 2 }
                 planner.previewRenameParameter(
                     snap, symbol, oldName, newName,
                     acceptExternalConsumerRisk = "accept-external-consumer-risk" in parsed.flags,
@@ -407,10 +507,10 @@ class RefactorKitCli(
             "change-parameter-type", "changeParameterType", "changeSignature.changeParameterType" -> {
                 val name = parsed.options["name"]
                     ?: parsed.options["parameter-name"]
-                    ?: run { System.err.println("change-signature change-parameter-type requires --name <param>"); return 2 }
+                    ?: run { cliErr().println("change-signature change-parameter-type requires --name <param>"); return 2 }
                 val type = parsed.options["type"]
                     ?: parsed.options["new-type"]
-                    ?: run { System.err.println("change-signature change-parameter-type requires --type <javaType>"); return 2 }
+                    ?: run { cliErr().println("change-signature change-parameter-type requires --type <javaType>"); return 2 }
                 planner.previewChangeParameterType(
                     snap, symbol, name, type,
                     includeHierarchy = "include-hierarchy" in parsed.flags,
@@ -420,14 +520,14 @@ class RefactorKitCli(
             "add-parameter", "addParameter", "changeSignature.addParameter" -> {
                 val type = parsed.options["type"]
                     ?: parsed.options["parameter-type"]
-                    ?: run { System.err.println("change-signature add-parameter requires --type <javaType>"); return 2 }
+                    ?: run { cliErr().println("change-signature add-parameter requires --type <javaType>"); return 2 }
                 val name = parsed.options["name"]
                     ?: parsed.options["param-name"]
                     ?: parsed.options["parameter-name"]
-                    ?: run { System.err.println("change-signature add-parameter requires --name <param>"); return 2 }
+                    ?: run { cliErr().println("change-signature add-parameter requires --name <param>"); return 2 }
                 val defaultExpression = parsed.options["default"]
                     ?: parsed.options["default-expression"]
-                    ?: run { System.err.println("change-signature add-parameter requires --default <expression>"); return 2 }
+                    ?: run { cliErr().println("change-signature add-parameter requires --default <expression>"); return 2 }
                 planner.previewAddParameter(
                     snap, symbol, type, name, defaultExpression,
                     includeHierarchy = "include-hierarchy" in parsed.flags,
@@ -438,7 +538,7 @@ class RefactorKitCli(
             "reorder-parameters", "reorderParameters", "changeSignature.reorderParameters" -> {
                 val order = parsed.options["order"]
                     ?: parsed.options["new-order"]
-                    ?: run { System.err.println("change-signature reorder-parameters requires --order <param1,param2,...>"); return 2 }
+                    ?: run { cliErr().println("change-signature reorder-parameters requires --order <param1,param2,...>"); return 2 }
                 planner.previewReorderParameters(
                     snap, symbol, order.split(','),
                     includeHierarchy = "include-hierarchy" in parsed.flags,
@@ -449,7 +549,7 @@ class RefactorKitCli(
                 val name = parsed.options["name"]
                     ?: parsed.options["param-name"]
                     ?: parsed.options["parameter-name"]
-                    ?: run { System.err.println("change-signature remove-parameter requires --name <param>"); return 2 }
+                    ?: run { cliErr().println("change-signature remove-parameter requires --name <param>"); return 2 }
                 planner.previewRemoveParameter(
                     snap, symbol, name,
                     includeHierarchy = "include-hierarchy" in parsed.flags,
@@ -457,14 +557,14 @@ class RefactorKitCli(
                 )
             }
             else -> {
-                System.err.println("change-signature supports --operation rename-parameter, change-parameter-type, add-parameter, reorder-parameters, or remove-parameter")
+                cliErr().println("change-signature supports --operation rename-parameter, change-parameter-type, add-parameter, reorder-parameters, or remove-parameter")
                 return 2
             }
         }
-        println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snap.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -472,14 +572,14 @@ class RefactorKitCli(
 
     private fun cmdMoveClass(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val symbol = parsed.options["symbol"] ?: run { System.err.println("move-class requires --symbol"); return 2 }
-        val toPkg = parsed.options["to-package"] ?: run { System.err.println("move-class requires --to-package"); return 2 }
+        val symbol = parsed.options["symbol"] ?: run { cliErr().println("move-class requires --symbol"); return 2 }
+        val toPkg = parsed.options["to-package"] ?: run { cliErr().println("move-class requires --to-package"); return 2 }
         val root = parsed.positionals.firstOrNull() ?: "."
         val snap = scanFrom(root) ?: return 1
         val promotionAttempt = try {
             moveClassPromotionAttempt(parsed)
         } catch (failure: IllegalArgumentException) {
-            System.err.println(failure.message)
+            cliErr().println(failure.message)
             return 2
         }
         return when (val outcome = JavaMoveClassOperationDispatcher(javaAdapter).preview(
@@ -489,9 +589,9 @@ class RefactorKitCli(
             promotionAttempt,
         )) {
             is JavaMoveClassOperationOutcome.Guidance -> {
-                println(moveClassGuidanceOutput.render(outcome.guidance))
+                cliOut().println(moveClassGuidanceOutput.render(outcome.guidance))
                 if ("apply" in parsed.flags) {
-                    System.err.println(
+                    cliErr().println(
                         "Apply refused [guidance.nonManaged]: REVIEW_ONLY_GUIDANCE has no managed-write path.",
                     )
                     1
@@ -500,9 +600,9 @@ class RefactorKitCli(
                 }
             }
             is JavaMoveClassOperationOutcome.LexicalReview -> {
-                println(JavaMoveClassLexicalFallbackReviewJsonProjection.render(outcome.envelope))
+                cliOut().println(JavaMoveClassLexicalFallbackReviewJsonProjection.render(outcome.envelope))
                 if ("apply" in parsed.flags) {
-                    System.err.println(
+                    cliErr().println(
                         "Apply refused [evidence.insufficient]: lexical fallback review is non-managed.",
                     )
                     1
@@ -512,10 +612,10 @@ class RefactorKitCli(
             }
             is JavaMoveClassOperationOutcome.Plan -> {
                 val plan = outcome.preview.plan
-                println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+                cliOut().println(PatchPreviewRenderer(snap.workspace.root).render(plan))
                 if (plan.status == PatchStatus.REFUSED) return 1
                 if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-                println("Use --apply to apply this change.")
+                cliOut().println("Use --apply to apply this change.")
                 0
             }
         }
@@ -526,14 +626,14 @@ class RefactorKitCli(
     private fun cmdOrganizeImports(args: List<String>): Int {
         val parsed = parseOptions(args)
         val filePaths = parsed.positionals.map(Paths::get)
-        if (filePaths.isEmpty()) { System.err.println("organize-imports requires one or more file paths"); return 2 }
+        if (filePaths.isEmpty()) { cliErr().println("organize-imports requires one or more file paths"); return 2 }
         val root = parsed.options["root"] ?: "."
         val snap = scanFrom(root) ?: return 1
         val plan = JavaOrganizeImportsPlanner().preview(snap, filePaths)
-        println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snap.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -543,7 +643,7 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val requested = parsed.positionals.firstOrNull()
             ?: parsed.options["file"]
-            ?: run { System.err.println("format-file requires a Java file path"); return 2 }
+            ?: run { cliErr().println("format-file requires a Java file path"); return 2 }
         val root = parsed.options["root"] ?: "."
         val snap = scanFrom(root) ?: return 1
         val requestedPath = Paths.get(requested)
@@ -553,10 +653,10 @@ class RefactorKitCli(
             snap.workspace.root.relativize(absolute)
         } else requestedPath.normalize()
         val plan = JavaFormatFilePlanner(javaAdapter).preview(snap, relative)
-        println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snap.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -564,26 +664,26 @@ class RefactorKitCli(
 
     private fun cmdSafeDelete(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val symbol = parsed.options["symbol"] ?: run { System.err.println("safe-delete requires --symbol"); return 2 }
+        val symbol = parsed.options["symbol"] ?: run { cliErr().println("safe-delete requires --symbol"); return 2 }
         val force = "force" in parsed.flags
         val root = parsed.positionals.firstOrNull() ?: "."
         val snap = scanFrom(root) ?: return 1
         val plan = JavaSafeDeletePlanner(javaAdapter).preview(snap, symbol, force)
-        println(PatchPreviewRenderer(snap.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snap.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
     // ── patch ─────────────────────────────────────────────────────────────────
 
     private fun cmdPatch(args: List<String>): Int {
-        if (args.isEmpty()) { System.err.println("patch requires a subcommand: recover or rollback"); return 2 }
+        if (args.isEmpty()) { cliErr().println("patch requires a subcommand: recover or rollback"); return 2 }
         return when (args.first()) {
             "recover" -> cmdRecover(args.drop(1))
             "rollback" -> cmdRollback(args.drop(1))
-            else -> { System.err.println("Unknown patch subcommand: ${args.first()}"); 2 }
+            else -> { cliErr().println("Unknown patch subcommand: ${args.first()}"); 2 }
         }
     }
 
@@ -593,11 +693,11 @@ class RefactorKitCli(
         val workspaceRoot = Paths.get(root).toAbsolutePath().normalize()
         val diagnostics = patchEngineFor(workspaceRoot).recover()
         if (diagnostics.isNotEmpty()) {
-            System.err.println("Recovery failed:")
-            diagnostics.forEach { System.err.println("  ${it.severity}: ${it.message}") }
+            cliErr().println("Recovery failed:")
+            diagnostics.forEach { cliErr().println("  ${it.severity}: ${it.message}") }
             return 1
         }
-        println("Recovered workspace $workspaceRoot.")
+        cliOut().println("Recovered workspace $workspaceRoot.")
         return 0
     }
 
@@ -605,7 +705,7 @@ class RefactorKitCli(
         val parsed = parseOptions(args)
         val txId = parsed.positionals.firstOrNull()
             ?: parsed.options["transaction"]
-            ?: run { System.err.println("patch rollback requires a transaction ID"); return 2 }
+            ?: run { cliErr().println("patch rollback requires a transaction ID"); return 2 }
         val root = parsed.options["root"] ?: "."
         val workspaceRoot = Paths.get(root).toAbsolutePath().normalize()
         val mode = if ("force" in parsed.flags) RollbackMode.FORCE else RollbackMode.NORMAL
@@ -618,27 +718,27 @@ class RefactorKitCli(
         )
         return when (outcome) {
             is ManagedRollbackOutcome.InvalidTransactionId -> {
-                System.err.println("Invalid transaction ID: $txId")
+                cliErr().println("Invalid transaction ID: $txId")
                 2
             }
             is ManagedRollbackOutcome.TransactionNotFound -> {
-                System.err.println("Transaction not found: $txId")
+                cliErr().println("Transaction not found: $txId")
                 1
             }
             is ManagedRollbackOutcome.JournalLookupFailed -> {
-                System.err.println("Transaction log error [${outcome.failure.code}]: ${outcome.failure.message}")
+                cliErr().println("Transaction log error [${outcome.failure.code}]: ${outcome.failure.message}")
                 1
             }
             is ManagedRollbackOutcome.PreflightRejected ->
                 error("Allow rollback preflight guard unexpectedly rejected")
             is ManagedRollbackOutcome.RollbackCallJournalFailed -> throw outcome.failure
             is ManagedRollbackOutcome.RolledBack -> {
-                println("${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId.")
+                cliOut().println("${if (mode == RollbackMode.FORCE) "Force rolled back" else "Rolled back"} transaction $txId.")
                 0
             }
             is ManagedRollbackOutcome.Refused -> {
-                System.err.println("Rollback refused:")
-                outcome.diagnostics.forEach { System.err.println("  ${it.severity}: ${it.message}") }
+                cliErr().println("Rollback refused:")
+                outcome.diagnostics.forEach { cliErr().println("  ${it.severity}: ${it.message}") }
                 1
             }
         }
@@ -663,13 +763,13 @@ class RefactorKitCli(
             diagnosticsGate,
         )) {
             is ApplyResult.Applied -> {
-                println("Applied. Transaction: ${result.transaction.id.value}")
-                println("To rollback: refactorkit patch rollback ${result.transaction.id.value}")
+                cliOut().println("Applied. Transaction: ${result.transaction.id.value}")
+                cliOut().println("To rollback: refactorkit patch rollback ${result.transaction.id.value}")
                 0
             }
             is ApplyResult.Refused -> {
-                System.err.println("Apply refused:")
-                CliDiagnosticLineRenderer.renderSelected(result.diagnostics).forEach(System.err::println)
+                cliErr().println("Apply refused:")
+                CliDiagnosticLineRenderer.renderSelected(result.diagnostics).forEach(cliErr()::println)
                 1
             }
         }
@@ -683,7 +783,7 @@ class RefactorKitCli(
 
     private fun scanFrom(root: String, flags: Set<String> = emptySet()): ProjectSnapshot? {
         val path = Paths.get(root)
-        if (!path.exists()) { System.err.println("Path does not exist: $path"); return null }
+        if (!path.exists()) { cliErr().println("Path does not exist: $path"); return null }
         return scanner(flags).scan(path)
     }
 
@@ -728,28 +828,28 @@ class RefactorKitCli(
 
     private fun cmdTypeScript(args: List<String>): Int {
         if (args.isEmpty()) {
-            System.err.println("typescript requires a subcommand: search, definition, references, diagnostics, diagnostics-v2, rename, refactor, or refactorings")
+            cliErr().println("typescript requires a subcommand: search, definition, references, diagnostics, diagnostics-v2, rename, refactor, or refactorings")
             return 2
         }
         val operation = args.first()
         if (operation !in setOf("search", "definition", "references", "diagnostics", "diagnostics-v2", "rename", "refactor", "refactorings")) {
-            System.err.println("Unknown typescript subcommand: $operation")
+            cliErr().println("Unknown typescript subcommand: $operation")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
         val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
         val languageId = parsed.options["language"] ?: "typescript"
-        val node = parsed.options["node"] ?: run { System.err.println("--node required"); return 2 }
+        val node = parsed.options["node"] ?: run { cliErr().println("--node required"); return 2 }
         val serverPackage = parsed.options["language-server-package"]
-            ?: run { System.err.println("--language-server-package required"); return 2 }
+            ?: run { cliErr().println("--language-server-package required"); return 2 }
         val compilerPackage = parsed.options["typescript-package"]
-            ?: run { System.err.println("--typescript-package required"); return 2 }
+            ?: run { cliErr().println("--typescript-package required"); return 2 }
         if (operation in setOf("definition", "references") && parsed.options["symbol"] == null) {
-            System.err.println("--symbol required")
+            cliErr().println("--symbol required")
             return 2
         }
         if (operation == "rename" && parsed.options["to"] == null) {
-            System.err.println("--to required")
+            cliErr().println("--to required")
             return 2
         }
         val session = semanticSessionFactory()
@@ -819,15 +919,71 @@ class RefactorKitCli(
                     } else preview
                 }
             }
-            println(semanticJson.encodeToString(result))
+            cliOut().println(semanticJson.encodeToString(result))
             0
         } catch (failure: Exception) {
             val refusalCode = ((failure as? JsonRpcException)?.data as? JsonObject)?.get("refusalCode")?.jsonPrimitive?.content
-            System.err.println("TypeScript semantic command failed${refusalCode?.let { " [$it]" }.orEmpty()}: ${failure.message}")
+            cliErr().println("TypeScript semantic command failed${refusalCode?.let { " [$it]" }.orEmpty()}: ${failure.message}")
             1
         } finally {
             session.close()
         }
+    }
+
+    private fun cSdkConfiguration(parsed: ParsedArgs): JsonElement? {
+        if ("read-only-sdks" !in parsed.options && "read-only-sdks" !in parsed.flags) return null
+        fun invalid(): Nothing = throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS,
+            "c.sdkConfigurationInvalid: --read-only-sdks requires a JSON array",
+            buildJsonObject { put("refusalCode", "c.sdkConfigurationInvalid"); put("field", "readOnlySdks") })
+        val value = parsed.options["read-only-sdks"] ?: invalid()
+        return try { semanticJson.parseToJsonElement(value) }
+        catch (_: kotlinx.serialization.SerializationException) { invalid() }
+    }
+
+    /** Read-only C routes share the daemon's compiler-bound application services. */
+    private fun cmdCQuery(args: List<String>): Int {
+        val operation = if (args.first() == "symbols") "search" else args.first()
+        val parsed = parseOptions(args.drop(1))
+        if ("apply" in parsed.flags) {
+            cliErr().println("C queries are read-only")
+            return 2
+        }
+        if (operation != "search" && parsed.options["symbol"] == null) {
+            cliErr().println("C $operation requires --symbol from c symbols")
+            return 2
+        }
+        val clang = parsed.options["clang"] ?: run { cliErr().println("--clang required"); return 2 }
+        val clangd = parsed.options["clangd"] ?: run { cliErr().println("--clangd required"); return 2 }
+        val format = parsed.options["clang-format"] ?: run { cliErr().println("--clang-format required"); return 2 }
+        val limit = parsed.options["limit"]?.let { value -> value.toIntOrNull() ?: run {
+            cliErr().println("--limit must be an integer")
+            return 2
+        } }
+        val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
+        val session = semanticSessionFactory()
+        return try {
+            val opened = session.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+            val result = session.dispatch("symbol.$operation", buildJsonObject {
+                put("languageId", "c")
+                put("expectedSnapshotHash", parsed.options["expected-snapshot-hash"]
+                    ?: opened.getValue("snapshotHash").jsonPrimitive.content)
+                put("clang", clang); put("clangd", clangd); put("clangFormat", format)
+                cSdkConfiguration(parsed)?.let { put("readOnlySdks", it) }
+                if (operation == "search") put("query", parsed.options["query"].orEmpty())
+                parsed.options["symbol"]?.let { put("symbol", it) }
+                limit?.let { put("limit", it) }
+                if (operation == "references") put("includeDeclaration", "include-declaration" in parsed.flags)
+            })
+            cliOut().println(semanticJson.encodeToString(result))
+            0
+        } catch (failure: JsonRpcException) {
+            val refusal = (failure.data as? JsonObject)?.get("refusalCode")?.jsonPrimitive?.content
+            cliErr().println("C query refused${refusal?.let { " [$it]" }.orEmpty()}: ${failure.message}")
+            1
+        } catch (failure: Exception) {
+            cliErr().println("C query failed: ${failure.message}")
+            1
+        } finally { session.close() }
     }
 
     /**
@@ -840,6 +996,7 @@ class RefactorKitCli(
      */
     private fun cmdC(args: List<String>): Int {
         val operation = args.firstOrNull()
+        if (operation in setOf("symbols", "search", "definition", "references")) return cmdCQuery(args)
         val catalogue = mapOf(
             "rename" to "renameSymbol",
             "rename-prefix" to "renamePrefix",
@@ -854,93 +1011,212 @@ class RefactorKitCli(
             "relocate" to "relocateComponent",
         )
         if (operation == null || operation !in catalogue) {
-            System.err.println("c requires a subcommand: ${catalogue.keys.joinToString(", ")}")
+            cliErr().println("c requires a subcommand: symbols, search, definition, references, ${catalogue.keys.joinToString(", ")}")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
-        val clang = parsed.options["clang"] ?: run { System.err.println("--clang required"); return 2 }
-        val clangd = parsed.options["clangd"] ?: run { System.err.println("--clangd required"); return 2 }
-        val clangFormat = parsed.options["clang-format"] ?: run { System.err.println("--clang-format required"); return 2 }
+        if ("preview" in parsed.flags && "apply" in parsed.flags) {
+            cliErr().println("C command cannot combine --preview and --apply")
+            return 2
+        }
+        if (operation == "format") {
+            val missingRangeValue = parsed.flags.firstOrNull { it in setOf("ranges", "start-line", "end-line") }
+            if (missingRangeValue != null) {
+                cliErr().println("C format option --$missingRangeValue requires a value")
+                return 2
+            }
+        }
+        if ("forward-headers" in parsed.options && operation != "relocate") {
+            cliErr().println("--forward-headers requires C relocate")
+            return 2
+        }
+        val prefixMappings = when {
+            operation == "rename-prefix" -> {
+                if ("to" in parsed.options) {
+                    cliErr().println("C rename-prefix uses --mapping, not --to")
+                    return 2
+                }
+                val mappings = parsed.options["mapping"]?.let(::parsePrefixRenameMappings)
+                if (mappings == null) {
+                    cliErr().println("C rename-prefix requires --mapping OLD=NEW[,OLD=NEW...]")
+                    return 2
+                }
+                mappings
+            }
+            operation == "relocate" && "mapping" in parsed.options -> {
+                parsed.options["mapping"]?.let(::parsePrefixRenameMappings) ?: run {
+                    cliErr().println("C relocate --mapping requires OLD=NEW[,OLD=NEW...]")
+                    return 2
+                }
+            }
+            "mapping" in parsed.options -> {
+                cliErr().println("--mapping is only supported by C rename-prefix and relocate")
+                return 2
+            }
+            else -> emptyMap()
+        }
+        val cOperation = if (operation == "change-signature") {
+            when (parsed.options["operation"] ?: "rename-parameter") {
+                "rename-parameter" -> {
+                    if (listOf("order", "name", "position", "argument-expression", "type", "default").any(parsed.options::containsKey)) {
+                        cliErr().println("C change-signature cannot mix rename, reorder and insertion inputs; select their explicit --operation")
+                        return 2
+                    }
+                    "changeSignature"
+                }
+                "reorder-parameters" -> {
+                    if (listOf("old-param", "new-param", "name", "position", "argument-expression", "type", "default").any(parsed.options::containsKey)) {
+                        cliErr().println("C change-signature cannot mix rename, reorder and insertion inputs")
+                        return 2
+                    }
+                    "reorderParameters"
+                }
+                "add-parameter" -> {
+                    if (listOf("old-param", "new-param", "order", "type", "default").any(parsed.options::containsKey)) {
+                        cliErr().println("C change-signature cannot mix insertion with rename/reorder or unsupported type/default options")
+                        return 2
+                    }
+                    "addParameter"
+                }
+                else -> {
+                    cliErr().println("C change-signature --operation must be rename-parameter, reorder-parameters or add-parameter")
+                    return 2
+                }
+            }
+        } else if (operation == "extract") {
+            when (parsed.options["operation"] ?: "extract-expression") {
+                "extract-expression" -> {
+                    if (listOf("helper-name", "start-byte", "end-byte").any(parsed.options::containsKey)) {
+                        cliErr().println("C extract cannot mix expression and statement helper inputs; select --operation extract-statements")
+                        return 2
+                    }
+                    "extractExpression"
+                }
+                "extract-statements" -> {
+                    if (listOf("temp-name", "start-line", "start-char", "end-line", "end-char").any(parsed.options::containsKey)) {
+                        cliErr().println("C extract cannot mix expression and statement helper inputs")
+                        return 2
+                    }
+                    "extractStatements"
+                }
+                else -> {
+                    cliErr().println("C extract --operation must be extract-expression or extract-statements")
+                    return 2
+                }
+            }
+        } else catalogue.getValue(operation)
+        val clang = parsed.options["clang"] ?: run { cliErr().println("--clang required"); return 2 }
+        val clangd = parsed.options["clangd"] ?: run { cliErr().println("--clangd required"); return 2 }
+        val clangFormat = parsed.options["clang-format"] ?: run { cliErr().println("--clang-format required"); return 2 }
         val arguments = buildJsonObject {
             parsed.options["symbol"]?.let { put("symbol", it) }
             parsed.options["to"]?.let { put("newName", it) }
             parsed.options["file"]?.let { put("file", it) }
+            parsed.options["line"]?.let { put("line", it) }
+            parsed.options["character"]?.let { put("character", it) }
             parsed.options["target"]?.let { put("target", it) }
             parsed.options["component-dir"]?.let { put("componentDir", it) }
             parsed.options["new-dir"]?.let { put("newDir", it) }
             parsed.options["temp-name"]?.let { put("tempName", it) }
+            parsed.options["helper-name"]?.let { put("helperName", it) }
+            parsed.options["start-byte"]?.let { put("startByte", it) }
+            parsed.options["end-byte"]?.let { put("endByte", it) }
             parsed.options["old-param"]?.let { put("oldParam", it) }
             parsed.options["new-param"]?.let { put("newParam", it) }
+            parsed.options["order"]?.let { put("originalIndices", it) }
+            parsed.options["name"]?.let { put("parameterName", it) }
+            parsed.options["position"]?.let { put("parameterOrdinal", it) }
+            parsed.options["argument-expression"]?.let { put("callerExpression", it) }
             parsed.options["start-line"]?.let { put("startLine", it) }
             parsed.options["start-char"]?.let { put("startChar", it) }
             parsed.options["end-line"]?.let { put("endLine", it) }
             parsed.options["end-char"]?.let { put("endChar", it) }
+            if (operation == "format") parsed.options["ranges"]?.let { put("ranges", it) }
+            prefixMappings.forEach { (oldName, newName) -> put("rename.$oldName", newName) }
+            parsed.options["forward-headers"]?.let { put("forwardHeaders", it) }
         }
         val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
         val session = semanticSessionFactory()
         return try {
             session.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
             val preview = session.dispatch("c.preview", buildJsonObject {
-                put("operation", catalogue.getValue(operation))
+                put("operation", cOperation)
                 put("arguments", arguments)
                 put("clang", clang)
                 put("clangd", clangd)
                 put("clangFormat", clangFormat)
+                cSdkConfiguration(parsed)?.let { put("readOnlySdks", it) }
             })
             val result = if ("apply" in parsed.flags) {
                 session.dispatch("refactor.apply", buildJsonObject {
                     put("planId", preview.jsonObject.getValue("planId").jsonPrimitive.content)
                 })
             } else preview
-            println(semanticJson.encodeToString(result))
+            cliOut().println(semanticJson.encodeToString(result))
             if (result.jsonObject.getValue("status").jsonPrimitive.content in setOf("PREVIEW", "applied")) 0 else 1
         } catch (failure: JsonRpcException) {
             // Invalid params and structured refusals are distinct from internal errors.
-            System.err.println("C command refused${failure.message?.let { ": $it" }.orEmpty()}")
+            val refusalCode = (failure.data as? JsonObject)?.get("refusalCode")?.jsonPrimitive?.content
+            cliErr().println("C command refused${refusalCode?.let { " [$it]" }.orEmpty()}${failure.message?.let { ": $it" }.orEmpty()}")
             1
         } catch (failure: Exception) {
-            System.err.println("C command failed: ${failure.message}")
+            cliErr().println("C command failed: ${failure.message}")
             1
         } finally {
             session.close()
         }
     }
 
+    private fun parsePrefixRenameMappings(raw: String): Map<String, String>? {
+        if (raw.isBlank()) return null
+        val mappings = linkedMapOf<String, String>()
+        for (entry in raw.split(',')) {
+            val separator = entry.indexOf('=')
+            if (separator <= 0 || separator != entry.lastIndexOf('=')) return null
+            val oldName = entry.substring(0, separator)
+            val newName = entry.substring(separator + 1)
+            if (oldName.isBlank() || newName.isBlank() || oldName != oldName.trim() || newName != newName.trim()) return null
+            if (oldName in mappings) return null
+            mappings[oldName] = newName
+        }
+        return mappings.takeIf { it.isNotEmpty() }
+    }
+
     private fun cmdKotlin(args: List<String>): Int {
         val operation = args.firstOrNull()
         if (operation !in setOf("diagnostics", "symbols", "definition", "references", "rename", "move-declaration", "organize-imports", "change-signature", "extract-method", "inline-method")) {
-            System.err.println("kotlin requires subcommand: diagnostics, symbols, definition, references, rename, move-declaration, organize-imports, change-signature, extract-method, or inline-method")
+            cliErr().println("kotlin requires subcommand: diagnostics, symbols, definition, references, rename, move-declaration, organize-imports, change-signature, extract-method, or inline-method")
             return 2
         }
         val parsed = parseOptions(args.drop(1))
         val positionNavigation = operation in setOf("definition", "references") && parsed.options["symbol"] == null
         if (operation == "rename" && (parsed.options["symbol"] == null || parsed.options["to"] == null)) {
-            System.err.println("Kotlin rename requires --symbol and --to")
+            cliErr().println("Kotlin rename requires --symbol and --to")
             return 2
         }
         if (operation == "move-declaration" &&
             (parsed.options["symbol"] == null || parsed.options["to-package"] == null)) {
-            System.err.println("Kotlin move-declaration requires --symbol and --to-package")
+            cliErr().println("Kotlin move-declaration requires --symbol and --to-package")
             return 2
         }
         if (operation == "organize-imports" && parsed.options["file"] == null) {
-            System.err.println("Kotlin organize-imports requires --file")
+            cliErr().println("Kotlin organize-imports requires --file")
             return 2
         }
         if (operation == "extract-method" &&
             listOf("file", "start-line", "end-line", "method-name").any { parsed.options[it] == null }) {
-            System.err.println("Kotlin extract-method requires --file, --start-line, --end-line, and --method-name")
+            cliErr().println("Kotlin extract-method requires --file, --start-line, --end-line, and --method-name")
             return 2
         }
         if (operation == "inline-method" && parsed.options["symbol"] == null) {
-            System.err.println("Kotlin inline-method requires --symbol")
+            cliErr().println("Kotlin inline-method requires --symbol")
             return 2
         }
         val inferredRenameParameter = listOf("old-name", "new-name").any { parsed.options[it] != null }
         val inferredAddParameter = listOf("type", "name", "default").any { parsed.options[it] != null }
         if (operation == "change-signature" && parsed.options["operation"] == null &&
             inferredRenameParameter && inferredAddParameter) {
-            System.err.println("Kotlin change-signature requires --operation when rename and add arguments are mixed")
+            cliErr().println("Kotlin change-signature requires --operation when rename and add arguments are mixed")
             return 2
         }
         val kotlinSignatureMode = parsed.options["operation"] ?: when {
@@ -948,36 +1224,36 @@ class RefactorKitCli(
             else -> "rename-parameter"
         }
         if (operation == "change-signature" && kotlinSignatureMode !in setOf("rename-parameter", "add-parameter")) {
-            System.err.println("Kotlin change-signature --operation must be rename-parameter or add-parameter")
+            cliErr().println("Kotlin change-signature --operation must be rename-parameter or add-parameter")
             return 2
         }
         if (operation == "change-signature" && kotlinSignatureMode == "rename-parameter" &&
             listOf("symbol", "old-name", "new-name").any { parsed.options[it] == null }) {
-            System.err.println("Kotlin parameter rename requires --symbol, --old-name, and --new-name")
+            cliErr().println("Kotlin parameter rename requires --symbol, --old-name, and --new-name")
             return 2
         }
         if (operation == "change-signature" && kotlinSignatureMode == "add-parameter" &&
             listOf("symbol", "type", "name", "default").any { parsed.options[it] == null }) {
-            System.err.println("Kotlin shared add-parameter requires --symbol, --type, --name, and --default")
+            cliErr().println("Kotlin shared add-parameter requires --symbol, --type, --name, and --default")
             return 2
         }
         if (positionNavigation && listOf("file", "line", "character").any { parsed.options[it] == null }) {
-            System.err.println("position navigation requires --file, --line, and --character")
+            cliErr().println("position navigation requires --file, --line, and --character")
             return 2
         }
         val line = parsed.options["line"]?.toIntOrNull()
         val character = parsed.options["character"]?.toIntOrNull()
         if (positionNavigation && (line == null || line < 0 || character == null || character < 0)) {
-            System.err.println("--line and --character must be non-negative zero-based integers")
+            cliErr().println("--line and --character must be non-negative zero-based integers")
             return 2
         }
         if (operation == "references" && parsed.options["symbol"] != null) {
-            System.err.println("Kotlin references currently require --file, --line, and --character, not --symbol")
+            cliErr().println("Kotlin references currently require --file, --line, and --character, not --symbol")
             return 2
         }
         val root = Paths.get(parsed.positionals.firstOrNull() ?: ".").toAbsolutePath().normalize()
-        val jdkHome = parsed.options["jdk-home"] ?: run { System.err.println("--jdk-home required"); return 2 }
-        val compilerJar = parsed.options["compiler-jar"] ?: run { System.err.println("--compiler-jar required"); return 2 }
+        val jdkHome = parsed.options["jdk-home"] ?: run { cliErr().println("--jdk-home required"); return 2 }
+        val compilerJar = parsed.options["compiler-jar"] ?: run { cliErr().println("--compiler-jar required"); return 2 }
         val compilerClasspath = parsed.options["compiler-classpath"].orEmpty()
             .split(java.io.File.pathSeparator).filter(String::isNotBlank)
         val session = semanticSessionFactory()
@@ -1059,10 +1335,10 @@ class RefactorKitCli(
                     if (operation == "references") put("includeDeclaration", "exclude-declaration" !in parsed.flags)
                 }
             })
-            println(semanticJson.encodeToString(result))
+            cliOut().println(semanticJson.encodeToString(result))
             if (result.jsonObject.getValue("status").jsonPrimitive.content in setOf("ready", "PREVIEW", "applied")) 0 else 1
         } catch (failure: Exception) {
-            System.err.println("Kotlin semantic command failed: ${failure.message}")
+            cliErr().println("Kotlin semantic command failed: ${failure.message}")
             1
         } finally {
             session.close()
@@ -1071,7 +1347,7 @@ class RefactorKitCli(
 
     private fun cmdJava(args: List<String>): Int {
         if (args.isEmpty()) {
-            System.err.println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, move-source-root, move-across-maven-modules, create-module, or rename-module")
+            cliErr().println("java requires a subcommand: scan, symbols, diagnostics, references, definition, import-class, move-source-root, move-across-maven-modules, create-module, or rename-module")
             return 2
         }
         return when (args.first()) {
@@ -1086,24 +1362,24 @@ class RefactorKitCli(
             "move-across-maven-modules" -> cmdJavaMoveAcrossMavenModules(args.drop(1))
             "create-module" -> cmdJavaCreateModule(args.drop(1))
             "rename-module" -> cmdJavaRenameModule(args.drop(1))
-            else -> { System.err.println("Unknown java subcommand: ${args.first()}"); 2 }
+            else -> { cliErr().println("Unknown java subcommand: ${args.first()}"); 2 }
         }
     }
 
     private fun cmdJavaMoveSourceRoot(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val from = parsed.options["from"] ?: run { System.err.println("move-source-root requires --from"); return 2 }
-        val to = parsed.options["to"] ?: run { System.err.println("move-source-root requires --to"); return 2 }
+        val from = parsed.options["from"] ?: run { cliErr().println("move-source-root requires --from"); return 2 }
+        val to = parsed.options["to"] ?: run { cliErr().println("move-source-root requires --to"); return 2 }
         val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
         val snapshot = scanFrom(root, parsed.flags) ?: return 1
         val plan = JavaMoveSourceRootPlanner(javaAdapter).preview(snapshot, Paths.get(from), Paths.get(to))
-        println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) {
-            plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+            plan.refusalCode?.let { cliErr().println("Refusal code: $it") }
             return 1
         }
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -1133,76 +1409,76 @@ class RefactorKitCli(
             val plan = planner.preview(
                 snapshot, Paths.get(required("from")), Paths.get(required("to")), listOfNotNull(rewrite),
             )
-            println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+            cliOut().println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
             if (plan.status == PatchStatus.REFUSED) {
-                plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+                plan.refusalCode?.let { cliErr().println("Refusal code: $it") }
                 return 1
             }
             if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
-            println("Use --apply to apply this change.")
+            cliOut().println("Use --apply to apply this change.")
             0
         } catch (failure: IllegalArgumentException) {
-            System.err.println(failure.message)
+            cliErr().println(failure.message)
             2
         }
     }
 
     private fun cmdJavaCreateModule(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val moduleName = parsed.options["module-name"] ?: run { System.err.println("create-module requires --module-name"); return 2 }
-        val parentPom = parsed.options["parent-pom"] ?: run { System.err.println("create-module requires --parent-pom"); return 2 }
+        val moduleName = parsed.options["module-name"] ?: run { cliErr().println("create-module requires --module-name"); return 2 }
+        val parentPom = parsed.options["parent-pom"] ?: run { cliErr().println("create-module requires --parent-pom"); return 2 }
         val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
         val snapshot = scanFrom(root, parsed.flags) ?: return 1
         val plan = JavaCreateMavenModulePlanner().preview(snapshot, moduleName, Paths.get(parentPom))
-        println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) {
-            plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+            plan.refusalCode?.let { cliErr().println("Refusal code: $it") }
             return 1
         }
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
     private fun cmdJavaRenameModule(args: List<String>): Int {
         val outputSelection = CliRenameModulePreviewProtocol.select(args)
         if (outputSelection is CliRenameModuleOutputSelection.Rejected) {
-            System.err.println(outputSelection.message)
+            cliErr().println(outputSelection.message)
             return 2
         }
         val parsed = parseOptions(args)
-        val oldModuleDir = parsed.options["old-module-dir"] ?: run { System.err.println("rename-module requires --old-module-dir"); return 2 }
-        val newModuleDir = parsed.options["new-module-dir"] ?: run { System.err.println("rename-module requires --new-module-dir"); return 2 }
+        val oldModuleDir = parsed.options["old-module-dir"] ?: run { cliErr().println("rename-module requires --old-module-dir"); return 2 }
+        val newModuleDir = parsed.options["new-module-dir"] ?: run { cliErr().println("rename-module requires --new-module-dir"); return 2 }
         val newArtifactId = parsed.options["new-artifact-id"]
         val root = parsed.options["root"] ?: parsed.positionals.firstOrNull() ?: "."
         val snapshot = scanFrom(root, parsed.flags) ?: return 1
         val plan = JavaRenameMavenModulePlanner().preview(snapshot, oldModuleDir, newModuleDir, newArtifactId)
         if (outputSelection is CliRenameModuleOutputSelection.JsonPreview) {
             if (plan.status == PatchStatus.REFUSED) {
-                System.err.println("rename-module JSON output is qualified only for a successful preview")
+                cliErr().println("rename-module JSON output is qualified only for a successful preview")
                 return 1
             }
             return try {
-                println(CliRenameModulePreviewProtocol.render(plan, outputSelection.requestId))
+                cliOut().println(CliRenameModulePreviewProtocol.render(plan, outputSelection.requestId))
                 0
             } catch (failure: IllegalArgumentException) {
-                System.err.println("rename-module JSON preview unavailable: ${failure.message}")
+                cliErr().println("rename-module JSON preview unavailable: ${failure.message}")
                 1
             }
         }
-        println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
+        cliOut().println(PatchPreviewRenderer(snapshot.workspace.root).render(plan))
         if (plan.status == PatchStatus.REFUSED) {
-            plan.refusalCode?.let { System.err.println("Refusal code: $it") }
+            plan.refusalCode?.let { cliErr().println("Refusal code: $it") }
             return 1
         }
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snapshot, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
     private fun cmdJavaImportClass(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val targetPkg = parsed.options["target-package"] ?: run { System.err.println("--target-package required"); return 2 }
+        val targetPkg = parsed.options["target-package"] ?: run { cliErr().println("--target-package required"); return 2 }
         val sourceUrl = parsed.options["source-url"]
         val licensePolicy = when (parsed.options["license-policy"]) {
             "block-unknown" -> LicensePolicy.BLOCK_UNKNOWN
@@ -1212,7 +1488,7 @@ class RefactorKitCli(
         val code: String = when {
             "stdin" in parsed.flags -> generateSequence(::readLine).joinToString("\n")
             parsed.options.containsKey("file") -> Paths.get(parsed.options["file"]!!).readText()
-            else -> { System.err.println("Provide --stdin or --file <path>"); return 2 }
+            else -> { cliErr().println("Provide --stdin or --file <path>"); return 2 }
         }
         val root = parsed.positionals.firstOrNull() ?: "."
         val snap = scanFrom(root)
@@ -1221,29 +1497,29 @@ class RefactorKitCli(
             sourceKind = if ("stdin" in parsed.flags) SourceKind.CLIPBOARD else SourceKind.FILE,
             licensePolicy = licensePolicy, snapshot = snap,
         ))
-        println(PatchPreviewRenderer(Paths.get(root).toAbsolutePath().normalize()).render(plan))
+        cliOut().println(PatchPreviewRenderer(Paths.get(root).toAbsolutePath().normalize()).render(plan))
         if (plan.status.name == "REFUSED") return 1
         if ("apply" in parsed.flags && snap != null) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
     private fun cmdRecipe(args: List<String>): Int {
-        if (args.isEmpty()) { System.err.println("recipe requires a subcommand: run"); return 2 }
+        if (args.isEmpty()) { cliErr().println("recipe requires a subcommand: run"); return 2 }
         return when (args.first()) {
             "run" -> cmdRecipeRun(args.drop(1))
-            else -> { System.err.println("Unknown recipe subcommand: ${args.first()}"); 2 }
+            else -> { cliErr().println("Unknown recipe subcommand: ${args.first()}"); 2 }
         }
     }
 
     private fun cmdRecipeRun(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val recipePath = parsed.positionals.firstOrNull() ?: run { System.err.println("recipe run requires <recipe.yml>"); return 2 }
+        val recipePath = parsed.positionals.firstOrNull() ?: run { cliErr().println("recipe run requires <recipe.yml>"); return 2 }
         val root = parsed.options["root"] ?: "."
         val dryRun = "apply" !in parsed.flags
         val params = parsed.options.filterKeys { it.startsWith("param.") }.mapKeys { it.key.removePrefix("param.") }
         val recipe = try { RecipeLoader.load(Paths.get(recipePath)) } catch (e: Exception) {
-            System.err.println("Failed to load recipe: ${e.message}"); return 1
+            cliErr().println("Failed to load recipe: ${e.message}"); return 1
         }
         if (recipe.language in setOf("typescript", "javascript")) {
             val arguments = buildJsonObject {
@@ -1256,30 +1532,30 @@ class RefactorKitCli(
             return cmdTypeScript(listOf("refactor", root, "--language", recipe.language, "--operation", "recipe", "--arguments-json", arguments.toString()) +
                 toolOptions + parsed.flags.filter { it in setOf("apply", "allow-workspace-local-toolchain") }.map { "--$it" })
         }
-        println("Recipe: ${recipe.name} (${recipe.id})\nMode  : ${if (dryRun) "preview" else "apply"}\n")
+        cliOut().println("Recipe: ${recipe.name} (${recipe.id})\nMode  : ${if (dryRun) "preview" else "apply"}\n")
         val result = RecipeEngine().run(recipe, params, Paths.get(root), dryRun)
         result.stepPlans.forEach { step ->
-            println("Step [${step.stepType}]: ${step.message.ifBlank { step.plan?.summary ?: "ok" }}")
-            step.plan?.warnings?.forEach { println("  Warning: $it") }
+            cliOut().println("Step [${step.stepType}]: ${step.message.ifBlank { step.plan?.summary ?: "ok" }}")
+            step.plan?.warnings?.forEach { cliOut().println("  Warning: $it") }
         }
         return when (result) {
             is RecipeResult.Preview -> {
-                println("\n${PatchPreviewRenderer(Paths.get(root)).render(result.recipePlan)}")
-                println("${result.summary}\nUse --apply to apply.")
+                cliOut().println("\n${PatchPreviewRenderer(Paths.get(root)).render(result.recipePlan)}")
+                cliOut().println("${result.summary}\nUse --apply to apply.")
                 0
             }
-            is RecipeResult.Applied -> { println("\n${result.summary}"); 0 }
-            is RecipeResult.Failed  -> { System.err.println("Recipe failed: ${result.reason}"); 1 }
+            is RecipeResult.Applied -> { cliOut().println("\n${result.summary}"); 0 }
+            is RecipeResult.Failed  -> { cliErr().println("Recipe failed: ${result.reason}"); 1 }
             is RecipeResult.NonManaged -> {
-                println(JavaMoveClassLexicalFallbackReviewJsonProjection.render(result.envelope))
-                System.err.println("Recipe stopped [evidence.insufficient]: lexical fallback review is non-managed.")
+                cliOut().println(JavaMoveClassLexicalFallbackReviewJsonProjection.render(result.envelope))
+                cliErr().println("Recipe stopped [evidence.insufficient]: lexical fallback review is non-managed.")
                 1
             }
         }
     }
 
     private fun cmdCapabilities(): Int {
-        println(LanguageCapabilityProtocol.render(
+        cliOut().println(LanguageCapabilityProtocol.render(
             listOf(
                 JavaAdapterRegistration.create(javaAdapter).descriptor,
                 KotlinAdapterRegistration.descriptor(),
@@ -1292,10 +1568,10 @@ class RefactorKitCli(
         val version = try {
             CliCommandCatalogueProjection.select(args)
         } catch (failure: IllegalArgumentException) {
-            System.err.println(failure.message)
+            cliErr().println(failure.message)
             return 2
         }
-        println(CliCommandCatalogueProjection.render(version))
+        cliOut().println(CliCommandCatalogueProjection.render(version))
         return 0
     }
 
@@ -1304,15 +1580,15 @@ class RefactorKitCli(
     private fun cmdOutline(args: List<String>): Int {
         val parsed = parseOptions(args)
         val filePath = parsed.positionals.firstOrNull()
-            ?: run { System.err.println("outline requires <file>"); return 2 }
+            ?: run { cliErr().println("outline requires <file>"); return 2 }
         val path = Paths.get(filePath)
-        if (!path.toFile().exists()) { System.err.println("File not found: $filePath"); return 1 }
+        if (!path.toFile().exists()) { cliErr().println("File not found: $filePath"); return 1 }
         val language = parsed.options["language"] ?: path.fileName.toString().substringAfterLast('.', "")
         val content = path.readText()
         val items = TreeSitterAdapter().outline(content, language)
-        if (items.isEmpty()) { println("No outline items found."); return 0 }
+        if (items.isEmpty()) { cliOut().println("No outline items found."); return 0 }
         items.forEach { item ->
-            println("${item.kind.name.padEnd(12)} ${item.name.padEnd(40)} line ${item.line + 1}")
+            cliOut().println("${item.kind.name.padEnd(12)} ${item.name.padEnd(40)} line ${item.line + 1}")
         }
         return 0
     }
@@ -1321,19 +1597,19 @@ class RefactorKitCli(
 
     private fun cmdSearch(args: List<String>): Int {
         val parsed = parseOptions(args)
-        val pattern = parsed.options["pattern"] ?: run { System.err.println("search requires --pattern"); return 2 }
+        val pattern = parsed.options["pattern"] ?: run { cliErr().println("search requires --pattern"); return 2 }
         val filePath = parsed.positionals.firstOrNull()
-            ?: run { System.err.println("search requires <file>"); return 2 }
+            ?: run { cliErr().println("search requires <file>"); return 2 }
         val path = Paths.get(filePath)
-        if (!path.toFile().exists()) { System.err.println("File not found: $filePath"); return 1 }
+        if (!path.toFile().exists()) { cliErr().println("File not found: $filePath"); return 1 }
         val language = parsed.options["language"] ?: path.fileName.toString().substringAfterLast('.', "")
         val wholeWord = "whole-word" in parsed.flags
         val caseSensitive = "case-insensitive" !in parsed.flags
         val content = path.readText()
         val matches = GenericStructuralSearch.search(content, pattern, language, wholeWord, caseSensitive)
-        if (matches.isEmpty()) { println("No matches found."); return 0 }
+        if (matches.isEmpty()) { cliOut().println("No matches found."); return 0 }
         matches.forEach { m ->
-            println("${filePath}:${m.line + 1}:${m.character + 1}  ${m.text}")
+            cliOut().println("${filePath}:${m.line + 1}:${m.character + 1}  ${m.text}")
         }
         return 0
     }
@@ -1343,12 +1619,12 @@ class RefactorKitCli(
     private fun cmdLocalRename(args: List<String>): Int {
         val parsed = parseOptions(args)
         val filePath = parsed.positionals.firstOrNull()
-            ?: run { System.err.println("local-rename requires <file>"); return 2 }
-        val from = parsed.options["from"] ?: run { System.err.println("local-rename requires --from"); return 2 }
-        val to = parsed.options["to"] ?: run { System.err.println("local-rename requires --to"); return 2 }
+            ?: run { cliErr().println("local-rename requires <file>"); return 2 }
+        val from = parsed.options["from"] ?: run { cliErr().println("local-rename requires --from"); return 2 }
+        val to = parsed.options["to"] ?: run { cliErr().println("local-rename requires --to"); return 2 }
         val root = parsed.options["root"] ?: "."
         val path = Paths.get(filePath)
-        if (!path.toFile().exists()) { System.err.println("File not found: $filePath"); return 1 }
+        if (!path.toFile().exists()) { cliErr().println("File not found: $filePath"); return 1 }
 
         // Build a minimal snapshot containing just the target file
         val rootPath = Paths.get(root).toAbsolutePath().normalize()
@@ -1362,10 +1638,10 @@ class RefactorKitCli(
             }
         }
         val plan = GenericLocalRenamePlanner().preview(snap, relPath, from, to)
-        println(PatchPreviewRenderer(rootPath).render(plan))
+        cliOut().println(PatchPreviewRenderer(rootPath).render(plan))
         if (plan.status == PatchStatus.REFUSED) return 1
         if ("apply" in parsed.flags) return applyPlanAndLog(plan, snap, root)
-        println("Use --apply to apply this change.")
+        cliOut().println("Use --apply to apply this change.")
         return 0
     }
 
@@ -1378,37 +1654,51 @@ class RefactorKitCli(
 
         val cases = if (filterName != null) {
             val case = runCatching { GoldenTestLoader.loadNamed(filterName, goldenDir) }.getOrElse {
-                System.err.println("Golden case not found: $filterName in $goldenDir"); return 1
+                cliErr().println("Golden case not found: $filterName in $goldenDir"); return 1
             }
             listOf(case)
         } else {
             GoldenTestLoader.discover(goldenDir)
         }
 
-        if (cases.isEmpty()) { println("No golden test cases found in $goldenDir"); return 0 }
+        if (cases.isEmpty()) { cliOut().println("No golden test cases found in $goldenDir"); return 0 }
 
-        val runner = GoldenTestRunner()
+        val cSelectors = listOf("clang", "clangd", "clang-format").map { parsed.options[it] }
+        if (cSelectors.any { it != null } && cSelectors.any { it == null }) {
+            cliErr().println("c.golden.toolchainUnavailable: supply --clang, --clangd and --clang-format together")
+            return 2
+        }
+        val cToolchain = if (cSelectors.all { it != null }) CGoldenToolchainPaths(
+            Paths.get(requireNotNull(cSelectors[0])), Paths.get(requireNotNull(cSelectors[1])), Paths.get(requireNotNull(cSelectors[2])),
+        ) else null
+        val runner = GoldenTestRunner(cToolchain = cToolchain)
         var passed = 0; var failed = 0
         cases.forEach { tc ->
-            print("  ${tc.name.padEnd(50)} ")
+            cliOut().print("  ${tc.name.padEnd(50)} ")
             val result = runner.run(tc)
             if (result.passed) {
-                println("PASS")
+                cliOut().println("PASS")
+                result.cQualification?.let { qualification ->
+                    cliOut().println("    C native compiler ${qualification.compilerVersion}; rollback verified=${qualification.rollbackVerified}")
+                }
                 passed++
             } else {
-                println("FAIL")
-                result.errors.forEach { System.err.println("    ✗ $it") }
+                cliOut().println("FAIL")
+                result.errors.forEach { cliErr().println("    ✗ $it") }
                 failed++
             }
         }
-        println("\n${cases.size} case(s): $passed passed, $failed failed")
+        cliOut().println("\n${cases.size} case(s): $passed passed, $failed failed")
         return if (failed > 0) 1 else 0
     }
 
-    private fun printVersion() = println("${RefactorKitVersion.NAME} ${RefactorKitVersion.VERSION} (API ${RefactorKitVersion.API_VERSION})")
+    private fun printVersion() = cliOut().println("${RefactorKitVersion.NAME} ${RefactorKitVersion.VERSION} (API ${RefactorKitVersion.API_VERSION})")
 
-    private fun printHelp() = println("""
+    private fun printHelp() = cliOut().println("""
         RefactorKit ${RefactorKitVersion.VERSION}  deterministic refactoring engine
+
+        Output is limited to ${String.format(java.util.Locale.ROOT, "%,d", org.refactorkit.core.ProtocolLimits.MAX_CLI_OUTPUT_BYTES)} UTF-8 bytes across stdout and stderr per invocation.
+        If exceeded, all command output is discarded and cli.outputLimitExceeded is written to stderr.
 
         Usage:
           refactorkit --help
@@ -1458,10 +1748,21 @@ class RefactorKitCli(
           refactorkit kotlin change-signature <root> --operation add-parameter --symbol <java-jvm-method-id> --type <javaType> --name <parameter> --default <expr> --accept-external-consumer-risk [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin extract-method <root> --file <path.kt> --start-line <one-based> --end-line <one-based> --method-name <name> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
           refactorkit kotlin inline-method <root> --symbol <kotlin-jvm-callable-id> [--apply] --jdk-home <dir> --compiler-jar <jar> [--compiler-classpath <paths>]
+          refactorkit c symbols <root> [--query <text>] [--limit <n>] [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c definition <root> --symbol <c-decl:id> [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c references <root> --symbol <c-decl:id> [--include-declaration] [--limit <n>] [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c rename <root> --symbol <name> --to <name> --file <path> --line <n> --character <n> [--read-only-sdks <json-array>] [--apply] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c format <root> --file <path.c> [--ranges <start:end[,start:end...]> | --start-line <n> --end-line <n>] [--apply] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c rename-prefix <root> --mapping <old=new[,old=new...]> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c change-signature <root> --operation reorder-parameters --file <path.c> --symbol <function> --order <original-indices> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c change-signature <root> --operation add-parameter --file <path.c> --symbol <function> --name <parameter> --position <ordinal> --argument-expression <expr> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c extract <root> --file <path.c> --start-line <zero-based-line> --start-char <UTF-16-column> --end-line <zero-based-line> --end-char <UTF-16-column> [--temp-name <name>] [--operation extract-expression] [--apply] --clang <exe> --clangd <exe> --clang-format <exe>
+          refactorkit c extract <root> --operation extract-statements --file <path.c> --symbol <function> --helper-name <name> --start-byte <offset> --end-byte <exclusive-offset> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>
           refactorkit recipe run        <recipe.yml> [--param.<name> <value>]   [--apply] [--root <path>]
           refactorkit outline           <file>                                  [--language <lang>]
           refactorkit search            <file> --pattern <pattern>              [--language <lang>] [--whole-word] [--case-insensitive]
           refactorkit local-rename      <file> --from <name> --to <name>       [--apply] [--root <path>]
           refactorkit test-golden       [<case-name>]                          [--golden-dir <path>]
+            C goldens require --clang <exe> --clangd <exe> --clang-format <exe> and an explicit fixture compilation database
     """.trimIndent())
 }

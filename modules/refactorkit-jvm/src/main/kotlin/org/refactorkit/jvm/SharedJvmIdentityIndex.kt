@@ -312,6 +312,7 @@ object SharedJvmIdentityProjector {
         org.refactorkit.java.JdtJavaSemanticSymbolKind.ANNOTATION -> Symbol.Kind.ANNOTATION
         org.refactorkit.java.JdtJavaSemanticSymbolKind.METHOD -> Symbol.Kind.METHOD
         org.refactorkit.java.JdtJavaSemanticSymbolKind.FIELD -> Symbol.Kind.FIELD
+        org.refactorkit.java.JdtJavaSemanticSymbolKind.RECORD_COMPONENT -> Symbol.Kind.RECORD_COMPONENT
         org.refactorkit.java.JdtJavaSemanticSymbolKind.CONSTRUCTOR -> Symbol.Kind.CONSTRUCTOR
     }
 }

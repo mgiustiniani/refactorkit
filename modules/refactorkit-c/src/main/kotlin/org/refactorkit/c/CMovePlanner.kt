@@ -11,6 +11,8 @@ import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.WorkspaceEdit
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 
 /**
@@ -48,14 +50,24 @@ class CMovePlanner {
         // Refuse generated files and macro-computed includes that could target the moved file.
         val generated = snapshot.files.firstOrNull { it.path.normalize() == oldPath && isGenerated(oldPath) }
         if (generated != null) return refused(snapshot, "Move target is a generated file")
+        val uncapturedInclude = findUncapturedQuotedInclude(snapshot, oldPath, file.content)
+        if (uncapturedInclude != null) {
+            return refused(snapshot, "Source move has an uncaptured quoted include target '$uncapturedInclude'; move is refused")
+        }
 
         val includeEdits = buildIncludeEdits(snapshot, oldResolved, newResolved, oldPath, newPath)
             ?: return refused(snapshot, "A macro-computed include could target the moved file")
+
+        val cmakeBinding = CMakeLiteralBindings.move(snapshot, oldPath, newPath)
+        if (cmakeBinding is CMakeBindingDecision.Refused) return refused(snapshot, cmakeBinding.reason)
 
         val edits = mutableListOf<FileEdit>()
         edits += FileEdit.Rename(oldPath, newPath)
         includeEdits.forEach { (file, textEdits) ->
             edits += FileEdit.Modify(file, textEdits)
+        }
+        if (cmakeBinding is CMakeBindingDecision.Bound) {
+            edits += FileEdit.Modify(Path.of("CMakeLists.txt"), cmakeBinding.edits)
         }
 
         return PatchPlan(
@@ -64,13 +76,16 @@ class CMovePlanner {
             snapshotHash = snapshot.hash,
             confidence = 1.0,
             requiresUserApproval = true,
-            summary = "Move source file $oldPath to $newPath and update ${includeEdits.values.sumOf { it.size }} literal include(s)",
+            summary = "Move source file $oldPath to $newPath and update ${includeEdits.values.sumOf { it.size }} literal include(s)" +
+                if (cmakeBinding is CMakeBindingDecision.Bound) " and root CMake target ${cmakeBinding.target}" else "",
             affectedFiles = WorkspaceEdit(edits).affectedFiles(),
             workspaceEdit = WorkspaceEdit(edits),
             diagnosticsBefore = emptyList(),
             diagnosticsAfterPreview = emptyList(),
-            warnings = listOf("Literal includes updated; macro-computed includes and build bindings are not rewritten."),
-            riskLevel = RiskLevel.MEDIUM,
+            warnings = listOf(if (cmakeBinding is CMakeBindingDecision.Bound)
+                "Root literal CMake binding updated; staged TU/configuration and consumer proof remain unqualified."
+            else "Literal includes updated; build bindings without a root CMakeLists.txt are not qualified."),
+            riskLevel = RiskLevel.HIGH,
             evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
@@ -141,6 +156,24 @@ class CMovePlanner {
         val normalizedMacro = macroName.uppercase().replace("_", "")
         val candidates = listOf(name, stem).map { it.uppercase().replace("_", "").replace(".", "") }
         return candidates.any { it.isNotEmpty() && normalizedMacro.contains(it) }
+    }
+
+    private fun findUncapturedQuotedInclude(
+        snapshot: ProjectSnapshot,
+        sourcePath: Path,
+        sourceContent: String,
+    ): Path? {
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val sourceDirectory = root.resolve(sourcePath.parent ?: Path.of("")).normalize()
+        for (directive in CIncludeDirectiveParser().parse(sourceContent)) {
+            if (directive.kind != CIncludeKind.QUOTED) continue
+            val target = sourceDirectory.resolve(directive.target).normalize()
+            val captured = snapshot.files.any { root.resolve(it.path.normalize()).normalize() == target }
+            if (!captured && (Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(target))) {
+                return root.relativize(target).normalize()
+            }
+        }
+        return null
     }
 
     private fun isCSourceOrHeader(path: Path): Boolean {

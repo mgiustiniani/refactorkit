@@ -58,11 +58,16 @@ class CRenamePlanner(
         val result = client.rename(file, line, character, newName)
         return when (result) {
             is CRenameResult.Found -> {
-                val proposal = buildProposal(result.edits)
-                val normalization = normalizer.normalize(snapshot, proposal)
-                when (normalization) {
-                    is ExternalWorkspaceEditNormalization.Accepted -> CRenamePlannerResult.Accepted(normalization.normalized)
-                    is ExternalWorkspaceEditNormalization.Refused -> CRenamePlannerResult.Refused(normalization.diagnostics)
+                val macroOriginRefusal = CMacroOriginRenameGuard.refusal(snapshot, result.edits)
+                if (macroOriginRefusal != null) {
+                    CRenamePlannerResult.Refused(listOf(macroOriginRefusal))
+                } else {
+                    val proposal = buildProposal(result.edits)
+                    val normalization = normalizer.normalize(snapshot, proposal)
+                    when (normalization) {
+                        is ExternalWorkspaceEditNormalization.Accepted -> CRenamePlannerResult.Accepted(normalization.normalized)
+                        is ExternalWorkspaceEditNormalization.Refused -> CRenamePlannerResult.Refused(normalization.diagnostics)
+                    }
                 }
             }
             is CRenameResult.NotFound -> CRenamePlannerResult.Refused(listOf(

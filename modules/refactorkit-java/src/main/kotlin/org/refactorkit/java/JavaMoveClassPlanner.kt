@@ -1,6 +1,7 @@
 package org.refactorkit.java
 
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
@@ -12,6 +13,8 @@ import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.WorkspaceEditSimulator
+import org.refactorkit.core.owningBuildSourceRoots
 import java.nio.file.Path
 
 /** Typed Java move-class structural-refusal classifications. */
@@ -210,11 +213,31 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             ))
         }
 
-        val availableSelection = JavaMoveClassTargetAuthorityEvaluator.availableSelection(
+        val bindingCheck = JavaMoveClassTargetAuthorityEvaluator.availableSelection(
             snapshot,
             symbolFqn,
             declarationFile.path,
         )
+        val availableSelection = bindingCheck.selection
+        if (request.isCrossModuleMove && availableSelection == null) {
+            val missing = bindingCheck.missingGradleOutputs.map(MoveAuthoritySourceSet::displayName).sorted()
+            if (missing.isNotEmpty()) {
+                val owners = missing.take(8).joinToString(", ") + if (missing.size > 8) " and ${missing.size - 8} more" else ""
+                return withoutAuthority(refused(
+                    snapshot,
+                    "moveClass",
+                    "Cross-module move requires complete JDT bindings, and the evaluated Gradle compile classpath " +
+                        "has missing project outputs for $owners. Compile the affected source sets and synchronize Gradle before retrying.",
+                    "java.moveClass.gradleCompilerOutputsMissing",
+                ))
+            }
+            return withoutAuthority(refused(
+                snapshot,
+                "moveClass",
+                "Cross-module move requires complete available JDT binding evidence for its source module",
+                "java.moveClass.crossModuleContextUnavailable",
+            ))
+        }
         val offlinePreparation = if (availableSelection == null) {
             JavaMoveClassTargetAuthorityEvaluator.prepare(snapshot, symbolFqn, declarationFile.path)
         } else null
@@ -287,6 +310,71 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         }
 
         val workspaceEdit = WorkspaceEdit(edits)
+        var crossModuleDiagnosticGate: Pair<List<Diagnostic>, List<Diagnostic>>? = null
+        if (request.isCrossModuleMove) {
+            val targetOwner = requireNotNull(request.targetOwner)
+            val staged = runCatching { WorkspaceEditSimulator.apply(snapshot, workspaceEdit) }.getOrNull()
+                ?: return withoutAuthority(refused(
+                    snapshot,
+                    "moveClass",
+                    "Cross-module move edit cannot be staged against the captured workspace",
+                    "java.moveClass.crossModuleStagingFailed",
+                ))
+            val stagedOwner = staged.owningBuildSourceRoots(newRelativePath).singleOrNull()
+            if (stagedOwner == null || stagedOwner.providerId != targetOwner.providerId ||
+                stagedOwner.module.id != targetOwner.module.id ||
+                stagedOwner.sourceSet.id != targetOwner.sourceSet.id || stagedOwner.root != targetOwner.root
+            ) {
+                return withoutAuthority(refused(
+                    snapshot,
+                    "moveClass",
+                    "Staged destination no longer has the exact selected build source-root owner",
+                    "java.moveClass.crossModuleTargetOwnershipChanged",
+                ))
+            }
+            val stagedSelection = JavaMoveClassTargetAuthorityEvaluator.availableSelection(
+                staged,
+                newFqn,
+                newRelativePath,
+            ).selection
+            val originalSelection = requireNotNull(availableSelection)
+            val stagedBindingsRetained = stagedSelection?.let { stagedSelection ->
+                nonImportReferenceCounts(snapshot, originalSelection)?.let { before ->
+                    nonImportReferenceCounts(staged, stagedSelection) == before
+                }
+            } == true
+            if (stagedSelection == null || !stagedBindingsRetained) {
+                return withoutAuthority(refused(
+                    snapshot,
+                    "moveClass",
+                    "Staged cross-module declaration or observer closure does not retain exact JDT bindings",
+                    "java.moveClass.crossModuleStagedBindingsUnavailable",
+                ))
+            }
+            val beforeDiagnostics = runCatching { adapter.diagnostics(snapshot) }.getOrNull()
+                ?: return withoutAuthority(refused(
+                    snapshot,
+                    "moveClass",
+                    "Baseline Java diagnostics are unavailable for cross-module validation",
+                    "java.moveClass.crossModuleDiagnosticsUnavailable",
+                ))
+            val afterDiagnostics = runCatching { adapter.diagnostics(staged) }.getOrNull()
+                ?: return withoutAuthority(refused(
+                    snapshot,
+                    "moveClass",
+                    "Staged Java diagnostics are unavailable for cross-module validation",
+                    "java.moveClass.crossModuleDiagnosticsUnavailable",
+                ))
+            if (hasIntroducedErrors(beforeDiagnostics, afterDiagnostics, declarationFile.path, newRelativePath)) {
+                return withoutAuthority(refused(
+                    snapshot,
+                    "moveClass",
+                    "Cross-module move introduces Java error diagnostics in the staged workspace",
+                    "java.moveClass.crossModuleDiagnosticsIntroduced",
+                ))
+            }
+            crossModuleDiagnosticGate = beforeDiagnostics to afterDiagnostics
+        }
         val targetAuthorityLease = offlinePrepared?.let { prepared ->
             JavaMoveClassTargetAuthorityEvaluator.complete(
                 prepared,
@@ -345,10 +433,12 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
             summary = "Move $simpleName from $oldPkg → $targetPackage. ${affectedPaths.size} file(s) affected.",
             affectedFiles = affectedPaths,
             workspaceEdit = workspaceEdit,
-            diagnosticsBefore = targetAuthorityLease?.retainedDiagnosticsBefore
-                ?.map(JavaMoveClassRetainedDiagnosticIdentity::toDiagnostic).orEmpty(),
-            diagnosticsAfterPreview = targetAuthorityLease?.retainedDiagnosticsStaged
-                ?.map(JavaMoveClassRetainedDiagnosticIdentity::toDiagnostic).orEmpty(),
+            diagnosticsBefore = crossModuleDiagnosticGate?.first
+                ?: targetAuthorityLease?.retainedDiagnosticsBefore
+                    ?.map(JavaMoveClassRetainedDiagnosticIdentity::toDiagnostic).orEmpty(),
+            diagnosticsAfterPreview = crossModuleDiagnosticGate?.second
+                ?: targetAuthorityLease?.retainedDiagnosticsStaged
+                    ?.map(JavaMoveClassRetainedDiagnosticIdentity::toDiagnostic).orEmpty(),
             warnings = warnings,
             riskLevel = if (frameworkAssessment.hasFindings) RiskLevel.HIGH else RiskLevel.MEDIUM,
             evidence = if (semanticEligible) RefactoringEvidence.JDT_BINDING else RefactoringEvidence.LEXICAL_FALLBACK,
@@ -443,6 +533,25 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         return edits.values.sortedWith(compareBy({ it.range.start.line }, { it.range.start.character }))
     }
 
+    /** Imports are binding references too, but this operation creates or rewrites them while preserving uses. */
+    private fun nonImportReferenceCounts(
+        snapshot: ProjectSnapshot,
+        selection: JavaMoveClassSemanticSelection,
+    ): Map<Path, Int>? {
+        val files = snapshot.files.associateBy { it.path }
+        val counts = linkedMapOf<Path, Int>()
+        for (reference in selection.references) {
+            val content = files[reference.path]?.content ?: return null
+            val start = TextEdits.offsetOf(content, reference.sourceRange.start)
+            val end = TextEdits.offsetOf(content, reference.sourceRange.end)
+            val isImport = JavaLexer.extractImports(content).any { import ->
+                start >= import.startOffset && end <= import.endOffset
+            }
+            if (!isImport) counts[reference.path] = counts.getOrDefault(reference.path, 0) + 1
+        }
+        return counts
+    }
+
     private fun lexicalReferenceEdits(
         file: SourceFile,
         oldFqn: String,
@@ -512,6 +621,35 @@ class JavaMoveClassPlanner(private val adapter: JavaLanguageAdapter) {
         if (content.startsWith("\r\n", offset)) offset += 2
         else if (content.startsWith("\n", offset)) offset += 1
         return offset
+    }
+
+    private fun hasIntroducedErrors(
+        before: List<Diagnostic>,
+        after: List<Diagnostic>,
+        oldPath: Path,
+        newPath: Path,
+    ): Boolean {
+        fun identities(diagnostics: List<Diagnostic>, mapNewPathToOld: Boolean): Map<String, Int> =
+            diagnostics.asSequence()
+                .filter { it.severity == Diagnostic.Severity.ERROR }
+                .map { diagnostic ->
+                    val path = diagnostic.location?.path?.normalize()?.let { diagnosticPath ->
+                        if (mapNewPathToOld && diagnosticPath == newPath.normalize()) oldPath.normalize()
+                        else diagnosticPath
+                    }?.toString().orEmpty()
+                    listOf(
+                        diagnostic.code.orEmpty(),
+                        diagnostic.category?.name.orEmpty(),
+                        diagnostic.message,
+                        path,
+                    ).joinToString("\u0000")
+                }
+                .groupingBy { it }
+                .eachCount()
+
+        val previous = identities(before, mapNewPathToOld = false)
+        val staged = identities(after, mapNewPathToOld = true)
+        return staged.any { (identity, count) -> count > (previous[identity] ?: 0) }
     }
 
     private fun refused(

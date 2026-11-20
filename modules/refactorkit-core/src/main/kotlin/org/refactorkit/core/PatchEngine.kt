@@ -38,6 +38,12 @@ fun interface PatchFaultInjector {
     }
 }
 
+sealed interface RollbackAuthorityResolution {
+    data object NotRequired : RollbackAuthorityResolution
+    data class Available(val snapshot: ProjectSnapshot, val diagnosticsGate: DiagnosticsGate) : RollbackAuthorityResolution
+    data class Refused(val code: String, val message: String) : RollbackAuthorityResolution
+}
+
 class PatchEngine(
     private val workspaceRoot: Path,
     private val transactionLog: TransactionLog = TransactionLog(
@@ -302,6 +308,13 @@ class PatchEngine(
     }
 
     private fun validateImmutableManagedWriteEvidence(plan: PatchPlan): Diagnostic? = when {
+        !plan.managedWriteEligible || plan.referenceAnalysis?.let {
+            !it.completeProject || it.completeness != PlanReferenceCompleteness.COMPLETE
+        } == true -> Diagnostic(
+            "Managed apply is refused because the plan's typed reference analysis is incomplete or unresolved",
+            Diagnostic.Severity.ERROR,
+            code = "referenceAnalysis.incomplete",
+        )
         plan.evidence == RefactoringEvidence.LEXICAL_FALLBACK -> Diagnostic(
             "Lexical fallback previews are review-only and cannot be applied through the stable managed-write contract",
             Diagnostic.Severity.ERROR,
@@ -499,6 +512,7 @@ class PatchEngine(
     fun rollback(
         transaction: Transaction,
         mode: RollbackMode = RollbackMode.NORMAL,
+        authorityProvider: ((TransactionJournalRecord) -> RollbackAuthorityResolution)? = null,
     ): ApplyResult = withWorkspaceLock {
         val record = transactionLog.loadRecord(transaction.id)
             ?: return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
@@ -532,6 +546,20 @@ class PatchEngine(
             }
         }
 
+        val protected = "rollbackAuthorityProvider" in record.authorityAttributes
+        if (protected && mode != RollbackMode.NORMAL) return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+            "Protected rollback does not admit forced source restoration", Diagnostic.Severity.ERROR,
+            code = "rollback.forceAuthorityUnsupported")))
+        if (protected) faultInjector.inject(PatchFaultPoint.BEFORE_AUTHORITY_LEASE_VALIDATION, Path.of("."), 0)
+        val authority = try { authorityProvider?.invoke(record) ?: RollbackAuthorityResolution.NotRequired }
+        catch (_: Exception) { RollbackAuthorityResolution.Refused("rollback.authorityUnavailable", "Rollback authority could not be evaluated") }
+        if (authority is RollbackAuthorityResolution.Refused) return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+            authority.message, Diagnostic.Severity.ERROR, code = authority.code)))
+        if (protected && authority !is RollbackAuthorityResolution.Available) return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+            "Protected transaction requires its original rollback authority", Diagnostic.Severity.ERROR,
+            code = "rollback.authorityRequired")))
+        if (authority is RollbackAuthorityResolution.Available) return@withWorkspaceLock rollbackAuthoritatively(record, authority)
+
         val rollbackDiagnostics = rollbackAppliedRecord(
             record,
             if (mode == RollbackMode.FORCE) "Forced rollback explicitly requested" else null,
@@ -541,6 +569,37 @@ class PatchEngine(
     }
 
     // ── private ──────────────────────────────────────────────────────────────
+
+    private fun rollbackAuthoritatively(record: TransactionJournalRecord, authority: RollbackAuthorityResolution.Available): ApplyResult {
+        val provider = authority.diagnosticsGate.authoritativeProvider ?: return ApplyResult.Refused(listOf(Diagnostic(
+            "Protected rollback requires authoritative diagnostics", Diagnostic.Severity.ERROR, code = "rollback.authorityUnavailable")))
+        if (authority.snapshot.hash != record.postSnapshotHash) return ApplyResult.Refused(listOf(Diagnostic(
+            "Protected rollback snapshot differs from journal post-image", Diagnostic.Severity.ERROR, code = "rollback.snapshotStale")))
+        val plan = PatchPlan(operation = "rollback", snapshotHash = authority.snapshot.hash, confidence = 1.0,
+            summary = "Restore exact transaction pre-image", affectedFiles = record.transaction.rollbackEdit.affectedFiles(),
+            workspaceEdit = record.transaction.rollbackEdit)
+        val validation = validateAuthoritativeDiagnosticsGate(authority.snapshot, plan, authority.diagnosticsGate.id, provider,
+            originalRestorationHash = record.preSnapshotHash)
+        if (validation.diagnostics.isNotEmpty()) return ApplyResult.Refused(validation.diagnostics)
+        val restored = requireNotNull(validation.stagedEvaluation)
+        if (restored.snapshot.hash != record.preSnapshotHash) return ApplyResult.Refused(listOf(Diagnostic(
+            "Protected rollback candidate differs from original snapshot", Diagnostic.Severity.ERROR, code = "rollback.preSnapshotMismatch")))
+        val rollbackDiagnostics = rollbackAppliedRecord(record, "Authoritative rollback validated")
+        if (rollbackDiagnostics.isNotEmpty()) return ApplyResult.Refused(rollbackDiagnostics)
+        val failure = authoritativePostApplyFailure(restored, provider, authority.diagnosticsGate.id)
+            ?: return ApplyResult.Applied(record.transaction)
+        return try {
+            val current = record.postImages.map { FileImage(it.path, readImage(it.path)) }
+            transactionLog.update(record.copy(state = JournalState.ROLLING_BACK, failure = "Compensating failed authoritative rollback"))
+            commitPostImages(record, current, record.postImages, record.postImages.associate { it.path to it.posixPermissions })
+            transactionLog.update(record.copy(state = JournalState.APPLIED, failure = failure.message))
+            val restoredFailure = authoritativeRestoredFailure(authority.snapshot, requireNotNull(validation.baselineEvaluation), provider, authority.diagnosticsGate.id)
+            ApplyResult.Refused(listOfNotNull(failure, restoredFailure))
+        } catch (_: Exception) {
+            markRecoveryRequired(record, "Failed rollback compensation requires recovery")
+            ApplyResult.Refused(listOf(failure, Diagnostic("Rollback compensation requires recovery", Diagnostic.Severity.ERROR, code = "transaction.recoveryRequired")))
+        }
+    }
 
     private fun rollbackAppliedRecord(
         record: TransactionJournalRecord,
@@ -853,6 +912,7 @@ class PatchEngine(
         plan: PatchPlan,
         gateId: String,
         provider: AuthoritativeDiagnosticsProvider,
+        originalRestorationHash: String? = null,
     ): AuthoritativeDiagnosticsGateValidation {
         val baselineEvaluation = try {
             provider.evaluate(snapshot)
@@ -909,7 +969,18 @@ class PatchEngine(
             return AuthoritativeDiagnosticsGateValidation(stagedBoundaryDiagnostics, provider = provider)
         }
 
-        val regressions = diagnosticsRegression(baselineEvaluation.diagnostics, stagedEvaluation.diagnostics)
+        // A protected inverse restores journal S0, including errors that forward apply
+        // moved or removed. Its exact original bytes, SDK and classpath define that
+        // baseline; S1 is still evaluated for compensation and post-restore currency.
+        // Forward apply retains its ordinary diagnostic regression policy.
+        if (originalRestorationHash != null && stagedEvaluation.snapshot.hash != originalRestorationHash) {
+            return AuthoritativeDiagnosticsGateValidation(listOf(Diagnostic(
+                "Protected rollback candidate differs from original snapshot", Diagnostic.Severity.ERROR,
+                code = "rollback.preSnapshotMismatch")), provider = provider)
+        }
+        val baselineDiagnostics = if (originalRestorationHash == null) baselineEvaluation.diagnostics
+            else stagedEvaluation.diagnostics
+        val regressions = diagnosticsRegression(baselineDiagnostics, stagedEvaluation.diagnostics)
         val unapprovedRegressions = diagnosticsRegression(plan.diagnosticsAfterPreview, regressions)
         if (unapprovedRegressions.isNotEmpty()) {
             return AuthoritativeDiagnosticsGateValidation(
@@ -1638,6 +1709,9 @@ class PatchEngine(
             preSnapshotHash = snapshot.hash,
             postSnapshotHash = exactPostSnapshotHash ?: postSnapshotHash(snapshot, postImages),
             state = JournalState.PREPARED,
+            authorityAttributes = plan.authorityLease?.attributes.orEmpty().takeIf {
+                "rollbackAuthorityProvider" in it || it["retainInTransactionJournal"] == "true"
+            }.orEmpty(),
             history = listOf(JournalEvent(
                 JournalState.PREPARED,
                 Instant.now(),
@@ -1881,12 +1955,12 @@ class PatchEngine(
                 createDirectoriesDurably(requireNotNull(target.parent))
                 val temporary = if (ownsStagingReservation(record)) stagingPath(record.transaction.id, image.path)
                     else target.parent.resolve(".refactorkit-stage-${UUID.randomUUID()}.tmp")
-                val identity = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
-                    val createdIdentity = stagingIdentity(temporary)
+                val createdFileKey = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+                    val createdKey = stagingFileKey(temporary)
                     val buffer = java.nio.ByteBuffer.wrap(requireNotNull(image.content).toByteArray(Charsets.UTF_8))
                     while (buffer.hasRemaining()) channel.write(buffer)
                     channel.force(true)
-                    createdIdentity
+                    createdKey
                 }
                 applyStagedPermissions(
                     temporary,
@@ -1899,7 +1973,11 @@ class PatchEngine(
                 FileChannel.open(temporary, StandardOpenOption.WRITE).use { it.force(true) }
                 forceWorkspaceDirectory(requireNotNull(temporary.parent))
                 stagedFiles[image.path] = temporary
-                stagingProofs[temporary] = identity to sha256(requireNotNull(image.content).toByteArray(Charsets.UTF_8))
+                // On Linux, BasicFileAttributes.creationTime can advance when file contents
+                // change (some filesystems expose ctime there). Capture it after all writes
+                // and permission changes, while requiring the original CREATE_NEW inode.
+                stagingProofs[temporary] = stagingIdentity(temporary, createdFileKey) to
+                    sha256(requireNotNull(image.content).toByteArray(Charsets.UTF_8))
                 require(safeStagingFile(temporary, listOf(image.content.toByteArray(Charsets.UTF_8)), stagingProofs[temporary])) {
                     "Created staging file changed before its ownership was retained"
                 }
@@ -2168,10 +2246,18 @@ class PatchEngine(
                 Diagnostic.Severity.ERROR, code = "rollback.conflict")
         }
 
-    private fun stagingIdentity(path: Path): String {
+    private fun stagingFileKey(path: Path): String {
         val attributes = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
         require(attributes.isRegularFile && !attributes.isSymbolicLink)
-        return "${requireNotNull(attributes.fileKey()) { "Filesystem does not expose staging identity" }}|${attributes.creationTime()}"
+        return requireNotNull(attributes.fileKey()) { "Filesystem does not expose staging identity" }.toString()
+    }
+
+    private fun stagingIdentity(path: Path, expectedFileKey: String? = null): String {
+        val attributes = Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+        require(attributes.isRegularFile && !attributes.isSymbolicLink)
+        val fileKey = requireNotNull(attributes.fileKey()) { "Filesystem does not expose staging identity" }.toString()
+        require(expectedFileKey == null || fileKey == expectedFileKey) { "Staging file identity changed" }
+        return "$fileKey|${attributes.creationTime()}"
     }
 
     private fun safeStagingFile(path: Path, expected: List<ByteArray>, proof: Pair<String, String>?): Boolean = runCatching {

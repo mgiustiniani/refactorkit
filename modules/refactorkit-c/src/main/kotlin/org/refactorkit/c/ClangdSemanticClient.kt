@@ -10,11 +10,13 @@ import org.refactorkit.core.SemanticProcessSpec
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.URI
 import java.nio.file.Path
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
@@ -79,6 +81,11 @@ sealed interface CClangdSemanticResult {
     data class Refused(val diagnostics: List<Diagnostic>) : CClangdSemanticResult
 }
 
+internal sealed interface CClangdSymbolInfoResponse {
+    data class Available(val body: String) : CClangdSymbolInfoResponse
+    data class Unavailable(val diagnostics: List<Diagnostic>) : CClangdSymbolInfoResponse
+}
+
 /**
  * Bounded clangd LSP client for textDocument/definition and textDocument/references.
  * clangd is launched through the shared bounded process manager; all requests are
@@ -89,12 +96,24 @@ class ClangdSemanticClient(
     private val processManager: ExternalSemanticProcessManager = ExternalSemanticProcessManager(),
     private val requestTimeoutMillis: Long = DEFAULT_REQUEST_TIMEOUT_MILLIS,
     private val initializeTimeoutMillis: Long = DEFAULT_INITIALIZE_TIMEOUT_MILLIS,
+    /** Explicit simulation ports are for tests/controlled hosts, never native qualification. */
+    private val runtimeProvider: ClangToolchainRuntimeProvider = ClangToolchainRuntimeCapture(),
+    readOnlySdks: List<CReadOnlySdkRequest> = emptyList(),
 ) : AutoCloseable {
-    private var managedProcess: ManagedSemanticProcess? = null
-    private var writer: OutputStream? = null
-    private var reader: InputStream? = null
-    private var requestExecutor: ExecutorService? = null
+    private class StartAttempt {
+        @Volatile var cancelled = false
+    }
+
+    private val sdkRequests = (toolchain.readOnlySdkInputs.requests + readOnlySdks.take(CNativeSysrootPolicy.MAX_ROOTS + 1))
+        .distinct().take(CNativeSysrootPolicy.MAX_ROOTS + 1).toList()
+    private val lifecycleLock = Any()
+    private var activeStart: StartAttempt? = null
+    @Volatile private var managedProcess: ManagedSemanticProcess? = null
+    @Volatile private var writer: OutputStream? = null
+    @Volatile private var reader: InputStream? = null
+    @Volatile private var requestExecutor: ExecutorService? = null
     private var workspaceRoot: Path? = null
+    @Volatile private var launchContext: CClangdLaunchContext? = null
     private val nextId = AtomicInteger(1)
 
     init {
@@ -102,67 +121,142 @@ class ClangdSemanticClient(
         require(initializeTimeoutMillis in 1..300_000L) { "initialize timeout is outside the safe range" }
     }
 
-    fun processProvenance(): org.refactorkit.core.SemanticProcessProvenance? = managedProcess?.provenance
+    fun processProvenance(): org.refactorkit.core.SemanticProcessProvenance? =
+        synchronized(lifecycleLock) { managedProcess?.provenance }
+
+    /** Captured caller-declared SDK metadata; live queries independently check input currency. */
+    fun readOnlySdkProvenance(): List<CReadOnlySdkProvenance> = launchContext?.readOnlySdkProvenance().orEmpty()
 
     /** Launches clangd and completes the LSP initialize handshake. */
     fun start(workspaceRoot: Path) {
-        require(managedProcess == null) { "clangd is already running" }
-        this.workspaceRoot = workspaceRoot.toAbsolutePath().normalize()
-        val clangd = toolchain.clangdExecutable.toAbsolutePath().normalize()
-        val process = processManager.launch(SemanticProcessSpec(
-            id = "clangd-${PROCESS_SEQUENCE.getAndIncrement()}",
-            executable = clangd,
-            arguments = listOf("--background-index", "--compile-commands-dir", workspaceRoot.toString()),
-            workingDirectory = workspaceRoot.toAbsolutePath().normalize(),
-            limits = SemanticProcessLimits(
-                maxStdoutBytes = MAX_SESSION_OUTPUT_BYTES,
-                maxStderrBytes = MAX_STDERR_BYTES,
-                gracefulShutdownMillis = SHUTDOWN_TIMEOUT_MILLIS,
-            ),
-        ))
-        managedProcess = process
-        writer = process.input
-        reader = process.output
-        requestExecutor = Executors.newSingleThreadExecutor { task ->
-            Thread(task, "refactorkit-clangd-${process.provenance.id}").apply { isDaemon = true }
+        val attempt = synchronized(lifecycleLock) {
+            require(managedProcess == null && activeStart == null) { "clangd is already running or starting" }
+            StartAttempt().also { activeStart = it }
         }
-        val initialize = withDeadline(initializeTimeoutMillis) {
-            send("initialize", """{"processId":null,"rootUri":${quote(uri(workspaceRoot))},"capabilities":{},"workspaceFolders":[{"uri":${quote(uri(workspaceRoot))},"name":"root"}]}""")
-        }
-        if (initialize == null || parseMessage(initialize).success != true) {
+        try {
+            ensureStartActive(attempt)
+            runtimeAuthorityDiagnostic()?.let { throw CClangdConfigurationException(it) }
+            ensureStartActive(attempt)
+            if (!resourcesAreCurrent()) throw CClangdConfigurationException(resourceDiagnostic(
+                "c.clangdResourcesUnavailable", "Complete retained Clang resources are unavailable or changed before startup"))
+            ensureStartActive(attempt)
+            val normalizedWorkspace = workspaceRoot.toAbsolutePath().normalize()
+            val context = CClangdLaunchContext.capture(normalizedWorkspace, toolchain.clangExecutable, sdkRequests)
+            val contextAccepted = synchronized(lifecycleLock) {
+                if (!isStartActive(attempt)) {
+                    false
+                } else {
+                    this.workspaceRoot = normalizedWorkspace
+                    launchContext = context
+                    true
+                }
+            }
+            if (!contextAccepted) {
+                context.close()
+                ensureStartActive(attempt)
+            }
+            configurationChanged()?.let { throw CClangdConfigurationException(it) }
+            ensureStartActive(attempt)
+            val resourceRoot = (toolchain.resources as ClangResourceCaptureResult.Captured).snapshot.root
+            val clangd = toolchain.clangdExecutable.toAbsolutePath().normalize()
+            val process = synchronized(lifecycleLock) {
+                ensureStartActive(attempt)
+                processManager.launch(SemanticProcessSpec(
+                    id = "clangd-${PROCESS_SEQUENCE.getAndIncrement()}",
+                    executable = clangd,
+                    arguments = listOf("--enable-config=false", "--background-index=false", "--pch-storage=memory",
+                        "--compile-commands-dir=${context.root}", "--resource-dir=$resourceRoot"),
+                    workingDirectory = context.root,
+                    limits = SemanticProcessLimits(
+                        maxStdoutBytes = MAX_SESSION_OUTPUT_BYTES,
+                        maxStderrBytes = MAX_STDERR_BYTES,
+                        gracefulShutdownMillis = SHUTDOWN_TIMEOUT_MILLIS,
+                    ),
+                )).also { started ->
+                    managedProcess = started
+                    writer = started.input
+                    reader = started.output
+                    requestExecutor = Executors.newSingleThreadExecutor { task ->
+                        Thread(task, "refactorkit-clangd-${started.provenance.id}").apply { isDaemon = true }
+                    }
+                }
+            }
+            ensureStartActive(attempt)
+            val initialize = withDeadline(initializeTimeoutMillis) {
+                send("initialize", """{"processId":null,"rootUri":${quote(uri(normalizedWorkspace))},"capabilities":{},"workspaceFolders":[{"uri":${quote(uri(normalizedWorkspace))},"name":"root"}]}""")
+            }
+            if (initialize == null || parseMessage(initialize).success != true) {
+                error("clangd did not complete the initialize handshake")
+            }
+            val initialized = withDeadline(requestTimeoutMillis) { notify("initialized", "{}") }
+            if (initialized != true) error("clangd did not accept initialized")
+            configurationChanged()?.let { throw CClangdConfigurationException(it) }
+            ensureStartActive(attempt)
+        } catch (failure: Exception) {
             close()
-            error("clangd did not complete the initialize handshake")
+            throw failure
+        } finally {
+            synchronized(lifecycleLock) {
+                if (activeStart === attempt) activeStart = null
+            }
         }
-        val initialized = withDeadline(requestTimeoutMillis) { notify("initialized", "{}") }
-        if (initialized != true) {
-            close()
-            error("clangd did not accept initialized")
+    }
+
+    private fun isStartActive(attempt: StartAttempt): Boolean = activeStart === attempt && !attempt.cancelled
+
+    private fun ensureStartActive(attempt: StartAttempt) {
+        if (!synchronized(lifecycleLock) { isStartActive(attempt) }) {
+            throw IllegalStateException("clangd startup was cancelled")
         }
     }
 
     /** Opens a source document in clangd so definition/references can resolve. */
     fun didOpen(file: Path, content: String): Boolean {
         val process = managedProcess ?: return false
-        if (!process.isAlive) return false
+        if (!process.isAlive || configurationChanged() != null) return false
         val response = withDeadline(requestTimeoutMillis) {
             notify("textDocument/didOpen", """{"textDocument":{"uri":${quote(uri(file))},"languageId":"c","version":1,"text":${quote(content)}}}""")
         }
-        return response == true
+        return response == true && configurationChanged() == null
+    }
+
+    /** Requests native identity without treating a declaration location as a complete definition. */
+    internal fun symbolInfo(file: Path, line: Int, character: Int): CClangdSymbolInfoResponse {
+        fun unavailable(code: String, message: String) = CClangdSymbolInfoResponse.Unavailable(listOf(resourceDiagnostic(code, message)))
+        val process = managedProcess ?: return CClangdSymbolInfoResponse.Unavailable(listOf(notRunningDiagnostic()))
+        if (!process.isAlive) return CClangdSymbolInfoResponse.Unavailable(listOf(unavailableDiagnostic()))
+        configurationChanged()?.let { return CClangdSymbolInfoResponse.Unavailable(listOf(it)) }
+        val response = withDeadline(requestTimeoutMillis) {
+            send("textDocument/symbolInfo", """{"textDocument":{"uri":${quote(uri(file))}},"position":{"line":$line,"character":$character}}""")
+        } ?: return unavailable("clangd.unavailable", "clangd returned no symbol identity response")
+        configurationChanged()?.let { return CClangdSymbolInfoResponse.Unavailable(listOf(it)) }
+        val message = parseMessage(response)
+        if (message.success != true) return unavailable("clangd.refused", "clangd refused symbol identity acquisition")
+        val body = message.body ?: return unavailable("clangd.resultInvalid", "clangd returned no symbol identity result")
+        return CClangdSymbolInfoResponse.Available(body)
     }
 
     /** Requests the definition for a symbol at the given position. */
     fun definition(file: Path, line: Int, character: Int): CClangdSemanticResult {
         val process = managedProcess ?: return refusal("clangd.notRunning", "clangd is not running")
         if (!process.isAlive) return refusal("clangd.unavailable", "clangd is unavailable")
+        configurationChanged()?.let { return CClangdSemanticResult.Refused(listOf(it)) }
         val response = withDeadline(requestTimeoutMillis) {
             send("textDocument/definition", """{"textDocument":{"uri":${quote(uri(file))}},"position":{"line":$line,"character":$character}}""")
         } ?: return refusal("clangd.unavailable", "clangd returned no definition response")
+        configurationChanged()?.let { return CClangdSemanticResult.Refused(listOf(it)) }
         val message = parseMessage(response)
         if (message.success != true) return refusal("clangd.refused", message.error ?: "clangd refused definition")
-        val body = message.body
-        if (body == null) return CClangdSemanticResult.NotFound(listOf(notFoundDiagnostic()))
+        val body = message.body ?: return refusal("clangd.resultInvalid", "clangd returned no definition result")
+        val result = runCatching { Json.parseToJsonElement(body) }.getOrNull()
+        if (result == JsonNull || (result is JsonArray && result.isEmpty())) {
+            return CClangdSemanticResult.NotFound(listOf(notFoundDiagnostic()))
+        }
+        if (result is JsonArray && result.size > 1) {
+            return refusal("clangd.definitionAmbiguous", "clangd returned multiple definition locations; explicit selection is required")
+        }
         val location = parseLocation(body)
-        if (location == null) return CClangdSemanticResult.NotFound(listOf(notFoundDiagnostic()))
+            ?: return refusal("clangd.resultInvalid", "clangd returned malformed or unsupported definition evidence")
         return CClangdSemanticResult.Found(CSymbolDefinition(location.file, location.startLine, location.startCharacter, location.endLine, location.endCharacter, location.name))
     }
 
@@ -170,12 +264,25 @@ class ClangdSemanticClient(
     fun rename(file: Path, line: Int, character: Int, newName: String): CRenameResult {
         val process = managedProcess ?: return CRenameResult.Refused(listOf(notRunningDiagnostic()))
         if (!process.isAlive) return CRenameResult.Refused(listOf(unavailableDiagnostic()))
+        configurationChanged()?.let { return CRenameResult.Refused(listOf(it)) }
         if (newName.isBlank() || newName.length > MAX_RENAME_NAME) return CRenameResult.Refused(listOf(
             Diagnostic(message = "Rename target name is invalid", severity = Diagnostic.Severity.ERROR, code = "clang.renameInvalidName", evidence = DiagnosticEvidence.STRUCTURAL, category = DiagnosticCategory.TYPE_RESOLUTION),
         ))
+        val sdkContext = launchContext?.takeIf { it.readOnlySdkProvenance().isNotEmpty() }
+        if (sdkContext != null) {
+            if (sdkContext.sdkRenameDecision(file, null) == CReadOnlySdkRename.READ_ONLY)
+                return sdkRenameRefusal(CReadOnlySdkRename.READ_ONLY)
+            val ownership = when (val target = definition(file, line, character)) {
+                is CClangdSemanticResult.Found -> sdkContext.sdkRenameDecision(file, target.definition.file)
+                is CClangdSemanticResult.Refused -> return CRenameResult.Refused(target.diagnostics)
+                is CClangdSemanticResult.NotFound -> CReadOnlySdkRename.UNAVAILABLE
+            }
+            if (ownership != CReadOnlySdkRename.SOURCE_OWNED) return sdkRenameRefusal(ownership)
+        }
         val response = withDeadline(requestTimeoutMillis) {
             send("textDocument/rename", """{"textDocument":{"uri":${quote(uri(file))}},"position":{"line":$line,"character":$character},"newName":${quote(newName)}}""")
         } ?: return CRenameResult.Refused(listOf(unavailableDiagnostic()))
+        configurationChanged()?.let { return CRenameResult.Refused(listOf(it)) }
         val message = parseMessage(response)
         if (message.success != true) return CRenameResult.Refused(listOf(
             Diagnostic(message = message.error ?: "clangd refused rename", severity = Diagnostic.Severity.ERROR, code = "clangd.refused", evidence = DiagnosticEvidence.COMPILER, category = DiagnosticCategory.TYPE_RESOLUTION),
@@ -186,6 +293,10 @@ class ClangdSemanticClient(
             Diagnostic(message = "clangd returned a malformed rename result", severity = Diagnostic.Severity.ERROR, code = "clangd.resultInvalid", evidence = DiagnosticEvidence.COMPILER, category = DiagnosticCategory.TYPE_RESOLUTION),
         ))
         if (edits.isEmpty()) return CRenameResult.NotFound(listOf(notFoundDiagnostic()))
+        if (sdkContext != null) {
+            val ownership = sdkContext.sdkEditDecision(edits.map { it.file })
+            if (ownership != CReadOnlySdkRename.SOURCE_OWNED) return sdkRenameRefusal(ownership)
+        }
         return CRenameResult.Found(edits)
     }
 
@@ -193,24 +304,96 @@ class ClangdSemanticClient(
     fun references(file: Path, line: Int, character: Int): CReferenceResult {
         val process = managedProcess ?: return CReferenceResult.Unavailable(listOf(notRunningDiagnostic()))
         if (!process.isAlive) return CReferenceResult.Unavailable(listOf(unavailableDiagnostic()))
+        configurationChanged()?.let { return CReferenceResult.Unavailable(listOf(it)) }
         val response = withDeadline(requestTimeoutMillis) {
             send("textDocument/references", """{"textDocument":{"uri":${quote(uri(file))}},"position":{"line":$line,"character":$character},"context":{"includeDeclaration":true}}""")
         } ?: return CReferenceResult.Unavailable(listOf(unavailableDiagnostic()))
+        configurationChanged()?.let { return CReferenceResult.Unavailable(listOf(it)) }
         val message = parseMessage(response)
         if (message.success != true) return CReferenceResult.Unavailable(listOf(
             Diagnostic(message = message.error ?: "clangd refused references", severity = Diagnostic.Severity.ERROR, code = "clangd.refused", evidence = DiagnosticEvidence.COMPILER, category = DiagnosticCategory.TYPE_RESOLUTION),
         ))
-        val body = message.body ?: return CReferenceResult.NotFound(listOf(notFoundDiagnostic()))
-        return CReferenceResult.Found(parseLocations(body))
+        val body = message.body ?: return CReferenceResult.Unavailable(listOf(invalidResultDiagnostic()))
+        // LSP permits null to mean no references. All other results must be a
+        // complete array; malformed entries or an over-limit array are unavailable,
+        // never evidence that the symbol has no uses.
+        if (body == "null") return CReferenceResult.NotFound(listOf(notFoundDiagnostic()))
+        val locations = parseLocations(body) ?: return CReferenceResult.Unavailable(listOf(invalidResultDiagnostic()))
+        return if (locations.isEmpty()) CReferenceResult.NotFound(listOf(notFoundDiagnostic()))
+        else CReferenceResult.Found(locations)
     }
 
+    private fun sdkRenameRefusal(ownership: CReadOnlySdkRename): CRenameResult.Refused = CRenameResult.Refused(listOf(
+        resourceDiagnostic(if (ownership == CReadOnlySdkRename.READ_ONLY) "c.sdkReadOnly" else "c.sdkRenameContextUnavailable",
+            if (ownership == CReadOnlySdkRename.READ_ONLY) "SDK declarations and files are read only" else "Complete source-owned rename evidence is unavailable"),
+    ))
+
+    private fun configurationChanged(): Diagnostic? {
+        val context = launchContext ?: return null
+        runtimeAuthorityDiagnostic()?.let {
+            close()
+            return it
+        }
+        if (!resourcesAreCurrent()) {
+            close()
+            return resourceDiagnostic("c.clangdResourcesChanged",
+                "Retained Clang resources changed or are unavailable; start a fresh semantic session")
+        }
+        if (context.isCurrent()) return null
+        close()
+        return Diagnostic(
+            message = "Captured compilation configuration changed or is unavailable; start a fresh semantic session",
+            severity = Diagnostic.Severity.ERROR, code = "c.clangdConfigurationChanged",
+            evidence = DiagnosticEvidence.STRUCTURAL, category = DiagnosticCategory.SAFETY,
+        )
+    }
+
+    private fun runtimeAuthorityDiagnostic(): Diagnostic? {
+        if (toolchain.provenance.readOnlySdkIdentity != toolchain.readOnlySdkInputs.identity)
+            return resourceDiagnostic("c.clangdSdkUnavailable", "Declared SDK identity does not match retained SDK inputs")
+        if (!toolchain.readOnlySdkInputs.isCurrent())
+            return resourceDiagnostic("c.clangdSdkChanged", "Retained SDK inputs changed; discover a fresh toolchain")
+        return when (runtimeProvider.checkCurrent(toolchain)) {
+            ClangToolchainRuntimeCurrency.Current -> null
+            is ClangToolchainRuntimeCurrency.NotCurrent -> {
+                val code = if (toolchain.runtime !is ClangToolchainRuntimeCaptureResult.Captured) {
+                    "c.clangdRuntimeUnavailable"
+                } else {
+                    "c.clangdRuntimeChanged"
+                }
+                resourceDiagnostic(code,
+                    "Retained native runtime inputs are unavailable, changed, or no longer match the selected toolchain")
+            }
+        }
+    }
+
+    private fun resourcesAreCurrent(): Boolean {
+        val resources = toolchain.resources as? ClangResourceCaptureResult.Captured ?: return false
+        val declared = runCatching { Path.of(toolchain.provenance.resourceDir ?: return false) }.getOrNull() ?: return false
+        return declared.isAbsolute && declared.normalize() == resources.snapshot.root &&
+            ClangResourceDirectoryCapture().checkCurrent(resources.snapshot) == ClangResourceCurrency.Current
+    }
+
+    private fun resourceDiagnostic(code: String, message: String) = Diagnostic(message,
+        Diagnostic.Severity.ERROR, code = code, evidence = DiagnosticEvidence.STRUCTURAL,
+        category = DiagnosticCategory.SAFETY)
+
     override fun close() {
-        managedProcess?.close()
-        requestExecutor?.shutdownNow()
-        requestExecutor = null
-        managedProcess = null
-        writer = null
-        reader = null
+        val resources = synchronized(lifecycleLock) {
+            activeStart?.cancelled = true
+            val process = managedProcess
+            val executor = requestExecutor
+            val context = launchContext
+            managedProcess = null
+            requestExecutor = null
+            writer = null
+            reader = null
+            launchContext = null
+            Triple(process, executor, context)
+        }
+        resources.first?.close()
+        resources.second?.shutdownNow()
+        resources.third?.close()
     }
 
     private fun send(method: String, paramsJson: String): String? {
@@ -331,7 +514,10 @@ class ClangdSemanticClient(
         if (root == null) return Message(null, null, null, null)
         return Message(
             id = (root["id"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull(),
-            success = (root["result"] as? JsonObject) != null || (root["result"] as? JsonArray) != null || root["result"] == null,
+            // Missing result, explicit error and malformed result types never count
+            // as successful JSON-RPC, even when no result member was supplied.
+            success = !root.containsKey("error") &&
+                (root["result"] is JsonObject || root["result"] is JsonArray || root["result"] == JsonNull),
             error = root["error"]?.toString(),
             body = root["result"]?.toString(),
         )
@@ -343,10 +529,11 @@ class ClangdSemanticClient(
         val element = runCatching { Json.parseToJsonElement(body) }.getOrNull() ?: return null
         val objectValue = when (element) {
             is JsonObject -> element
-            is JsonArray -> element.firstOrNull() as? JsonObject
+            is JsonArray -> element.singleOrNull() as? JsonObject
             else -> null
         } ?: return null
         val uri = objectValue.string("uri") ?: return null
+        val file = uriToPath(uri) ?: return null
         val range = objectValue["range"] as? JsonObject ?: return null
         val start = range["start"] as? JsonObject ?: return null
         val end = range["end"] as? JsonObject ?: return null
@@ -356,25 +543,38 @@ class ClangdSemanticClient(
         val endCharacter = end.integer("character") ?: return null
         if (startLine < 0 || startCharacter < 0 || endLine < 0 || endCharacter < 0) return null
         if (endLine < startLine || (endLine == startLine && endCharacter < startCharacter)) return null
-        return Location(Path.of(uriToPath(uri)), startLine, startCharacter, endLine, endCharacter, objectValue.string("name"))
+        return Location(file, startLine, startCharacter, endLine, endCharacter, objectValue.string("name"))
     }
 
-    internal fun parseLocations(body: String): List<CSymbolReference> {
-        val element = runCatching { Json.parseToJsonElement(body) }.getOrNull() ?: return emptyList()
-        val array = element as? JsonArray ?: return emptyList()
-        return array.mapNotNull { entry ->
-            val objectValue = entry as? JsonObject ?: return@mapNotNull null
-            val uri = objectValue.string("uri") ?: return@mapNotNull null
-            val range = objectValue["range"] as? JsonObject ?: return@mapNotNull null
-            val start = range["start"] as? JsonObject ?: return@mapNotNull null
-            val end = range["end"] as? JsonObject ?: return@mapNotNull null
-            val startLine = start.integer("line") ?: return@mapNotNull null
-            val startCharacter = start.integer("character") ?: return@mapNotNull null
-            val endLine = end.integer("line") ?: return@mapNotNull null
-            val endCharacter = end.integer("character") ?: return@mapNotNull null
-            CSymbolReference(Path.of(uriToPath(uri)), startLine, startCharacter, endLine, endCharacter)
-        }.take(MAX_REFERENCES)
+    internal fun parseLocations(body: String): List<CSymbolReference>? {
+        val element = runCatching { Json.parseToJsonElement(body) }.getOrNull() ?: return null
+        val array = element as? JsonArray ?: return null
+        if (array.size > MAX_REFERENCES) return null
+        return array.map { entry ->
+            val objectValue = entry as? JsonObject ?: return null
+            val uri = objectValue.string("uri") ?: return null
+            val file = runCatching { Path.of(URI(uri)).normalize() }.getOrNull()
+                ?.takeIf(Path::isAbsolute) ?: return null
+            val range = objectValue["range"] as? JsonObject ?: return null
+            val start = range["start"] as? JsonObject ?: return null
+            val end = range["end"] as? JsonObject ?: return null
+            val startLine = start.integer("line") ?: return null
+            val startCharacter = start.integer("character") ?: return null
+            val endLine = end.integer("line") ?: return null
+            val endCharacter = end.integer("character") ?: return null
+            if (startLine < 0 || startCharacter < 0 || endLine < 0 || endCharacter < 0) return null
+            if (endLine < startLine || (endLine == startLine && endCharacter <= startCharacter)) return null
+            CSymbolReference(file, startLine, startCharacter, endLine, endCharacter)
+        }
     }
+
+    private fun invalidResultDiagnostic() = Diagnostic(
+        message = "clangd reference result is incomplete or malformed",
+        severity = Diagnostic.Severity.ERROR,
+        code = "clangd.resultInvalid",
+        evidence = DiagnosticEvidence.COMPILER,
+        category = DiagnosticCategory.TYPE_RESOLUTION,
+    )
 
     private fun refusal(code: String, message: String) = CClangdSemanticResult.Refused(listOf(
         Diagnostic(message = message, severity = Diagnostic.Severity.ERROR, code = code, evidence = DiagnosticEvidence.STRUCTURAL, category = DiagnosticCategory.TYPE_RESOLUTION),
@@ -404,6 +604,7 @@ class ClangdSemanticClient(
         val changes = objectValue["changes"] as? JsonObject ?: return null
         val edits = mutableListOf<CRenameEdit>()
         for ((uri, value) in changes) {
+            val file = uriToPath(uri) ?: return null
             val array = value as? JsonArray ?: return null
             for (entry in array) {
                 val edit = entry as? JsonObject ?: return null
@@ -417,7 +618,7 @@ class ClangdSemanticClient(
                 val newText = edit.string("newText") ?: return null
                 if (startLine < 0 || startCharacter < 0 || endLine < 0 || endCharacter < 0) return null
                 if (endLine < startLine || (endLine == startLine && endCharacter < startCharacter)) return null
-                edits += CRenameEdit(Path.of(uriToPath(uri)), startLine, startCharacter, endLine, endCharacter, newText)
+                edits += CRenameEdit(file, startLine, startCharacter, endLine, endCharacter, newText)
                 if (edits.size > MAX_RENAME_EDITS) return null
             }
         }
@@ -427,13 +628,17 @@ class ClangdSemanticClient(
     private fun uri(path: Path): String {
         val root = workspaceRoot ?: path.toAbsolutePath().normalize()
         val resolved = if (path.isAbsolute) path.toAbsolutePath().normalize() else root.resolve(path).normalize()
-        return "file://" + resolved.toString().replace('\\', '/')
+        return resolved.toUri().toASCIIString()
     }
-    private fun uriToPath(uri: String): String = uri.removePrefix("file://")
+    private fun uriToPath(uri: String): Path? = runCatching {
+        Path.of(URI(uri)).normalize().takeIf(Path::isAbsolute)
+    }.getOrNull()
     private fun quote(value: String): String = JsonPrimitive(value).toString()
 
-    private fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
-    private fun JsonObject.integer(name: String): Int? = (this[name] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+    private fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)
+        ?.takeIf { it.isString }?.contentOrNull
+    private fun JsonObject.integer(name: String): Int? = (this[name] as? JsonPrimitive)
+        ?.takeUnless { it.isString }?.contentOrNull?.toIntOrNull()
 
     companion object {
         private val JSON = Json { isLenient = false; ignoreUnknownKeys = true }

@@ -19,9 +19,10 @@ import java.util.regex.Pattern;
 /** Minimal isolated entry point for the explicitly supplied Kotlin compiler. */
 public final class KotlinCompilerBridgeMain {
     private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
+    private static final Pattern MODULE_NAME = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}");
     private static final long MAX_XML_BYTES = 6L * 1024L * 1024L;
     private static final Set<String> VALUE_OPTIONS = immutableSet(
-        "-language-version", "-api-version", "-jvm-target", "-jdk-home", "-classpath", "-d"
+        "-language-version", "-api-version", "-jvm-target", "-module-name", "-jdk-home", "-classpath", "-d"
     );
     private static final Set<String> FLAG_OPTIONS = immutableSet("-no-stdlib", "-no-reflect", "-Xuse-k2");
 
@@ -108,6 +109,9 @@ public final class KotlinCompilerBridgeMain {
                 if ("-jdk-home".equals(value)) jdkHome = canonicalDirectory(Paths.get(optionValue));
                 if ("-classpath".equals(value)) classpath = validateClasspath(optionValue);
                 if ("-jvm-target".equals(value)) jvmTarget = optionValue;
+                if ("-module-name".equals(value) && !MODULE_NAME.matcher(optionValue).matches()) {
+                    throw new IllegalArgumentException();
+                }
                 if ("-language-version".equals(value)) languageVersion = optionValue;
                 if ("-api-version".equals(value)) apiVersion = optionValue;
             } else if (FLAG_OPTIONS.contains(value)) {

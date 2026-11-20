@@ -26,6 +26,8 @@ import org.junit.platform.suite.api.Suite
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-rename-method-characterization.feature")
+@SelectClasspathResource("java-kotlin-member-rename-closure.feature")
+@SelectClasspathResource("java-kotlin-definition-authority.feature")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.renamemethod")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,

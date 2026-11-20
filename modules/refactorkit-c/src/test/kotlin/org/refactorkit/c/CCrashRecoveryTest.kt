@@ -20,6 +20,17 @@ import kotlin.test.assertTrue
  * whole managed process tree is reaped - no dangling child, no silent pass.
  */
 class CCrashRecoveryTest {
+    private val simulatedRuntimeProvider = object : ClangToolchainRuntimeProvider {
+        override fun capture(clang: Path, clangd: Path, formatter: Path): ClangToolchainRuntimeCaptureResult =
+            error("Crash-recovery fixture does not qualify native runtime capture")
+
+        override fun checkCurrent(captured: ClangToolchainRuntimeCaptureResult.Captured) =
+            ClangToolchainRuntimeCurrency.Current
+
+        override fun checkCurrent(toolchain: ClangSemanticToolchain) =
+            ClangToolchainRuntimeCurrency.Current
+    }
+
     @Test
     fun malformedHandshakeIsRefusedAndProcessReaped() {
         assertFaultReaped("printf 'Content-Length: 6\\r\\n\\r\\n{bad!}'")
@@ -67,10 +78,11 @@ class CCrashRecoveryTest {
                     clangVersion = "22.1.8", clangdVersion = "22.1.8", clangFormatVersion = "22.1.8",
                     targetTriple = "x86_64-pc-linux-gnu", resourceDir = "/usr/lib/clang/22", evidence = emptyList(),
                 ),
-            ),
+            ).withCapturedTestResources(Files.createDirectory(workspace.resolve("authored-empty-resources"))),
             processManager = manager,
             requestTimeoutMillis = 2_000L,
             initializeTimeoutMillis = 2_000L,
+            runtimeProvider = simulatedRuntimeProvider,
         )
 
         var threw = false

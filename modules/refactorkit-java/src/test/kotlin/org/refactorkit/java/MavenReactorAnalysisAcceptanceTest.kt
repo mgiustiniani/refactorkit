@@ -429,10 +429,12 @@ class MavenReactorAnalysisAcceptanceTest {
         assertFalse(snapshot.files.any { it.path.startsWith(Path.of("src/inactive/java")) })
         val model = snapshot.buildModels.single()
         assertEquals(BuildModelStatus.AVAILABLE, model.status)
-        assertTrue(model.modules.single().sourceSets.single { it.kind == SourceSetKind.MAIN }
-            .sourceRoots.contains(Path.of("src/feature/java")))
-        assertTrue(model.modules.single().sourceSets.single { it.kind == SourceSetKind.TEST }
-            .sourceRoots.contains(Path.of("src/verification/java")))
+        val customSourceRoots = model.modules.single().sourceSets
+            .filter { it.kind == SourceSetKind.CUSTOM }
+            .flatMap { it.sourceRoots }
+            .toSet()
+        assertTrue(Path.of("src/feature/java") in customSourceRoots)
+        assertTrue(Path.of("src/verification/java") in customSourceRoots)
         val diagnostics = JavaLanguageAdapter().diagnostics(snapshot)
             .filter { it.severity == Diagnostic.Severity.ERROR }
         assertTrue(diagnostics.isEmpty(), diagnostics.toString())

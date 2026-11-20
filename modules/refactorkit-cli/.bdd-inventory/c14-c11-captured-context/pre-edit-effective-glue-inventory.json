@@ -1,0 +1,1388 @@
+{
+  "duplicateExpressionGroups": [
+    {
+      "definitions": [
+        {
+          "expression": "authoritative after diagnostics attest the committed snapshot with no introduced errors",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 473,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "authoritative after diagnostics attest the committed snapshot with no introduced errors",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 582,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "authoritative after diagnostics attest the committed snapshot with no introduced errors",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "authoritative rollback diagnostics attest the restored snapshot",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 2179,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "authoritative rollback diagnostics attest the restored snapshot",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 533,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "authoritative rollback diagnostics attest the restored snapshot",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 650,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "authoritative rollback diagnostics attest the restored snapshot",
+      "occurrences": 3
+    },
+    {
+      "definitions": [
+        {
+          "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 384,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 158,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 153,
+          "package": "org.refactorkit.cli.mavenmoveobserverauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveobserverauthority/JavaMavenMoveClassObserverAuthoritySteps.kt"
+        },
+        {
+          "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 167,
+          "package": "org.refactorkit.cli.req004lexicalreview",
+          "path": "src/test/kotlin/org/refactorkit/cli/req004lexicalreview/JavaMavenMoveClassLexicalFallbackReviewSteps.kt"
+        },
+        {
+          "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 114,
+          "package": "org.refactorkit.cli.req008authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req008authority/JavaMavenMoveClassAuthorityFailureSteps.kt"
+        },
+        {
+          "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 109,
+          "package": "org.refactorkit.cli.req013authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req013authority/JavaMavenMoveClassUnderLockAuthoritySteps.kt"
+        },
+        {
+          "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 250,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "discovery and analysis cannot run Maven lifecycle goals, plugins, annotation processors, credential helpers, or network requests",
+      "occurrences": 7
+    },
+    {
+      "definitions": [
+        {
+          "expression": "each result is a {string} with evidence {string} and managed-write eligibility {string}",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 2627,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "each result is a {string} with evidence {string} and managed-write eligibility {string}",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 299,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "each result is a {string} with evidence {string} and managed-write eligibility {string}",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 362,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "each result is a {string} with evidence {string} and managed-write eligibility {string}",
+      "occurrences": 3
+    },
+    {
+      "definitions": [
+        {
+          "expression": "every file byte, path, inventory entry, and snapshot hash equals the pre-apply image",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 513,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "every file byte, path, inventory entry, and snapshot hash equals the pre-apply image",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 619,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "every file byte, path, inventory entry, and snapshot hash equals the pre-apply image",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "every observer has current dependency-bounded source paths, classpaths, source inventories, Java platform signatures, and provider evidence",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 234,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "every observer has current dependency-bounded source paths, classpaths, source inventories, Java platform signatures, and provider evidence",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 311,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "every observer has current dependency-bounded source paths, classpaths, source inventories, Java platform signatures, and provider evidence",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "exact staged diagnostics introduce no errors relative to authoritative before diagnostics",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 386,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "exact staged diagnostics introduce no errors relative to authoritative before diagnostics",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 411,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "exact staged diagnostics introduce no errors relative to authoritative before diagnostics",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 360,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 140,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 141,
+          "package": "org.refactorkit.cli.mavenmoveobserverauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveobserverauthority/JavaMavenMoveClassObserverAuthoritySteps.kt"
+        },
+        {
+          "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 158,
+          "package": "org.refactorkit.cli.req004lexicalreview",
+          "path": "src/test/kotlin/org/refactorkit/cli/req004lexicalreview/JavaMavenMoveClassLexicalFallbackReviewSteps.kt"
+        },
+        {
+          "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 103,
+          "package": "org.refactorkit.cli.req008authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req008authority/JavaMavenMoveClassAuthorityFailureSteps.kt"
+        },
+        {
+          "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 99,
+          "package": "org.refactorkit.cli.req013authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req013authority/JavaMavenMoveClassUnderLockAuthoritySteps.kt"
+        },
+        {
+          "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 236,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "its active graph has at least three dependency levels, one materialized local external dependency, and one safely materialized generated Java source root",
+      "occurrences": 7
+    },
+    {
+      "definitions": [
+        {
+          "expression": "its exact staged post-image is committed in one managed transaction",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 451,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "its exact staged post-image is committed in one managed transaction",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 528,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "its exact staged post-image is committed in one managed transaction",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "no prohibited build or network activity was attempted",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 404,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "no prohibited build or network activity was attempted",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 422,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "no prohibited build or network activity was attempted",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "one approved preview is applied under the workspace lock",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 2702,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "one approved preview is applied under the workspace lock",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 424,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "one approved preview is applied under the workspace lock",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 450,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "one approved preview is applied under the workspace lock",
+      "occurrences": 3
+    },
+    {
+      "definitions": [
+        {
+          "expression": "that transaction is rolled back",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 2750,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "that transaction is rolled back",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 503,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "that transaction is rolled back",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 603,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "that transaction is rolled back",
+      "occurrences": 3
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the capabilities output contains none of {string}, {string}, {string}, {string}, {string}, {string}, {string}, or {string} as command-catalogue fields",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 479,
+          "package": "org.refactorkit.cli.reqjavaclicatalog001",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogSteps.kt"
+        },
+        {
+          "expression": "the capabilities output contains none of {string}, {string}, {string}, {string}, {string}, {string}, {string}, or {string} as command-catalogue fields",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 442,
+          "package": "org.refactorkit.cli.reqjavaclicatalog002",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2Steps.kt"
+        }
+      ],
+      "expression": "the capabilities output contains none of {string}, {string}, {string}, {string}, {string}, {string}, {string}, or {string} as command-catalogue fields",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the declared workspace root is the permanent fixture {string}",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 330,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "the declared workspace root is the permanent fixture {string}",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 106,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "the declared workspace root is the permanent fixture {string}",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 111,
+          "package": "org.refactorkit.cli.mavenmoveobserverauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveobserverauthority/JavaMavenMoveClassObserverAuthoritySteps.kt"
+        },
+        {
+          "expression": "the declared workspace root is the permanent fixture {string}",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 138,
+          "package": "org.refactorkit.cli.req004lexicalreview",
+          "path": "src/test/kotlin/org/refactorkit/cli/req004lexicalreview/JavaMavenMoveClassLexicalFallbackReviewSteps.kt"
+        },
+        {
+          "expression": "the declared workspace root is the permanent fixture {string}",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 84,
+          "package": "org.refactorkit.cli.req008authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req008authority/JavaMavenMoveClassAuthorityFailureSteps.kt"
+        },
+        {
+          "expression": "the declared workspace root is the permanent fixture {string}",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 82,
+          "package": "org.refactorkit.cli.req013authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req013authority/JavaMavenMoveClassUnderLockAuthoritySteps.kt"
+        },
+        {
+          "expression": "the declared workspace root is the permanent fixture {string}",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 183,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "the declared workspace root is the permanent fixture {string}",
+      "occurrences": 7
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 336,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 112,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 117,
+          "package": "org.refactorkit.cli.mavenmoveobserverauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveobserverauthority/JavaMavenMoveClassObserverAuthoritySteps.kt"
+        },
+        {
+          "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 144,
+          "package": "org.refactorkit.cli.req004lexicalreview",
+          "path": "src/test/kotlin/org/refactorkit/cli/req004lexicalreview/JavaMavenMoveClassLexicalFallbackReviewSteps.kt"
+        },
+        {
+          "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 91,
+          "package": "org.refactorkit.cli.req008authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req008authority/JavaMavenMoveClassAuthorityFailureSteps.kt"
+        },
+        {
+          "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 89,
+          "package": "org.refactorkit.cli.req013authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req013authority/JavaMavenMoveClassUnderLockAuthoritySteps.kt"
+        },
+        {
+          "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 211,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "the fixture is a plugin-free offline Maven reactor with one root aggregator and 20 active non-aggregator modules",
+      "occurrences": 7
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the full effective reactor graph and complete reverse-observer closure are available and hash-bound",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 197,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "the full effective reactor graph and complete reverse-observer closure are available and hash-bound",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 289,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "the full effective reactor graph and complete reverse-observer closure are available and hash-bound",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the move is previewed twice from identical snapshot and evidence hashes",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 294,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "the move is previewed twice from identical snapshot and evidence hashes",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 347,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "the move is previewed twice from identical snapshot and evidence hashes",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the normalized edits, observer closure, evidence counts, and diagnostics are identical between the previews",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 333,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "the normalized edits, observer closure, evidence counts, and diagnostics are identical between the previews",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 388,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "the normalized edits, observer closure, evidence counts, and diagnostics are identical between the previews",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 406,
+          "package": "org.refactorkit.cli.acceptance",
+          "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthoritySteps.kt"
+        },
+        {
+          "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 182,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 174,
+          "package": "org.refactorkit.cli.mavenmoveobserverauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveobserverauthority/JavaMavenMoveClassObserverAuthoritySteps.kt"
+        },
+        {
+          "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 184,
+          "package": "org.refactorkit.cli.req004lexicalreview",
+          "path": "src/test/kotlin/org/refactorkit/cli/req004lexicalreview/JavaMavenMoveClassLexicalFallbackReviewSteps.kt"
+        },
+        {
+          "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 127,
+          "package": "org.refactorkit.cli.req008authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req008authority/JavaMavenMoveClassAuthorityFailureSteps.kt"
+        },
+        {
+          "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 122,
+          "package": "org.refactorkit.cli.req013authority",
+          "path": "src/test/kotlin/org/refactorkit/cli/req013authority/JavaMavenMoveClassUnderLockAuthoritySteps.kt"
+        },
+        {
+          "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 273,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "the request moves the writable sole top-level class {string} from {string} to the unused path {string} within the same main source set",
+      "occurrences": 7
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the same source-built entrypoint invokes top-level help and {string}",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 277,
+          "package": "org.refactorkit.cli.reqjavaclicatalog001",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogSteps.kt"
+        },
+        {
+          "expression": "the same source-built entrypoint invokes top-level help and {string}",
+          "keyword": "When",
+          "language": "KOTLIN",
+          "line": 231,
+          "package": "org.refactorkit.cli.reqjavaclicatalog002",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2Steps.kt"
+        }
+      ],
+      "expression": "the same source-built entrypoint invokes top-level help and {string}",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 104,
+          "package": "org.refactorkit.cli.reqjavaclicatalog001",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogSteps.kt"
+        },
+        {
+          "expression": "the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 95,
+          "package": "org.refactorkit.cli.reqjavaclicatalog002",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2Steps.kt"
+        },
+        {
+          "expression": "the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 177,
+          "package": "org.refactorkit.cli.reqjavacliresult001",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavacliresult001/JavaCliOperationResultSteps.kt"
+        }
+      ],
+      "expression": "the source-built RefactorKit 0.7.0 CLI entrypoint runs locally on Linux with JDK 21 and the current CPU architecture",
+      "occurrences": 3
+    },
+    {
+      "definitions": [
+        {
+          "expression": "the target declaration and every managed Java edit site resolve to the same exact non-recovered JDT binding",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 270,
+          "package": "org.refactorkit.cli.mavenmoveauthority",
+          "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthoritySteps.kt"
+        },
+        {
+          "expression": "the target declaration and every managed Java edit site resolve to the same exact non-recovered JDT binding",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 327,
+          "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+          "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthoritySteps.kt"
+        }
+      ],
+      "expression": "the target declaration and every managed Java edit site resolve to the same exact non-recovered JDT binding",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "this scenario makes no implementation, validation, promotion, or support claim for:",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 486,
+          "package": "org.refactorkit.cli.reqjavaclicatalog002",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2Steps.kt"
+        },
+        {
+          "expression": "this scenario makes no implementation, validation, promotion, or support claim for:",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 629,
+          "package": "org.refactorkit.cli.reqjavacliresult001",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavacliresult001/JavaCliOperationResultSteps.kt"
+        }
+      ],
+      "expression": "this scenario makes no implementation, validation, promotion, or support claim for:",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "workspace opening, scanning, planning, locking, WAL, transaction, editing, and installation mutation boundaries are instrumented fail-closed",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 171,
+          "package": "org.refactorkit.cli.reqjavaclicatalog001",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogSteps.kt"
+        },
+        {
+          "expression": "workspace opening, scanning, planning, locking, WAL, transaction, editing, and installation mutation boundaries are instrumented fail-closed",
+          "keyword": "Given",
+          "language": "KOTLIN",
+          "line": 157,
+          "package": "org.refactorkit.cli.reqjavaclicatalog002",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2Steps.kt"
+        }
+      ],
+      "expression": "workspace opening, scanning, planning, locking, WAL, transaction, editing, and installation mutation boundaries are instrumented fail-closed",
+      "occurrences": 2
+    },
+    {
+      "definitions": [
+        {
+          "expression": "{string} matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 455,
+          "package": "org.refactorkit.cli.reqjavaclicatalog001",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogSteps.kt"
+        },
+        {
+          "expression": "{string} matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema",
+          "keyword": "Then",
+          "language": "KOTLIN",
+          "line": 422,
+          "package": "org.refactorkit.cli.reqjavaclicatalog002",
+          "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2Steps.kt"
+        }
+      ],
+      "expression": "{string} matches the exact pinned additive language-capability evolution and remains valid only as the existing language-capability schema",
+      "occurrences": 2
+    }
+  ],
+  "glueRoots": [
+    "org.refactorkit.cli.acceptance",
+    "org.refactorkit.cli.managedrollback",
+    "org.refactorkit.cli.mavenmodulerenamesurface002",
+    "org.refactorkit.cli.mavenmoveauthority",
+    "org.refactorkit.cli.mavenmoveobserverauthority",
+    "org.refactorkit.cli.navigation",
+    "org.refactorkit.cli.packagedmavenmodulerename",
+    "org.refactorkit.cli.packagedmavenmoveauthority",
+    "org.refactorkit.cli.pendingplan",
+    "org.refactorkit.cli.previewcommand",
+    "org.refactorkit.cli.req004lexicalreview",
+    "org.refactorkit.cli.req008authority",
+    "org.refactorkit.cli.req013authority",
+    "org.refactorkit.cli.reqjavaclicatalog001",
+    "org.refactorkit.cli.reqjavaclicatalog002",
+    "org.refactorkit.cli.reqjavacliresult001",
+    "org.refactorkit.cli.workspacesnapshotcomposer"
+  ],
+  "projectRoot": ".",
+  "recommendations": [
+    "Reuse compatible effective glue before creating a step definition.",
+    "Move stateless/common vocabulary behind explicit shared glue roots and scenario-scoped context.",
+    "Resolve every effective-runner ambiguity before implementation.",
+    "Do not create a runner or leaf glue package solely to isolate one scenario."
+  ],
+  "runnerAmbiguities": [],
+  "runners": [
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.acceptance"
+      ],
+      "package": "org.refactorkit.cli.acceptance",
+      "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassApplyAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.acceptance"
+      ],
+      "package": "org.refactorkit.cli.acceptance",
+      "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassDescriptorPruningAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.acceptance"
+      ],
+      "package": "org.refactorkit.cli.acceptance",
+      "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassExplicitTransitiveScopeAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.acceptance"
+      ],
+      "package": "org.refactorkit.cli.acceptance",
+      "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassGuidanceAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.acceptance"
+      ],
+      "package": "org.refactorkit.cli.acceptance",
+      "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassOfflineMissingAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.acceptance"
+      ],
+      "package": "org.refactorkit.cli.acceptance",
+      "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassOrdinaryMissingLeafAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.acceptance"
+      ],
+      "package": "org.refactorkit.cli.acceptance",
+      "path": "src/test/kotlin/org/refactorkit/cli/acceptance/JavaMavenMoveClassSelectedDescriptorAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.managedrollback"
+      ],
+      "package": "org.refactorkit.cli.managedrollback",
+      "path": "src/test/kotlin/org/refactorkit/cli/managedrollback/ManagedRollbackExecutorCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.mavenmodulerenamesurface002"
+      ],
+      "package": "org.refactorkit.cli.mavenmodulerenamesurface002",
+      "path": "src/test/kotlin/org/refactorkit/cli/mavenmodulerenamesurface002/JavaMavenModuleRenameSurface002CucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.mavenmoveauthority"
+      ],
+      "package": "org.refactorkit.cli.mavenmoveauthority",
+      "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveauthority/JavaMavenMoveClassAvailableAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.mavenmoveobserverauthority"
+      ],
+      "package": "org.refactorkit.cli.mavenmoveobserverauthority",
+      "path": "src/test/kotlin/org/refactorkit/cli/mavenmoveobserverauthority/JavaMavenMoveClassObserverAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.navigation"
+      ],
+      "package": "org.refactorkit.cli.navigation",
+      "path": "src/test/kotlin/org/refactorkit/cli/navigation/JavaNavigationCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.pendingplan"
+      ],
+      "package": "org.refactorkit.cli.pendingplan",
+      "path": "src/test/kotlin/org/refactorkit/cli/pendingplan/PendingPlanStoreCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111EffectiveContextCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsAggregateCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsInferenceCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaInlineOperationsDaemonCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/MavenBuildHelperProjectContextCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.previewcommand"
+      ],
+      "package": "org.refactorkit.cli.previewcommand",
+      "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaPreviewCommandSurfaceCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.req004lexicalreview"
+      ],
+      "package": "org.refactorkit.cli.req004lexicalreview",
+      "path": "src/test/kotlin/org/refactorkit/cli/req004lexicalreview/JavaMavenMoveClassLexicalFallbackReviewCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.req008authority"
+      ],
+      "package": "org.refactorkit.cli.req008authority",
+      "path": "src/test/kotlin/org/refactorkit/cli/req008authority/JavaMavenMoveClassAuthorityFailureCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.req013authority"
+      ],
+      "package": "org.refactorkit.cli.req013authority",
+      "path": "src/test/kotlin/org/refactorkit/cli/req013authority/JavaMavenMoveClassUnderLockAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.reqjavaclicatalog001"
+      ],
+      "package": "org.refactorkit.cli.reqjavaclicatalog001",
+      "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog001/JavaCliCommandCatalogCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.reqjavaclicatalog002"
+      ],
+      "package": "org.refactorkit.cli.reqjavaclicatalog002",
+      "path": "src/test/kotlin/org/refactorkit/cli/reqjavaclicatalog002/JavaCliCommandCatalogV2CucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.reqjavacliresult001"
+      ],
+      "package": "org.refactorkit.cli.reqjavacliresult001",
+      "path": "src/test/kotlin/org/refactorkit/cli/reqjavacliresult001/JavaCliOperationResultCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.workspacesnapshotcomposer"
+      ],
+      "package": "org.refactorkit.cli.workspacesnapshotcomposer",
+      "path": "src/test/kotlin/org/refactorkit/cli/workspacesnapshotcomposer/WorkspaceSnapshotComposerCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.packagedmavenmoveauthority"
+      ],
+      "package": "org.refactorkit.cli.packagedmavenmoveauthority",
+      "path": "src/packagedMavenMoveClassAuthorityTest/kotlin/org/refactorkit/cli/packagedmavenmoveauthority/PackagedJavaMavenMoveClassAuthorityCucumberTest.kt",
+      "source": "annotation"
+    },
+    {
+      "glueRoots": [
+        "org.refactorkit.cli.packagedmavenmodulerename"
+      ],
+      "package": "org.refactorkit.cli.packagedmavenmodulerename",
+      "path": "src/packagedMavenModuleRenameQualificationTest/kotlin/org/refactorkit/cli/packagedmavenmodulerename/PackagedJavaMavenModuleRenameQualificationCucumberTest.kt",
+      "source": "annotation"
+    }
+  ],
+  "schemaVersion": "bdd-jvm-project-analysis-v1",
+  "selectedScenario": {
+    "expandedCaseCount": 1,
+    "featurePath": ".bdd-inventory/c14-c11-captured-context/feature.feature",
+    "featureSha256": "ca931846cfb91e8ad2c454905aa372a2e66e247f55337b248a954afd024b2c9e",
+    "inventory": [
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "an isolated C include workspace with {string} directives",
+            "keyword": "Given",
+            "language": "KOTLIN",
+            "line": 47,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/CIncludeOrderSteps.kt"
+          }
+        ],
+        "step": "an isolated C include workspace with \"independent-builtin-prototypes-c11\" directives",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      },
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "the C organize-includes preview is requested",
+            "keyword": "When",
+            "language": "KOTLIN",
+            "line": 180,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/CIncludeOrderSteps.kt"
+          }
+        ],
+        "step": "the C organize-includes preview is requested",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      },
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "the {word} include preview is {string} without losing an include",
+            "keyword": "Then",
+            "language": "KOTLIN",
+            "line": 227,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/CIncludeOrderSteps.kt"
+          }
+        ],
+        "step": "the independent-builtin-prototypes-c11 include preview is \"sorted-preview\" without losing an include",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      },
+      {
+        "ambiguousRunners": [],
+        "classification": "EXACT_REUSE",
+        "matches": [
+          {
+            "expression": "the include source bytes and transaction journal remain unchanged",
+            "keyword": "Then",
+            "language": "KOTLIN",
+            "line": 357,
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/CIncludeOrderSteps.kt"
+          }
+        ],
+        "step": "the include source bytes and transaction journal remain unchanged",
+        "visibleRunners": [
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111EffectiveContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsAggregateCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaGradle8111JpmsInferenceCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaInlineOperationsDaemonCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaMoveClassTargetModuleSelectionCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/MavenBuildHelperProjectContextCucumberTest.kt",
+            "source": "annotation"
+          },
+          {
+            "glueRoots": [
+              "org.refactorkit.cli.previewcommand"
+            ],
+            "package": "org.refactorkit.cli.previewcommand",
+            "path": "src/test/kotlin/org/refactorkit/cli/previewcommand/JavaPreviewCommandSurfaceCucumberTest.kt",
+            "source": "annotation"
+          }
+        ]
+      }
+    ],
+    "inventoryCounts": {
+      "ambiguous": 0,
+      "exactReuse": 4,
+      "newRequired": 0,
+      "sharedReuseCandidates": 0
+    },
+    "line": 130,
+    "requirementId": "REQ-C-INCLUDE-ORDER-001",
+    "scenarioId": "REQ-C-INCLUDE-ORDER-001#c11-captured-context-admits-independent-local-prototype-ordering",
+    "scenarioName": "C11 captured context admits independent local prototype ordering",
+    "steps": [
+      "an isolated C include workspace with \"independent-builtin-prototypes-c11\" directives",
+      "the C organize-includes preview is requested",
+      "the independent-builtin-prototypes-c11 include preview is \"sorted-preview\" without losing an include",
+      "the include source bytes and transaction journal remain unchanged"
+    ],
+    "tags": [
+      "@REQ-C-INCLUDE-ORDER-001",
+      "@functional-requirement",
+      "@partial",
+      "@scenario-c11-captured-context-admits-independent-local-prototype-ordering"
+    ]
+  },
+  "summary": {
+    "duplicateOccurrenceCount": 80,
+    "duplicatedExpressionCount": 25,
+    "glueRootCount": 17,
+    "javaStepDefinitionCount": 0,
+    "kotlinStepDefinitionCount": 1335,
+    "runnerAmbiguityCount": 0,
+    "runnerCount": 29,
+    "stepDefinitionCount": 1335,
+    "uniqueExpressionCount": 1280
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "authority": "Controlled source images only; native production acquisition must prove semantic results",
+  "sources": {
+    "include/api.h": "#pragma once\nenum state { READY = 1 };\nextern int value;\nint compute(int value);\n",
+    "src/api.c": "#include \"api.h\"\nint value = 7;\nstatic int hidden = 3;\nint compute(int value) { int local = value; { int value = 5; local += value; } return local + hidden + READY; }\n",
+    "src/main.c": "#include \"api.h\"\nstatic int hidden = 100;\nint main(void) { int local = 2; return compute(local) + value + READY + hidden; }\n"
+  }
+}

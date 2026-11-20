@@ -56,11 +56,15 @@ class CRenamePrefixPlanner(
     fun startFailure(): String? = startFailure
 
     /** Renames the explicit [mapping] (old symbol name -> new name) into one preview plan. */
-    fun preview(snapshot: ProjectSnapshot, mapping: Map<String, String>): PatchPlan {
+    fun preview(snapshot: ProjectSnapshot, mapping: Map<String, String>): PatchPlan =
+        preview(snapshot, mapping, definitionPaths = null)
+
+    internal fun preview(snapshot: ProjectSnapshot, mapping: Map<String, String>,
+        definitionPaths: Set<Path>?): PatchPlan {
         if (!started) return refused(snapshot, startFailure ?: "C prefix rename planner is not started")
         if (mapping.isEmpty()) return refused(snapshot, "No symbol mapping provided")
         if (mapping.size > MAX_SYMBOLS) return refused(snapshot, "Symbol mapping exceeds $MAX_SYMBOLS entries")
-        if (mapping.any { (old, new) -> old.isBlank() || new.isBlank() || old == new }) {
+        if (mapping.any { (old, new) -> !C_IDENTIFIER.matches(old) || !C_IDENTIFIER.matches(new) || old == new }) {
             return refused(snapshot, "Symbol mapping contains invalid entries")
         }
         if (mapping.keys.distinct().size != mapping.size) {
@@ -69,10 +73,16 @@ class CRenamePrefixPlanner(
 
         val editsByFile = mutableMapOf<Path, MutableList<TextEdit>>()
         for ((oldName, newName) in mapping) {
-            val resolved = resolveOccurrence(snapshot, oldName)
+            val resolved = resolveCompilerBoundOccurrence(snapshot, oldName)
             val occurrence = when (resolved) {
                 is OccurrenceResolution.Found -> resolved.occurrence
                 is OccurrenceResolution.Refused -> return refused(snapshot, resolved.message)
+            }
+            if (definitionPaths != null) {
+                val definition = snapshot.workspace.root.resolve(occurrence.file).toAbsolutePath().normalize()
+                if (definition !in definitionPaths) {
+                    return refused(snapshot, "Compiler-resolved declaration for '$oldName' is not owned by the moved component")
+                }
             }
             val result = client.rename(occurrence.file, occurrence.line, occurrence.character, newName)
             when (result) {
@@ -134,6 +144,82 @@ class CRenamePrefixPlanner(
      * refused explicitly instead of being treated as a semantic occurrence.
      */
     internal fun resolveOccurrence(snapshot: ProjectSnapshot, name: String): OccurrenceResolution {
+        val candidates = occurrenceCandidates(snapshot, name)
+        val distinctFiles = candidates.map { it.file }.distinct()
+        return when {
+            candidates.isEmpty() -> OccurrenceResolution.Refused("Symbol '$name' has no semantic occurrence")
+            distinctFiles.size > 1 -> OccurrenceResolution.Refused("Symbol '$name' is ambiguous across ${distinctFiles.size} files; rename is refused")
+            else -> OccurrenceResolution.Found(candidates.first())
+        }
+    }
+
+    private fun resolveCompilerBoundOccurrence(snapshot: ProjectSnapshot, name: String): OccurrenceResolution {
+        val candidates = occurrenceCandidates(snapshot, name)
+        if (candidates.isEmpty()) return OccurrenceResolution.Refused("Symbol '$name' has no semantic occurrence")
+        if (candidates.size > MAX_CANDIDATE_OCCURRENCES) {
+            return OccurrenceResolution.Refused("Symbol '$name' exceeds the bounded local occurrence inventory")
+        }
+
+        val workspace = snapshot.workspace.root.toAbsolutePath().normalize()
+        fun absolute(path: Path): Path = (if (path.isAbsolute) path else workspace.resolve(path)).normalize()
+        val lexicalLocations = candidates.map { occurrence ->
+            ReferenceIdentity(absolute(occurrence.file), occurrence.line, occurrence.character)
+        }.toSet()
+        val seed = candidates.first()
+        val definition = when (val result = client.definition(seed.file, seed.line, seed.character)) {
+            is CClangdSemanticResult.Found -> result.definition
+            is CClangdSemanticResult.NotFound -> return OccurrenceResolution.Refused(
+                "Symbol '$name' has no compiler-resolved declaration",
+            )
+            is CClangdSemanticResult.Refused -> return OccurrenceResolution.Refused(
+                result.diagnostics.firstOrNull()?.message ?: "clangd could not resolve symbol '$name'",
+            )
+        }
+        val definitionIdentity = ReferenceIdentity(
+            absolute(definition.file), definition.startLine, definition.startCharacter,
+        )
+        if (definitionIdentity !in lexicalLocations) {
+            return OccurrenceResolution.Refused(
+                "clangd declaration for '$name' is outside the captured source token inventory",
+            )
+        }
+
+        val references = when (val result = client.references(
+            definition.file, definition.startLine, definition.startCharacter,
+        )) {
+            is CReferenceResult.Found -> result.references
+            is CReferenceResult.NotFound -> return OccurrenceResolution.Refused(
+                "Symbol '$name' has no complete compiler reference family",
+            )
+            is CReferenceResult.Unavailable -> return OccurrenceResolution.Refused(
+                result.diagnostics.firstOrNull()?.message ?: "clangd reference closure for '$name' is unavailable",
+            )
+        }
+        val compilerLocations = references.map { reference ->
+            if (reference.startLine != reference.endLine ||
+                reference.endCharacter - reference.startCharacter != name.length
+            ) {
+                return OccurrenceResolution.Refused(
+                    "clangd returned a non-exact source range for '$name'",
+                )
+            }
+            ReferenceIdentity(absolute(reference.file), reference.startLine, reference.startCharacter)
+        }.toSet()
+        if (compilerLocations != lexicalLocations) {
+            val lexicalOnly = (lexicalLocations - compilerLocations).sortedWith(compareBy<ReferenceIdentity> { it.file.toString() }
+                .thenBy(ReferenceIdentity::line).thenBy(ReferenceIdentity::character)).take(8)
+            val compilerOnly = (compilerLocations - lexicalLocations).sortedWith(compareBy<ReferenceIdentity> { it.file.toString() }
+                .thenBy(ReferenceIdentity::line).thenBy(ReferenceIdentity::character)).take(8)
+            return OccurrenceResolution.Refused(
+                "Symbol '$name' does not have one complete binding-matched local consumer family " +
+                    "(snapshot=${lexicalLocations.size}, clangd=${compilerLocations.size}, " +
+                    "snapshotOnly=$lexicalOnly, clangdOnly=$compilerOnly)",
+            )
+        }
+        return OccurrenceResolution.Found(Occurrence(definition.file.normalize(), definition.startLine, definition.startCharacter))
+    }
+
+    private fun occurrenceCandidates(snapshot: ProjectSnapshot, name: String): List<Occurrence> {
         val candidates = mutableListOf<Occurrence>()
         for (source in snapshot.files.sortedBy { it.path.toString() }) {
             if (source.languageId !in setOf("c", "cpp", "objective-c")) continue
@@ -147,13 +233,10 @@ class CRenamePrefixPlanner(
                 candidates += Occurrence(source.path.normalize(), token.line - 1, token.column)
             }
         }
-        val distinctFiles = candidates.map { it.file }.distinct()
-        return when {
-            candidates.isEmpty() -> OccurrenceResolution.Refused("Symbol '$name' has no semantic occurrence")
-            distinctFiles.size > 1 -> OccurrenceResolution.Refused("Symbol '$name' is ambiguous across ${distinctFiles.size} files; rename is refused")
-            else -> OccurrenceResolution.Found(candidates.first())
-        }
+        return candidates
     }
+
+    private data class ReferenceIdentity(val file: Path, val line: Int, val character: Int)
 
     internal sealed interface OccurrenceResolution {
         data class Found(val occurrence: Occurrence) : OccurrenceResolution
@@ -176,9 +259,12 @@ class CRenamePrefixPlanner(
         warnings = listOf(message),
         riskLevel = RiskLevel.HIGH,
         evidence = RefactoringEvidence.STRUCTURAL,
+        refusalCode = "c.renamePrefix.refused",
     )
 
     companion object {
         private const val MAX_SYMBOLS = 256
+        private const val MAX_CANDIDATE_OCCURRENCES = 4_096
+        private val C_IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]{0,127}")
     }
 }

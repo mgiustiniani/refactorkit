@@ -208,10 +208,22 @@ class KotlinCompilerDiagnostics private constructor(
         consumer: (Path) -> Unit,
     ): KotlinCompilerDiagnosticsResult = analyzeInternal(snapshot, additionalClasspath, consumer)
 
+    /** Replays an evaluated module name for a read-only binary identity comparison. */
+    fun analyzeWithAdditionalClasspathAndCompiledOutput(
+        snapshot: ProjectSnapshot,
+        additionalClasspath: List<Path>,
+        moduleName: String,
+        consumer: (Path) -> Unit,
+    ): KotlinCompilerDiagnosticsResult {
+        require(moduleName.isNotBlank() && moduleName.length <= 128 && '\u0000' !in moduleName)
+        return analyzeInternal(snapshot, additionalClasspath, consumer, moduleName)
+    }
+
     private fun analyzeInternal(
         snapshot: ProjectSnapshot,
         additionalClasspath: List<Path>,
         compiledOutputConsumer: ((Path) -> Unit)?,
+        moduleName: String? = null,
     ): KotlinCompilerDiagnosticsResult {
         var ephemeralClasspathHash = ""
         val model = snapshot.buildModels.singleOrNull { it.providerId == KotlinJvmBuildModelProjector.PROVIDER_ID }
@@ -231,7 +243,7 @@ class KotlinCompilerDiagnostics private constructor(
         }
         ephemeralClasspathHash = hashEphemeralClasspath(ephemeralClasspath)
         validateToolchain()?.let { return KotlinCompilerDiagnosticsResult.Refused(it, attestation()) }
-        if (snapshot.files.any { it.languageId == "kotlin" && it.path.fileName.toString().endsWith(".kts") }) return refused(
+        if (snapshot.trackedFiles.any { it.languageId == "kotlin" && it.path.fileName.toString().endsWith(".kts") }) return refused(
             "kotlin.scriptSemanticsUnsupported", "Kotlin script semantics remain refused", attestation(),
         )
         if (model == null || model.status != BuildModelStatus.AVAILABLE) {
@@ -322,6 +334,7 @@ class KotlinCompilerDiagnostics private constructor(
                 add("-language-version"); add("2.0")
                 add("-api-version"); add("2.0")
                 add("-jvm-target"); add(target)
+                moduleName?.let { add("-module-name"); add(it) }
                 add("-jdk-home"); add(toolchain.jdkHome.toString())
                 add("-no-stdlib"); add("-no-reflect")
                 if (classpath.isNotEmpty()) {

@@ -1,67 +1,47 @@
 package org.refactorkit.treesitter
 
 import org.refactorkit.core.Module
+import org.refactorkit.core.OwnedSourceInventoryReader
 import org.refactorkit.core.ProjectSnapshot
-import org.refactorkit.core.SourceFile
+import org.refactorkit.core.SourceCapturePolicy
 import org.refactorkit.core.Workspace
 import java.nio.file.Path
-import kotlin.io.path.exists
-import kotlin.io.path.isDirectory
-import kotlin.io.path.readText
 
-/**
- * Lightweight multi-language project scanner for structural support.
- *
- * This scanner is intentionally shallow: it maps known source file extensions to
- * language IDs and excludes common generated/build directories. It does not
- * replace language-specific scanners such as [org.refactorkit.java.JavaProjectScanner].
- */
-class GenericProjectScanner(
-    private val extensionLanguageIds: Map<String, String> = DEFAULT_EXTENSION_LANGUAGE_IDS,
+/** Bounded structural inventory. Source reads use owned handles; language intelligence remains separate. */
+class GenericProjectScanner private constructor(
+    private val capturePolicy: SourceCapturePolicy,
+    extensionLanguageIds: Map<String, String>,
 ) {
+    constructor(extensionLanguageIds: Map<String, String> = DEFAULT_EXTENSION_LANGUAGE_IDS) :
+        this(SourceCapturePolicy(), extensionLanguageIds)
+
+    constructor(extensionLanguageIds: Map<String, String>, capturePolicy: SourceCapturePolicy) :
+        this(capturePolicy, extensionLanguageIds)
+
+    constructor() : this(DEFAULT_EXTENSION_LANGUAGE_IDS)
+
+    private val extensionLanguageIds = extensionLanguageIds.toMap()
+
     fun scan(root: Path): ProjectSnapshot {
         val normalizedRoot = root.toAbsolutePath().normalize()
-        val files: List<SourceFile> = if (!normalizedRoot.exists()) emptyList()
-        else normalizedRoot.toFile().walkTopDown()
-            .onEnter { dir -> !isIgnoredDir(dir.name) }
-            .filter { it.isFile }
-            .mapNotNull { file ->
-                val path = file.toPath()
-                val languageId = languageIdFor(path) ?: return@mapNotNull null
-                SourceFile(normalizedRoot.relativize(path), path.readText(), languageId)
-            }
-            .sortedBy { it.path.toString() }
-            .toList()
-
-        val sourceRoots = detectSourceRoots(normalizedRoot)
+        val inventory = OwnedSourceInventoryReader(
+            extensionLanguageIds, capturePolicy, IGNORED_DIRECTORIES,
+            allowMissingRoot = true, ignoreRootDirectory = true,
+        ).capture(normalizedRoot)
+        val sourceRoots = listOf("src/main/java", "src/test/java", "src", "lib")
+            .map(Path::of).filter { it in inventory.directories }.ifEmpty { listOf(Path.of("")) }
         return ProjectSnapshot(
             workspace = Workspace(normalizedRoot),
             modules = listOf(Module(
                 name = normalizedRoot.fileName?.toString() ?: "root",
                 root = normalizedRoot,
-                sourceRoots = sourceRoots.map(normalizedRoot::relativize),
+                sourceRoots = sourceRoots,
             )),
-            files = files,
-            sourceExtensions = extensionLanguageIds.keys,
+            files = inventory.sources,
+            sourceExtensions = extensionLanguageIds.keys.toSet(),
             ignoredDirectories = IGNORED_DIRECTORIES,
         )
     }
-
-    private fun languageIdFor(path: Path): String? {
-        val fileName = path.fileName?.toString() ?: return null
-        val extension = fileName.substringAfterLast('.', missingDelimiterValue = "")
-        return extensionLanguageIds[extension]
-    }
-
-    private fun detectSourceRoots(root: Path): List<Path> = listOf(
-        root.resolve("src/main/java"),
-        root.resolve("src/test/java"),
-        root.resolve("src"),
-        root.resolve("lib"),
-    ).filter { it.exists() && it.isDirectory() }
-        .ifEmpty { listOf(root) }
-
-    private fun isIgnoredDir(dirName: String): Boolean = dirName in IGNORED_DIRECTORIES
 
     companion object {
         val DEFAULT_EXTENSION_LANGUAGE_IDS = mapOf(

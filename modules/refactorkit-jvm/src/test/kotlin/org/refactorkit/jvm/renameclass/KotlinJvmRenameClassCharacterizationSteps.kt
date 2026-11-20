@@ -111,6 +111,43 @@ class KotlinJvmRenameClassCharacterizationSteps(private val context: KotlinJvmRe
         declarationPath = STANDARD_DECLARATION
     }
 
+    @Given("^a Java workspace snapshot containing a nested type and a same-named unrelated type$")
+    fun workspaceWithNestedTypeAndSameNamedUnrelatedType() {
+        val root = temporaryDirectory("rk-jvm-renameclass-nested")
+        writePom(root, "src/main/java")
+        write(
+            root,
+            "src/main/java/com/example/Outer.java",
+            """package com.example;
+                |public class Outer {
+                |    public static class LegacyNode { public LegacyNode() {} }
+                |    public static class Other {
+                |        public static class LegacyNode {}
+                |        LegacyNode unrelated;
+                |    }
+                |    LegacyNode selected;
+                |    public LegacyNode create() { return new LegacyNode(); }
+                |}
+                |""".trimMargin(),
+        )
+        write(
+            root,
+            "src/main/java/com/example/Client.java",
+            """package com.example;
+                |import com.example.Outer.LegacyNode;
+                |public class Client {
+                |    LegacyNode selected = new LegacyNode();
+                |    Outer.Other.LegacyNode unrelated;
+                |}
+                |""".trimMargin(),
+        )
+        fixtureRoot = root
+        snapshot = JavaProjectScanner().scan(root)
+        symbolFqn = "com.example.Outer.LegacyNode"
+        newName = "RenamedNode"
+        declarationPath = Path.of("src/main/java/com/example/Outer.java")
+    }
+
     @Given("^the JDT binding analysis is clean and resolves the type binding with no error warnings$")
     fun jdtBindingCleanAndResolvesTypeBinding() {
         val snap = requireNotNull(snapshot)
@@ -273,6 +310,46 @@ class KotlinJvmRenameClassCharacterizationSteps(private val context: KotlinJvmRe
     @Then("^the plan evidence is JDT_BINDING$")
     fun planEvidenceJdtBinding() {
         assertEquals(RefactoringEvidence.JDT_BINDING, requireNotNull(plan).evidence, requireNotNull(plan).toString())
+    }
+
+    @Then("^the plan leaves the declaration path unchanged and contains no FileEdit.Rename$")
+    fun nestedRenameKeepsDeclarationPath() {
+        val p = requireNotNull(plan)
+        val declaration = requireNotNull(declarationPath)
+        val client = Path.of("src/main/java/com/example/Client.java")
+        assertTrue(p.workspaceEdit.edits.isNotEmpty(), "expected exact nested type source edits: ${p.workspaceEdit.edits}")
+        assertTrue(
+            p.workspaceEdit.edits.none { it is FileEdit.Rename },
+            "a nested type rename must not rename its enclosing source file: ${p.workspaceEdit.edits}",
+        )
+        assertEquals(setOf(declaration, client), p.affectedFiles, "only files containing bound declaration or references are affected")
+    }
+
+    @Then("^the plan edits the selected nested type and only references bound to it$")
+    fun nestedRenamePreservesSameNamedUnrelatedType() {
+        val before = requireNotNull(snapshot)
+        val plan = requireNotNull(plan)
+        val expected = before.trackedFiles.associate { it.path to it.content }.toMutableMap()
+        expected[Path.of("src/main/java/com/example/Outer.java")] = """package com.example;
+            |public class Outer {
+            |    public static class RenamedNode { public RenamedNode() {} }
+            |    public static class Other {
+            |        public static class LegacyNode {}
+            |        LegacyNode unrelated;
+            |    }
+            |    RenamedNode selected;
+            |    public RenamedNode create() { return new RenamedNode(); }
+            |}
+            |""".trimMargin()
+        expected[Path.of("src/main/java/com/example/Client.java")] = """package com.example;
+            |import com.example.Outer.RenamedNode;
+            |public class Client {
+            |    RenamedNode selected = new RenamedNode();
+            |    Outer.Other.LegacyNode unrelated;
+            |}
+            |""".trimMargin()
+        val actual = WorkspaceEditSimulator.apply(before, plan.workspaceEdit).trackedFiles.associate { it.path to it.content }
+        assertEquals(expected, actual, "complete post-image changes only the selected nested type binding")
     }
 
     @Then("^the plan risk is LOW$")

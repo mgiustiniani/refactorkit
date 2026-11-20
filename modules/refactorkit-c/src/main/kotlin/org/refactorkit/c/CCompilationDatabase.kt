@@ -8,10 +8,17 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.util.ArrayList
+import java.util.Collections
+
+private class CCompilationArgumentFailure(val detail: String) : RuntimeException()
 
 /** Bounded policy for compiling a `compile_commands.json` database. */
 data class CCompilationDatabasePolicy(
@@ -47,34 +54,100 @@ data class CCompilationDatabasePolicy(
 }
 
 /** One translation unit captured from the compilation database. Commands are untrusted data, never executed. */
-data class CCompilationUnit(
+class CCompilationUnit(
     val file: Path,
     val directory: Path,
-    val arguments: List<String>,
+    arguments: List<String>,
     val output: String?,
     val standard: String?,
-    val defines: List<String>,
-    val includeDirectories: List<Path>,
+    defines: List<String>,
+    includeDirectories: List<Path>,
     val target: String?,
     val sysroot: Path?,
 ) {
+    val arguments: List<String> = immutableCCompilationList(arguments)
+    val defines: List<String> = immutableCCompilationList(defines)
+    val includeDirectories: List<Path> = immutableCCompilationList(includeDirectories)
+
     init {
-        require(arguments.size <= 512) { "compilation unit arguments exceed the bounded limit" }
-        require(defines.size <= 512) { "compilation unit defines exceed the bounded limit" }
-        require(includeDirectories.size <= 512) { "compilation unit include directories exceed the bounded limit" }
+        require(this.arguments.size <= 512) { "compilation unit arguments exceed the bounded limit" }
+        require(this.defines.size <= 512) { "compilation unit defines exceed the bounded limit" }
+        require(this.includeDirectories.size <= 512) { "compilation unit include directories exceed the bounded limit" }
     }
+
+    operator fun component1(): Path = file
+    operator fun component2(): Path = directory
+    operator fun component3(): List<String> = arguments
+    operator fun component4(): String? = output
+    operator fun component5(): String? = standard
+    operator fun component6(): List<String> = defines
+    operator fun component7(): List<Path> = includeDirectories
+    operator fun component8(): String? = target
+    operator fun component9(): Path? = sysroot
+
+    fun copy(
+        file: Path = this.file,
+        directory: Path = this.directory,
+        arguments: List<String> = this.arguments,
+        output: String? = this.output,
+        standard: String? = this.standard,
+        defines: List<String> = this.defines,
+        includeDirectories: List<Path> = this.includeDirectories,
+        target: String? = this.target,
+        sysroot: Path? = this.sysroot,
+    ) = CCompilationUnit(file, directory, arguments, output, standard, defines, includeDirectories, target, sysroot)
+
+    override fun equals(other: Any?): Boolean = other === this ||
+        other is CCompilationUnit && file == other.file && directory == other.directory &&
+        arguments == other.arguments && output == other.output && standard == other.standard &&
+        defines == other.defines && includeDirectories == other.includeDirectories &&
+        target == other.target && sysroot == other.sysroot
+
+    override fun hashCode(): Int {
+        var result = file.hashCode()
+        result = 31 * result + directory.hashCode()
+        result = 31 * result + arguments.hashCode()
+        result = 31 * result + (output?.hashCode() ?: 0)
+        result = 31 * result + (standard?.hashCode() ?: 0)
+        result = 31 * result + defines.hashCode()
+        result = 31 * result + includeDirectories.hashCode()
+        result = 31 * result + (target?.hashCode() ?: 0)
+        result = 31 * result + (sysroot?.hashCode() ?: 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "CCompilationUnit(file=$file, directory=$directory, arguments=$arguments, output=$output, standard=$standard, defines=$defines, includeDirectories=$includeDirectories, target=$target, sysroot=$sysroot)"
 }
 
-data class CCompilationDatabase(
+class CCompilationDatabase(
     val workspaceRoot: Path,
-    val units: List<CCompilationUnit>,
+    units: List<CCompilationUnit>,
 ) {
+    val units: List<CCompilationUnit> = immutableCCompilationList(units)
+
     init {
-        require(units.map(CCompilationUnit::file).distinct().size == units.size) {
+        require(this.units.map(CCompilationUnit::file).distinct().size == this.units.size) {
             "compilation database contains duplicate translation units"
         }
     }
+
+    operator fun component1(): Path = workspaceRoot
+    operator fun component2(): List<CCompilationUnit> = units
+
+    fun copy(workspaceRoot: Path = this.workspaceRoot, units: List<CCompilationUnit> = this.units) =
+        CCompilationDatabase(workspaceRoot, units)
+
+    override fun equals(other: Any?): Boolean = other === this ||
+        other is CCompilationDatabase && workspaceRoot == other.workspaceRoot && units == other.units
+
+    override fun hashCode(): Int = 31 * workspaceRoot.hashCode() + units.hashCode()
+
+    override fun toString(): String = "CCompilationDatabase(workspaceRoot=$workspaceRoot, units=$units)"
 }
+
+private fun <T> immutableCCompilationList(values: Collection<T>): List<T> =
+    Collections.unmodifiableList(ArrayList(values))
 
 sealed interface CCompilationDatabaseDiscovery {
     data class Available(val database: CCompilationDatabase) : CCompilationDatabaseDiscovery
@@ -90,7 +163,17 @@ sealed interface CCompilationDatabaseDiscovery {
 class CCompilationDatabaseParser(
     private val policy: CCompilationDatabasePolicy = CCompilationDatabasePolicy(),
 ) {
-    fun parse(workspaceRoot: Path, bytes: ByteArray): CCompilationDatabaseDiscovery {
+    fun parse(workspaceRoot: Path, bytes: ByteArray): CCompilationDatabaseDiscovery = try {
+        parseRecords(workspaceRoot, bytes)
+    } catch (_: InvalidPathException) {
+        CCompilationDatabaseDiscovery.Refused(listOf(refusal(
+            "c.compilationDatabaseInvalid", "compile_commands.json contains an invalid path",
+        )))
+    } catch (failure: CCompilationArgumentFailure) {
+        CCompilationDatabaseDiscovery.Refused(listOf(refusal("c.compilationDatabaseInvalid", failure.detail)))
+    }
+
+    private fun parseRecords(workspaceRoot: Path, bytes: ByteArray): CCompilationDatabaseDiscovery {
         val diagnostics = mutableListOf<Diagnostic>()
         val workspace = requireDirectory(workspaceRoot, "workspace", diagnostics)
             ?: return CCompilationDatabaseDiscovery.Refused(diagnostics)
@@ -125,6 +208,13 @@ class CCompilationDatabaseParser(
                 diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index must be an object")
                 continue
             }
+            val invalidField = listOf("file", "directory", "command", "output").firstOrNull { key ->
+                objectValue.containsKey(key) && (objectValue[key] as? JsonPrimitive)?.isString != true
+            }
+            if (invalidField != null) {
+                diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index '$invalidField' must be a string")
+                continue
+            }
             val fileText = objectValue.string("file")
             if (fileText == null) {
                 diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index is missing 'file'")
@@ -135,10 +225,10 @@ class CCompilationDatabaseParser(
                 diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index is missing 'directory'")
                 continue
             }
-            val file = resolveWithin(workspace, fileText, "file", index, diagnostics)
-            if (file == null) continue
             val directory = resolveWithin(workspace, directoryText, "directory", index, diagnostics)
             if (directory == null) continue
+            val file = resolveWithin(workspace, fileText, "file", index, diagnostics, baseDirectory = directory)
+            if (file == null) continue
             if (!seenFiles.add(file)) {
                 diagnostics += refusal("c.duplicateTranslationUnit", "translation unit '${fileText}' appears more than once")
                 continue
@@ -146,11 +236,13 @@ class CCompilationDatabaseParser(
             val arguments = parseArguments(objectValue, index, diagnostics)
             if (arguments == null) continue
             val output = objectValue.string("output")
-            val standard = findFlag(arguments, "-std=")
-            val defines = findFlags(arguments, "-D")
-            val includeDirs = findIncludePaths(arguments, workspace)
-            val target = findTarget(arguments)
-            val sysroot = findSysroot(arguments, workspace)
+            val options = optionValues(arguments)
+            val standard = options.firstOrNull { it.first == "-std" }?.second?.takeIf(String::isNotBlank)
+            val defines = findFlags(options, "-D")
+            val includeDirs = findIncludePaths(options, directory)
+            val target = options.firstOrNull { it.first in setOf("-target", "--target") }?.second?.takeIf(String::isNotBlank)
+            val sysroot = options.firstOrNull { it.first in setOf("--sysroot", "-isysroot") }
+                ?.second?.let { resolveInclude(it, directory) }
             units += CCompilationUnit(
                 file = file,
                 directory = directory,
@@ -173,6 +265,10 @@ class CCompilationDatabaseParser(
 
     private fun parseArguments(objectValue: JsonObject, index: Int, diagnostics: MutableList<Diagnostic>): List<String>? {
         val array = objectValue.array("arguments")
+        if (objectValue.containsKey("arguments") && array == null) {
+            diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index 'arguments' must be an array of strings")
+            return null
+        }
         if (array != null) {
             if (array.isEmpty()) {
                 diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index has empty 'arguments'")
@@ -182,11 +278,11 @@ class CCompilationDatabaseParser(
                 diagnostics += refusal("c.compilationDatabaseLimit", "unit $index arguments exceed ${policy.maxArgumentsPerUnit}")
                 return null
             }
-            val strings = array.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-            if (strings.isEmpty()) {
-                diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index 'arguments' are not strings")
+            if (array.any { it !is JsonPrimitive || !it.isString }) {
+                diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index 'arguments' must contain only strings")
                 return null
             }
+            val strings = array.map { (it as JsonPrimitive).content }
             val unsafe = unsafeCompilerFlag(strings)
             if (unsafe != null) {
                 diagnostics += refusal("c.unsafeCompilerFlag", "unit $index captures unsafe compiler flag '$unsafe'")
@@ -247,97 +343,70 @@ class CCompilationDatabaseParser(
         }
     }
 
-    private fun findFlag(arguments: List<String>, prefix: String): String? {
-        val value = arguments.firstOrNull { it.startsWith(prefix) }?.substring(prefix.length)
-        return value?.takeIf(String::isNotBlank)
-    }
-
-    private fun findTarget(arguments: List<String>): String? {
-        var i = 0
-        while (i < arguments.size) {
-            val arg = arguments[i]
-            when {
-                arg.startsWith("-target=") && arg.length > 8 -> return arg.substring(8).takeIf(String::isNotBlank)
-                arg.startsWith("--target=") && arg.length > 9 -> return arg.substring(9).takeIf(String::isNotBlank)
-                arg == "-target" && i + 1 < arguments.size -> return arguments[i + 1].takeIf(String::isNotBlank)
-                arg == "--target" && i + 1 < arguments.size -> return arguments[i + 1].takeIf(String::isNotBlank)
+    /** Consume known operand-taking options before classifying values that resemble flags. */
+    internal fun optionValues(arguments: List<String>): List<Pair<String, String>> {
+        val separate = setOf("-D", "-U", "-I", "-iquote", "-isystem", "-o", "-x",
+            "-target", "--target", "--sysroot", "-isysroot")
+        val joined = listOf("-isystem", "-iquote", "-isysroot", "-D", "-U", "-I")
+        val assigned = listOf("-std=", "-target=", "--target=", "--sysroot=")
+        val result = mutableListOf<Pair<String, String>>()
+        var index = 1
+        while (index < arguments.size) {
+            val argument = arguments[index]
+            if (argument == "--target" || argument.startsWith("-target=")) {
+                throw CCompilationArgumentFailure("The qualified compiler requires -target <triple> or --target=<triple>")
             }
-            i++
-        }
-        return null
-    }
-
-    private fun findFlags(arguments: List<String>, prefix: String): List<String> {
-        return arguments.filter { it.startsWith(prefix) }
-            .map { it.substring(prefix.length) }
-            .filter(String::isNotBlank)
-            .take(512)
-    }
-
-    private fun findIncludePaths(arguments: List<String>, workspace: Path): List<Path> {
-        val result = mutableListOf<Path>()
-        var i = 0
-        while (i < arguments.size) {
-            val arg = arguments[i]
-            when {
-                arg.startsWith("-I") && arg.length > 2 -> {
-                    resolveInclude(arg.substring(2), workspace)?.let(result::add)
+            if (argument == "-I-") throw CCompilationArgumentFailure("The -I- include separator is not supported by the qualified compiler")
+            if (argument.startsWith("-isystem-after")) throw CCompilationArgumentFailure("The -isystem-after mode is not admitted for the qualified C context")
+            if (argument in separate) {
+                val operand = arguments.getOrNull(index + 1)
+                    ?: throw CCompilationArgumentFailure("Compiler option '$argument' requires an operand")
+                result += argument to operand
+                index += 2
+            } else {
+                val assignment = assigned.firstOrNull { argument.startsWith(it) }
+                if (assignment != null) {
+                    result += assignment.removeSuffix("=") to argument.substring(assignment.length)
+                } else {
+                    joined.firstOrNull { argument.startsWith(it) && argument.length > it.length }?.let { prefix ->
+                        result += prefix to argument.substring(prefix.length)
+                    }
                 }
-                arg == "-I" && i + 1 < arguments.size -> {
-                    resolveInclude(arguments[i + 1], workspace)?.let(result::add)
-                    i++
-                }
-                arg.startsWith("-isystem") && arg.length > 8 -> {
-                    resolveInclude(arg.substring(8), workspace)?.let(result::add)
-                }
-                arg == "-isystem" && i + 1 < arguments.size -> {
-                    resolveInclude(arguments[i + 1], workspace)?.let(result::add)
-                    i++
-                }
+                index++
             }
-            i++
         }
-        return result.distinct().take(512)
+        return result
     }
 
-    private fun findSysroot(arguments: List<String>, workspace: Path): Path? {
-        var i = 0
-        while (i < arguments.size) {
-            val arg = arguments[i]
-            when {
-                arg.startsWith("--sysroot=") && arg.length > 10 -> {
-                    return resolveInclude(arg.substring(10), workspace)
-                }
-                arg == "--sysroot" && i + 1 < arguments.size -> {
-                    return resolveInclude(arguments[i + 1], workspace)
-                }
-                arg.startsWith("-isysroot") && arg.length > 9 -> {
-                    return resolveInclude(arg.substring(9), workspace)
-                }
-                arg == "-isysroot" && i + 1 < arguments.size -> {
-                    return resolveInclude(arguments[i + 1], workspace)
-                }
-            }
-            i++
-        }
-        return null
-    }
+    private fun findFlags(options: List<Pair<String, String>>, prefix: String): List<String> =
+        options.filter { it.first == prefix }.map { it.second }.filter(String::isNotBlank)
+
+    private fun findIncludePaths(options: List<Pair<String, String>>, workspace: Path): List<Path> =
+        options.filter { it.first in setOf("-I", "-iquote", "-isystem") }
+            .mapNotNull { resolveInclude(it.second, workspace) }.distinct()
 
     private fun resolveInclude(raw: String, workspace: Path): Path? {
-        val text = raw.trim()
+        val text = raw
         if (text.isEmpty()) return null
         val path = Path.of(text)
         return if (path.isAbsolute) path.normalize() else workspace.resolve(path).normalize()
     }
 
-    private fun resolveWithin(workspace: Path, raw: String, label: String, index: Int, diagnostics: MutableList<Diagnostic>): Path? {
-        val text = raw.trim()
+    private fun resolveWithin(
+        workspace: Path,
+        raw: String,
+        label: String,
+        index: Int,
+        diagnostics: MutableList<Diagnostic>,
+        baseDirectory: Path = workspace,
+    ): Path? {
+        val text = raw
         if (text.isEmpty()) {
             diagnostics += refusal("c.compilationDatabaseInvalid", "unit $index $label is empty")
             return null
         }
         val path = Path.of(text)
-        val normalized = if (path.isAbsolute) path.normalize() else workspace.resolve(path).normalize()
+        val normalized = if (path.isAbsolute) path.normalize() else baseDirectory.resolve(path).normalize()
         if (!normalized.startsWith(workspace)) {
             diagnostics += refusal("c.pathOutsideWorkspace", "unit $index $label resolves outside the workspace")
             return null
@@ -355,7 +424,13 @@ class CCompilationDatabaseParser(
     }
 
     private fun decode(bytes: ByteArray, diagnostics: MutableList<Diagnostic>): JsonElement? {
-        val text = bytes.toString(Charsets.UTF_8)
+        val text = try {
+            Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
+        } catch (_: CharacterCodingException) {
+            diagnostics += refusal("c.compilationDatabaseInvalid", "compile_commands.json is not valid UTF-8")
+            return null
+        }
         return runCatching {
             Json.parseToJsonElement(text)
         }.getOrElse {
@@ -372,7 +447,7 @@ class CCompilationDatabaseParser(
         category = DiagnosticCategory.PROJECT_STRUCTURE,
     )
 
-    private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+    private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
     private fun JsonObject.array(key: String): JsonArray? = this[key] as? JsonArray
 
     private companion object {

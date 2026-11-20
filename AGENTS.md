@@ -12,7 +12,14 @@ Its goal is to provide safe, previewable, rollbackable code transformations simi
 
 The first supported language is **Java**.
 
-The Java adapter must be compatible with Java 8 projects while supporting Java language/source constructs and type forms through Java 25.
+The Java adapter must be compatible with Java 8 projects while supporting Java
+language/source constructs and type forms through Java 25. The existing
+`REQ-JAVA-PROJECT-CONTEXT-001` acceptance is extended to cover provider-backed
+project context for GA Java 26 and 27 (the current GA range as of 2026-10-26),
+including compiler and platform-API metadata. This extension remains unqualified:
+it does not advertise source-language support until the parser/JDT and platform
+APIs are independently qualified. Keep unsupported source levels as typed
+refusals; never infer support from the installed JDK alone.
 
 The architecture must allow future support for other languages through adapters.
 

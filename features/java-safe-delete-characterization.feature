@@ -13,9 +13,9 @@ Ability: Delete a JDT-proven unused Java type with exact binding evidence, fall 
   carries confidence 1.0, requiresUserApproval true, evidence JDT_BINDING, risk LOW by
   default, an affected-file set listing only the declaration file, and a WorkspaceEdit with
   exactly one FileEdit.Delete for that declaration file. The plan always reports the adapter
-  diagnostics computed after the declaration file is removed from the snapshot, warns that
-  build configuration (pom.xml, build.gradle) is not scanned for references, and warns about
-  framework annotation findings when the declaration carries one.
+  diagnostics computed after the declaration file is removed from the snapshot, reports that
+  captured project text inputs are searched for literal target names while dynamic references
+  remain unresolved, and warns about framework annotation findings when present.
 
   Characterization RED-deferral (truthful, anti-fake): production already implements the
   planner JavaSafeDeletePlanner in the Java adapter, so this feature begins GREEN and
@@ -50,7 +50,7 @@ Ability: Delete a JDT-proven unused Java type with exact binding evidence, fall 
     And the plan carries a WorkspaceEdit with exactly one FileEdit.Delete for the declaration file
     And the plan reports the adapter diagnostics computed after the declaration file is removed from the snapshot
     And the plan warns that Java source references were evaluated using exact JDT type-binding evidence
-    And the plan warns that build configuration (pom.xml, build.gradle) is not scanned for references
+    And the plan warns that captured workspace text inputs are scanned for literal target names only
     And the plan summary names the fully qualified type and the declaration file path
 
   # Scenario 2: forced delete with references
@@ -83,7 +83,7 @@ Ability: Delete a JDT-proven unused Java type with exact binding evidence, fall 
     And the plan affected-file set lists only the declaration file
     And the plan carries a WorkspaceEdit with exactly one FileEdit.Delete for the declaration file
     And the plan warns that JDT type-binding evidence was unavailable or not clean and that Java source references use lexical fallback and need careful review
-    And the plan warns that build configuration (pom.xml, build.gradle) is not scanned for references
+    And the plan warns that captured workspace text inputs are scanned for literal target names only
 
   # Scenario 4: framework annotation findings elevate risk to HIGH
   @REQ-JAVA-SAFE-DELETE-CHAR-001 @functional-requirement
@@ -155,3 +155,112 @@ Ability: Delete a JDT-proven unused Java type with exact binding evidence, fall 
       | Generated source cannot be deleted: build/generated/sources/annotationProcessor/java/main/Generated.java (path is inside a generated-source or build-output location) | the declaration path is inside a generated-source or build-output location |
       | Generated source cannot be deleted: Generated.java (source declares a generated-code annotation) | the declaration source declares a generated-code annotation |
       | Generated source cannot be deleted: Generated.java (source header identifies generated code) | the declaration source header identifies generated code |
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#captured-project-text-reference-refuses-safedelete @functional-requirement
+  Scenario Outline: Captured project text reference refuses safeDelete
+    Given a Java workspace snapshot that contains a recognized non-generated Java type declaration file
+    And a captured workspace text input of type "<surface>" references the selected type at "<path>"
+    When the caller requests a safeDelete preview for that fully qualified type name without force
+    Then the adapter returns a REFUSED patch plan for the operation safeDelete
+    And the refusal carries an empty WorkspaceEdit and an empty affected-file set
+    And the refusal grants no approval and carries confidence 0.0 with risk HIGH
+    And the refusal summary and warning carry a message that begins with Cannot delete and the fully qualified type name and that reports the reference count and the evidence kind
+    And the refusal message lists each reference as a path and line, up to the first twenty references
+
+    Examples:
+      | surface | path |
+      | gradle  | build.gradle |
+      | xml     | src/main/resources/hibernate.cfg.xml |
+      | xml     | src/main/resources/pom.xml |
+      | yaml    | src/main/resources/application.yml |
+      | sql     | src/main/resources/db/queries/legacy.sql |
+      | service | src/main/resources/META-INF/services/com.example.Legacy |
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#maven-pom-only-literal-reference-produces-a-review-only-safedelete-preview @functional-requirement
+  Scenario: Maven POM-only literal reference produces a review-only safeDelete preview
+    Given a Java workspace snapshot that contains a recognized non-generated Java type declaration file
+    And the JDT binding analysis is clean with no parse or classpath warnings
+    And a captured workspace text input of type "maven" references the selected type at "pom.xml"
+    When the caller requests a safeDelete preview for that fully qualified type name without force
+    Then the adapter returns a PREVIEW patch plan for the operation safeDelete
+    And the plan carries confidence 0.3
+    And the plan requires user approval
+    And the plan evidence is LEXICAL_FALLBACK
+    And the plan risk is HIGH
+    And the plan affected-file set lists only the declaration file
+    And the plan carries a WorkspaceEdit with exactly one FileEdit.Delete for the declaration file
+    And the review-only proposal identifies "pom.xml" and PatchEngine refuses Apply with "evidence.insufficient" before mutation
+    When the caller previews and applies safeDelete through the daemon and MCP
+    Then managed Apply is refused with code "java.safeDelete.referenceClosureIncomplete"
+    And workspace files and transaction metadata remain unchanged
+    And daemon and MCP expose only snapshot-bound workspace-text analysis without Apply authority
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#incomplete-text-reference-scan-refuses-even-forced-safedelete @functional-requirement
+  Scenario Outline: Incomplete text-reference scan refuses even forced safeDelete
+    Given a Java workspace snapshot that contains a recognized non-generated Java type declaration file
+    And workspace text-reference scan evidence is <coverage>
+    When the caller requests a safeDelete preview for that fully qualified type name with force allowed
+    Then the adapter returns a REFUSED patch plan for the operation safeDelete
+    And the refusal summary and warning carry the message "Safe delete requires complete workspace text-reference scan evidence."
+    And the refusal carries an empty WorkspaceEdit and an empty affected-file set
+    And the refusal carries no typed refusal code because refusals are message-based
+
+    Examples:
+      | coverage |
+      | over-budget |
+      | missing |
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#symlinked-workspace-text-input-makes-forced-safedelete-refuse @functional-requirement
+  Scenario: Symlinked workspace text input makes forced safeDelete refuse
+    Given a Java workspace snapshot that contains a recognized non-generated Java type declaration file
+    And workspace text-reference coverage is hidden by a symbolic link
+    When the caller requests a safeDelete preview for that fully qualified type name with force allowed
+    Then the adapter returns a REFUSED patch plan for the operation safeDelete
+    And the refusal summary and warning carry the message "Safe delete requires complete workspace text-reference scan evidence."
+    And the refusal carries an empty WorkspaceEdit and an empty affected-file set
+    And the refusal carries no typed refusal code because refusals are message-based
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#managed-safedelete-refuses-incomplete-reference-closure @functional-requirement
+  Scenario: Managed safeDelete refuses incomplete reference closure
+    Given a Java workspace snapshot that contains a recognized non-generated Java type declaration file
+    And the project contains an unresolved dynamic class-loading consumer with no literal target name
+    When the caller previews and applies safeDelete through the daemon and MCP
+    Then managed Apply is refused with code "java.safeDelete.referenceClosureIncomplete"
+    And workspace files and transaction metadata remain unchanged
+    And daemon and MCP expose only snapshot-bound workspace-text analysis without Apply authority
+
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#aggregator-root-pom-only-literal-reference-produces-a-review-only-safedelete-preview @functional-requirement
+  Scenario: Maven aggregator root POM-only literal reference produces a review-only safeDelete preview
+    Given a clean Maven reactor with an unused Java type referenced only from its root aggregator POM
+    And the JDT binding analysis is clean with no parse or classpath warnings
+    When the caller requests a safeDelete preview for that fully qualified type name without force
+    Then the adapter returns a PREVIEW patch plan for the operation safeDelete
+    And the plan carries confidence 0.3
+    And the plan requires user approval
+    And the plan evidence is LEXICAL_FALLBACK
+    And the plan risk is HIGH
+    And the plan affected-file set lists only the declaration file
+    And the plan carries a WorkspaceEdit with exactly one FileEdit.Delete for the declaration file
+    And the review-only proposal identifies "pom.xml" and PatchEngine refuses Apply with "evidence.insufficient" before mutation
+
+  @REQ-JAVA-SAFE-DELETE-CHAR-001#managed-safedelete-requires-complete-maven-reactor-closure-and-rejects-stale-apply @functional-requirement
+  Scenario: Managed safeDelete requires complete Maven reactor closure and rejects stale Apply
+    Given an available two-module Maven reactor has a package-private Java type with no source or text consumers
+    When the IDE requests safeDelete for fixtures.orbit.Orphan with an SDK-bound daemon context
+    Then RefactorKit reports complete snapshot-bound Maven closure and managed Apply authority only for this preview
+    And a stale Apply is refused, then exact Apply and rollback restore the full reactor image
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#binary-resource-keeps-managed-safedelete-disabled @functional-requirement
+  Scenario: Binary resource keeps managed safeDelete disabled
+    Given a two-module Maven reactor contains a package-private Java type and an opaque binary resource
+    When the IDE previews safeDelete for fixtures.orbit.Orphan with an SDK-bound daemon context
+    Then RefactorKit reports the binary resource as outside semantic closure and grants no Apply authority
+    And managed Apply is refused without changing the reactor or transaction log
+
+  @REQ-JAVA-SAFE-DELETE-WORKSPACE-TEXT-001#unmodeled-workspace-input-keeps-managed-safedelete-disabled @functional-requirement
+  Scenario: Unmodeled workspace input keeps managed safeDelete disabled
+    Given a two-module Maven reactor contains a package-private Java type and an unmodeled input
+    When the IDE previews safeDelete for fixtures.orbit.Orphan with an SDK-bound daemon context
+    Then RefactorKit reports an unmodeled workspace input and grants no Apply authority
+    And managed Apply is refused without changing the reactor or transaction log

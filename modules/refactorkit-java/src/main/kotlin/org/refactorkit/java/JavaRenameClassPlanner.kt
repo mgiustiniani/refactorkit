@@ -18,54 +18,90 @@ import org.refactorkit.core.WorkspaceEdit
 import java.nio.file.Path
 
 /**
- * Generates a [PatchPlan] that renames a Java class/interface/enum/record and
- * updates all references across the project using the token-aware [JavaLexer].
- *
- * This is a structural (lexical) rename, not a full semantic rename.
- * Reflection, string-based framework references, and annotation processor output
- * are explicitly warned about but not resolved.
+ * Generates a [PatchPlan] that renames Java types. Clean JDT binding evidence
+ * drives semantic edits; top-level types retain the existing lexical fallback.
+ * Nested types require clean JDT evidence because a lexical fallback cannot
+ * safely distinguish the nested declaration from same-named types.
  */
 class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
 
     fun preview(snapshot: ProjectSnapshot, symbolFqn: String, newSimpleName: String): PatchPlan {
-        val oldPkg = JavaPackageUtil.packageOf(symbolFqn)
-        val oldSimple = JavaPackageUtil.simpleName(symbolFqn)
-        val newFqn = JavaPackageUtil.fqn(oldPkg, newSimpleName)
+        val requestedOldSimple = JavaPackageUtil.simpleName(symbolFqn)
 
         // Validate target name
         if (!isValidJavaIdentifier(newSimpleName)) {
             return refused(snapshot, "renameClass", "Invalid Java identifier: $newSimpleName")
         }
-        if (oldSimple == newSimpleName) {
-            return refused(snapshot, "renameClass", "Old and new type names are the same: $oldSimple")
+        if (requestedOldSimple == newSimpleName) {
+            return refused(snapshot, "renameClass", "Old and new type names are the same: $requestedOldSimple")
         }
 
-        // Find the symbol
+        // The language-neutral index currently contains top-level types only. JDT
+        // supplies the exact nested declaration identity without widening that index.
         val index = adapter.buildSymbols(snapshot)
         val symbol = index.symbols.find {
             it.id.value == symbolFqn && it.kind in RENAMEABLE_KINDS
-        } ?: return refused(snapshot, "renameClass", "Symbol not found or not a renameable type: $symbolFqn")
+        }
+        val semanticAnalysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        val jdtTarget = semanticAnalysis?.symbols?.singleOrNull { candidate ->
+            candidate.qualifiedName == symbolFqn && candidate.kind in JDT_RENAMEABLE_KINDS
+        }
+        val nestedTarget = jdtTarget?.takeIf { it.ownerQualifiedName != null }
+        if (symbol == null && nestedTarget == null) {
+            return refused(snapshot, "renameClass", "Symbol not found or not a renameable type: $symbolFqn")
+        }
+        val oldSimple = jdtTarget?.simpleName ?: symbol!!.name
+        if (oldSimple == newSimpleName) {
+            return refused(snapshot, "renameClass", "Old and new type names are the same: $oldSimple")
+        }
+        val oldPkg = JavaPackageUtil.packageOf(symbolFqn).takeIf { nestedTarget == null }.orEmpty()
+        val newFqn = nestedTarget?.ownerQualifiedName?.let { "$it.$newSimpleName" }
+            ?: JavaPackageUtil.fqn(oldPkg, newSimpleName)
+        if (nestedTarget != null && (
+                semanticAnalysis?.warnings?.isNotEmpty() != false ||
+                    nestedTarget.recovered || nestedTarget.bindingKey.isNullOrBlank()
+                )
+        ) {
+            return refused(snapshot, "renameClass", "Nested type rename requires clean JDT binding evidence: $symbolFqn")
+        }
 
-        val declarationFile = snapshot.files.find { it.path == symbol.location.path }
-            ?: return refused(snapshot, "renameClass", "Declaration file not found: ${symbol.location.path}")
+        val declarationPath = symbol?.location?.path ?: nestedTarget!!.path
+        val declarationFile = snapshot.files.find { it.path == declarationPath }
+            ?: return refused(snapshot, "renameClass", "Declaration file not found: $declarationPath")
         JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
             return refused(snapshot, "renameClass", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)")
         }
-        val newFileName = "$newSimpleName.java"
-        val newFilePath = declarationFile.path.resolveSibling(newFileName)
-        if (index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newFilePath }) {
-            return refused(snapshot, "renameClass", "Rename target already exists: $newFqn ($newFilePath)")
+        val newFilePath = if (nestedTarget == null) {
+            declarationFile.path.resolveSibling("$newSimpleName.java")
+        } else {
+            null
+        }
+        val targetExists = if (nestedTarget != null) {
+            semanticAnalysis!!.symbols.any { it.qualifiedName == newFqn && it.path == declarationFile.path }
+        } else {
+            index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newFilePath }
+        }
+        if (targetExists) {
+            val targetDetail = newFilePath?.let { " ($it)" }.orEmpty()
+            return refused(snapshot, "renameClass", "Rename target already exists: $newFqn$targetDetail")
         }
 
-        buildJdtRenameEvidence(snapshot, symbolFqn, newSimpleName, declarationFile.path)?.let { evidence ->
+        val jdtEvidence = buildJdtRenameEvidence(semanticAnalysis, symbolFqn, newSimpleName, declarationFile.path)
+        if (nestedTarget != null && jdtEvidence == null) {
+            return refused(snapshot, "renameClass", "Nested type rename requires clean JDT binding evidence: $symbolFqn")
+        }
+        jdtEvidence?.let { evidence ->
             val frameworkAssessment = JavaFrameworkDetector.assess(declarationFile)
             val affectedPaths = evidence.modifications.mapTo(mutableSetOf()) { it.path }
             affectedPaths.add(declarationFile.path)
-            affectedPaths.add(newFilePath)
+            if (newFilePath != null) affectedPaths.add(newFilePath)
             val warnings = mutableListOf(
                 "JDT type binding selected $symbolFqn; declaration, constructor, and reference edits use exact JDT source ranges.",
                 "String literals and comments are NOT scanned. Reflection and annotation processor output require manual review.",
             )
+            if (nestedTarget != null) {
+                warnings += "Nested type rename keeps the enclosing source file at its existing path."
+            }
             warnings += frameworkAssessment.warnings("renameClass")
             if (affectedPaths.size > 10) warnings += "Large rename: ${affectedPaths.size} files affected."
             return PatchPlan(
@@ -76,7 +112,9 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
                 requiresUserApproval = true,
                 summary = "Rename $oldSimple → $newSimpleName (FQN: $newFqn) using JDT binding evidence. ${affectedPaths.size} file(s) affected.",
                 affectedFiles = affectedPaths,
-                workspaceEdit = WorkspaceEdit(evidence.modifications + FileEdit.Rename(declarationFile.path, newFilePath)),
+                workspaceEdit = WorkspaceEdit(
+                    evidence.modifications + listOfNotNull(newFilePath?.let { FileEdit.Rename(declarationFile.path, it) }),
+                ),
                 warnings = warnings,
                 riskLevel = when {
                     frameworkAssessment.hasFindings -> RiskLevel.HIGH
@@ -99,9 +137,11 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
         }
 
         // 2. Rename the source file itself
-        edits += FileEdit.Rename(declarationFile.path, newFilePath)
+        val topLevelNewFilePath = newFilePath
+            ?: return refused(snapshot, "renameClass", "Nested type rename requires clean JDT binding evidence: $symbolFqn")
+        edits += FileEdit.Rename(declarationFile.path, topLevelNewFilePath)
         affectedPaths.add(declarationFile.path)
-        affectedPaths.add(newFilePath)
+        affectedPaths.add(topLevelNewFilePath)
 
         // 3. Update all other Java files
         for (file in snapshot.files) {
@@ -152,16 +192,17 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private fun buildJdtRenameEvidence(
-        snapshot: ProjectSnapshot,
+        analysis: JdtJavaSemanticAnalysisResult?,
         symbolFqn: String,
         newSimpleName: String,
         declarationPath: Path,
     ): JdtRenameEvidence? {
-        val analysis = JdtJavaSemanticAnalyzer().analyze(snapshot)
+        analysis ?: return null
         if (analysis.warnings.isNotEmpty()) return null
         val target = analysis.symbols.singleOrNull { symbol ->
             symbol.qualifiedName == symbolFqn && symbol.kind in JDT_RENAMEABLE_KINDS
         } ?: return null
+        if (target.path != declarationPath || target.recovered) return null
         val bindingKey = target.bindingKey ?: return null
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         fun add(path: Path, range: SourceRange) {
@@ -189,9 +230,7 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
         return JdtRenameEvidence(modifications)
     }
 
-    private data class JdtRenameEvidence(
-        val modifications: List<FileEdit.Modify>,
-    )
+    private data class JdtRenameEvidence(val modifications: List<FileEdit.Modify>)
 
     private fun buildModify(
         file: SourceFile,

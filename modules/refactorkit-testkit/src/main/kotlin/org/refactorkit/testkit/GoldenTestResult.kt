@@ -10,6 +10,7 @@ data class GoldenTestResult(
     val plan: PatchPlan?,
     val planErrors: List<String> = emptyList(),
     val afterErrors: List<String> = emptyList(),
+    val cQualification: CGoldenQualification? = null,
 ) {
     val planValid: Boolean get() = planErrors.isEmpty()
     val afterValid: Boolean get() = afterErrors.isEmpty()

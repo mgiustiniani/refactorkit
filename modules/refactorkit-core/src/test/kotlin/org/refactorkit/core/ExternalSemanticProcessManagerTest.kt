@@ -105,11 +105,15 @@ class ExternalSemanticProcessManagerTest {
     ): SemanticProcessSpec = SemanticProcessSpec(
         id = id,
         executable = javaExecutable(),
-        arguments = listOf("-Xmx64m", "-cp", System.getProperty("java.class.path"), SemanticProcessFixture::class.java.name) + fixtureArguments,
+        arguments = listOf("-Xmx64m", "-cp", fixtureClasspath(), SemanticProcessFixture::class.java.name) + fixtureArguments,
         workingDirectory = Files.createTempDirectory("refactorkit-semantic-process"),
         environment = environment,
         limits = limits,
     )
+
+    private fun fixtureClasspath(): String = listOf(SemanticProcessFixture::class.java, Unit::class.java)
+        .map { Path.of(it.protectionDomain.codeSource.location.toURI()).toString() }
+        .distinct().joinToString(java.io.File.pathSeparator)
 
     private fun javaExecutable(): Path {
         val executable = if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java"

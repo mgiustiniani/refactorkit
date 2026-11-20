@@ -201,6 +201,10 @@ class JavaMavenModuleRenameSurface005Steps {
     private var sequence = 0
     private var bytecodeEvidence: String? = null
     private val consumedObservations = linkedSetOf<InternalObservation>()
+    private lateinit var lspSafeDeleteRoot: Path
+    private lateinit var lspSafeDeleteBaseline: ExactManifest
+    private var lspSafeDeleteResponse: JsonElement? = null
+    private var lspSafeDeleteFailure: Throwable? = null
 
     private val literalModifies = listOf(
         LiteralModify(Path.of("catalog-model/pom.xml"), 9, 14, 9, 27, "catalog-model", "catalog-domain"),
@@ -238,6 +242,97 @@ class JavaMavenModuleRenameSurface005Steps {
         } finally {
             deleteNoFollow(temporaryRoot)
         }
+    }
+
+    @Before("@safe-delete-lsp")
+    fun prepareLspSafeDeleteStory() {
+        lspSafeDeleteRoot = Files.createTempDirectory("refactorkit-lsp-safedelete-review-only-")
+            .toAbsolutePath().normalize()
+        val javaFile = lspSafeDeleteRoot.resolve("src/main/java/com/example/Legacy.java")
+        Files.createDirectories(javaFile.parent)
+        Files.writeString(javaFile, "package com.example;\npublic class Legacy {}\n", StandardCharsets.UTF_8)
+        Files.writeString(
+            lspSafeDeleteRoot.resolve("pom.xml"),
+            """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>example</groupId>
+              <artifactId>review-only</artifactId>
+              <version>1</version>
+              <build><sourceDirectory>src/main/java</sourceDirectory></build>
+              <properties><safeDelete.target>com.example.Legacy</safeDelete.target></properties>
+            </project>
+            """.trimIndent() + "\n",
+            StandardCharsets.UTF_8,
+        )
+        lspSafeDeleteBaseline = captureManifest(lspSafeDeleteRoot, excludeEngine = true)
+        lspSafeDeleteResponse = null
+        lspSafeDeleteFailure = null
+    }
+
+    @After("@safe-delete-lsp")
+    fun cleanLspSafeDeleteStory() {
+        try {
+            check(lspSafeDeleteBaseline == captureManifest(lspSafeDeleteRoot, excludeEngine = true)) {
+                "LSP safeDelete story changed the workspace bytes"
+            }
+        } finally {
+            deleteNoFollow(lspSafeDeleteRoot)
+        }
+    }
+
+    @Given("^a Maven project with a Java type referenced only by its root POM$")
+    fun mavenProjectWithRootPomOnlySafeDeleteReference() {
+        check(lspSafeDeleteBaseline.entries.keys.any { it == "pom.xml" })
+        check(lspSafeDeleteBaseline.entries.keys.any { it.endsWith("Legacy.java") })
+    }
+
+    @When("^an LSP client requests safeDelete for that Java type$")
+    fun lspClientRequestsSafeDelete() {
+        val session = LspSession()
+        session.dispatch("initialize", buildJsonObject {
+            put("rootUri", lspSafeDeleteRoot.toUri().toString())
+            put("capabilities", buildJsonObject {
+                put("workspace", buildJsonObject {
+                    put("workspaceEdit", buildJsonObject { put("documentChanges", true) })
+                })
+            })
+        })
+        val result = runCatching {
+            session.dispatch("workspace/executeCommand", buildJsonObject {
+                put("command", "refactorkit.safeDelete")
+                put("arguments", buildJsonArray {
+                    add(buildJsonObject { put("symbol", "com.example.Legacy") })
+                })
+            })
+        }
+        lspSafeDeleteResponse = result.getOrNull()
+        lspSafeDeleteFailure = result.exceptionOrNull()
+    }
+
+    @Then("^RefactorKit refuses the client-managed edit with error code \"([^\"]+)\"$")
+    fun lspRefusesReviewOnlySafeDeleteEdit(expectedCode: String) {
+        check(lspSafeDeleteResponse == null) {
+            "LSP returned a client-applicable edit for a review-only proposal: $lspSafeDeleteResponse"
+        }
+        val failure = lspSafeDeleteFailure as? JsonRpcException
+            ?: error("LSP did not return a structured refusal: $lspSafeDeleteFailure")
+        val code = when (expectedCode) {
+            "PLAN_REFUSED" -> JsonRpcErrorCodes.PLAN_REFUSED
+            else -> error("Unsupported expected LSP refusal code: $expectedCode")
+        }
+        check(failure.code == code) { "expected $expectedCode, got ${failure.code}: ${failure.message}" }
+        check(failure.message?.contains("Review-only proposal") == true) {
+            "LSP refusal must explain the review-only boundary: ${failure.message}"
+        }
+    }
+
+    @io.cucumber.java.en.And("^the workspace remains unchanged and no client workspace edit is returned$")
+    fun lspSafeDeleteWorkspaceRemainsUnchanged() {
+        check(lspSafeDeleteResponse == null) { "unexpected client WorkspaceEdit: $lspSafeDeleteResponse" }
+        check(lspSafeDeleteBaseline == captureManifest(lspSafeDeleteRoot, excludeEngine = true))
+        check(!Files.exists(lspSafeDeleteRoot.resolve(".refactorkit/workspace.lock")))
+        check(!Files.exists(lspSafeDeleteRoot.resolve(".refactorkit/transactions")))
     }
 
     @Given("each case uses a fresh no-follow disposable byte copy of {string}")

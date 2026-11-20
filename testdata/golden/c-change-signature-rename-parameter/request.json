@@ -1,0 +1,1 @@
+{"operation":"c.changeSignature","arguments":{"file":"main.c","symbol":"weighted","oldParam":"amount","newParam":"total"}}

@@ -106,7 +106,7 @@ class CCompilationDatabaseProviderTest {
         val model = provider().discover(BuildModelRequest(fixture.workspace))
         assertEquals(BuildModelStatus.PARTIAL, model.status)
         assertTrue(model.diagnostics.any { it.code == "c.compilationConfigurationIncomplete" })
-        assertEquals("denied", model.attributes["perUnitFlags"])
+        assertEquals("declared", model.attributes["perUnitFlags"])
         assertEquals("declared", model.attributes["standard"])
         assertEquals("declared", model.attributes["includes"])
     }

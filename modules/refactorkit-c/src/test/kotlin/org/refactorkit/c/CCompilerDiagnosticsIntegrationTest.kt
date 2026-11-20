@@ -48,7 +48,16 @@ class CCompilerDiagnosticsIntegrationTest {
         assertTrue(available.diagnostics.isEmpty())
     }
 
-    private fun toolchain() = ClangSemanticToolchain(
+    private fun toolchain(): ClangSemanticToolchain {
+        val configured = System.getProperty("refactorkit.c.qualificationToolchain")?.let(Path::of)
+        if (configured != null) return when (val discovered = ClangToolchainDiscoverer().discover(ClangToolchainRequest(
+            Path.of(System.getProperty("java.io.tmpdir")), configured.resolve("usr/bin/clang-22"),
+            configured.resolve("usr/bin/clangd"), configured.resolve("usr/bin/clang-format"),
+        ))) {
+            is ClangToolchainDiscovery.Available -> discovered.toolchain
+            is ClangToolchainDiscovery.Refused -> error("Explicit test toolchain is unavailable: ${discovered.diagnostics}")
+        }
+        val legacy = ClangSemanticToolchain(
         clangExecutable = clang,
         clangdExecutable = Path.of("/usr/bin/clangd"),
         clangFormatExecutable = Path.of("/usr/bin/clang-format"),
@@ -56,5 +65,10 @@ class CCompilerDiagnosticsIntegrationTest {
             clangVersion = "22.1.8", clangdVersion = "22.1.8", clangFormatVersion = "22.1.8",
             targetTriple = "x86_64-pc-linux-gnu", resourceDir = "/usr/lib/clang/22", evidence = emptyList(),
         ),
-    )
+        )
+        if (!Files.isExecutable(legacy.clangExecutable)) return legacy
+        val resources = Path.of(ManagedClangResourceDirProbe().probe(legacy.clangExecutable).getOrThrow())
+        return legacy.copy(provenance = legacy.provenance.copy(resourceDir = resources.toString()),
+            resources = ClangResourceDirectoryCapture().capture(resources))
+    }
 }

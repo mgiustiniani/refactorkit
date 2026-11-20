@@ -1,0 +1,700 @@
+package org.refactorkit.cli.previewcommand
+
+import io.cucumber.java.After
+import io.cucumber.java.en.Given
+import io.cucumber.java.en.Then
+import io.cucumber.java.en.When
+import org.refactorkit.cli.RefactorKitCli
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.refactorkit.c.CProjectScanner
+import org.refactorkit.c.CRefactoringFacade
+import org.refactorkit.c.ClangToolchainDiscoverer
+import org.refactorkit.c.ClangToolchainDiscovery
+import org.refactorkit.c.ClangToolchainRequest
+import org.refactorkit.core.FileEdit
+import org.refactorkit.core.JsonRpcErrorCodes
+import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.PatchPlan
+import org.refactorkit.core.PatchDiffRenderer
+import org.refactorkit.core.PatchStatus
+import org.refactorkit.core.ProjectSnapshot
+import org.refactorkit.core.TextEdits
+import org.refactorkit.daemon.DaemonSession
+import org.refactorkit.mcp.McpSession
+import java.nio.file.Files
+import java.nio.file.Path
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.Comparator
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+class CSemanticRenameExactSelectionSteps {
+    private var root: Path? = null
+    private var facade: CRefactoringFacade? = null
+    private var daemon: DaemonSession? = null
+    private var mcp: McpSession? = null
+    private lateinit var snapshot: ProjectSnapshot
+    private lateinit var toolchainRoot: Path
+    private lateinit var originalFiles: Map<Path, String>
+    private lateinit var expectedFiles: Map<Path, String>
+    private lateinit var beforeDigest: Map<Path, String>
+    private lateinit var privateBefore: Set<Path>
+    private var selection = ""
+    private var outcome = ""
+    private var detail = ""
+    private var cliExitCode = -1
+    private var cliOutput = ""
+
+    private companion object {
+        val CLI_CAPTURE_MONITOR = Any()
+    }
+
+    @Given("a C workspace contains a header declaration, definition, caller and lexical decoys")
+    fun workspaceContainsMultifileFamily() = createWorkspace(targetCollision = false)
+
+    @Given("a C workspace contains two header API declarations, definitions, callers and lexical decoys")
+    fun workspaceContainsMultipleFunctionFamilies() = createWorkspace(targetCollision = false, multiFunctionFamily = true)
+
+    @Given("a C workspace contains a header declaration, caller, lexical decoys, and a same-translation-unit target function")
+    fun workspaceContainsSameTranslationUnitTargetCollision() = createWorkspace(targetCollision = true)
+
+    @Given("a C workspace contains a header function declaration and a same-spelled struct tag")
+    fun workspaceContainsTagTarget() = createWorkspace(targetCollision = false, tagTarget = true)
+
+    @Given("a C workspace contains a header global variable declaration, definition, uses, and lexical decoys")
+    fun workspaceContainsGlobalVariableFamily() = createWorkspace(targetCollision = false, globalVariable = true)
+
+    @Given("a C workspace contains a header typedef declaration, type-signature family, and lexical decoys")
+    fun workspaceContainsTypedefFamily() = createWorkspace(targetCollision = false, typedefFamily = true)
+
+    @Given("a C workspace contains a header enum declaration, two translation-unit uses, and lexical decoys")
+    fun workspaceContainsEnumeratorFamily() = createWorkspace(targetCollision = false, enumeratorFamily = true)
+
+    @Given("a C workspace contains a header struct-field declaration and member uses in two translation units with lexical decoys")
+    fun workspaceContainsFieldFamily() = createWorkspace(targetCollision = false, fieldFamily = true)
+
+    @Given("a C source contains a function parameter shadowed by a nested local and lexical decoys")
+    fun sourceContainsShadowedFunctionParameter() = createWorkspace(targetCollision = false, functionParameter = true)
+
+    @Given("a C source contains a static file object shadowed by local and external objects with lexical decoys")
+    fun sourceContainsShadowedStaticFileObject() = createWorkspace(targetCollision = false, staticObject = true)
+
+    @Given("a C source contains a local variable shadowed by another local and a parameter, with lexical decoys")
+    fun sourceContainsShadowedLocalVariable() = createWorkspace(targetCollision = false, localVariable = true)
+
+    @Given("a C workspace contains a function declaration generated by a function-like macro and macro-expanded uses")
+    fun workspaceContainsMacroGeneratedFunctionFamily() = createWorkspace(targetCollision = false, macroGeneratedDeclaration = true)
+
+    private fun createWorkspace(
+        targetCollision: Boolean,
+        tagTarget: Boolean = false,
+        globalVariable: Boolean = false,
+        typedefFamily: Boolean = false,
+        enumeratorFamily: Boolean = false,
+        fieldFamily: Boolean = false,
+        functionParameter: Boolean = false,
+        staticObject: Boolean = false,
+        localVariable: Boolean = false,
+        macroGeneratedDeclaration: Boolean = false,
+        multiFunctionFamily: Boolean = false,
+    ) {
+        toolchainRoot = Path.of(assertNotNull(System.getProperty("refactorkit.c.qualificationToolchain")))
+        val clang = toolchainRoot.resolve("usr/bin/clang-22")
+        val clangd = toolchainRoot.resolve("usr/bin/clangd")
+        val clangFormat = toolchainRoot.resolve("usr/bin/clang-format")
+        assumeTrue(listOf(clang, clangd, clangFormat).all(Files::isExecutable), "Reference Clang 22.1.8 toolchain is not installed")
+
+        val workspace = Files.createTempDirectory("refactorkit-c-semantic-rename-")
+        root = workspace
+        val contents = when {
+            macroGeneratedDeclaration -> linkedMapOf(
+                Path.of("include/api.h") to """#ifndef API_H
+#define API_H
+#define DECLARE_FUNCTION(name) int name(int value)
+#define CALL_FUNCTION(name, value) name(value)
+DECLARE_FUNCTION(calculate);
+#endif
+""",
+                Path.of("src/calculate.c") to """#include "api.h"
+int calculate(int value) { return value + 1; }
+""",
+                Path.of("src/main.c") to """#include "api.h"
+int main(void) { return CALL_FUNCTION(calculate, 41) == 42 ? 0 : 1; }
+""",
+            )
+            localVariable -> linkedMapOf(
+                Path.of("src/main.c") to """/* local_count in this comment is not a reference */
+const char *label = "local_count";
+int calculate(int local_count) {
+    return local_count;
+}
+int main(void) {
+    int local_count = 41;
+    {
+        int local_count = 1;
+        local_count += 1;
+    }
+    local_count += 1;
+                return local_count == 42 && label[0] == 'l' ? 0 : 1;
+}
+""",
+            )
+            staticObject -> linkedMapOf(
+                Path.of("src/storage.c") to """/* file_count in this comment is not a reference */
+static int file_count = 0;
+int increment_file_count(void) {
+    const char *label = "file_count";
+    int result = ++file_count;
+    {
+        int file_count = 7;
+        result += file_count;
+    }
+    return result + (label[0] == 'f' ? 0 : 1000);
+}
+""",
+                Path.of("src/main.c") to """/* file_count in this comment is not a reference */
+int file_count = 41;
+int increment_file_count(void);
+int main(void) {
+    return increment_file_count() == 8 && file_count == 41 ? 0 : 1;
+}
+""",
+            )
+            functionParameter -> linkedMapOf(
+                Path.of("include/api.h") to "int calculate(int prototype_value);\n",
+                Path.of("src/calculate.c") to """#include "api.h"
+/* amount in this comment is not a reference */
+int calculate(int amount) {
+    const char *label = "amount";
+    int result = amount;
+    {
+        int amount = 1;
+        result += amount;
+    }
+    return result + amount + (label[0] == 'a' ? 0 : 1000);
+}
+""",
+                Path.of("src/main.c") to """#include "api.h"
+int main(void) { return calculate(10) == 21 ? 0 : 1; }
+""",
+            )
+            globalVariable -> linkedMapOf(
+                Path.of("include/api.h") to "extern int item_count;\n",
+                Path.of("src/storage.c") to """#include "api.h"
+int item_count = 0;
+""",
+                Path.of("src/main.c") to """#include "api.h"
+/* item_count in this comment is not a reference */
+const char *label = "item_count";
+int main(void) {
+    item_count += 1;
+    return label[0] == 'i' && item_count == 1 ? 0 : 1;
+}
+""",
+            )
+            typedefFamily -> linkedMapOf(
+                Path.of("include/api.h") to """typedef int value_t;
+struct result_t;
+/* value_t in this comment is not a reference */
+static const char *typeLabel = "value_t";
+value_t calculate(value_t value);
+""",
+                Path.of("src/calculate.c") to """#include "api.h"
+value_t calculate(value_t value) { return value + 1; }
+""",
+                Path.of("src/main.c") to """#include "api.h"
+/* value_t in this comment is not a reference */
+int main(void) {
+    value_t result = calculate(41);
+    return result == 42 && typeLabel[0] == 'v' ? 0 : 1;
+}
+""",
+            )
+            enumeratorFamily -> linkedMapOf(
+                Path.of("include/api.h") to """enum order_state { ORDER_PENDING = 0, ORDER_READY = 1 };
+/* ORDER_PENDING in this comment is not a reference */
+enum order_state read_order(void);
+""",
+                Path.of("src/read_order.c") to """#include "api.h"
+enum order_state read_order(void) { return ORDER_PENDING; }
+""",
+                Path.of("src/main.c") to """#include "api.h"
+/* ORDER_PENDING in this comment is not a reference */
+int main(void) {
+    const char *label = "ORDER_PENDING";
+    return read_order() == ORDER_PENDING && label[0] == 'O' ? 0 : 1;
+}
+""",
+            )
+            fieldFamily -> linkedMapOf(
+                Path.of("include/api.h") to """struct meter_reading {
+    int raw_count;
+    int calibration;
+};
+/* raw_count in this comment is not a reference */
+struct meter_reading read_meter(void);
+""",
+                Path.of("src/read_meter.c") to """#include "api.h"
+struct meter_reading read_meter(void) {
+    return (struct meter_reading) { .raw_count = 42, .calibration = 1 };
+}
+""",
+                Path.of("src/main.c") to """#include "api.h"
+/* raw_count in this comment is not a reference */
+int main(void) {
+    const char *label = "raw_count";
+    struct meter_reading reading = read_meter();
+    return reading.raw_count == 42 && label[0] == 'r' ? 0 : 1;
+}
+""",
+            )
+            else -> if (multiFunctionFamily) linkedMapOf(
+                Path.of("include/api.h") to """int calculate(int value);
+int load_item(int value);
+""",
+                Path.of("src/calculate.c") to """#include "api.h"
+/* calculate and load_item in this comment are not references */
+const char *calculateDefinitionLabel = "calculate";
+const char *loadDefinitionLabel = "load_item";
+int calculate(int value) { return value + 1; }
+int load_item(int value) { return value - 1; }
+""",
+                Path.of("src/main.c") to """#include "api.h"
+/* calculate and load_item in this comment are not references */
+int main(void) {
+    const char *calculateCallLabel = "calculate";
+    const char *loadCallLabel = "load_item";
+    int calculate_helper = 7;
+    int load_item_helper = 8;
+    return calculate(41) == 42 && load_item(41) == 40 &&
+        calculate_helper == 7 && load_item_helper == 8 &&
+        calculateCallLabel[0] == 'c' && loadCallLabel[0] == 'l' ? 0 : 1;
+}
+""",
+            ) else linkedMapOf(
+                Path.of("include/api.h") to "int calculate(int value);\n${if (tagTarget) "struct compute;\n" else ""}",
+                Path.of("src/calculate.c") to """#include "api.h"
+/* calculate in this comment is not a reference */
+const char *definitionLabel = "calculate";
+${if (targetCollision) "int compute(int value) { return value; }\n" else ""}int calculate(int value) { return value + 1; }
+""",
+                Path.of("src/main.c") to """#include "api.h"
+/* calculate in this comment is not a reference */
+int main(void) {
+    const char *callLabel = "calculate";
+    int calculate_helper = 7;
+    return calculate(41) == 42 && calculate_helper == 7 && callLabel[0] == 'c' ? 0 : 1;
+}
+""",
+            )
+        }
+        contents.forEach { (relative, content) ->
+            val path = workspace.resolve(relative)
+            Files.createDirectories(path.parent)
+            Files.writeString(path, content)
+        }
+        val sourceUnits = when {
+            macroGeneratedDeclaration -> listOf("src/calculate.c", "src/main.c")
+            localVariable -> listOf("src/main.c")
+            staticObject -> listOf("src/storage.c", "src/main.c")
+            functionParameter -> listOf("src/calculate.c", "src/main.c")
+            globalVariable -> listOf("src/storage.c", "src/main.c")
+            typedefFamily -> listOf("src/calculate.c", "src/main.c")
+            enumeratorFamily -> listOf("src/read_order.c", "src/main.c")
+            fieldFamily -> listOf("src/read_meter.c", "src/main.c")
+            else -> listOf("src/calculate.c", "src/main.c")
+        }
+        Files.writeString(workspace.resolve("compile_commands.json"), JsonArray(sourceUnits.map { source ->
+            buildJsonObject {
+                put("directory", workspace.toString())
+                put("file", workspace.resolve(source).toString())
+                val compilerArguments = buildList {
+                    add(clang.toString())
+                    add("-std=c11")
+                    if (!localVariable && !staticObject) {
+                        add("-I")
+                        add(workspace.resolve("include").toString())
+                    }
+                    add("-c")
+                    add(source)
+                }
+                put("arguments", JsonArray(compilerArguments.map(::JsonPrimitive)))
+            }
+        }).toString())
+
+        originalFiles = contents
+        expectedFiles = when {
+            staticObject -> mapOf(
+                Path.of("src/storage.c") to contents.getValue(Path.of("src/storage.c"))
+                    .replace("static int file_count = 0;", "static int storage_count = 0;")
+                    .replace("++file_count", "++storage_count"),
+            )
+            functionParameter -> mapOf(
+                Path.of("src/calculate.c") to contents.getValue(Path.of("src/calculate.c"))
+                    .replace("int calculate(int amount)", "int calculate(int input_amount)")
+                    .replace("int result = amount;", "int result = input_amount;")
+                    .replace("return result + amount +", "return result + input_amount +"),
+            )
+            localVariable -> {
+                val main = contents.getValue(Path.of("src/main.c"))
+                mapOf(Path.of("src/main.c") to main
+                    .replace("int local_count = 41;", "int local_total = 41;")
+                    .replace("\n    local_count += 1;\n", "\n    local_total += 1;\n")
+                    .replace("    return local_count == 42", "    return local_total == 42"))
+            }
+            globalVariable -> mapOf(
+                Path.of("include/api.h") to contents.getValue(Path.of("include/api.h")).replaceFirst("item_count", "item_total"),
+                Path.of("src/storage.c") to contents.getValue(Path.of("src/storage.c")).replaceFirst("item_count", "item_total"),
+                Path.of("src/main.c") to contents.getValue(Path.of("src/main.c")).replace("item_count +=", "item_total +=").replace("item_count ==", "item_total =="),
+            )
+            typedefFamily -> mapOf(
+                Path.of("include/api.h") to contents.getValue(Path.of("include/api.h"))
+                    .replace("typedef int value_t;", "typedef int record_count_t;")
+                    .replace("value_t calculate(value_t value);", "record_count_t calculate(record_count_t value);"),
+                Path.of("src/calculate.c") to contents.getValue(Path.of("src/calculate.c"))
+                    .replace("value_t calculate(value_t value)", "record_count_t calculate(record_count_t value)"),
+                Path.of("src/main.c") to contents.getValue(Path.of("src/main.c"))
+                    .replace("    value_t result =", "    record_count_t result ="),
+            )
+            enumeratorFamily -> mapOf(
+                Path.of("include/api.h") to contents.getValue(Path.of("include/api.h"))
+                    .replaceFirst("ORDER_PENDING", "ORDER_PLACED"),
+                Path.of("src/read_order.c") to contents.getValue(Path.of("src/read_order.c"))
+                    .replace("return ORDER_PENDING", "return ORDER_PLACED"),
+                Path.of("src/main.c") to contents.getValue(Path.of("src/main.c"))
+                    .replace("read_order() == ORDER_PENDING", "read_order() == ORDER_PLACED"),
+            )
+            fieldFamily -> mapOf(
+                Path.of("include/api.h") to contents.getValue(Path.of("include/api.h"))
+                    .replace("int raw_count;", "int scaled_count;"),
+                Path.of("src/read_meter.c") to contents.getValue(Path.of("src/read_meter.c"))
+                    .replace(".raw_count =", ".scaled_count ="),
+                Path.of("src/main.c") to contents.getValue(Path.of("src/main.c"))
+                    .replace("reading.raw_count", "reading.scaled_count"),
+            )
+            multiFunctionFamily -> mapOf(
+                Path.of("include/api.h") to contents.getValue(Path.of("include/api.h"))
+                    .replace("int calculate(int value);", "int compute(int value);")
+                    .replace("int load_item(int value);", "int read_item(int value);"),
+                Path.of("src/calculate.c") to contents.getValue(Path.of("src/calculate.c"))
+                    .replace("int calculate(int value)", "int compute(int value)")
+                    .replace("int load_item(int value)", "int read_item(int value)"),
+                Path.of("src/main.c") to contents.getValue(Path.of("src/main.c"))
+                    .replace("calculate(41)", "compute(41)")
+                    .replace("load_item(41)", "read_item(41)"),
+            )
+            else -> mapOf(
+                Path.of("include/api.h") to contents.getValue(Path.of("include/api.h")).replaceFirst("calculate", "compute"),
+                Path.of("src/calculate.c") to contents.getValue(Path.of("src/calculate.c")).replaceFirst("int calculate(", "int compute("),
+                Path.of("src/main.c") to contents.getValue(Path.of("src/main.c")).replaceFirst("return calculate(", "return compute("),
+            )
+        }
+        beforeDigest = workspaceDigest(workspace)
+        snapshot = CProjectScanner().scan(workspace)
+        val discovered = ClangToolchainDiscoverer().discover(ClangToolchainRequest(
+            workspaceRoot = workspace,
+            clangExecutable = clang,
+            clangdExecutable = clangd,
+            clangFormatExecutable = clangFormat,
+        ))
+        val toolchain = assertIs<ClangToolchainDiscovery.Available>(discovered).toolchain
+        assertEquals("22.1.8", toolchain.provenance.clangVersion)
+        facade = CRefactoringFacade(toolchain)
+        daemon = DaemonSession().also { it.dispatch("project.open", buildJsonObject { put("root", workspace.toString()) }) }
+        mcp = McpSession().also { call(it, "project_scan", buildJsonObject { put("root", workspace.toString()) }) }
+        privateBefore = privateDirectories()
+    }
+
+    @When("renameSymbol is requested with {string} through library, daemon, and MCP")
+    fun requestRename(kind: String) {
+        selection = kind
+        val globalVariable = kind == "exact-global-variable-token"
+        val typedefFamily = kind == "exact-header-typedef-token"
+        val enumeratorFamily = kind == "exact-header-enumerator-token"
+        val fieldFamily = kind == "exact-header-field-token"
+        val functionParameter = kind == "exact-function-parameter-token"
+        val staticObject = kind == "exact-static-file-object-token"
+        val localVariable = kind == "exact-local-variable-token"
+        val macroGeneratedDeclaration = kind == "macro-generated-declaration-token"
+        val symbol = when { globalVariable -> "item_count"; typedefFamily -> "value_t"; enumeratorFamily -> "ORDER_PENDING"; fieldFamily -> "raw_count"; functionParameter -> "amount"; staticObject -> "file_count"; localVariable -> "local_count"; else -> "calculate" }
+        val newName = when { globalVariable -> "item_total"; typedefFamily -> "record_count_t"; enumeratorFamily -> "ORDER_PLACED"; fieldFamily -> "scaled_count"; functionParameter -> "input_amount"; staticObject -> "storage_count"; localVariable -> "local_total"; else -> "compute" }
+        val expectedPreview = kind in setOf("exact-header-token", "exact-header-tag-target", "exact-global-variable-token", "exact-header-typedef-token", "exact-header-enumerator-token", "exact-header-field-token", "exact-function-parameter-token", "exact-static-file-object-token", "exact-local-variable-token")
+        val exactSelection = kind in setOf("exact-header-token", "exact-header-collision", "exact-header-tag-target", "exact-global-variable-token", "exact-header-typedef-token", "exact-header-enumerator-token", "exact-header-field-token", "exact-function-parameter-token", "exact-static-file-object-token", "exact-local-variable-token", "macro-generated-declaration-token")
+        val args = buildMap {
+            put("symbol", symbol)
+            put("newName", newName)
+            if (exactSelection) {
+                put("file", when { localVariable -> "src/main.c"; functionParameter -> "src/calculate.c"; staticObject -> "src/storage.c"; else -> "include/api.h" })
+                put("line", when { localVariable -> "6"; fieldFamily -> "1"; functionParameter -> "2"; staticObject -> "1"; macroGeneratedDeclaration -> "4"; else -> "0" })
+                put("character", when { globalVariable -> "11"; typedefFamily -> "12"; enumeratorFamily -> "19"; fieldFamily -> "8"; functionParameter -> "18"; staticObject -> "11"; localVariable -> "8"; macroGeneratedDeclaration -> "17"; else -> "4" })
+            }
+        }
+
+        val library = requireNotNull(facade)
+        library.startFor(snapshot, "renameSymbol")
+        val libraryPlan = try {
+            library.preview(snapshot, "renameSymbol", args)
+        } finally {
+            library.close()
+        }
+        val expectedRefusalCode = when (kind) {
+            "exact-header-token", "exact-header-tag-target", "exact-global-variable-token", "exact-header-typedef-token", "exact-header-enumerator-token", "exact-header-field-token", "exact-function-parameter-token", "exact-static-file-object-token", "exact-local-variable-token" -> null
+            "name-only" -> "c.renameSymbolAmbiguous"
+            "exact-header-collision" -> "c.renameTargetIdentifierPresent"
+            "macro-generated-declaration-token" -> "c.renameMacroGeneratedSymbolUnsupported"
+            else -> error("unsupported C rename selection kind: $kind")
+        }
+        if (expectedPreview) {
+            assertEquals(PatchStatus.PREVIEW, libraryPlan.status, libraryPlan.summary)
+            assertExactBindingEdits(libraryPlan)
+        } else {
+            assertEquals(PatchStatus.REFUSED, libraryPlan.status, libraryPlan.summary)
+            assertEquals(expectedRefusalCode, libraryPlan.refusalCode)
+            if (macroGeneratedDeclaration) {
+                assertTrue(libraryPlan.workspaceEdit.edits.isEmpty(), "macro-origin refusal must not retain proposed edits")
+                assertTrue(libraryPlan.affectedFiles.isEmpty(), "macro-origin refusal must not name affected files")
+                assertEquals(null, libraryPlan.authorityLease, "macro-origin refusal must not retain mutation authority")
+                assertEquals(0.0, libraryPlan.confidence)
+            }
+        }
+
+        val rpcRequest = cPreviewRequest(args)
+        if (expectedPreview) {
+            val result = requireNotNull(daemon).dispatch("c.preview", rpcRequest).jsonObject
+            assertEquals("PREVIEW", result.getValue("status").jsonPrimitive.content, result.toString())
+            assertProtocolPreview(result.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content }.toSet(), result.getValue("renderedDiff").jsonPrimitive.content, symbol, newName)
+        } else {
+            val failure = runCatching { requireNotNull(daemon).dispatch("c.preview", rpcRequest) }.exceptionOrNull()
+            assertTypedDaemonRefusal(failure, requireNotNull(expectedRefusalCode))
+        }
+
+        val mcpText = call(requireNotNull(mcp), "preview_refactoring", buildJsonObject {
+            put("operation", "renameSymbol")
+            put("languageId", "c")
+            put("symbol", symbol)
+            put("arguments", buildJsonObject { args.forEach { (key, value) -> put(key, value) } })
+            put("clang", toolchainRoot.resolve("usr/bin/clang-22").toString())
+            put("clangd", toolchainRoot.resolve("usr/bin/clangd").toString())
+            put("clangFormat", toolchainRoot.resolve("usr/bin/clang-format").toString())
+        })
+        if (expectedPreview) {
+            assertTrue(mcpText.contains("Status   : PREVIEW"), mcpText)
+            expectedFiles.keys.forEach { path -> assertTrue(mcpText.contains("  $path\n"), mcpText) }
+        } else {
+            assertTrue(mcpText.contains("Status   : REFUSED"), mcpText)
+            assertTrue(mcpText.contains("Refusal  : $expectedRefusalCode"), mcpText)
+        }
+        outcome = if (expectedPreview) "preview" else "refused"
+        detail = "library=${libraryPlan.status}/${libraryPlan.refusalCode}; daemon=$kind; expectedRefusal=$expectedRefusalCode; MCP=${mcpText.lineSequence().firstOrNull { it.startsWith("Status") }}"
+    }
+
+    @When("renamePrefix maps API symbol {string} to {string} across library, daemon, and MCP")
+    fun requestPrefixRename(oldName: String, newName: String) {
+        val args = mapOf("rename.$oldName" to newName)
+        val library = requireNotNull(facade)
+        library.startFor(snapshot, "renamePrefix")
+        val libraryPlan = try {
+            library.preview(snapshot, "renamePrefix", args)
+        } finally {
+            library.close()
+        }
+        assertEquals(PatchStatus.PREVIEW, libraryPlan.status, libraryPlan.summary)
+        assertExactBindingEdits(libraryPlan)
+
+        val daemonResult = requireNotNull(daemon).dispatch("c.preview", cPreviewRequest(args, "renamePrefix")).jsonObject
+        assertEquals("PREVIEW", daemonResult.getValue("status").jsonPrimitive.content, daemonResult.toString())
+        assertProtocolPreview(
+            daemonResult.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content }.toSet(),
+            daemonResult.getValue("renderedDiff").jsonPrimitive.content,
+            oldName,
+            newName,
+        )
+
+        val mcpText = call(requireNotNull(mcp), "preview_refactoring", buildJsonObject {
+            put("operation", "renamePrefix")
+            put("languageId", "c")
+            put("arguments", buildJsonObject { args.forEach { (key, value) -> put(key, value) } })
+            put("clang", toolchainRoot.resolve("usr/bin/clang-22").toString())
+            put("clangd", toolchainRoot.resolve("usr/bin/clangd").toString())
+            put("clangFormat", toolchainRoot.resolve("usr/bin/clang-format").toString())
+        })
+        assertTrue(mcpText.contains("Status   : PREVIEW"), mcpText)
+        expectedFiles.keys.forEach { path -> assertTrue(mcpText.contains("  $path\n"), mcpText) }
+        outcome = "preview"
+        detail = "library=${libraryPlan.status}; daemon=${daemonResult.getValue("status").jsonPrimitive.content}; MCP=${mcpText.lineSequence().firstOrNull { it.startsWith("Status") }}"
+    }
+
+    @When("the C CLI previews rename-prefix mapping {string} to {string}")
+    fun requestPrefixRenameFromCli(oldName: String, newName: String) {
+        val result = captureCliOutput(listOf(
+            "c", "rename-prefix", requireNotNull(root).toString(),
+            "--mapping", "$oldName=$newName",
+            "--clang", toolchainRoot.resolve("usr/bin/clang-22").toString(),
+            "--clangd", toolchainRoot.resolve("usr/bin/clangd").toString(),
+            "--clang-format", toolchainRoot.resolve("usr/bin/clang-format").toString(),
+        ))
+        cliExitCode = result.exitCode
+        cliOutput = result.stdout
+        detail = "CLI exit=$cliExitCode; stderr=${result.stderr}; stdout=$cliOutput"
+    }
+
+    @When("the C CLI previews rename-prefix mappings {string}")
+    fun requestMultiplePrefixRenamesFromCli(mappings: String) {
+        val result = captureCliOutput(listOf(
+            "c", "rename-prefix", requireNotNull(root).toString(),
+            "--mapping", mappings,
+            "--clang", toolchainRoot.resolve("usr/bin/clang-22").toString(),
+            "--clangd", toolchainRoot.resolve("usr/bin/clangd").toString(),
+            "--clang-format", toolchainRoot.resolve("usr/bin/clang-format").toString(),
+        ))
+        cliExitCode = result.exitCode
+        cliOutput = result.stdout
+        detail = "CLI exit=$cliExitCode; stderr=${result.stderr}; stdout=$cliOutput"
+    }
+
+    private data class CapturedCliResult(val exitCode: Int, val stdout: String, val stderr: String)
+
+    private fun captureCliOutput(arguments: List<String>): CapturedCliResult = synchronized(CLI_CAPTURE_MONITOR) {
+        val previousOut = System.out
+        val previousErr = System.err
+        val stdout = ByteArrayOutputStream()
+        val stderr = ByteArrayOutputStream()
+        val output = PrintStream(stdout, true, StandardCharsets.UTF_8)
+        val error = PrintStream(stderr, true, StandardCharsets.UTF_8)
+        try {
+            System.setOut(output)
+            System.setErr(error)
+            val exitCode = RefactorKitCli().run(arguments)
+            CapturedCliResult(exitCode, stdout.toString(StandardCharsets.UTF_8), stderr.toString(StandardCharsets.UTF_8))
+        } finally {
+            System.setOut(previousOut)
+            System.setErr(previousErr)
+            output.close()
+            error.close()
+        }
+    }
+
+    @Then("the C CLI returns a preview for exactly the binding-matched API family")
+    fun assertCliPrefixPreview() {
+        assertEquals(0, cliExitCode, detail)
+        val result = kotlinx.serialization.json.Json.parseToJsonElement(cliOutput).jsonObject
+        assertEquals("PREVIEW", result.getValue("status").jsonPrimitive.content, result.toString())
+        assertProtocolPreview(
+            result.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content }.toSet(),
+            result.getValue("renderedDiff").jsonPrimitive.content,
+            "calculate",
+            "compute",
+        )
+        outcome = "preview"
+    }
+
+    @Then("the C CLI returns both exact binding-matched API families")
+    fun assertCliMultiplePrefixPreview() {
+        assertEquals(0, cliExitCode, detail)
+        val result = kotlinx.serialization.json.Json.parseToJsonElement(cliOutput).jsonObject
+        assertEquals("PREVIEW", result.getValue("status").jsonPrimitive.content, result.toString())
+        assertEquals("Rename 2 compiler-proven C API symbol(s)", result.getValue("summary").jsonPrimitive.content, result.toString())
+
+        val library = requireNotNull(facade)
+        library.startFor(snapshot, "renamePrefix")
+        val libraryPlan = try {
+            library.preview(snapshot, "renamePrefix", mapOf("rename.calculate" to "compute", "rename.load_item" to "read_item"))
+        } finally {
+            library.close()
+        }
+        assertEquals(PatchStatus.PREVIEW, libraryPlan.status, libraryPlan.summary)
+        assertExactBindingEdits(libraryPlan)
+        assertEquals(
+            expectedFiles.keys.map(Path::toString).toSet(),
+            result.getValue("affectedFiles").jsonArray.map { it.jsonPrimitive.content }.toSet(),
+        )
+        val cliDiff = result.getValue("renderedDiff").jsonPrimitive.content
+        val expectedDiff = PatchDiffRenderer.render(snapshot, libraryPlan.workspaceEdit).renderedDiff
+        assertEquals(expectedDiff, cliDiff, "CLI must forward both explicit mappings and return their exact preview diff")
+    }
+
+    @Then("all surfaces return {string} with exact binding-matched edits or a typed refusal")
+    fun assertOutcome(expected: String) = assertEquals(expected, outcome, detail)
+
+    @Then("preview leaves every project byte unchanged with no transaction")
+    fun assertPreviewIsReadOnly() {
+        val workspace = requireNotNull(root)
+        assertEquals(beforeDigest, workspaceDigest(workspace), "previews must preserve project bytes")
+        assertFalse(Files.exists(workspace.resolve(".refactorkit/transactions")), "preview must not create transaction records")
+        assertEquals(snapshot.hash, CProjectScanner().scan(workspace).hash)
+        assertEquals(privateBefore, privateDirectories(), "semantic process temporary directories must be released")
+    }
+
+    private fun assertExactBindingEdits(plan: PatchPlan) {
+        val changes = plan.workspaceEdit.edits.filterIsInstance<FileEdit.Modify>().associate { it.path.normalize() to it.textEdits }
+        assertEquals(expectedFiles.keys, changes.keys)
+        assertEquals(expectedFiles.keys, plan.affectedFiles)
+        expectedFiles.forEach { (path, expected) ->
+            assertEquals(expected, TextEdits.apply(originalFiles.getValue(path), changes.getValue(path)), "binding edit for $path")
+        }
+    }
+
+    private fun assertProtocolPreview(paths: Set<String>, diff: String, symbol: String, newName: String) {
+        assertEquals(expectedFiles.keys.map(Path::toString).toSet(), paths)
+        assertTrue(diff.contains(symbol) && diff.contains(newName), diff)
+    }
+
+    private fun cPreviewRequest(args: Map<String, String>, operation: String = "renameSymbol") = buildJsonObject {
+        put("operation", operation)
+        put("arguments", buildJsonObject { args.forEach { (key, value) -> put(key, value) } })
+        put("clang", toolchainRoot.resolve("usr/bin/clang-22").toString())
+        put("clangd", toolchainRoot.resolve("usr/bin/clangd").toString())
+        put("clangFormat", toolchainRoot.resolve("usr/bin/clang-format").toString())
+    }
+
+    private fun assertTypedDaemonRefusal(failure: Throwable?, expectedRefusalCode: String) {
+        val refused = assertIs<JsonRpcException>(failure)
+        assertEquals(JsonRpcErrorCodes.PLAN_REFUSED, refused.code)
+        val data = assertIs<JsonObject>(assertNotNull(refused.data))
+        assertEquals(expectedRefusalCode, data.getValue("refusalCode").jsonPrimitive.content)
+    }
+
+    private fun call(session: McpSession, name: String, arguments: JsonObject): String =
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", name)
+            put("arguments", arguments)
+        }).jsonObject.getValue("content").jsonArray.first().jsonObject.getValue("text").jsonPrimitive.content
+
+    private fun workspaceDigest(workspace: Path): Map<Path, String> = Files.walk(workspace).use { paths ->
+        paths.filter(Files::isRegularFile).toList().associate { file ->
+            workspace.relativize(file) to MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file))
+                .joinToString("") { byte -> "%02x".format(byte) }
+        }
+    }
+
+    private fun privateDirectories(): Set<Path> = Files.list(Path.of(System.getProperty("java.io.tmpdir"))).use { paths ->
+        paths.filter { path -> path.fileName.toString().startsWith("refactorkit-clangd-launch-") || path.fileName.toString().startsWith("refactorkit-semantic-overlay-") }
+            .toList().toSet()
+    }
+
+    @After
+    fun cleanup() {
+        facade?.close()
+        daemon?.close()
+        mcp?.close()
+        root?.let { workspace ->
+            if (Files.exists(workspace)) Files.walk(workspace).use { paths ->
+                paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
+            }
+        }
+    }
+}

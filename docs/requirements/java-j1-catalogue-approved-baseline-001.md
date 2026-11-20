@@ -21,6 +21,12 @@ authoritative bounded scope for Java 0.7.x work; nothing outside it is claimed.
 
 - Q-CS1..Q-CS5: `changeSignature` renameParameter / addParameter / removeParameter /
   reorderParameters / changeParameterType (java-jdt-change-signature acceptance).
+- Q-CS1..Q-CS5 freeze the bounded JDT planner behavior covered by that acceptance; they do
+  not promote Java `LanguageCapability` status or authorize IDE-managed Apply. The five
+  operations remain `EXPERIMENTAL`/`PROPOSAL_ONLY` until the existing P0/P1 support-discovery
+  and per-operation Story BDD/managed-Apply qualification in
+  [integration-contracts](../integration-contracts.md) is complete. An existing narrow
+  `renameParameter` integration does not qualify sibling operations.
 - Q-MOVE: `moveClass` bounded package migration, guidance, lexical review, structural/freshness
   refusals (REQ-JAVA-MAVEN-MOVE-AUTH-001..013).
 - Q-OWN: complete non-generated root moved between existing Maven modules with one exact literal

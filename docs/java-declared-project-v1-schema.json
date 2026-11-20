@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.org/schemas/java-declared-project-v1.json",
+  "title": "RefactorKit explicit Java project declaration v1",
+  "$comment": "Java adapter declaration only; ARC42 appendix java-declared-project-provider-2026-11-13 owns qualification, java-project-context-protocol.md owns wire/configuration details. Runtime checks UTF-8 byte bounds, nesting/duplicate JSON keys, normalized owned paths, SDK identity, unique IDs/output ownership, source/generated containment and classpath capture. Total sets256/roots1024 are cross-module runtime bounds. Java26/27 semantic support is unqualified; v6/v7 metadata only, independently qualified matrix still required.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sdkHome",
+    "modules"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "java-declared-project-v1"
+    },
+    "sdkHome": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/module"
+      }
+    }
+  },
+  "$defs": {
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "root",
+        "sourceSets"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sourceSets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/sourceSet"
+          }
+        }
+      }
+    },
+    "sourceSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "sourceRoots",
+        "generatedSourceRoots",
+        "outputDirectories",
+        "compileClasspath",
+        "runtimeClasspath",
+        "release",
+        "proc"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "kind": {
+          "enum": [
+            "main",
+            "test",
+            "integration-test",
+            "custom"
+          ]
+        },
+        "sourceRoots": {
+          "type": "array",
+          "maxItems": 256,
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "generatedSourceRoots": {
+          "type": "array",
+          "maxItems": 256,
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "outputDirectories": {
+          "type": "array",
+          "maxItems": 256,
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "compileClasspath": {
+          "type": "array",
+          "maxItems": 256,
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "runtimeClasspath": {
+          "type": "array",
+          "maxItems": 256,
+          "minItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "release": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 27
+        },
+        "proc": {
+          "const": "none"
+        }
+      }
+    }
+  }
+}

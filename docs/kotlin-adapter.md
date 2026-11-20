@@ -43,6 +43,10 @@ All remaining `.kt` operations and all `.kts` script semantics remain
 `kotlin.toolchainNotConfigured`; no lexical or structural fallback is fabricated.
 Refactoring requests still return edit-free refused plans and cannot reach
 `PatchEngine`.
+The broader `.kts` qualification scope remains tracked under
+[`REQ-KOTLIN-MATRIX-001`](requirements/kotlin-advanced-shapes-and-platform-matrices.md);
+the current `scriptSemantics=refused` boundary remains in force until those cases
+are independently qualified.
 
 ## Compiler diagnostics session
 

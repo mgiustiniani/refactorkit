@@ -68,10 +68,11 @@ data class CSymbolIndex(
         require(units.map { it.file }.distinct().size == units.size) { "C symbol index contains duplicate translation units" }
     }
 
-    /** Adds a unit, enforcing the bounded unit count. */
-    fun add(unit: CTranslationUnitIndex) {
+    /** Returns a new index with the unit appended, preserving this index. */
+    fun add(unit: CTranslationUnitIndex): CSymbolIndex {
         require(units.size + 1 <= MAX_UNITS) { "C symbol index unit count exceeds the bounded limit" }
         require(units.none { it.file == unit.file }) { "C symbol index contains duplicate translation units" }
+        return copy(units = units + unit)
     }
 
     fun search(query: String): List<CSymbolIdentity> = units.flatMap { it.search(query) }.take(MAX_RESULTS)

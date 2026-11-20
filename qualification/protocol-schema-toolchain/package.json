@@ -1,0 +1,11 @@
+{
+  "name": "refactorkit-protocol-schema-qualification",
+  "version": "0.8.0",
+  "private": true,
+  "description": "Pinned native protocol schema qualification infrastructure: legacy Ajv6 plus unmodified Draft2020-12 validation with Ajv8; no production dependency.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "ajv": "6.15.0",
+    "ajv2020": "npm:ajv@8.20.0"
+  }
+}

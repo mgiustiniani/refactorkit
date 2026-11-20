@@ -55,6 +55,12 @@ A refused move is a safety result. Do not emulate it with filesystem moves plus
 text replacement; request a corrected preview or perform a manually reviewed
 change outside the deterministic workflow.
 
+For a cross-module move in an SDK-bound Gradle context, `java.moveClass.gradleCompilerOutputsMissing`
+reports that a source set with JDT type-resolution errors has an evaluated compile classpath
+with missing project outputs. Compile the affected source sets and synchronize Gradle before
+retrying. If JDT bindings are already complete, an unbuilt source-only project can still
+preview the move. Preview checks the original and staged bindings and diagnostics.
+
 ## Warnings and manual-review areas
 
 Move class is medium risk by default and high risk when recognized framework

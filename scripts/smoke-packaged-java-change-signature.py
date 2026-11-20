@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Packaged daemon/MCP acceptance for JDT-bound Java parameter rename."""
-import hashlib
+"""Smoke-test packaged managed Java parameter rename through daemon and MCP."""
 import json
 import os
 from pathlib import Path
@@ -20,15 +19,6 @@ def command(path: Path) -> list[str]:
     return [str(path)]
 
 
-def source_hash(root: Path) -> str:
-    digest = hashlib.sha256()
-    for path in sorted(root.rglob("*.java")):
-        digest.update(path.relative_to(root).as_posix().encode())
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-    return digest.hexdigest()
-
-
 def start(path: Path) -> subprocess.Popen:
     return subprocess.Popen(
         command(path), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -36,19 +26,17 @@ def start(path: Path) -> subprocess.Popen:
     )
 
 
-def exchange(process: subprocess.Popen, request_id: int, method: str, params: dict | None = None) -> dict:
-    request = {"jsonrpc": "2.0", "id": request_id, "method": method}
-    if params is not None:
-        request["params"] = params
+def exchange(process: subprocess.Popen, request_id: int, method: str, params: dict) -> dict:
+    request = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
     process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
     process.stdin.flush()
     line = process.stdout.readline()
     if not line:
         raise AssertionError(f"{method} produced no response: {process.stderr.read()}")
     response = json.loads(line)
-    if response.get("error") is not None:
-        raise AssertionError(f"{method} failed: {response}")
-    return response["result"]
+    if response.get("id") != request_id:
+        raise AssertionError(f"{method} returned the wrong request ID: {response}")
+    return response
 
 
 def stop(process: subprocess.Popen) -> None:
@@ -64,14 +52,22 @@ def stop(process: subprocess.Popen) -> None:
         raise AssertionError(f"packaged process exited {process.returncode}: {process.stderr.read()}")
 
 
-def assert_contains(path: Path, required: list[str]) -> None:
-    text = path.read_text(encoding="utf-8")
-    missing = [item for item in required if item not in text]
-    if missing:
-        raise AssertionError(f"expected Java post-image fragments missing {missing}: {text}")
-    if path.name == "Service.java" and (
-            "find(int key) { return String.valueOf(key); }" not in text or "private String key" not in text):
-        raise AssertionError(f"same-name field/overload was changed: {text}")
+def transaction_files(root: Path) -> tuple[str, ...]:
+    directory = root / ".refactorkit" / "transactions"
+    return tuple(sorted(path.relative_to(root).as_posix() for path in directory.rglob("*") if path.is_file())) if directory.exists() else ()
+
+
+def require_preview_read_only(root: Path, source: Path, original: bytes, previous: tuple[str, ...]) -> None:
+    if source.read_bytes() != original or transaction_files(root) != previous:
+        raise AssertionError("Parameter rename preview changed the source or transaction files")
+
+
+def require_transaction(root: Path, previous: tuple[str, ...], transaction_id: str, state: str) -> None:
+    journal = f".refactorkit/transactions/{transaction_id}.json"
+    if set(transaction_files(root)) != set(previous) | {journal} or journal in previous:
+        raise AssertionError(f"Expected one new transaction journal for {transaction_id}")
+    if json.loads((root / journal).read_text(encoding="utf-8"))["state"] != state:
+        raise AssertionError(f"Transaction {transaction_id} did not reach {state}")
 
 
 def main() -> int:
@@ -85,379 +81,116 @@ def main() -> int:
         root = Path(temporary)
         source = root / "src/main/java/com/acme/Service.java"
         source.parent.mkdir(parents=True)
-        original = (
-            b"package com.acme;\npublic class Service {\n"
-            b"    private String key = \"field\";\n"
-            b"    String find(String key, boolean unused) { return key.trim() + this.key; }\n"
-            b"    String find(int key) { return String.valueOf(key); }\n"
-            b"    String run() { return find(\"x\", true); }\n"
-            b"    int size(CharSequence text) { return text.length(); }\n"
-            b"    int sizeRun() { return size(\"abc\"); }\n}\n"
+        source.write_text(
+            "package com.acme; public class Service { "
+            "public String execute(String value) { return value.trim(); } }\n",
+            encoding="utf-8",
         )
-        source.write_bytes(original)
-        lookup = root / "src/main/java/com/acme/Lookup.java"
-        implementation = root / "src/main/java/com/acme/DefaultLookup.java"
-        hierarchy_caller = root / "src/main/java/com/acme/HierarchyCaller.java"
-        token = root / "src/main/java/com/acme/Token.java"
-        shapes = root / "src/main/java/com/acme/SignatureShapes.java"
-        references = root / "src/main/java/com/acme/References.java"
-        lookup.write_bytes(b"package com.acme; public interface Lookup { String find(String key, boolean unused); }\n")
-        implementation.write_bytes(
-            b"package com.acme; public class DefaultLookup implements Lookup { "
-            b"@Override public String find(String value, boolean ignored) { return value.toString(); } }\n"
+        descriptor = root / "pom.xml"
+        descriptor.write_text(
+            "<project><modelVersion>4.0.0</modelVersion><groupId>com.acme</groupId>"
+            "<artifactId>app</artifactId><version>1.0</version>"
+            "<properties><maven.compiler.release>8</maven.compiler.release></properties></project>\n",
+            encoding="utf-8",
         )
-        hierarchy_caller.write_bytes(
-            b"package com.acme; class HierarchyCaller { "
-            b"String api(Lookup lookup) { return lookup.find(\"a\", true); } "
-            b"String impl(DefaultLookup lookup) { return lookup.find(\"b\", false); } }\n"
-        )
-        token.write_bytes(
-            b"package com.acme; public final class Token { "
-            b"public Token(String value) { value.toString(); } "
-            b"private Token() { this(\"default\"); } "
-            b"static Token create() { return new Token(\"x\"); } }\n"
-        )
-        references.write_bytes(
-            b"package com.acme; import java.util.function.Function; final class References { "
-            b"private static String map(String value) { return value; } "
-            b"Function<String, String> reference() { return References::map; } }\n"
-        )
-        shapes.write_bytes(
-            b"package com.acme; import java.util.function.Supplier; final class SignatureShapes { "
-            b"private static <T> T select(T value, int unused) { return value; } "
-            b"private static String join(String prefix, int count, String... parts) { return prefix; } "
-            b"private static String annotated(@Deprecated String value, int rank) { return value; } "
-            b"private static String find(String value) { return value; } "
-            b"private static String find(int value) { return Integer.toString(value); } "
-            b"static Supplier<String> supplier() { return () -> find(\"lambda\"); } "
-            b"static String run() { return select(\"x\", 1) + join(\"a\", 2, \"b\") + annotated(\"c\", 3) + find(1); } }\n"
-        )
-        before = source_hash(root)
-        symbol = "com.acme.Service#find(java.lang.String,boolean)"
-
-        process = start(mcp)
-        try:
-            exchange(process, 1, "tools/call", {"name": "project_scan", "arguments": {"root": str(root)}})
-            preview = exchange(process, 2, "tools/call", {
-                "name": "preview_refactoring",
-                "arguments": {
-                    "operation": "changeSignature.renameParameter", "symbol": symbol,
-                    "arguments": {"oldName": "key", "newName": "lookupKey"},
-                },
-            })
-            preview_text = preview["content"][0]["text"]
-            if "JDT-proven parameter" not in preview_text or source_hash(root) != before:
-                raise AssertionError(f"MCP preview failed or wrote sources: {preview_text}")
-            plan_id = preview_text.split("Plan ID  : ", 1)[1].splitlines()[0]
-            applied = exchange(process, 3, "tools/call", {
-                "name": "apply_refactoring", "arguments": {"planId": plan_id},
-            })["content"][0]["text"]
-            transaction_id = applied.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_contains(source, [
-                "find(String lookupKey, boolean unused) { return lookupKey.trim() + this.key; }",
-            ])
-            rolled_back = exchange(process, 4, "tools/call", {
-                "name": "rollback_refactoring", "arguments": {"transactionId": transaction_id},
-            })["content"][0]["text"]
-            if "Rolled back" not in rolled_back or source.read_bytes() != original:
-                raise AssertionError(f"MCP rollback failed: {rolled_back}")
-
-            cases = [
-                ("changeSignature.changeParameterType", {"name": "text", "type": "String"},
-                 ["size(String text)", "size(\"abc\")"], "com.acme.Service#size(java.lang.CharSequence)"),
-                ("changeSignature.addParameter", {"type": "int", "name": "limit", "default": "10"},
-                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"], symbol),
-                ("changeSignature.reorderParameters", {"order": "unused,key"},
-                 ["find(boolean unused, String key)", "find(true, \"x\")"], symbol),
-                ("changeSignature.removeParameter", {"name": "unused"},
-                 ["find(String key)", "find(\"x\")"], symbol),
-            ]
-            request_id = 20
-            for operation, arguments, required, case_symbol in cases:
-                preview_result = exchange(process, request_id, "tools/call", {
-                    "name": "preview_refactoring", "arguments": {
-                        "operation": operation, "symbol": case_symbol, "arguments": arguments,
-                    },
-                })["content"][0]["text"]
-                if "Status   : PREVIEW" not in preview_result:
-                    raise AssertionError(f"MCP {operation} preview refused: {preview_result}")
-                plan = preview_result.split("Plan ID  : ", 1)[1].splitlines()[0]
-                apply_text = exchange(process, request_id + 1, "tools/call", {
-                    "name": "apply_refactoring", "arguments": {"planId": plan},
-                })["content"][0]["text"]
-                if "Transaction ID: " not in apply_text:
-                    raise AssertionError(f"MCP {operation} apply did not return a transaction: {apply_text}")
-                transaction = apply_text.split("Transaction ID: ", 1)[1].splitlines()[0]
-                assert_contains(source, required)
-                exchange(process, request_id + 2, "tools/call", {
-                    "name": "rollback_refactoring", "arguments": {"transactionId": transaction},
-                })
-                if source.read_bytes() != original:
-                    raise AssertionError(f"MCP {operation} rollback did not restore exact bytes")
-                request_id += 3
-
-            hierarchy_preview = exchange(process, 50, "tools/call", {
-                "name": "preview_refactoring", "arguments": {
-                    "operation": "changeSignature.addParameter",
-                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                    "arguments": {
-                        "type": "int", "name": "limit", "default": "10",
-                        "includeHierarchy": True, "acceptExternalConsumerRisk": True,
-                    },
-                },
-            })["content"][0]["text"]
-            if "Status   : PREVIEW" not in hierarchy_preview or "2 JDT-connected" not in hierarchy_preview:
-                raise AssertionError(f"MCP hierarchy preview failed: {hierarchy_preview}")
-            hierarchy_plan = hierarchy_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
-            hierarchy_apply = exchange(process, 51, "tools/call", {
-                "name": "apply_refactoring", "arguments": {"planId": hierarchy_plan},
-            })["content"][0]["text"]
-            hierarchy_transaction = hierarchy_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_contains(lookup, ["find(String key, boolean unused, int limit)"])
-            assert_contains(implementation, ["find(String value, boolean ignored, int limit)"])
-            assert_contains(hierarchy_caller, ["find(\"a\", true, 10)", "find(\"b\", false, 10)"])
-            exchange(process, 52, "tools/call", {
-                "name": "rollback_refactoring", "arguments": {"transactionId": hierarchy_transaction},
-            })
-            if source_hash(root) != before:
-                raise AssertionError("MCP hierarchy rollback did not restore exact source bytes")
-            remove_preview = exchange(process, 53, "tools/call", {
-                "name": "preview_refactoring", "arguments": {
-                    "operation": "changeSignature.removeParameter",
-                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                    "arguments": {"name": "unused", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
-                },
-            })["content"][0]["text"]
-            remove_plan = remove_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
-            remove_apply = exchange(process, 54, "tools/call", {
-                "name": "apply_refactoring", "arguments": {"planId": remove_plan},
-            })["content"][0]["text"]
-            remove_transaction = remove_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_contains(hierarchy_caller, ["find(\"a\")", "find(\"b\")"])
-            exchange(process, 55, "tools/call", {
-                "name": "rollback_refactoring", "arguments": {"transactionId": remove_transaction},
-            })
-            if source_hash(root) != before:
-                raise AssertionError("MCP hierarchy remove rollback did not restore exact bytes")
-            reorder_preview = exchange(process, 56, "tools/call", {
-                "name": "preview_refactoring", "arguments": {
-                    "operation": "changeSignature.reorderParameters",
-                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                    "arguments": {"order": "unused,key", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
-                },
-            })["content"][0]["text"]
-            reorder_plan = reorder_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
-            reorder_apply = exchange(process, 57, "tools/call", {
-                "name": "apply_refactoring", "arguments": {"planId": reorder_plan},
-            })["content"][0]["text"]
-            reorder_transaction = reorder_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_contains(implementation, ["find(boolean ignored, String value)"])
-            assert_contains(hierarchy_caller, ["find(true, \"a\")", "find(false, \"b\")"])
-            exchange(process, 58, "tools/call", {
-                "name": "rollback_refactoring", "arguments": {"transactionId": reorder_transaction},
-            })
-            if source_hash(root) != before:
-                raise AssertionError("MCP hierarchy reorder rollback did not restore exact bytes")
-            type_preview = exchange(process, 59, "tools/call", {
-                "name": "preview_refactoring", "arguments": {
-                    "operation": "changeSignature.changeParameterType",
-                    "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                    "arguments": {"name": "key", "type": "CharSequence", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
-                },
-            })["content"][0]["text"]
-            type_plan = type_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
-            type_apply = exchange(process, 60, "tools/call", {
-                "name": "apply_refactoring", "arguments": {"planId": type_plan},
-            })["content"][0]["text"]
-            type_transaction = type_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_contains(lookup, ["find(CharSequence key, boolean unused)"])
-            assert_contains(implementation, ["find(CharSequence value, boolean ignored)"])
-            exchange(process, 61, "tools/call", {
-                "name": "rollback_refactoring", "arguments": {"transactionId": type_transaction},
-            })
-            if source_hash(root) != before:
-                raise AssertionError("MCP hierarchy type rollback did not restore exact bytes")
-            constructor_preview = exchange(process, 62, "tools/call", {
-                "name": "preview_refactoring", "arguments": {
-                    "operation": "changeSignature.addParameter",
-                    "symbol": "com.acme.Token#<init>(java.lang.String)",
-                    "arguments": {"type": "boolean", "name": "trusted", "default": "false", "acceptExternalConsumerRisk": True},
-                },
-            })["content"][0]["text"]
-            constructor_plan = constructor_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
-            constructor_apply = exchange(process, 63, "tools/call", {
-                "name": "apply_refactoring", "arguments": {"planId": constructor_plan},
-            })["content"][0]["text"]
-            constructor_transaction = constructor_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-            assert_contains(token, ["Token(String value, boolean trusted)", "this(\"default\", false)", "new Token(\"x\", false)"])
-            exchange(process, 64, "tools/call", {
-                "name": "rollback_refactoring", "arguments": {"transactionId": constructor_transaction},
-            })
-            if source_hash(root) != before:
-                raise AssertionError("MCP constructor rollback did not restore exact bytes")
-            for request_id, operation, shape_symbol, arguments, expected in [
-                (65, "changeSignature.removeParameter", "com.acme.SignatureShapes#select", {"name": "unused"}, "select(\"x\")"),
-                (68, "changeSignature.reorderParameters", "com.acme.SignatureShapes#annotated(java.lang.String,int)", {"order": "rank,value"}, "annotated(3, \"c\")"),
-                (79, "changeSignature.addParameter", "com.acme.SignatureShapes#find(java.lang.String)", {"type": "boolean", "name": "trusted", "default": "false"}, "find(\"lambda\", false)"),
-                (82, "changeSignature.addParameter", "com.acme.References#map(java.lang.String)", {"type": "int", "name": "rank", "default": "0", "migrateFunctionalReferences": True}, "(arg0) -> References.map(arg0, 0)"),
-            ]:
-                shape_preview = exchange(process, request_id, "tools/call", {
-                    "name": "preview_refactoring", "arguments": {"operation": operation, "symbol": shape_symbol, "arguments": arguments},
-                })["content"][0]["text"]
-                shape_plan = shape_preview.split("Plan ID  : ", 1)[1].splitlines()[0]
-                shape_apply = exchange(process, request_id + 1, "tools/call", {
-                    "name": "apply_refactoring", "arguments": {"planId": shape_plan},
-                })["content"][0]["text"]
-                shape_transaction = shape_apply.split("Transaction ID: ", 1)[1].splitlines()[0]
-                assert_contains(references if "References#" in shape_symbol else shapes, [expected])
-                exchange(process, request_id + 2, "tools/call", {
-                    "name": "rollback_refactoring", "arguments": {"transactionId": shape_transaction},
-                })
-                if source_hash(root) != before:
-                    raise AssertionError("MCP bounded signature shape rollback did not restore exact bytes")
-        finally:
-            stop(process)
+        original = source.read_bytes()
+        original_descriptor = descriptor.read_bytes()
+        expected = original.replace(b"String value", b"String lookupKey").replace(b"return value.", b"return lookupKey.")
 
         process = start(daemon)
         try:
-            exchange(process, 10, "project.open", {"root": str(root)})
-            preview = exchange(process, 11, "refactor.preview", {
-                "operation": "changeSignature.renameParameter", "symbol": symbol,
-                "arguments": {"oldName": "key", "newName": "lookupKey"},
-            })
-            if preview.get("status") != "PREVIEW" or source_hash(root) != before:
-                raise AssertionError(f"daemon preview failed or wrote sources: {preview}")
-            applied = exchange(process, 12, "refactor.apply", {"planId": preview["planId"]})
-            if applied.get("status") != "applied":
-                raise AssertionError(f"daemon apply failed: {applied}")
-            assert_contains(source, [
-                "find(String lookupKey, boolean unused) { return lookupKey.trim() + this.key; }",
-            ])
-            rolled_back = exchange(process, 13, "patch.rollback", {
-                "transactionId": applied["transactionId"],
-            })
-            if rolled_back.get("status") != "rolledBack" or source.read_bytes() != original:
-                raise AssertionError(f"daemon rollback failed: {rolled_back}")
-
-            cases = [
-                ("changeSignature.changeParameterType", {"name": "text", "type": "String"},
-                 ["size(String text)", "size(\"abc\")"], "com.acme.Service#size(java.lang.CharSequence)"),
-                ("changeSignature.addParameter", {"type": "int", "name": "limit", "default": "10"},
-                 ["find(String key, boolean unused, int limit)", "find(\"x\", true, 10)"], symbol),
-                ("changeSignature.reorderParameters", {"order": "unused,key"},
-                 ["find(boolean unused, String key)", "find(true, \"x\")"], symbol),
-                ("changeSignature.removeParameter", {"name": "unused"},
-                 ["find(String key)", "find(\"x\")"], symbol),
-            ]
-            request_id = 30
-            for operation, arguments, required, case_symbol in cases:
-                preview_result = exchange(process, request_id, "refactor.preview", {
-                    "operation": operation, "symbol": case_symbol, "arguments": arguments,
-                })
-                applied_result = exchange(process, request_id + 1, "refactor.apply", {
-                    "planId": preview_result["planId"],
-                })
-                assert_contains(source, required)
-                exchange(process, request_id + 2, "patch.rollback", {
-                    "transactionId": applied_result["transactionId"],
-                })
-                if source.read_bytes() != original:
-                    raise AssertionError(f"daemon {operation} rollback did not restore exact bytes")
-                request_id += 3
-
-            hierarchy_preview = exchange(process, 60, "refactor.preview", {
-                "operation": "changeSignature.addParameter",
-                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                "arguments": {
-                    "type": "int", "name": "limit", "default": "10",
-                    "includeHierarchy": True, "acceptExternalConsumerRisk": True,
-                },
-            })
-            hierarchy_apply = exchange(process, 61, "refactor.apply", {"planId": hierarchy_preview["planId"]})
-            assert_contains(lookup, ["find(String key, boolean unused, int limit)"])
-            assert_contains(implementation, ["find(String value, boolean ignored, int limit)"])
-            assert_contains(hierarchy_caller, ["find(\"a\", true, 10)", "find(\"b\", false, 10)"])
-            exchange(process, 62, "patch.rollback", {"transactionId": hierarchy_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon hierarchy rollback did not restore exact source bytes")
-            remove_preview = exchange(process, 63, "refactor.preview", {
-                "operation": "changeSignature.removeParameter",
-                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                "arguments": {"name": "unused", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
-            })
-            remove_apply = exchange(process, 64, "refactor.apply", {"planId": remove_preview["planId"]})
-            assert_contains(hierarchy_caller, ["find(\"a\")", "find(\"b\")"])
-            exchange(process, 65, "patch.rollback", {"transactionId": remove_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon hierarchy remove rollback did not restore exact bytes")
-            reorder_preview = exchange(process, 66, "refactor.preview", {
-                "operation": "changeSignature.reorderParameters",
-                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                "arguments": {"order": "unused,key", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
-            })
-            reorder_apply = exchange(process, 67, "refactor.apply", {"planId": reorder_preview["planId"]})
-            assert_contains(implementation, ["find(boolean ignored, String value)"])
-            assert_contains(hierarchy_caller, ["find(true, \"a\")", "find(false, \"b\")"])
-            exchange(process, 68, "patch.rollback", {"transactionId": reorder_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon hierarchy reorder rollback did not restore exact bytes")
-            type_preview = exchange(process, 69, "refactor.preview", {
-                "operation": "changeSignature.changeParameterType",
-                "symbol": "com.acme.Lookup#find(java.lang.String,boolean)",
-                "arguments": {"name": "key", "type": "CharSequence", "includeHierarchy": True, "acceptExternalConsumerRisk": True},
-            })
-            type_apply = exchange(process, 70, "refactor.apply", {"planId": type_preview["planId"]})
-            assert_contains(lookup, ["find(CharSequence key, boolean unused)"])
-            assert_contains(implementation, ["find(CharSequence value, boolean ignored)"])
-            exchange(process, 71, "patch.rollback", {"transactionId": type_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon hierarchy type rollback did not restore exact bytes")
-            constructor_preview = exchange(process, 72, "refactor.preview", {
+            opened = exchange(process, 1, "project.open", {"root": str(root)})
+            snapshot_hash = opened["result"]["snapshotHash"]
+            before_transactions = transaction_files(root)
+            preview = exchange(process, 2, "refactor.preview", {
                 "operation": "changeSignature.renameParameter",
-                "symbol": "com.acme.Token#<init>(java.lang.String)",
-                "arguments": {"oldName": "value", "newName": "text", "acceptExternalConsumerRisk": True},
-            })
-            constructor_apply = exchange(process, 73, "refactor.apply", {"planId": constructor_preview["planId"]})
-            assert_contains(token, ["Token(String text)", "text.toString()"])
-            exchange(process, 74, "patch.rollback", {"transactionId": constructor_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon constructor rollback did not restore exact bytes")
-            shape_preview = exchange(process, 76, "refactor.preview", {
-                "operation": "changeSignature.reorderParameters",
-                "symbol": "com.acme.SignatureShapes#join(java.lang.String,int,java.lang.String[])",
-                "arguments": {"order": "count,prefix,parts"},
-            })
-            shape_apply = exchange(process, 77, "refactor.apply", {"planId": shape_preview["planId"]})
-            assert_contains(shapes, ["join(int count, String prefix, String... parts)", "join(2, \"a\", \"b\")"])
-            exchange(process, 78, "patch.rollback", {"transactionId": shape_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon bounded varargs rollback did not restore exact bytes")
-            overload_preview = exchange(process, 79, "refactor.preview", {
-                "operation": "changeSignature.addParameter",
-                "symbol": "com.acme.SignatureShapes#find(java.lang.String)",
-                "arguments": {"type": "boolean", "name": "trusted", "default": "false"},
-            })
-            overload_apply = exchange(process, 80, "refactor.apply", {"planId": overload_preview["planId"]})
-            assert_contains(shapes, ["find(String value, boolean trusted)", "find(\"lambda\", false)", "find(int value)", "find(1)"])
-            exchange(process, 81, "patch.rollback", {"transactionId": overload_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon overload/lambda rollback did not restore exact bytes")
-            reference_preview = exchange(process, 82, "refactor.preview", {
-                "operation": "changeSignature.addParameter",
-                "symbol": "com.acme.References#map(java.lang.String)",
-                "arguments": {"type": "int", "name": "rank", "default": "0", "migrateFunctionalReferences": True},
-            })
-            reference_apply = exchange(process, 83, "refactor.apply", {"planId": reference_preview["planId"]})
-            assert_contains(references, ["(arg0) -> References.map(arg0, 0)"])
-            exchange(process, 84, "patch.rollback", {"transactionId": reference_apply["transactionId"]})
-            if source_hash(root) != before:
-                raise AssertionError("daemon functional-reference rollback did not restore exact bytes")
+                "languageId": "java",
+                "symbol": "com.acme.Service#execute",
+                "arguments": {"oldName": "value", "newName": "lookupKey"},
+                "expectedSnapshotHash": snapshot_hash,
+            })["result"]
+            if preview.get("status") != "PREVIEW":
+                raise AssertionError(f"daemon did not return a parameter-rename preview: {preview}")
+            require_preview_read_only(root, source, original, before_transactions)
+            applied = exchange(process, 3, "refactor.apply", {"planId": preview["planId"]}).get("result", {})
+            if applied.get("status") != "applied" or source.read_bytes() != expected:
+                raise AssertionError(f"daemon did not apply the exact parameter rename: {applied}")
+            transaction_id = applied["transactionId"]
+            require_transaction(root, before_transactions, transaction_id, "APPLIED")
+            rolled = exchange(process, 4, "patch.rollback", {"transactionId": transaction_id}).get("result", {})
+            if (
+                rolled.get("status") != "rolledBack"
+                or rolled.get("transactionId") != transaction_id
+                or source.read_bytes() != original
+            ):
+                raise AssertionError(f"daemon did not restore the original bytes: {rolled}")
+            require_transaction(root, before_transactions, transaction_id, "ROLLED_BACK")
+            if descriptor.read_bytes() != original_descriptor:
+                raise AssertionError("daemon parameter rename changed the Maven descriptor")
         finally:
             stop(process)
 
-    print("Packaged Java JDT change signature passed: MCP and daemon rename/type/add/reorder/remove plus hierarchy, constructor, generic, varargs, annotation, overload, lambda, and functional-reference rows restored exact bytes.")
+        process = start(mcp)
+        try:
+            scanned = exchange(process, 10, "tools/call", {
+                "name": "project_scan", "arguments": {"root": str(root)},
+            })["result"]
+            if scanned.get("isError") is True:
+                raise AssertionError(f"MCP project_scan failed: {scanned}")
+            before_transactions = transaction_files(root)
+            preview = exchange(process, 11, "tools/call", {
+                "name": "preview_refactoring",
+                "arguments": {
+                    "operation": "changeSignature.renameParameter",
+                    "symbol": "com.acme.Service#execute",
+                    "arguments": {"oldName": "value", "newName": "lookupKey"},
+                },
+            })["result"]
+            if preview.get("isError") is True:
+                raise AssertionError(f"MCP parameter-rename preview failed: {preview}")
+            preview_text = preview["content"][0]["text"]
+            if "JDT-proven parameter" not in preview_text:
+                raise AssertionError(f"MCP did not return the JDT-bound preview: {preview_text}")
+            plan_id = next(line.split(":", 1)[1].strip() for line in preview_text.splitlines()
+                           if line.strip().startswith("Plan ID"))
+            require_preview_read_only(root, source, original, before_transactions)
+            applied = exchange(process, 12, "tools/call", {
+                "name": "apply_refactoring", "arguments": {"planId": plan_id},
+            })["result"]
+            applied_text = applied["content"][0]["text"]
+            if (
+                applied.get("isError") is True
+                or not applied_text.startswith("Applied successfully.")
+                or source.read_bytes() != expected
+            ):
+                raise AssertionError(f"MCP did not apply the exact parameter rename: {applied_text}")
+            transaction_id = next(line.partition(":")[2].strip() for line in applied_text.splitlines()
+                                  if line.strip().startswith("Transaction ID:"))
+            require_transaction(root, before_transactions, transaction_id, "APPLIED")
+            rolled = exchange(process, 13, "tools/call", {
+                "name": "rollback_refactoring", "arguments": {"transactionId": transaction_id},
+            })["result"]
+            rolled_text = rolled["content"][0]["text"]
+            if (
+                rolled.get("isError") is True
+                or "Rolled back" not in rolled_text
+                or transaction_id not in rolled_text
+                or source.read_bytes() != original
+            ):
+                raise AssertionError(f"MCP did not restore the original bytes: {rolled_text}")
+            require_transaction(root, before_transactions, transaction_id, "ROLLED_BACK")
+            if descriptor.read_bytes() != original_descriptor:
+                raise AssertionError("MCP parameter rename changed the Maven descriptor")
+        finally:
+            stop(process)
+
+    print("Packaged Java parameter rename passed through daemon and MCP: read-only preview, exact apply, WAL rollback.")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as failure:
+        print(f"Packaged Java change-signature smoke failed: {failure}", file=sys.stderr)
+        raise

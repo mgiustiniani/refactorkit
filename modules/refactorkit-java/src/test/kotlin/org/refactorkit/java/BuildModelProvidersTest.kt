@@ -59,8 +59,9 @@ class BuildModelProvidersTest {
         ))
 
         assertEquals("selected", model.attributes["activeProfiles"])
-        assertTrue(model.modules.single().sourceSets.single { it.kind == SourceSetKind.MAIN }
-            .sourceRoots.contains(Path.of("src/profile/java")))
+        assertTrue(model.modules.single().sourceSets
+            .filter { it.kind == SourceSetKind.CUSTOM }
+            .any { Path.of("src/profile/java") in it.sourceRoots })
     }
 
     @Test

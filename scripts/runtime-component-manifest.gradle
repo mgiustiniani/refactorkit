@@ -1,0 +1,34 @@
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+
+// Adapter only: Gradle owns resolved coordinates; the application helper owns
+// inventory validation, hashing, and atomic publication of the requested record.
+tasks.register('writeRuntimeComponentManifest', Exec) {
+    group = 'verification'
+    description = 'Record resolved runtime component identities in an explicit fresh destination.'
+    dependsOn tasks.named('jar'), configurations.runtimeClasspath
+    doFirst {
+        def artifacts = configurations.runtimeClasspath.incoming.artifacts.artifacts.collect { artifact ->
+            def id = artifact.id.componentIdentifier
+            def coordinates = [kind: 'unqualified']
+            if (id instanceof ModuleComponentIdentifier) {
+                coordinates = [kind: 'module', group: id.group, artifact: id.module, version: id.version]
+            } else if (id instanceof ProjectComponentIdentifier && id.build.buildPath == ':') {
+                def owner = project(id.projectPath)
+                coordinates = [kind: 'project', group: owner.group.toString(), artifact: owner.name,
+                               version: owner.version.toString(), projectPath: id.projectPath]
+            }
+            [file: artifact.file.absolutePath, coordinates: coordinates]
+        }
+        artifacts.add([file: tasks.named('jar').get().archiveFile.get().asFile.absolutePath,
+                       coordinates: [kind: 'project', group: project.group.toString(), artifact: project.name,
+                                     version: project.version.toString(), projectPath: project.path]])
+        def request = [sourceVersion: project.version.toString(), configuration: (project.path == ':' ? '' : project.path) + ':runtimeClasspath',
+                       artifacts: artifacts]
+        standardInput = new ByteArrayInputStream(JsonOutput.toJson(request).getBytes('UTF-8'))
+        commandLine 'python3', rootProject.file('scripts/qualify-runtime-components.py').absolutePath,
+                    '--root', rootProject.projectDir.absolutePath, '--output',
+                    providers.gradleProperty('refactorkit.runtime.components.output').getOrElse('')
+    }
+}

@@ -1,0 +1,1796 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.org/schemas/api-0.2-project-context-v7.json",
+  "title": "RefactorKit API 0.2 project.context response v7",
+  "description": "Provider-qualified readonly Java project context. V7 adds bounded, origin-bearing explicit Maven Surefire settings on test source sets and Failsafe settings only on provider-declared integration-test source sets. Parent, plugin-management, profile, unresolved, and merged configurations remain incomplete until their effective settings are proven. It retains v6 metadata-only Java 26/27 source-analysis semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "snapshotHash",
+    "contextHash",
+    "sdk",
+    "providers",
+    "modules",
+    "buildEvidence",
+    "selectedSource",
+    "analysis",
+    "refusal"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "java-project-context-v7"
+    },
+    "status": {
+      "enum": [
+        "available",
+        "partial",
+        "refused"
+      ]
+    },
+    "snapshotHash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contextHash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sdk": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sdk"
+      },
+      "maxItems": 18
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/provider"
+      },
+      "maxItems": 16
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/module"
+      },
+      "maxItems": 1024
+    },
+    "buildEvidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      },
+      "maxItems": 16384
+    },
+    "selectedSource": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sourceAssociation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "analysis": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/analysis"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "refusal": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/refusal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "semanticAnalysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability",
+        "refusalCode"
+      ],
+      "properties": {
+        "availability": {
+          "enum": [
+            "available",
+            "unqualified"
+          ]
+        },
+        "refusalCode": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "const": "java.context.sourceAnalysisUnqualified"
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "availability": {
+              "const": "available"
+            },
+            "refusalCode": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "availability": {
+              "const": "unqualified"
+            },
+            "refusalCode": {
+              "const": "java.context.sourceAnalysisUnqualified"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind",
+        "fingerprint"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "kind": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        }
+      }
+    },
+    "sdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "home",
+        "sourceRelease",
+        "platformRelease",
+        "identitySha256",
+        "releaseMetadataSha256",
+        "signatureArchive",
+        "signatureArchiveSha256"
+      ],
+      "properties": {
+        "home": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "sourceRelease": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 27
+        },
+        "platformRelease": {
+          "type": "integer",
+          "minimum": 8
+        },
+        "identitySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "releaseMetadataSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "signatureArchive": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "signatureArchiveSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerId",
+        "status",
+        "strategy",
+        "buildCodeExecution",
+        "credentialsAccess",
+        "networkAccess",
+        "diagnostics"
+      ],
+      "properties": {
+        "providerId": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "partial",
+            "offline-missing",
+            "unavailable",
+            "execution-refused"
+          ]
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "buildCodeExecution": {
+          "type": "string"
+        },
+        "credentialsAccess": {
+          "type": "string"
+        },
+        "networkAccess": {
+          "type": "string"
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500
+        }
+      }
+    },
+    "classpathEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "providerId",
+        "moduleId",
+        "sourceSetId",
+        "dependencyScope",
+        "fingerprint",
+        "artifact"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "moduleId": {
+          "type": "string"
+        },
+        "sourceSetId": {
+          "type": "string"
+        },
+        "dependencyScope": {
+          "anyOf": [
+            {
+              "enum": [
+                "compile",
+                "provided",
+                "runtime",
+                "test",
+                "system",
+                "custom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "artifact": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/resolvedArtifact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "moduleId",
+        "scope"
+      ],
+      "properties": {
+        "moduleId": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "compile",
+            "provided",
+            "runtime",
+            "test",
+            "system",
+            "custom"
+          ]
+        }
+      }
+    },
+    "sourceSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "sourceLevel",
+        "release",
+        "sourceRoots",
+        "generatedSourceRoots",
+        "outputDirectories",
+        "analysisSourceRoots",
+        "compileClasspath",
+        "runtimeClasspath",
+        "moduleDependencies",
+        "sourceRootEvidence",
+        "compilerOptionsAvailability",
+        "compilerOptionsRefusalCode",
+        "compilerOptions",
+        "resolvedArtifactAvailability",
+        "resolvedArtifactRefusalCode",
+        "resolvedArtifacts",
+        "annotationProcessors",
+        "jpms",
+        "mavenFailsafe",
+        "mavenTestJvm"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "main",
+            "test",
+            "integration-test",
+            "custom"
+          ]
+        },
+        "sourceLevel": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 27
+        },
+        "release": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 27
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceRoots": {
+          "type": "array",
+          "description": "Workspace-relative roots owned by this source set. A Gradle source root may be outside both buildRoot and module.root, but remains inside the opened workspace.",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 256
+        },
+        "generatedSourceRoots": {
+          "type": "array",
+          "description": "Workspace-relative generated roots owned by this source set; filesystem ancestry under buildRoot or module.root is not implied.",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 256
+        },
+        "outputDirectories": {
+          "type": "array",
+          "description": "Workspace-relative outputs owned by this source set; filesystem ancestry under buildRoot or module.root is not implied.",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 256
+        },
+        "analysisSourceRoots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 16384
+        },
+        "compileClasspath": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/classpathEntry"
+          },
+          "maxItems": 4096
+        },
+        "runtimeClasspath": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/classpathEntry"
+          },
+          "maxItems": 4096
+        },
+        "moduleDependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependency"
+          },
+          "maxItems": 1024
+        },
+        "sourceRootEvidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceRootEvidence"
+          },
+          "maxItems": 4096
+        },
+        "compilerOptionsAvailability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous"
+          ]
+        },
+        "compilerOptionsRefusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compilerOptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/compilerOption"
+          },
+          "maxItems": 1024
+        },
+        "resolvedArtifactAvailability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous"
+          ]
+        },
+        "resolvedArtifactRefusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolvedArtifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resolvedArtifact"
+          },
+          "maxItems": 16384
+        },
+        "annotationProcessors": {
+          "$ref": "#/$defs/annotationProcessors"
+        },
+        "jpms": {
+          "$ref": "#/$defs/jpms"
+        },
+        "mavenFailsafe": {
+          "$ref": "#/$defs/mavenFailsafeFact"
+        },
+        "mavenTestJvm": {
+          "$ref": "#/$defs/mavenTestJvmFact"
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerId",
+        "id",
+        "name",
+        "root",
+        "sourceSets",
+        "coordinates"
+      ],
+      "properties": {
+        "providerId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Workspace-relative evaluated module root. For Gradle this is the actual projectDir; it may be outside buildRoot while remaining inside the opened workspace. The containing module row carries its build/module identity."
+        },
+        "buildRoot": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Workspace-relative Gradle build root. Present when evaluated composite-build identity is complete. The root build uses '.'. This is an identity base, not a filesystem-containment requirement for projectDir or source/output paths."
+        },
+        "projectPath": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "Logical Gradle project path within buildRoot, such as ':app'. Present with buildRoot for evaluated Gradle module identities; it is not a filesystem path."
+        },
+        "buildTreeProjectPath": {
+          "type": "string",
+          "pattern": "^:",
+          "description": "The logical Project.getBuildTreePath() from the Gradle model evaluated during explicit project.sync. It is scoped to the opened composite and preserves all evaluated included-build aliases, for example ':parentAlias:leafAlias:app'. For a task in this project, invoke the qualified task from the opened composite root. For the root project path ':', append the task name directly. Request the field with includeGradleBuildTreeProjectPaths: true on project.context.aggregate (v3), provider-qualified project.context (v3), or project.context.v7. Check the gradleBuildTreeProjectPath capability on the method used. The default response shape is preserved. The requested field is available on evaluated Gradle module rows from supported Gradle runtimes with Project.getBuildTreePath(), introduced in 8.3. Existing Gradle and JDK qualification requirements apply."
+        },
+        "sourceSets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceSet"
+          },
+          "maxItems": 64
+        },
+        "coordinates": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/coordinates"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "sourceAssociation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "symbol",
+        "moduleId",
+        "providerId",
+        "sourceSetId",
+        "sourceRoot",
+        "generated",
+        "bindingKey",
+        "evidence"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "moduleId": {
+          "type": "string"
+        },
+        "sourceSetId": {
+          "type": "string"
+        },
+        "sourceRoot": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "generated": {
+          "type": "boolean"
+        },
+        "bindingKey": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "enum": [
+            "JDT_BINDING",
+            "SOURCE_ROOT_OWNERSHIP"
+          ]
+        },
+        "providerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "snapshotHash",
+        "platformIdentitiesByRelease",
+        "warningCount"
+      ],
+      "properties": {
+        "backend": {
+          "const": "eclipse-jdt"
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "platformIdentitiesByRelease": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "warningCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "coordinates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "groupId",
+        "artifactId",
+        "version"
+      ],
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "artifactId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "resolvedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "coordinates",
+        "extension",
+        "classifier",
+        "scope",
+        "transitive",
+        "fingerprint"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "coordinates": {
+          "$ref": "#/$defs/coordinates"
+        },
+        "extension": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "classifier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "compile",
+                "provided",
+                "runtime",
+                "test",
+                "system",
+                "custom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transitive": {
+          "type": "boolean"
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "sourceRootEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "origin",
+        "providerId",
+        "descriptorPath",
+        "profileId",
+        "pluginId",
+        "executionId",
+        "goal",
+        "phase",
+        "availability"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "origin": {
+          "enum": [
+            "conventional",
+            "build-descriptor",
+            "build-plugin",
+            "generated"
+          ]
+        },
+        "providerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "descriptorPath": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profileId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pluginId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "goal": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "availability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous"
+          ]
+        }
+      }
+    },
+    "compilerOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value",
+        "origin",
+        "redacted"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 16384
+        },
+        "origin": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "annotationProcessors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability",
+        "processorPath",
+        "dependencies",
+        "processorNames",
+        "options",
+        "mode",
+        "refusalCode"
+      ],
+      "properties": {
+        "availability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous"
+          ]
+        },
+        "processorPath": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "maxItems": 256
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resolvedArtifact"
+          },
+          "maxItems": 256
+        },
+        "processorNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "maxItems": 256
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 16384
+          },
+          "maxProperties": 256
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "refusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "moduleName",
+        "modifiers"
+      ],
+      "properties": {
+        "moduleName": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "modifiers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "static",
+              "transitive"
+            ]
+          },
+          "maxItems": 2
+        }
+      }
+    },
+    "exports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packageName",
+        "targets"
+      ],
+      "properties": {
+        "packageName": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "maxItems": 1024
+        }
+      }
+    },
+    "moduleDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "moduleName",
+        "open",
+        "requires",
+        "exports",
+        "opens",
+        "uses",
+        "provides",
+        "contentSha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "moduleName": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requires"
+          },
+          "maxItems": 1024
+        },
+        "exports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/exports"
+          },
+          "maxItems": 1024
+        },
+        "contentSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "opens": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/exports"
+          },
+          "maxItems": 1024
+        },
+        "uses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "maxItems": 1024
+        },
+        "provides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provides"
+          },
+          "maxItems": 1024
+        }
+      }
+    },
+    "modulePathEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "moduleNames",
+        "fingerprint"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "moduleNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "maxItems": 4096
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "jpms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability",
+        "modulePath",
+        "descriptors",
+        "refusalCode"
+      ],
+      "properties": {
+        "availability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous"
+          ]
+        },
+        "modulePath": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/modulePathEntry"
+          },
+          "maxItems": 4096
+        },
+        "descriptors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/moduleDescriptor"
+          },
+          "maxItems": 16
+        },
+        "refusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "mavenFailsafeFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability",
+        "refusalCode",
+        "executions"
+      ],
+      "properties": {
+        "availability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous",
+            "not-applicable"
+          ]
+        },
+        "refusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mavenFailsafeExecution"
+          },
+          "maxItems": 16
+        }
+      }
+    },
+    "mavenFailsafeExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "pluginVersion",
+        "executionId",
+        "goals",
+        "phase",
+        "profileId",
+        "availability",
+        "refusalCode",
+        "selectors",
+        "reports"
+      ],
+      "properties": {
+        "pluginId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "pluginVersion": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 32
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profileId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "availability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous",
+            "not-applicable"
+          ]
+        },
+        "refusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mavenFailsafeConfiguredValue"
+          },
+          "maxItems": 128
+        },
+        "reports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mavenFailsafeConfiguredValue"
+          },
+          "maxItems": 128
+        }
+      }
+    },
+    "mavenFailsafeConfiguredValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value",
+        "origin",
+        "availability"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "test",
+            "includes",
+            "excludes",
+            "includesFile",
+            "excludesFile",
+            "suiteXmlFiles",
+            "reportsDirectory",
+            "reportFormat",
+            "reportNameSuffix",
+            "summaryFile"
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "availability": {
+          "enum": [
+            "complete",
+            "not-declared",
+            "partial",
+            "unavailable",
+            "ambiguous",
+            "not-applicable"
+          ]
+        }
+      }
+    },
+    "provides": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "serviceName",
+        "implementations"
+      ],
+      "properties": {
+        "serviceName": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "implementations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "maxItems": 1024
+        }
+      }
+    },
+    "mavenTestJvmSetting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value",
+        "origin",
+        "availability",
+        "redacted"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "forkCount",
+            "forkMode",
+            "reuseForks",
+            "argLine"
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 16384
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "availability": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "ambiguous",
+            "not-declared",
+            "not-applicable"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "mavenTestJvmExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "pluginVersion",
+        "executionId",
+        "goals",
+        "phase",
+        "mode",
+        "availability",
+        "refusalCode",
+        "forkSettings",
+        "argLineLayers",
+        "effectiveArgLineTemplate"
+      ],
+      "properties": {
+        "pluginId": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "pluginVersion": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "maxItems": 32
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "enum": [
+            "forked",
+            "in-process",
+            "ambiguous",
+            "unknown"
+          ]
+        },
+        "availability": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "ambiguous"
+          ]
+        },
+        "refusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "forkSettings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mavenTestJvmSetting"
+          },
+          "maxItems": 16
+        },
+        "argLineLayers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mavenTestJvmSetting"
+          },
+          "maxItems": 16
+        },
+        "effectiveArgLineTemplate": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 16384
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jvmSelection": {
+          "$ref": "#/$defs/mavenTestJvmSelection"
+        }
+      }
+    },
+    "mavenTestJvmFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability",
+        "mode",
+        "refusalCode",
+        "executions"
+      ],
+      "properties": {
+        "availability": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable",
+            "ambiguous",
+            "not-declared",
+            "not-applicable"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "forked",
+            "in-process",
+            "ambiguous",
+            "unknown",
+            "mixed"
+          ]
+        },
+        "refusalCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mavenTestJvmExecution"
+          },
+          "maxItems": 16
+        }
+      }
+    },
+    "mavenTestJvmSelection": {
+      "type": "object",
+      "description": "Execution JVM selection is projected by project.context.v7.testJvmSelection. Availability covers the executable selector established by captured inputs. Executable paths are literal POM facts and build-jvm refers to the Maven process. Maven may resolve declared jdkToolchain criteria before starting the fork even when an explicit jvm sets the executable.",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "availability",
+        "origin",
+        "executable",
+        "requirements",
+        "redacted",
+        "refusalCode",
+        "toolchainPrerequisite"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "build-jvm",
+            "explicit-executable",
+            "toolchain",
+            "unresolved"
+          ]
+        },
+        "availability": {
+          "enum": [
+            "complete",
+            "unavailable"
+          ]
+        },
+        "origin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 8192
+        },
+        "executable": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "requirements": {
+          "type": "object",
+          "maxProperties": 16,
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "refusalCode": {
+          "enum": [
+            null,
+            "java.context.mavenTestJvmSelectionUnavailable",
+            "java.context.mavenTestJvmToolchainUnresolved"
+          ]
+        },
+        "toolchainPrerequisite": {
+          "description": "A captured jdkToolchain declaration that Maven can require before starting this execution. Discovery reports its resolution as unavailable and exposes only bounded literal criteria and provenance.",
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["availability", "origin", "requirements", "redacted", "refusalCode"],
+          "properties": {
+            "availability": { "const": "unavailable" },
+            "origin": { "type": "string", "maxLength": 8192 },
+            "requirements": {
+              "type": "object",
+              "maxProperties": 16,
+              "additionalProperties": { "type": "string", "maxLength": 1024 }
+            },
+            "redacted": { "type": "boolean" },
+            "refusalCode": {
+              "enum": [
+                "java.context.mavenTestJvmSelectionUnavailable",
+                "java.context.mavenTestJvmToolchainUnresolved"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "available",
+              "partial"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "semanticAnalysis"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "refusal": {
+            "properties": {
+              "code": {
+                "const": "java.context.sourceAnalysisUnqualified"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "refusal"
+        ]
+      },
+      "then": {
+        "required": [
+          "semanticAnalysis"
+        ]
+      }
+    }
+  ]
+}

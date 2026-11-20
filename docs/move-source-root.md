@@ -2,6 +2,10 @@
 
 Status: beta contract for `v0.5.0`.
 
+Authority boundary: this page defines the operation contract and refusal
+semantics; [ARC42's requirements appendix](arc42/appendix-requirements.adoc)
+owns integrated requirement status and release reconciliation.
+
 `moveSourceRoot` transfers every Java compilation unit from one recognized source
 root to another while preserving package identity, FQCNs, imports, and UTF-8
 bytes. It is distinct from [`moveClass`](move-class.md), which changes a type's
@@ -37,8 +41,25 @@ The destination may be an existing declared source root or the conventional
 prospective `src/main/java` / `src/test/java` root of a Maven reactor module that
 already has an effective POM in the worktree.
 
+## Consumer-reported native Apply/Rollback boundary
+
+On 2026-10-21, a consumer reported a native IDE run on a real Gradle module with
+two source roots. Preview and Apply moved
+`unrelated/src/extra/java/fixtures/unrelated/Extra.java` to
+`unrelated/src/main/java/fixtures/unrelated/Extra.java`; the destination file
+contained the original bytes. Rollback displayed
+`[tauri:rollback_refactorkit_engine_refactoring] RefactorKit could not roll back the real-engine refactoring transaction`,
+and the GUI test timed out waiting for rollback success. The cause is unknown.
+This is consumer evidence under the existing source-root tracking. The current
+Story characterizes preview behavior and does not qualify native Apply/Rollback
+for a real Gradle project; no broader rollback failure is inferred.
+
 ## Typed refusals
 
+- `java.context.sdkRequired` when a moved source root contains `module-info.java`
+  and JPMS diagnostics lack an explicitly configured SDK. Reacquire the Java
+  project context with that SDK, then create a fresh preview; the refused plan
+  contains no edits.
 - `sourceRoot.missing`
 - `sourceRoot.generated`
 - `sourceRoot.overlap`

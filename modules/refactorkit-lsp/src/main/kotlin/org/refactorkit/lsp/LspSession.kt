@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -15,6 +16,8 @@ import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.ImmutableEditorOverlay
+import org.refactorkit.core.ImmutableEditorOverlayDocument
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.LanguageCapabilityProtocol
@@ -22,11 +25,15 @@ import org.refactorkit.core.ManagedRollbackExecutor
 import org.refactorkit.core.ManagedRollbackOutcome
 import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchPlan
+import org.refactorkit.core.PatchDiffRenderer
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.PendingPlanStore
+import org.refactorkit.core.ProtocolPath
+import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactorKitVersion
 import org.refactorkit.core.RefactoringApplyIdentity
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RollbackLookupVisibility
 import org.refactorkit.core.RollbackMode
 import org.refactorkit.core.RollbackPreflightDecision
@@ -35,13 +42,45 @@ import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
+import org.refactorkit.core.SymbolId
+import org.refactorkit.core.TextEdits
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.WorkspaceRefreshCoordinator
 import org.refactorkit.core.WorkspaceRefreshResult
+import org.refactorkit.c.CCompilerEditorQueries
+import org.refactorkit.c.CCompilerEditorQuery
+import org.refactorkit.c.CProjectScanner
+import org.refactorkit.c.CProjectScanException
+import org.refactorkit.c.CRefactoringFacade
+import org.refactorkit.c.ClangSemanticToolchain
+import org.refactorkit.c.ClangToolchainDiscoverer
+import org.refactorkit.c.ClangToolchainDiscovery
+import org.refactorkit.c.CReadOnlySdkRequestJson
+import org.refactorkit.c.ClangToolchainRequest
 import org.refactorkit.java.JavaChangeSignaturePlanner
+import org.refactorkit.java.JavaChangeVisibilityPlanner
+import org.refactorkit.java.JavaExtractInterfacePlanner
+import org.refactorkit.java.JavaExtractInterfaceRequest
+import org.refactorkit.java.JavaExtractSuperclassPlanner
+import org.refactorkit.java.JavaExtractSuperclassRequest
 import org.refactorkit.java.JavaExtractMethodPlanner
+import org.refactorkit.java.JavaExtractParameterPlanner
+import org.refactorkit.java.JavaExtractParameterRequest
 import org.refactorkit.java.JavaFormatFilePlanner
+import org.refactorkit.java.JavaEditorOverlaySession
+import org.refactorkit.java.JavaEditorQueryKind
+import org.refactorkit.java.JavaEditorQueryPayload
+import org.refactorkit.java.JavaEditorQueryRequest
+import org.refactorkit.java.JavaEditorQueryResult
+import org.refactorkit.java.JavaEditorReadResult
+import org.refactorkit.java.JavaExtractVariablePlanner
+import org.refactorkit.java.JavaExtractVariableRequest
+import org.refactorkit.java.JavaEncapsulateFieldPlanner
+import org.refactorkit.java.JavaMutationSelectionService
+import org.refactorkit.java.JavaMakeStaticPlanner
+import org.refactorkit.java.JavaJdtNavigationKind
+import org.refactorkit.java.JavaJdtNavigationProjection
 import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.treesitter.GenericOutline
@@ -55,6 +94,7 @@ import org.refactorkit.java.JavaMoveClassPromotionAttemptMetadata
 import org.refactorkit.java.JavaOrganizeImportsPlanner
 import org.refactorkit.java.JavaPackageUtil
 import org.refactorkit.java.JavaProjectScanner
+import org.refactorkit.java.JavaProjectContextRequest
 import org.refactorkit.java.JavaRenameClassPlanner
 import org.refactorkit.java.JavaCreateMavenModulePlanner
 import org.refactorkit.java.JavaMoveAcrossMavenModulesPlanner
@@ -88,8 +128,18 @@ class LspSession {
     @Volatile private var rootUri: String? = null
     @Volatile private var snapshot: ProjectSnapshot? = null
     @Volatile private var supportsDocumentChanges: Boolean = false
+    @Volatile private var supportsCreateFile: Boolean = false
     private val openDocuments = linkedMapOf<String, OpenDocument>()
+    private var cQueryConfiguration: JsonObject? = null
+    private val javaEditorOverlaySession = JavaEditorOverlaySession()
     private val pendingPlans = PendingPlanStore<PatchPlan>()
+    private val pendingCPlans = PendingPlanStore<PendingCPlan>()
+
+    private data class PendingCPlan(
+        val plan: PatchPlan,
+        val snapshot: ProjectSnapshot,
+        val toolchain: ClangSemanticToolchain,
+    )
 
     var onExit: () -> Unit = {}
     var onNotification: (method: String, params: JsonElement) -> Unit = { _, _ -> }
@@ -109,7 +159,9 @@ class LspSession {
         "textDocument/didChange"        -> { didChange(params); JsonNull }
         "textDocument/didSave"          -> { didSave(params); JsonNull }
         "textDocument/didClose"         -> { didClose(params); JsonNull }
+        "workspace/symbol"             -> cEditorQuery(CCompilerEditorQuery.WORKSPACE_SYMBOLS, params)
         "textDocument/definition"       -> definition(params)
+        "textDocument/implementation"   -> implementation(params)
         "textDocument/references"       -> references(params)
         "textDocument/prepareRename"    -> prepareRename(params)
         "textDocument/rename"           -> rename(params)
@@ -125,10 +177,16 @@ class LspSession {
     // ── LSP methods ───────────────────────────────────────────────────────────
 
     private fun initialize(params: JsonObject?): JsonElement {
+        cQueryConfiguration = params?.obj("initializationOptions")?.obj("c")
         supportsDocumentChanges = params?.obj("capabilities")?.obj("workspace")
             ?.obj("workspaceEdit")?.get("documentChanges")?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true
+        supportsCreateFile = (params?.obj("capabilities")?.obj("workspace")
+            ?.obj("workspaceEdit")?.get("resourceOperations") as? JsonArray)
+            ?.any { (it as? JsonPrimitive)?.content == "create" } == true
         openDocuments.clear()
+        javaEditorOverlaySession.clear()
         pendingPlans.clear()
+        pendingCPlans.clear()
         moveClassDispatcher.clearLexicalReviewAudit()
         rootUri = params?.string("rootUri") ?: (params?.get("workspaceFolders") as? JsonArray)
             ?.firstOrNull()?.jsonObject?.string("uri")
@@ -150,7 +208,13 @@ class LspSession {
                     put("change", 1) // Full sync
                     put("save", buildJsonObject { put("includeText", true) })
                 })
+                put("workspaceSymbolProvider", cQueryConfiguration != null)
                 put("definitionProvider", true)
+                put("implementationProvider", buildJsonObject {
+                    put("documentSelector", buildJsonArray {
+                        add(buildJsonObject { put("language", "java"); put("scheme", "file") })
+                    })
+                })
                 put("referencesProvider", true)
                 put("documentSymbolProvider", true)
                 put("codeActionProvider", true)
@@ -172,7 +236,7 @@ class LspSession {
                 put("experimental", buildJsonObject {
                     put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
                         listOf(
-                            JavaAdapterRegistration.create().descriptor,
+                            javaLspAdapterDescriptor(),
                             KotlinAdapterRegistration.descriptor(),
                         ) + TypeScriptAdapterDescriptors.descriptors(),
                     ))
@@ -185,7 +249,7 @@ class LspSession {
                         // promises WAL/rollback for editor-applied C edits.
                         put("c", "refactorkit-managed-clang-semantic-via-cli-daemon-mcp-lsp")
                         put("managedMutationSurfaces", buildJsonArray {
-                            add(JsonPrimitive("cli")); add(JsonPrimitive("daemon")); add(JsonPrimitive("mcp"))
+                            add(JsonPrimitive("cli")); add(JsonPrimitive("daemon")); add(JsonPrimitive("mcp")); add(JsonPrimitive("lsp"))
                         })
                     })
                 })
@@ -198,6 +262,15 @@ class LspSession {
                         add(JsonPrimitive("refactorkit.changeSignature.addParameter"))
                         add(JsonPrimitive("refactorkit.changeSignature.reorderParameters"))
                         add(JsonPrimitive("refactorkit.changeSignature.removeParameter"))
+                        add(JsonPrimitive("refactorkit.changeType"))
+                        add(JsonPrimitive("refactorkit.changeVisibility"))
+                        add(JsonPrimitive("refactorkit.extractVariable"))
+                        add(JsonPrimitive("refactorkit.extractField"))
+                        add(JsonPrimitive("refactorkit.extractConstant"))
+                        add(JsonPrimitive("refactorkit.extractInterface"))
+                        add(JsonPrimitive("refactorkit.extractParameter"))
+                        add(JsonPrimitive("refactorkit.extractSuperclass"))
+                        add(JsonPrimitive("refactorkit.encapsulateField"))
                         add(JsonPrimitive("refactorkit.organizeImports"))
                         add(JsonPrimitive("refactorkit.formatFile"))
                         add(JsonPrimitive("refactorkit.safeDelete"))
@@ -207,6 +280,7 @@ class LspSession {
                         add(JsonPrimitive("refactorkit.renameMavenModule"))
                         add(JsonPrimitive("refactorkit.applyPlan"))
                         add(JsonPrimitive("refactorkit.rollback"))
+                        add(JsonPrimitive("refactorkit.c.preview"))
                     })
                 })
             })
@@ -217,6 +291,23 @@ class LspSession {
         }
     }
 
+    /** LSP-specific runtime projection: response output is bounded; synchronous reads are not cancellable. */
+    private fun javaLspAdapterDescriptor(): org.refactorkit.core.LanguageAdapterDescriptor {
+        val descriptor = JavaAdapterRegistration.create().descriptor
+        fun lspRuntime(runtime: org.refactorkit.core.LanguageAdapterRuntime) = runtime.copy(
+            supportsCancellation = false,
+            limits = runtime.limits.copy(
+                maxOutputBytes = ProtocolLimits.MAX_LSP_RESPONSE_BYTES.toLong(),
+            ),
+        )
+        return descriptor.copy(
+            runtime = lspRuntime(descriptor.runtime),
+            capabilities = descriptor.capabilities.map { capability ->
+                capability.copy(runtime = lspRuntime(capability.runtime ?: descriptor.runtime))
+            },
+        )
+    }
+
     private fun didOpen(params: JsonObject?) {
         val document = params?.obj("textDocument") ?: missing("textDocument")
         val uri = document.string("uri") ?: missing("textDocument.uri")
@@ -225,6 +316,7 @@ class LspSession {
         val path = relativePathForUri(uri)
         openDocuments[uri] = OpenDocument(path, version, text)
         pendingPlans.clear()
+        pendingCPlans.clear()
         refreshSnapshot()
     }
 
@@ -249,6 +341,7 @@ class LspSession {
         val text = changes.single().jsonObject.string("text") ?: missing("contentChanges[0].text")
         openDocuments[uri] = current.copy(version = version, content = text)
         pendingPlans.clear()
+        pendingCPlans.clear()
         refreshSnapshot()
     }
 
@@ -260,18 +353,78 @@ class LspSession {
         }.getOrDefault(current.content)
         openDocuments[uri] = current.copy(content = savedContent)
         pendingPlans.clear()
+        pendingCPlans.clear()
         refreshSnapshot()
     }
 
     private fun didClose(params: JsonObject?) {
         val uri = params?.obj("textDocument")?.string("uri") ?: missing("textDocument.uri")
         openDocuments.remove(uri)
+        javaEditorOverlaySession.clear()
         pendingPlans.clear()
+        pendingCPlans.clear()
         refreshSnapshot()
+    }
+
+    private fun isCDocument(uri: String): Boolean = runCatching {
+        Paths.get(URI(uri)).fileName.toString().substringAfterLast('.') in setOf("c", "h")
+    }.getOrDefault(false)
+
+    /** Standard C LSP reads only extract protocol inputs and project the C application response. */
+    private fun cEditorQuery(operation: CCompilerEditorQuery, params: JsonObject?): JsonElement {
+        val root = snapshotRoot()
+        val configuration = cQueryConfiguration ?: throw typeRepairRefusal("c.editor.toolchainRequired",
+            "C editor queries require initializationOptions.c with explicit clang, clangd and clangFormat")
+        if (listOf("clang", "clangd", "clangFormat").any { configuration.string(it).isNullOrBlank() })
+            throw typeRepairRefusal("c.editor.toolchainRequired", "C editor toolchain paths must be explicit")
+        val arguments = buildJsonObject {
+            configuration.forEach { (key, value) -> put(key, value) }
+            if (operation == CCompilerEditorQuery.WORKSPACE_SYMBOLS) put("query", params?.string("query").orEmpty())
+            else {
+                val uri = params?.obj("textDocument")?.string("uri") ?: missing("textDocument.uri")
+                put("file", ProtocolPath.serialize(relativePathForUri(uri)))
+                if (operation != CCompilerEditorQuery.DOCUMENT_SYMBOLS) {
+                    val (_, line, character) = extractPosition(params) ?: missing("position")
+                    put("line", line); put("character", character)
+                    params?.obj("context")?.get("includeDeclaration")?.let { put("includeDeclaration", it) }
+                }
+            }
+        }
+        val documents = openDocuments.values.map { ImmutableEditorOverlayDocument(it.path, it.version.toLong(), it.content) }
+        val result = CCompilerEditorQueries.execute(root, operation, arguments, documents) { discoverCToolchain(root, configuration) }
+        if (result == JsonNull) return JsonNull
+        return when (operation) {
+            CCompilerEditorQuery.DEFINITION -> cQueryLocation(root, result.jsonObject)
+            CCompilerEditorQuery.REFERENCES -> buildJsonArray { result.jsonArray.forEach { add(cQueryLocation(root, it.jsonObject)) } }
+            CCompilerEditorQuery.DOCUMENT_SYMBOLS -> buildJsonArray {
+                result.jsonArray.forEach { raw ->
+                    val item = raw.jsonObject; val range = cQueryLocation(root, item).getValue("range")
+                    add(buildJsonObject {
+                        put("name", item.getValue("name")); put("kind", lspSymbolKind(org.refactorkit.core.Symbol.Kind.valueOf(item.getValue("kind").jsonPrimitive.content)))
+                        put("range", range); put("selectionRange", range)
+                    })
+                }
+            }
+            CCompilerEditorQuery.WORKSPACE_SYMBOLS -> buildJsonArray {
+                result.jsonArray.map { it.jsonObject }.distinctBy { listOf(it["file"], it["line"], it["character"], it["name"], it["kind"]) }.forEach { item ->
+                    add(buildJsonObject {
+                        put("name", item.getValue("name")); put("kind", lspSymbolKind(org.refactorkit.core.Symbol.Kind.valueOf(item.getValue("kind").jsonPrimitive.content)))
+                        put("location", cQueryLocation(root, item))
+                    })
+                }
+            }
+        }
+    }
+
+    private fun cQueryLocation(root: Path, item: JsonObject): JsonObject = buildJsonObject {
+        fun number(key: String) = item.getValue(key).jsonPrimitive.content.toInt()
+        put("uri", root.resolve(item.getValue("file").jsonPrimitive.content).toUri().toString())
+        put("range", rangeJson(number("line") - 1, number("character"), number("endLine") - 1, number("endCharacter")))
     }
 
     private fun definition(params: JsonObject?): JsonElement {
         val (fileUri, line, char) = extractPosition(params) ?: return JsonNull
+        if (isCDocument(fileUri)) return cEditorQuery(CCompilerEditorQuery.DEFINITION, params)
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
@@ -284,8 +437,50 @@ class LspSession {
         }
     }
 
+    private fun implementation(params: JsonObject?): JsonElement {
+        val (fileUri, line, character) = extractPosition(params) ?: return JsonArray(emptyList())
+        val snap = snapshot ?: return JsonArray(emptyList())
+        val file = snap.files.singleOrNull { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
+            ?: return JsonArray(emptyList())
+        if (file.languageId != "java") return JsonArray(emptyList())
+        return when (val projection = adapter.semanticNavigation(
+            snap,
+            JavaJdtNavigationKind.IMPLEMENTATIONS,
+            pointLocation(file.path, line, character),
+            direction = "all",
+            limit = ProtocolLimits.MAX_SYMBOL_RESULTS,
+        )) {
+            is JavaJdtNavigationProjection.Implementations -> {
+                if (!projection.complete || projection.truncated) throw JsonRpcException(
+                    JsonRpcErrorCodes.INTERNAL_ERROR,
+                    "Java implementation lookup is incomplete (${projection.warningCount} warning(s))",
+                )
+                buildJsonArray {
+                    projection.items.forEach { item ->
+                        val symbol = item.symbol
+                        add(buildJsonObject {
+                            put("uri", snap.workspace.root.resolve(symbol.location.path).toAbsolutePath().toUri().toString())
+                            put("range", rangeJson(
+                                symbol.location.range.start.line,
+                                symbol.location.range.start.character,
+                                symbol.location.range.end.line,
+                                symbol.location.range.end.character,
+                            ))
+                        })
+                    }
+                }
+            }
+            is JavaJdtNavigationProjection.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INTERNAL_ERROR,
+                "Java implementation lookup refused (${projection.diagnostic.code}): ${projection.diagnostic.message}",
+            )
+            else -> throw IllegalStateException("Unexpected Java implementation projection")
+        }
+    }
+
     private fun references(params: JsonObject?): JsonElement {
         val (fileUri, line, char) = extractPosition(params) ?: return JsonNull
+        if (isCDocument(fileUri)) return cEditorQuery(CCompilerEditorQuery.REFERENCES, params)
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
@@ -336,7 +531,8 @@ class LspSession {
         val symbol = adapter.resolveSymbol(snap, pointLocation(file.path, line, char)).symbol ?: return JsonNull
         val plan = when (symbol.kind) {
             org.refactorkit.core.Symbol.Kind.METHOD,
-            org.refactorkit.core.Symbol.Kind.FIELD ->
+            org.refactorkit.core.Symbol.Kind.FIELD,
+            org.refactorkit.core.Symbol.Kind.RECORD_COMPONENT ->
                 JavaRenameMemberPlanner(adapter).preview(snap, symbol.id.value, newName)
             else ->
                 JavaRenameClassPlanner(adapter).preview(snap, symbol.id.value, newName)
@@ -378,7 +574,8 @@ class LspSession {
         if (symbol != null) {
                 val renameCommand = when (symbol.kind) {
                     org.refactorkit.core.Symbol.Kind.METHOD,
-                    org.refactorkit.core.Symbol.Kind.FIELD -> "refactorkit.renameMember"
+                    org.refactorkit.core.Symbol.Kind.FIELD,
+                    org.refactorkit.core.Symbol.Kind.RECORD_COMPONENT -> "refactorkit.renameMember"
                     else -> "refactorkit.renameClass"
                 }
                 actions += buildJsonObject {
@@ -398,44 +595,35 @@ class LspSession {
                     }))
                 }
                 if (symbol.kind == org.refactorkit.core.Symbol.Kind.METHOD) {
+                    // Signature commands need explicit arguments. Clients with an input flow can
+                    // invoke workspace/executeCommand; do not offer placeholder code actions.
+                    val makeStatic = JavaMakeStaticPlanner(adapter).preview(snap, symbol.id.value)
                     actions += buildJsonObject {
-                        put("title", "RefactorKit: Change signature of ${symbol.name}")
+                        val title = "RefactorKit: Make ${symbol.name} static"
+                        put("title", title)
                         put("kind", "refactor.rewrite")
-                        put("command", commandJson("RefactorKit: Change signature of ${symbol.name}",
-                            "refactorkit.changeSignature.renameParameter", buildJsonObject {
-                                put("symbol", symbol.id.value)
-                                put("oldName", "")
-                                put("newName", "")
-                            }))
-                    }
-                    actions += buildJsonObject {
-                        put("title", "RefactorKit: Add parameter to ${symbol.name}")
-                        put("kind", "refactor.rewrite")
-                        put("command", commandJson("RefactorKit: Add parameter to ${symbol.name}",
-                            "refactorkit.changeSignature.addParameter", buildJsonObject {
-                                put("symbol", symbol.id.value)
-                                put("type", "")
-                                put("name", "")
-                                put("default", "")
-                            }))
-                    }
-                    actions += buildJsonObject {
-                        put("title", "RefactorKit: Reorder parameters of ${symbol.name}")
-                        put("kind", "refactor.rewrite")
-                        put("command", commandJson("RefactorKit: Reorder parameters of ${symbol.name}",
-                            "refactorkit.changeSignature.reorderParameters", buildJsonObject {
-                                put("symbol", symbol.id.value)
-                                put("order", "")
-                            }))
-                    }
-                    actions += buildJsonObject {
-                        put("title", "RefactorKit: Remove parameter from ${symbol.name}")
-                        put("kind", "refactor.rewrite")
-                        put("command", commandJson("RefactorKit: Remove parameter from ${symbol.name}",
-                            "refactorkit.changeSignature.removeParameter", buildJsonObject {
-                                put("symbol", symbol.id.value)
-                                put("name", "")
-                            }))
+                        if (makeStatic.status == PatchStatus.REFUSED) {
+                            put("disabled", buildJsonObject {
+                                put("reason", makeStatic.summary.take(1024))
+                            })
+                        } else {
+                            val projection = planToLspWorkspaceEdit(makeStatic, snap, retainPlan = false)
+                            put("edit", buildJsonObject {
+                                projection["changes"]?.let { put("changes", it) }
+                                projection["documentChanges"]?.let { put("documentChanges", it) }
+                            })
+                            put("data", buildJsonObject {
+                                put("operation", makeStatic.operation)
+                                put("summary", makeStatic.summary)
+                                put("riskLevel", makeStatic.riskLevel.name)
+                                put("evidence", makeStatic.evidence.name)
+                                put("warnings", buildJsonArray {
+                                    makeStatic.warnings.forEach { add(JsonPrimitive(it)) }
+                                })
+                                put("editOwnership", "client-managed")
+                                put("rollbackAvailable", false)
+                            })
+                        }
                     }
                 }
                 actions += buildJsonObject {
@@ -452,6 +640,7 @@ class LspSession {
 
     private fun documentSymbol(params: JsonObject?): JsonElement {
         val fileUri = params?.obj("textDocument")?.string("uri") ?: return JsonNull
+        if (isCDocument(fileUri)) return cEditorQuery(CCompilerEditorQuery.DOCUMENT_SYMBOLS, params)
         val snap = snapshot ?: return JsonNull
         val file = snap.files.find { snap.workspace.root.resolve(it.path).toUri().toString() == fileUri }
             ?: return JsonNull
@@ -600,7 +789,8 @@ class LspSession {
                 val newName = args.string("newName") ?: args.string("newParameterName") ?: missing("newName")
                 val plan = JavaChangeSignaturePlanner(adapter).previewRenameParameter(snap, symbol, oldName, newName)
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
-                planToLspWorkspaceEdit(plan, snap)
+                val proposal = planToLspWorkspaceEdit(plan, snap, retainPlan = false)
+                JsonObject(proposal - "refactorkitPlanId" + ("refactorkitManagedApplyAvailable" to JsonPrimitive(false)))
             }
             "refactorkit.changeSignature.addParameter" -> {
                 val symbol = args?.string("symbol") ?: missing("symbol")
@@ -625,6 +815,15 @@ class LspSession {
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
                 planToLspWorkspaceEdit(plan, snap)
             }
+            "refactorkit.changeType" -> executeChangeType(args, snap)
+            "refactorkit.changeVisibility" -> executeChangeVisibility(args, snap)
+            "refactorkit.extractVariable" -> executeExtractVariable(args, snap)
+            "refactorkit.extractField" -> executeExtractField(args, snap)
+            "refactorkit.extractConstant" -> executeExtractConstant(args, snap)
+            "refactorkit.extractInterface" -> executeExtractInterface(args, snap)
+            "refactorkit.extractParameter" -> executeExtractParameter(args, snap)
+            "refactorkit.extractSuperclass" -> executeExtractSuperclass(args, snap)
+            "refactorkit.encapsulateField" -> executeEncapsulateField(args, snap)
             "refactorkit.moveClass" -> {
                 val symbol = args?.string("symbol") ?: missing("symbol")
                 val pkg = args?.string("targetPackage") ?: missing("targetPackage")
@@ -665,7 +864,9 @@ class LspSession {
             "refactorkit.safeDelete" -> {
                 val symbol = args?.string("symbol") ?: missing("symbol")
                 val plan = JavaSafeDeletePlanner(adapter).preview(snap, symbol)
-                if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+                if (plan.status == PatchStatus.REFUSED || plan.evidence == RefactoringEvidence.LEXICAL_FALLBACK) {
+                    throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
+                }
                 planToLspWorkspaceEdit(plan, snap)
             }
             "refactorkit.moveSourceRoot" -> {
@@ -697,6 +898,7 @@ class LspSession {
                 if (plan.status == PatchStatus.REFUSED) throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
                 planToLspWorkspaceEdit(plan, snap)
             }
+            "refactorkit.c.preview" -> cManagedPreview(args, root)
             "refactorkit.applyPlan" -> {
                 val values = args ?: JsonObject(emptyMap())
                 val planId = when (val identity = RefactoringApplyIdentity.parse(values)) {
@@ -715,37 +917,48 @@ class LspSession {
                     }
                     is RefactoringApplyIdentity.ManagedPlan -> identity.planId
                 }
-                val plan = pendingPlans.lookup(planId)
+                val cPending = pendingCPlans.lookup(planId)
+                val plan = pendingPlans.lookup(planId) ?: cPending?.plan
                     ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: ${planId.value}")
                 requireManagedWriteSafe(plan.affectedFiles)
-                val current = scanner.scan(root)
-                val diagnosticsGate = ManagedApplyDiagnosticsGateSelector.select(
-                    plan = plan,
-                    languageId = "java",
-                    javaAdapter = adapter,
-                    kotlinAdapter = kotlinAdapter,
-                    externalGateResolver = { languageId ->
-                        throw JsonRpcException(
-                            JsonRpcErrorCodes.INVALID_PARAMS,
-                            "Managed apply diagnostics are unavailable for language: $languageId",
+                val cGateOwner = cPending?.let { CRefactoringFacade(it.toolchain) }
+                try {
+                    val scannedSnapshot = scanner.scan(root)
+                    val current = if (cPending == null) scannedSnapshot else cProjectSnapshot(scannedSnapshot, root)
+                    val diagnosticsGate = if (cPending != null) {
+                        requireNotNull(cGateOwner).diagnosticsGate(cPending.snapshot, plan)
+                    } else {
+                        ManagedApplyDiagnosticsGateSelector.select(
+                            plan = plan,
+                            languageId = "java",
+                            javaAdapter = adapter,
+                            kotlinAdapter = kotlinAdapter,
+                            externalGateResolver = { languageId ->
+                                throw JsonRpcException(
+                                    JsonRpcErrorCodes.INVALID_PARAMS,
+                                    "Managed apply diagnostics are unavailable for language: $languageId",
+                                )
+                            },
                         )
-                    },
-                )
-                when (val result = PatchEngine(root).apply(
-                    plan,
-                    current,
-                    ApplyAuthorization.explicit("lsp-managed-command"),
-                    diagnosticsGate,
-                )) {
-                    is ApplyResult.Applied -> {
-                        pendingPlans.remove(planId)
-                        refreshSnapshot()
-                        buildJsonObject { put("transactionId", result.transaction.id.value) }
                     }
-                    is ApplyResult.Refused -> throw JsonRpcException(
-                        JsonRpcErrorCodes.applyRefusalCode(result.diagnostics),
-                        result.diagnostics.joinToString("; ") { it.message },
-                    )
+                    when (val result = PatchEngine(root).apply(
+                        plan,
+                        current,
+                        ApplyAuthorization.explicit("lsp-managed-command"),
+                        diagnosticsGate,
+                    )) {
+                        is ApplyResult.Applied -> {
+                            if (cPending == null) pendingPlans.remove(planId) else pendingCPlans.remove(planId)
+                            refreshSnapshot()
+                            buildJsonObject { put("transactionId", result.transaction.id.value) }
+                        }
+                        is ApplyResult.Refused -> throw JsonRpcException(
+                            JsonRpcErrorCodes.applyRefusalCode(result.diagnostics),
+                            result.diagnostics.joinToString("; ") { it.message },
+                        )
+                    }
+                } finally {
+                    cGateOwner?.close()
                 }
             }
             "refactorkit.rollback" -> {
@@ -798,6 +1011,776 @@ class LspSession {
             }
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown command: $command")
         }
+    }
+
+    private fun executeChangeType(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject {
+        val commandArgs = args ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeType arguments are required")
+        if (!supportsDocumentChanges) throw JsonRpcException(
+            JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+            "Java changeType requires versioned documentChanges support",
+        )
+        val root = sessionSnapshot.workspace.root.toAbsolutePath().normalize()
+        val rawPath = commandArgs.string("file") ?: missing("file")
+        val requestedPath = try { Paths.get(rawPath) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeType file must be a workspace-relative Java path")
+        }
+        val path = requestedPath.normalize()
+        if (requestedPath.isAbsolute || path.toString().isBlank() || path.startsWith(Paths.get(".."))) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeType file must stay inside the workspace")
+        }
+        val target = root.resolve(path).normalize()
+        if (!target.startsWith(root) || !Files.isRegularFile(target)) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeType source is not a saved workspace file")
+        }
+        if (!target.toRealPath().startsWith(root.toRealPath())) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeType source resolves outside the workspace")
+        }
+        openDocuments.values.singleOrNull { it.path.normalize() == path }
+            ?: throw typeRepairRefusal("java.typeRepair.documentNotOpen", "changeType requires one open, versioned Java document")
+        val savedSnapshot = scanner.scan(root)
+        if (overlayOpenDocuments(savedSnapshot).hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.typeRepair.snapshotStale", "Workspace inputs changed; refresh the Java project before requesting type repair")
+        }
+        savedSnapshot.files.singleOrNull { it.path.normalize() == path && it.languageId == "java" }
+            ?: throw typeRepairRefusal("java.typeRepair.selectionUnavailable", "The selected source is not a saved Java file")
+        val sdkHome = try { Paths.get(commandArgs.string("sdkHome") ?: missing("sdkHome")) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        }
+        if (!sdkHome.isAbsolute) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        val line = commandArgs.obj("position")?.int("line") ?: missing("position.line")
+        val character = commandArgs.obj("position")?.int("character") ?: missing("position.character")
+        if (line < 0 || character < 0) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Selection position must be non-negative")
+        val newType = commandArgs.string("newType")?.takeIf { it.isNotBlank() && it.length <= 64 }
+            ?: missing("newType")
+
+        val editorDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        val scan = { scanner.scan(root) }
+        val overlayFactory: (ProjectSnapshot) -> ImmutableEditorOverlay = { base ->
+            try {
+                ImmutableEditorOverlay.create(base, editorDocuments, expectedLanguageId = "java")
+            } catch (failure: Exception) {
+                throw org.refactorkit.java.JavaContextAuthorityException(
+                    "java.typeRepair.overlayUnavailable",
+                    failure.message ?: "Open Java documents do not form a valid immutable editor overlay",
+                )
+            }
+        }
+        val contextRequest = JavaProjectContextRequest(savedSnapshot.hash, sdkHome)
+        val selectionResult = javaEditorOverlaySession.query(
+            contextRequest,
+            JavaEditorQueryRequest(JavaEditorQueryKind.MUTATION_SELECTION, path, SourcePosition(line, character), 1),
+            scan,
+            overlayFactory,
+        )
+        if (selectionResult is JavaEditorQueryResult.Refused) {
+            throw typeRepairRefusal(selectionResult.code, selectionResult.message)
+        }
+        val available = selectionResult as JavaEditorQueryResult.Available
+        val selected = available.payload as? JavaEditorQueryPayload.MutationSelection
+            ?: throw typeRepairRefusal("java.typeRepair.selectionUnavailable", "JDT did not return an exact Java field selection")
+        val selection = try {
+            JavaMutationSelectionService.validate(
+                selected.boundContext,
+                selected.value.selection,
+                "changeType",
+                selected.value.selection.symbolId,
+                mapOf("file" to path.toString(), "newType" to newType),
+            )
+        } catch (failure: org.refactorkit.java.JavaContextAuthorityException) {
+            throw typeRepairRefusal(failure.code, failure.message.orEmpty())
+        }
+        val plan = org.refactorkit.java.JavaTypeRepairPlanner(adapter).preview(
+            selected.boundContext.snapshot,
+            selection.symbolId,
+            selection.path,
+            selection.bindingKey,
+            newType,
+        )
+        if (plan.status == PatchStatus.REFUSED) {
+            throw typeRepairRefusal(plan.refusalCode ?: "java.typeRepair.previewRefused", plan.summary)
+        }
+        available.context.verifyAfterQuery(scan)?.let { throw typeRepairRefusal(it.code, it.message) }
+        val currentJavaDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        if (currentJavaDocuments != editorDocuments || snapshot?.hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.overlay.versionStale", "An editor document changed while the type-repair proposal was being planned")
+        }
+        val edit = WorkspaceEditSimulator.normalize(plan.workspaceEdit).edits.singleOrNull() as? FileEdit.Modify
+        if (edit == null || edit.path.normalize() != path || edit.textEdits.size != 1) {
+            throw typeRepairRefusal(
+                "java.typeRepair.workspaceEditShapeUnsupported",
+                "The bounded field repair must produce exactly one text edit in the selected open document",
+            )
+        }
+        val overlaySource = available.overlay.document(path)?.content
+            ?: throw typeRepairRefusal("java.overlay.selectionMissing", "The selected Java document is absent from the immutable editor overlay")
+        try {
+            TextEdits.apply(overlaySource, edit.textEdits)
+        } catch (_: RuntimeException) {
+            throw typeRepairRefusal("java.overlay.editInvalid", "The proposed type edit is not valid against the current editor buffer")
+        }
+        val proposal = planToLspWorkspaceEdit(plan, savedSnapshot, retainPlan = false)
+        return JsonObject(proposal - "refactorkitPlanId" + ("refactorkitManagedApplyAvailable" to JsonPrimitive(false)))
+    }
+
+    private fun executeChangeVisibility(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject {
+        val commandArgs = args ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeVisibility arguments are required")
+        if (!supportsDocumentChanges) throw JsonRpcException(
+            JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+            "Java changeVisibility requires versioned documentChanges support",
+        )
+        val root = sessionSnapshot.workspace.root.toAbsolutePath().normalize()
+        val rawPath = commandArgs.string("file") ?: missing("file")
+        val requestedPath = try { Paths.get(rawPath) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeVisibility file must be a workspace-relative Java path")
+        }
+        val path = requestedPath.normalize()
+        if (requestedPath.isAbsolute || path.toString().isBlank() || path.startsWith(Paths.get(".."))) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeVisibility file must stay inside the workspace")
+        }
+        val target = root.resolve(path).normalize()
+        if (!target.startsWith(root) || !Files.isRegularFile(target) || !target.toRealPath().startsWith(root.toRealPath())) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "changeVisibility source is not a saved workspace file")
+        }
+        openDocuments.values.singleOrNull { it.path.normalize() == path }
+            ?: throw typeRepairRefusal("java.changeVisibility.documentNotOpen", "changeVisibility requires one open, versioned Java declaration document")
+        val savedSnapshot = scanner.scan(root)
+        if (overlayOpenDocuments(savedSnapshot).hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.changeVisibility.snapshotStale", "Workspace inputs changed; refresh the Java project before changing method visibility")
+        }
+        savedSnapshot.files.singleOrNull { it.path.normalize() == path && it.languageId == "java" }
+            ?: throw typeRepairRefusal("java.changeVisibility.selectionUnavailable", "The selected source is not a saved Java file")
+        val sdkHome = try { Paths.get(commandArgs.string("sdkHome") ?: missing("sdkHome")) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        }
+        if (!sdkHome.isAbsolute) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        val line = commandArgs.obj("position")?.int("line") ?: missing("position.line")
+        val character = commandArgs.obj("position")?.int("character") ?: missing("position.character")
+        if (line < 0 || character < 0) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Selection position must be non-negative")
+        val visibility = commandArgs.string("visibility") ?: missing("visibility")
+
+        val editorDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        val scan = { scanner.scan(root) }
+        val overlayFactory: (ProjectSnapshot) -> ImmutableEditorOverlay = { base ->
+            try {
+                ImmutableEditorOverlay.create(base, editorDocuments, expectedLanguageId = "java")
+            } catch (failure: Exception) {
+                throw org.refactorkit.java.JavaContextAuthorityException(
+                    "java.changeVisibility.overlayUnavailable",
+                    failure.message ?: "Open Java documents do not form a valid immutable editor overlay",
+                )
+            }
+        }
+        val selectionResult = javaEditorOverlaySession.query(
+            JavaProjectContextRequest(savedSnapshot.hash, sdkHome),
+            JavaEditorQueryRequest(JavaEditorQueryKind.MUTATION_SELECTION, path, SourcePosition(line, character), 1),
+            scan,
+            overlayFactory,
+        )
+        if (selectionResult is JavaEditorQueryResult.Refused) {
+            throw typeRepairRefusal(selectionResult.code, selectionResult.message)
+        }
+        val available = selectionResult as JavaEditorQueryResult.Available
+        val selected = available.payload as? JavaEditorQueryPayload.MutationSelection
+            ?: throw typeRepairRefusal("java.changeVisibility.selectionUnavailable", "JDT did not return an exact Java method selection")
+        val selection = try {
+            JavaMutationSelectionService.validate(
+                selected.boundContext,
+                selected.value.selection,
+                "changeVisibility",
+                selected.value.selection.symbolId,
+                mapOf("file" to path.toString()),
+            )
+        } catch (failure: org.refactorkit.java.JavaContextAuthorityException) {
+            throw typeRepairRefusal(failure.code, failure.message.orEmpty())
+        }
+        val overlaySnapshot = selected.boundContext.snapshot
+        val plan = JavaChangeVisibilityPlanner(adapter).preview(overlaySnapshot, selection.symbolId, visibility)
+        if (plan.status == PatchStatus.REFUSED) {
+            throw typeRepairRefusal(plan.refusalCode ?: "java.changeVisibility.previewRefused", plan.summary)
+        }
+        if (plan.snapshotHash != overlaySnapshot.hash) {
+            throw typeRepairRefusal("java.changeVisibility.snapshotMismatch", "The visibility proposal is not bound to the current editor overlay")
+        }
+        available.context.verifyAfterQuery(scan)?.let { throw typeRepairRefusal(it.code, it.message) }
+        val currentJavaDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        if (currentJavaDocuments != editorDocuments || snapshot?.hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.overlay.versionStale", "An editor document changed while the changeVisibility proposal was being planned")
+        }
+        val proposal = planToLspWorkspaceEdit(plan, overlaySnapshot, retainPlan = false)
+        return JsonObject(proposal - "refactorkitPlanId" + ("refactorkitManagedApplyAvailable" to JsonPrimitive(false)))
+    }
+
+    private fun executeExtractSuperclass(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject {
+        val commandArgs = args ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractSuperclass arguments are required")
+        if (!supportsDocumentChanges || !supportsCreateFile) throw JsonRpcException(
+            JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+            "Java extractSuperclass requires versioned documentChanges and CreateFile resource-operation support",
+        )
+        val root = sessionSnapshot.workspace.root.toAbsolutePath().normalize()
+        val rawPath = commandArgs.string("file") ?: missing("file")
+        val requestedPath = try { Paths.get(rawPath) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractSuperclass file must be a workspace-relative Java path")
+        }
+        val path = requestedPath.normalize()
+        if (requestedPath.isAbsolute || path.toString().isBlank() || path.startsWith(Paths.get(".."))) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractSuperclass file must stay inside the workspace")
+        }
+        val target = root.resolve(path).normalize()
+        if (!target.startsWith(root) || !Files.isRegularFile(target) || !target.toRealPath().startsWith(root.toRealPath())) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractSuperclass source is not a saved workspace file")
+        }
+        openDocuments.values.singleOrNull { it.path.normalize() == path }
+            ?: throw typeRepairRefusal("java.extractSuperclass.documentNotOpen", "extractSuperclass requires one open, versioned Java declaration document")
+        val savedSnapshot = scanner.scan(root)
+        if (overlayOpenDocuments(savedSnapshot).hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.extractSuperclass.snapshotStale", "Workspace inputs changed; refresh the Java project before requesting superclass extraction")
+        }
+        savedSnapshot.files.singleOrNull { it.path.normalize() == path && it.languageId == "java" }
+            ?: throw typeRepairRefusal("java.extractSuperclass.selectionUnavailable", "The selected source is not a saved Java file")
+        val sdkHome = try { Paths.get(commandArgs.string("sdkHome") ?: missing("sdkHome")) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        }
+        if (!sdkHome.isAbsolute) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        val line = commandArgs.obj("position")?.int("line") ?: missing("position.line")
+        val character = commandArgs.obj("position")?.int("character") ?: missing("position.character")
+        if (line < 0 || character < 0) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Selection position must be non-negative")
+        val superclassName = commandArgs.string("superclassName") ?: missing("superclassName")
+        val methodName = commandArgs.string("methodName") ?: missing("methodName")
+
+        val editorDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        val scan = { scanner.scan(root) }
+        val overlayFactory: (ProjectSnapshot) -> ImmutableEditorOverlay = { base ->
+            try {
+                ImmutableEditorOverlay.create(base, editorDocuments, expectedLanguageId = "java")
+            } catch (failure: Exception) {
+                throw org.refactorkit.java.JavaContextAuthorityException(
+                    "java.extractSuperclass.overlayUnavailable",
+                    failure.message ?: "Open Java documents do not form a valid immutable editor overlay",
+                )
+            }
+        }
+        val selectionResult = javaEditorOverlaySession.query(
+            JavaProjectContextRequest(savedSnapshot.hash, sdkHome),
+            JavaEditorQueryRequest(JavaEditorQueryKind.MUTATION_SELECTION, path, SourcePosition(line, character), 1),
+            scan,
+            overlayFactory,
+        )
+        if (selectionResult is JavaEditorQueryResult.Refused) {
+            throw typeRepairRefusal(selectionResult.code, selectionResult.message)
+        }
+        val available = selectionResult as JavaEditorQueryResult.Available
+        val selected = available.payload as? JavaEditorQueryPayload.MutationSelection
+            ?: throw typeRepairRefusal("java.extractSuperclass.selectionUnavailable", "JDT did not return an exact Java type selection")
+        val selection = try {
+            JavaMutationSelectionService.validate(
+                selected.boundContext,
+                selected.value.selection,
+                "extractSuperclass",
+                selected.value.selection.symbolId,
+                mapOf("file" to path.toString()),
+            )
+        } catch (failure: org.refactorkit.java.JavaContextAuthorityException) {
+            throw typeRepairRefusal(failure.code, failure.message.orEmpty())
+        }
+        val overlaySnapshot = selected.boundContext.snapshot
+        val plan = JavaExtractSuperclassPlanner(adapter).preview(
+            overlaySnapshot,
+            JavaExtractSuperclassRequest(path, selection.symbolId, superclassName, methodName),
+        )
+        if (plan.status == PatchStatus.REFUSED) {
+            throw typeRepairRefusal(plan.refusalCode ?: "java.extractSuperclass.previewRefused", plan.summary)
+        }
+        if (plan.snapshotHash != overlaySnapshot.hash) {
+            throw typeRepairRefusal("java.extractSuperclass.snapshotMismatch", "The superclass proposal is not bound to the current editor overlay")
+        }
+        available.context.verifyAfterQuery(scan)?.let { throw typeRepairRefusal(it.code, it.message) }
+        val currentJavaDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        if (currentJavaDocuments != editorDocuments || snapshot?.hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.overlay.versionStale", "An editor document changed while the extractSuperclass proposal was being planned")
+        }
+        val proposal = planToLspWorkspaceEdit(plan, overlaySnapshot, retainPlan = false)
+        return JsonObject(proposal - "refactorkitPlanId" + ("refactorkitManagedApplyAvailable" to JsonPrimitive(false)))
+    }
+
+    private fun executeExtractInterface(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject {
+        val commandArgs = args ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractInterface arguments are required")
+        if (!supportsDocumentChanges || !supportsCreateFile) throw JsonRpcException(
+            JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+            "Java extractInterface requires versioned documentChanges and CreateFile resource-operation support",
+        )
+        val root = sessionSnapshot.workspace.root.toAbsolutePath().normalize()
+        val rawPath = commandArgs.string("file") ?: missing("file")
+        val requestedPath = try { Paths.get(rawPath) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractInterface file must be a workspace-relative Java path")
+        }
+        val path = requestedPath.normalize()
+        if (requestedPath.isAbsolute || path.toString().isBlank() || path.startsWith(Paths.get(".."))) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractInterface file must stay inside the workspace")
+        }
+        val target = root.resolve(path).normalize()
+        if (!target.startsWith(root) || !Files.isRegularFile(target) || !target.toRealPath().startsWith(root.toRealPath())) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "extractInterface source is not a saved workspace file")
+        }
+        openDocuments.values.singleOrNull { it.path.normalize() == path }
+            ?: throw typeRepairRefusal("java.extractInterface.documentNotOpen", "extractInterface requires one open, versioned Java declaration document")
+        val savedSnapshot = scanner.scan(root)
+        if (overlayOpenDocuments(savedSnapshot).hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.extractInterface.snapshotStale", "Workspace inputs changed; refresh the Java project before requesting interface extraction")
+        }
+        savedSnapshot.files.singleOrNull { it.path.normalize() == path && it.languageId == "java" }
+            ?: throw typeRepairRefusal("java.extractInterface.selectionUnavailable", "The selected source is not a saved Java file")
+        val sdkHome = try { Paths.get(commandArgs.string("sdkHome") ?: missing("sdkHome")) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        }
+        if (!sdkHome.isAbsolute) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        val line = commandArgs.obj("position")?.int("line") ?: missing("position.line")
+        val character = commandArgs.obj("position")?.int("character") ?: missing("position.character")
+        if (line < 0 || character < 0) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Selection position must be non-negative")
+        val interfaceName = commandArgs.string("interfaceName") ?: missing("interfaceName")
+        val methodName = commandArgs.string("methodName") ?: missing("methodName")
+
+        val editorDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        val scan = { scanner.scan(root) }
+        val overlayFactory: (ProjectSnapshot) -> ImmutableEditorOverlay = { base ->
+            try {
+                ImmutableEditorOverlay.create(base, editorDocuments, expectedLanguageId = "java")
+            } catch (failure: Exception) {
+                throw org.refactorkit.java.JavaContextAuthorityException(
+                    "java.extractInterface.overlayUnavailable",
+                    failure.message ?: "Open Java documents do not form a valid immutable editor overlay",
+                )
+            }
+        }
+        val selectionResult = javaEditorOverlaySession.query(
+            JavaProjectContextRequest(savedSnapshot.hash, sdkHome),
+            JavaEditorQueryRequest(JavaEditorQueryKind.MUTATION_SELECTION, path, SourcePosition(line, character), 1),
+            scan,
+            overlayFactory,
+        )
+        if (selectionResult is JavaEditorQueryResult.Refused) {
+            throw typeRepairRefusal(selectionResult.code, selectionResult.message)
+        }
+        val available = selectionResult as JavaEditorQueryResult.Available
+        val selected = available.payload as? JavaEditorQueryPayload.MutationSelection
+            ?: throw typeRepairRefusal("java.extractInterface.selectionUnavailable", "JDT did not return an exact Java type selection")
+        val selection = try {
+            JavaMutationSelectionService.validate(
+                selected.boundContext,
+                selected.value.selection,
+                "extractInterface",
+                selected.value.selection.symbolId,
+                mapOf("file" to path.toString()),
+            )
+        } catch (failure: org.refactorkit.java.JavaContextAuthorityException) {
+            throw typeRepairRefusal(failure.code, failure.message.orEmpty())
+        }
+        val overlaySnapshot = selected.boundContext.snapshot
+        val plan = JavaExtractInterfacePlanner(adapter).preview(
+            overlaySnapshot,
+            JavaExtractInterfaceRequest(path, selection.symbolId, interfaceName, methodName),
+        )
+        if (plan.status == PatchStatus.REFUSED) {
+            throw typeRepairRefusal(plan.refusalCode ?: "java.extractInterface.previewRefused", plan.summary)
+        }
+        if (plan.snapshotHash != overlaySnapshot.hash) {
+            throw typeRepairRefusal("java.extractInterface.snapshotMismatch", "The interface proposal is not bound to the current editor overlay")
+        }
+        available.context.verifyAfterQuery(scan)?.let { throw typeRepairRefusal(it.code, it.message) }
+        val currentJavaDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        if (currentJavaDocuments != editorDocuments || snapshot?.hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.overlay.versionStale", "An editor document changed while the extractInterface proposal was being planned")
+        }
+        val proposal = planToLspWorkspaceEdit(plan, overlaySnapshot, retainPlan = false)
+        return JsonObject(proposal - "refactorkitPlanId" + ("refactorkitManagedApplyAvailable" to JsonPrimitive(false)))
+    }
+
+    private fun executeEncapsulateField(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject {
+        val commandArgs = args ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "encapsulateField arguments are required")
+        if (!supportsDocumentChanges) throw JsonRpcException(
+            JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+            "Java encapsulateField requires versioned documentChanges support",
+        )
+        val root = sessionSnapshot.workspace.root.toAbsolutePath().normalize()
+        val rawPath = commandArgs.string("file") ?: missing("file")
+        val requestedPath = try { Paths.get(rawPath) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "encapsulateField file must be a workspace-relative Java path")
+        }
+        val path = requestedPath.normalize()
+        if (requestedPath.isAbsolute || path.toString().isBlank() || path.startsWith(Paths.get(".."))) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "encapsulateField file must stay inside the workspace")
+        }
+        val target = root.resolve(path).normalize()
+        if (!target.startsWith(root) || !Files.isRegularFile(target) || !target.toRealPath().startsWith(root.toRealPath())) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "encapsulateField source is not a saved workspace file")
+        }
+        openDocuments.values.singleOrNull { it.path.normalize() == path }
+            ?: throw typeRepairRefusal("java.encapsulateField.documentNotOpen", "encapsulateField requires an open, versioned Java declaration document")
+        val savedSnapshot = scanner.scan(root)
+        if (overlayOpenDocuments(savedSnapshot).hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.encapsulateField.snapshotStale", "Workspace inputs changed; refresh the Java project before requesting field encapsulation")
+        }
+        savedSnapshot.files.singleOrNull { it.path.normalize() == path && it.languageId == "java" }
+            ?: throw typeRepairRefusal("java.encapsulateField.selectionUnavailable", "The selected source is not a saved Java file")
+        val sdkHome = try { Paths.get(commandArgs.string("sdkHome") ?: missing("sdkHome")) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        }
+        if (!sdkHome.isAbsolute) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        val line = commandArgs.obj("position")?.int("line") ?: missing("position.line")
+        val character = commandArgs.obj("position")?.int("character") ?: missing("position.character")
+        if (line < 0 || character < 0) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Selection position must be non-negative")
+
+        val editorDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        val scan = { scanner.scan(root) }
+        val overlayFactory: (ProjectSnapshot) -> ImmutableEditorOverlay = { base ->
+            try {
+                ImmutableEditorOverlay.create(base, editorDocuments, expectedLanguageId = "java")
+            } catch (failure: Exception) {
+                throw org.refactorkit.java.JavaContextAuthorityException(
+                    "java.encapsulateField.overlayUnavailable",
+                    failure.message ?: "Open Java documents do not form a valid immutable editor overlay",
+                )
+            }
+        }
+        val contextRequest = JavaProjectContextRequest(savedSnapshot.hash, sdkHome)
+        val selectionResult = javaEditorOverlaySession.query(
+            contextRequest,
+            JavaEditorQueryRequest(JavaEditorQueryKind.MUTATION_SELECTION, path, SourcePosition(line, character), 1),
+            scan,
+            overlayFactory,
+        )
+        if (selectionResult is JavaEditorQueryResult.Refused) {
+            throw typeRepairRefusal(selectionResult.code, selectionResult.message)
+        }
+        val available = selectionResult as JavaEditorQueryResult.Available
+        val selected = available.payload as? JavaEditorQueryPayload.MutationSelection
+            ?: throw typeRepairRefusal("java.encapsulateField.selectionUnavailable", "JDT did not return an exact Java field selection")
+        val selection = try {
+            JavaMutationSelectionService.validate(
+                selected.boundContext,
+                selected.value.selection,
+                "encapsulateField",
+                selected.value.selection.symbolId,
+                mapOf("file" to path.toString()),
+            )
+        } catch (failure: org.refactorkit.java.JavaContextAuthorityException) {
+            throw typeRepairRefusal(failure.code, failure.message.orEmpty())
+        }
+        val overlaySnapshot = selected.boundContext.snapshot
+        val plan = JavaEncapsulateFieldPlanner(adapter).preview(overlaySnapshot, SymbolId(selection.symbolId))
+        if (plan.status == PatchStatus.REFUSED) {
+            throw typeRepairRefusal(plan.refusalCode ?: "java.encapsulateField.previewRefused", plan.summary)
+        }
+        if (plan.snapshotHash != overlaySnapshot.hash) {
+            throw typeRepairRefusal("java.encapsulateField.snapshotMismatch", "The encapsulation proposal is not bound to the current editor overlay")
+        }
+        available.context.verifyAfterQuery(scan)?.let { throw typeRepairRefusal(it.code, it.message) }
+        val currentJavaDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        if (currentJavaDocuments != editorDocuments || snapshot?.hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.overlay.versionStale", "An editor document changed while the encapsulateField proposal was being planned")
+        }
+        val proposal = planToLspWorkspaceEdit(plan, savedSnapshot, retainPlan = false)
+        return JsonObject(proposal - "refactorkitPlanId" + ("refactorkitManagedApplyAvailable" to JsonPrimitive(false)))
+    }
+
+    private fun executeExtractVariable(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject =
+        executeJavaExpressionExtraction(args, sessionSnapshot, "extractVariable") { staged, path, selection, name ->
+            JavaExtractVariablePlanner(adapter).preview(staged, JavaExtractVariableRequest(path, selection, name))
+        }
+
+    private fun executeExtractField(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject =
+        executeJavaExpressionExtraction(args, sessionSnapshot, "extractField") { staged, path, selection, name ->
+            org.refactorkit.java.JavaExtractConstantPlanner(adapter).previewInstanceField(
+                staged,
+                org.refactorkit.java.JavaExtractConstantRequest(path, selection, name),
+            )
+        }
+
+    private fun executeExtractConstant(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject =
+        executeJavaExpressionExtraction(args, sessionSnapshot, "extractConstant") { staged, path, selection, name ->
+            org.refactorkit.java.JavaExtractConstantPlanner(adapter).preview(
+                staged,
+                org.refactorkit.java.JavaExtractConstantRequest(path, selection, name),
+            )
+        }
+
+    private fun executeExtractParameter(args: JsonObject?, sessionSnapshot: ProjectSnapshot): JsonObject =
+        executeJavaExpressionExtraction(
+            args,
+            sessionSnapshot,
+            "extractParameter",
+            expectedTextEditCount = 3,
+        ) { staged, path, selection, name ->
+            JavaExtractParameterPlanner(adapter).preview(
+                staged,
+                JavaExtractParameterRequest(path, selection, name),
+            )
+        }
+
+    private fun executeJavaExpressionExtraction(
+        args: JsonObject?,
+        sessionSnapshot: ProjectSnapshot,
+        operation: String,
+        expectedTextEditCount: Int = 2,
+        planner: (ProjectSnapshot, Path, SourceRange, String) -> PatchPlan,
+    ): JsonObject {
+        val commandArgs = args ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "$operation arguments are required")
+        if (!supportsDocumentChanges) throw JsonRpcException(
+            JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+            "Java $operation requires versioned documentChanges support",
+        )
+        val root = sessionSnapshot.workspace.root.toAbsolutePath().normalize()
+        val rawPath = commandArgs.string("file") ?: missing("file")
+        val requestedPath = try { Paths.get(rawPath) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "$operation file must be a workspace-relative Java path")
+        }
+        val path = requestedPath.normalize()
+        if (requestedPath.isAbsolute || path.toString().isBlank() || path.startsWith(Paths.get(".."))) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "$operation file must stay inside the workspace")
+        }
+        val target = root.resolve(path).normalize()
+        if (!target.startsWith(root) || !Files.isRegularFile(target) || !target.toRealPath().startsWith(root.toRealPath())) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "$operation source is not a saved workspace file")
+        }
+        openDocuments.values.singleOrNull { it.path.normalize() == path }
+            ?: throw typeRepairRefusal("java.$operation.documentNotOpen", "$operation requires one open, versioned Java document")
+        val savedSnapshot = scanner.scan(root)
+        if (overlayOpenDocuments(savedSnapshot).hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.$operation.snapshotStale", "Workspace inputs changed; refresh the Java project before requesting extraction")
+        }
+        savedSnapshot.files.singleOrNull { it.path.normalize() == path && it.languageId == "java" }
+            ?: throw typeRepairRefusal("java.$operation.selectionUnavailable", "The selected source is not a saved Java file")
+        val sdkHome = try { Paths.get(commandArgs.string("sdkHome") ?: missing("sdkHome")) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        }
+        if (!sdkHome.isAbsolute) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK path")
+        val rangeObject = commandArgs.obj("range") ?: missing("range")
+        fun position(field: String): SourcePosition {
+            val value = rangeObject.obj(field) ?: missing("range.$field")
+            val line = value.int("line") ?: missing("range.$field.line")
+            val character = value.int("character") ?: missing("range.$field.character")
+            if (line < 0 || character < 0) throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Selection positions must be non-negative")
+            return SourcePosition(line, character)
+        }
+        val selection = SourceRange(position("start"), position("end"))
+        val name = commandArgs.string("name")?.takeIf { it.isNotBlank() && it.length <= 128 }
+            ?: missing("name")
+        val editorDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        val overlayFactory: (ProjectSnapshot) -> ImmutableEditorOverlay = { base ->
+            try {
+                ImmutableEditorOverlay.create(base, editorDocuments, expectedLanguageId = "java")
+            } catch (failure: Exception) {
+                throw org.refactorkit.java.JavaContextAuthorityException(
+                    "java.$operation.overlayUnavailable",
+                    failure.message ?: "Open Java documents do not form a valid immutable editor overlay",
+                )
+            }
+        }
+        val scan = { scanner.scan(root) }
+        val read = try {
+            javaEditorOverlaySession.read(
+                JavaProjectContextRequest(savedSnapshot.hash, sdkHome),
+                path,
+                ImmutableEditorOverlay.computeHash(editorDocuments),
+                scan,
+                overlayFactory,
+                org.refactorkit.core.SemanticCancellationToken.NONE,
+            ) { _, _, staged -> planner(staged, path, selection, name) }
+        } catch (failure: org.refactorkit.java.JavaContextAuthorityException) {
+            throw typeRepairRefusal(failure.code, failure.message.orEmpty())
+        } catch (_: Exception) {
+            throw typeRepairRefusal("java.overlay.analysisUnavailable", "Java editor overlay analysis could not be completed")
+        }
+        if (read is JavaEditorReadResult.Refused) throw typeRepairRefusal(read.code, read.message)
+        val available = read as JavaEditorReadResult.Available
+        val plan = available.value
+        if (plan.status == PatchStatus.REFUSED) {
+            throw typeRepairRefusal(plan.refusalCode ?: "java.$operation.previewRefused", plan.summary)
+        }
+        val currentJavaDocuments = openDocuments.values
+            .filter { it.path.fileName.toString().endsWith(".java", ignoreCase = true) }
+            .map { ImmutableEditorOverlayDocument(it.path.normalize(), it.version.toLong(), it.content) }
+            .sortedBy { ProtocolPath.serialize(it.path) }
+        if (currentJavaDocuments != editorDocuments || snapshot?.hash != sessionSnapshot.hash) {
+            throw typeRepairRefusal("java.overlay.versionStale", "An editor document changed while the $operation proposal was being planned")
+        }
+        val edit = WorkspaceEditSimulator.normalize(plan.workspaceEdit).edits.singleOrNull() as? FileEdit.Modify
+        if (edit == null || edit.path.normalize() != path || edit.textEdits.size != expectedTextEditCount) {
+            throw typeRepairRefusal(
+                "java.$operation.workspaceEditShapeUnsupported",
+                "The bounded $operation plan must produce $expectedTextEditCount text edits in the selected open document",
+            )
+        }
+        val overlaySource = available.overlay.document(path)?.content
+            ?: throw typeRepairRefusal("java.overlay.selectionMissing", "The selected Java document is absent from the immutable editor overlay")
+        try {
+            TextEdits.apply(overlaySource, edit.textEdits)
+        } catch (_: RuntimeException) {
+            throw typeRepairRefusal("java.overlay.editInvalid", "The proposed $operation edit is not valid against the current editor buffer")
+        }
+        val proposal = planToLspWorkspaceEdit(plan, savedSnapshot, retainPlan = false)
+        return JsonObject(proposal - "refactorkitPlanId" + ("refactorkitManagedApplyAvailable" to JsonPrimitive(false)))
+    }
+
+    private fun typeRepairRefusal(code: String, message: String) = JsonRpcException(
+        JsonRpcErrorCodes.PLAN_REFUSED,
+        message,
+        buildJsonObject { put("refusalCode", code) },
+    )
+
+    private fun cManagedPreview(args: JsonObject?, root: Path): JsonObject {
+        val values = args ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "C preview arguments are required")
+        val operation = values.string("operation")
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Missing C operation")
+        val rawArguments = values.obj("arguments") ?: JsonObject(emptyMap())
+        val operationArguments = rawArguments.mapValues { (name, value) ->
+            val primitive = value as? JsonPrimitive
+                ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "C argument '$name' must be a scalar")
+            primitive.content
+        }
+        val baseSnapshot = snapshot ?: scanner.scan(root)
+        val cSnapshot = cProjectSnapshot(baseSnapshot, root)
+        val toolchain = discoverCToolchain(root, values)
+        val facade = CRefactoringFacade(toolchain)
+        try {
+            val plan = facade.previewForManagedApply(cSnapshot, operation, operationArguments)
+            if (plan.status == PatchStatus.REFUSED) {
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.PLAN_REFUSED,
+                    plan.summary,
+                    buildJsonObject { plan.refusalCode?.let { put("refusalCode", it) } },
+                )
+            }
+            pendingCPlans.insert(plan.id, PendingCPlan(plan, cSnapshot, toolchain))
+            return cPlanPreviewJson(plan, cSnapshot)
+        } finally {
+            facade.close()
+        }
+    }
+
+    private fun cProjectSnapshot(base: ProjectSnapshot, root: Path): ProjectSnapshot {
+        val cSnapshot = try {
+            CProjectScanner().scan(root)
+        } catch (failure: CProjectScanException) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.PLAN_REFUSED,
+                failure.message ?: "C source capture is unavailable",
+                buildJsonObject {
+                    put("refusalCode", "c.sourceCapture.unavailable")
+                    put("sourceCaptureFailure", failure.code.name)
+                },
+            )
+        }
+        val cPaths = cSnapshot.files.mapTo(mutableSetOf()) { it.path.normalize() }
+        val sources = (base.files.filterNot { it.path.normalize() in cPaths } + cSnapshot.files)
+            .distinctBy { it.path.normalize() }
+            .sortedBy { it.path.toString() }
+        val auxiliaryByPath = linkedMapOf<Path, SourceFile>()
+        base.auxiliaryFiles.filterNot { it.path.normalize() in cPaths }.forEach {
+            auxiliaryByPath[it.path.normalize()] = it
+        }
+        cSnapshot.auxiliaryFiles.forEach { auxiliaryByPath[it.path.normalize()] = it }
+        val auxiliary = auxiliaryByPath.values.filterNot { source ->
+            sources.any { it.path.normalize() == source.path.normalize() }
+        }.sortedBy { it.path.toString() }
+        return base.copy(
+            files = sources,
+            sourceExtensions = ProjectSnapshot.inferSourceExtensions(sources),
+            auxiliaryFiles = auxiliary,
+        )
+    }
+
+    private fun discoverCToolchain(root: Path, args: JsonObject): ClangSemanticToolchain {
+        val request = ClangToolchainRequest(
+            workspaceRoot = root,
+            clangExecutable = args.string("clang")?.let(Paths::get),
+            clangdExecutable = args.string("clangd")?.let(Paths::get),
+            clangFormatExecutable = args.string("clangFormat")?.let(Paths::get),
+            readOnlySdks = CReadOnlySdkRequestJson.decode(args["readOnlySdks"]),
+        )
+        return when (val discovery = ClangToolchainDiscoverer().discover(request)) {
+            is ClangToolchainDiscovery.Available -> discovery.toolchain
+            is ClangToolchainDiscovery.Refused -> throw JsonRpcException(
+                JsonRpcErrorCodes.INVALID_PARAMS,
+                discovery.diagnostics.joinToString("; ") { it.message },
+            )
+        }
+    }
+
+    private fun cPlanPreviewJson(plan: PatchPlan, snap: ProjectSnapshot): JsonObject {
+        val renderable = snap.copy(files = snap.trackedFiles, auxiliaryFiles = emptyList())
+        val diff = PatchDiffRenderer.render(renderable, plan.workspaceEdit)
+        return buildJsonObject {
+            put("planId", plan.id.value)
+            put("operation", plan.operation)
+            put("status", plan.status.name)
+            put("summary", plan.summary)
+            put("confidence", plan.confidence)
+            put("riskLevel", plan.riskLevel.name)
+            put("evidence", plan.evidence.name)
+            put("affectedFiles", buildJsonArray {
+                plan.affectedFiles.sortedBy(ProtocolPath::serialize).forEach { add(JsonPrimitive(ProtocolPath.serialize(it))) }
+            })
+            put("renderedDiff", diff.renderedDiff)
+            put("diffTruncated", diff.truncated)
+            put("warnings", buildJsonArray { plan.warnings.forEach { add(JsonPrimitive(it)) } })
+            putCPreviewDiagnostics("diagnosticsBefore", plan.diagnosticsBefore, snap)
+            putCPreviewDiagnostics("diagnosticsAfterPreview", plan.diagnosticsAfterPreview, snap)
+        }
+    }
+
+    private fun JsonObjectBuilder.putCPreviewDiagnostics(
+        key: String,
+        diagnostics: List<Diagnostic>,
+        snapshot: ProjectSnapshot,
+    ) {
+        if (diagnostics.isEmpty()) return
+        val items = mutableListOf<JsonObject>()
+        var remainingBytes = ProtocolLimits.MAX_PREVIEW_DIAGNOSTIC_BYTES - 2
+        for (diagnostic in diagnostics.take(ProtocolLimits.MAX_PREVIEW_DIAGNOSTICS)) {
+            val lspDiagnostic = diagnosticJson(diagnostic)
+            val item = diagnostic.location?.let {
+                JsonObject(lspDiagnostic + ("uri" to JsonPrimitive(uriForPath(snapshot, it.path))))
+            } ?: lspDiagnostic
+            val itemBytes = item.toString().toByteArray(Charsets.UTF_8).size + 1
+            if (itemBytes > remainingBytes) break
+            items += item
+            remainingBytes -= itemBytes
+        }
+        put(key, JsonArray(items))
+        put("${key}Truncated", items.size < diagnostics.size)
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -866,7 +1849,11 @@ class LspSession {
         return if (start < end) lineContent.substring(start, end) else null
     }
 
-    private fun planToLspWorkspaceEdit(plan: PatchPlan, snap: ProjectSnapshot): JsonObject {
+    private fun planToLspWorkspaceEdit(
+        plan: PatchPlan,
+        snap: ProjectSnapshot,
+        retainPlan: Boolean = true,
+    ): JsonObject {
         if (plan.status == PatchStatus.REFUSED) {
             throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED, plan.summary)
         }
@@ -881,7 +1868,13 @@ class LspSession {
                 "LSP client must support versioned documentChanges for structural or open-document edits",
             )
         }
-        pendingPlans.insert(plan.id, plan)
+        if (normalizedEdit.edits.any { it is FileEdit.Create } && !supportsCreateFile) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+                "LSP client must support CreateFile resource operations for file-creating edits",
+            )
+        }
+        if (retainPlan) pendingPlans.insert(plan.id, plan)
         val changes = mutableMapOf<String, MutableList<JsonObject>>()
         val documentChanges = mutableListOf<JsonObject>()
         for (edit in normalizedEdit.edits) {
@@ -910,13 +1903,36 @@ class LspSession {
                     put("oldUri", uriForPath(snap, edit.path))
                     put("newUri", uriForPath(snap, edit.newPath))
                 }
-                is FileEdit.Create -> documentChanges += buildJsonObject {
-                    put("kind", "create")
-                    put("uri", uriForPath(snap, edit.path))
-                    put("options", buildJsonObject {
-                        put("overwrite", edit.overwrite)
-                        put("ignoreIfExists", false)
-                    })
+                is FileEdit.Create -> {
+                    if (edit.path.normalize() in openPaths) {
+                        throw JsonRpcException(
+                            JsonRpcErrorCodes.DOCUMENT_VERSION_MISMATCH,
+                            "LSP cannot create a path that is already open in the client: ${edit.path}",
+                        )
+                    }
+                    val uri = uriForPath(snap, edit.path)
+                    documentChanges += buildJsonObject {
+                        put("kind", "create")
+                        put("uri", uri)
+                        put("options", buildJsonObject {
+                            put("overwrite", edit.overwrite)
+                            put("ignoreIfExists", false)
+                        })
+                    }
+                    if (edit.content.isNotEmpty()) {
+                        documentChanges += buildJsonObject {
+                            put("textDocument", buildJsonObject {
+                                put("uri", uri)
+                                put("version", JsonNull)
+                            })
+                            put("edits", buildJsonArray {
+                                add(buildJsonObject {
+                                    put("range", rangeJson(0, 0, 0, 0))
+                                    put("newText", edit.content)
+                                })
+                            })
+                        }
+                    }
                 }
                 is FileEdit.Delete -> documentChanges += buildJsonObject {
                     put("kind", "delete")
@@ -1094,7 +2110,10 @@ class LspSession {
         org.refactorkit.core.Symbol.Kind.ENUM        -> 10
         org.refactorkit.core.Symbol.Kind.RECORD      -> 5
         org.refactorkit.core.Symbol.Kind.METHOD      -> 6
+        org.refactorkit.core.Symbol.Kind.FUNCTION    -> 12
+        org.refactorkit.core.Symbol.Kind.CONSTANT    -> 14
         org.refactorkit.core.Symbol.Kind.FIELD       -> 8
+        org.refactorkit.core.Symbol.Kind.RECORD_COMPONENT -> 8
         org.refactorkit.core.Symbol.Kind.CONSTRUCTOR -> 9
         org.refactorkit.core.Symbol.Kind.PACKAGE     -> 4
         else                                          -> 13
@@ -1107,7 +2126,8 @@ class LspSession {
         org.refactorkit.core.Symbol.Kind.INTERFACE   -> TOKEN_TYPES.indexOf("interface")
         org.refactorkit.core.Symbol.Kind.ENUM        -> TOKEN_TYPES.indexOf("enum")
         org.refactorkit.core.Symbol.Kind.METHOD      -> TOKEN_TYPES.indexOf("method")
-        org.refactorkit.core.Symbol.Kind.FIELD       -> TOKEN_TYPES.indexOf("property")
+        org.refactorkit.core.Symbol.Kind.FIELD,
+        org.refactorkit.core.Symbol.Kind.RECORD_COMPONENT -> TOKEN_TYPES.indexOf("property")
         org.refactorkit.core.Symbol.Kind.CONSTRUCTOR -> TOKEN_TYPES.indexOf("constructor")
         else                                          -> TOKEN_TYPES.indexOf("variable")
     }

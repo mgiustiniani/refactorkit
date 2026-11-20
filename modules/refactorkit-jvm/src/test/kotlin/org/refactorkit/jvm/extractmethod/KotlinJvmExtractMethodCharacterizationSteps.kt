@@ -1,5 +1,11 @@
 package org.refactorkit.jvm.extractmethod
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import io.cucumber.java.After
 import io.cucumber.java.Scenario
 import io.cucumber.java.en.Given
@@ -11,15 +17,23 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringRequest
 import org.refactorkit.core.RiskLevel
+import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.TextEdit
 import org.refactorkit.java.JavaLanguageAdapter
+import org.refactorkit.java.JavaAdapterRegistration
 import org.refactorkit.java.JavaProjectScanner
+import org.refactorkit.daemon.DaemonSession
+import org.refactorkit.mcp.McpSession
+import org.refactorkit.core.CapabilityStability
+import org.refactorkit.core.MutationAuthority
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import javax.tools.ToolProvider
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.writeText
@@ -60,6 +74,13 @@ class KotlinJvmExtractMethodCharacterizationSteps {
     private var snapshot: ProjectSnapshot? = null
     private var plan: PatchPlan? = null
     private var condition: String? = null
+    private var managedPlanEvidence: Map<String, String> = emptyMap()
+    private var daemonApplied = false
+    private var daemonRolledBack = false
+    private var mcpApplied = false
+    private var mcpRolledBack = false
+    private var lexicalDaemonRefused = false
+    private var lexicalMcpRefused = false
 
     private val TARGET = Path.of("src/main/java/example/extract/ExtractTarget.java")
 
@@ -120,6 +141,81 @@ class KotlinJvmExtractMethodCharacterizationSteps {
         previewUnderCondition(requireNotNull(condition))
     }
 
+    @When("^the caller requests a binding-aware extractMethod preview for the fixture's checked-exception multi-statement selection as \"readContents\" through daemon and MCP$")
+    fun previewBindingAwareCheckedExceptionExtraction() {
+        val root = requireNotNull(fixtureRoot)
+        val scanned = requireNotNull(snapshot)
+        plan = preview(TARGET, 9, 13, "readContents")
+        val baseline = workspaceImage(root)
+        val daemon = DaemonSession()
+        try {
+            val opened = daemon.dispatch("project.open", buildJsonObject {
+                put("root", root.toString())
+            }).jsonObject
+            val daemonPreview = daemon.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "extractMethod")
+                put("languageId", "java")
+                put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+                put("arguments", buildJsonObject {
+                    put("file", TARGET.toString()); put("startLine", 9); put("endLine", 13); put("methodName", "readContents")
+                })
+            }).jsonObject
+            kotlin.test.assertEquals("PREVIEW", daemonPreview.getValue("status").jsonPrimitive.content, daemonPreview.toString())
+            kotlin.test.assertEquals("JDT_BINDING", daemonPreview.getValue("evidence").jsonPrimitive.content)
+            kotlin.test.assertTrue(daemonPreview.getValue("diagnosticsAfterPreview").jsonArray.none {
+                it.jsonObject.getValue("severity").jsonPrimitive.content == "ERROR"
+            })
+            val applied = daemon.dispatch("refactor.apply", buildJsonObject {
+                put("planId", daemonPreview.getValue("planId").jsonPrimitive.content)
+                put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+            }).jsonObject
+            daemonApplied = applied.getValue("status").jsonPrimitive.content == "applied"
+            val rolledBack = daemon.dispatch("patch.rollback", buildJsonObject {
+                put("transactionId", applied.getValue("transactionId").jsonPrimitive.content)
+            }).jsonObject
+            daemonRolledBack = rolledBack["rolledBack"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true ||
+                rolledBack["status"]?.jsonPrimitive?.content == "rolledBack"
+            assertWorkspaceImage(baseline, root)
+            managedPlanEvidence = managedPlanEvidence + ("daemon" to daemonPreview.getValue("evidence").jsonPrimitive.content)
+        } finally {
+            daemon.close()
+        }
+
+        val mcp = McpSession()
+        try {
+            val scan = mcpCall(mcp, "project_scan", buildJsonObject {
+                put("root", root.toString())
+            })
+            kotlin.test.assertFalse(scan.getValue("isError").jsonPrimitive.content.toBooleanStrict(), scan.toString())
+            val previewResult = mcpCall(mcp, "preview_refactoring", buildJsonObject {
+                put("operation", "extractMethod"); put("languageId", "java")
+                put("arguments", buildJsonObject {
+                    put("file", TARGET.toString()); put("startLine", 9); put("endLine", 13); put("methodName", "readContents")
+                })
+            })
+            val previewText = toolText(previewResult)
+            kotlin.test.assertTrue(previewText.contains("Status   : PREVIEW"), previewText)
+            kotlin.test.assertTrue(previewText.contains("Evidence : JDT_BINDING"), previewText)
+            kotlin.test.assertFalse(previewText.contains("[ERROR]"), previewText)
+            val planId = Regex("Plan ID\\s*:\\s*(\\S+)").find(previewText)?.groupValues?.get(1)
+                ?: error("MCP extractMethod preview omitted its plan ID: $previewText")
+            val apply = mcpCall(mcp, "apply_refactoring", buildJsonObject { put("planId", planId) })
+            val applyText = toolText(apply)
+            mcpApplied = applyText.startsWith("Applied successfully.")
+            val transactionId = Regex("Transaction ID: ([^\\s]+)").find(applyText)?.groupValues?.get(1)
+                ?: error("MCP extractMethod apply omitted its transaction ID: $applyText")
+            val rollback = mcpCall(mcp, "rollback_refactoring", buildJsonObject {
+                put("transactionId", transactionId)
+            })
+            mcpRolledBack = toolText(rollback).startsWith("Rolled back transaction")
+            assertWorkspaceImage(baseline, root)
+            managedPlanEvidence = managedPlanEvidence + ("MCP" to "JDT_BINDING")
+        } finally {
+            mcp.close()
+        }
+        verifyLexicalCompatibilityIsReviewOnly(buildFixture("default"))
+    }
+
     // ------------------------------------------------------------ Scenario 1 Thens
 
     @Then("^the adapter returns a PREVIEW patch plan for the operation extractMethod$")
@@ -127,6 +223,43 @@ class KotlinJvmExtractMethodCharacterizationSteps {
         val p = requireNotNull(plan)
         assertEquals(PatchStatus.PREVIEW, p.status, "${p.summary}")
         assertEquals("extractMethod", p.operation, p.toString())
+    }
+
+    @Then("^the single live-out preview has the exact returned-local image and preserves compiled output$")
+    fun singleLiveOutHasExactImageAndCompiledResult() {
+        val original = requireNotNull(snapshot)
+        val preview = requireNotNull(plan)
+        assertEquals(org.refactorkit.core.RefactoringEvidence.JDT_BINDING, preview.evidence)
+        assertTrue(preview.requiresUserApproval)
+        assertEquals(setOf(TARGET), preview.affectedFiles)
+        assertTrue(preview.diagnosticsAfterPreview.none { it.severity.name == "ERROR" })
+        val staged = WorkspaceEditSimulator.apply(original, preview.workspaceEdit)
+        val expected = """
+            package example.extract;
+
+            public final class ExtractTarget {
+                public void run() {
+                    int total = extract();
+                    System.out.println(total);
+                }
+
+                private int extract() {
+                    int total = 1;
+                    return total;
+                }
+            }
+        """.trimIndent() + "\n"
+        assertEquals(expected, staged.files.single { it.path == TARGET }.content)
+        val launcher = mapOf(Path.of("fixture/InvokeExtract.java") to
+            "package example.extract; public final class InvokeExtract { public static void main(String[] args) { new ExtractTarget().run(); } }\n")
+        val beforeOutput = compileAndRun(original.trackedFiles.associate { it.path to it.content } + launcher,
+            "", "liveout-before", "example.extract.InvokeExtract")
+        val afterOutput = compileAndRun(staged.trackedFiles.associate { it.path to it.content } + launcher,
+            "", "liveout-after", "example.extract.InvokeExtract")
+        assertEquals("1" + System.lineSeparator(), beforeOutput)
+        assertEquals(beforeOutput, afterOutput)
+        assertEquals(original.trackedFiles.associate { it.path to it.content }, workspaceImage(requireNotNull(fixtureRoot)))
+        assertTrue(!Files.exists(requireNotNull(fixtureRoot).resolve(".refactorkit/transactions")))
     }
 
     @Then("^the plan carries confidence 0.70$")
@@ -227,6 +360,139 @@ class KotlinJvmExtractMethodCharacterizationSteps {
         val p = requireNotNull(plan)
         assertTrue(p.warnings.any { it == "Selection was refused if local variables, return values, exceptions, or complex control flow were detected." },
             "expected the complex-flow warning: ${p.warnings}")
+    }
+
+    @Then("^the preview passes the input parameters and returns the selected local from the multi-statement control-flow block with its checked exception$")
+    fun previewPassesParameterReturnsLocalAndDeclaresCheckedException() {
+        val p = requireNotNull(plan)
+        assertEquals(PatchStatus.PREVIEW, p.status, p.summary)
+        val modify = p.workspaceEdit.edits.single() as? FileEdit.Modify ?: error("expected one source modification")
+        assertEquals(TARGET, modify.path)
+        assertEquals(2, modify.textEdits.size)
+        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), p.workspaceEdit)
+        val content = staged.files.single { it.path == TARGET }.content
+        assertTrue("String normalized = readContents(path, fallback, prefix);" in content, "the extracted call must retain the live-out local and pass the method parameters and preceding local input:\n$content")
+        assertTrue(
+            "private static java.lang.String readContents(java.nio.file.Path path, java.lang.String fallback, java.lang.String prefix) throws java.io.IOException {" in content,
+            "the helper must return the live-out type, accept the resolved method parameters and preceding local, and propagate IOException:\n$content",
+        )
+        assertTrue("String raw = Files.readString(path);" in content, "the helper must preserve the first selected statement:\n$content")
+        assertTrue("String normalized = prefix + raw.trim();" in content, "the helper must preserve the captured local read:\n$content")
+        assertTrue("if (normalized.isEmpty())" in content && "normalized = fallback;" in content,
+            "the helper must preserve the selected conditional data flow:\n$content")
+        assertTrue("return normalized;" in content, "the helper must return the selected live-out local:\n$content")
+        assertEquals(null, p.authorityLease, "the planner preview itself must not create a transaction authority lease")
+        assertEquals(setOf(TARGET), p.affectedFiles)
+    }
+
+    @Then("^the staged before and after Java fixtures compile and preserve the method result$")
+    fun stagedJavaFixturesCompileAndPreserveResult() {
+        val original = requireNotNull(snapshot).trackedFiles.associate { it.path to it.content }
+        val staged = WorkspaceEditSimulator.apply(requireNotNull(snapshot), requireNotNull(plan).workspaceEdit)
+            .trackedFiles.associate { it.path to it.content }
+        val input = "  extracted value  "
+        val before = compileAndRun(original, input, "extract-before")
+        val after = compileAndRun(staged, input, "extract-after")
+        assertEquals("extracted value", before, "original fixture output")
+        assertEquals(before, after, "extracting the local result must preserve observable output")
+        val blankBefore = compileAndRun(original, "   ", "extract-before-branch")
+        val blankAfter = compileAndRun(staged, "   ", "extract-after-branch")
+        assertEquals("fallback", blankBefore, "original fixture conditional output")
+        assertEquals(blankBefore, blankAfter, "the extracted helper must preserve the selected conditional branch")
+    }
+
+    @Then("^extractMethod is advertised as stable managed mutation for binding-backed plans$")
+    fun extractMethodCapabilityIsStableForBindingBackedPlans() {
+        val capability = requireNotNull(JavaAdapterRegistration.capability("extractMethod"))
+        assertEquals(CapabilityStability.STABLE, capability.stability)
+        assertEquals(MutationAuthority.MANAGED_STABLE, capability.mutationAuthority)
+        assertEquals(org.refactorkit.core.RefactoringEvidence.JDT_BINDING, requireNotNull(plan).evidence)
+        assertTrue(requireNotNull(plan).diagnosticsBefore.none { it.severity.name == "ERROR" })
+        assertTrue(requireNotNull(plan).diagnosticsAfterPreview.none { it.severity.name == "ERROR" })
+        assertEquals(mapOf("daemon" to "JDT_BINDING", "MCP" to "JDT_BINDING"), managedPlanEvidence)
+    }
+
+    @Then("^daemon and MCP apply and roll back the plan with exact source restoration while line-based fallback remains non-applicable$")
+    fun daemonAndMcpRestoreExactSourceAfterManagedApply() {
+        assertTrue(daemonApplied, "daemon must apply the binding-backed plan")
+        assertTrue(daemonRolledBack, "daemon must roll back the exact transaction")
+        assertTrue(mcpApplied, "MCP must apply the binding-backed plan")
+        assertTrue(mcpRolledBack, "MCP must roll back the exact transaction")
+        assertTrue(lexicalDaemonRefused, "daemon must refuse managed Apply for lexical fallback evidence")
+        assertTrue(lexicalMcpRefused, "MCP must refuse managed Apply for lexical fallback evidence")
+    }
+
+    @Then("^the managed planner refuses a selected write to a preceding local without edits$")
+    fun managedPlannerRefusesWritesToPrecedingLocal() {
+        val root = buildFixture("the selection writes to a preceding direct local")
+        snapshot = JavaProjectScanner().scan(root)
+        val before = Files.readString(root.resolve(TARGET))
+        plan = preview(TARGET, 6, 7, "incrementPrior")
+        val refused = requireNotNull(plan)
+        assertEquals(PatchStatus.REFUSED, refused.status, refused.summary)
+        assertEquals("Writes to values declared outside the selected statements are not supported", refused.summary)
+        assertTrue(refused.workspaceEdit.edits.isEmpty(), "a write to a preceding local must not produce edits")
+        assertTrue(refused.affectedFiles.isEmpty(), "a refusal must not claim affected files")
+        assertEquals(before, Files.readString(root.resolve(TARGET)), "planning a refusal must leave source bytes unchanged")
+    }
+
+    private fun verifyLexicalCompatibilityIsReviewOnly(root: Path) {
+        val target = root.resolve(TARGET)
+        val original = Files.readString(target)
+        val baseline = workspaceImage(root)
+        val daemon = DaemonSession()
+        try {
+            val opened = daemon.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+            val preview = daemon.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "extractMethod"); put("languageId", "java")
+                put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+                put("arguments", buildJsonObject {
+                    put("file", TARGET.toString()); put("startLine", 5); put("endLine", 6); put("methodName", "extract")
+                })
+            }).jsonObject
+            assertEquals("PREVIEW", preview.getValue("status").jsonPrimitive.content)
+            assertEquals("LEXICAL_FALLBACK", preview.getValue("evidence").jsonPrimitive.content)
+            val txBefore = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().size
+            val refusal = runCatching {
+                daemon.dispatch("refactor.apply", buildJsonObject {
+                    put("planId", preview.getValue("planId").jsonPrimitive.content)
+                    put("expectedSnapshotHash", opened.getValue("snapshotHash").jsonPrimitive.content)
+                })
+            }.exceptionOrNull()
+            lexicalDaemonRefused = refusal is JsonRpcException && refusal.message.orEmpty().contains("Lexical fallback previews")
+            assertTrue(lexicalDaemonRefused, refusal?.toString().orEmpty())
+            assertEquals(txBefore, TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().size)
+            assertEquals(original, Files.readString(target))
+        } finally {
+            daemon.close()
+        }
+
+        val mcp = McpSession()
+        try {
+            val scan = mcpCall(mcp, "project_scan", buildJsonObject { put("root", root.toString()) })
+            assertEquals("false", scan.getValue("isError").jsonPrimitive.content)
+            val preview = mcpCall(mcp, "preview_refactoring", buildJsonObject {
+                put("operation", "extractMethod"); put("languageId", "java")
+                put("arguments", buildJsonObject {
+                    put("file", TARGET.toString()); put("startLine", 5); put("endLine", 6); put("methodName", "extract")
+                })
+            })
+            val text = toolText(preview)
+            assertTrue(text.contains("Status   : PREVIEW"), text)
+            assertTrue(text.contains("Evidence : LEXICAL_FALLBACK"), text)
+            val planId = Regex("Plan ID\\s*:\\s*(\\S+)").find(text)?.groupValues?.get(1)
+                ?: error("MCP lexical preview omitted plan ID: $text")
+            val txBefore = TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().size
+            val result = runCatching {
+                toolText(mcpCall(mcp, "apply_refactoring", buildJsonObject { put("planId", planId) }))
+            }.getOrElse { it.message.orEmpty() }
+            lexicalMcpRefused = result.contains("evidence.insufficient") || result.contains("Lexical fallback previews")
+            assertTrue(lexicalMcpRefused, result)
+            assertEquals(txBefore, TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().size)
+            assertWorkspaceImage(baseline, root)
+        } finally {
+            mcp.close()
+        }
     }
 
     // -------------------------------------------------------------- Scenario 2 Thens
@@ -380,21 +646,60 @@ class KotlinJvmExtractMethodCharacterizationSteps {
 
     private fun buildFixture(condition: String): Path {
         val root = temporaryDirectory("rk-jvm-extractmethod")
+        val bindingAware = condition == "the selection spans multiple statements, reads method parameters and a preceding direct local, updates one local through a conditional branch and invokes a checked-exception method" ||
+            condition == "the selection writes to a preceding direct local"
+        val sourceDirectory = if (bindingAware) "" else "<sourceDirectory>.</sourceDirectory>"
+        val release = if (bindingAware) "<maven.compiler.release>21</maven.compiler.release>" else ""
         Files.writeString(root.resolve("pom.xml"), """
             <project><modelVersion>4.0.0</modelVersion>
               <groupId>example</groupId><artifactId>extract</artifactId><version>1</version>
-              <build><sourceDirectory>.</sourceDirectory></build>
+              <properties>$release</properties>
+              <build>$sourceDirectory</build>
             </project>
         """.trimIndent())
         val target = root.resolve("src/main/java/example/extract/ExtractTarget.java")
         target.parent.createDirectories()
         target.writeText(extractTargetContent(condition))
         root.resolve("Util.kt").writeText("package example\nfun util() {}\n")
-        root.resolve("Generated.java").writeText("package example.generated;\n@Generated\npublic class Generated {}\n")
+        root.resolve("Generated.java").writeText("package example.generated;\n@javax.annotation.processing.Generated(\"fixture\")\npublic class Generated {}\n")
         return root
     }
 
     private fun extractTargetContent(condition: String): String = when (condition) {
+        "the selection spans multiple statements, reads method parameters and a preceding direct local, updates one local through a conditional branch and invokes a checked-exception method" ->
+            """|package example.extract;
+               |import java.io.IOException;
+               |import java.nio.file.Files;
+               |import java.nio.file.Path;
+               |
+               |public final class ExtractTarget {
+               |    public static String normalize(Path path, String fallback) throws IOException {
+               |        String prefix = "";
+               |        String raw = Files.readString(path);
+               |        String normalized = prefix + raw.trim();
+               |        if (normalized.isEmpty()) {
+               |            normalized = fallback;
+               |        }
+               |        return normalized;
+               |    }
+               |
+               |    public static void main(String[] args) throws IOException {
+               |        System.out.print(normalize(Path.of(args[0]), "fallback"));
+               |    }
+               |}
+               |""".trimMargin()
+        "the selection writes to a preceding direct local" ->
+            """|package example.extract;
+               |
+               |public final class ExtractTarget {
+               |    public int run() {
+               |        int total = 1;
+               |        total += 1;
+               |        int result = total;
+               |        return result;
+               |    }
+               |}
+               |""".trimMargin()
         "a method named extract already exists or is already called in the file" ->
             """|package example.extract;
                |
@@ -541,12 +846,65 @@ class KotlinJvmExtractMethodCharacterizationSteps {
         return Files.createTempDirectory(base, prefix).also(temporaryDirectories::add)
     }
 
+    private fun compileAndRun(image: Map<Path, String>, input: String, label: String,
+                              entryPoint: String = "example.extract.ExtractTarget"): String {
+        val directory = temporaryDirectory("$label-")
+        val sourceRoot = directory.resolve("src")
+        val classes = directory.resolve("classes")
+        Files.createDirectories(sourceRoot)
+        Files.createDirectories(classes)
+        val sourceFiles = image.filterKeys { it.toString().endsWith(".java") }.map { (relative, content) ->
+            val path = sourceRoot.resolve(relative).normalize()
+            require(path.startsWith(sourceRoot)) { "fixture source escaped its temporary root: $relative" }
+            Files.createDirectories(requireNotNull(path.parent))
+            Files.writeString(path, content)
+            path
+        }
+        assertTrue(sourceFiles.isNotEmpty(), "expected at least one Java compilation unit")
+        val compiler = requireNotNull(ToolProvider.getSystemJavaCompiler()) { "tests require a full JDK compiler" }
+        val diagnostics = javax.tools.DiagnosticCollector<javax.tools.JavaFileObject>()
+        val fileManager = compiler.getStandardFileManager(diagnostics, null, Charsets.UTF_8)
+        val success = fileManager.use { manager ->
+            val units = manager.getJavaFileObjectsFromPaths(sourceFiles)
+            compiler.getTask(null, manager, diagnostics, listOf("--release", "21", "-d", classes.toString()), null, units).call()
+        }
+        assertTrue(success, "$label fixture did not compile: ${diagnostics.diagnostics.joinToString("\n")}")
+        Files.writeString(directory.resolve("input.txt"), input)
+        val java = Path.of(System.getProperty("java.home")).resolve("bin").resolve(if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java")
+        val process = ProcessBuilder(java.toString(), "-cp", classes.toString(), entryPoint, directory.resolve("input.txt").toString())
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        val exit = process.waitFor()
+        assertEquals(0, exit, "$label fixture failed at runtime: $output")
+        return output
+    }
+
     private fun deleteNoFollow(root: Path) {
         if (!root.exists()) return
         Files.walk(root).use { stream -> stream.toList() }
             .sortedByDescending(Path::getNameCount)
             .forEach { path -> Files.delete(path) }
     }
+
+    private fun workspaceImage(root: Path): Map<Path, String> = Files.walk(root).use { files ->
+        files.toList().filter(Files::isRegularFile)
+            .filter { !it.startsWith(root.resolve(".refactorkit")) }
+            .associate { path -> root.relativize(path) to Files.readString(path) }
+    }
+
+    private fun assertWorkspaceImage(expected: Map<Path, String>, root: Path) {
+        assertEquals(expected, workspaceImage(root), "managed rollback must restore every original workspace input")
+    }
+
+    private fun mcpCall(session: McpSession, name: String, arguments: JsonObject): JsonObject =
+        session.dispatch("tools/call", buildJsonObject {
+            put("name", name)
+            put("arguments", arguments)
+        }).jsonObject
+
+    private fun toolText(result: JsonObject): String = result.getValue("content").jsonArray.single()
+        .jsonObject.getValue("text").jsonPrimitive.content
 
     @After
     fun cleanup(scenario: Scenario) {

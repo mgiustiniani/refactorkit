@@ -2,39 +2,572 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://refactorkit.org/schemas/api-0.2-intelligence-query.json",
   "title": "RefactorKit API 0.2 intelligence.query response",
+  "$comment": "This response contract includes Java typeDefinition, typeHierarchy, callHierarchy, and compiler-bound implementations. ARC42 owns integrated qualification; docs/java-project-context-protocol.md owns Java source-authority wire details.",
   "oneOf": [
-    {"$ref": "#/$defs/ready"},
-    {"$ref": "#/$defs/completion"},
-    {"$ref": "#/$defs/definition"},
-    {"$ref": "#/$defs/references"},
-    {"$ref": "#/$defs/javaHover"},
-    {"$ref": "#/$defs/hover"},
-    {"$ref": "#/$defs/signatureHelp"},
-    {"$ref": "#/$defs/refused"}
+    {
+      "$ref": "#/$defs/javaEditorCompilerDiagnostics"
+    },
+    {
+      "$ref": "#/$defs/entryPoints"
+    },
+    {
+      "$ref": "#/$defs/entryPointsV2"
+    },
+    {
+      "$ref": "#/$defs/ready"
+    },
+    {
+      "$ref": "#/$defs/completion"
+    },
+    {
+      "$ref": "#/$defs/definition"
+    },
+    {
+      "$ref": "#/$defs/typeDefinition"
+    },
+    {
+      "$ref": "#/$defs/typeHierarchy"
+    },
+    {
+      "$ref": "#/$defs/callHierarchy"
+    },
+    {
+      "$ref": "#/$defs/implementations"
+    },
+    {
+      "$ref": "#/$defs/references"
+    },
+    {
+      "$ref": "#/$defs/javaHover"
+    },
+    {
+      "$ref": "#/$defs/hover"
+    },
+    {
+      "$ref": "#/$defs/signatureHelp"
+    },
+    {
+      "$ref": "#/$defs/refused"
+    },
+    {
+      "$ref": "#/$defs/mutationSelection"
+    },
+    {
+      "$ref": "#/$defs/editorMutationSelection"
+    }
   ],
   "$defs": {
+    "javaEditorCompilerDiagnostics": {
+      "$comment": "Java-only immutable editor compiler errors. Completeness is for the providerSnapshot (saved Java sources plus exact draft replacements), not lint warnings or a build. analyzedSourceCount can exceed documents.length. The consumer must capture all open Java drafts and discard results if that draft set or its versions change; the server cannot attest editor buffers never communicated. Count/message limits refuse rather than silently truncate. Native queued cancellation retains JSON-RPC REQUEST_CANCELLED. ARC42: java-editor-compiler-diagnostics-2026-11-14.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "snapshotHash",
+        "indexGeneration",
+        "status",
+        "kind",
+        "providerId",
+        "backend",
+        "evidence",
+        "coverage",
+        "complete",
+        "contextHash",
+        "contextSchemaVersion",
+        "platformIdentities",
+        "providerSnapshotHash",
+        "provenanceHash",
+        "sourceAuthority",
+        "analyzedSourceCount",
+        "total",
+        "items"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "indexGeneration": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "const": "ready"
+        },
+        "kind": {
+          "const": "diagnostics"
+        },
+        "providerId": {
+          "enum": ["java-jdt-bindings-v1", "java-sdk-compiler-diagnostics-v1", "java-sdk-and-jdt-compiler-diagnostics-v1"]
+        },
+        "backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "const": "compiler"
+        },
+        "coverage": {
+          "const": "compiler-errors"
+        },
+        "complete": {
+          "const": true
+        },
+        "contextHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "contextSchemaVersion": {
+          "enum": [
+            "java-project-context-v2",
+            "java-project-context-v3",
+            "java-project-context-v4",
+            "java-project-context-v5",
+            "java-project-context-v6",
+            "java-project-context-v7"
+          ]
+        },
+        "platformIdentities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "providerSnapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenanceHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sourceAuthority": {
+          "$ref": "#/$defs/javaEditorOverlayAuthority"
+        },
+        "analyzedSourceCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "severity",
+              "code",
+              "message",
+              "location"
+            ],
+            "properties": {
+              "severity": {
+                "const": "error"
+              },
+              "code": {
+                "anyOf": [
+                  { "enum": ["java.jdt.syntax", "java.jdt.typeResolution"] },
+                  { "type": "string", "pattern": "^java\\.javac\\.compiler\\.err\\.[a-zA-Z0-9_.]+$" }
+                ]
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "location": {
+                "$ref": "#/$defs/location"
+              }
+            }
+          }
+        }
+      }
+    },
+    "entryPoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "kind",
+        "status",
+        "snapshotHash",
+        "indexGeneration",
+        "contextHash",
+        "contextSchemaVersion",
+        "providerId",
+        "backend",
+        "evidence",
+        "provenanceHash",
+        "scope",
+        "platformIdentities",
+        "launcherRelease",
+        "launchProfile",
+        "scopeAnalysisComplete",
+        "complete",
+        "coverage",
+        "returnedCount",
+        "totalEligibleCount",
+        "observedEligibleLowerBound",
+        "truncated",
+        "candidates"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "java-entry-points-v1"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "kind": {
+          "const": "entryPoints"
+        },
+        "status": {
+          "const": "ready"
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "indexGeneration": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contextHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "contextSchemaVersion": {
+          "enum": [
+            "java-project-context-v2",
+            "java-project-context-v3",
+            "java-project-context-v4",
+            "java-project-context-v5",
+            "java-project-context-v6",
+            "java-project-context-v7"
+          ]
+        },
+        "providerId": {
+          "const": "java-jdt-bindings-v1"
+        },
+        "backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "const": "compiler"
+        },
+        "provenanceHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "scope": {
+          "$ref": "#/$defs/entryPointScope"
+        },
+        "platformIdentities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "launcherRelease": {
+          "type": "integer",
+          "minimum": 8
+        },
+        "launchProfile": {
+          "const": "classic-declared-v1"
+        },
+        "scopeAnalysisComplete": {
+          "const": true
+        },
+        "complete": {
+          "const": false
+        },
+        "coverage": {
+          "$ref": "#/$defs/entryPointCoverage"
+        },
+        "returnedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        },
+        "selection": {
+          "$ref": "#/$defs/entryPointSelection"
+        },
+        "totalEligibleCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observedEligibleLowerBound": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/entryPointCandidate"
+          }
+        }
+      },
+      "$comment": "Classic declared-main response only. ARC42 java-entry-point-enclosing-type-2026-11-13 owns qualification; java-project-context-protocol.md owns wire details. UTF-8 byte limits, range ordering/containment, path ownership, cross-field counts and snapshot/SDK currency are enforced at runtime, not fully expressible here. complete remains false while inherited/Java25/compact forms are unqualified."
+    },
+    "entryPointPosition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "line",
+        "character"
+      ],
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "character": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "entryPointRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/entryPointPosition"
+        },
+        "end": {
+          "$ref": "#/$defs/entryPointPosition"
+        }
+      }
+    },
+    "entryPointLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "range"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "range": {
+          "$ref": "#/$defs/entryPointRange"
+        }
+      }
+    },
+    "entryPointScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerId",
+        "moduleId",
+        "sourceSetId"
+      ],
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "moduleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "sourceSetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      }
+    },
+    "entryPointCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryPointId",
+        "binaryName",
+        "declaringBinaryName",
+        "descriptor",
+        "invocation",
+        "inherited",
+        "generated",
+        "sourceLevel",
+        "targetLevel",
+        "source"
+      ],
+      "properties": {
+        "entryPointId": {
+          "type": "string",
+          "pattern": "^java-entry:[0-9a-f]{64}$"
+        },
+        "binaryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "declaringBinaryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "descriptor": {
+          "const": "([Ljava/lang/String;)V"
+        },
+        "invocation": {
+          "const": "static"
+        },
+        "inherited": {
+          "const": false
+        },
+        "generated": {
+          "type": "boolean"
+        },
+        "sourceLevel": {
+          "type": "integer",
+          "minimum": 8
+        },
+        "targetLevel": {
+          "type": "integer",
+          "minimum": 8
+        },
+        "source": {
+          "$ref": "#/$defs/entryPointLocation"
+        }
+      }
+    },
+    "entryPointSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "path",
+        "position",
+        "binaryName",
+        "range"
+      ],
+      "properties": {
+        "mode": {
+          "const": "enclosing-type"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "position": {
+          "$ref": "#/$defs/entryPointPosition"
+        },
+        "binaryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "range": {
+          "$ref": "#/$defs/entryPointRange"
+        }
+      }
+    },
+    "entryPointCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualifiedProfiles",
+        "unqualifiedProfiles"
+      ],
+      "properties": {
+        "qualifiedProfiles": {
+          "const": [
+            "classic-declared-v1"
+          ]
+        },
+        "unqualifiedProfiles": {
+          "const": [
+            "inherited-v1",
+            "java25-v1",
+            "compact-preview-v1"
+          ]
+        }
+      }
+    },
     "position": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["line", "character"],
+      "required": [
+        "line",
+        "character"
+      ],
       "properties": {
-        "line": {"type": "integer", "minimum": 0},
-        "character": {"type": "integer", "minimum": 0}
+        "line": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "character": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "location": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "range"],
+      "required": [
+        "path",
+        "range"
+      ],
       "properties": {
-        "path": {"type": "string", "minLength": 1},
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
         "range": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["start", "end"],
+          "required": [
+            "start",
+            "end"
+          ],
           "properties": {
-            "start": {"$ref": "#/$defs/position"},
-            "end": {"$ref": "#/$defs/position"}
+            "start": {
+              "$ref": "#/$defs/position"
+            },
+            "end": {
+              "$ref": "#/$defs/position"
+            }
           }
         }
       }
@@ -42,244 +575,2896 @@
     "symbol": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "symbolKind", "languageId", "providerId", "backend", "evidence", "completeness", "location"],
+      "required": [
+        "id",
+        "name",
+        "symbolKind",
+        "languageId",
+        "providerId",
+        "backend",
+        "evidence",
+        "completeness",
+        "location"
+      ],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "name": {"type": "string", "minLength": 1},
-        "symbolKind": {"type": "string"},
-        "languageId": {"type": "string"},
-        "providerId": {"type": "string"},
-        "backend": {"type": "string"},
-        "evidence": {"enum": ["compiler", "language-server", "native-ast", "structural-parse", "lexical"]},
-        "completeness": {"enum": ["declarations", "semantic"]},
-        "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "location": {"$ref": "#/$defs/location"}
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbolKind": {
+          "type": "string"
+        },
+        "languageId": {
+          "type": "string"
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "evidence": {
+          "enum": [
+            "compiler",
+            "language-server",
+            "native-ast",
+            "structural-parse",
+            "lexical"
+          ]
+        },
+        "completeness": {
+          "enum": [
+            "declarations",
+            "semantic"
+          ]
+        },
+        "provenanceHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "location": {
+          "$ref": "#/$defs/location"
+        }
       }
     },
     "base": {
       "type": "object",
-      "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration"],
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "status",
+        "kind",
+        "snapshotHash",
+        "indexGeneration"
+      ],
       "properties": {
-        "schemaVersion": {"const": 1},
-        "requestId": {"type": "string", "minLength": 1, "maxLength": 128},
-        "status": {"enum": ["ready", "refused"]},
-        "kind": {"type": "string"},
-        "snapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "indexGeneration": {"type": "integer", "minimum": 1}
+        "schemaVersion": {
+          "const": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "refused"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "indexGeneration": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "ready": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "coverage", "missingProviderLanguages", "total", "returned", "truncated", "items"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "coverage",
+            "missingProviderLanguages",
+            "total",
+            "returned",
+            "truncated",
+            "items"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
-            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "sourceAuthority": {"type": "object"},
-            "status": {"const": "ready"},
-            "kind": {"enum": ["workspaceSymbols", "documentSymbols"]},
-            "coverage": {"enum": ["source-inventory", "partial", "declarations", "semantic"]},
-            "missingProviderLanguages": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
-            "total": {"type": "integer", "minimum": 0},
-            "returned": {"type": "integer", "minimum": 0, "maximum": 200},
-            "truncated": {"type": "boolean"},
-            "items": {"type": "array", "maxItems": 200, "items": {"$ref": "#/$defs/symbol"}}
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "sourceAuthority": {
+              "type": "object"
+            },
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "enum": [
+                "workspaceSymbols",
+                "documentSymbols"
+              ]
+            },
+            "coverage": {
+              "enum": [
+                "source-inventory",
+                "partial",
+                "declarations",
+                "semantic"
+              ]
+            },
+            "missingProviderLanguages": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "returned": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 200
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "$ref": "#/$defs/symbol"
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 18,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          },
+          "dependentRequired": {
+            "contextHash": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "contextSchemaVersion": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "platformIdentities": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ]
           }
         }
       ]
     },
     "definition": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "providerId", "backend", "evidence", "completeness", "provenanceHash", "locations", "sourceAuthority", "cache"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "locations",
+            "sourceAuthority",
+            "cache"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
-            "status": {"const": "ready"}, "kind": {"const": "definition"},
-            "providerId": {"enum": ["java-jdt-bindings-v1", "kotlin-k2-fir-usages-v1"]},
-            "backend": {"enum": ["eclipse-jdt-3.44-bindings-v1", "kotlin-compiler-jvm-declarations-k2-v1"]},
-            "evidence": {"const": "compiler"}, "completeness": {"const": "semantic"},
-            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "locations": {"type": "array", "maxItems": 1, "items": {"$ref": "#/$defs/location"}},
-            "sourceAuthority": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "contentSha256"], "properties": {
-              "kind": {"const": "saved-snapshot"}, "path": {"type": "string"},
-              "contentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
-            }},
-            "cache": {"type": "object", "additionalProperties": false, "required": ["entries", "hits", "misses"], "properties": {
-              "entries": {"type": "integer", "minimum": 1, "maximum": 2},
-              "hits": {"type": "integer", "minimum": 0}, "misses": {"type": "integer", "minimum": 0}
-            }}
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "definition"
+            },
+            "providerId": {
+              "enum": [
+                "java-jdt-bindings-v1",
+                "kotlin-k2-fir-usages-v1"
+              ]
+            },
+            "backend": {
+              "enum": [
+                "eclipse-jdt-3.44-bindings-v1",
+                "kotlin-compiler-jvm-declarations-k2-v1"
+              ]
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "completeness": {
+              "const": "semantic"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "locations": {
+              "type": "array",
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/location"
+              }
+            },
+            "sourceAuthority": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "path",
+                    "contentSha256"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "saved-snapshot"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "contentSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/$defs/javaEditorOverlayAuthority"
+                }
+              ]
+            },
+            "cache": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "entries",
+                "hits",
+                "misses"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2
+                },
+                "hits": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "misses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 18,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "dependentRequired": {
+            "contextHash": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "contextSchemaVersion": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "platformIdentities": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ]
           }
         }
       ]
     },
     "references": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "providerId", "backend", "evidence", "completeness", "provenanceHash", "total", "returned", "truncated", "complete", "warningCount", "references", "sourceAuthority", "cache"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "total",
+            "returned",
+            "truncated",
+            "complete",
+            "warningCount",
+            "references",
+            "sourceAuthority",
+            "cache"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
-            "status": {"const": "ready"}, "kind": {"const": "references"},
-            "providerId": {"enum": ["java-jdt-bindings-v1", "kotlin-k2-fir-usages-v1"]},
-            "backend": {"enum": ["eclipse-jdt-3.44-bindings-v1", "kotlin-compiler-jvm-declarations-k2-v1"]},
-            "evidence": {"const": "compiler"}, "completeness": {"enum": ["semantic", "partial"]},
-            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "total": {"type": "integer", "minimum": 0}, "returned": {"type": "integer", "minimum": 0, "maximum": 1000},
-            "truncated": {"type": "boolean"}, "complete": {"type": "boolean"},
-            "warningCount": {"type": "integer", "minimum": 0},
-            "references": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/location"}},
-            "sourceAuthority": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "contentSha256"], "properties": {
-              "kind": {"const": "saved-snapshot"}, "path": {"type": "string"},
-              "contentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
-            }},
-            "cache": {"type": "object", "additionalProperties": false, "required": ["entries", "hits", "misses"], "properties": {
-              "entries": {"type": "integer", "minimum": 1, "maximum": 2},
-              "hits": {"type": "integer", "minimum": 0}, "misses": {"type": "integer", "minimum": 0}
-            }}
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "references"
+            },
+            "providerId": {
+              "enum": [
+                "java-jdt-bindings-v1",
+                "kotlin-k2-fir-usages-v1"
+              ]
+            },
+            "backend": {
+              "enum": [
+                "eclipse-jdt-3.44-bindings-v1",
+                "kotlin-compiler-jvm-declarations-k2-v1"
+              ]
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "completeness": {
+              "enum": [
+                "semantic",
+                "partial"
+              ]
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "returned": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "references": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "$ref": "#/$defs/location"
+              }
+            },
+            "sourceAuthority": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "path",
+                    "contentSha256"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "saved-snapshot"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "contentSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/$defs/javaEditorOverlayAuthority"
+                }
+              ]
+            },
+            "cache": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "entries",
+                "hits",
+                "misses"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2
+                },
+                "hits": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "misses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 18,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "dependentRequired": {
+            "contextHash": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "contextSchemaVersion": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "platformIdentities": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ]
           }
         }
       ]
     },
     "completion": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "providerSnapshotHash", "indexGeneration", "providerId", "backend", "evidence", "provenanceHash", "incomplete", "items", "sourceAuthority"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "providerSnapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "provenanceHash",
+            "incomplete",
+            "items",
+            "sourceAuthority"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
-            "status": {"const": "ready"}, "kind": {"const": "completion"},
-            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "providerId": {"type": "string"}, "backend": {"type": "string"},
-            "evidence": {"const": "language-server"},
-            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "incomplete": {"type": "boolean"},
-            "items": {"type": "array", "maxItems": 200, "items": {"type": "object", "additionalProperties": false, "required": ["label", "symbolKind", "insertTextFormat", "commitCharacters", "additionalTextEdits"], "properties": {
-              "label": {"type": "string", "minLength": 1, "maxLength": 512}, "symbolKind": {"type": "string"},
-              "detail": {"type": "string", "maxLength": 4096}, "documentation": {"type": "string", "maxLength": 16384},
-              "sortText": {"type": "string", "maxLength": 65536}, "filterText": {"type": "string", "maxLength": 65536},
-              "insertText": {"type": "string", "maxLength": 65536},
-              "insertTextFormat": {"enum": ["plain-text", "snippet"]},
-              "commitCharacters": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 8}},
-              "replacementRange": {"$ref": "#/$defs/location/properties/range"},
-              "additionalTextEdits": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": false, "required": ["range", "newText"], "properties": {"range": {"$ref": "#/$defs/location/properties/range"}, "newText": {"type": "string", "maxLength": 65536}}}}
-            }}},
-            "sourceAuthority": {"type": "object"}
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "completion"
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "backend": {
+              "type": "string"
+            },
+            "evidence": {
+              "const": "language-server"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "incomplete": {
+              "type": "boolean"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 200,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "symbolKind",
+                  "insertTextFormat",
+                  "commitCharacters",
+                  "additionalTextEdits"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "symbolKind": {
+                    "type": "string"
+                  },
+                  "detail": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "documentation": {
+                    "type": "string",
+                    "maxLength": 16384
+                  },
+                  "sortText": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "filterText": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "insertText": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "insertTextFormat": {
+                    "enum": [
+                      "plain-text",
+                      "snippet"
+                    ]
+                  },
+                  "commitCharacters": {
+                    "type": "array",
+                    "maxItems": 16,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 8
+                    }
+                  },
+                  "replacementRange": {
+                    "$ref": "#/$defs/location/properties/range"
+                  },
+                  "additionalTextEdits": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "range",
+                        "newText"
+                      ],
+                      "properties": {
+                        "range": {
+                          "$ref": "#/$defs/location/properties/range"
+                        },
+                        "newText": {
+                          "type": "string",
+                          "maxLength": 65536
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "sourceAuthority": {
+              "type": "object"
+            }
           }
         }
       ]
     },
     "javaHover": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "providerId", "backend", "evidence", "completeness", "provenanceHash", "range", "contents", "complete", "warningCount", "sourceAuthority", "cache"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "range",
+            "contents",
+            "complete",
+            "warningCount",
+            "sourceAuthority",
+            "cache"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
-            "status": {"const": "ready"}, "kind": {"const": "hover"},
-            "providerId": {"const": "java-jdt-bindings-v1"}, "backend": {"const": "eclipse-jdt-3.44-bindings-v1"},
-            "evidence": {"const": "compiler"}, "completeness": {"const": "semantic"},
-            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "range": {"oneOf": [{"$ref": "#/$defs/location/properties/range"}, {"type": "null"}]},
-            "contents": {"type": "array", "maxItems": 3, "items": {"type": "object", "additionalProperties": false, "required": ["format", "value"], "properties": {
-              "format": {"enum": ["plain-text", "markdown"]}, "value": {"type": "string", "maxLength": 16384}
-            }}},
-            "complete": {"type": "boolean"}, "warningCount": {"type": "integer", "minimum": 0},
-            "sourceAuthority": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "contentSha256"], "properties": {
-              "kind": {"const": "saved-snapshot"}, "path": {"type": "string"},
-              "contentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
-            }},
-            "cache": {"type": "object", "additionalProperties": false, "required": ["entries", "hits", "misses"], "properties": {
-              "entries": {"type": "integer", "minimum": 1, "maximum": 2},
-              "hits": {"type": "integer", "minimum": 0}, "misses": {"type": "integer", "minimum": 0}
-            }}
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "hover"
+            },
+            "providerId": {
+              "const": "java-jdt-bindings-v1"
+            },
+            "backend": {
+              "const": "eclipse-jdt-3.44-bindings-v1"
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "completeness": {
+              "const": "semantic"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "range": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/location/properties/range"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "contents": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "format",
+                  "value"
+                ],
+                "properties": {
+                  "format": {
+                    "enum": [
+                      "plain-text",
+                      "markdown"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 16384
+                  }
+                }
+              }
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sourceAuthority": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "path",
+                    "contentSha256"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "saved-snapshot"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "contentSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/$defs/javaEditorOverlayAuthority"
+                }
+              ]
+            },
+            "cache": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "entries",
+                "hits",
+                "misses"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2
+                },
+                "hits": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "misses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 18,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "dependentRequired": {
+            "contextHash": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "contextSchemaVersion": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ],
+            "platformIdentities": [
+              "contextHash",
+              "contextSchemaVersion",
+              "platformIdentities"
+            ]
           }
         }
       ]
     },
     "hover": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "providerSnapshotHash", "indexGeneration", "providerId", "backend", "evidence", "provenanceHash", "range", "contents", "sourceAuthority"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "providerSnapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "provenanceHash",
+            "range",
+            "contents",
+            "sourceAuthority"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
-            "status": {"const": "ready"}, "kind": {"const": "hover"},
-            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "providerId": {"type": "string"}, "backend": {"type": "string"},
-            "evidence": {"const": "language-server"},
-            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "range": {"oneOf": [{"$ref": "#/$defs/location/properties/range"}, {"type": "null"}]},
-            "contents": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["format", "value"], "properties": {"format": {"enum": ["plain-text", "markdown"]}, "value": {"type": "string", "maxLength": 16384}}}},
-            "sourceAuthority": {"type": "object"}
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "hover"
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "backend": {
+              "type": "string"
+            },
+            "evidence": {
+              "const": "language-server"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "range": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/location/properties/range"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "contents": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "format",
+                  "value"
+                ],
+                "properties": {
+                  "format": {
+                    "enum": [
+                      "plain-text",
+                      "markdown"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 16384
+                  }
+                }
+              }
+            },
+            "sourceAuthority": {
+              "type": "object"
+            }
           }
         }
       ]
     },
     "signatureHelp": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "providerSnapshotHash", "indexGeneration", "providerId", "backend", "evidence", "provenanceHash", "activeSignature", "activeParameter", "signatures", "sourceAuthority"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "providerSnapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "provenanceHash",
+            "activeSignature",
+            "activeParameter",
+            "signatures",
+            "sourceAuthority"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "snapshotHash": {}, "indexGeneration": {},
-            "status": {"const": "ready"}, "kind": {"const": "signatureHelp"},
-            "providerSnapshotHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "providerId": {"type": "string"}, "backend": {"type": "string"},
-            "evidence": {"const": "language-server"},
-            "provenanceHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "activeSignature": {"type": ["integer", "null"], "minimum": 0},
-            "activeParameter": {"type": ["integer", "null"], "minimum": 0},
-            "signatures": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["label", "parameters"], "properties": {
-              "label": {"type": "string", "minLength": 1, "maxLength": 8192},
-              "documentation": {"type": "string", "maxLength": 16384},
-              "parameters": {"type": "array", "maxItems": 64, "items": {"type": "object", "additionalProperties": false, "required": ["labelStart", "labelEnd"], "properties": {
-                "labelStart": {"type": "integer", "minimum": 0}, "labelEnd": {"type": "integer", "minimum": 0},
-                "documentation": {"type": "string", "maxLength": 16384}
-              }}}
-            }}},
-            "sourceAuthority": {"type": "object"}
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "signatureHelp"
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "backend": {
+              "type": "string"
+            },
+            "evidence": {
+              "const": "language-server"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "activeSignature": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "activeParameter": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "signatures": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "parameters"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "documentation": {
+                    "type": "string",
+                    "maxLength": 16384
+                  },
+                  "parameters": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "labelStart",
+                        "labelEnd"
+                      ],
+                      "properties": {
+                        "labelStart": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "labelEnd": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "documentation": {
+                          "type": "string",
+                          "maxLength": 16384
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "sourceAuthority": {
+              "type": "object"
+            }
           }
         }
       ]
     },
     "refused": {
       "allOf": [
-        {"$ref": "#/$defs/base"},
+        {
+          "$ref": "#/$defs/base"
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "requestId", "status", "kind", "snapshotHash", "indexGeneration", "error"],
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "error"
+          ],
           "properties": {
-            "schemaVersion": {}, "requestId": {}, "kind": {}, "snapshotHash": {}, "indexGeneration": {},
-            "status": {"const": "refused"},
+            "schemaVersion": {},
+            "requestId": {},
+            "kind": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "refused"
+            },
             "error": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["code", "message"],
+              "required": [
+                "code",
+                "message"
+              ],
               "properties": {
-                "code": {"type": "string"},
-                "message": {"type": "string"}
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
               }
             }
           }
         }
       ]
+    },
+    "javaEditorOverlayAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "baseSnapshotHash",
+        "overlayHash",
+        "documents"
+      ],
+      "properties": {
+        "kind": {
+          "const": "immutable-editor-overlay"
+        },
+        "baseSnapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "overlayHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "documents": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "version",
+              "contentSha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "contentSha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "javaMutationSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "snapshotHash",
+        "contextHash",
+        "path",
+        "position",
+        "symbolId",
+        "symbolKind",
+        "bindingKey",
+        "declaration",
+        "contentSha256",
+        "provenanceHash",
+        "selectorHash"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "java-mutation-selection-v1"
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "contextHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "position": {
+          "$ref": "#/$defs/position"
+        },
+        "symbolId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbolKind": {
+          "enum": [
+            "class",
+            "interface",
+            "enum",
+            "record",
+            "annotation",
+            "method",
+            "field"
+          ]
+        },
+        "bindingKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "declaration": {
+          "$ref": "#/$defs/location"
+        },
+        "contentSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenanceHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "selectorHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "mutationSelection": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "snapshotHash",
+            "indexGeneration",
+            "status",
+            "kind",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "contextHash",
+            "contextSchemaVersion",
+            "platformIdentities",
+            "sourceAuthority",
+            "selection"
+          ],
+          "properties": {
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "mutationSelection"
+            },
+            "providerId": {
+              "const": "java-jdt-bindings-v1"
+            },
+            "backend": {
+              "const": "eclipse-jdt-3.44-bindings-v1"
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "completeness": {
+              "const": "semantic"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "sourceAuthority": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "path",
+                "contentSha256"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "saved-snapshot"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "contentSha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            },
+            "selection": {
+              "$ref": "#/$defs/javaMutationSelection"
+            }
+          }
+        }
+      ]
+    },
+    "javaEditorMutationSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "baseSnapshotHash",
+        "overlayHash",
+        "selectorHash",
+        "documents",
+        "selection"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "java-editor-mutation-selection-v1"
+        },
+        "baseSnapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "overlayHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "selectorHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "documents": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "version",
+              "contentSha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "contentSha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "selection": {
+          "$ref": "#/$defs/javaMutationSelection"
+        }
+      }
+    },
+    "editorMutationSelection": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "snapshotHash",
+            "indexGeneration",
+            "status",
+            "kind",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "contextHash",
+            "contextSchemaVersion",
+            "platformIdentities",
+            "sourceAuthority",
+            "selection",
+            "providerSnapshotHash"
+          ],
+          "properties": {
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "kind": {
+              "const": "mutationSelection"
+            },
+            "providerId": {
+              "const": "java-jdt-bindings-v1"
+            },
+            "backend": {
+              "const": "eclipse-jdt-3.44-bindings-v1"
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "completeness": {
+              "const": "semantic"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "sourceAuthority": {
+              "$ref": "#/$defs/javaEditorOverlayAuthority"
+            },
+            "selection": {
+              "$ref": "#/$defs/javaEditorMutationSelection"
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "typeDefinition": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "sourceAuthority",
+            "cache",
+            "target",
+            "locations",
+            "scope"
+          ],
+          "properties": {
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "providerId": {
+              "const": "java-jdt-bindings-v1"
+            },
+            "backend": {
+              "const": "eclipse-jdt-3.44-bindings-v1"
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "sourceAuthority": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "path",
+                    "contentSha256"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "saved-snapshot"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "contentSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/$defs/javaEditorOverlayAuthority"
+                }
+              ]
+            },
+            "cache": {
+              "type": "object",
+              "required": [
+                "entries",
+                "hits",
+                "misses"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "hits": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "misses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "kind": {
+              "const": "typeDefinition"
+            },
+            "target": {
+              "$ref": "#/$defs/symbol"
+            },
+            "locations": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/location"
+              }
+            },
+            "scope": {
+              "const": "workspace-source"
+            },
+            "completeness": {
+              "enum": [
+                "semantic",
+                "partial"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "typeHierarchy": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "sourceAuthority",
+            "cache",
+            "root",
+            "direction",
+            "scope",
+            "complete",
+            "warningCount",
+            "total",
+            "returned",
+            "truncated",
+            "items"
+          ],
+          "properties": {
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "providerId": {
+              "const": "java-jdt-bindings-v1"
+            },
+            "backend": {
+              "const": "eclipse-jdt-3.44-bindings-v1"
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "sourceAuthority": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "path",
+                    "contentSha256"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "saved-snapshot"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "contentSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/$defs/javaEditorOverlayAuthority"
+                }
+              ]
+            },
+            "cache": {
+              "type": "object",
+              "required": [
+                "entries",
+                "hits",
+                "misses"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "hits": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "misses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "kind": {
+              "const": "typeHierarchy"
+            },
+            "root": {
+              "$ref": "#/$defs/symbol"
+            },
+            "direction": {
+              "enum": [
+                "supertypes",
+                "subtypes",
+                "both"
+              ]
+            },
+            "scope": {
+              "const": "workspace-source"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "returned": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 500,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "relation",
+                  "symbol"
+                ],
+                "properties": {
+                  "relation": {
+                    "enum": [
+                      "supertype",
+                      "subtype"
+                    ]
+                  },
+                  "symbol": {
+                    "$ref": "#/$defs/symbol"
+                  }
+                }
+              }
+            },
+            "completeness": {
+              "enum": [
+                "semantic",
+                "partial"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "callHierarchy": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "sourceAuthority",
+            "cache",
+            "root",
+            "direction",
+            "scope",
+            "targetScope",
+            "complete",
+            "warningCount",
+            "total",
+            "returned",
+            "truncated",
+            "items"
+          ],
+          "properties": {
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "providerId": {
+              "const": "java-jdt-bindings-v1"
+            },
+            "backend": {
+              "const": "eclipse-jdt-3.44-bindings-v1"
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "sourceAuthority": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "path",
+                    "contentSha256"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "saved-snapshot"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "contentSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/$defs/javaEditorOverlayAuthority"
+                }
+              ]
+            },
+            "cache": {
+              "type": "object",
+              "required": [
+                "entries",
+                "hits",
+                "misses"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "hits": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "misses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "kind": {
+              "const": "callHierarchy"
+            },
+            "root": {
+              "$ref": "#/$defs/symbol"
+            },
+            "direction": {
+              "enum": [
+                "incoming",
+                "outgoing"
+              ]
+            },
+            "scope": {
+              "const": "workspace-direct-invocations"
+            },
+            "targetScope": {
+              "const": "workspace-source+resolved-classpath"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "returned": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "method",
+                  "methodIdentity",
+                  "sourceNavigation",
+                  "callSites"
+                ],
+                "properties": {
+                  "method": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/$defs/symbol"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "methodIdentity": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "schemaVersion",
+                      "name",
+                      "qualifiedName",
+                      "bindingKey",
+                      "jvmIdentity"
+                    ],
+                    "properties": {
+                      "schemaVersion": {
+                        "const": "java-method-binding-identity-v1"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "qualifiedName": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "bindingKey": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "jvmIdentity": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "kind",
+                              "ownerBinaryName",
+                              "memberName",
+                              "descriptor"
+                            ],
+                            "properties": {
+                              "kind": {
+                                "const": "callable"
+                              },
+                              "ownerBinaryName": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "memberName": {
+                                "type": "string"
+                              },
+                              "descriptor": {
+                                "type": "string",
+                                "minLength": 3
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "sourceNavigation": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "status",
+                          "location"
+                        ],
+                        "properties": {
+                          "status": {
+                            "const": "available"
+                          },
+                          "location": {
+                            "$ref": "#/$defs/location"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "status",
+                          "reason",
+                          "location"
+                        ],
+                        "properties": {
+                          "status": {
+                            "const": "unavailable"
+                          },
+                          "reason": {
+                            "const": "classpathSourceUnavailable"
+                          },
+                          "location": {
+                            "type": "null"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "callSites": {
+                    "type": "array",
+                    "maxItems": 1000,
+                    "items": {
+                      "$ref": "#/$defs/location"
+                    }
+                  }
+                }
+              }
+            },
+            "completeness": {
+              "enum": [
+                "semantic",
+                "partial"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "implementations": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "requestId",
+            "status",
+            "kind",
+            "snapshotHash",
+            "indexGeneration",
+            "providerId",
+            "backend",
+            "evidence",
+            "completeness",
+            "provenanceHash",
+            "sourceAuthority",
+            "cache",
+            "root",
+            "targetKind",
+            "scope",
+            "complete",
+            "warningCount",
+            "total",
+            "returned",
+            "truncated",
+            "items"
+          ],
+          "properties": {
+            "schemaVersion": {},
+            "requestId": {},
+            "snapshotHash": {},
+            "indexGeneration": {},
+            "status": {
+              "const": "ready"
+            },
+            "providerId": {
+              "const": "java-jdt-bindings-v1"
+            },
+            "backend": {
+              "const": "eclipse-jdt-3.44-bindings-v1"
+            },
+            "evidence": {
+              "const": "compiler"
+            },
+            "provenanceHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "sourceAuthority": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "path",
+                    "contentSha256"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "saved-snapshot"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "contentSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/$defs/javaEditorOverlayAuthority"
+                }
+              ]
+            },
+            "cache": {
+              "type": "object",
+              "required": [
+                "entries",
+                "hits",
+                "misses"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "hits": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "misses": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "contextHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "contextSchemaVersion": {
+              "enum": [
+                "java-project-context-v2",
+                "java-project-context-v3"
+              ]
+            },
+            "platformIdentities": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "providerSnapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "kind": {
+              "const": "implementations"
+            },
+            "root": {
+              "$ref": "#/$defs/symbol"
+            },
+            "scope": {
+              "const": "workspace-source"
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "returned": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "items": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "relation",
+                  "symbol"
+                ],
+                "properties": {
+                  "relation": {
+                    "enum": [
+                      "concreteType",
+                      "concreteMethod"
+                    ]
+                  },
+                  "symbol": {
+                    "$ref": "#/$defs/symbol"
+                  }
+                }
+              }
+            },
+            "completeness": {
+              "enum": [
+                "semantic",
+                "partial"
+              ]
+            },
+            "targetKind": {
+              "enum": [
+                "type",
+                "method"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "entryPointDeclarationV2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "path",
+            "range"
+          ],
+          "properties": {
+            "kind": {
+              "const": "source"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "range": {
+              "$ref": "#/$defs/entryPointRange"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "originKind",
+            "uri",
+            "inputPath",
+            "inputSha256"
+          ],
+          "properties": {
+            "kind": {
+              "const": "binary"
+            },
+            "originKind": {
+              "enum": [
+                "classpath",
+                "platform"
+              ]
+            },
+            "uri": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "moduleName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "inputPath": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "inputSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "entryPointCandidateV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryPointId",
+        "binaryName",
+        "declaringBinaryName",
+        "descriptor",
+        "invocation",
+        "inherited",
+        "generated",
+        "sourceLevel",
+        "targetLevel",
+        "source",
+        "declaration"
+      ],
+      "properties": {
+        "entryPointId": {
+          "type": "string",
+          "pattern": "^java-entry:[0-9a-f]{64}$"
+        },
+        "binaryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "declaringBinaryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "descriptor": {
+          "enum": [
+            "()V",
+            "([Ljava/lang/String;)V"
+          ]
+        },
+        "invocation": {
+          "enum": [
+            "static",
+            "instance"
+          ]
+        },
+        "inherited": {
+          "type": "boolean"
+        },
+        "generated": {
+          "type": "boolean"
+        },
+        "sourceLevel": {
+          "const": 25
+        },
+        "targetLevel": {
+          "const": 25
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "range",
+            "form"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "range": {
+              "$ref": "#/$defs/entryPointRange"
+            },
+            "form": {
+              "enum": [
+                "declared",
+                "compact"
+              ]
+            }
+          }
+        },
+        "declaration": {
+          "$ref": "#/$defs/entryPointDeclarationV2"
+        },
+        "construction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binaryName",
+            "descriptor"
+          ],
+          "properties": {
+            "binaryName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "descriptor": {
+              "const": "()V"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "invocation": {
+                "const": "instance"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "construction"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "construction"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "entryPointsV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "kind",
+        "status",
+        "snapshotHash",
+        "indexGeneration",
+        "contextHash",
+        "contextSchemaVersion",
+        "providerId",
+        "backend",
+        "evidence",
+        "provenanceHash",
+        "scope",
+        "platformIdentities",
+        "launcherRelease",
+        "launchProfile",
+        "scopeAnalysisComplete",
+        "complete",
+        "coverage",
+        "returnedCount",
+        "totalEligibleCount",
+        "observedEligibleLowerBound",
+        "truncated",
+        "candidates",
+        "launcher",
+        "analysis",
+        "ineligibleCount",
+        "ineligibleTypesTruncated",
+        "ineligibleTypes"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "java-entry-points-v2"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "kind": {
+          "const": "entryPoints"
+        },
+        "status": {
+          "const": "ready"
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "indexGeneration": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contextHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "contextSchemaVersion": {
+          "enum": [
+            "java-project-context-v2",
+            "java-project-context-v3",
+            "java-project-context-v4",
+            "java-project-context-v5",
+            "java-project-context-v6",
+            "java-project-context-v7"
+          ]
+        },
+        "providerId": {
+          "const": "java-sdk-launcher-v2"
+        },
+        "backend": {
+          "const": "jdk25-javac"
+        },
+        "evidence": {
+          "const": "compiler"
+        },
+        "provenanceHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "scope": {
+          "$ref": "#/$defs/entryPointScope"
+        },
+        "platformIdentities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "launcherRelease": {
+          "const": 25
+        },
+        "launchProfile": {
+          "enum": [
+            "inherited-v1",
+            "java25-v1"
+          ]
+        },
+        "scopeAnalysisComplete": {
+          "const": true
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "qualifiedProfiles",
+            "unqualifiedProfiles",
+            "qualifiedCell"
+          ],
+          "properties": {
+            "qualifiedProfiles": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "enum": [
+                  "inherited-v1",
+                  "java25-v1"
+                ]
+              }
+            },
+            "unqualifiedProfiles": {
+              "const": [
+                "compact-preview-v1"
+              ]
+            },
+            "qualifiedCell": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sourceLevel",
+                "targetLevel",
+                "platformRelease",
+                "launcherRelease",
+                "preview"
+              ],
+              "properties": {
+                "sourceLevel": {
+                  "const": 25
+                },
+                "targetLevel": {
+                  "const": 25
+                },
+                "platformRelease": {
+                  "const": 25
+                },
+                "launcherRelease": {
+                  "const": 25
+                },
+                "preview": {
+                  "const": false
+                }
+              }
+            }
+          }
+        },
+        "returnedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        },
+        "selection": {
+          "$ref": "#/$defs/entryPointSelection"
+        },
+        "totalEligibleCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observedEligibleLowerBound": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/entryPointCandidateV2"
+          }
+        },
+        "launcher": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sdkHome",
+            "executable",
+            "executableSha256",
+            "compilerSha256",
+            "platformIdentity"
+          ],
+          "properties": {
+            "sdkHome": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "executable": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "executableSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "compilerSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "platformIdentity": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "analysis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "snapshotHash",
+            "workerSha256",
+            "sourceLevel",
+            "targetLevel",
+            "analyzedSourceCount",
+            "classpathInputs"
+          ],
+          "properties": {
+            "snapshotHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "workerSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "sourceLevel": {
+              "const": 25
+            },
+            "targetLevel": {
+              "const": 25
+            },
+            "analyzedSourceCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "classpathInputs": {
+              "type": "array",
+              "maxItems": 1024,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "sha256"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ineligibleCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "ineligibleTypesTruncated": {
+          "type": "boolean"
+        },
+        "ineligibleTypes": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/entryPointIneligibleTypeV2"
+          }
+        }
+      },
+      "$comment": "Opt-in entryPointSchemaVersion=java-entry-points-v2. Native SDK25 source25/target25 non-JPMS scope; global snapshotHash differs from analysis.snapshotHash. Closed v1 definitions stay unchanged. ARC42 java-entry-point-java25-upgrade-contract-2026-11-15."
+    },
+    "entryPointIneligibleTypeV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binaryName",
+        "reason",
+        "source"
+      ],
+      "properties": {
+        "binaryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "reason": {
+          "const": "java.entryPoints.instanceCreationIneligible"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "range"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "range": {
+              "$ref": "#/$defs/entryPointRange"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -12,8 +12,9 @@ import org.junit.platform.suite.api.Suite
  * (REQ-JAVA-RENAME-FIELD-CHAR-001, row C-RENAME-FIELD of the approved finite J1 Java catalogue
  * REQ-JAVA-J1-CATALOGUE-APPROVED-001, candidate 95feaa6d). The feature is truthful GREEN-start:
  * production already implements JavaRenameMemberPlanner in the Java adapter, so this suite asserts
- * the REAL behavior rather than inventing it (anti-fake characterization). It covers 5 scenarios /
- * 14 cases total: 1 successful JDT owner-bound field rename (confidence 0.95, LOW), 1 lexical
+ * the REAL behavior rather than inventing it (anti-fake characterization). It covers 6 scenarios /
+ * 15 cases total: 1 successful JDT owner-bound field rename (confidence 0.95, LOW), 1 record-component
+ * rename coordinating the canonical constructor and generated accessor (confidence 0.95, MEDIUM), 1 lexical
  * fallback (confidence 0.88, LOW), 1 multiple-same-named-member lexical fallback (confidence 0.88,
  * MEDIUM), 1 refusal-contract scenario, and the 10 deterministic real refusal MESSAGE strings
  * asserted as Examples data (no invented typed renameMember.xxx codes).

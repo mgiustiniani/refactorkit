@@ -11,7 +11,11 @@ import org.junit.platform.suite.api.Suite
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-maven-module-rename-managed-surfaces.feature")
-@ConfigurationParameter(key = FILTER_TAGS_PROPERTY_NAME, value = "@REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-005")
+@SelectClasspathResource("java-safe-delete-lsp-review-only.feature")
+@ConfigurationParameter(
+    key = FILTER_TAGS_PROPERTY_NAME,
+    value = "@REQ-JAVA-MAVEN-MODULE-RENAME-SURFACE-005 or @safe-delete-lsp",
+)
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.lsp.mavenmodulerenamesurface005")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,

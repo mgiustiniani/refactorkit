@@ -5,6 +5,9 @@ import org.refactorkit.core.DiagnosticCategory
 import org.refactorkit.core.DiagnosticEvidence
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.ArrayList
+import java.util.Collections
+import java.util.LinkedHashMap
 
 /** Ownership classification for a C source/header file. */
 enum class CFileOwnership {
@@ -16,32 +19,124 @@ enum class CFileOwnership {
 }
 
 /** One `#include` directive parsed from a source file. */
-data class CIncludeDirective(
+class CIncludeDirective(
     val line: Int,
     val target: String,
     val kind: CIncludeKind,
     val resolved: Path?,
     val ownership: CFileOwnership,
-    val diagnostics: List<Diagnostic>,
+    diagnostics: List<Diagnostic>,
 ) {
+    val diagnostics: List<Diagnostic> = immutableList(diagnostics)
+
     init {
         require(line >= 1) { "include directive line must be positive" }
         require(target.isNotBlank() && target.length <= 512) { "include target is invalid" }
     }
+
+    operator fun component1(): Int = line
+    operator fun component2(): String = target
+    operator fun component3(): CIncludeKind = kind
+    operator fun component4(): Path? = resolved
+    operator fun component5(): CFileOwnership = ownership
+    operator fun component6(): List<Diagnostic> = diagnostics
+
+    fun copy(
+        line: Int = this.line,
+        target: String = this.target,
+        kind: CIncludeKind = this.kind,
+        resolved: Path? = this.resolved,
+        ownership: CFileOwnership = this.ownership,
+        diagnostics: List<Diagnostic> = this.diagnostics,
+    ) = CIncludeDirective(line, target, kind, resolved, ownership, diagnostics)
+
+    override fun equals(other: Any?): Boolean = other === this ||
+        other is CIncludeDirective && line == other.line && target == other.target &&
+        kind == other.kind && resolved == other.resolved && ownership == other.ownership &&
+        diagnostics == other.diagnostics
+
+    override fun hashCode(): Int {
+        var result = line
+        result = 31 * result + target.hashCode()
+        result = 31 * result + kind.hashCode()
+        result = 31 * result + (resolved?.hashCode() ?: 0)
+        result = 31 * result + ownership.hashCode()
+        result = 31 * result + diagnostics.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "CIncludeDirective(line=$line, target=$target, kind=$kind, resolved=$resolved, ownership=$ownership, diagnostics=$diagnostics)"
 }
 
 enum class CIncludeKind { QUOTED, ANGLED, MACRO }
 
 /** Bounded include-graph model over a set of source files. */
-data class CIncludeGraph(
-    val files: List<Path>,
-    val edges: List<CIncludeEdge>,
-    val ownership: Map<Path, CFileOwnership>,
-    val diagnostics: List<Diagnostic>,
+class CIncludeGraph(
+    files: List<Path>,
+    edges: List<CIncludeEdge>,
+    ownership: Map<Path, CFileOwnership>,
+    diagnostics: List<Diagnostic>,
 ) {
+    val files: List<Path> = immutableList(files)
+    val edges: List<CIncludeEdge> = immutableList(edges)
+    val ownership: Map<Path, CFileOwnership> =
+        Collections.unmodifiableMap(LinkedHashMap(ownership))
+    val diagnostics: List<Diagnostic> = immutableList(diagnostics)
+
     init {
         require(files.distinct().size == files.size) { "include graph has duplicate files" }
-        require(edges.map(CIncludeEdge::from).distinct().size == edges.map(CIncludeEdge::from).distinct().size) { "include graph edges are invalid" }
+        require(edges.distinct().size == edges.size) { "include graph has duplicate edges" }
+    }
+
+    operator fun component1(): List<Path> = files
+    operator fun component2(): List<CIncludeEdge> = edges
+    operator fun component3(): Map<Path, CFileOwnership> = ownership
+    operator fun component4(): List<Diagnostic> = diagnostics
+
+    fun copy(
+        files: List<Path> = this.files,
+        edges: List<CIncludeEdge> = this.edges,
+        ownership: Map<Path, CFileOwnership> = this.ownership,
+        diagnostics: List<Diagnostic> = this.diagnostics,
+    ) = CIncludeGraph(files, edges, ownership, diagnostics)
+
+    override fun equals(other: Any?): Boolean = other === this ||
+        other is CIncludeGraph && files == other.files && edges == other.edges &&
+        ownership == other.ownership && diagnostics == other.diagnostics
+
+    override fun hashCode(): Int {
+        var result = files.hashCode()
+        result = 31 * result + edges.hashCode()
+        result = 31 * result + ownership.hashCode()
+        result = 31 * result + diagnostics.hashCode()
+        return result
+    }
+
+    override fun toString(): String =
+        "CIncludeGraph(files=$files, edges=$edges, ownership=$ownership, diagnostics=$diagnostics)"
+}
+
+private fun <T> immutableList(values: Collection<T>): List<T> =
+    Collections.unmodifiableList(ArrayList(values))
+
+internal fun classifyCFileOwnership(
+    workspace: Path,
+    path: Path,
+    includeDirectories: List<Path>,
+): CFileOwnership {
+    val name = path.fileName?.toString().orEmpty()
+    val normalized = path.toAbsolutePath().normalize()
+    val insideWorkspace = normalized.startsWith(workspace.toAbsolutePath().normalize())
+    val insideIncludeRoot = includeDirectories.any { normalized.startsWith(it.toAbsolutePath().normalize()) }
+    return when {
+        name.endsWith(".generated.c") || name.endsWith(".generated.h") -> CFileOwnership.GENERATED
+        // Headers outside the workspace and every include root are read-only external evidence.
+        name.endsWith(".h") && !insideWorkspace && !insideIncludeRoot -> CFileOwnership.EXTERNAL
+        name.endsWith(".h") && insideIncludeRoot -> CFileOwnership.PUBLIC
+        name.endsWith(".h") -> CFileOwnership.PRIVATE
+        name.endsWith(".c") -> CFileOwnership.PRIVATE
+        else -> CFileOwnership.UNKNOWN
     }
 }
 
@@ -165,11 +260,11 @@ class CIncludeGraphBuilder(
                     }
                 }
             }
-            ownership[resolved] = classify(workspace, resolved, includeDirectories)
+            ownership[resolved] = classifyCFileOwnership(workspace, resolved, includeDirectories)
         }
 
         for (file in fileSet) {
-            ownership.putIfAbsent(file, classify(workspace, file, includeDirectories))
+            ownership.putIfAbsent(file, classifyCFileOwnership(workspace, file, includeDirectories))
         }
 
         return CIncludeGraph(
@@ -208,22 +303,6 @@ class CIncludeGraphBuilder(
             add(workspace.resolve(target))
         }
         return candidates.firstOrNull { Files.isRegularFile(it) }
-    }
-
-    private fun classify(workspace: Path, path: Path, includeDirectories: List<Path>): CFileOwnership {
-        val name = path.fileName.toString()
-        val normalized = path.toAbsolutePath().normalize()
-        val insideWorkspace = normalized.startsWith(workspace.toAbsolutePath().normalize())
-        val insideIncludeRoot = includeDirectories.any { normalized.startsWith(it.toAbsolutePath().normalize()) }
-        return when {
-            name.endsWith(".generated.c") || name.endsWith(".generated.h") -> CFileOwnership.GENERATED
-            // Headers outside the workspace and every include root are read-only external evidence.
-            name.endsWith(".h") && !insideWorkspace && !insideIncludeRoot -> CFileOwnership.EXTERNAL
-            name.endsWith(".h") && insideIncludeRoot -> CFileOwnership.PUBLIC
-            name.endsWith(".h") -> CFileOwnership.PRIVATE
-            name.endsWith(".c") -> CFileOwnership.PRIVATE
-            else -> CFileOwnership.UNKNOWN
-        }
     }
 
     private fun refusal(code: String, message: String) = Diagnostic(

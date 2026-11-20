@@ -14,6 +14,9 @@ import tempfile
 import xml.sax.saxutils
 
 
+JAVA_LTS_SOURCE_LEVELS = (8, 11, 17, 21, 25)
+
+
 def command_for(executable: Path, args: list[str]) -> list[str]:
     if os.name == "nt":
         return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", str(executable), *args]
@@ -68,16 +71,16 @@ def write_reactor(root: Path, release: int) -> None:
     )
 
 
-def write_release_matrix(root: Path) -> None:
+def write_release_matrix(root: Path, releases: tuple[int, ...]) -> None:
     root.mkdir(parents=True)
-    modules = "".join(f"<module>release-{release}</module>" for release in range(8, 26))
+    modules = "".join(f"<module>release-{release}</module>" for release in releases)
     (root / "pom.xml").write_text(
         "<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId>"
         "<artifactId>release-matrix</artifactId><version>1</version><packaging>pom</packaging>"
         f"<modules>{modules}</modules></project>\n",
         encoding="utf-8",
     )
-    for release in range(8, 26):
+    for release in releases:
         module = root / f"release-{release}"
         source = module / f"src/main/java/fixture/release{release}/ReleaseApi.java"
         source.parent.mkdir(parents=True)
@@ -473,7 +476,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime", default="modules/refactorkit-cli/build/package/refactorkit")
     parser.add_argument("--jdk-home", default=os.environ.get("REFACTORKIT_JAVA_25_HOME"))
+    parser.add_argument("--java-scope", choices=("full", "lts"), default="full",
+                        help="Source/API levels for the packaged diagnostics matrix")
     options = parser.parse_args()
+    releases = JAVA_LTS_SOURCE_LEVELS if options.java_scope == "lts" else tuple(range(8, 26))
+    release_label = ", ".join(map(str, releases)) if options.java_scope == "lts" else "8 through 25"
     runtime = (Path.cwd() / options.runtime).resolve()
     suffix = ".bat" if os.name == "nt" else ""
     cli = runtime / "bin" / f"refactorkit{suffix}"
@@ -483,7 +490,7 @@ def main() -> int:
     if not platform.is_file():
         raise AssertionError(f"packaged Java platform signatures are missing: {platform}")
     if not options.jdk_home:
-        raise AssertionError("--jdk-home or REFACTORKIT_JAVA_25_HOME is required for the Java 8-through-25 matrix")
+        raise AssertionError("--jdk-home or REFACTORKIT_JAVA_25_HOME is required for the Java source-level matrix")
     jdk_home = Path(options.jdk_home).resolve()
     release_metadata = jdk_home / "release"
     if not release_metadata.is_file() or 'JAVA_VERSION="25' not in release_metadata.read_text(encoding="utf-8"):
@@ -506,19 +513,19 @@ def main() -> int:
             raise AssertionError("read-only packaged diagnostics modified the reactor")
 
         matrix = Path(temporary) / "release-matrix"
-        write_release_matrix(matrix)
+        write_release_matrix(matrix, releases)
         matrix_hash = tree_hash(matrix)
         matrix_cli = run_cli(cli, matrix, jdk_home=jdk_home)
         if matrix_cli.returncode != 0 or matrix_cli.stdout.strip() != "No diagnostics.":
-            raise AssertionError(f"packaged Java 8-through-25 CLI matrix failed: {matrix_cli.stdout}\n{matrix_cli.stderr}")
+            raise AssertionError(f"packaged Java CLI matrix ({release_label}) failed: {matrix_cli.stdout}\n{matrix_cli.stderr}")
         matrix_daemon = daemon_diagnostics(daemon, matrix, jdk_home=jdk_home)
         if matrix_daemon:
-            raise AssertionError(f"packaged Java 8-through-25 daemon matrix failed: {matrix_daemon}")
+            raise AssertionError(f"packaged Java daemon matrix ({release_label}) failed: {matrix_daemon}")
         matrix_mcp = mcp_diagnostics(mcp, matrix, jdk_home=jdk_home)
         if matrix_mcp.strip() != "No diagnostics.":
-            raise AssertionError(f"packaged Java 8-through-25 MCP matrix failed: {matrix_mcp}")
+            raise AssertionError(f"packaged Java MCP matrix ({release_label}) failed: {matrix_mcp}")
         if tree_hash(matrix) != matrix_hash or (matrix / ".refactorkit").exists():
-            raise AssertionError("Java 8-through-25 packaged diagnostics modified the matrix workspace")
+            raise AssertionError(f"packaged Java diagnostics modified the matrix workspace ({release_label})")
 
         variant_scope = Path(temporary) / "variant-scope"
         maven_home = Path(temporary) / "maven-home"
@@ -615,7 +622,7 @@ def main() -> int:
         if tree_hash(root) != historical_hash or (root / ".refactorkit").exists():
             raise AssertionError("historical packaged diagnostics modified the reactor")
 
-    print("Packaged authoritative Java acceptance passed: exact releases 8 through 25, Maven variant/scope derivation, ownership previews, release-21 reactor closure, source-set availability, and release-8 API boundary.")
+    print(f"Packaged authoritative Java acceptance passed: exact releases {release_label}, Maven variant/scope derivation, ownership previews, release-21 reactor closure, source-set availability, and release-8 API boundary.")
     return 0
 
 

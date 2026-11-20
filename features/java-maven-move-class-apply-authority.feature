@@ -17,7 +17,7 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
     And the request moves the writable sole top-level class "com.acme.catalog.legacy.Product" from "catalog-model/src/main/java/com/acme/catalog/legacy/Product.java" to the unused path "catalog-model/src/main/java/com/acme/catalog/api/Product.java" within the same main source set
 
   # RPK-JAVA-MOVE-001..004 and RPK-JAVA-MOVE-006..007
-  @REQ-JAVA-MAVEN-MOVE-AUTH-001 @functional-requirement @non-functional-requirement @implemented-and-validated
+  @REQ-JAVA-MAVEN-MOVE-AUTH-001 @REQ-JAVA-MAVEN-MOVE-AUTH-001#binding-clean-move-is-committed-once-and-rolled-back-byte-for-byte @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: A binding-clean move is committed once and rolled back byte for byte
     Given the full effective reactor graph and complete reverse-observer closure are available and hash-bound
     And every observer has current dependency-bounded source paths, classpaths, source inventories, Java platform signatures, and provider evidence
@@ -35,7 +35,7 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
     And authoritative rollback diagnostics attest the restored snapshot
 
   # RPK-JAVA-MOVE-002..003 and RPK-JAVA-MOVE-006..007
-  @REQ-JAVA-MAVEN-MOVE-AUTH-002 @functional-requirement @implemented-and-validated
+  @REQ-JAVA-MAVEN-MOVE-AUTH-002 @REQ-JAVA-MAVEN-MOVE-AUTH-002#only-binding-proven-java-observers-are-updated @functional-requirement @implemented-and-validated
   Scenario: Only binding-proven Java observers are updated
     Given the complete reverse-observer closure contains these binding-proven uses:
       | source set               | dependency relation | Java use forms                              |
@@ -56,7 +56,7 @@ Business Need: Authorize managed Java class moves with complete Maven semantic e
     And the preview reports the same-name and unrelated Java candidates as excluded and the non-Java match as a residual review risk
 
   # RPK-JAVA-MOVE-002 and RPK-JAVA-MOVE-004..007
-  @REQ-JAVA-MAVEN-MOVE-AUTH-003 @functional-requirement @non-functional-requirement @implemented-and-validated
+  @REQ-JAVA-MAVEN-MOVE-AUTH-003 @REQ-JAVA-MAVEN-MOVE-AUTH-003#safely-enumerable-preview-defects-produce-immutable-non-managed-guidance @functional-requirement @non-functional-requirement @implemented-and-validated
   Scenario: Safely enumerable preview defects produce immutable non-managed guidance
     Given each preview-time authority defect is evaluated independently for the otherwise supported canonical move request
     And every listed input and its affected scope remains readable, safely contained, and enumerable enough for complete bounded guidance:

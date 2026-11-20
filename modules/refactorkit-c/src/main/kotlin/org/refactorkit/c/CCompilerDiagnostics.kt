@@ -39,6 +39,7 @@ sealed interface CDiagnosticsResult {
 class CCompilerDiagnostics(
     private val toolchain: ClangSemanticToolchain,
     private val processManager: ExternalSemanticProcessManager = ExternalSemanticProcessManager(),
+    private val runtimeProvider: ClangToolchainRuntimeProvider = ClangToolchainRuntimeCapture(),
 ) {
     /**
      * Analyzes [file] with the captured [flags] (from the compilation database).
@@ -56,6 +57,19 @@ class CCompilerDiagnostics(
         if (flags.size > MAX_FLAGS) {
             return unavailable("clang.compilerDiagnosticsFlagLimit", "Compiler flags exceed $MAX_FLAGS entries")
         }
+        if (flags.any { argument ->
+            val option = if (argument.startsWith("-Xclang=")) argument.substringAfter('=') else argument
+            option.trimStart('-').let { it == "resource-dir" || it.startsWith("resource-dir=") }
+        }) {
+            return unavailable("clang.compilerDiagnosticsResourceOverride", "Compiler flags cannot override retained resources")
+        }
+        val resources = toolchain.resources as? ClangResourceCaptureResult.Captured
+            ?: return unavailable("clang.compilerResourcesUnavailable", "Complete compiler resource inputs have not been captured")
+        if (!resourcesAreCurrent(resources)) {
+            return unavailable("clang.compilerResourcesUnavailable", "Retained compiler resource inputs are unavailable or changed")
+        }
+        if (!sdkIsCurrent()) return sdkUnavailable()
+        if (!runtimeIsCurrent()) return runtimeUnavailable()
         val overlay = runCatching { SemanticWorkspaceOverlay.create(snapshot) }.getOrElse {
             return unavailable("clang.compilerDiagnosticsOverlayFailed", it.message ?: "Compiler diagnostics overlay failed")
         }
@@ -65,9 +79,17 @@ class CCompilerDiagnostics(
             )
             val arguments = buildList {
                 add("-fsyntax-only")
+                add("--no-default-config")
                 addAll(flags)
+                add("-resource-dir")
+                add(resources.snapshot.root.toString())
                 add(overlayFile.toString())
             }
+            if (!resourcesAreCurrent(resources)) {
+                return unavailable("clang.compilerResourcesUnavailable", "Retained compiler resources changed before syntax evaluation")
+            }
+            if (!sdkIsCurrent()) return sdkUnavailable()
+            if (!runtimeIsCurrent()) return runtimeUnavailable()
             val execution = processManager.launch(SemanticProcessSpec(
                 id = "clang-syntax-${SEQUENCE.getAndIncrement()}",
                 executable = toolchain.clangExecutable,
@@ -89,6 +111,14 @@ class CCompilerDiagnostics(
                     return unavailable("clang.compilerDiagnosticsTimeout", "Exact compiler diagnostics timed out")
                 }
                 val stdoutText = future.get(2, TimeUnit.SECONDS)
+                if (!resourcesAreCurrent(resources)) {
+                    return unavailable("clang.compilerResourcesUnavailable", "Retained compiler resources changed during syntax evaluation")
+                }
+                if (!sdkIsCurrent()) return sdkUnavailable()
+                val expectedExecutableHash = toolchain.provenance.evidence.singleOrNull { it.role == "clang-executable" }?.sha256
+                if (!runtimeIsCurrent() || execution.provenance.executableSha256 != expectedExecutableHash) {
+                    return runtimeUnavailable()
+                }
                 val stderrText = execution.stderrText()
                 val text = when {
                     stdoutText.isNotBlank() && stderrText.isNotBlank() -> stdoutText + "\n" + stderrText
@@ -97,7 +127,16 @@ class CCompilerDiagnostics(
                 }
                 val mutations = overlay.verifySourcesUnchanged()
                 if (mutations.isNotEmpty()) return CDiagnosticsResult.Unavailable(mutations.first())
-                parse(text, overlay.toWorkspacePath(overlayFile) ?: normalized, execution.provenance, execution.exitCode ?: 0)
+                when (val result = parse(text, overlay.toWorkspacePath(overlayFile) ?: normalized,
+                    execution.provenance, execution.exitCode ?: 0)) {
+                    is CDiagnosticsResult.Unavailable -> result
+                    is CDiagnosticsResult.Available -> result.copy(diagnostics = result.diagnostics.map { diagnostic ->
+                        val location = diagnostic.location
+                        val workspacePath = location?.let { overlay.toWorkspacePath(it.path) }
+                        if (location == null || workspacePath == null) diagnostic
+                        else diagnostic.copy(location = location.copy(path = workspacePath))
+                    })
+                }
             } finally {
                 reader.shutdownNow()
                 execution.close()
@@ -108,6 +147,19 @@ class CCompilerDiagnostics(
             overlay.close()
         }
     }
+
+    private fun resourcesAreCurrent(resources: ClangResourceCaptureResult.Captured): Boolean {
+        val declared = runCatching { Path.of(toolchain.provenance.resourceDir ?: return false) }.getOrNull() ?: return false
+        return declared.isAbsolute && declared.normalize() == resources.snapshot.root &&
+            ClangResourceDirectoryCapture().checkCurrent(resources.snapshot) == ClangResourceCurrency.Current
+    }
+
+    private fun sdkIsCurrent() = toolchain.provenance.readOnlySdkIdentity == toolchain.readOnlySdkInputs.identity &&
+        toolchain.readOnlySdkInputs.isCurrent()
+    private fun sdkUnavailable() = unavailable("clang.compilerSdkUnavailable", "Retained read-only SDK inputs or their toolchain binding are unavailable or changed")
+
+    private fun runtimeIsCurrent() = runtimeProvider.checkCurrent(toolchain) == ClangToolchainRuntimeCurrency.Current
+    private fun runtimeUnavailable() = unavailable("clang.compilerRuntimeUnavailable", "Retained native runtime inputs or toolchain binding are unavailable or changed")
 
     internal fun parseForTest(
         output: String,
@@ -167,6 +219,10 @@ class CCompilerDiagnostics(
         }
         if (!sawErrorSummary && !sawWarningSummary) {
             return unavailable("clang.compilerDiagnosticsIncomplete", "Compiler diagnostics were incomplete")
+        }
+        if (exitCode != 0 && parsed.none { it.severity == Diagnostic.Severity.ERROR }) {
+            return unavailable("clang.compilerDiagnosticsIncomplete",
+                "Compiler exited with code $exitCode without an error diagnostic")
         }
         return CDiagnosticsResult.Available(parsed, provenance)
     }

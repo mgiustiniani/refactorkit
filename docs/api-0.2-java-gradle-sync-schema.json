@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://refactorkit.org/schemas/api-0.2-java-gradle-sync.json",
+  "title": "RefactorKit explicit Gradle synchronization",
+  "description": "Bounded project.sync params/results; project execution requires explicit opt-in. sdkHome selects the Java compiler/platform SDK; optional gradleRuntimeHome selects the Gradle launcher JVM. ARC42 owns integrated status.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "buildSystem",
+        "expectedSnapshotHash",
+        "sdkHome",
+        "gradleExecutable",
+        "allowBuildExecution"
+      ],
+      "properties": {
+        "buildSystem": {
+          "const": "gradle"
+        },
+        "expectedSnapshotHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sdkHome": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/"
+        },
+        "gradleExecutable": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/"
+        },
+        "gradleRuntimeHome": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/",
+          "description": "Optional absolute Gradle launcher JDK. Defaults to sdkHome for backward compatibility; when different, sdkHome remains the selected compiler/toolchain platform."
+        },
+        "allowBuildExecution": {
+          "type": "boolean"
+        },
+        "gradleUserHome": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/"
+        },
+        "projectProperties": {
+          "type": "object",
+          "maxProperties": 64,
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 1024,
+            "pattern": "^[^\\u0000]*$"
+          }
+        }
+      }
+    },
+    "result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "status",
+            "snapshotHash",
+            "providerId",
+            "gradleVersion",
+            "sdkHome"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "java-gradle-sync-v1"
+            },
+            "status": {
+              "const": "synchronized"
+            },
+            "snapshotHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "providerId": {
+              "const": "gradle-effective-v1"
+            },
+            "gradleVersion": {
+              "type": "string"
+            },
+            "sdkHome": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            },
+            "gradleRuntimeHome": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^/"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "status",
+            "error"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "java-gradle-sync-v1"
+            },
+            "status": {
+              "const": "refused"
+            },
+            "error": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "code",
+                "message"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -2,6 +2,8 @@
 
 Status: requirement-first acceptance contract for `0.7.0-SNAPSHOT`.
 
+Integrated architecture/status authority is the [ARC42 requirements appendix](../arc42/appendix-requirements.adoc); this file owns Java package-migration behavior and its bounded acceptance.
+
 ## Scope
 
 `movePackage` migrates Java compilation units whose declared package exactly
@@ -85,6 +87,66 @@ Offline Maven discovery shall expose sibling-module production source roots and
 resolved reactor output/classpath evidence to dependent main/test JDT analysis
 without executing project plugins, lifecycle goals, annotation processors, or
 network access.
+
+### Existing `movePackage` provider/IDE integration gap
+
+Status: `actionable`; priority P1 under the recorded IDE-first project priority. This is an
+integration/API qualification gap, not missing planner behavior and not a new
+package-migration requirement. `RecipeEngine` already implements the Java
+`movePackage` step and the focused requirement tests cover its behavior. However,
+`refactorkit recipe run` remains experimental, there is no stable Java CLI/daemon
+entry point that advertises this step, and the current daemon `operation=recipe`
+managed preview does not accept Java recipes. The IDE therefore has no qualified
+provider route for an IDE-reviewed package move.
+
+Consumer-reported IDE gap — 2026-10-21: current IDE contracts, adapters and UI
+contain no stable `movePackage` route, so a reviewable package-move preview and
+Apply are unavailable from a Java workspace. The planner is reachable only as an
+internal `RecipeEngine` step through the experimental recipe path; the daemon
+`operation=recipe` preview rejects Java recipes. This confirms the existing
+provider/IDE integration gap and does not establish a stable IDE route. Both this
+daemon limitation and the finite J1 catalogue's exclusion of recipe-private
+`movePackage` remain in force. The consumer report itself did not authorize a
+public API or IDE action; the separate user-authorized follow-up below records
+the subsequent scope direction.
+
+User-authorized API/J1 follow-up — 2026-10-21: close this same provider/IDE gap
+under the existing package-migration requirement and Java API/J1 gate; do not open
+a duplicate requirement. The authorized scope is a direct typed Java provider route
+for the existing bounded `movePackage` behavior, rather than public execution of
+arbitrary Java recipes. This addendum records work authorization and supersedes the
+baseline's recipe-private `movePackage` public-surface non-claim only for this
+bounded route. The historical finite J1 baseline remains unchanged. The authorization
+itself did not promote capability stability or managed-write authority; those
+required the acceptance gate below.
+
+Historical interim guard (superseded 2026-10-22): until the direct route passed,
+`movePackage` remained absent from stable Java capability discovery and IDE actions.
+The current `operation=recipe` rejection of Java recipes was an expected limitation,
+not a substitute for direct-route preview/apply acceptance.
+
+Provider/API qualification — 2026-10-22: the bounded direct Java route now passes
+the existing package-migration gate without adding a duplicate requirement. The
+daemon accepts `refactor.preview` with `operation=movePackage`, `languageId=java`,
+and typed `fromPackage`/`toPackage` arguments under an explicit Java SDK context.
+The Java language capability advertises `stable`, `managed-stable`, and
+`structural-parse`; `javaContextRefactoring.operations` contains the same operation.
+The requirement-bound Story verifies read-only preview with staged diagnostics,
+exact stale-snapshot refusal, one PatchEngine transaction, exact-package main/test
+units and `package-info.java`, package references and path literals, generated-source
+exclusion, exact rollback, and continued rejection of generic Java recipe execution.
+The single-scenario local JDK 21 Cucumber result and analyzer evidence are recorded
+in [the provider acceptance receipt](evidence/java-package-migration-provider-r001.json).
+
+This closes the RefactorKit provider/API portion of the P1 item. The IDE action is
+still `actionable`: the IDE must add the package-move entry and review flow and run
+its consumer/native qualification before advertising it. The historical finite J1
+catalogue remains unchanged, and arbitrary Java recipe execution remains excluded.
+
+The finite J1 catalogue remains the historical baseline and is not rewritten.
+This addendum authorizes only the bounded direct provider route described above;
+generic recipe composition remains excluded. The provider has qualified locally;
+the IDE surface still requires independent consumer qualification.
 
 ## Focused fixture
 

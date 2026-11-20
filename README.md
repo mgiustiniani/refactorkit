@@ -40,8 +40,8 @@ The MVP focuses on safe deterministic Java refactoring with patch preview, diagn
 
 Newest published version is **`v0.7.0` for Linux x86-64**, independently verified
 within its approved bounded Java, TypeScript/JavaScript, Kotlin and recovery scope.
-See [0.7.0 acceptance](docs/releases/v0.7.0-acceptance.md). Source/build is `0.7.0`;
-API `0.2` remains the beta compatibility baseline. Other0.7.0 hosts are explicitly
+See [0.7.0 acceptance](docs/releases/v0.7.0-acceptance.md). The working source and build use
+`0.8.0` with API `0.2`. Other 0.7.0 hosts are explicitly
 waived/not verified; Windows/macOS retain the separately qualified `v0.6.2` assets.
 GitHub's cross-platform Latest alias deliberately remains on the earlier release.
 Stable `v1.0.0` is deliberately deferred until deep IDE-grade language
@@ -507,7 +507,7 @@ refactorkit test-golden --golden-dir testdata/golden
 
 The beta workflow is: scan the project, generate a preview, inspect affected files/diagnostics/warnings, apply only with `--apply`, verify with diagnostics or tests, and roll back by transaction ID if the result is not acceptable. Patch application validates the snapshot hash and records rollback metadata under the workspace.
 
-MVP limitations remain visible: Java analysis is still mostly lexical, `organize-imports` does not fully remove unused imports, `safe-delete` does not inspect every non-source reference, external importer license detection is heuristic, and extract-method/change-signature support is conservative. See [`docs/release-plan.md`](docs/release-plan.md) and ARC42 risks in [`docs/arc42/11-risks-and-technical-debt.adoc`](docs/arc42/11-risks-and-technical-debt.adoc).
+Java plans distinguish JDT binding evidence, structural transformations and lexical fallback. Managed apply refuses lexical fallback; a preview is not proof that a semantic operation is safe. Supported operations and their project-context limits are recorded in the [Java capability matrix](docs/java-capabilities.md) and [Java adapter](docs/java-adapter.md). Non-source references and external code still require explicit risk review; importer license detection is heuristic. See the [release plan](docs/release-plan.md) and [ARC42 risks](docs/arc42/11-risks-and-technical-debt.adoc).
 
 ## Self-contained CLI, daemon and MCP package
 

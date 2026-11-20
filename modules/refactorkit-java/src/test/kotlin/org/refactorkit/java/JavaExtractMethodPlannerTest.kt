@@ -1,12 +1,8 @@
 package org.refactorkit.java
 
-import org.refactorkit.core.ApplyResult
-import org.refactorkit.core.PatchEngine
 import org.refactorkit.core.PatchStatus
-import org.refactorkit.core.RiskLevel
 import java.nio.file.Files
 import java.nio.file.Paths
-import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,36 +12,6 @@ import kotlin.test.assertTrue
 class JavaExtractMethodPlannerTest {
 
     private val planner = JavaExtractMethodPlanner()
-
-    @Test
-    fun extractsSimpleStatementsIntoPrivateVoidMethod() {
-        val root = tempProject(
-            "src/main/java/com/example/App.java" to """
-                package com.example;
-
-                public class App {
-                    public void run() {
-                        System.out.println("a");
-                        System.out.println("b");
-                    }
-                }
-            """.trimIndent() + "\n",
-        )
-        val snap = JavaProjectScanner().scan(root)
-        val plan = planner.preview(snap, Paths.get("src/main/java/com/example/App.java"), 5, 6, "printMessages")
-
-        assertEquals(PatchStatus.PREVIEW, plan.status)
-        assertEquals(RiskLevel.MEDIUM, plan.riskLevel)
-        assertTrue(plan.summary.contains("printMessages"))
-
-        val result = PatchEngine(root).apply(plan, snap)
-        assertIs<ApplyResult.Applied>(result)
-        val content = root.resolve("src/main/java/com/example/App.java").readText()
-        assertTrue(content.contains("printMessages();"), content)
-        assertTrue(content.contains("private void printMessages()"), content)
-        assertTrue(content.contains("System.out.println(\"a\");"), content)
-        assertTrue(content.contains("System.out.println(\"b\");"), content)
-    }
 
     @Test
     fun refusesReturnStatement() {

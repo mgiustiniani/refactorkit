@@ -353,11 +353,13 @@ class JavaMavenMoveClassAvailableAuthoritySteps {
         assertEquals(20, counts.reactorModules)
         assertEquals(40, counts.reactorSourceSets)
         assertEquals(7, counts.sourceFiles)
-        assertEquals(23, counts.auxiliaryFiles)
+        assertEquals(25, counts.auxiliaryFiles)
         assertEquals(
             setOf(
                 Path.of("catalog-acceptance/.refactorkit-expected-source-inventory.properties"),
                 Path.of("catalog-generated-support/.refactorkit-generated-root-inventory.properties"),
+                Path.of("catalog-acceptance/src/test/resources/features/product-lifecycle.feature"),
+                Path.of("fixture-libs/provenance/src/com/acme/fixture/external/PriceAuthority.java"),
             ),
             first.snapshot.auxiliaryFiles.filterNot { it.languageId == "maven-pom" }.mapTo(linkedSetOf()) { it.path },
         )

@@ -9,13 +9,7 @@ import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.ProtocolPath
-import org.refactorkit.core.SourcePosition
-import org.refactorkit.core.SourceRange
-import org.refactorkit.c.CExtractPlanner
-import org.refactorkit.c.CInlinePlanner
-import org.refactorkit.c.COrganizeIncludesPlanner
-import org.refactorkit.c.CProjectScanner
-import org.refactorkit.c.CRelocateComponentPlanner
+import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
@@ -46,18 +40,19 @@ import kotlin.io.path.readText
  *
  * 1. Copy `before/` to a temporary directory.
  * 2. Parse `request.json` → [GoldenRequest].
- * 3. Scan the project with [JavaProjectScanner].
+ * 3. Route C to its bounded native authority; scan Java with [JavaProjectScanner].
  * 4. Execute the requested operation and obtain a [PatchPlan].
  * 5. Validate the plan against `expected-plan.json` (if present).
- * 6. If plan status is PREVIEW: apply the plan.
- * 7. If `after/` directory exists: compare the resulting file tree.
- * 8. Return a [GoldenTestResult] with all errors.
+ * 6. Apply only managed-evidence PREVIEW plans; lexical-fallback previews are review-only.
+ * 7. If an applicable `after/` fixture exists: compare the resulting file tree.
+ * 8. Native C also verifies exact rollback before recording qualification evidence.
+ * 9. Return a [GoldenTestResult] with all errors.
  */
 class GoldenTestRunner(
     private val scanner: JavaProjectScanner = JavaProjectScanner(),
     private val adapter: JavaLanguageAdapter = JavaLanguageAdapter(),
+    private val cToolchain: CGoldenToolchainPaths? = null,
 ) {
-    private val cScanner = CProjectScanner()
     fun run(testCase: GoldenTestCase): GoldenTestResult {
         val tempDir = Files.createTempDirectory("golden-${testCase.name}-")
         return try {
@@ -68,14 +63,15 @@ class GoldenTestRunner(
     }
 
     private fun runInDir(testCase: GoldenTestCase, workDir: Path): GoldenTestResult {
+        val request = GoldenJson.parseRequest(CGoldenExecution.readInput(testCase.requestFile))
+        if (CGoldenExecution.handles(request)) {
+            return CGoldenExecution(cToolchain).run(testCase, request, workDir, ::validatePlan)
+        }
         // 1. Copy before/ into work dir
         copyDirectory(testCase.beforeDir, workDir)
 
-        // 2. Parse request
-        val request = GoldenJson.parseRequest(testCase.requestFile.readText())
-
-        // 3. Scan (C operations use the offline C-family structural scanner)
-        val snap = if (isCOperation(request.operation)) cScanner.scan(workDir) else scanner.scan(workDir)
+        // C has already delegated to its native application path above.
+        val snap = scanner.scan(workDir)
 
         // 4. Build plan
         val plan = try {
@@ -93,7 +89,11 @@ class GoldenTestRunner(
 
         // 6. Apply if PREVIEW
         val afterErrors = mutableListOf<String>()
-        if (plan.status == PatchStatus.PREVIEW) {
+        if (plan.status == PatchStatus.PREVIEW && plan.evidence == RefactoringEvidence.LEXICAL_FALLBACK) {
+            if (testCase.afterDir.exists()) {
+                planErrors += "Lexical-fallback preview is review-only and cannot validate an applied after/ fixture"
+            }
+        } else if (plan.status == PatchStatus.PREVIEW) {
             val diagnosticsProvider: (ProjectSnapshot) -> List<Diagnostic> = when (request.operation) {
                 "moveAcrossMavenModules" -> { s ->
                     JavaMoveAcrossMavenModulesPlanner(adapter).diagnostics(s)
@@ -238,49 +238,11 @@ class GoldenTestRunner(
                     Paths.get(requireArgument(request, "to")), dependencyRewrites,
                 )
             }
-            "extractExpression" -> CExtractPlanner().preview(
-                snap,
-                cFile(request),
-                cRange(request),
-                requireArgument(request, "tempName"),
-            )
-            "inlineFunction" -> CInlinePlanner().preview(
-                snap,
-                cFile(request),
-                requireArgument(request, "symbol"),
-            )
-            "organizeIncludes" -> COrganizeIncludesPlanner().preview(
-                snap,
-                cFile(request),
-            )
-            "relocateComponent" -> CRelocateComponentPlanner().preview(
-                snap,
-                Paths.get(requireArgument(request, "componentDir")),
-                Paths.get(requireArgument(request, "newDir")),
-            )
             else -> error("Unknown operation: '${request.operation}'")
         }
 
     private fun requireSymbol(request: GoldenRequest): String =
         request.symbol ?: error("Operation '${request.operation}' requires 'symbol' in request.json")
-
-    private fun isCOperation(operation: String): Boolean =
-        operation in setOf("extractExpression", "inlineFunction", "organizeIncludes", "relocateComponent")
-
-    private fun cFile(request: GoldenRequest): Path =
-        Paths.get(requireArgument(request, "file"))
-
-    private fun cRange(request: GoldenRequest): SourceRange =
-        SourceRange(
-            SourcePosition(
-                requireArgument(request, "startLine").toInt(),
-                requireArgument(request, "startChar").toInt(),
-            ),
-            SourcePosition(
-                requireArgument(request, "endLine").toInt(),
-                requireArgument(request, "endChar").toInt(),
-            ),
-        )
 
     private fun requireArgument(request: GoldenRequest, name: String): String =
         request.arguments[name] ?: error("${request.operation} needs '$name' in arguments")

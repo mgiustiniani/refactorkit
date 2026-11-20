@@ -122,12 +122,13 @@ class JavaImportTargetResolverTest {
     @Test
     fun refusesSymlinkEscapeWithoutExposingSource() {
         val root = project("src/main/java")
+        val snapshot = JavaProjectScanner().scan(root)
         val outside = Files.createTempDirectory("rk-import-target-outside")
         val link = root.resolve("src/main/java/escape")
         val created = runCatching { Files.createSymbolicLink(link, outside) }.isSuccess
         if (!created) return
         val refusal = assertIs<JavaImportTargetResolution.Refused>(
-            resolver.resolve(JavaProjectScanner().scan(root), "src/main/java/escape"),
+            resolver.resolve(snapshot, "src/main/java/escape"),
         ).refusal
         assertEquals("targetDirectory.symlinkEscape", refusal.code)
         assertTrue(!refusal.message.contains("public class Secret"))
@@ -136,10 +137,11 @@ class JavaImportTargetResolverTest {
     @Test
     fun refusesInternalSymlinkAndSymlinkSourceRoot() {
         val root = project("src/main/java/com/real")
+        val snapshotBeforeLink = JavaProjectScanner().scan(root)
         val internalLink = root.resolve("src/main/java/com/linked")
         if (runCatching { Files.createSymbolicLink(internalLink, root.resolve("src/main/java/com/real")) }.isSuccess) {
             assertRefusal(
-                JavaProjectScanner().scan(root),
+                snapshotBeforeLink,
                 "src/main/java/com/linked",
                 "targetDirectory.symbolicLink",
             )

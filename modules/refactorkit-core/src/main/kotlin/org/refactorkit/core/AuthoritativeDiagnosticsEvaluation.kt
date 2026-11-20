@@ -83,6 +83,9 @@ private fun deeplyDetachedBuildModule(source: BuildModule): BuildModule = BuildM
     root = source.root,
     sourceSets = immutableList(source.sourceSets.map(::deeplyDetachedBuildSourceSet)),
     attributes = immutableMap(source.attributes),
+    coordinates = source.coordinates?.let { coordinates ->
+        BuildArtifactCoordinates(coordinates.groupId, coordinates.artifactId, coordinates.version)
+    },
 )
 
 private fun deeplyDetachedBuildSourceSet(source: BuildSourceSet): BuildSourceSet = BuildSourceSet(
@@ -109,6 +112,60 @@ private fun deeplyDetachedBuildSourceSet(source: BuildSourceSet): BuildSourceSet
             evidence = facet.evidence,
         )
     }),
+    sourceRootEvidence = immutableList(source.sourceRootEvidence.map { evidence ->
+        BuildSourceRootEvidence(
+            path = evidence.path,
+            origin = evidence.origin,
+            providerId = evidence.providerId,
+            descriptorPath = evidence.descriptorPath,
+            profileId = evidence.profileId,
+            pluginId = evidence.pluginId,
+            executionId = evidence.executionId,
+            goal = evidence.goal,
+            phase = evidence.phase,
+            availability = evidence.availability,
+        )
+    }),
+    compilerOptions = immutableList(source.compilerOptions.map { option ->
+        BuildCompilerOption(option.name, option.value, option.origin, option.redacted)
+    }),
+    compilerOptionsAvailability = source.compilerOptionsAvailability,
+    compilerOptionsRefusalCode = source.compilerOptionsRefusalCode,
+    resolvedArtifacts = immutableList(source.resolvedArtifacts.map(::deeplyDetachedResolvedArtifact)),
+    resolvedArtifactAvailability = source.resolvedArtifactAvailability,
+    resolvedArtifactRefusalCode = source.resolvedArtifactRefusalCode,
+    annotationProcessors = source.annotationProcessors?.let { processors ->
+        BuildAnnotationProcessorConfiguration(
+            availability = processors.availability,
+            processorPath = immutableList(processors.processorPath.map(::deeplyDetachedResolvedArtifact)),
+            processorPathEntries = immutableList(processors.processorPathEntries),
+            processorNames = immutableList(processors.processorNames),
+            options = immutableMap(processors.options),
+            mode = processors.mode,
+            refusalCode = processors.refusalCode,
+        )
+    },
+    jpmsModulePath = source.jpmsModulePath?.let { fact ->
+        BuildJpmsModulePathFact(
+            availability = fact.availability,
+            inferenceEnabled = fact.inferenceEnabled,
+            entries = immutableList(fact.entries),
+            origin = fact.origin,
+        )
+    },
+)
+
+private fun deeplyDetachedResolvedArtifact(source: BuildResolvedArtifact): BuildResolvedArtifact = BuildResolvedArtifact(
+    path = source.path,
+    coordinates = BuildArtifactCoordinates(
+        source.coordinates.groupId,
+        source.coordinates.artifactId,
+        source.coordinates.version,
+    ),
+    extension = source.extension,
+    classifier = source.classifier,
+    scope = source.scope,
+    transitive = source.transitive,
 )
 
 private fun deeplyDetachedDiagnostic(source: Diagnostic): Diagnostic = Diagnostic(

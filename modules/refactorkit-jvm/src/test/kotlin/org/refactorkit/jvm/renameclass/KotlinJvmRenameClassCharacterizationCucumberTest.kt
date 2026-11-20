@@ -13,7 +13,7 @@ import org.junit.platform.suite.api.Suite
  * REQ-JAVA-J1-CATALOGUE-APPROVED-001, baseline 8aa49c3). The feature is truthful GREEN-start:
  * production already implements JavaRenameClassPlanner in the Java adapter, so this suite
  * asserts the REAL behavior rather than inventing it (anti-fake characterization). It covers
- * 6 scenarios / 14 cases total: 1 successful exact JDT rename, 3 framework-annotation risk
+ * 7 scenarios / 15 cases total: 1 successful exact JDT rename, 1 nested type binding rename, 3 framework-annotation risk
  * elevation cases (Spring/JPA/Jackson), 1 large-rename (12 files) MEDIUM-risk case, 1
  * lexical-fallback case, 1 refusal-contract case, and the 7 deterministic real refusal MESSAGE
  * strings asserted as Examples data (no invented typed renameClass.xxx codes). Evidence for

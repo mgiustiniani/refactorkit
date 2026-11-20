@@ -155,7 +155,17 @@ class JavaMoveAcrossMavenModulesPlanner(
         val pomOnlyEdit = WorkspaceEdit(pomEdits)
         val pomStaged = runCatching { WorkspaceEditSimulator.apply(snapshot, pomOnlyEdit) }
             .getOrElse { return refused(snapshot, "mavenOwnership.ambiguousPomOrigin", "POM staging failed: ${it.message}") }
-        val before = adapter.diagnostics(snapshot)
+        val before = try {
+            adapter.diagnostics(snapshot)
+        } catch (failure: JavaContextAuthorityException) {
+            return refused(snapshot, failure.code, failure.message.orEmpty())
+        } catch (failure: Exception) {
+            return refused(
+                snapshot,
+                "buildModel.unavailable",
+                "Current Maven ownership diagnostics are unavailable: ${failure.message}",
+            )
+        }
         return withMaterializedSnapshot(pomStaged) { rebuiltPomSnapshot ->
             if (rebuiltPomSnapshot.buildModels.singleOrNull { it.providerId == MAVEN_PROVIDER }?.status != BuildModelStatus.AVAILABLE) {
                 return@withMaterializedSnapshot refused(

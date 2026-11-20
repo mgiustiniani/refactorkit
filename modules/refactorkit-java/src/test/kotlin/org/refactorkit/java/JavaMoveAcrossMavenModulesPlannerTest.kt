@@ -34,8 +34,8 @@ class JavaMoveAcrossMavenModulesPlannerTest {
         assertEquals(PatchStatus.PREVIEW, plan.status, "${plan.refusalCode}: ${plan.summary}")
         assertEquals(JavaMoveAcrossMavenModulesPlanner.OPERATION, plan.operation)
         assertEquals(RefactoringEvidence.JDT_BINDING, plan.evidence)
-        assertEquals(4, plan.workspaceEdit.edits.size)
-        assertEquals(3, plan.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>().size)
+        assertEquals(3, plan.workspaceEdit.edits.size)
+        assertEquals(2, plan.workspaceEdit.edits.filterIsInstance<FileEdit.Rename>().size)
         assertEquals(1, plan.workspaceEdit.edits.filterIsInstance<FileEdit.Modify>().size)
         assertFalse(root.resolve(TO).exists(), "preview must not mutate the workspace")
         assertEquals(originalConsumerPom, Files.readString(root.resolve(CONSUMER_POM)))
@@ -85,7 +85,7 @@ class JavaMoveAcrossMavenModulesPlannerTest {
     }
 
     @Test
-    fun languageAdapterExposesTheFirstOwnershipMigrationRow() {
+    fun languageAdapterKeepsMavenOwnershipMigrationOutsideEditorRefactoringDiscovery() {
         val root = reactorFixture()
         val adapter = JavaLanguageAdapter()
         val plan = adapter.applyRefactoring(RefactoringRequest(
@@ -105,7 +105,7 @@ class JavaMoveAcrossMavenModulesPlannerTest {
         ))
 
         assertEquals(PatchStatus.PREVIEW, plan.status, "${plan.refusalCode}: ${plan.summary}")
-        assertTrue(adapter.availableRefactorings(org.refactorkit.core.CodeSelection(
+        assertFalse(adapter.availableRefactorings(org.refactorkit.core.CodeSelection(
             org.refactorkit.core.SourceLocation(
                 Path.of("source/src/main/java/example/shared/SharedValue.java"),
                 org.refactorkit.core.SourceRange(
@@ -283,7 +283,6 @@ class JavaMoveAcrossMavenModulesPlannerTest {
         val helperField = if (sourceDependsOnHelper) " static Helper helper;" else ""
         Files.writeString(source.resolve("SharedValue.java"), "package example.shared;\n${helperImport}public record SharedValue(String value) {$helperField}\n")
         Files.writeString(source.resolve("package-info.java"), "@Deprecated\npackage example.shared;\n")
-        Files.writeString(root.resolve(FROM).resolve("module-info.java"), "module example.source { exports example.shared; }\n")
         val consumer = root.resolve("consumer/src/main/java/example/consumer/Consumer.java")
         Files.createDirectories(consumer.parent)
         Files.writeString(consumer, "package example.consumer;\nimport example.shared.SharedValue;\npublic class Consumer { SharedValue value = new SharedValue(\"ok\"); }\n")

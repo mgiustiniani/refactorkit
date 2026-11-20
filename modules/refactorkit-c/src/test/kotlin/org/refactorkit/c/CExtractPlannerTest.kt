@@ -34,7 +34,8 @@ class CExtractPlannerTest {
 
     @Test
     fun extractsPureExpression() {
-        val plan = planner().preview(snapshot(), Path.of("src/main.c"), range(0, 30, 0, 35), "tmp")
+        // Select the expression x + 1, not the trailing `;` and a partial token.
+        val plan = planner().preview(snapshot(), Path.of("src/main.c"), range(0, 29, 0, 34), "tmp")
         assertEquals(PatchStatus.PREVIEW, plan.status)
     }
 
@@ -54,7 +55,7 @@ class CExtractPlannerTest {
 
     @Test
     fun declarationUsesConstWhenContextAllows() {
-        val plan = planner().preview(snapshot(), Path.of("src/main.c"), range(0, 30, 0, 35), "tmp")
+        val plan = planner().preview(snapshot(), Path.of("src/main.c"), range(0, 29, 0, 34), "tmp")
         assertEquals(PatchStatus.PREVIEW, plan.status)
         val inserted = plan.workspaceEdit.edits.filterIsInstance<org.refactorkit.core.FileEdit.Modify>().single()
             .textEdits.first { it.newText.contains("tmp") }

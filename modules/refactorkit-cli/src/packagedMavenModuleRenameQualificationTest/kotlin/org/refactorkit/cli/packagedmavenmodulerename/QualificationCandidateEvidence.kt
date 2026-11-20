@@ -777,25 +777,25 @@ internal fun inspectPackagedGateSelector(
     val operationIndex = operationLineIndexes.single()
     val gateIndex = gateLineIndexes.single()
     assertTrue(operationIndex >= 3)
-    assertTrue(gateIndex == operationIndex + 4, "Gate constant is not in the canonical operation branch")
-    assertTrue(lines[operationIndex - 3].contains("PatchPlan.getOperation"))
-    assertTrue(lines[operationIndex + 1].contains("Intrinsics.areEqual"))
-    assertTrue(lines[operationIndex + 2].contains("ifeq"))
-    assertTrue(lines[operationIndex + 3].contains("DiagnosticsGate.Companion"))
+    assertTrue(lines[gateIndex - 1].contains("DiagnosticsGate.Companion"))
     assertTrue(lines[gateIndex + 3].contains("DiagnosticsGate\$Companion.lazyAuthoritative"))
-    assertFalse(lines.subList(operationIndex, gateIndex + 4).any { it.contains("java-jdt") })
 
     val operationOffset = instructionOffset(lines[operationIndex])
-    val branchTarget = Regex("\\bifeq\\s+(\\d+)").find(lines[operationIndex + 2])
-        ?.groupValues?.get(1)?.toInt()
-        ?: error("Canonical operation selector branch has no bytecode target")
     val gateOffset = instructionOffset(lines[gateIndex])
     val lazyOffset = instructionOffset(lines[gateIndex + 3])
-    assertTrue(operationOffset < gateOffset && gateOffset < lazyOffset && lazyOffset < branchTarget)
-    val branchTargetIndex = lines.indexOfFirst { line ->
-        Regex("^\\s*$branchTarget:").containsMatchIn(line)
+    val branchTarget = if (lines[operationIndex + 2].contains("ifeq")) {
+        // A linear equality chain rejects a non-matching operation at this jump.
+        assertEquals(operationIndex + 4, gateIndex)
+        assertTrue(lines[operationIndex - 3].contains("PatchPlan.getOperation"))
+        assertTrue(lines[operationIndex + 1].contains("Intrinsics.areEqual"))
+        val target = jumpTarget(lines[operationIndex + 2], "ifeq")
+        assertTrue(operationOffset < gateOffset && gateOffset < lazyOffset && lazyOffset < target)
+        assertTrue(instructionIndex(lines, target) > gateIndex + 3)
+        target
+    } else {
+        verifySwitchSelectorBranch(lines, operation, operationIndex, gateIndex)
     }
-    assertTrue(branchTargetIndex > gateIndex + 3, "Canonical selector branch does not skip to its next mapping")
+    assertFalse(lines.subList(operationIndex, gateIndex + 4).any { it.contains("java-jdt") })
 
     val methodHash = sha256(method.toByteArray(StandardCharsets.UTF_8))
     val proof = listOf(
@@ -829,6 +829,45 @@ internal fun inspectPackagedGateSelector(
         operationToGateMappingProofSha256 = sha256(proof),
     )
 }
+
+private fun verifySwitchSelectorBranch(
+    lines: List<String>,
+    operation: String,
+    operationIndex: Int,
+    gateIndex: Int,
+): Int {
+    // A string when hashes PatchPlan.operation, then checks equality at the selected table entry.
+    val dispatch = lines.subList(0, operationIndex).indexOfLast { it.contains("lookupswitch") }
+    assertTrue(dispatch >= 5, "Operation hash switch is absent")
+    assertTrue(lines[dispatch - 4].contains("PatchPlan.getOperation"))
+    val operationLoad = Regex("^\\s*\\d+:\\s+aload(?:_|\\s+)(\\d+)\\s*$")
+    val local = operationLoad.matchEntire(lines[dispatch - 2])?.groupValues?.get(1)
+        ?: error("Operation hash does not load a local")
+    assertTrue(lines[dispatch - 3].matches(Regex("^\\s*\\d+:\\s+astore(?:_|\\s+)$local\\s*$")))
+    assertTrue(lines[dispatch - 1].contains("java/lang/String.hashCode:()I"))
+    val receiver = lines[operationIndex - 1]
+    assertEquals(local, operationLoad.matchEntire(receiver)?.groupValues?.get(1))
+    val table = lines.drop(dispatch + 1).takeWhile { it.trim() != "}" }
+    assertTrue(table.any { it.trim() == "${operation.hashCode()}: ${instructionOffset(receiver)}" })
+    assertTrue(lines[operationIndex + 1].contains("java/lang/String.equals:(Ljava/lang/Object;)Z"))
+    val match = jumpTarget(lines[operationIndex + 2], "ifne")
+    val otherwise = jumpTarget(lines[operationIndex + 3], "goto")
+    assertTrue(table.any { it.trim() == "default: $otherwise" })
+    assertEquals(gateIndex - 1, instructionIndex(lines, match), "Equality must enter the exact authoritative gate")
+    assertTrue(operationIndex + 3 < gateIndex - 1 && gateIndex + 4 < instructionIndex(lines, otherwise))
+    assertTrue(lines[instructionIndex(lines, otherwise) + 1].endsWith("// String java-jdt"))
+    val returnOffset = jumpTarget(lines[gateIndex + 4], "goto")
+    assertTrue(lines[instructionIndex(lines, returnOffset)].trim().endsWith("areturn"))
+    return match
+}
+
+private fun jumpTarget(line: String, opcode: String): Int =
+    Regex("^\\s*\\d+:\\s+$opcode\\s+(\\d+)\\s*$").matchEntire(line)?.groupValues?.get(1)?.toInt()
+        ?: error("Expected $opcode bytecode instruction: $line")
+
+private fun instructionIndex(lines: List<String>, offset: Int): Int =
+    lines.indexOfFirst { Regex("^\\s*$offset:\\s+[a-z]").containsMatchIn(it) }
+        .also { assertTrue(it >= 0, "Jump target $offset is not a bytecode instruction") }
 
 private fun instructionRegex(opcode: String, comment: String): Regex =
     Regex("^\\s*\\d+:\\s+$opcode\\s+#\\d+(?:,\\s*\\d+)?\\s+$comment\\s*$")

@@ -1,6 +1,12 @@
 package org.refactorkit.c
 
 import org.refactorkit.core.FileEdit
+import org.refactorkit.core.Diagnostic
+import org.refactorkit.core.DiagnosticCategory
+import org.refactorkit.core.DiagnosticEvidence
+import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.core.ExternalSemanticProcessManager
+import org.refactorkit.core.OperationAuthorityLease
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
@@ -9,25 +15,29 @@ import org.refactorkit.core.RiskLevel
 import org.refactorkit.core.SourcePosition
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.TextEdit
+import org.refactorkit.core.TextEdits
+import org.refactorkit.core.WorkspaceEditIdentity
+import org.refactorkit.core.WorkspaceEditSimulator
 import org.refactorkit.core.WorkspaceEdit
 import java.nio.file.Path
+import java.security.MessageDigest
 
-/**
- * Bounded C inline: a single-use `static`/`extern` function with a proven local
- * call family (same translation unit, direct calls, no recursion, no
- * address-taking, no macro use) is inlined at its call site. The helper is
- * removed only when the single call is provably replaced.
- *
- * First positive target: a function whose body is a single `return expr;`
- * (pure expression). Refusals cover macro/reflection/recursive/address-taking/
- * volatile/multiple-translation-unit cases and non-`return` bodies.
- */
-class CInlinePlanner {
+/** Bounded inline-function proposals and compiler-proven single-use local inline. */
+class CInlinePlanner(
+    private val toolchain: ClangSemanticToolchain? = null,
+    private val processManager: ExternalSemanticProcessManager? = null,
+) {
     fun preview(snapshot: ProjectSnapshot, file: Path, functionName: String): PatchPlan {
         if (functionName.isBlank() || !functionName.matches(IDENTIFIER)) {
             return refused(snapshot, "Invalid function name: '$functionName'")
         }
-        val source = snapshot.files.singleOrNull { it.path.normalize() == file.normalize() }
+        val root = snapshot.workspace.root.toAbsolutePath().normalize()
+        val selected = (if (file.isAbsolute) file else root.resolve(file)).toAbsolutePath().normalize()
+        if (!selected.startsWith(root) || selected == root) {
+            return refusedLocal(snapshot, "c.inlineLocal.sourceUnavailable", "Selected source escapes the captured workspace")
+        }
+        val relativeFile = root.relativize(selected)
+        val source = snapshot.files.singleOrNull { it.path.normalize() == relativeFile }
             ?: return refused(snapshot, "Source file not found")
         if (source.languageId !in setOf("c", "cpp", "objective-c")) {
             return refused(snapshot, "Inline currently supports C sources only")
@@ -42,6 +52,21 @@ class CInlinePlanner {
         if (definition.body.expr.hasSideEffects()) {
             return refused(snapshot, "Function '$functionName' body expression has side effects")
         }
+        if (definition.returnType != "int") {
+            return refused(snapshot, "Return conversion for '$functionName' is unproven without compiler types")
+        }
+        val bodyTokens = CTokenizer().tokenize(definition.body.expr)
+        if (bodyTokens.withIndex().any { (index, token) ->
+                token.type == CTokenType.IDENTIFIER && token.text !in definition.params &&
+                    bodyTokens.getOrNull(index - 1)?.text !in setOf(".", "->")
+            }) {
+            return refused(snapshot, "Function '$functionName' reads an unbound or captured name; binding is unproven")
+        }
+        if (tokens.withIndex().any { (index, token) ->
+                token.text == functionName && tokens.getOrNull(index - 1)?.text == "&"
+            }) {
+            return refused(snapshot, "Address-taking of '$functionName' prevents consumer closure")
+        }
         val calls = findCalls(tokens, functionName)
         if (calls.size != 1) {
             return refused(snapshot, "Function '$functionName' has ${calls.size} call sites; inline requires exactly one")
@@ -53,7 +78,9 @@ class CInlinePlanner {
         if (call.args.any { it.hasSideEffects() }) {
             return refused(snapshot, "Call site argument has side effects")
         }
-        val replaced = substitute(definition.body.expr, definition.params, call.args)
+        // The substituted expression is itself an operand at the call site.
+        // Parenthesizing only arguments does not preserve 2 * add(3, 4).
+        val replaced = "(${substitute(definition.body.expr, definition.params, call.args)})"
         val edits = listOf(
             TextEdit(SourceRange(SourcePosition(call.startLine, call.startChar), SourcePosition(call.endLine, call.endChar)), replaced),
             TextEdit(SourceRange(SourcePosition(definition.startLine, definition.startChar), SourcePosition(definition.endLine, definition.endChar)), ""),
@@ -62,98 +89,71 @@ class CInlinePlanner {
             operation = "inlineFunction",
             status = PatchStatus.PREVIEW,
             snapshotHash = snapshot.hash,
-            confidence = 1.0,
+            confidence = 0.5,
             requiresUserApproval = true,
             summary = "Inline single-use function '$functionName' and remove its definition in $file",
             affectedFiles = setOf(file.normalize()),
             workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(file.normalize(), edits))),
             diagnosticsBefore = emptyList(),
             diagnosticsAfterPreview = emptyList(),
-            warnings = listOf("Inlined a single-use static/extern function; the definition is removed only because the single call is provably replaced."),
-            riskLevel = RiskLevel.MEDIUM,
+            warnings = listOf("Bounded inline-function preview; full binding, conversion, configuration and consumer closure are not yet qualified."),
+            riskLevel = RiskLevel.HIGH,
             evidence = RefactoringEvidence.STRUCTURAL,
         )
     }
 
-    /**
-     * Inline a single-use scalar local variable whose initializer is a literal
-     * expression (no identifiers, no side effects): replace its one read with the
-     * initializer and remove the declaration. Provably safe because a literal cannot
-     * change between the declaration and the use. Everything less clearly safe (more
-     * than one use, an address-taken or write position, a non-scalar declaration, or an
-     * initializer that reads mutable state) is refused.
-     */
+    /** Compiler-proven inline for one direct int literal, one bound read and one return. */
     fun inlineLocal(snapshot: ProjectSnapshot, file: Path, name: String): PatchPlan {
         if (name.isBlank() || !name.matches(IDENTIFIER)) {
-            return refusedLocal(snapshot, "Invalid variable name: '$name'")
+            return refusedLocal(snapshot, "c.inlineLocal.invalidName", "Invalid variable name: '$name'")
         }
+        val compiler = toolchain ?: return refusedLocal(snapshot, "c.inlineLocal.compilerUnavailable",
+            "A current captured Clang context is required to prove inline-local bindings and effects")
+        val manager = processManager ?: return refusedLocal(snapshot, "c.inlineLocal.compilerUnavailable",
+            "A managed compiler process boundary is required to prove inline-local bindings and effects")
+        val before = when (val result = CFunctionFactsService(compiler, manager).analyzeInlineLocal(snapshot, file, name)) {
+            is CInlineLocalFactsResult.LocalAvailable -> result.facts.takeIf { result.snapshotHash == snapshot.hash }
+            is CInlineLocalFactsResult.Unavailable -> return refusedLocal(snapshot,
+                result.diagnostic.code ?: "c.inlineLocal.factsUnavailable", result.diagnostic.message,
+                RefactoringEvidence.COMPILER_PROVEN)
+            is CInlineLocalFactsResult.CandidateAvailable -> null
+        } ?: return refusedLocal(snapshot, "c.inlineLocal.factsUnavailable", "Compiler facts do not identify this captured snapshot",
+            RefactoringEvidence.COMPILER_PROVEN)
         val source = snapshot.files.singleOrNull { it.path.normalize() == file.normalize() }
-            ?: return refusedLocal(snapshot, "Source file not found")
-        if (source.languageId !in setOf("c", "cpp", "objective-c")) {
-            return refusedLocal(snapshot, "Inline currently supports C sources only")
+            ?: return refusedLocal(snapshot, "c.inlineLocal.sourceUnavailable", "Source file is not uniquely captured")
+        val bytes = source.content.toByteArray(Charsets.UTF_8)
+        if (before.sourceSha256 != MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) } ||
+            before.declaration.endExclusive > bytes.size || before.use.endExclusive > bytes.size) {
+            return refusedLocal(snapshot, "c.inlineLocal.factsStale", "Compiler inline-local spans do not match the captured source",
+                RefactoringEvidence.COMPILER_PROVEN)
         }
-        val tokens = tokensWithOffsets(source.content)
-        val occurrences = tokens.withIndex()
-            .filter { (_, t) -> t.type == CTokenType.IDENTIFIER && t.text == name }
-            .map { it.index }
-        if (occurrences.size != 2) {
-            return refusedLocal(snapshot, "Variable '$name' must be declared once and used once; found ${occurrences.size} occurrences")
-        }
-        val declIdx = occurrences.firstOrNull { isScalarDeclaration(tokens, it) }
-            ?: return refusedLocal(snapshot, "Variable '$name' has no scalar 'type $name = ...' declaration")
-        val useIdx = occurrences.first { it != declIdx }
-        if (useIdx < declIdx) return refusedLocal(snapshot, "Variable '$name' is used before its declaration")
-        if (isScalarDeclaration(tokens, useIdx)) {
-            return refusedLocal(snapshot, "Variable '$name' is declared more than once")
-        }
-        if (writesHere(tokens, useIdx)) {
-            return refusedLocal(snapshot, "Variable '$name' is written or has its address taken at its use site; cannot inline")
-        }
-        val eqIdx = declIdx + 1
-        if (tokens.getOrNull(eqIdx)?.text != "=") {
-            return refusedLocal(snapshot, "Variable '$name' declaration has no initializer")
-        }
-        val semiIdx = (eqIdx + 1 until tokens.size).firstOrNull { tokens[it].text == ";" }
-            ?: return refusedLocal(snapshot, "Could not locate the declaration terminator for '$name'")
-        val exprTokens = tokens.subList(eqIdx + 1, semiIdx)
-        if (exprTokens.isEmpty()) return refusedLocal(snapshot, "Variable '$name' has no initializer")
-        val expr = exprTokens.joinToString(" ") { it.text }.trim()
-        if (expr.isBlank() || expr.hasSideEffects()) {
-            return refusedLocal(snapshot, "Variable '$name' initializer is blank or has side effects")
-        }
-        // A literal-only initializer is always safe. If it reads identifiers, require
-        // that none of them is written or has its address taken between the declaration
-        // and the use, and that no call (which could mutate through a pointer) appears in
-        // that region; otherwise the inlined value could differ from the declared one.
-        val exprIdents = exprTokens
-            .filter { it.type == CTokenType.IDENTIFIER && it.text !in TYPE_KEYWORDS }
-            .map { it.text }
-            .toSet()
-        if (exprIdents.isNotEmpty()) {
-            for (k in (semiIdx + 1) until useIdx) {
-                val tok = tokens[k]
-                if (tok.text == "(" && tokens.getOrNull(k - 1)?.type == CTokenType.IDENTIFIER) {
-                    return refusedLocal(snapshot, "A call occurs between the declaration and use of '$name'; immutability cannot be proven")
-                }
-                if (tok.type == CTokenType.IDENTIFIER && tok.text in exprIdents && writesHere(tokens, k)) {
-                    return refusedLocal(snapshot, "An initializer identifier of '$name' is written or has its address taken before the use; immutability cannot be proven")
-                }
-            }
-        }
-        var startIdx = declIdx
-        while (startIdx > 0) {
-            val prev = tokens[startIdx - 1].text
-            if (prev == ";" || prev == "}" || prev == "{") break
-            startIdx--
-        }
-        val declStart = tokens[startIdx]
-        val semi = tokens[semiIdx]
-        val useTok = tokens[useIdx]
-        val replacement = wrapArgIfNeeded(expr)
+        var declarationEnd = before.declaration.endExclusive
+        while (declarationEnd < source.content.length && source.content[declarationEnd] in setOf(' ', '\t')) declarationEnd++
         val edits = listOf(
-            TextEdit(SourceRange(SourcePosition(useTok.line, useTok.startChar), SourcePosition(useTok.line, useTok.endChar)), replacement),
-            TextEdit(SourceRange(SourcePosition(declStart.line, declStart.startChar), SourcePosition(semi.line, semi.endChar)), ""),
+            TextEdit(TextEdits.rangeForOffset(source.content, before.use.start, before.use.endExclusive - before.use.start), before.literalValue.toString()),
+            TextEdit(TextEdits.rangeForOffset(source.content, before.declaration.start,
+                declarationEnd - before.declaration.start), ""),
         )
+        val edit = WorkspaceEdit(listOf(FileEdit.Modify(source.path.normalize(), edits)))
+        val candidate = try { WorkspaceEditSimulator.apply(snapshot, edit) }
+        catch (_: Exception) { return refusedLocal(snapshot, "c.inlineLocal.previewInvalid", "Compiler-bound edits could not be staged",
+            RefactoringEvidence.COMPILER_PROVEN) }
+        val compilerService = CFunctionFactsService(compiler, manager)
+        val after = when (val result = compilerService.analyzeInlineLocalPreview(snapshot, candidate, file, before.functionName,
+            name, before.literalValue)) {
+            is CInlineLocalFactsResult.CandidateAvailable -> result.takeIf { it.snapshotHash == candidate.hash }
+            is CInlineLocalFactsResult.Unavailable -> return refusedLocal(snapshot,
+                result.diagnostic.code ?: "c.inlineLocal.candidateUnavailable", result.diagnostic.message,
+                RefactoringEvidence.COMPILER_PROVEN)
+            is CInlineLocalFactsResult.LocalAvailable -> null
+        } ?: return refusedLocal(snapshot, "c.inlineLocal.candidateUnavailable", "Staged compiler facts do not match the proposed inline",
+            RefactoringEvidence.COMPILER_PROVEN)
+        val resourceIdentity = (compiler.resources as? ClangResourceCaptureResult.Captured)?.snapshot?.identity
+            ?: return refusedLocal(snapshot, "c.inlineLocal.resourceUnavailable", "A captured Clang resource identity is required",
+                RefactoringEvidence.COMPILER_PROVEN)
+        val clangIdentity = compiler.provenance.evidence.singleOrNull { it.role == "clang-executable" }?.sha256
+            ?: return refusedLocal(snapshot, "c.inlineLocal.compilerUnavailable", "The Clang executable identity is unavailable",
+                RefactoringEvidence.COMPILER_PROVEN)
         return PatchPlan(
             operation = "inlineLocalVariable",
             status = PatchStatus.PREVIEW,
@@ -161,36 +161,21 @@ class CInlinePlanner {
             confidence = 1.0,
             requiresUserApproval = true,
             summary = "Inline single-use scalar local '$name' and remove its declaration in $file",
-            affectedFiles = setOf(file.normalize()),
-            workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(file.normalize(), edits))),
+            affectedFiles = edit.affectedFiles(),
+            workspaceEdit = edit,
             diagnosticsBefore = emptyList(),
             diagnosticsAfterPreview = emptyList(),
-            warnings = listOf("Inlined a single-use literal local; the declaration is removed because the initializer is a literal and the single use is a pure read."),
+            warnings = listOf("Qualified only for one compiler-bound int decimal literal returned by a single-use local in a straight-line main function."),
             riskLevel = RiskLevel.MEDIUM,
-            evidence = RefactoringEvidence.STRUCTURAL,
+            evidence = RefactoringEvidence.COMPILER_PROVEN,
+            authorityLease = OperationAuthorityLease(
+                kind = "c.inline-local-int-literal-v1", operation = "inlineLocalVariable", snapshotHash = snapshot.hash,
+                evidenceHash = after.snapshotHash, workspaceEditSha256 = WorkspaceEditIdentity.sha256(edit),
+                attributes = mapOf("c.file" to source.path.normalize().toString(), "c.name" to name,
+                    "c.functionName" to before.functionName, "c.literalValue" to before.literalValue.toString(),
+                    "c.clangSha256" to clangIdentity, "c.resourceDirectoryIdentity" to resourceIdentity),
+            ),
         )
-    }
-
-    private fun isScalarDeclaration(tokens: List<Tok>, index: Int): Boolean {
-        val prev = tokens.getOrNull(index - 1)
-        val next = tokens.getOrNull(index + 1)
-        return prev != null && prev.type == CTokenType.IDENTIFIER && prev.text in TYPE_KEYWORDS && next?.text == "="
-    }
-
-    /** True when the token at [index] is written to (assignment, compound-assign, ++/-- or &). */
-    private fun writesHere(tokens: List<Tok>, index: Int): Boolean {
-        val p1 = tokens.getOrNull(index - 1)?.text
-        val p2 = tokens.getOrNull(index - 2)?.text
-        val n1 = tokens.getOrNull(index + 1)?.text
-        val n2 = tokens.getOrNull(index + 2)?.text
-        val n3 = tokens.getOrNull(index + 3)?.text
-        return p1 == "&" ||
-            (p1 == "+" && p2 == "+") || (p1 == "-" && p2 == "-") ||
-            (n1 == "+" && n2 == "+") || (n1 == "-" && n2 == "-") ||
-            (n1 == "=" && n2 != "=") ||
-            (n1 in setOf("+", "-", "*", "/", "%", "^", "|", "&") && n2 == "=") ||
-            (n1 == "<" && n2 == "<" && n3 == "=") ||
-            (n1 == ">" && n2 == ">" && n3 == "=")
     }
 
     private fun parseDefinition(tokens: List<Tok>, name: String): Definition? {
@@ -211,8 +196,7 @@ class CInlinePlanner {
             val bodyOpen = tokens.getOrNull(bodyOpenIndex) ?: continue
             if (bodyOpen.text != "{") continue
             val bodyCloseIndex = matchingBrace(tokens, bodyOpenIndex) ?: continue
-            val bodyText = tokens.subList(bodyOpenIndex + 1, bodyCloseIndex).map { it.text }.joinToString(" ")
-            val body = parseBody(bodyText)
+            val body = parseBody(tokens.subList(bodyOpenIndex + 1, bodyCloseIndex))
             // Walk back to the start of this declaration, stopping at the previous
             // statement/block boundary rather than the current line: the storage/type
             // prefix may span multiple lines (e.g. 'static int\nsq(...)') and several
@@ -227,6 +211,7 @@ class CInlinePlanner {
             val declarationStart = tokens[startIdx]
             return Definition(
                 params = params,
+                returnType = prev?.text.orEmpty(),
                 body = body,
                 startLine = declarationStart.line, startChar = declarationStart.startChar,
                 endLine = tokens[bodyCloseIndex].line, endChar = tokens[bodyCloseIndex].endChar,
@@ -288,10 +273,15 @@ class CInlinePlanner {
         return params
     }
 
-    private fun parseBody(bodyText: String): Body {
-        val expr = bodyText.removePrefix("return").trim().removeSuffix(";").trim()
-        if (expr.isEmpty()) return Body.NonExpression
-        return Body.ReturnExpression(expr)
+    private fun parseBody(bodyTokens: List<Tok>): Body {
+        // The tokenizer may split ++/-- into adjacent punctuation tokens. Reject
+        // before joining with spaces, which would hide the effect as `x + +`.
+        if (bodyTokens.firstOrNull()?.text != "return" || bodyTokens.lastOrNull()?.text != ";" ||
+            bodyTokens.count { it.text == ";" } != 1 ||
+            bodyTokens.zipWithNext().any { (a, b) -> a.text == b.text && a.text in setOf("+", "-") }
+        ) return Body.NonExpression
+        val expr = bodyTokens.subList(1, bodyTokens.lastIndex).joinToString(" ") { it.text }.trim()
+        return if (expr.isEmpty()) Body.NonExpression else Body.ReturnExpression(expr)
     }
 
     private fun findCalls(tokens: List<Tok>, name: String): List<Call> {
@@ -337,15 +327,11 @@ class CInlinePlanner {
     }
 
     private fun substitute(expr: String, params: List<String>, args: List<String>): String {
-        if (params.isEmpty()) return expr
-        // Single simultaneous pass: each parameter occurrence maps directly to its own
-        // argument. Sequential per-parameter replacement would corrupt swapped or
-        // overlapping arguments (e.g. renaming a->b then b->a turns a+b into a+a).
-        val alternation = params.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }
-        val pattern = Regex("\\b($alternation)\\b")
-        return pattern.replace(expr) { match ->
-            val idx = params.indexOf(match.groupValues[1])
-            wrapArgIfNeeded(args.getOrElse(idx) { match.value })
+        // A single token pass is simultaneous and cannot rewrite identifiers inside
+        // string or character literals (or substrings of other identifiers).
+        return CTokenizer().tokenize(expr).joinToString(" ") { token ->
+            val index = if (token.type == CTokenType.IDENTIFIER) params.indexOf(token.text) else -1
+            if (index >= 0) wrapArgIfNeeded(args[index]) else token.text
         }
     }
 
@@ -387,7 +373,8 @@ class CInlinePlanner {
         return result
     }
 
-    private fun refusedLocal(snapshot: ProjectSnapshot, message: String) = PatchPlan(
+    private fun refusedLocal(snapshot: ProjectSnapshot, code: String, message: String,
+        evidence: RefactoringEvidence = RefactoringEvidence.STRUCTURAL) = PatchPlan(
         operation = "inlineLocalVariable",
         status = PatchStatus.REFUSED,
         snapshotHash = snapshot.hash,
@@ -397,10 +384,13 @@ class CInlinePlanner {
         affectedFiles = emptySet(),
         workspaceEdit = WorkspaceEdit(),
         diagnosticsBefore = emptyList(),
-        diagnosticsAfterPreview = emptyList(),
+        diagnosticsAfterPreview = listOf(Diagnostic(message, Diagnostic.Severity.ERROR, code = code,
+            evidence = if (evidence == RefactoringEvidence.COMPILER_PROVEN) DiagnosticEvidence.COMPILER else DiagnosticEvidence.STRUCTURAL,
+            category = DiagnosticCategory.SAFETY)),
         warnings = listOf(message),
         riskLevel = RiskLevel.HIGH,
-        evidence = RefactoringEvidence.STRUCTURAL,
+        evidence = evidence,
+        refusalCode = code,
     )
 
     private fun refused(snapshot: ProjectSnapshot, message: String) = PatchPlan(
@@ -421,6 +411,7 @@ class CInlinePlanner {
 
     private data class Definition(
         val params: List<String>,
+        val returnType: String,
         val body: Body,
         val startLine: Int, val startChar: Int,
         val endLine: Int, val endChar: Int,
@@ -449,5 +440,87 @@ class CInlinePlanner {
             "int", "char", "long", "short", "unsigned", "signed", "float", "double", "void", "_Bool",
             "const", "volatile", "static", "extern", "register", "auto", "inline", "restrict",
         )
+    }
+}
+
+/** Revalidates both compiler images under PatchEngine's managed transaction. */
+internal class CManagedInlineLocalContext(
+    private val toolchain: ClangSemanticToolchain,
+    private val processManager: ExternalSemanticProcessManager,
+) {
+    fun gate(before: ProjectSnapshot, plan: PatchPlan): DiagnosticsGate {
+        val lease = plan.authorityLease
+        val resourceIdentity = (toolchain.resources as? ClangResourceCaptureResult.Captured)?.snapshot?.identity
+        val clangIdentity = toolchain.provenance.evidence.singleOrNull { it.role == "clang-executable" }?.sha256
+        if (plan.status != PatchStatus.PREVIEW || !plan.requiresUserApproval ||
+            plan.evidence != RefactoringEvidence.COMPILER_PROVEN || plan.operation != "inlineLocalVariable" ||
+            plan.snapshotHash != before.hash || before.copy().hash != before.hash ||
+            lease?.kind != "c.inline-local-int-literal-v1" || lease.operation != plan.operation ||
+            lease.snapshotHash != before.hash || lease.workspaceEditSha256 != WorkspaceEditIdentity.sha256(plan.workspaceEdit) ||
+            resourceIdentity == null || clangIdentity == null ||
+            lease.attributes["c.resourceDirectoryIdentity"] != resourceIdentity ||
+            lease.attributes["c.clangSha256"] != clangIdentity || !CCompilationSnapshotCapture.compilerIsCurrent(toolchain)) {
+            return refusedGate()
+        }
+        val file: Path
+        val name: String
+        val functionName: String
+        val literalValue: Int
+        try {
+            fun attribute(key: String, limit: Int): String = requireNotNull(lease.attributes[key]).also { require(it.length in 1..limit) }
+            file = Path.of(attribute("c.file", 4096)).also { require(!it.isAbsolute && it.normalize() == it) }
+            name = attribute("c.name", 128)
+            functionName = attribute("c.functionName", 128)
+            val rawValue = attribute("c.literalValue", 11)
+            literalValue = rawValue.toInt().also { require(it >= 0 && it.toString() == rawValue) }
+            val rebuilt = CInlinePlanner(toolchain, processManager).inlineLocal(before, file, name)
+            require(rebuilt.status == PatchStatus.PREVIEW && rebuilt.authorityLease == lease)
+            val staged = WorkspaceEditSimulator.apply(before, plan.workspaceEdit)
+            require(staged.hash == lease.evidenceHash)
+        } catch (_: Exception) {
+            return refusedGate()
+        }
+        val root = before.workspace.root.toAbsolutePath().normalize()
+        val service = CFunctionFactsService(toolchain, processManager)
+        return DiagnosticsGate.enabled("clang-inline-local-v1") { candidate ->
+            require(candidate.workspace.root.toAbsolutePath().normalize() == root && candidate.copy().hash == candidate.hash) {
+                "c.inlineLocal.authorityInvalid: candidate workspace or immutable content identity differs"
+            }
+            val result = when (candidate.hash) {
+                before.hash -> service.analyzeInlineLocal(candidate, file, name)
+                lease.evidenceHash -> if (CCompilationSnapshotCapture.isCurrent(before)) {
+                    service.analyzeInlineLocalPreview(before, candidate, file, functionName, name, literalValue)
+                } else {
+                    service.analyzeInlineLocalCandidate(candidate, file, functionName, name, literalValue)
+                }
+                else -> error("c.inlineLocal.authorityInvalid: candidate differs from the approved before/after images")
+            }
+            when (result) {
+                is CInlineLocalFactsResult.LocalAvailable -> {
+                    require(candidate.hash == before.hash && result.snapshotHash == candidate.hash &&
+                        result.facts.functionName == functionName && result.facts.literalValue == literalValue) {
+                        "c.inlineLocal.authorityInvalid: compiler facts differ from the retained local declaration"
+                    }
+                    require(result.processProvenance.executableSha256 == clangIdentity) {
+                        "c.inlineLocal.authorityInvalid: compiler process identity changed"
+                    }
+                }
+                is CInlineLocalFactsResult.CandidateAvailable -> {
+                    require(candidate.hash == lease.evidenceHash && result.snapshotHash == candidate.hash &&
+                        result.facts.functionName == functionName && result.facts.literalValue == literalValue) {
+                        "c.inlineLocal.authorityInvalid: staged compiler facts differ from the retained inline candidate"
+                    }
+                    require(result.processProvenance.executableSha256 == clangIdentity) {
+                        "c.inlineLocal.authorityInvalid: compiler process identity changed"
+                    }
+                }
+                is CInlineLocalFactsResult.Unavailable -> error("${result.diagnostic.code}: ${result.diagnostic.message}")
+            }
+            emptyList<Diagnostic>()
+        }
+    }
+
+    private fun refusedGate() = DiagnosticsGate.enabled("clang-inline-local-v1") {
+        error("c.inlineLocal.authorityInvalid: unchanged compiler-bound preview and current Clang evidence are required")
     }
 }

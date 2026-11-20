@@ -38,6 +38,7 @@ class JavaMoveClassOperationDispatcher(
         targetPackage: String,
         @Suppress("UNUSED_PARAMETER")
         promotionAttempt: JavaMoveClassPromotionAttemptMetadata = JavaMoveClassPromotionAttemptMetadata.NONE,
+        targetModuleId: String? = null,
     ): JavaMoveClassOperationOutcome {
         val planner = JavaMoveClassPlanner(javaAdapter)
         return when (val preflight = JavaMoveClassRequestValidator.validate(
@@ -45,6 +46,7 @@ class JavaMoveClassOperationDispatcher(
             javaAdapter,
             symbolFqn,
             targetPackage,
+            targetModuleId,
         )) {
             is JavaMoveClassRequestValidation.Refused -> planOutcome(
                 planner.previewWithAuthority(snapshot, preflight),

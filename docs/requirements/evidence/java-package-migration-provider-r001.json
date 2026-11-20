@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "local-requirement-story-acceptance",
+  "requirement": "RPK-PKG-003",
+  "scenarioId": "REQ-JAVA-PACKAGE-MIGRATION-003#direct-java-package-migration-previews-applies-once-refuses-stale-plans-and-rolls-back-exactly",
+  "featurePath": "features/java-package-migration-provider.feature",
+  "featureSha256": "04f425a3110d9e575badacdb745686333ac7443712e8733fe5dcf67adc5287a5",
+  "analyzer": {
+    "source": "/home/paperboy/workspace/projects/multi-agent/pi-java-multiagent/validators/analyze-bdd-project.py",
+    "sourceSha256": "35c848b9be5561453ee5eabff0cb9e031e3a330fd39fe1927381169480e1fccb"
+  },
+  "preEditInventorySha256": "26f3ea32fde2ae8cdac00fa45328492491d555ce9564c4cac8856b31249306b1",
+  "postEditInventorySha256": "1cce5210ddf2cdc79846cd1492c9c13d64809920fdba3e3dfb861e10d3d083c3",
+  "postEditInventorySummary": {
+    "duplicateOccurrenceCount": 0,
+    "duplicatedExpressionCount": 0,
+    "glueRootCount": 1,
+    "javaStepDefinitionCount": 0,
+    "kotlinStepDefinitionCount": 456,
+    "runnerAmbiguityCount": 0,
+    "runnerCount": 1,
+    "stepDefinitionCount": 456,
+    "uniqueExpressionCount": 456
+  },
+  "selectedScenarioInventoryCounts": {
+    "ambiguous": 0,
+    "exactReuse": 4,
+    "newRequired": 0,
+    "sharedReuseCandidates": 0
+  },
+  "junitXmlSha256": "e744eb326e630a2ab904003a46eef4ccb9c25f1820ebdc32f3cbf3d4a8d8ad09",
+  "cucumberJsonSha256": "edebfc573543616588a518a8c88b72505901e72907b96095af888dbff84448b4",
+  "testResult": {
+    "status": "passed",
+    "scenarioCount": 1,
+    "failureCount": 0,
+    "errorCount": 0,
+    "durationSeconds": 2.825
+  },
+  "execution": {
+    "gradle": "9.6.1",
+    "jdk": "21",
+    "offline": true,
+    "runner": "existing JavaRefactoringPreviewCommandSurfaceCucumberTest",
+    "activeScenarios": 1
+  },
+  "sourceSha256": {
+    "features/java-package-migration-provider.feature": "04f425a3110d9e575badacdb745686333ac7443712e8733fe5dcf67adc5287a5",
+    "modules/refactorkit-cli/src/test/kotlin/org/refactorkit/cli/previewcommand/JavaRefactoringPreviewCommandSurfaceCucumberTest.kt": "6bb2c664f7665502103caeb0cdf91e737abeb4d5f08258ccb6cd2879bf1c6170",
+    "modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/JavaMovePackagePlanner.kt": "be7ddb52255ff468e15eabbea7a35ea61676a139b2142c0bad2bf479ffbdb875",
+    "modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/JavaLanguageAdapter.kt": "a90ae49d5c554e7a4878ee52d719b121a36babc695cd46a845eae37ee9d14f2f",
+    "modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/JavaAdapterRegistration.kt": "0bd6e60cde257fd80578e9d279e10d3fdb08aef6d7f892061477bfcf9bbbe827",
+    "modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/JavaContextAuthority.kt": "d60b72ef129cac0cb854c80539fdf200db6139ce525050bea64d62700fa70de9",
+    "modules/refactorkit-java/src/main/kotlin/org/refactorkit/java/recipe/RecipeEngine.kt": "067e89e08fcb6eb216d3316a107e3d40fd5c6903e41301801ee398a1f8f23310",
+    "modules/refactorkit-daemon/src/main/kotlin/org/refactorkit/daemon/DaemonSession.kt": "2340dc5364f5284db0d9e3e373389d9540539591c5ffd54677a4259ddb8c4a85"
+  },
+  "qualifiedSurface": {
+    "request": "refactor.preview operation=movePackage languageId=java with fromPackage and toPackage arguments",
+    "capability": {
+      "stability": "stable",
+      "mutationAuthority": "managed-stable",
+      "evidence": "structural-parse"
+    },
+    "contextRoute": "javaContextRefactoring.operations includes movePackage",
+    "checks": [
+      "read-only preview with diagnosticsAfterPreview",
+      "exact stale-snapshot refusal",
+      "one managed transaction",
+      "package-info and exact-package main/test units moved",
+      "subpackage and external-module references updated",
+      "generated source preserved",
+      "exact workspace tree restored by rollback",
+      "generic Java operation=recipe rejected"
+    ]
+  },
+  "limits": [
+    "Local source-built acceptance only; no independent review or release qualification.",
+    "Native IDE entry, preview UI, and consumer qualification remain owned by the IDE.",
+    "Generic Java recipe execution remains excluded."
+  ]
+}

@@ -11,14 +11,41 @@ on:
         description: 'Single-platform qualification target for 0.8.0 (other hosts remain NOT VERIFIED until 1.0.0)'
         required: false
         default: linux-x86_64
-        type: string
+        type: choice
+        options:
+          - linux-x86_64
 
 jobs:
+  qualification-scope:
+    name: Admit interim Linux qualification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject unsupported qualification requests
+        shell: python
+        env:
+          QUALIFICATION_EVENT: ${{ github.event_name }}
+          QUALIFICATION_PLATFORM: ${{ inputs.qualification_platform }}
+        run: |
+          import os
+          if os.environ['QUALIFICATION_EVENT'] == 'workflow_dispatch' and os.environ['QUALIFICATION_PLATFORM'] != 'linux-x86_64':
+              raise RuntimeError('Interim qualification admits only linux-x86_64; other hosts remain NOT VERIFIED until 1.0.0')
+
   build:
+    needs: qualification-scope
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare the pinned Clang 22.1.8 C qualification toolchain
+        shell: bash
+        run: bash scripts/prepare-clang-qualification-toolchain.sh
+
+      - name: Prepare the pinned SPDX producer qualification input
+        shell: bash
+        run: |
+          python3 scripts/qualify-sbom-producer.py prepare --download --destination "$RUNNER_TEMP/refactorkit-syft-1.42.3"
+          echo "REFACTORKIT_SYFT_QUALIFICATION_TOOLCHAIN=$RUNNER_TEMP/refactorkit-syft-1.42.3" >> "$GITHUB_ENV"
 
       - name: Set up JDK 25 qualification input
         uses: actions/setup-java@v4
@@ -29,6 +56,36 @@ jobs:
       - name: Record JDK 25 qualification home
         shell: bash
         run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 8 LTS qualification input
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Record JDK 8 LTS qualification home
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK8_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 11 LTS qualification input
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Record JDK 11 LTS qualification home
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK11_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17 LTS qualification input
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Record JDK 17 LTS qualification home
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK17_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
       - name: Set up exact JDK 21 build runtime
         uses: actions/setup-java@v4
@@ -53,8 +110,48 @@ jobs:
         working-directory: qualification/typescript-toolchain
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Install pinned protocol schema qualification packages without scripts
+        working-directory: qualification/protocol-schema-toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Prepare the pinned Gradle 8.11.1 fixture input
+        shell: bash
+        run: bash scripts/prepare-gradle-8-11-1-fixture.sh
+
+      - name: Set up exact Gradle 9.8.1 fixture input
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: '9.8.1'
+          cache-disabled: true
+
+      - name: Verify and export native fixture profile
+        shell: bash
+        run: |
+          mkdir -p .refactorkit/runs/ci-native-fixture-profile
+          python3 scripts/prepare-native-fixture-profile.py \
+            --java-scope lts \
+            --jdk8 "$REFACTORKIT_CI_JDK8_HOME" \
+            --jdk11 "$REFACTORKIT_CI_JDK11_HOME" \
+            --jdk17 "$REFACTORKIT_CI_JDK17_HOME" \
+            --jdk21 "$JAVA_HOME" \
+            --jdk25 "$REFACTORKIT_JAVA_25_HOME" \
+            --gradle98 "$(command -v gradle)" \
+            --node "$(command -v node)" \
+            --ajv-module "$GITHUB_WORKSPACE/qualification/protocol-schema-toolchain/node_modules/ajv" \
+            --candidate-root "$GITHUB_WORKSPACE/modules/refactorkit-cli/build/package/refactorkit" \
+            --github-env "$GITHUB_ENV" \
+            --evidence .refactorkit/runs/ci-native-fixture-profile/profile.json
+
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
+
+      - name: Upload verified native fixture profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-fixture-profile-build-linux-x86_64
+          path: .refactorkit/runs/ci-native-fixture-profile/profile.json
+          if-no-files-found: error
 
       - name: Install CLI to user home for boundary tests
         run: |
@@ -66,7 +163,13 @@ jobs:
         run: ./gradlew build
 
       - name: Run golden tests
-        run: ./refactorkit test-golden
+        shell: bash
+        run: |
+          : "${REFACTORKIT_C_QUALIFICATION_TOOLCHAIN:?Verified C toolchain is required}"
+          ./refactorkit test-golden \
+            --clang "$REFACTORKIT_C_QUALIFICATION_TOOLCHAIN/usr/bin/clang-22" \
+            --clangd "$REFACTORKIT_C_QUALIFICATION_TOOLCHAIN/usr/bin/clangd" \
+            --clang-format "$REFACTORKIT_C_QUALIFICATION_TOOLCHAIN/usr/bin/clang-format"
 
       - name: Test policy and packaging verification scripts
         run: |
@@ -182,7 +285,9 @@ jobs:
           done
 
       - name: Run packaged authoritative Java diagnostics qualification
-        run: python3 scripts/smoke-packaged-java-authoritative-diagnostics.py
+        env:
+          REFACTORKIT_JAVA_SMOKE_SCOPE: lts
+        run: python3 scripts/smoke-packaged-java-authoritative-diagnostics.py --java-scope "$REFACTORKIT_JAVA_SMOKE_SCOPE"
 
       - name: Run packaged real TypeScript qualification
         run: python3 scripts/smoke-packaged-typescript.py
@@ -218,12 +323,15 @@ jobs:
           if-no-files-found: error
 
   maven-move-class-native:
+    needs: qualification-scope
     name: Maven move-class authority (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
-        include: >-
-          ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.qualification_platform == 'linux-x86_64' && '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' || '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            gradle: ./gradlew
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout exact source revision
@@ -306,24 +414,29 @@ jobs:
           if-no-files-found: warn
 
   cross-platform-runtime:
+    needs: qualification-scope
     name: Runtime (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2022
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
+          - os: ubuntu-latest
+            platform: linux-x86_64
             gradle: ./gradlew
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare the pinned Clang 22.1.8 C qualification toolchain
+        shell: bash
+        run: bash scripts/prepare-clang-qualification-toolchain.sh
+
+      - name: Prepare the pinned SPDX producer qualification input
+        shell: bash
+        run: |
+          python3 scripts/qualify-sbom-producer.py prepare --download --destination "$RUNNER_TEMP/refactorkit-syft-1.42.3"
+          echo "REFACTORKIT_SYFT_QUALIFICATION_TOOLCHAIN=$RUNNER_TEMP/refactorkit-syft-1.42.3" >> "$GITHUB_ENV"
 
       - name: Set up JDK 25 qualification input
         uses: actions/setup-java@v4
@@ -334,6 +447,36 @@ jobs:
       - name: Record JDK 25 qualification home
         shell: bash
         run: echo "REFACTORKIT_JAVA_25_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 8 LTS qualification input
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Record JDK 8 LTS qualification home
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK8_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 11 LTS qualification input
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Record JDK 11 LTS qualification home
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK11_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17 LTS qualification input
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Record JDK 17 LTS qualification home
+        shell: bash
+        run: echo "REFACTORKIT_CI_JDK17_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
 
       - name: Set up exact JDK 21 build runtime
         uses: actions/setup-java@v4
@@ -358,8 +501,48 @@ jobs:
         working-directory: qualification/typescript-toolchain
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Install pinned protocol schema qualification packages without scripts
+        working-directory: qualification/protocol-schema-toolchain
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Prepare the pinned Gradle 8.11.1 fixture input
+        shell: bash
+        run: bash scripts/prepare-gradle-8-11-1-fixture.sh
+
+      - name: Set up exact Gradle 9.8.1 fixture input
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          gradle-version: '9.8.1'
+          cache-disabled: true
+
+      - name: Verify and export native fixture profile
+        shell: bash
+        run: |
+          mkdir -p .refactorkit/runs/ci-native-fixture-profile
+          python3 scripts/prepare-native-fixture-profile.py \
+            --java-scope lts \
+            --jdk8 "$REFACTORKIT_CI_JDK8_HOME" \
+            --jdk11 "$REFACTORKIT_CI_JDK11_HOME" \
+            --jdk17 "$REFACTORKIT_CI_JDK17_HOME" \
+            --jdk21 "$JAVA_HOME" \
+            --jdk25 "$REFACTORKIT_JAVA_25_HOME" \
+            --gradle98 "$(command -v gradle)" \
+            --node "$(command -v node)" \
+            --ajv-module "$GITHUB_WORKSPACE/qualification/protocol-schema-toolchain/node_modules/ajv" \
+            --candidate-root "$GITHUB_WORKSPACE/modules/refactorkit-cli/build/package/refactorkit" \
+            --github-env "$GITHUB_ENV" \
+            --evidence .refactorkit/runs/ci-native-fixture-profile/profile.json
+
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
+
+      - name: Upload verified native fixture profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-fixture-profile-cross-platform-runtime-linux-x86_64
+          path: .refactorkit/runs/ci-native-fixture-profile/profile.json
+          if-no-files-found: error
 
       - name: Test native kill-recovery observer
         shell: python
@@ -442,10 +625,13 @@ jobs:
           subprocess.run([sys.executable, "scripts/smoke-packaged-build-model.py"], check=True)
 
       - name: Native packaged authoritative Java diagnostics qualification
+        env:
+          REFACTORKIT_JAVA_SMOKE_SCOPE: lts
         shell: python
         run: |
-          import subprocess, sys
-          subprocess.run([sys.executable, "scripts/smoke-packaged-java-authoritative-diagnostics.py"], check=True)
+          import os, subprocess, sys
+          subprocess.run([sys.executable, "scripts/smoke-packaged-java-authoritative-diagnostics.py",
+                          "--java-scope", os.environ["REFACTORKIT_JAVA_SMOKE_SCOPE"]], check=True)
 
       - name: Native packaged real TypeScript qualification
         shell: python
@@ -526,6 +712,7 @@ jobs:
           if-no-files-found: error
 
   k1-k2-shared-foundations-native:
+    needs: qualification-scope
     name: K1 K2 shared JVM foundations (${{ matrix.platform }})
     strategy:
       fail-fast: false
@@ -533,15 +720,6 @@ jobs:
         include:
           - os: ubuntu-24.04
             platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2025
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
             gradle: ./gradlew
     runs-on: ${{ matrix.os }}
     steps:
@@ -622,6 +800,7 @@ jobs:
           if-no-files-found: error
 
   k5-move-next-native:
+    needs: qualification-scope
     name: K5 move next (${{ matrix.platform }})
     strategy:
       fail-fast: false
@@ -629,15 +808,6 @@ jobs:
         include:
           - os: ubuntu-24.04
             platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2025
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
             gradle: ./gradlew
     runs-on: ${{ matrix.os }}
     steps:
@@ -708,6 +878,7 @@ jobs:
           if-no-files-found: error
 
   k5-bounded-completion-native:
+    needs: qualification-scope
     name: K5 bounded completion (${{ matrix.platform }})
     strategy:
       fail-fast: false
@@ -715,15 +886,6 @@ jobs:
         include:
           - os: ubuntu-24.04
             platform: linux-x86_64
-            gradle: ./gradlew
-          - os: windows-2025
-            platform: windows-x86_64
-            gradle: ./gradlew.bat
-          - os: macos-15-intel
-            platform: macos-x86_64
-            gradle: ./gradlew
-          - os: macos-15
-            platform: macos-aarch64
             gradle: ./gradlew
     runs-on: ${{ matrix.os }}
     steps:

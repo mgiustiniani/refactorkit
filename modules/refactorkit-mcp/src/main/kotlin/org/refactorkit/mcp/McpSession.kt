@@ -17,6 +17,8 @@ import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.CodeSelection
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.OwnedSourceCaptureException
+import org.refactorkit.core.OwnedSourceInventoryReader
 import org.refactorkit.core.LanguageCapabilityProtocol
 import org.refactorkit.core.ManagedRollbackExecutor
 import org.refactorkit.core.ManagedRollbackOutcome
@@ -41,12 +43,19 @@ import org.refactorkit.core.RollbackPreflightGuard
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.core.WorkspaceRefreshCoordinator
 import org.refactorkit.core.WorkspaceSnapshotComposer
+import org.refactorkit.c.CMakeManifestCapture
+import org.refactorkit.c.CCompilationSnapshotCapture
+import org.refactorkit.c.CFormattingStyleSnapshot
 import org.refactorkit.c.CRefactoringFacade
+import org.refactorkit.c.CCompilerSymbolSearch
+import org.refactorkit.c.CCompilerSymbolNavigation
 import org.refactorkit.c.ClangSemanticToolchain
 import org.refactorkit.c.ClangToolchainDiscoverer
 import org.refactorkit.c.ClangToolchainDiscovery
+import org.refactorkit.c.CReadOnlySdkRequestJson
 import org.refactorkit.c.ClangToolchainRequest
 import org.refactorkit.java.JavaAdapterRegistration
+import org.refactorkit.java.JavaSafeDeleteManagedApplyPolicy
 import org.refactorkit.java.JavaChangeSignaturePlanner
 import org.refactorkit.java.JavaExtractMethodPlanner
 import org.refactorkit.java.JavaFormatFilePlanner
@@ -172,11 +181,28 @@ class McpSession(
         })
         put("refactorkitLanguageKernel", LanguageCapabilityProtocol.render(
             listOf(
-                JavaAdapterRegistration.create().descriptor,
+                mcpJavaAdapterDescriptor(),
                 KotlinAdapterRegistration.descriptor(),
             ) + TypeScriptAdapterDescriptors.descriptors(),
         ))
         }
+    }
+
+    /** MCP dispatch is synchronous and every response is subject to the stdio output ceiling. */
+    private fun mcpJavaAdapterDescriptor(): org.refactorkit.core.LanguageAdapterDescriptor {
+        val descriptor = JavaAdapterRegistration.create().descriptor
+        fun mcpRuntime(runtime: org.refactorkit.core.LanguageAdapterRuntime) = runtime.copy(
+            supportsCancellation = false,
+            limits = runtime.limits.copy(
+                maxOutputBytes = ProtocolLimits.MAX_MCP_RESPONSE_BYTES.toLong(),
+            ),
+        )
+        return descriptor.copy(
+            runtime = mcpRuntime(descriptor.runtime),
+            capabilities = descriptor.capabilities.map { capability ->
+                capability.copy(runtime = mcpRuntime(capability.runtime ?: descriptor.runtime))
+            },
+        )
     }
 
     // ── tools ─────────────────────────────────────────────────────────────────
@@ -186,6 +212,9 @@ class McpSession(
             add(tool("project_scan", "Scan and index a Java project.",
                 required = listOf("root"),
                 props = mapOf("root" to "string: absolute path to project root")))
+            add(tool("java_project_context", "Acquire an explicit SDK-bound Java project context for compiler-backed operations.",
+                required = listOf("sdkHome"),
+                props = mapOf("sdkHome" to "string: absolute configured JDK home")))
             add(tool("project_summary", "Return summary of the currently open project.",
                 required = emptyList(), props = emptyMap()))
             add(tool("typescript_semantic_start", "Start an explicit bounded TypeScript/JavaScript semantic session.",
@@ -252,17 +281,33 @@ class McpSession(
                 required = listOf("query"),
                 props = mapOf(
                     "query" to "string: name or partial FQN to search",
-                    "languageId" to "string: java | typescript | javascript (default java)",
-                )))
+                    "languageId" to "string: java | typescript | javascript | c (default java); C returns compiler declaration JSON",
+                    "expectedSnapshotHash" to "string: required for C search; exact project_scan snapshot",
+                    "clang" to "string: explicitly configured C compiler path, required for C search",
+                    "clangd" to "string: explicitly configured clangd path, required for C search",
+                    "clangFormat" to "string: explicitly configured clang-format path, required for C search",
+                    "limit" to "integer: C search result bound, 1..200 (default 200)",
+                ), propertySchemas = mapOf("readOnlySdks" to CReadOnlySdkRequestJson.schema())))
             add(tool("symbol_definition", "Return the definition location of a symbol.",
                 required = listOf("symbol"),
                 props = mapOf(
                     "symbol" to "string: fully-qualified or opaque symbol ID",
-                    "languageId" to "string: java | typescript | javascript (default java)",
-                )))
+                    "languageId" to "string: java | typescript | javascript | c (default java)",
+                    "expectedSnapshotHash" to "string: required for C navigation, exact project_scan snapshot",
+                    "clang" to "string: explicit compiler path required for C navigation",
+                    "clangd" to "string: explicit clangd path required for C navigation",
+                    "clangFormat" to "string: explicit clang-format path required for C navigation",
+                ), propertySchemas = mapOf("readOnlySdks" to CReadOnlySdkRequestJson.schema())))
             add(tool("symbol_references", "Find all references to a symbol.",
                 required = listOf("symbol"),
-                props = mapOf("symbol" to "string: fully-qualified symbol name")))
+                props = mapOf("symbol" to "string: fully-qualified or opaque symbol ID",
+                    "languageId" to "string: java | typescript | javascript | c (default java)",
+                    "expectedSnapshotHash" to "string: required for C navigation, exact project_scan snapshot",
+                    "clang" to "string: explicit compiler path required for C navigation",
+                    "clangd" to "string: explicit clangd path required for C navigation",
+                    "clangFormat" to "string: explicit clang-format path required for C navigation",
+                    "includeDeclaration" to "boolean: include C declaration sites (default false)",
+                    "limit" to "integer: maximum C reference locations, 1..200 (default 200)"), propertySchemas = mapOf("readOnlySdks" to CReadOnlySdkRequestJson.schema())))
             add(tool("diagnostics", "Return legacy human-readable diagnostics for the project.",
                 required = emptyList(), props = emptyMap()))
             add(tool("diagnostics_v2", "Return IDE-grade exact compiler diagnostics with snapshot, lease, authority, ranges, and attestation.",
@@ -281,7 +326,7 @@ class McpSession(
             add(tool("preview_refactoring", "Preview a refactoring operation without applying it.",
                 required = listOf("operation"),
                 props = mapOf(
-                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete | sourceFileRelocation | extractFunction | extractConstant | inlineVariable | moveDeclaration | projectReferenceMigration | recipe | renamePrefix | moveSource | organizeIncludes | changeSignature | extractExpression | inlineFunction | inlineLocalVariable | relocateComponent",
+                    "operation" to "string: renameSymbol | renameClass | renameMember | extractMethod | extractVariable | inlineMethod | changeSignature.renameParameter | changeSignature.changeParameterType | changeSignature.addParameter | changeSignature.reorderParameters | changeSignature.removeParameter | changeVisibility | batchCleanup | moveClass | moveSourceRoot | java.moveAcrossMavenModules | java.renameMavenModule | organizeImports | formatFile | safeDelete | sourceFileRelocation | extractFunction | extractConstant | extractField | encapsulateField | extractInterface | extractSuperclass | extractParameter | inlineVariable | inlineConstant | moveDeclaration | projectReferenceMigration | recipe | renamePrefix | moveSource | organizeIncludes | changeSignature | reorderParameters | addParameter | extractStatements | extractExpression | inlineFunction | inlineLocalVariable | relocateComponent",
                     "symbol" to "string: fully-qualified symbol name",
                     "languageId" to "string: java | kotlin | typescript | javascript | c (default java); c requires clang/clangd/clangFormat",
                     "clang" to "string: explicit clang executable path (required for languageId=c)",
@@ -289,7 +334,10 @@ class McpSession(
                     "clangFormat" to "string: explicit clang-format executable path (required for languageId=c)",
                     "expectedSnapshotHash" to "string: required for Kotlin mutations and advanced TypeScript/JavaScript previews",
                     "semanticLease" to "string: required for Kotlin mutations and advanced TypeScript/JavaScript previews",
+                    "javaContext" to "object: explicit SDK-bound Java context returned by java_project_context; required for compiler-backed Java mutations",
                     "arguments" to "object: operation-specific arguments (newName, targetPackage, file/line/character, safety overrides, etc.)",
+                ), propertySchemas = mapOf(
+                    "readOnlySdks" to CReadOnlySdkRequestJson.schema(),
                 )))
             add(tool("apply_refactoring", "Apply a managed plan or refuse a known review-only operation.",
                 required = emptyList(),
@@ -297,6 +345,7 @@ class McpSession(
                     "operationId" to "string: non-capability ID returned by lexical review",
                     "planId" to "string: managed plan ID returned by preview_refactoring",
                     "semanticLease" to "string: required for Kotlin rename apply",
+                    "javaContext" to "object: same explicit SDK-bound Java context returned by java_project_context",
                 ),
                 exactlyOneOf = listOf("operationId", "planId")))
             add(tool("rollback_refactoring", "Roll back a previously applied transaction; normal mode refuses post-apply changes.",
@@ -304,6 +353,7 @@ class McpSession(
                 props = mapOf(
                     "transactionId" to "string: transaction ID returned by apply_refactoring",
                     "force" to "boolean: explicitly overwrite post-apply changes (default false)",
+                    "javaContext" to "object: required to roll back an SDK-authorized Java transaction",
                 )))
             add(tool("import_external_java_class", "Import an external Java class into the project with license/conflict checks.",
                 required = listOf("code", "targetPackage"),
@@ -342,6 +392,7 @@ class McpSession(
 
     private fun callTool(name: String, args: JsonObject): String = when (name) {
         "project_scan"          -> toolProjectScan(args)
+        "java_project_context" -> toolJavaProjectContext(args)
         "project_summary"       -> toolProjectSummary()
         "typescript_semantic_start" -> toolTypeScriptSemanticStart(args)
         "typescript_semantic_stop" -> toolTypeScriptSemanticStop(args)
@@ -675,6 +726,7 @@ class McpSession(
     private fun toolProjectScan(args: JsonObject): String {
         val root = args.string("root") ?: missing("root")
         val path = Paths.get(root).toAbsolutePath().normalize()
+        withSourceCaptureRefusal { OwnedSourceInventoryReader.requireOwnedRoot(path) }
         val recoveryErrors = PatchEngine(path).inspectRecovery()
         if (recoveryErrors.isNotEmpty()) {
             throw JsonRpcException(
@@ -689,6 +741,32 @@ class McpSession(
         snapshot = snap
         workspaceRoot = path
         return "Scanned ${snap.workspace.root}\nFiles: ${snap.files.size}\nModules: ${snap.modules.size}\nSnapshot: ${snap.hash}"
+    }
+
+    private fun toolJavaProjectContext(args: JsonObject): String {
+        val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open. Call project_scan first.")
+        val sdkHome = args.string("sdkHome")?.let(Paths::get) ?: missing("sdkHome")
+        if (!sdkHome.isAbsolute) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "sdkHome must be an absolute configured JDK home",
+        )
+        val current = scanWorkspace(root)
+        val request = org.refactorkit.java.JavaProjectContextRequest(
+            expectedSnapshotHash = current.hash,
+            sdkHome = sdkHome,
+        )
+        return when (val result = org.refactorkit.java.JavaBoundContext.acquire(request, { scanWorkspace(root) })) {
+            is org.refactorkit.java.JavaBoundContextResolution.Refused ->
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, result.message,
+                    buildJsonObject { put("refusalCode", result.code) })
+            is org.refactorkit.java.JavaBoundContextResolution.Available -> buildJsonObject {
+                put("status", "available")
+                put("javaContext", buildJsonObject {
+                    put("expectedSnapshotHash", result.context.snapshot.hash)
+                    put("expectedContextHash", result.context.view.contextHash)
+                    put("sdkHome", sdkHome.toRealPath().toString())
+                })
+            }.toString()
+        }
     }
 
     private fun toolProjectSummary(): String {
@@ -718,6 +796,7 @@ class McpSession(
         val query = args.string("query") ?: ""
         val snap = requireSnapshot()
         val languageId = args.string("languageId") ?: "java"
+        if (languageId == "c") return CCompilerSymbolSearch.search(snap, args) { discoverCToolchain(args) }.toString()
         val results = if (languageId == "java") adapter.searchSymbols(snap, query) else
             requireSemanticAdapter(languageId).searchWorkspaceSymbols(snap, query)
         if (results.isEmpty()) return "No symbols found for query: $query"
@@ -728,6 +807,7 @@ class McpSession(
         val symbolId = args.string("symbol") ?: missing("symbol")
         val snap = requireSnapshot()
         val languageId = args.string("languageId") ?: "java"
+        if (languageId == "c") return CCompilerSymbolNavigation.definition(snap, args) { discoverCToolchain(args) }.toString()
         val sym = if (languageId == "java") adapter.findSymbol(snap, org.refactorkit.core.SymbolId(symbolId)) else
             requireSemanticAdapter(languageId).buildSymbols(snap).symbols.singleOrNull { it.id.value == symbolId }
         sym ?: return "Symbol not found: $symbolId"
@@ -738,6 +818,7 @@ class McpSession(
         val symbolId = args.string("symbol") ?: missing("symbol")
         val snap = requireSnapshot()
         val languageId = args.string("languageId") ?: "java"
+        if (languageId == "c") return CCompilerSymbolNavigation.references(snap, args) { discoverCToolchain(args) }.toString()
         val refs = if (languageId == "java") adapter.findReferences(snap, org.refactorkit.core.SymbolId(symbolId)) else {
             val semantic = requireSemanticAdapter(languageId)
             semantic.buildSymbols(snap)
@@ -786,8 +867,11 @@ class McpSession(
             "- organizeIncludes: organize one C include block, preserving comments\n" +
             "- safeDelete: delete a C symbol only with proven absence of uses\n" +
             "- changeSignature: rename a C function parameter (fully-prototyped, non-variadic)\n" +
-            "- extractExpression: extract a scalar C expression to a const local temporary\n" +
-            "- inlineFunction: inline a single-use static/extern C function\n" +
+            "- reorderParameters: reorder a captured one-file static integer family with a complete original-index mapping\n" +
+            "- addParameter: insert an integer parameter in a captured one-file static family; supply parameterName, parameterOrdinal and callerExpression explicitly\n" +
+            "- extractStatements: extract integer declarations in a captured one-file static family; supply file, symbol, helperName and UTF-8 startByte/endByte explicitly\n" +
+            "- extractExpression: extract a captured eager native int initializer into a const int temporary; supply file and zero-based UTF-16 startLine/startChar/endLine/endChar, with optional tempName\n" +
+            "- inlineFunction: inline one compiler-bound static int C function in captured C11/C17 inputs, with one direct call and atomic int arguments; supply file and symbol explicitly\n" +
             "- inlineLocalVariable: inline a single-use literal C scalar local\n" +
             "- relocateComponent: move a C component directory and update literal includes"
         val symbolId = args.string("symbol") ?: missing("symbol")
@@ -796,6 +880,17 @@ class McpSession(
             "- renameMember: rename a method or field\n" +
             "- extractMethod: extract selected Java lines into a private void method\n" +
             "- extractMethod: bounded Java or Kotlin expression extraction\n" +
+            "- extractVariable: extract one complete JDT-bound primitive-int return expression into a local\n" +
+            "- extractConstant: move one JDT-bound primitive-int compile-time constant expression into a private static final field\n" +
+            "- extractInterface: extract one JDT-bound primitive-signature public method into a new interface\n" +
+            "- extractSuperclass: move one JDT-bound pure int-returning method into a new superclass\n" +
+            "- changeVisibility: promote one exact JDT-bound final method to public visibility\n" +
+            "- inlineConstant: inline a private static final primitive-int literal at binding-matched reads in its declaring compilation unit\n" +
+            "- extractField: move one JDT-bound primitive-int compile-time constant expression from an instance method into a private final instance field\n" +
+            "- encapsulateField: make one public final JDT-bound primitive-int field private and update bound Java reads through a generated public getter\n" +
+            "- encapsulateField: make one public final JDT-bound primitive-int field private and update bound Java reads through a generated public getter\n" +
+            "- extractParameter: promote one JDT-bound primitive-int return addition into a parameter and update its unique caller\n" +
+            "- extractParameter: promote one JDT-bound primitive-int return addition into a parameter and update its unique caller\n" +
             "- inlineMethod: bounded Kotlin private helper inline\n" +
             "- changeSignature.renameParameter: rename a method parameter\n" +
             "- changeSignature.changeParameterType: change one JDT-bound method parameter type\n" +
@@ -830,7 +925,10 @@ class McpSession(
             "organizeIncludes" -> "organizeIncludes"
             "safeDelete" -> "safeDelete"
             "changeSignature" -> "changeSignature"
+            "reorderParameters" -> "reorderParameters"
+            "addParameter" -> "addParameter"
             "extractExpression" -> "extractExpression"
+            "extractStatements" -> "extractStatements"
             "inlineFunction" -> "inlineFunction"
             "inlineLocalVariable" -> "inlineLocalVariable"
             "relocateComponent" -> "relocateComponent"
@@ -838,18 +936,18 @@ class McpSession(
         }
         val resolvedArgs = opArgs + (symbol?.let { mapOf("symbol" to it) } ?: emptyMap())
         try {
-            facade.startFor(snap, cOperation)
             // The pending plan is inserted by the shared preview path so the C diagnostics
             // gate is retained consistently; this helper only computes the plan.
-            return facade.preview(snap, cOperation, resolvedArgs)
+            return facade.previewForManagedApply(snap, cOperation, resolvedArgs)
         } finally {
             facade.close()
         }
     }
 
-    private fun cDiagnosticsGate(toolchain: ClangSemanticToolchain): DiagnosticsGate =
-        // Thin delegation: the C facade owns the exact-version clang gate.
-        CRefactoringFacade(toolchain).diagnosticsGate()
+    private fun cDiagnosticsGate(toolchain: ClangSemanticToolchain, snapshot: ProjectSnapshot, plan: PatchPlan): DiagnosticsGate =
+        // The C facade binds the gate to the actual pending preview, not a later
+        // reconstruction from untrusted MCP arguments.
+        CRefactoringFacade(toolchain).diagnosticsGate(snapshot, plan)
 
     private fun discoverCToolchain(args: JsonObject): ClangSemanticToolchain {
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
@@ -858,6 +956,7 @@ class McpSession(
             clangExecutable = args.string("clang")?.let(Paths::get),
             clangdExecutable = args.string("clangd")?.let(Paths::get),
             clangFormatExecutable = args.string("clangFormat")?.let(Paths::get),
+            readOnlySdks = CReadOnlySdkRequestJson.decode(args["readOnlySdks"]),
         )
         return when (val discovery = ClangToolchainDiscoverer().discover(request)) {
             is ClangToolchainDiscovery.Available -> discovery.toolchain
@@ -888,12 +987,37 @@ class McpSession(
         val symbol = args.string("symbol")
         val languageId = args.string("languageId") ?: "java"
         val opArgs = (args["arguments"] as? JsonObject)?.entries?.associate { (k, v) ->
-            k to (v as? JsonPrimitive)?.content.orEmpty()
+            k to if (operation == "batchCleanup" && k == "actions") {
+                (v as? JsonArray)?.toString() ?: throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS, "batchCleanup arguments.actions must be an array",
+                )
+            } else (v as? JsonPrimitive)?.content.orEmpty()
         } ?: emptyMap()
-        val snap = requireSnapshot()
+        val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val javaContextRequest = args["javaContext"]?.let(::parseJavaContextRequest)
+        val javaContext = javaContextRequest?.let { request ->
+            when (val acquired = org.refactorkit.java.JavaBoundContext.acquire(request, scan = { scanWorkspace(root) })) {
+                is org.refactorkit.java.JavaBoundContextResolution.Available -> acquired.context
+                is org.refactorkit.java.JavaBoundContextResolution.Refused -> throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS, acquired.message, buildJsonObject { put("refusalCode", acquired.code) },
+                )
+            }
+        }
+        if (operation == "batchCleanup" && languageId != "java") throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "batchCleanup requires languageId=java",
+        )
+        val snap = if (operation == "batchCleanup" && javaContext == null) scanWorkspace(root)
+        else javaContext?.snapshot ?: requireSnapshot()
+        if (operation == "batchCleanup" && args.string("expectedSnapshotHash") != snap.hash) {
+            throw JsonRpcException(
+                JsonRpcErrorCodes.PLAN_REFUSED,
+                "batchCleanup requires the exact current saved-project snapshot hash",
+                buildJsonObject { put("refusalCode", "java.batchCleanup.snapshotStale") },
+            )
+        }
 
         val semanticOwner = if (languageId in setOf("typescript", "javascript") && operation != "renameSymbol") requireSemanticAdapter(languageId) else null
-        val retainedGate = if (languageId == "c") cDiagnosticsGate(discoverCToolchain(args)) else semanticOwner?.diagnosticsGate()
+        val retainedGate = semanticOwner?.diagnosticsGate()
         val plan = if (languageId == "c") {
             cPreview(snap, operation, symbol, opArgs, args)
         } else if (semanticOwner != null) {
@@ -962,6 +1086,58 @@ class McpSession(
                 val newName = opArgs["newName"] ?: missing("arguments.newName")
                 val command = JavaRefactoringPreviewCommand.RenameMember(target, newName)
                 JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
+            }
+            "extractVariable" -> {
+                if (languageId != "java") missing("languageId=java")
+                adapter.applyRefactoring(RefactoringRequest(
+                    operation = operation,
+                    arguments = opArgs,
+                    snapshot = snap,
+                ))
+            }
+            "extractInterface" -> {
+                if (languageId != "java") missing("languageId=java")
+                (javaContext?.adapter ?: adapter).applyRefactoring(RefactoringRequest(
+                    operation = operation,
+                    symbolId = org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
+                    arguments = opArgs,
+                    snapshot = snap,
+                ))
+            }
+            "extractSuperclass" -> {
+                if (languageId != "java") missing("languageId=java")
+                (javaContext?.adapter ?: adapter).applyRefactoring(RefactoringRequest(
+                    operation = operation,
+                    symbolId = org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
+                    arguments = opArgs,
+                    snapshot = snap,
+                ))
+            }
+            "changeVisibility" -> {
+                if (languageId != "java") missing("languageId=java")
+                (javaContext?.adapter ?: adapter).applyRefactoring(RefactoringRequest(
+                    operation = operation,
+                    symbolId = org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
+                    arguments = opArgs,
+                    snapshot = snap,
+                ))
+            }
+            "extractConstant", "extractField", "extractParameter", "inlineConstant" -> {
+                if (languageId != "java") missing("languageId=java")
+                (javaContext?.adapter ?: adapter).applyRefactoring(RefactoringRequest(
+                    operation = operation,
+                    arguments = opArgs,
+                    snapshot = snap,
+                ))
+            }
+            "encapsulateField" -> {
+                if (languageId != "java") missing("languageId=java")
+                (javaContext?.adapter ?: adapter).applyRefactoring(RefactoringRequest(
+                    operation = operation,
+                    symbolId = org.refactorkit.core.SymbolId(symbol ?: missing("symbol")),
+                    arguments = opArgs,
+                    snapshot = snap,
+                ))
             }
             "extractMethod" -> {
                 val file = Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file"))
@@ -1094,6 +1270,11 @@ class McpSession(
                     JavaRefactoringPreviewDispatcher().preview(snap, adapter, command)
                 }
             }
+            "batchCleanup" -> (javaContext?.adapter ?: adapter).applyRefactoring(RefactoringRequest(
+                operation = operation,
+                arguments = opArgs,
+                snapshot = snap,
+            ))
             "formatFile" -> JavaFormatFilePlanner(adapter).preview(snap, Paths.get(opArgs["file"] ?: symbol ?: missing("arguments.file")))
             "safeDelete" -> {
                 val target = org.refactorkit.core.SymbolId(symbol ?: missing("symbol"))
@@ -1104,38 +1285,59 @@ class McpSession(
             else -> throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Unknown operation: $operation")
         }
 
-        if (plan.status == PatchStatus.PREVIEW) pendingPlans.insert(plan.id, PendingPlan(
-            plan, languageId, if (languageId == "kotlin") args.string("semanticLease") else null, retainedGate,
-        ))
-        return PreviewToolResult.Text(buildString {
-            appendLine("Plan ID  : ${plan.id.value}")
-            appendLine("Operation: ${plan.operation}")
-            appendLine("Status   : ${plan.status}")
-            appendLine("Summary  : ${plan.summary}")
-            appendLine("Risk     : ${plan.riskLevel}")
-            appendLine("Evidence : ${plan.evidence}")
-            plan.refusalCode?.let { appendLine("Refusal  : $it") }
-            appendLine("Confidence: ${plan.confidence}")
-            appendLine("Affected : ${plan.affectedFiles.size} file(s)")
-            plan.affectedFiles.forEach { appendLine("  $it") }
-            if (plan.warnings.isNotEmpty()) {
-                appendLine("Warnings:")
-                plan.warnings.forEach { appendLine("  - $it") }
+        val retainedPlan = if (javaContext != null && languageId == "java") {
+            javaContext.attestPreview(plan) { scanWorkspace(root) }.plan
+        } else plan
+        if (retainedPlan.status == PatchStatus.PREVIEW) {
+            val previewGate = when {
+                javaContext != null && languageId == "java" -> javaContext.diagnosticsGate()
+                languageId == "c" -> cDiagnosticsGate(discoverCToolchain(args), snap, retainedPlan)
+                else -> retainedGate
             }
-            if (plan.diagnosticsAfterPreview.isNotEmpty()) {
+            pendingPlans.insert(retainedPlan.id, PendingPlan(
+                retainedPlan, languageId, if (languageId == "kotlin") args.string("semanticLease") else null,
+                previewGate, javaContextRequest,
+            ))
+        }
+        val previewText = buildString {
+            appendLine("Plan ID  : ${retainedPlan.id.value}")
+            appendLine("Operation: ${retainedPlan.operation}")
+            appendLine("Status   : ${retainedPlan.status}")
+            appendLine("Summary  : ${retainedPlan.summary}")
+            appendLine("Risk     : ${retainedPlan.riskLevel}")
+            appendLine("Evidence : ${retainedPlan.evidence}")
+            retainedPlan.refusalCode?.let { appendLine("Refusal  : $it") }
+            appendLine("Confidence: ${retainedPlan.confidence}")
+            appendLine("Affected : ${retainedPlan.affectedFiles.size} file(s)")
+            retainedPlan.affectedFiles.forEach { appendLine("  $it") }
+            if (retainedPlan.warnings.isNotEmpty()) {
+                appendLine("Warnings:")
+                retainedPlan.warnings.forEach { appendLine("  - $it") }
+            }
+            if (retainedPlan.diagnosticsAfterPreview.isNotEmpty()) {
                 appendLine("Post-edit diagnostics:")
-                plan.diagnosticsAfterPreview.forEach { d ->
+                retainedPlan.diagnosticsAfterPreview.forEach { d ->
                     val loc = d.location?.let { " at ${it.path}:${it.range.start.line + 1}" } ?: ""
                     appendLine("  [${d.severity}]${d.code?.let { " (${it})" } ?: ""} ${d.message}$loc")
                 }
             }
-            if (plan.status == PatchStatus.REFUSED) appendLine("\nRefused. Do NOT apply.")
-            else appendLine("\nTo apply: use tool apply_refactoring with planId=${plan.id.value}")
-        }.trim())
+            if (retainedPlan.status == PatchStatus.REFUSED) appendLine("\nRefused. Do NOT apply.")
+            else appendLine("\nTo apply: use tool apply_refactoring with planId=${retainedPlan.id.value}")
+        }.trim()
+        return if (languageId == "java" && operation == "safeDelete") {
+            val analysis = org.refactorkit.java.JavaSafeDeleteReferenceAnalysis.from(snap)
+            PreviewToolResult.StructuredText(
+                previewText,
+                buildJsonObject { put("referenceAnalysis", safeDeleteReferenceAnalysisJson(analysis)) },
+            )
+        } else {
+            PreviewToolResult.Text(previewText)
+        }
     }
 
     private fun previewToolContent(result: PreviewToolResult): JsonElement = when (result) {
         is PreviewToolResult.Text -> textContent(result.value)
+        is PreviewToolResult.StructuredText -> structuredToolContent(result.value, result.structured, isError = false)
         is PreviewToolResult.LexicalReview -> structuredToolContent(
             JavaMoveClassLexicalFallbackReviewJsonProjection.render(result.envelope, pretty = false),
             JavaMoveClassLexicalFallbackReviewJsonProjection.toJson(result.envelope),
@@ -1163,6 +1365,30 @@ class McpSession(
         val pending = pendingPlans.lookup(planId)
             ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Plan not found: ${planId.value}")
         val plan = pending.plan
+        if (pending.languageId == "java" && plan.operation == "safeDelete") {
+            pendingPlans.remove(planId)
+            throw JsonRpcException(
+                JsonRpcErrorCodes.PLAN_VALIDATION_FAILED,
+                JavaSafeDeleteManagedApplyPolicy.REFUSAL_MESSAGE,
+                buildJsonObject { put("refusalCode", JavaSafeDeleteManagedApplyPolicy.REFUSAL_CODE) },
+            )
+        }
+        if (pending.languageId == "java") {
+            val capability = org.refactorkit.java.JavaAdapterRegistration.capability(plan.operation)
+            if (capability != null && capability.mutationAuthority != org.refactorkit.core.MutationAuthority.MANAGED_STABLE) {
+                pendingPlans.remove(planId)
+                val refusalCode = if (capability.mutationAuthority == org.refactorkit.core.MutationAuthority.PROPOSAL_ONLY) {
+                    "java.refactoring.proposalOnly"
+                } else {
+                    "java.refactoring.notManaged"
+                }
+                throw JsonRpcException(
+                    JsonRpcErrorCodes.PLAN_VALIDATION_FAILED,
+                    "${plan.operation} is preview-only and cannot be applied as a managed Java refactoring",
+                    buildJsonObject { put("refusalCode", refusalCode) },
+                )
+            }
+        }
         if (pending.languageId == "kotlin") {
             val lease = args.string("semanticLease") ?: missing("semanticLease")
             if (lease != pending.semanticLease || lease != kotlinSemanticLease) {
@@ -1172,17 +1398,25 @@ class McpSession(
         }
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
         val current = scanWorkspace(root)
+        val applyDiagnosticsGate = if (pending.javaContextRequest != null) {
+            val request = args["javaContext"]?.let(::parseJavaContextRequest)
+                ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "SDK-bound preview requires javaContext at apply")
+            org.refactorkit.java.JavaBoundContext.validateApply(plan, request) { current }
+            pending.diagnosticsGate ?: throw JsonRpcException(
+                JsonRpcErrorCodes.PLAN_VALIDATION_FAILED, "SDK-bound preview has no retained diagnostics authority",
+            )
+        } else ManagedApplyDiagnosticsGateSelector.select(
+            plan = plan,
+            languageId = pending.languageId,
+            javaAdapter = adapter,
+            kotlinAdapter = kotlinAdapter,
+            externalGateResolver = { languageId -> pending.diagnosticsGate ?: requireSemanticAdapter(languageId).diagnosticsGate() },
+        )
         return when (val result = PatchEngine(root).apply(
             plan,
             current,
             ApplyAuthorization.explicit("mcp-tool"),
-            ManagedApplyDiagnosticsGateSelector.select(
-                plan = plan,
-                languageId = pending.languageId,
-                javaAdapter = adapter,
-                kotlinAdapter = kotlinAdapter,
-                externalGateResolver = { languageId -> pending.diagnosticsGate ?: requireSemanticAdapter(languageId).diagnosticsGate() },
-            ),
+            applyDiagnosticsGate,
         )) {
             is ApplyResult.Applied -> {
                 pendingPlans.remove(planId)
@@ -1202,13 +1436,21 @@ class McpSession(
     private fun toolRollbackRefactoring(args: JsonObject): String {
         val txId = args.string("transactionId") ?: missing("transactionId")
         val root = workspaceRoot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open")
+        val javaContextRequest = args["javaContext"]?.let(::parseJavaContextRequest)
         val mode = if (args["force"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() == true) {
             RollbackMode.FORCE
         } else RollbackMode.NORMAL
         val log = TransactionLog(root.resolve(".refactorkit/transactions"))
-        val outcome = ManagedRollbackExecutor(log, PatchEngine(root)).execute(
+        val outcome = ManagedRollbackExecutor(log, PatchEngine(root), rollbackCall = { engine, transaction, rollbackMode ->
+            engine.rollback(transaction, rollbackMode) { record ->
+                org.refactorkit.java.JavaBoundContext.rollbackAuthority(
+                    record,
+                    javaContextRequest?.copy(expectedSnapshotHash = requireNotNull(record.postSnapshotHash)),
+                ) { scanWorkspace(root) }
+            }
+        }).execute(
             txId,
-            RollbackLookupVisibility.APPLIED_ONLY,
+            RollbackLookupVisibility.JOURNAL_RECORD,
             mode,
             RollbackPreflightGuard<Nothing> { RollbackPreflightDecision.Allow },
         )
@@ -1445,6 +1687,12 @@ class McpSession(
             add(buildJsonObject { put("type", "text"); put("text", "Error: ${failure.message}") })
         })
         put("isError", true)
+        if (failure is JsonRpcException) put("structuredContent", buildJsonObject {
+            put("error", buildJsonObject {
+                put("code", failure.code); put("message", failure.message)
+                failure.data?.let { put("data", it) }
+            })
+        })
     }
 
     private fun structuredToolContent(
@@ -1459,12 +1707,36 @@ class McpSession(
         put("isError", isError)
     }
 
+    private fun safeDeleteReferenceAnalysisJson(
+        analysis: org.refactorkit.java.JavaSafeDeleteReferenceAnalysis,
+    ): JsonObject = buildJsonObject {
+        put("schemaVersion", analysis.schemaVersion)
+        put("operation", analysis.operation)
+        put("scope", analysis.scope)
+        put("status", analysis.status.wire)
+        if (analysis.inputCount == null) {
+            put("inputCount", kotlinx.serialization.json.JsonNull)
+        } else {
+            put("inputCount", analysis.inputCount)
+        }
+        if (analysis.verifiedBytes == null) {
+            put("verifiedBytes", kotlinx.serialization.json.JsonNull)
+        } else {
+            put("verifiedBytes", analysis.verifiedBytes)
+        }
+        put("snapshotHash", analysis.snapshotHash)
+        put("managedApplyAuthority", analysis.managedApplyAuthority)
+        put("completeProject", analysis.completeProject)
+        put("referenceClosure", "incomplete")
+    }
+
     private fun tool(
         name: String,
         description: String,
         required: List<String>,
         props: Map<String, String>,
         exactlyOneOf: List<String> = emptyList(),
+        propertySchemas: Map<String, JsonObject> = emptyMap(),
     ): JsonElement = buildJsonObject {
             put("name", name)
             put("description", description)
@@ -1476,6 +1748,7 @@ class McpSession(
                         val descriptionText = v.substringAfter(":", v).trim()
                         put(k, buildJsonObject { put("type", type); put("description", descriptionText) })
                     }
+                    propertySchemas.forEach { (key, schema) -> put(key, schema) }
                 })
                 put("required", buildJsonArray { required.forEach { add(JsonPrimitive(it)) } })
                 if (exactlyOneOf.isNotEmpty()) {
@@ -1542,9 +1815,19 @@ class McpSession(
         else WorkspaceRefreshCoordinator.refresh(current) { scanWorkspace(root) }.snapshot
     }
 
-    private fun scanWorkspace(root: Path): ProjectSnapshot {
+    private inline fun <T> withSourceCaptureRefusal(action: () -> T): T = try {
+        action()
+    } catch (failure: OwnedSourceCaptureException) {
+        throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED,
+            "workspace.sourceCapture.unavailable: ${failure.code.name}", buildJsonObject {
+                put("refusalCode", "workspace.sourceCapture.unavailable")
+                put("sourceCaptureFailure", failure.code.name)
+            })
+    }
+
+    private fun scanWorkspace(root: Path): ProjectSnapshot = withSourceCaptureRefusal {
         val currentKotlinToolchain = kotlinToolchain
-        return WorkspaceSnapshotComposer().compose(
+        val snapshot = WorkspaceSnapshotComposer().composeInventoryFirst(
             root = root,
             authoritativeBaseScanner = scanner::scan,
             sourceInventoryScanner = GenericProjectScanner(SCRIPT_EXTENSIONS)::scan,
@@ -1553,6 +1836,7 @@ class McpSession(
                 { snapshot: ProjectSnapshot -> KotlinJvmBuildModelIntegration.attach(snapshot, toolchain) }
             },
         )
+        CFormattingStyleSnapshot.captureForSources(CCompilationSnapshotCapture.capture(CMakeManifestCapture.capture(snapshot)))
     }
 
     private fun closeSemanticAdapters() {
@@ -1574,6 +1858,32 @@ class McpSession(
         params.string("semanticLease") == kotlinSemanticLease &&
             params.string("expectedSnapshotHash") == current.hash
 
+    private fun parseJavaContextRequest(value: JsonElement): org.refactorkit.java.JavaProjectContextRequest {
+        val context = value as? JsonObject
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "javaContext must be an object")
+        if (context.keys != setOf("expectedSnapshotHash", "expectedContextHash", "sdkHome")) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS,
+                "javaContext requires exactly expectedSnapshotHash, expectedContextHash, and sdkHome")
+        }
+        fun field(name: String): String = context.string(name)
+            ?: throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "javaContext.$name must be a string")
+        val sdkHome = try { Paths.get(field("sdkHome")) } catch (_: Exception) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "javaContext.sdkHome must be an absolute JDK path")
+        }
+        if (!sdkHome.isAbsolute) throw JsonRpcException(
+            JsonRpcErrorCodes.INVALID_PARAMS, "javaContext.sdkHome must be an absolute JDK path",
+        )
+        return try {
+            org.refactorkit.java.JavaProjectContextRequest(
+                expectedSnapshotHash = field("expectedSnapshotHash"),
+                sdkHome = sdkHome,
+                expectedContextHash = field("expectedContextHash"),
+            )
+        } catch (failure: IllegalArgumentException) {
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, "Invalid javaContext: ${failure.message}")
+        }
+    }
+
     private fun requireSnapshot(): ProjectSnapshot =
         snapshot ?: throw JsonRpcException(JsonRpcErrorCodes.PROJECT_NOT_OPEN, "No project open. Call project_scan first.")
 
@@ -1593,6 +1903,7 @@ class McpSession(
 
     private sealed interface PreviewToolResult {
         data class Text(val value: String) : PreviewToolResult
+        data class StructuredText(val value: String, val structured: JsonObject) : PreviewToolResult
         data class LexicalReview(
             val envelope: JavaMoveClassLexicalFallbackReviewEnvelope,
         ) : PreviewToolResult
@@ -1603,6 +1914,7 @@ class McpSession(
         val languageId: String = "java",
         val semanticLease: String? = null,
         val diagnosticsGate: DiagnosticsGate? = null,
+        val javaContextRequest: org.refactorkit.java.JavaProjectContextRequest? = null,
     )
 
     companion object {

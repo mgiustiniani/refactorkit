@@ -1,0 +1,734 @@
+{
+  "id": "captured-insertion-1",
+  "kind": "TranslationUnitDecl",
+  "loc": {},
+  "range": {
+    "begin": {},
+    "end": {}
+  },
+  "inner": [
+    {
+      "id": "captured-insertion-2",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__int128_t",
+      "type": {
+        "qualType": "__int128"
+      },
+      "inner": [
+        {
+          "id": "captured-insertion-3",
+          "kind": "BuiltinType",
+          "type": {
+            "qualType": "__int128"
+          }
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-4",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__uint128_t",
+      "type": {
+        "qualType": "unsigned __int128"
+      },
+      "inner": [
+        {
+          "id": "captured-insertion-5",
+          "kind": "BuiltinType",
+          "type": {
+            "qualType": "unsigned __int128"
+          }
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-6",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__NSConstantString",
+      "type": {
+        "qualType": "struct __NSConstantString_tag"
+      },
+      "inner": [
+        {
+          "id": "captured-insertion-7",
+          "kind": "RecordType",
+          "type": {
+            "qualType": "struct __NSConstantString_tag"
+          },
+          "decl": {
+            "id": "captured-insertion-8",
+            "kind": "RecordDecl",
+            "name": "__NSConstantString_tag"
+          }
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-9",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__builtin_ms_va_list",
+      "type": {
+        "qualType": "char *"
+      },
+      "inner": [
+        {
+          "id": "captured-insertion-10",
+          "kind": "PointerType",
+          "type": {
+            "qualType": "char *"
+          },
+          "inner": [
+            {
+              "id": "captured-insertion-11",
+              "kind": "BuiltinType",
+              "type": {
+                "qualType": "char"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-12",
+      "kind": "TypedefDecl",
+      "loc": {},
+      "range": {
+        "begin": {},
+        "end": {}
+      },
+      "isImplicit": true,
+      "name": "__builtin_va_list",
+      "type": {
+        "qualType": "struct __va_list_tag[1]"
+      },
+      "inner": [
+        {
+          "id": "captured-insertion-13",
+          "kind": "ConstantArrayType",
+          "type": {
+            "qualType": "struct __va_list_tag[1]"
+          },
+          "size": 1,
+          "inner": [
+            {
+              "id": "captured-insertion-14",
+              "kind": "RecordType",
+              "type": {
+                "qualType": "struct __va_list_tag"
+              },
+              "decl": {
+                "id": "captured-insertion-15",
+                "kind": "RecordDecl",
+                "name": "__va_list_tag"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-16",
+      "kind": "TypedefDecl",
+      "loc": {
+        "offset": 12,
+        "file": "insertion.c",
+        "line": 1,
+        "col": 13,
+        "tokLen": 5
+      },
+      "range": {
+        "begin": {
+          "offset": 0,
+          "col": 1,
+          "tokLen": 7
+        },
+        "end": {
+          "offset": 12,
+          "col": 13,
+          "tokLen": 5
+        }
+      },
+      "isReferenced": true,
+      "name": "Width",
+      "type": {
+        "qualType": "int"
+      },
+      "inner": [
+        {
+          "id": "captured-insertion-17",
+          "kind": "BuiltinType",
+          "type": {
+            "qualType": "int"
+          }
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-18",
+      "kind": "VarDecl",
+      "loc": {
+        "offset": 23,
+        "line": 2,
+        "col": 5,
+        "tokLen": 4
+      },
+      "range": {
+        "begin": {
+          "offset": 19,
+          "col": 1,
+          "tokLen": 3
+        },
+        "end": {
+          "offset": 30,
+          "col": 12,
+          "tokLen": 1
+        }
+      },
+      "isUsed": true,
+      "name": "seed",
+      "mangledName": "seed",
+      "type": {
+        "qualType": "int"
+      },
+      "init": "c",
+      "inner": [
+        {
+          "id": "captured-insertion-19",
+          "kind": "IntegerLiteral",
+          "range": {
+            "begin": {
+              "offset": 30,
+              "col": 12,
+              "tokLen": 1
+            },
+            "end": {
+              "offset": 30,
+              "col": 12,
+              "tokLen": 1
+            }
+          },
+          "type": {
+            "qualType": "int"
+          },
+          "valueCategory": "prvalue",
+          "value": "7"
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-20",
+      "kind": "FunctionDecl",
+      "loc": {
+        "offset": 44,
+        "line": 3,
+        "col": 12,
+        "tokLen": 6
+      },
+      "range": {
+        "begin": {
+          "offset": 33,
+          "col": 1,
+          "tokLen": 6
+        },
+        "end": {
+          "offset": 78,
+          "col": 46,
+          "tokLen": 1
+        }
+      },
+      "isUsed": true,
+      "name": "answer",
+      "mangledName": "answer",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "storageClass": "static"
+    },
+    {
+      "id": "captured-insertion-21",
+      "kind": "FunctionDecl",
+      "loc": {
+        "offset": 92,
+        "line": 4,
+        "col": 12,
+        "tokLen": 6
+      },
+      "range": {
+        "begin": {
+          "offset": 81,
+          "col": 1,
+          "tokLen": 6
+        },
+        "end": {
+          "offset": 157,
+          "col": 77,
+          "tokLen": 1
+        }
+      },
+      "isUsed": true,
+      "previousDecl": "captured-insertion-20",
+      "name": "answer",
+      "mangledName": "answer",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "storageClass": "static",
+      "inner": [
+        {
+          "id": "captured-insertion-22",
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": {
+              "offset": 105,
+              "col": 25,
+              "tokLen": 1
+            },
+            "end": {
+              "offset": 157,
+              "col": 77,
+              "tokLen": 1
+            }
+          },
+          "inner": [
+            {
+              "id": "captured-insertion-23",
+              "kind": "DeclStmt",
+              "range": {
+                "begin": {
+                  "offset": 107,
+                  "col": 27,
+                  "tokLen": 5
+                },
+                "end": {
+                  "offset": 125,
+                  "col": 45,
+                  "tokLen": 1
+                }
+              },
+              "inner": [
+                {
+                  "id": "captured-insertion-24",
+                  "kind": "VarDecl",
+                  "loc": {
+                    "offset": 113,
+                    "col": 33,
+                    "tokLen": 5
+                  },
+                  "range": {
+                    "begin": {
+                      "offset": 107,
+                      "col": 27,
+                      "tokLen": 5
+                    },
+                    "end": {
+                      "offset": 121,
+                      "col": 41,
+                      "tokLen": 4
+                    }
+                  },
+                  "isUsed": true,
+                  "name": "value",
+                  "type": {
+                    "desugaredQualType": "int",
+                    "qualType": "Width",
+                    "typeAliasDeclId": "captured-insertion-16"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "id": "captured-insertion-25",
+                      "kind": "ImplicitCastExpr",
+                      "range": {
+                        "begin": {
+                          "offset": 121,
+                          "col": 41,
+                          "tokLen": 4
+                        },
+                        "end": {
+                          "offset": 121,
+                          "col": 41,
+                          "tokLen": 4
+                        }
+                      },
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "valueCategory": "prvalue",
+                      "castKind": "LValueToRValue",
+                      "inner": [
+                        {
+                          "id": "captured-insertion-26",
+                          "kind": "DeclRefExpr",
+                          "range": {
+                            "begin": {
+                              "offset": 121,
+                              "col": 41,
+                              "tokLen": 4
+                            },
+                            "end": {
+                              "offset": 121,
+                              "col": 41,
+                              "tokLen": 4
+                            }
+                          },
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "valueCategory": "lvalue",
+                          "referencedDecl": {
+                            "id": "captured-insertion-18",
+                            "kind": "VarDecl",
+                            "name": "seed",
+                            "type": {
+                              "qualType": "int"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "captured-insertion-27",
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": {
+                  "offset": 127,
+                  "col": 47,
+                  "tokLen": 6
+                },
+                "end": {
+                  "offset": 154,
+                  "col": 74,
+                  "tokLen": 1
+                }
+              },
+              "inner": [
+                {
+                  "id": "captured-insertion-28",
+                  "kind": "ImplicitCastExpr",
+                  "range": {
+                    "begin": {
+                      "offset": 134,
+                      "col": 54,
+                      "tokLen": 5
+                    },
+                    "end": {
+                      "offset": 154,
+                      "col": 74,
+                      "tokLen": 1
+                    }
+                  },
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "valueCategory": "prvalue",
+                  "castKind": "IntegralCast",
+                  "inner": [
+                    {
+                      "id": "captured-insertion-29",
+                      "kind": "BinaryOperator",
+                      "range": {
+                        "begin": {
+                          "offset": 134,
+                          "col": 54,
+                          "tokLen": 5
+                        },
+                        "end": {
+                          "offset": 154,
+                          "col": 74,
+                          "tokLen": 1
+                        }
+                      },
+                      "type": {
+                        "desugaredQualType": "unsigned long",
+                        "qualType": "__size_t"
+                      },
+                      "valueCategory": "prvalue",
+                      "opcode": "+",
+                      "inner": [
+                        {
+                          "id": "captured-insertion-30",
+                          "kind": "ImplicitCastExpr",
+                          "range": {
+                            "begin": {
+                              "offset": 134,
+                              "col": 54,
+                              "tokLen": 5
+                            },
+                            "end": {
+                              "offset": 134,
+                              "col": 54,
+                              "tokLen": 5
+                            }
+                          },
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "__size_t"
+                          },
+                          "valueCategory": "prvalue",
+                          "castKind": "IntegralCast",
+                          "inner": [
+                            {
+                              "id": "captured-insertion-31",
+                              "kind": "ImplicitCastExpr",
+                              "range": {
+                                "begin": {
+                                  "offset": 134,
+                                  "col": 54,
+                                  "tokLen": 5
+                                },
+                                "end": {
+                                  "offset": 134,
+                                  "col": 54,
+                                  "tokLen": 5
+                                }
+                              },
+                              "type": {
+                                "desugaredQualType": "int",
+                                "qualType": "Width",
+                                "typeAliasDeclId": "captured-insertion-16"
+                              },
+                              "valueCategory": "prvalue",
+                              "castKind": "LValueToRValue",
+                              "inner": [
+                                {
+                                  "id": "captured-insertion-32",
+                                  "kind": "DeclRefExpr",
+                                  "range": {
+                                    "begin": {
+                                      "offset": 134,
+                                      "col": 54,
+                                      "tokLen": 5
+                                    },
+                                    "end": {
+                                      "offset": 134,
+                                      "col": 54,
+                                      "tokLen": 5
+                                    }
+                                  },
+                                  "type": {
+                                    "desugaredQualType": "int",
+                                    "qualType": "Width",
+                                    "typeAliasDeclId": "captured-insertion-16"
+                                  },
+                                  "valueCategory": "lvalue",
+                                  "referencedDecl": {
+                                    "id": "captured-insertion-24",
+                                    "kind": "VarDecl",
+                                    "name": "value",
+                                    "type": {
+                                      "desugaredQualType": "int",
+                                      "qualType": "Width",
+                                      "typeAliasDeclId": "captured-insertion-16"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "captured-insertion-33",
+                          "kind": "UnaryExprOrTypeTraitExpr",
+                          "range": {
+                            "begin": {
+                              "offset": 142,
+                              "col": 62,
+                              "tokLen": 6
+                            },
+                            "end": {
+                              "offset": 154,
+                              "col": 74,
+                              "tokLen": 1
+                            }
+                          },
+                          "type": {
+                            "desugaredQualType": "unsigned long",
+                            "qualType": "__size_t"
+                          },
+                          "valueCategory": "prvalue",
+                          "name": "sizeof",
+                          "argType": {
+                            "desugaredQualType": "int",
+                            "qualType": "Width",
+                            "typeAliasDeclId": "captured-insertion-16"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "captured-insertion-34",
+      "kind": "FunctionDecl",
+      "loc": {
+        "offset": 163,
+        "line": 5,
+        "col": 5,
+        "tokLen": 4
+      },
+      "range": {
+        "begin": {
+          "offset": 159,
+          "col": 1,
+          "tokLen": 3
+        },
+        "end": {
+          "offset": 193,
+          "col": 35,
+          "tokLen": 1
+        }
+      },
+      "name": "main",
+      "mangledName": "main",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "inner": [
+        {
+          "id": "captured-insertion-35",
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": {
+              "offset": 174,
+              "col": 16,
+              "tokLen": 1
+            },
+            "end": {
+              "offset": 193,
+              "col": 35,
+              "tokLen": 1
+            }
+          },
+          "inner": [
+            {
+              "id": "captured-insertion-36",
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": {
+                  "offset": 176,
+                  "col": 18,
+                  "tokLen": 6
+                },
+                "end": {
+                  "offset": 190,
+                  "col": 32,
+                  "tokLen": 1
+                }
+              },
+              "inner": [
+                {
+                  "id": "captured-insertion-37",
+                  "kind": "CallExpr",
+                  "range": {
+                    "begin": {
+                      "offset": 183,
+                      "col": 25,
+                      "tokLen": 6
+                    },
+                    "end": {
+                      "offset": 190,
+                      "col": 32,
+                      "tokLen": 1
+                    }
+                  },
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "valueCategory": "prvalue",
+                  "inner": [
+                    {
+                      "id": "captured-insertion-38",
+                      "kind": "ImplicitCastExpr",
+                      "range": {
+                        "begin": {
+                          "offset": 183,
+                          "col": 25,
+                          "tokLen": 6
+                        },
+                        "end": {
+                          "offset": 183,
+                          "col": 25,
+                          "tokLen": 6
+                        }
+                      },
+                      "type": {
+                        "qualType": "int (*)(void)"
+                      },
+                      "valueCategory": "prvalue",
+                      "castKind": "FunctionToPointerDecay",
+                      "inner": [
+                        {
+                          "id": "captured-insertion-39",
+                          "kind": "DeclRefExpr",
+                          "range": {
+                            "begin": {
+                              "offset": 183,
+                              "col": 25,
+                              "tokLen": 6
+                            },
+                            "end": {
+                              "offset": 183,
+                              "col": 25,
+                              "tokLen": 6
+                            }
+                          },
+                          "type": {
+                            "qualType": "int (void)"
+                          },
+                          "valueCategory": "prvalue",
+                          "referencedDecl": {
+                            "id": "captured-insertion-21",
+                            "kind": "FunctionDecl",
+                            "name": "answer",
+                            "type": {
+                              "qualType": "int (void)"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

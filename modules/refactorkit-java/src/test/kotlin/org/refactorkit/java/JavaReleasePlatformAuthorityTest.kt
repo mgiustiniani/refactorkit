@@ -74,7 +74,10 @@ class JavaReleasePlatformAuthorityTest {
     @Test
     fun `refuses implicit unsupported or incomplete platform inputs`() {
         val unsupported = assertIs<JavaReleasePlatformResolution.Refused>(
-            JavaReleasePlatformAuthorityResolver().resolve(temporary, 26),
+            JavaReleasePlatformAuthorityResolver().resolve(
+                temporary,
+                JavaParserReleaseSupport.maximumSupportedRelease + 1,
+            ),
         )
         assertEquals("java.platform.releaseUnsupported", unsupported.code)
 

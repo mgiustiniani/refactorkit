@@ -32,7 +32,7 @@ class JavaMoveSourceRootPlannerTest {
 
         assertEquals(PatchStatus.PREVIEW, plan.status, "${plan.refusalCode}: ${plan.summary}")
         assertEquals(RefactoringEvidence.STRUCTURAL, plan.evidence)
-        assertEquals(3, plan.workspaceEdit.edits.size)
+        assertEquals(2, plan.workspaceEdit.edits.size)
         assertTrue(plan.workspaceEdit.edits.all { it is FileEdit.Rename })
         assertFalse(root.resolve(TO).exists(), "preview must not create destination directories")
         val staged = WorkspaceEditSimulator.apply(before, plan.workspaceEdit)
@@ -75,7 +75,7 @@ class JavaMoveSourceRootPlannerTest {
         val plan = JavaMoveSourceRootPlanner().preview(compatibilityStripped, FROM, TO)
 
         assertEquals(PatchStatus.PREVIEW, plan.status, "${plan.refusalCode}: ${plan.summary}")
-        assertEquals(3, plan.workspaceEdit.edits.size)
+        assertEquals(2, plan.workspaceEdit.edits.size)
     }
 
     @Test
@@ -164,9 +164,10 @@ class JavaMoveSourceRootPlannerTest {
         assertEquals("sourceRoot.generated", generatedDestinationPlan.refusalCode)
 
         val symlinkRoot = reactorFixture()
+        val snapshotBeforeLink = JavaProjectScanner().scan(symlinkRoot)
         val link = symlinkRoot.resolve("destination/src")
         if (runCatching { Files.createSymbolicLink(link, symlinkRoot.resolve("source/src")); true }.getOrDefault(false)) {
-            val plan = JavaMoveSourceRootPlanner().preview(JavaProjectScanner().scan(symlinkRoot), FROM, TO)
+            val plan = JavaMoveSourceRootPlanner().preview(snapshotBeforeLink, FROM, TO)
             assertEquals("sourceRoot.symlinkEscape", plan.refusalCode)
         }
     }
@@ -185,7 +186,6 @@ class JavaMoveSourceRootPlannerTest {
         Files.createDirectories(source.resolve("example/shared"))
         Files.writeString(source.resolve("example/shared/SharedValue.java"), "package example.shared;\npublic record SharedValue(String value) {}\n")
         Files.writeString(source.resolve("example/shared/package-info.java"), "@Deprecated\npackage example.shared;\n")
-        Files.writeString(source.resolve("module-info.java"), "module example.shared.module { exports example.shared; }\n")
         return root
     }
 

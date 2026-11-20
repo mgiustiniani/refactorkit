@@ -5,6 +5,7 @@ import org.eclipse.jdt.internal.compiler.batch.FileSystem
 import org.eclipse.jdt.internal.core.dom.ICompilationUnitResolver
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -22,6 +23,7 @@ internal class JavaReleasePlatformClasspath private constructor(
     private val platformHome: Path,
     private val release: Int,
     private val historical: Boolean,
+    private val projectedArchive: Path? = null,
 ) : AutoCloseable {
     fun prepare(parser: ASTParser) {
         if (!historical) return
@@ -62,10 +64,23 @@ internal class JavaReleasePlatformClasspath private constructor(
         field.set(parser, proxy)
     }
 
-    override fun close() = Unit
+    override fun close() {
+        projectedArchive?.let(Files::deleteIfExists)
+    }
 
     companion object {
         fun materialize(authority: JavaReleasePlatformAuthority): JavaReleasePlatformClasspath {
+            if (authority.legacyBootArchives.isNotEmpty()) {
+                check(authority.release == JavaLegacy8Platform.RELEASE && authority.release == authority.platformRelease)
+                val projected = JavaLegacy8Platform.materialize(authority)
+                return JavaReleasePlatformClasspath(
+                    environmentPaths = listOf(projected) + authority.legacyBootArchives.keys,
+                    platformHome = authority.platformHome,
+                    release = authority.release,
+                    historical = false,
+                    projectedArchive = projected,
+                )
+            }
             val jrt = authority.platformHome.resolve("lib/jrt-fs.jar")
             check(java.nio.file.Files.isRegularFile(jrt)) { "Attested Java platform JRT filesystem is unavailable" }
             if (authority.release == authority.platformRelease) {

@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonObject
 import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.JsonRpcRequest
+import org.refactorkit.core.JsonRpcResponse
 import org.refactorkit.core.ProtocolLimits
 import org.refactorkit.core.errorResponse
 import org.refactorkit.core.isNotification
@@ -46,8 +47,8 @@ fun main() {
 
         val request = try {
             json.decodeFromString<JsonRpcRequest>(line)
-        } catch (e: Exception) {
-            out.println(json.encodeToString(errorResponse(JsonNull, JsonRpcErrorCodes.PARSE_ERROR, "Parse error: ${e.message}")))
+        } catch (_: Exception) {
+            out.println(json.encodeToString(errorResponse(JsonNull, JsonRpcErrorCodes.PARSE_ERROR, "Parse error")))
             continue
         }
 
@@ -61,11 +62,29 @@ fun main() {
             successResponse(request.id, result)
         } catch (e: JsonRpcException) {
             errorResponse(request.id, e)
-        } catch (e: Exception) {
-            errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, e.message ?: "Internal error")
+        } catch (_: Exception) {
+            errorResponse(request.id, JsonRpcErrorCodes.INTERNAL_ERROR, "Internal error")
         }
 
-        out.println(json.encodeToString(response))
+        out.println(McpResponseEncoder.encode(response, json))
     }
     session.close()
+}
+
+/** Applies the MCP stdio whole-response budget before writing an NDJSON frame. */
+object McpResponseEncoder {
+    fun encode(response: JsonRpcResponse, json: Json): String {
+        val encoded = json.encodeToString(response)
+        if (encoded.toByteArray(Charsets.UTF_8).size <= ProtocolLimits.MAX_MCP_RESPONSE_BYTES) return encoded
+
+        val message = "MCP response exceeds ${ProtocolLimits.MAX_MCP_RESPONSE_BYTES} bytes"
+        val refusal = json.encodeToString(errorResponse(response.id, JsonRpcErrorCodes.INTERNAL_ERROR, message))
+        if (refusal.toByteArray(Charsets.UTF_8).size <= ProtocolLimits.MAX_MCP_RESPONSE_BYTES) return refusal
+
+        val fallback = json.encodeToString(errorResponse(JsonNull, JsonRpcErrorCodes.INTERNAL_ERROR, message))
+        check(fallback.toByteArray(Charsets.UTF_8).size <= ProtocolLimits.MAX_MCP_RESPONSE_BYTES) {
+            "MCP bounded error exceeds ${ProtocolLimits.MAX_MCP_RESPONSE_BYTES} bytes"
+        }
+        return fallback
+    }
 }

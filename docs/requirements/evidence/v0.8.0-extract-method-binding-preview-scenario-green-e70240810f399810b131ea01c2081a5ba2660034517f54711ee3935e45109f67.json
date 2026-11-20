@@ -1,0 +1,39 @@
+{
+  "status": "scenario-green",
+  "requirementId": "REQ-JAVA-EXTRACT-METHOD-CHAR-001",
+  "scenarioId": "REQ-JAVA-EXTRACT-METHOD-CHAR-001#single-output-propagates-checked-exception",
+  "featureSha256": "36b85c2be881fe8f853bb61537283660c1884bc3b55badc056feef53dcad8d07",
+  "preEditInventorySha256": "261831f270a4991849bb5fae0fc5a5f51e9dfa32fd6e0e52cfe66c82dec29613",
+  "postEditInventory": {
+    "path": ".refactorkit/runs/java-extract-method-binding-flow-r002/inventory-post.json",
+    "sha256": "5880920357703c0790a18f9318dac74245d492563233ed399edc65349e8d78f9",
+    "runnerCount": 1,
+    "effectiveRunnerAmbiguities": 0,
+    "duplicateExpressions": 0,
+    "selectedStepCounts": {
+      "ambiguous": 0,
+      "exactReuse": 6,
+      "newRequired": 0,
+      "sharedReuseCandidates": 0
+    }
+  },
+  "storyExecution": {
+    "path": ".refactorkit/runs/java-extract-method-binding-flow-r002/execution.json",
+    "sha256": "7254052baa8fe5df28ed14cd486c0fcb0ff89976c0ce4adf601af523501e5bd4",
+    "cucumberReportSha256": "815784ba55c46a8a9a8649b260f14d74d754f6e0c19a11a1d4485045da138fb9",
+    "junitReportSha256": "71f173e515305567d44a5cebf4d733175aefaa1a1da1b947fe872a4d96ae3c72",
+    "passedSteps": 6,
+    "failedSteps": 0
+  },
+  "behaviorChecked": [
+    "SDK-bound JDT preview transforms String raw = Files.readString(path) into a helper call with the same input parameter.",
+    "The helper returns java.lang.String and declares java.io.IOException.",
+    "Original and staged Java images compile with --release 21 and run with identical output: extracted value.",
+    "extractMethod remains EXPERIMENTAL/PROPOSAL_ONLY; the preview carries no managed-write authority in this scenario."
+  ],
+  "limitations": [
+    "This scenario qualifies one single-local preview shape only.",
+    "Independent requirements-quality review, managed IDE Apply, packaged consumer, and broader Extract Method cases remain unqualified."
+  ],
+  "independentAcceptance": "pending"
+}

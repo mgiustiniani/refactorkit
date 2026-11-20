@@ -30,6 +30,7 @@ import org.junit.platform.suite.api.Suite
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-hierarchy-push-down-refusal.feature")
+@SelectClasspathResource("java-member-move-bounded.feature")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.hierarchypushdown,org.refactorkit.jvm.refusals")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,

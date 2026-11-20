@@ -81,13 +81,16 @@ class CFormatterIntegrationTest {
         }
     }
 
-    private fun toolchain() = ClangSemanticToolchain(
-        clangExecutable = Path.of("/usr/bin/clang"),
-        clangdExecutable = Path.of("/usr/bin/clangd"),
-        clangFormatExecutable = clangFormat,
-        provenance = ClangToolchainProvenance(
-            clangVersion = "22.1.8", clangdVersion = "22.1.8", clangFormatVersion = "22.1.8",
-            targetTriple = "x86_64-pc-linux-gnu", resourceDir = "/usr/lib/clang/22", evidence = emptyList(),
-        ),
-    )
+    /** Real discovery replaces metadata-only setup; legacy host fallback is not 22.1.8 qualification. */
+    private fun toolchain(): ClangSemanticToolchain {
+        val configured = System.getProperty("refactorkit.c.qualificationToolchain")?.let(Path::of)
+        val clang = configured?.resolve("usr/bin/clang-22") ?: Path.of("/usr/bin/clang").toRealPath()
+        val server = configured?.resolve("usr/bin/clangd") ?: Path.of("/usr/bin/clangd").toRealPath()
+        val formatter = configured?.resolve("usr/bin/clang-format") ?: clangFormat.toRealPath()
+        return when (val discovery = ClangToolchainDiscoverer().discover(ClangToolchainRequest(
+            Path.of(System.getProperty("java.io.tmpdir")), clang, server, formatter))) {
+            is ClangToolchainDiscovery.Available -> discovery.toolchain
+            is ClangToolchainDiscovery.Refused -> error("Native formatter fixture is unavailable: ${discovery.diagnostics}")
+        }
+    }
 }

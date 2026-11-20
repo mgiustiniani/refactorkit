@@ -38,6 +38,7 @@ data class ClangToolchainRequest(
     val clangExecutable: Path? = null,
     val clangdExecutable: Path? = null,
     val clangFormatExecutable: Path? = null,
+    val readOnlySdks: List<CReadOnlySdkRequest> = emptyList(),
 )
 
 data class ClangToolchainFileEvidence(
@@ -55,24 +56,14 @@ data class ClangToolchainProvenance(
     val targetTriple: String?,
     val resourceDir: String?,
     val evidence: List<ClangToolchainFileEvidence>,
+    val nativeRuntimeIdentity: String? = null,
+    val readOnlySdkIdentity: String? = null,
 ) {
     /** Immutable identity that invalidates any prior snapshot authority on change. */
-    fun toolchainIdentity(): String = buildString {
-        append(providerId).append('|')
-        append(clangVersion).append('|')
-        append(clangdVersion).append('|')
-        append(clangFormatVersion).append('|')
-        append(targetTriple ?: "-").append('|')
-        append(resourceDir ?: "-").append('|')
-        evidence.sortedBy(ClangToolchainFileEvidence::role).forEach { append(it.sha256).append('|') }
-    }.let { hash(it) }
+    fun toolchainIdentity(): String = CReadOnlySdkPolicy.bindToolchain(ClangToolchainIdentity.of(this), readOnlySdkIdentity)
 
     companion object {
         const val PROVIDER_ID = "clang-explicit-v1"
-
-        private fun hash(value: String): String = MessageDigest.getInstance("SHA-256")
-            .digest(value.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
     }
 }
 
@@ -81,6 +72,11 @@ data class ClangSemanticToolchain(
     val clangdExecutable: Path,
     val clangFormatExecutable: Path,
     val provenance: ClangToolchainProvenance,
+    val resources: ClangResourceCaptureResult = ClangResourceCaptureResult.Unavailable(Diagnostic(
+        "Clang resource inputs have not been captured", Diagnostic.Severity.ERROR,
+        code = "clang.resources.notCaptured", evidence = DiagnosticEvidence.STRUCTURAL, category = DiagnosticCategory.SAFETY)),
+    val runtime: ClangToolchainRuntimeCaptureResult = ClangToolchainRuntimeCaptureResult.NotCaptured,
+    val readOnlySdkInputs: CReadOnlySdkInputs = CReadOnlySdkInputs.EMPTY,
 )
 
 sealed interface ClangToolchainDiscovery {
@@ -88,12 +84,12 @@ sealed interface ClangToolchainDiscovery {
     data class Refused(val diagnostics: List<Diagnostic>) : ClangToolchainDiscovery
 }
 
-/** Executes only the explicitly selected executable with the constant `--version` argument. */
+/** Version query transport; discovery selects a config-isolated native compiler-driver probe. */
 fun interface ClangVersionProbe {
     fun probe(executable: Path): Result<String>
 }
 
-/** Executes only the explicitly selected clang with the constant `-print-resource-dir` argument. */
+/** Queries the selected native compiler resource directory with implicit driver config disabled. */
 fun interface ClangResourceDirProbe {
     fun probe(executable: Path): Result<String>
 }
@@ -123,7 +119,7 @@ class ManagedClangResourceDirProbe(
                     val process = manager.launch(SemanticProcessSpec(
                         id = "clang-resource-dir",
                         executable = executable,
-                        arguments = listOf("-print-resource-dir"),
+                        arguments = listOf("-print-resource-dir", "--no-default-config"),
                         workingDirectory = working,
                         limits = SemanticProcessLimits(
                             maxStdoutBytes = 4_096,
@@ -168,14 +164,20 @@ class ManagedClangVersionProbe(
         const val PROBE_TIMEOUT_MILLIS = 2_000L
         const val MAX_PROBE_ATTEMPTS = 2
 
-        private fun probeOnce(executable: Path): Result<String> = runCatching {
+        internal fun compilerDriver(): ClangVersionProbe = ManagedClangVersionProbe(ClangVersionProbe {
+            probeWithArguments(it, listOf("--version", "--no-default-config"))
+        })
+
+        private fun probeOnce(executable: Path): Result<String> = probeWithArguments(executable, listOf("--version"))
+
+        private fun probeWithArguments(executable: Path, arguments: List<String>): Result<String> = runCatching {
             val working = Files.createTempDirectory("refactorkit-clang-probe-")
             try {
                 ExternalSemanticProcessManager(maxProcesses = 1).use { manager ->
                     val process = manager.launch(SemanticProcessSpec(
                         id = "clang-version",
                         executable = executable,
-                        arguments = listOf("--version"),
+                        arguments = arguments,
                         workingDirectory = working,
                         limits = SemanticProcessLimits(
                             maxStdoutBytes = 4_096,
@@ -208,13 +210,23 @@ class ManagedClangVersionProbe(
  */
 class ClangToolchainDiscoverer(
     private val policy: ClangToolchainDiscoveryPolicy = ClangToolchainDiscoveryPolicy(),
-    private val versionProbe: ClangVersionProbe = ManagedClangVersionProbe(),
+    private val versionProbe: ClangVersionProbe? = null,
     private val resourceDirProbe: ClangResourceDirProbe = ManagedClangResourceDirProbe(),
+    private val runtimeProvider: ClangToolchainRuntimeProvider = ClangToolchainRuntimeCapture(),
 ) {
+    private val defaultVersionProbe = ManagedClangVersionProbe()
+    private val defaultCompilerVersionProbe = ManagedClangVersionProbe.compilerDriver()
+
     fun discover(request: ClangToolchainRequest): ClangToolchainDiscovery {
         val diagnostics = mutableListOf<Diagnostic>()
         val workspace = requireDirectory(request.workspaceRoot, "workspace", diagnostics)
             ?: return ClangToolchainDiscovery.Refused(diagnostics)
+        val sdkRequests = request.readOnlySdks.take(CNativeSysrootPolicy.MAX_ROOTS + 1).toList()
+        when (CReadOnlySdkPolicy.scope(workspace, sdkRequests)) {
+            CReadOnlySdkScope.ADMITTED -> Unit
+            CReadOnlySdkScope.INVALID -> return ClangToolchainDiscovery.Refused(listOf(refusal("clang.sdkScopeInvalid", "Explicit SDK scope is invalid")))
+            CReadOnlySdkScope.INPUT_LIMIT -> return ClangToolchainDiscovery.Refused(listOf(refusal("clang.sdkInputLimit", "Explicit SDK scope exceeds its input bound")))
+        }
         val clang = resolveExecutable(request.clangExecutable, "clang", workspace, diagnostics)
             ?: return ClangToolchainDiscovery.Refused(diagnostics)
         val clangd = resolveExecutable(request.clangdExecutable, "clangd", workspace, diagnostics)
@@ -222,8 +234,35 @@ class ClangToolchainDiscoverer(
         val clangFormat = resolveExecutable(request.clangFormatExecutable, "clang-format", workspace, diagnostics)
             ?: return ClangToolchainDiscovery.Refused(diagnostics)
 
+        val runtime = when (val captured = runtimeProvider.capture(clang, clangd, clangFormat)) {
+            is ClangToolchainRuntimeCaptureResult.Captured -> captured
+            else -> {
+                diagnostics += refusal("clang.toolchainRuntimeUnavailable", "Complete configured native runtimes are unavailable")
+                return ClangToolchainDiscovery.Refused(diagnostics)
+            }
+        }
+        val retained = runtime.facts.runtimes
+        if (retained.map { it.manifest.executable.requestedPath } != listOf(clang, clangd, clangFormat)) {
+            diagnostics += refusal("clang.toolchainRuntimeMismatch", "Retained runtime inventory does not match the configured executables")
+            return ClangToolchainDiscovery.Refused(diagnostics)
+        }
+        if (retained.any { it.inputs.cacheEvidence.path != ClangGlibcRuntimeInputCapture.SYSTEM_CACHE ||
+                it.inputs.preloadPath != ClangGlibcRuntimeInputCapture.SYSTEM_PRELOAD }) {
+            diagnostics += refusal("clang.toolchainRuntimeProfileUnsupported", "Inspection selectors cannot authorize actual host execution")
+            return ClangToolchainDiscovery.Refused(diagnostics)
+        }
+        fun runtimeIsCurrent(): Boolean = when (runtimeProvider.checkCurrent(runtime)) {
+            ClangToolchainRuntimeCurrency.Current -> true
+            is ClangToolchainRuntimeCurrency.NotCurrent -> {
+                diagnostics += refusal("clang.toolchainRuntimeChanged", "Retained native inputs changed or became unavailable during discovery")
+                false
+            }
+        }
+        if (!runtimeIsCurrent()) return ClangToolchainDiscovery.Refused(diagnostics)
+
         val clangRaw = probeRaw(clang, "clang", diagnostics)
             ?: return ClangToolchainDiscovery.Refused(diagnostics)
+        if (!runtimeIsCurrent()) return ClangToolchainDiscovery.Refused(diagnostics)
         val clangVersion = parseVersion(clangRaw)
             ?: run {
                 diagnostics += refusal("clang.versionInvalid", "clang version output could not be parsed")
@@ -231,8 +270,10 @@ class ClangToolchainDiscoverer(
             }
         val clangdVersion = probeVersion(clangd, "clangd", diagnostics)
             ?: return ClangToolchainDiscovery.Refused(diagnostics)
+        if (!runtimeIsCurrent()) return ClangToolchainDiscovery.Refused(diagnostics)
         val clangFormatVersion = probeVersion(clangFormat, "clang-format", diagnostics)
             ?: return ClangToolchainDiscovery.Refused(diagnostics)
+        if (!runtimeIsCurrent()) return ClangToolchainDiscovery.Refused(diagnostics)
 
         val clangMajor = parseMajor(clangVersion)
         if (clangMajor == null || clangMajor !in policy.minimumClangMajor..policy.maximumClangMajor) {
@@ -253,6 +294,7 @@ class ClangToolchainDiscoverer(
         val targetTriple = parseTargetTriple(clangRaw)
         val resourceDir = probeResourceDir(clang, diagnostics)
             ?: return ClangToolchainDiscovery.Refused(diagnostics)
+        if (!runtimeIsCurrent()) return ClangToolchainDiscovery.Refused(diagnostics)
 
         val evidence = listOf(
             evidence("clang-executable", clang, policy.maxExecutableBytes),
@@ -266,6 +308,16 @@ class ClangToolchainDiscoverer(
         }
         if (diagnostics.isNotEmpty()) return ClangToolchainDiscovery.Refused(diagnostics)
 
+        val resources = captureResources(resourceDir)
+        if (!runtimeIsCurrent()) return ClangToolchainDiscovery.Refused(diagnostics)
+
+        val sdkInputs = try { CReadOnlySdkInputs(sdkRequests.map { CNativeSysrootContext.captureReadOnly(it) }) }
+            catch (failure: CNativeSysrootCaptureException) {
+                return ClangToolchainDiscovery.Refused(listOf(refusal("clang.sdkInputsUnavailable", "SDK inputs unavailable: ${failure.reason.name}")))
+            }
+        if (!sdkInputs.isCurrent()) return ClangToolchainDiscovery.Refused(listOf(refusal("clang.sdkInputsChanged", "SDK inputs changed during discovery")))
+        if (!runtimeIsCurrent()) return ClangToolchainDiscovery.Refused(diagnostics)
+
         return ClangToolchainDiscovery.Available(ClangSemanticToolchain(
             clangExecutable = clang,
             clangdExecutable = clangd,
@@ -277,8 +329,22 @@ class ClangToolchainDiscoverer(
                 targetTriple = targetTriple,
                 resourceDir = resourceDir,
                 evidence = evidence.sortedBy(ClangToolchainFileEvidence::role),
+                nativeRuntimeIdentity = runtime.facts.identity,
+                readOnlySdkIdentity = sdkInputs.identity,
             ),
+            resources = resources,
+            runtime = runtime,
+            readOnlySdkInputs = sdkInputs,
         ))
+    }
+
+    private fun captureResources(raw: String): ClangResourceCaptureResult = try {
+        val path = Path.of(raw)
+        if (!path.isAbsolute) ClangResourceCaptureResult.Unavailable(refusal(
+            "clang.resources.pathInvalid", "Clang resource directory must be absolute"))
+        else ClangResourceDirectoryCapture().capture(path)
+    } catch (_: IllegalArgumentException) {
+        ClangResourceCaptureResult.Unavailable(refusal("clang.resources.pathInvalid", "Clang resource directory path is invalid"))
     }
 
     private fun resolveExecutable(
@@ -328,7 +394,8 @@ class ClangToolchainDiscoverer(
     }
 
     private fun probeRaw(executable: Path, label: String, diagnostics: MutableList<Diagnostic>): String? {
-        val raw = versionProbe.probe(executable).getOrElse {
+        val probe = versionProbe ?: if (label == "clang") defaultCompilerVersionProbe else defaultVersionProbe
+        val raw = probe.probe(executable).getOrElse {
             diagnostics += refusal("clang.versionProbeFailed", it.message ?: "$label version probe failed")
             return null
         }

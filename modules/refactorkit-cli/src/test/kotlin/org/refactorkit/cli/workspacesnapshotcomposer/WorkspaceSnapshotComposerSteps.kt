@@ -673,8 +673,10 @@ class WorkspaceSnapshotComposerSteps {
     fun boundedSurfaceAdoption() {
         assertTrue(daemonSource.contains("WorkspaceSnapshotComposer"))
         assertTrue(mcpSource.contains("WorkspaceSnapshotComposer"))
-        assertEquals(1, Regex("WorkspaceSnapshotComposer\\(\\)\\.compose\\(").findAll(daemonSource).count())
-        assertEquals(1, Regex("WorkspaceSnapshotComposer\\(\\)\\.compose\\(").findAll(mcpSource).count())
+        assertEquals(1, Regex("WorkspaceSnapshotComposer\\(\\)\\.composeInventoryFirst\\(").findAll(daemonSource).count())
+        assertEquals(1, Regex("WorkspaceSnapshotComposer\\(\\)\\.composeInventoryFirst\\(").findAll(mcpSource).count())
+        assertEquals(0, Regex("WorkspaceSnapshotComposer\\(\\)\\.compose\\(").findAll(daemonSource).count())
+        assertEquals(0, Regex("WorkspaceSnapshotComposer\\(\\)\\.compose\\(").findAll(mcpSource).count())
         assertMainSourcesExcludeComposer("modules/refactorkit-cli/src/main")
         assertMainSourcesExcludeComposer("modules/refactorkit-lsp/src/main")
     }
@@ -690,24 +692,26 @@ class WorkspaceSnapshotComposerSteps {
             listOf("project scan", "apply baseline", "apply post-image", "rollback refresh"),
             points.getValue("MCP"),
         )
-        assertEquals(6, Regex("\\bscanWorkspace\\(").findAll(daemonSource).count())
         assertTrue(functionText(daemonSource, "projectOpen").contains("scanWorkspace(path)"))
         assertTrue(functionText(daemonSource, "refreshSavedWorkspace").contains("scanWorkspace(root)"))
-        assertEquals(2, Regex("\\bscanWorkspace\\(root\\)").findAll(functionText(daemonSource, "refactorApply")).count())
+        val daemonApply = functionText(daemonSource, "refactorApply")
+        assertTrue(daemonApply.contains("JavaBoundContext.validateApply(plan"))
+        assertTrue(daemonApply.contains("{ scanWorkspace(root) })"))
+        assertTrue(daemonApply.contains("val currentSnap = scanWorkspace(root)"))
         assertTrue(functionText(daemonSource, "patchRollback").contains("scanWorkspace(root)"))
 
-        assertEquals(5, Regex("\\bscanWorkspace\\(").findAll(mcpSource).count())
         assertTrue(functionText(mcpSource, "toolProjectScan").contains("scanWorkspace(path)"))
-        assertEquals(1, Regex("\\bscanWorkspace\\(root\\)").findAll(functionText(mcpSource, "toolApplyRefactoring")).count())
-        assertTrue(functionText(mcpSource, "toolApplyRefactoring").contains("refreshStoredSnapshot(root)"))
+        val mcpApply = functionText(mcpSource, "toolApplyRefactoring")
+        assertTrue(mcpApply.contains("val current = scanWorkspace(root)"))
+        assertTrue(mcpApply.contains("refreshStoredSnapshot(root)"))
         assertTrue(functionText(mcpSource, "toolRollbackRefactoring").contains("refreshStoredSnapshot(root)"))
         val mcpRefresh = functionText(mcpSource, "refreshStoredSnapshot")
-        assertEquals(2, Regex("\\bscanWorkspace\\(root\\)").findAll(mcpRefresh).count())
+        assertTrue(mcpRefresh.contains("snapshot = if (current == null) scanWorkspace(root)"))
         assertTrue(mcpRefresh.contains("WorkspaceRefreshCoordinator.refresh"))
 
-        val daemonApply = functionText(daemonSource, "refactorApply")
-        assertTrue(daemonApply.indexOf("val refreshed = scanWorkspace(root)") < daemonApply.indexOf("closeSemanticAdapters()"))
-        val mcpApply = functionText(mcpSource, "toolApplyRefactoring")
+        val daemonRefreshIndex = daemonApply.indexOf("val refreshed = WorkspaceRefreshCoordinator.refresh(requireSnapshot())")
+        assertTrue(daemonRefreshIndex >= 0)
+        assertTrue(daemonRefreshIndex < daemonApply.indexOf("closeSemanticAdapters()"))
         assertTrue(mcpApply.indexOf("refreshStoredSnapshot(root)") < mcpApply.indexOf("closeSemanticAdapters()"))
     }
 
@@ -784,8 +788,9 @@ class WorkspaceSnapshotComposerSteps {
         assertTrue(WorkspaceSnapshotComposer::class.java.declaredFields.none { !it.isSynthetic })
         listOf(
             "var ", "Mutable", "WorkspaceIndex", "Json", "PatchEngine", "Transaction", "FileEdit",
-            "Files.", "Process", "Lock", "store", "persist",
+            "Process", "Lock", "store", "persist",
         ).forEach { forbidden -> assertFalse(coreSource.contains(forbidden), "composer owns $forbidden") }
+        assertFalse(Regex("\\bFiles\\.").containsMatchIn(coreSource), "composer owns file IO")
     }
 
     private fun sourceFile(row: Map<String, String>): SourceFile = SourceFile(
@@ -915,5 +920,77 @@ class WorkspaceSnapshotComposerSteps {
         val end = Regex("(?m)^    private fun ").find(source, matches.single().range.last + 1)
             ?.range?.first ?: source.length
         return source.substring(start, end)
+    }
+}
+
+/** Application composition of captured port values; no filesystem or language policy in core. */
+class AuxiliarySourcePromotionSteps {
+    private lateinit var condition: String
+    private lateinit var base: ProjectSnapshot
+    private lateinit var inventory: ProjectSnapshot
+    private lateinit var originalAuxiliary: List<SourceFile>
+    private lateinit var originalSources: List<SourceFile>
+    private lateinit var originalHashes: Pair<String, String>
+    private var result: ProjectSnapshot? = null
+    private var failure: Throwable? = null
+    private var conditionalCalls = 0
+    private var finalCalls = 0
+
+    @Given("snapshot composition captures an auxiliary and inventory overlap with {string}")
+    fun capture(condition: String) {
+        this.condition = condition
+        val root = Path.of("/captured-workspace")
+        val ts = condition == "identical TypeScript"
+        val canonical = Path.of(if (ts) "reports/result.ts" else "reports/result.js")
+        val auxiliaryPath = if (condition == "normalized overlap") Path.of("reports/old/../result.js") else canonical
+        val bytes = "const report = 1;\r\n"
+        base = ProjectSnapshot(Workspace(root), emptyList(), emptyList(), sourceExtensions = setOf("java"),
+            auxiliaryFiles = listOf(SourceFile(auxiliaryPath, bytes, "text"), SourceFile(Path.of("pom.xml"), "<project/>\n", "xml")))
+        val sourcePath = if (condition == "disjoint inventory") Path.of("scripts/new.js") else canonical
+        val source = SourceFile(sourcePath, if (condition == "changed bytes") bytes.replace("1", "2") else bytes,
+            if (ts) "typescript" else "javascript")
+        inventory = ProjectSnapshot(Workspace(root), emptyList(), if (condition == "empty inventory") emptyList() else listOf(source))
+        originalAuxiliary = base.auxiliaryFiles.toList(); originalSources = inventory.files.toList()
+        originalHashes = base.hash to inventory.hash
+    }
+
+    @When("the inventory-first composer reconciles captured classifications")
+    fun compose() {
+        try {
+            result = WorkspaceSnapshotComposer().composeInventoryFirst(base.workspace.root,
+                authoritativeBaseScanner = { base }, sourceInventoryScanner = { inventory },
+                conditionalEvidenceAttacher = { conditionalCalls++; it },
+                finalEvidenceAttacher = { finalCalls++; it })
+        } catch (error: Throwable) { failure = error }
+    }
+
+    @Then("composition reports {string} with exact source auxiliary and attacher facts")
+    fun verify(outcome: String) {
+        if (outcome == "input changed before attach") {
+            val error = kotlin.test.assertIs<org.refactorkit.core.OwnedSourceCaptureException>(failure)
+            assertEquals(org.refactorkit.core.OwnedSourceCaptureFailure.INPUT_CHANGED, error.code)
+            assertEquals(base.workspace.root.resolve("reports/result.js"), error.path)
+            assertEquals(null, result); assertEquals(0, conditionalCalls); assertEquals(0, finalCalls); return
+        }
+        assertEquals(null, failure, failure?.stackTraceToString())
+        val composed = assertNotNull(result)
+        assertSame(base.workspace, composed.workspace); assertEquals(base.modules, composed.modules)
+        assertEquals(base.classpathEvidence, composed.classpathEvidence); assertEquals(base.buildModels, composed.buildModels)
+        if (outcome == "base identity retained") {
+            assertSame(base, composed); assertEquals(0, conditionalCalls)
+        } else {
+            assertEquals(1, conditionalCalls); assertEquals(inventory.files, composed.files)
+            if (outcome == "promoted once") assertEquals(listOf(base.auxiliaryFiles.last()), composed.auxiliaryFiles)
+            else assertEquals(base.auxiliaryFiles, composed.auxiliaryFiles)
+        }
+        assertEquals(1, finalCalls)
+        assertTrue(composed.files.map { it.path.normalize() }.intersect(composed.auxiliaryFiles.map { it.path.normalize() }.toSet()).isEmpty())
+        assertEquals(composed.trackedFiles.size, composed.trackedFiles.map { it.path.normalize() }.distinct().size)
+    }
+
+    @Then("captured composition inputs remain immutable")
+    fun intact() {
+        assertEquals(originalAuxiliary, base.auxiliaryFiles); assertEquals(originalSources, inventory.files)
+        assertEquals(originalHashes, base.hash to inventory.hash)
     }
 }
