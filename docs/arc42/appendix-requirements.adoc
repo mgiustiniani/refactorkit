@@ -15675,6 +15675,17 @@ Evidence: `.refactorkit/runs/c17-v080-release-binding-native-r001/`,
 `c17-v080-release-binding-retained-controls-r001/` (bootstrap `green-r002`), and
 `c17-default-source-binding-selection-r001/green-r002/`.
 
+The 2026-11-20 coverage check binds each passing Cucumber result to its
+declared C scenario line or Examples row and checks the corresponding
+title. A duplicated result can no longer stand in for an unreported row.
+The operational Story
+`REQ-C-RELEASE-EVIDENCE-001#release-binding-requires-one-result-for-each-c-example-row`
+covers two distinct passing rows, duplicate and omitted rows, missing
+locations, undeclared rows and mismatched titles. Rechecking the actual
+R014 reports retains 1,362 cases across 107 C features. The altered copy
+with a missing row and a duplicate is refused. Evidence is under
+`.refactorkit/runs/v080-c17-example-coverage-20261120-r001/`.
+
 The older frozen-source whole-root `check goldenTest --continue` is terminal PASS
 with 6,311 source files/toolchain unchanged and 1,054 fresh report files. It
 predates these current-main edits and is not their qualification.

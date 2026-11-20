@@ -51,6 +51,7 @@ private class ReleaseBindingFixture(private val condition: String) : AutoCloseab
     private val spdxReceipt = root.resolve(".artifacts/spdx-qualification.json")
     private val buildLog = root.resolve(".artifacts/build.log")
     private val cucumberReport = "modules/refactorkit-cli/build/reports/cucumber/binding.json"
+    private val exampleCoverage = condition.startsWith("example coverage ")
     private val referenceProducer = Path.of(requireNotNull(System.getenv("REFACTORKIT_SYFT_QUALIFICATION_TOOLCHAIN")))
     private val producerInputs = listOf("syft", "LICENSE").associateWith { sha(referenceProducer.resolve(it)) }
     private val selectedProducer = if (condition == "producer executable changes after capture") {
@@ -72,7 +73,18 @@ private class ReleaseBindingFixture(private val condition: String) : AutoCloseab
         write("modules/refactorkit-core/src/main/kotlin/org/refactorkit/core/RefactorKitVersion.kt",
             "object RefactorKitVersion { const val VERSION = \"0.8.0\"; const val API_VERSION = \"0.2\" }\n")
         write("Tracked.md", "Authored metadata fixture, not an executable qualification.\n")
-        write("features/c-fixture.feature", "Feature: Metadata binding fixture\n  Scenario: Recorded metadata\n    Given metadata fixture evidence\n")
+        val feature = if (exampleCoverage) {
+            """
+            Feature: Metadata binding fixture
+              Scenario Outline: Recorded metadata
+                Given metadata fixture evidence <row>
+                Examples:
+                  | row    |
+                  | first  |
+                  | second |
+            """.trimIndent() + "\n"
+        } else "Feature: Metadata binding fixture\n  Scenario: Recorded metadata\n    Given metadata fixture evidence\n"
+        write("features/c-fixture.feature", feature)
         for (name in listOf("bind-v080-release-evidence.py", "verify-runtime-archive.py", "qualify-release-spdx.py", "qualify-sbom-producer.py")) {
             write("scripts/$name", Files.readString(repository.resolve("scripts/$name")))
         }
@@ -295,11 +307,39 @@ private class ReleaseBindingFixture(private val condition: String) : AutoCloseab
         assertEquals(0, process.exitValue(), Files.readString(log))
     }
 
+    private fun seedCucumberResults() {
+        val rows: List<Int?> = when (condition) {
+            "example coverage duplicate row" -> listOf(6, 6)
+            "example coverage omitted row" -> listOf(6)
+            "example coverage missing location" -> listOf(6, null)
+            "example coverage undeclared row" -> listOf(6, 999)
+            else -> if (exampleCoverage) listOf(6, 7) else listOf(2)
+        }
+        val elements = rows.mapIndexed { index, line ->
+            buildJsonObject {
+                put("type", "scenario")
+                val title = if (condition == "example coverage mismatched title" && index == 1) "Different scenario" else "Recorded metadata"
+                put("name", title)
+                line?.let { put("line", it) }
+                put("steps", buildJsonArray {
+                    add(buildJsonObject { put("result", buildJsonObject { put("status", "passed") }) })
+                })
+            }
+        }
+        val report = buildJsonArray {
+            add(buildJsonObject {
+                put("uri", "classpath:c-fixture.feature")
+                put("elements", JsonArray(elements))
+            })
+        }
+        write(cucumberReport, report.toString())
+    }
+
     private fun seedReports() {
         for (module in listOf("refactorkit-c", "refactorkit-cli", "refactorkit-lsp", "refactorkit-testkit")) {
             write("modules/$module/build/test-results/test/TEST-binding.xml", "<testsuite tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase name=\"metadata fixture\"/></testsuite>\n")
         }
-        write(cucumberReport, """[{"uri":"classpath:c-fixture.feature","elements":[{"type":"scenario","name":"Recorded metadata","steps":[{"result":{"status":"passed"}}]}]}]""")
+        seedCucumberResults()
         for (area in listOf("compiler-runtime", "formatter-runtime", "runtime-discovery", "runtime-manifest")) {
             write("modules/refactorkit-cli/build/reports/c-qualification/test/$area/record.json", """{"boundary":"authored metadata, not native acceptance","outcome":"binding fixture","nativeRuntimeIdentity":"${"a".repeat(64)}"}""")
         }
@@ -336,7 +376,8 @@ private class ReleaseBindingFixture(private val condition: String) : AutoCloseab
             val members = Json.parseToJsonElement(Files.readString(root.resolve(".artifacts/members.json"))).jsonObject
             val javaBytes = Base64.getDecoder().decode(members.getValue("runtime/bin/java").jsonPrimitive.content)
             assertEquals(shaBytes(javaBytes), receipt.getValue("runtimeMembersSha256").jsonObject.getValue("refactorkit/runtime/bin/java").jsonPrimitive.content)
-            assertEquals(1, receipt.getValue("cScenarioCoverage").jsonObject.getValue("c-fixture.feature").jsonPrimitive.int)
+            val scenarioCount = receipt.getValue("cScenarioCoverage").jsonObject.getValue("c-fixture.feature").jsonPrimitive.int
+            assertEquals(if (exampleCoverage) 2 else 1, scenarioCount)
             val reportHashes = receipt.getValue("reportSha256").jsonObject
             assertEquals(sha(root.resolve(cucumberReport)), reportHashes.getValue(cucumberReport).jsonPrimitive.content)
             assertFalse(receipt.getValue("wholeReleaseQualified").jsonPrimitive.boolean)

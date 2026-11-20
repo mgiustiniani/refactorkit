@@ -134,10 +134,14 @@ def atomic_record(path, value):
         os.unlink(temporary)
 
 
-def scenario_counts(path):
-    """Inventory English source declarations/Examples, excluding comments and docstrings."""
-    result = {}; name = None; outline = False; examples = False; header = False; quote = None
-    for raw in regular(path).read_text().splitlines():
+def scenario_locations(path):
+    """Map each source scenario or Examples row to its declared title."""
+    declared = {}
+    outline = None
+    in_examples = False
+    header = False
+    quote = None
+    for number, raw in enumerate(regular(path).read_text().splitlines(), start=1):
         line = raw.strip()
         if line.startswith(('"""', '```')):
             quote = None if quote else line[:3]
@@ -148,19 +152,21 @@ def scenario_counts(path):
             continue
         match = re.fullmatch(r'Scenario( Outline)?:\s*(.+)', line)
         if match:
-            name = match[2]; outline = bool(match[1]); examples = False
-            require(name not in result, 'FEATURE_SCENARIO_AMBIGUOUS')
-            result[name] = 0 if outline else 1
+            title = match[2]
+            require(title not in declared, 'FEATURE_SCENARIO_AMBIGUOUS')
+            outline = title if match[1] else None
+            declared[title] = [] if outline else [number]
+            in_examples = False
         elif outline and line.startswith('Examples:'):
-            examples = True; header = True
-        elif examples and line.startswith('|'):
+            in_examples = True
+            header = True
+        elif in_examples and line.startswith('|'):
             if header:
                 header = False
             else:
-                result[name] += 1
-    require(result and all(count > 0 for count in result.values()), 'FEATURE_SCENARIO_UNAVAILABLE')
-    return result
-
+                declared[outline].append(number)
+    require(declared and all(declared.values()), 'FEATURE_SCENARIO_UNAVAILABLE')
+    return {number: title for title, locations in declared.items() for number in locations}
 
 def native_reports(root, started_ns, source):
     retained = {}; totals = {}; coverage = {}
@@ -191,28 +197,28 @@ def native_reports(root, started_ns, source):
             name = unquote(feature.get('uri', '').removeprefix('classpath:')).replace('\\', '/').split('/')[-1]
             if not name.startswith('c-') or not name.endswith('.feature'):
                 continue
-            cases = coverage.setdefault(name, [])
+            cases = coverage.setdefault(name, {})
             for case in feature.get('elements', []):
                 if case.get('type') != 'scenario':
                     continue
                 steps = case.get('steps', [])
                 require(steps and all(s.get('result', {}).get('status') == 'passed' for s in steps), 'NATIVE_SCENARIO_FAILED')
-                cases.append(case['name'])
+                location = case.get('line')
+                require(type(location) is int and location > 0, 'NATIVE_SCENARIO_LOCATION_INVALID')
+                require(location not in cases, 'NATIVE_SCENARIO_RESULT_DUPLICATE')
+                cases[location] = case.get('name')
         retained[path.relative_to(root).as_posix()] = digest(path)
     expected_features = {Path(p).name: p for p in source if p.startswith('features/c-') and p.endswith('.feature')}
     require(expected_features, 'NATIVE_FEATURES_MISSING')
     for name, relative in expected_features.items():
-        declared = scenario_counts(root / relative)
-        observed = coverage.get(name, [])
-        remaining = list(observed)
-        for template, count in declared.items():
-            pattern = re.escape(template)
-            pattern = re.sub(r'<[^<>]+>', '.*', pattern)
-            matches = [n for n in remaining if re.fullmatch(pattern, n)]
-            require(len(matches) == count, 'NATIVE_SCENARIO_COVERAGE_MISSING')
-            for match in matches:
-                remaining.remove(match)
-        require(not remaining, 'NATIVE_SCENARIO_COVERAGE_AMBIGUOUS')
+        declared = scenario_locations(root / relative)
+        observed = coverage.get(name, {})
+        require(not observed.keys() - declared.keys(), 'NATIVE_SCENARIO_COVERAGE_AMBIGUOUS')
+        require(observed.keys() == declared.keys(), 'NATIVE_SCENARIO_COVERAGE_MISSING')
+        for location, title in declared.items():
+            actual = observed[location]
+            pattern = re.sub(r'<[^<>]+>', '.*', re.escape(title))
+            require(isinstance(actual, str) and re.fullmatch(pattern, actual), 'NATIVE_SCENARIO_COVERAGE_MISMATCH')
     native = {}
     for area in AREAS:
         folder = root / 'modules/refactorkit-cli/build/reports/c-qualification/test' / area

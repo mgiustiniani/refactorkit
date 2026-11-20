@@ -305,3 +305,19 @@ Feature: Bind the v0.8 Linux asset to its actual source and captured native evid
       | case         | outcome                            |
       | c17          | exact recovery                     |
       | c11-conflict | refusal preserves the foreign file |
+
+  @REQ-C-RELEASE-EVIDENCE-001#release-binding-requires-one-result-for-each-c-example-row
+  Scenario Outline: Release binding requires one result for each C example row
+    Given a v0.8 release evidence binding fixture has "<case>"
+    When the release binding captures source then finalizes the native evidence
+    Then the v0.8 release binding reports "<outcome>"
+    And release binding preserves inputs and writes only the requested complete receipt
+
+    Examples:
+      | case                              | outcome                              |
+      | example coverage distinct rows    | bound evidence                       |
+      | example coverage duplicate row    | NATIVE_SCENARIO_RESULT_DUPLICATE      |
+      | example coverage omitted row      | NATIVE_SCENARIO_COVERAGE_MISSING      |
+      | example coverage missing location | NATIVE_SCENARIO_LOCATION_INVALID      |
+      | example coverage undeclared row   | NATIVE_SCENARIO_COVERAGE_AMBIGUOUS    |
+      | example coverage mismatched title | NATIVE_SCENARIO_COVERAGE_MISMATCH     |
