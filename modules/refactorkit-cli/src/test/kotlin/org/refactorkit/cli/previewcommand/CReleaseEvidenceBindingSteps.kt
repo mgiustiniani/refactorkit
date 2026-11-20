@@ -212,7 +212,7 @@ private class ReleaseBindingFixture(private val condition: String) : AutoCloseab
             "asset checksum mismatch" -> Files.writeString(checksum, "0".repeat(64) + "  " + archive.fileName + "\n")
             "Cucumber report at the native report byte limit", "Cucumber report above the native report byte limit" -> {
                 val report = root.resolve(cucumberReport)
-                val limit = 32 * 1024 * 1024
+                val limit = 64 * 1024 * 1024
                 val targetSize = if (condition == "Cucumber report above the native report byte limit") limit + 1 else limit
                 Files.writeString(report, " ".repeat(targetSize - Files.size(report).toInt()), StandardOpenOption.APPEND)
                 assertEquals(targetSize.toLong(), Files.size(report))

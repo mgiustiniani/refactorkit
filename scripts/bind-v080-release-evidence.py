@@ -29,6 +29,7 @@ PINS = {
 }
 AREAS = ('compiler-runtime', 'formatter-runtime', 'runtime-discovery', 'runtime-manifest')
 MAX_NATIVE_REPORT_BYTES = 32 * 1024 * 1024
+MAX_CUCUMBER_REPORT_BYTES = 64 * 1024 * 1024
 COMPONENT_BUILD_INPUTS = (
     'gradlew', 'gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.properties',
     'modules/refactorkit-cli/build.gradle.kts', 'scripts/runtime-component-manifest.gradle',
@@ -171,9 +172,9 @@ def scenario_locations(path):
 def native_reports(root, started_ns, source):
     retained = {}; totals = {}; coverage = {}
     read_count = 0; read_bytes = 0
-    def fresh(path):
+    def fresh(path, limit=MAX_NATIVE_REPORT_BYTES):
         nonlocal read_count, read_bytes
-        require(regular(path, MAX_NATIVE_REPORT_BYTES).stat().st_mtime_ns >= started_ns, 'REPORTS_STALE')
+        require(regular(path, limit).stat().st_mtime_ns >= started_ns, 'REPORTS_STALE')
         read_count += 1; read_bytes += path.stat().st_size
         require(read_count <= 8192 and read_bytes <= 512 * 1024 * 1024, 'REPORT_SIZE_LIMIT')
         return path
@@ -193,7 +194,8 @@ def native_reports(root, started_ns, source):
         require(totals.get(name, {}).get('tests', 0) > totals.get(name, {}).get('skipped', 0), 'TEST_REPORTS_MISSING')
     require(totals['refactorkit-c']['skipped'] == 0, 'TEST_GATE_FAILED')
     for path in sorted(root.glob('modules/*/build/reports/cucumber/*.json')):
-        for feature in read_json(fresh(path), limit=MAX_NATIVE_REPORT_BYTES):
+        report = fresh(path, MAX_CUCUMBER_REPORT_BYTES)
+        for feature in read_json(report, limit=MAX_CUCUMBER_REPORT_BYTES):
             name = unquote(feature.get('uri', '').removeprefix('classpath:')).replace('\\', '/').split('/')[-1]
             if not name.startswith('c-') or not name.endswith('.feature'):
                 continue

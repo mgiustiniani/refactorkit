@@ -15717,6 +15717,16 @@ R014 reports retains 1,362 cases across 107 C features. The altered copy
 with a missing row and a duplicate is refused. Evidence is under
 `.refactorkit/runs/v080-c17-example-coverage-20261120-r001/`.
 
+The default CLI and LSP runners select all 1,395 declared C cases across
+107 features. The selection-only run produced a 33,652,701-byte CLI
+Cucumber report, which the former 32 MiB limit refused. Cucumber dry-run
+reports use passing step statuses for matched glue, so the selection receipt
+records no native step execution. Release binding now admits Cucumber JSON
+reports up to 64 MiB. XML and retained native report files keep the 32 MiB
+limit and all evidence files share the 512 MiB aggregate limit. The existing
+budget Story accepts 64 MiB and refuses one byte above it. Evidence is under
+`.refactorkit/runs/v080-c17-cucumber-report-budget-20261121-r001/`.
+
 The older frozen-source whole-root `check goldenTest --continue` is terminal PASS
 with 6,311 source files/toolchain unchanged and 1,054 fresh report files. It
 predates these current-main edits and is not their qualification.
