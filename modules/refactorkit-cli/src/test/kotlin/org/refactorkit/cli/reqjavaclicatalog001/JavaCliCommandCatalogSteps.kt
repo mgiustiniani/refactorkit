@@ -806,6 +806,7 @@ class JavaCliCommandCatalogSteps {
             "refactorkit c symbols <root> [--query <text>] [--limit <n>] [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>",
             "refactorkit c definition <root> --symbol <c-decl:id> [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>",
             "refactorkit c references <root> --symbol <c-decl:id> [--include-declaration] [--limit <n>] [--expected-snapshot-hash <sha256>] --clang <exe> --clangd <exe> --clang-format <exe>",
+            "refactorkit c format <root> --file <path.c> [--ranges <start:end[,start:end...]> | --start-line <n> --end-line <n>] [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
             "refactorkit c rename <root> --symbol <name> --to <name> --file <path> --line <n> --character <n> [--read-only-sdks <json-array>] [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
             "refactorkit c rename-prefix <root> --mapping <old=new[,old=new...]> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
             "refactorkit c change-signature <root> --operation reorder-parameters --file <path.c> --symbol <function> --order <original-indices> [--apply] --clang <exe> --clangd <exe> --clang-format <exe>",
