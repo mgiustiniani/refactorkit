@@ -14062,9 +14062,18 @@ lifecycles restore the exact source on rollback. Computed or missing includes
 and post-preview header drift refuse without writes or a journal.
 
 The baseline reproduced three semantic failures and kept both refusal controls.
-Evidence is in `.refactorkit/runs/v080-c07-captured-header-format-20261121-r001/`.
-Package acceptance remains `actionable`. The qualified directive and command
-profile is described in
+Source evidence is in `.refactorkit/runs/v080-c07-captured-header-format-20261121-r001/`.
+The Linux x86-64 0.8.0 archive
+`2d0d65b6670a2c480e413fa750687887ce9ba3dc004cffc38c2af65af7d36fc5`
+passed the five packaged Story cases and four independent CLI/LSP checks.
+The CLI control verifies that sorting the includes breaks compilation, then
+compiles and runs both the original and formatted sources and verifies exact
+rollback. LSP rejects Apply before journal creation if the captured style
+changes, is removed, or is introduced after preview. The exact archive and
+route evidence are recorded in `c07-combined-packaged/verification.json` and
+`c07-combined-native-routes-retry/verification.json` under
+`.refactorkit/runs/v080-ide-java-move-package-text-boundary-20261121-r001/`.
+The qualified directive and command profile is described in
 link:../requirements/c-formatting-source.md#managed-formatting-with-captured-local-headers[the formatting requirement].
 
 [[c08-c15-include-managed-boundaries-2026-11-13]]

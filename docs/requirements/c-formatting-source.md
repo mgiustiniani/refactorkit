@@ -202,8 +202,10 @@ The qualified fixtures exercise numeric object macros and an order-sensitive
 conditional in unchanged local headers. Apply changes only the selected
 translation unit, and rollback restores its bytes. A computed include or a
 missing header leaves the plan without Apply authority. A caller change to a
-captured header refuses before journal creation. All five cases passed against
-the compiled implementation. Package acceptance remains `actionable`.
+captured header refuses before journal creation. The Linux x86-64 0.8.0
+candidate with SHA-256 `2d0d65b6670a2c480e413fa750687887ce9ba3dc004cffc38c2af65af7d36fc5`
+passed all five cases. Four additional packaged CLI/LSP checks covered the
+include order and style drift.
 [ARC42 acceptance](../arc42/appendix-requirements.adoc#c07-owned-header-formatting-2026-11-21).
 
 ## Managed Apply refuses stale captured style
