@@ -294,6 +294,7 @@ class PatchEngine(
                     approval,
                     requireNotNull(gateValidation.stagedWorkspaceEdit),
                     stagedEvaluation.snapshot.hash,
+                    stagedEvaluation.rollbackEmptyDirectories,
                 )
                 if (applied is ApplyResult.Applied) {
                     validatePostApplyAuthoritativeDiagnostics(
@@ -541,8 +542,20 @@ class PatchEngine(
         }
         val stagingConflicts = validateReservedStagingPathsAbsent(record)
         if (stagingConflicts.isNotEmpty()) return@withWorkspaceLock ApplyResult.Refused(stagingConflicts)
+        val cleanup = if (mode == RollbackMode.NORMAL) {
+            try {
+                RollbackEmptyDirectories.validateScope(record.rollbackEmptyDirectories, record.createdDirectories, record.postImages)
+                RollbackEmptyDirectories.observe(normalizedRoot, record.rollbackEmptyDirectories)
+            } catch (error: Exception) {
+                return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+                    "Rollback output directories cannot be verified: ${error.message}",
+                    Diagnostic.Severity.ERROR, code = "rollback.conflict",
+                )))
+            }
+        } else emptyMap()
         if (mode == RollbackMode.NORMAL) {
-            val conflicts = validateRollbackPostImages(record) + validateCreatedDirectoryState(record)
+            val conflicts = validateRollbackPostImages(record) +
+                validateCreatedDirectoryState(record, cleanup.keys.mapTo(hashSetOf(), ::resolveInsideWorkspace))
             if (conflicts.isNotEmpty()) {
                 transactionLog.update(record.copy(failure = conflicts.joinToString("; ") { it.message }))
                 return@withWorkspaceLock ApplyResult.Refused(conflicts)
@@ -566,6 +579,7 @@ class PatchEngine(
         val rollbackDiagnostics = rollbackAppliedRecord(
             record,
             if (mode == RollbackMode.FORCE) "Forced rollback explicitly requested" else null,
+            cleanup,
         )
         if (rollbackDiagnostics.isEmpty()) ApplyResult.Applied(transaction)
         else ApplyResult.Refused(rollbackDiagnostics)
@@ -607,21 +621,28 @@ class PatchEngine(
     private fun rollbackAppliedRecord(
         record: TransactionJournalRecord,
         reason: String?,
-    ): List<Diagnostic> = try {
-        val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
-        val permissions = record.preImages.associate { it.path to it.posixPermissions }
-        transactionLog.update(record.copy(state = JournalState.ROLLING_BACK, failure = reason))
-        commitPostImages(record, currentImages, record.preImages, permissions)
-        removeCreatedDirectories(record.createdDirectories)
-        transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
-        emptyList()
-    } catch (error: Exception) {
-        markRecoveryRequired(record, "Rollback failed: ${error.message}")
-        listOf(Diagnostic(
-            "Rollback failed; recovery is required: ${error.message}",
-            Diagnostic.Severity.ERROR,
-            code = "transaction.recoveryRequired",
-        ))
+        cleanup: Map<Path, String> = emptyMap(),
+    ): List<Diagnostic> {
+        val rolling = record.copy(
+            state = JournalState.ROLLING_BACK, failure = reason, rollbackEmptyDirectoryIdentities = cleanup,
+        )
+        return try {
+            val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
+            val permissions = record.preImages.associate { it.path to it.posixPermissions }
+            transactionLog.update(rolling)
+            RollbackEmptyDirectories.remove(normalizedRoot, cleanup)
+            commitPostImages(rolling, currentImages, record.preImages, permissions)
+            removeCreatedDirectories(record.createdDirectories)
+            transactionLog.update(rolling.copy(state = JournalState.ROLLED_BACK, rollbackEmptyDirectoryIdentities = emptyMap()))
+            emptyList()
+        } catch (error: Exception) {
+            markRecoveryRequired(rolling, "Rollback failed: ${error.message}")
+            listOf(Diagnostic(
+                "Rollback failed; recovery is required: ${error.message}",
+                Diagnostic.Severity.ERROR,
+                code = "transaction.recoveryRequired",
+            ))
+        }
     }
 
     private fun withWorkspaceLock(action: () -> ApplyResult): ApplyResult {
@@ -720,12 +741,12 @@ class PatchEngine(
 
     private fun validateCreatedDirectoryState(
         record: TransactionJournalRecord,
-        ownedStagingPaths: Set<Path> = emptySet(),
+        allowedAdditionalPaths: Set<Path> = emptySet(),
     ): List<Diagnostic> {
         if (record.createdDirectories.isEmpty()) return emptyList()
         val allowed = (record.createdDirectories + record.postImages.filter { it.content != null }.map { it.path })
             .map { resolveInsideWorkspace(it) }
-            .toSet() + ownedStagingPaths
+            .toSet() + allowedAdditionalPaths
         return record.createdDirectories.flatMap { relative ->
             val directory = resolveInsideWorkspace(relative)
             if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) emptyList() else {
@@ -1373,7 +1394,8 @@ class PatchEngine(
                 committedEvaluation.snapshot,
             )
             val semanticMismatch = boundaryDiagnostics.isNotEmpty() ||
-                committedEvaluation.snapshot.hash != expected.snapshot.hash
+                committedEvaluation.snapshot.hash != expected.snapshot.hash ||
+                committedEvaluation.rollbackEmptyDirectories != expected.rollbackEmptyDirectories
             val diagnosticDifferences = diagnosticMultisetDifferenceCount(
                 expected.diagnostics,
                 committedEvaluation.diagnostics,
@@ -1615,9 +1637,12 @@ class PatchEngine(
         approval: ApprovalRecord,
         stagedWorkspaceEdit: StagedWorkspaceEdit? = null,
         exactPostSnapshotHash: String? = null,
+        rollbackEmptyDirectories: Set<Path> = emptySet(),
     ): ApplyResult {
         val record = try {
-            prepareJournalRecord(plan, snapshot, approval, stagedWorkspaceEdit, exactPostSnapshotHash).also { candidate ->
+            prepareJournalRecord(
+                plan, snapshot, approval, stagedWorkspaceEdit, exactPostSnapshotHash, rollbackEmptyDirectories,
+            ).also { candidate ->
                 require(validateReservedStagingPathsAbsent(candidate).isEmpty()) { "Reserved staging path already exists" }
             }
         } catch (error: Exception) {
@@ -1715,6 +1740,7 @@ class PatchEngine(
         approval: ApprovalRecord,
         stagedWorkspaceEdit: StagedWorkspaceEdit? = null,
         exactPostSnapshotHash: String? = null,
+        rollbackEmptyDirectories: Set<Path> = emptySet(),
     ): TransactionJournalRecord {
         val staged = stagedWorkspaceEdit ?: stageWorkspaceEdit(plan.workspaceEdit)
         val preImages = staged.preImages.map { image ->
@@ -1745,19 +1771,25 @@ class PatchEngine(
             rollbackEdit = staged.rollbackEdit,
             approval = approval,
         )
+        val createdDirectories = missingParentDirectories(postImages)
+        RollbackEmptyDirectories.validateScope(rollbackEmptyDirectories, createdDirectories, postImages)
+        require(rollbackEmptyDirectories.isEmpty() || "rollbackAuthorityProvider" !in plan.authorityLease?.attributes.orEmpty()) {
+            "Protected rollback requires its original post-apply directory layout"
+        }
         return TransactionJournalRecord(
             transaction = transaction,
             operation = plan.operation,
             forwardEdit = plan.workspaceEdit,
             preImages = preImages,
             postImages = postImages,
-            createdDirectories = missingParentDirectories(postImages),
+            createdDirectories = createdDirectories,
             preSnapshotHash = snapshot.hash,
             postSnapshotHash = exactPostSnapshotHash ?: postSnapshotHash(snapshot, postImages),
             state = JournalState.PREPARED,
             authorityAttributes = plan.authorityLease?.attributes.orEmpty().takeIf {
                 "rollbackAuthorityProvider" in it || it["retainInTransactionJournal"] == "true"
             }.orEmpty(),
+            rollbackEmptyDirectories = rollbackEmptyDirectories,
             history = listOf(JournalEvent(
                 JournalState.PREPARED,
                 Instant.now(),
@@ -2244,12 +2276,24 @@ class PatchEngine(
             markRecoveryRequired(record, "$reason; ${stageConflicts.joinToString("; ") { it.message }}")
             return false
         }
-        val directoryConflicts = validateCreatedDirectoryState(record, ownedStages.keys)
+        val cleanup = record.rollbackEmptyDirectoryIdentities
+        try {
+            RollbackEmptyDirectories.validateScope(record.rollbackEmptyDirectories, record.createdDirectories, record.postImages)
+            require(record.rollbackEmptyDirectories.containsAll(cleanup.keys)) { "Rollback cleanup receipt exceeds its authorization" }
+            RollbackEmptyDirectories.verifyRecorded(normalizedRoot, cleanup)
+        } catch (error: Exception) {
+            markRecoveryRequired(record, "$reason; cannot verify optional rollback directories: ${error.message}")
+            return false
+        }
+        val directoryConflicts = validateCreatedDirectoryState(
+            record, ownedStages.keys + cleanup.keys.map(::resolveInsideWorkspace),
+        )
         if (directoryConflicts.isNotEmpty()) {
             markRecoveryRequired(record, "$reason; ${directoryConflicts.joinToString("; ") { it.message }}")
             return false
         }
         return try {
+            RollbackEmptyDirectories.remove(normalizedRoot, cleanup)
             ownedStages.keys.forEach { path ->
                 if (Files.deleteIfExists(path)) forceWorkspaceDirectory(requireNotNull(path.parent))
             }
@@ -2263,7 +2307,9 @@ class PatchEngine(
                 )
             }
             removeCreatedDirectories(record.createdDirectories)
-            transactionLog.update(record.copy(state = JournalState.ROLLED_BACK, failure = reason))
+            transactionLog.update(record.copy(
+                state = JournalState.ROLLED_BACK, failure = reason, rollbackEmptyDirectoryIdentities = emptyMap(),
+            ))
             true
         } catch (error: Exception) {
             markRecoveryRequired(record, "$reason; compensation failed: ${error.message}")

@@ -192,7 +192,16 @@ internal object JavaRenameMavenModuleStaging {
             require(JavaRenameMavenModuleEvidence.exactDiagnosticsHash(diagnostics) == expectation.diagnosticsHash) {
                 "The exact Maven and authoritative JDT diagnostic multiset differs from the operation-authority lease"
             }
-            AuthoritativeDiagnosticsEvaluation(authoritative, diagnostics)
+            val optionalRollbackDirectories = if (expectation.destinationPresent) {
+                val target = authority.newModule.resolve("target")
+                val conventionalOutputs = setOf(target.resolve("classes"), target.resolve("test-classes"))
+                val declaredOutputs = model.modules.single { it.id == pathString(authority.newModule) }
+                    .sourceSets.flatMap { it.outputDirectories }.toSet()
+                if (declaredOutputs == conventionalOutputs &&
+                    authoritative.trackedFiles.none { it.path.normalize().startsWith(target) }
+                ) conventionalOutputs + setOf(target) else emptySet()
+            } else emptySet()
+            AuthoritativeDiagnosticsEvaluation(authoritative, diagnostics, optionalRollbackDirectories)
         }
     }
 

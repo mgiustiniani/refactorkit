@@ -120,6 +120,7 @@ class JavaMavenModuleRenameSteps {
     private var rollbackResult: ApplyResult? = null
     private lateinit var outputLayoutBaseline: ExactManifest
     private lateinit var outputLayoutPlan: PatchPlan
+    private lateinit var rollbackProbeImage: ExactManifest
 
     @Before("@REQ-JAVA-MAVEN-MODULE-RENAME-001")
     fun prepareScenario(scenario: Scenario) {
@@ -1366,10 +1367,7 @@ class JavaMavenModuleRenameSteps {
             }
             "compiled class" -> {
                 Files.createDirectories(output)
-                val compiledName = javaClass.simpleName + ".class"
-                assertNotNull(javaClass.getResourceAsStream(compiledName)).use {
-                    Files.copy(it, output.resolve(compiledName))
-                }
+                copyCompiledClass(output)
             }
             "symbolic link" -> {
                 Files.createDirectories(output)
@@ -1400,13 +1398,7 @@ class JavaMavenModuleRenameSteps {
             }
             "applies and rolls back exactly" -> {
                 assertEquals(PatchStatus.PREVIEW, outputLayoutPlan.status, outputLayoutPlan.summary)
-                val engine = PatchEngine(pristineRoot)
-                val applied = assertIs<ApplyResult.Applied>(engine.apply(
-                    outputLayoutPlan,
-                    s0,
-                    ApplyAuthorization.explicit("direct-library", "acceptance-caller"),
-                    positivePlanner.diagnosticsGate(outputLayoutPlan),
-                ))
+                val transaction = applyOutputLayoutPlan()
                 assertTrue(Files.isRegularFile(pristineRoot.resolve(NEW_MODULE).resolve("pom.xml")))
                 assertTrue(Files.notExists(pristineRoot.resolve(OLD_POM)))
                 assertTrue(Files.notExists(pristineRoot.resolve(NEW_MODULE).resolve("target")))
@@ -1416,12 +1408,79 @@ class JavaMavenModuleRenameSteps {
                     outputLayoutBaseline.entries.filterKeys { it.startsWith(retainedDirectory) },
                     staged.entries.filterKeys { it.startsWith(retainedDirectory) },
                 )
-                assertIs<ApplyResult.Applied>(engine.rollback(applied.transaction, RollbackMode.NORMAL))
+                assertIs<ApplyResult.Applied>(assertNotNull(patchEngine).rollback(transaction, RollbackMode.NORMAL))
                 assertEquals(outputLayoutBaseline, captureExactManifest(pristineRoot, excludeEngine = true))
                 assertEquals(s0.hash, scan(pristineRoot).hash)
             }
             else -> fail("Unexpected rename outcome: $outcome")
         }
+    }
+
+    @Given("an applied Maven module rename whose original workspace had empty IDE output directories")
+    fun applyRenameWithEmptyIdeOutputs() {
+        prepareOutputLayout("empty")
+        previewOutputLayout()
+        assertEquals(PatchStatus.PREVIEW, outputLayoutPlan.status, outputLayoutPlan.summary)
+        selectedTransaction = applyOutputLayoutPlan()
+    }
+
+    @When("the renamed Maven module receives {string} before normal rollback")
+    fun mutateDestinationBeforeRollback(change: String) {
+        val target = pristineRoot.resolve(NEW_MODULE).resolve("target")
+        val classes = target.resolve("classes")
+        val tests = target.resolve("test-classes")
+        Files.createDirectories(classes)
+        when (change) {
+            "empty conventional dirs" -> Files.createDirectory(tests)
+            "compiled class" -> copyCompiledClass(classes)
+            "symbolic link" -> Files.createSymbolicLink(tests, pristineRoot.resolve(OLD_MODULE).resolve("target/test-classes"))
+            "arbitrary empty dir" -> Files.createDirectory(target.resolve("unrelated"))
+            "non-directory output" -> Files.writeString(tests, "external file")
+            "modified tracked file" -> {
+                Files.createDirectory(tests)
+                Files.writeString(pristineRoot.resolve(NEW_MODULE).resolve("pom.xml"), "\n<!-- saved change -->\n", StandardOpenOption.APPEND)
+            }
+            else -> fail("Unexpected destination change: $change")
+        }
+        rollbackProbeImage = captureExactManifest(pristineRoot, excludeEngine = true, allowLinks = true)
+    }
+
+    @Then("rollback {string} and preserves external content")
+    fun assertNormalRollbackWithIdeOutputs(outcome: String) {
+        val transaction = assertNotNull(selectedTransaction)
+        val result = assertNotNull(patchEngine).rollback(transaction, RollbackMode.NORMAL)
+        val record = transactionLog().listRecordsReadOnly().single()
+        when (outcome) {
+            "restores the original workspace" -> {
+                assertIs<ApplyResult.Applied>(result)
+                assertEquals(JournalState.ROLLED_BACK, record.state)
+                assertEquals(outputLayoutBaseline, captureExactManifest(pristineRoot, excludeEngine = true))
+                assertEquals(s0.hash, scan(pristineRoot).hash)
+            }
+            "refuses without workspace writes" -> {
+                val refused = assertIs<ApplyResult.Refused>(result)
+                assertTrue(refused.diagnostics.any { it.code == "rollback.conflict" }, refused.toString())
+                assertEquals(JournalState.APPLIED, record.state)
+                assertEquals(rollbackProbeImage, captureExactManifest(pristineRoot, excludeEngine = true, allowLinks = true))
+            }
+            else -> fail("Unexpected rollback outcome: $outcome")
+        }
+    }
+
+    private fun applyOutputLayoutPlan(): Transaction {
+        val engine = PatchEngine(pristineRoot)
+        patchEngine = engine
+        return assertIs<ApplyResult.Applied>(engine.apply(
+            outputLayoutPlan,
+            s0,
+            ApplyAuthorization.explicit("direct-library", "acceptance-caller"),
+            positivePlanner.diagnosticsGate(outputLayoutPlan),
+        )).transaction
+    }
+
+    private fun copyCompiledClass(output: Path) {
+        val name = javaClass.simpleName + ".class"
+        assertNotNull(javaClass.getResourceAsStream(name)).use { Files.copy(it, output.resolve(name)) }
     }
 
     private fun scan(root: Path): ProjectSnapshot {

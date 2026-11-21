@@ -1,6 +1,8 @@
 package org.refactorkit.core
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -66,6 +68,8 @@ data class TransactionJournalRecord(
     val updatedAt: Instant = Instant.now(),
     val failure: String? = null,
     val authorityAttributes: Map<String, String> = emptyMap(),
+    val rollbackEmptyDirectories: Set<Path> = emptySet(),
+    val rollbackEmptyDirectoryIdentities: Map<Path, String> = emptyMap(),
 ) {
     companion object {
         const val CURRENT_SCHEMA_VERSION = 8
@@ -74,6 +78,7 @@ data class TransactionJournalRecord(
 }
 
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 internal data class TransactionJournalDto(
     val schemaVersion: Int,
     val implementationVersion: String? = null,
@@ -92,6 +97,11 @@ internal data class TransactionJournalDto(
     val failure: String? = null,
     val checksum: String? = null,
     val authorityAttributes: Map<String, String> = emptyMap(),
+    // Omitting an empty policy preserves the checksum of existing journal records.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val rollbackEmptyDirectories: List<String> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val rollbackEmptyDirectoryIdentities: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -136,6 +146,9 @@ internal fun TransactionJournalRecord.toJson(): String {
         updatedAt = updatedAt.toString(),
         failure = failure,
         authorityAttributes = authorityAttributes.toSortedMap(),
+        rollbackEmptyDirectories = rollbackEmptyDirectories.map(ProtocolPath::serialize).sorted(),
+        rollbackEmptyDirectoryIdentities = rollbackEmptyDirectoryIdentities.entries
+            .associate { (path, identity) -> ProtocolPath.serialize(path) to identity }.toSortedMap(),
         checksum = null,
     )
     return journalJson.encodeToString(unsigned.copy(checksum = checksum(unsigned)))
@@ -184,6 +197,8 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
         updatedAt = Instant.parse(dto.updatedAt),
         failure = dto.failure,
         authorityAttributes = java.util.Collections.unmodifiableMap(LinkedHashMap(dto.authorityAttributes)),
+        rollbackEmptyDirectories = dto.rollbackEmptyDirectories.mapTo(linkedSetOf(), Paths::get),
+        rollbackEmptyDirectoryIdentities = dto.rollbackEmptyDirectoryIdentities.mapKeys { (path, _) -> Paths.get(path) },
     )
 }
 

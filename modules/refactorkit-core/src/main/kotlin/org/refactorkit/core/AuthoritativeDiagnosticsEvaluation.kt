@@ -1,5 +1,6 @@
 package org.refactorkit.core
 
+import java.nio.file.Path
 import java.util.ArrayList
 import java.util.Collections
 import java.util.LinkedHashMap
@@ -12,11 +13,13 @@ import java.util.LinkedHashSet
  * provider's caller-owned collections from changing either the authoritative
  * value or the semantic state from which its fresh snapshot hash was computed.
  */
-class AuthoritativeDiagnosticsEvaluation(
+class AuthoritativeDiagnosticsEvaluation @JvmOverloads constructor(
     snapshot: ProjectSnapshot,
     diagnostics: List<Diagnostic>,
+    rollbackEmptyDirectories: Set<Path> = emptySet(),
 ) {
     val snapshot: ProjectSnapshot = deeplyDetachedSnapshot(snapshot)
+    val rollbackEmptyDirectories: Set<Path> = immutableSet(rollbackEmptyDirectories)
     private val diagnosticValues: List<Diagnostic> = immutableList(
         diagnostics.map(::deeplyDetachedDiagnostic),
     )
@@ -26,12 +29,15 @@ class AuthoritativeDiagnosticsEvaluation(
     override fun equals(other: Any?): Boolean =
         other is AuthoritativeDiagnosticsEvaluation &&
             snapshot == other.snapshot &&
-            diagnosticValues == other.diagnosticValues
+            diagnosticValues == other.diagnosticValues &&
+            rollbackEmptyDirectories == other.rollbackEmptyDirectories
 
-    override fun hashCode(): Int = 31 * snapshot.hashCode() + diagnosticValues.hashCode()
+    override fun hashCode(): Int =
+        31 * (31 * snapshot.hashCode() + diagnosticValues.hashCode()) + rollbackEmptyDirectories.hashCode()
 
     override fun toString(): String =
-        "AuthoritativeDiagnosticsEvaluation(snapshot=$snapshot, diagnostics=$diagnosticValues)"
+        "AuthoritativeDiagnosticsEvaluation(snapshot=$snapshot, diagnostics=$diagnosticValues, " +
+            "rollbackEmptyDirectories=$rollbackEmptyDirectories)"
 }
 
 private fun deeplyDetachedSnapshot(source: ProjectSnapshot): ProjectSnapshot = ProjectSnapshot(

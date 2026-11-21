@@ -148,3 +148,18 @@ Business Need: Rename one proven direct-child Maven module without widening writ
       | compiled class      | source content refused          |
       | symbolic link       | source content refused          |
       | untracked file      | source content refused          |
+
+  @REQ-JAVA-MAVEN-MODULE-RENAME-001 @REQ-JAVA-MAVEN-MODULE-RENAME-001#rollback-removes-only-empty-conventional-destination-outputs @functional-requirement
+  Scenario Outline: Rollback removes only empty conventional destination outputs
+    Given an applied Maven module rename whose original workspace had empty IDE output directories
+    When the renamed Maven module receives "<destination change>" before normal rollback
+    Then rollback "<outcome>" and preserves external content
+
+    Examples:
+      | destination change      | outcome                          |
+      | empty conventional dirs | restores the original workspace  |
+      | compiled class          | refuses without workspace writes |
+      | symbolic link           | refuses without workspace writes |
+      | arbitrary empty dir     | refuses without workspace writes |
+      | non-directory output    | refuses without workspace writes |
+      | modified tracked file   | refuses without workspace writes |
