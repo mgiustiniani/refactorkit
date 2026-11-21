@@ -1,5 +1,6 @@
 package org.refactorkit.treesitter
 
+import org.junit.jupiter.api.io.TempDir
 import org.refactorkit.core.CompletionTrigger
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.ExternalWorkspaceEditNormalization
@@ -27,6 +28,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ExternalLspAdapterLifecycleTest {
+    @TempDir
+    lateinit var fixtureDirectory: Path
+
     @Test
     fun boundedManagerOwnsHandshakeUnicodeFramesAndShutdown() {
         val workspace = Files.createTempDirectory("refactorkit lsp ünicode ")
@@ -304,16 +308,27 @@ class ExternalLspAdapterLifecycleTest {
         adapter.close()
     }
 
-    private fun adapter(mode: String, timeoutMillis: Long = 5_000): ExternalLspAdapter = ExternalLspAdapter(
-        languageId = "typescript",
-        command = listOf(
-            javaExecutable().toString(),
-            "-cp", System.getProperty("java.class.path"),
-            ExternalLspFixture::class.java.name,
-            mode,
-        ),
-        requestTimeoutMillis = timeoutMillis,
-    )
+    private fun adapter(mode: String, timeoutMillis: Long = 5_000): ExternalLspAdapter {
+        val arguments = fixtureDirectory.resolve("provider-classpath.args").toAbsolutePath()
+        val classpath = System.getProperty("java.class.path")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+        // Keep the Gradle test classpath outside the bounded provider command.
+        Files.writeString(arguments, "-classpath\n\"$classpath\"\n")
+
+        return ExternalLspAdapter(
+            languageId = "typescript",
+            command = listOf(
+                javaExecutable().toString(),
+                "@$arguments",
+                ExternalLspFixture::class.java.name,
+                mode,
+            ),
+            requestTimeoutMillis = timeoutMillis,
+        )
+    }
 
     private fun javaExecutable(): Path = Path.of(
         System.getProperty("java.home"), "bin",
