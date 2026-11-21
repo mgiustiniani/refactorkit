@@ -40,8 +40,6 @@ import java.security.MessageDigest
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipInputStream
-import javax.xml.XMLConstants
-import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
@@ -344,6 +342,7 @@ internal class MavenEffectiveReactorBuilder(
     inactiveProfiles: Set<String> = emptySet(),
     private val artifactTransport: MavenArtifactTransport = MavenCentralHttpsTransport,
     private val selectedDescriptorAuthorityContext: MavenSelectedDescriptorAuthorityContext? = null,
+    private val mavenRuntime: MavenRuntimeSelection? = null,
 ) {
     private val activeProfiles = validateProfileIds(activeProfiles)
     private val inactiveProfiles = validateProfileIds(inactiveProfiles)
@@ -356,6 +355,7 @@ internal class MavenEffectiveReactorBuilder(
     private val effectiveCache = ConcurrentHashMap<Path, EffectiveBuild>()
 
     fun build(workspaceRoot: Path, pomFiles: Collection<Path>): MavenReactorModel {
+        val lifecycleCompiler = mavenRuntime?.let(MavenLifecycleCompilerBinding::read)
         val normalizedPoms = pomFiles.map(Path::toAbsolutePath).map(Path::normalize)
             .filter { it.exists() && it.isRegularFile() }.toMutableSet()
         val rawCoordinates = normalizedPoms.mapNotNull(::rawCoordinate).toMap().toMutableMap()
@@ -433,7 +433,8 @@ internal class MavenEffectiveReactorBuilder(
                     modelFailure = concise(result.failure ?: "effective Maven model unavailable"),
                 )
             }
-            resolveModule(workspaceRoot, model, pom, resolver, effectiveCoordinates.keys, reactorProcessorModules, result)
+            resolveModule(workspaceRoot, model, pom, resolver, effectiveCoordinates.keys, reactorProcessorModules, result,
+                lifecycleCompiler?.takeIf { admitsDefaultCompiler(model, pom) })
         }.mapKeys { it.key.parent.toAbsolutePath().normalize() }
         val rootPom = workspaceRoot.toAbsolutePath().normalize().resolve("pom.xml")
         val rootModel = effective[rootPom]?.model
@@ -699,19 +700,7 @@ internal class MavenEffectiveReactorBuilder(
             }
         }
         val xmlBytes = descriptorBytes ?: return null
-        val factory = DocumentBuilderFactory.newInstance().apply {
-            setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
-            setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
-            isXIncludeAware = false
-            isExpandEntityReferences = false
-        }
-        val builder = factory.newDocumentBuilder()
-        builder.setEntityResolver { _, _ -> org.xml.sax.InputSource(java.io.StringReader("")) }
-        val root = builder.parse(ByteArrayInputStream(xmlBytes)).documentElement
+        val root = parseMavenMetadataDocument(xmlBytes)
         fun children(parent: org.w3c.dom.Element?, name: String): List<org.w3c.dom.Element> {
             if (parent == null) return emptyList()
             val found = mutableListOf<org.w3c.dom.Element>()
@@ -868,6 +857,7 @@ internal class MavenEffectiveReactorBuilder(
         reactorCoordinates: Set<MavenCoordinate>,
         reactorProcessorModules: Map<MavenCoordinate, List<MavenReactorProcessorModule>>,
         effective: EffectiveBuild,
+        lifecycleCompiler: MavenLifecycleCompilerBinding?,
     ): MavenModuleModel {
         val moduleCoordinate = requireNotNull(model.coordinate())
         val mainDirect = model.dependencies.filter { it.scope.normalizedScope() in MAIN_SCOPES && it.type != "pom" }
@@ -921,8 +911,9 @@ internal class MavenEffectiveReactorBuilder(
             workspaceRoot, effective.importedBoms, pom, moduleCoordinate, "test", "TEST",
             dependencySelectorRecords, selectedMissingEvidence, testOnlyResolvedArtifacts,
         )).distinct()
-        val (mainCompilerOptions, mainCompilerOptionsAvailability) = compilerOptions(model, test = false)
-        val (testCompilerOptions, testCompilerOptionsAvailability) = compilerOptions(model, test = true)
+        val (mainCompilerOptions, mainCompilerOptionsAvailability) = compilerOptions(model, test = false, lifecycleCompiler)
+        val (testCompilerOptions, testCompilerOptionsAvailability) = compilerOptions(model, test = true, lifecycleCompiler)
+        lifecycleCompiler?.let { modelInputs.add(it.coreJar) }
         val testJvmContextFact = mavenTestJvmContext(
             workspaceRoot, pom, model, effective.inputs, "maven-surefire-plugin",
         )
@@ -1938,7 +1929,31 @@ internal class MavenEffectiveReactorBuilder(
         return MavenTestJvmContextFact(availability, mode, refusal, executions.take(16), modelInputs)
     }
 
-    private fun compilerOptions(model: Model, test: Boolean): Pair<List<BuildCompilerOption>, BuildFactAvailability> {
+    private fun admitsDefaultCompiler(model: Model, pom: Path): Boolean {
+        if (model.packaging != "jar") return false
+        val build = model.build
+        if (build?.extensions.orEmpty().isNotEmpty() ||
+            build?.plugins.orEmpty().any { it.isExtensions || it.artifactId in setOf("maven-compiler-plugin", "maven-toolchains-plugin") } ||
+            build?.pluginManagement?.plugins.orEmpty().any { it.artifactId == "maven-compiler-plugin" }) return false
+        val properties = model.properties
+        if (properties.getProperty("maven.compiler.release") != null ||
+            properties.getProperty("maven.compiler.source")?.trim()?.let(::parsedJavaLevel) == null ||
+            properties.getProperty("maven.compiler.target")?.trim()?.let(::parsedJavaLevel) == null ||
+            listOf("encoding", "maven.compiler.encoding", "maven.main.skip", "maven.test.skip").any(properties::containsKey)) return false
+        val launchFiles = listOf("extensions.xml", "maven.config", "jvm.config")
+        return generateSequence(pom.parent, Path::getParent).all { ancestor ->
+            val config = ancestor.resolve(".mvn")
+            Files.notExists(config, LinkOption.NOFOLLOW_LINKS) ||
+                Files.isDirectory(config, LinkOption.NOFOLLOW_LINKS) &&
+                launchFiles.all { Files.notExists(config.resolve(it), LinkOption.NOFOLLOW_LINKS) }
+        }
+    }
+
+    private fun compilerOptions(
+        model: Model,
+        test: Boolean,
+        lifecycleCompiler: MavenLifecycleCompilerBinding?,
+    ): Pair<List<BuildCompilerOption>, BuildFactAvailability> {
         val properties = model.properties
         val declaredProperties = linkedMapOf<String, String>()
         val recognizedProperties = setOf("release", "source", "target", "encoding", "parameters", "compilerArgs")
@@ -1962,7 +1977,7 @@ internal class MavenEffectiveReactorBuilder(
         val plugins = model.build?.plugins.orEmpty().filter {
             it.artifactId == "maven-compiler-plugin" && it.groupId in setOf(null, "org.apache.maven.plugins")
         }
-        if (plugins.size != 1) {
+        if (plugins.size > 1 || plugins.isEmpty() && lifecycleCompiler == null) {
             val options = declaredProperties.map { (name, value) ->
                 val (safe, redacted) = safeBuildOption(name, value)
                 BuildCompilerOption(name, safe, "maven-project-property", redacted)
@@ -1972,9 +1987,10 @@ internal class MavenEffectiveReactorBuilder(
                 else -> BuildFactAvailability.PARTIAL
             }
         }
-        val plugin = plugins.single()
+        val plugin = plugins.singleOrNull()
+        val version = plugin?.version ?: lifecycleCompiler?.compilerVersion
         val selectedGoal = if (test) "testCompile" else "compile"
-        val executions = plugin.executions.filter { selectedGoal in it.goals }
+        val executions = plugin?.executions.orEmpty().filter { selectedGoal in it.goals }
         if (executions.size > 1) {
             return emptyList<BuildCompilerOption>() to BuildFactAvailability.AMBIGUOUS
         }
@@ -1983,20 +1999,20 @@ internal class MavenEffectiveReactorBuilder(
             val (safe, redacted) = safeBuildOption(name, value)
             effective[name] = BuildCompilerOption(name, safe, "maven-project-property", redacted)
         }
-        var availability = if (plugin.version.isNullOrBlank() || unrecognizedCompilerProperties.isNotEmpty()) {
+        var availability = if (version.isNullOrBlank() || unrecognizedCompilerProperties.isNotEmpty()) {
             BuildFactAvailability.PARTIAL
         } else BuildFactAvailability.COMPLETE
-        val compilerPluginVersion = plugin.version?.let { version ->
-            runCatching { DefaultArtifactVersion(version) }.getOrNull()
+        val compilerPluginVersion = version?.let {
+            runCatching { DefaultArtifactVersion(it) }.getOrNull()
         }
         val compilerPluginSupportsModulePath = compilerPluginVersion?.let {
             it >= DefaultArtifactVersion("3.11.0")
         } == true
-        if (!plugin.version.isNullOrBlank() && compilerPluginVersion == null) {
+        if (!version.isNullOrBlank() && compilerPluginVersion == null) {
             availability = BuildFactAvailability.PARTIAL
         }
-        plugin.version?.takeIf(String::isNotBlank)?.let {
-            effective["pluginVersion"] = BuildCompilerOption("pluginVersion", it, "maven-compiler-plugin")
+        version?.takeIf(String::isNotBlank)?.let {
+            effective["pluginVersion"] = BuildCompilerOption("pluginVersion", it, lifecycleCompiler?.origin ?: "maven-compiler-plugin")
         }
         fun collect(configuration: Any?, origin: String) {
             val xml = configuration as? org.codehaus.plexus.util.xml.Xpp3Dom ?: return
@@ -2028,7 +2044,7 @@ internal class MavenEffectiveReactorBuilder(
             ) }
             if (unknown.isNotEmpty()) availability = BuildFactAvailability.PARTIAL
         }
-        collect(plugin.configuration, "maven-compiler-plugin:plugin")
+        collect(plugin?.configuration, "maven-compiler-plugin:plugin")
         executions.singleOrNull()?.let { execution -> collect(execution.configuration, "maven-compiler-plugin:${execution.id}") }
         if (compilerPluginSupportsModulePath) {
             effective.putIfAbsent(

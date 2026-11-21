@@ -83,6 +83,9 @@ class JavaEffectiveProjectContextSteps {
     private lateinit var customTestSourceBaseline: Map<Path, String>
     private lateinit var sourceOnlyPlatformSnapshot: org.refactorkit.core.ProjectSnapshot
     private var sourceOnlyPlatformResolution: JdtAuthoritativeJavaAnalysisResolution? = null
+    private var mavenCoreJar: Path? = null
+    private var staleMavenCore = false
+    private var expectedLifecycleCompiler: Pair<String, String>? = null
     private lateinit var addModuleSnapshotHash: String
     private lateinit var addModuleOutsidePath: Path
     private var addModuleRefusalCodes: List<String> = emptyList()
@@ -391,7 +394,7 @@ class JavaEffectiveProjectContextSteps {
     @Given("a Maven source-target 17 project with {string} compiler binding")
     fun mavenCompilerAuthorityFixture(binding: String) {
         val compiler = when (binding) {
-            "implicit" -> ""
+            "implicit", "Maven 3.9.11 runtime", "Maven 3.9.16 runtime", "Maven runtime stale" -> ""
             "pinned" -> """
                 <build><plugins><plugin>
                   <artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version>
@@ -403,6 +406,36 @@ class JavaEffectiveProjectContextSteps {
         container = owned
         root = owned.resolve("workspace")
         val repository = Files.createDirectory(owned.resolve("repository"))
+        staleMavenCore = binding == "Maven runtime stale"
+        expectedLifecycleCompiler = when (binding) {
+            "Maven 3.9.11 runtime", "Maven runtime stale" -> "3.9.11" to "3.13.0"
+            "Maven 3.9.16 runtime" -> "3.9.16" to "3.15.0"
+            else -> null
+        }
+        mavenCoreJar = expectedLifecycleCompiler?.let { (maven, plugin) ->
+            owned.resolve("maven-core-$maven.jar").also { jar ->
+                JarOutputStream(Files.newOutputStream(jar)).use { output ->
+                    fun entry(name: String, body: String) {
+                        output.putNextEntry(JarEntry(name))
+                        output.write(body.toByteArray(Charsets.UTF_8))
+                        output.closeEntry()
+                    }
+                    entry("META-INF/maven/org.apache.maven/maven-core/pom.properties",
+                        "groupId=org.apache.maven\nartifactId=maven-core\nversion=$maven\n")
+                    entry("META-INF/plexus/default-bindings.xml", """
+                        <component-set><components><component>
+                          <role>org.apache.maven.lifecycle.mapping.LifecycleMapping</role>
+                          <role-hint>jar</role-hint>
+                          <implementation>org.apache.maven.lifecycle.mapping.DefaultLifecycleMapping</implementation>
+                          <configuration><lifecycles><lifecycle><id>default</id><phases>
+                            <compile>org.apache.maven.plugins:maven-compiler-plugin:$plugin:compile</compile>
+                            <test-compile>org.apache.maven.plugins:maven-compiler-plugin:$plugin:testCompile</test-compile>
+                          </phases></lifecycle></lifecycles></configuration>
+                        </component></components></component-set>
+                    """.trimIndent())
+                }
+            }
+        }
         write(root.resolve("pom.xml"), """
             <project><modelVersion>4.0.0</modelVersion><groupId>fixture.context</groupId>
               <artifactId>compiler-authority</artifactId><version>1</version>
@@ -413,16 +446,28 @@ class JavaEffectiveProjectContextSteps {
         """.trimIndent() + "\n")
         write(root.resolve("src/main/java/example/CompilerAuthority.java"),
             "package example; class CompilerAuthority {}\n")
+        write(root.resolve("src/test/java/example/CompilerAuthorityTest.java"),
+            "package example; class CompilerAuthorityTest { CompilerAuthority owner; }\n")
         session = DaemonSession()
         previousHash = requireNotNull(session).dispatch("project.open", buildJsonObject {
             put("root", root.toString())
             put("mavenRepository", repository.toString())
+            mavenCoreJar?.let { jar ->
+                put("mavenRuntime", buildJsonObject {
+                    put("coreJar", jar.toString())
+                    put("sha256", fileSha256(jar))
+                })
+            }
         }).jsonObject.getValue("snapshotHash").jsonPrimitive.content
         baseline = contents(owned)
     }
 
     @When("public Maven project context is requested with {string} SDK selection")
     fun requestMavenCompilerAuthority(sdk: String) {
+        if (staleMavenCore) {
+            Files.writeString(requireNotNull(mavenCoreJar), "changed after project.open")
+            baseline = contents(requireNotNull(container))
+        }
         response = requireNotNull(session).dispatch("project.context", buildJsonObject {
             put("expectedSnapshotHash", previousHash)
             when (sdk) {
@@ -440,6 +485,23 @@ class JavaEffectiveProjectContextSteps {
         if (expectedRefusal == "none") {
             assertEquals(JsonNull, response.getValue("refusal"))
             assertNotNull(response["analysis"] as? JsonObject)
+            expectedLifecycleCompiler?.let { (maven, plugin) ->
+                val jar = requireNotNull(mavenCoreJar)
+                val origin = "maven-core:$maven:jar-default:sha256=${fileSha256(jar)}"
+                val sets = response.getValue("modules").jsonArray.single().jsonObject.getValue("sourceSets").jsonArray
+                assertEquals(setOf("main", "test"), sets.map { it.jsonObject.getValue("id").jsonPrimitive.content }.toSet())
+                sets.forEach { value ->
+                    val options = value.jsonObject.getValue("compilerOptions").jsonArray.map { it.jsonObject }
+                    val version = options.single { it.getValue("name").jsonPrimitive.content == "pluginVersion" }
+                    assertEquals(plugin, version.getValue("value").jsonPrimitive.content)
+                    assertEquals(origin, version.getValue("origin").jsonPrimitive.content)
+                }
+                assertTrue(response.getValue("buildEvidence").jsonArray.any {
+                    val input = it.jsonObject
+                    input.getValue("path").jsonPrimitive.content == jar.toString() &&
+                        input.getValue("kind").jsonPrimitive.content == "effective-model-input"
+                })
+            }
             return
         }
         val refusal = response.getValue("refusal").jsonObject

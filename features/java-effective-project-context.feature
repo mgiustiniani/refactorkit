@@ -514,10 +514,13 @@ Feature: Expose snapshot-bound Java effective project context to integration con
     And context acquisition preserves project bytes and executes no build or debugger
 
     Examples:
-      | compiler | sdk      | status    | refusal                                 |
-      | implicit | selected | refused   | java.context.compilerOptionsIncomplete  |
-      | implicit | omitted  | refused   | java.context.sdkRequired                |
-      | pinned   | selected | available | none                                    |
+      | compiler                | sdk      | status    | refusal                                |
+      | implicit                | selected | refused   | java.context.compilerOptionsIncomplete |
+      | implicit                | omitted  | refused   | java.context.sdkRequired               |
+      | pinned                  | selected | available | none                                   |
+      | Maven 3.9.11 runtime    | selected | available | none                                   |
+      | Maven 3.9.16 runtime    | selected | available | none                                   |
+      | Maven runtime stale    | selected | refused   | java.context.snapshotStale             |
 
   @REQ-JAVA-PROJECT-CONTEXT-001#project-context-resolves-provider-qualified-source-set-kind-or-refuses-ambiguity
   Scenario Outline: Project context resolves provider-qualified source-set kind or refuses ambiguity

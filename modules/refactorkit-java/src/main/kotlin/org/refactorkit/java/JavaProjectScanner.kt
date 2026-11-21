@@ -41,6 +41,7 @@ class JavaProjectScanner(
     private val selectedMavenDescriptorAuthority: MavenSelectedDescriptorAuthorityContext? = null,
     private val effectiveGradleModelProvider: ((Path) -> org.refactorkit.core.BuildModel?)? = null,
     private val effectiveGradleEvidenceProvider: ((Path) -> List<ClasspathEvidence>)? = null,
+    private val mavenRuntime: MavenRuntimeSelection? = null,
 ) {
     fun scan(root: Path): ProjectSnapshot = scanInternal(root, includeBuildModels = true)
 
@@ -63,6 +64,7 @@ class JavaProjectScanner(
                 activeMavenProfiles,
                 inactiveMavenProfiles,
                 selectedDescriptorAuthorityContext = selectedMavenDescriptorAuthority,
+                mavenRuntime = mavenRuntime,
             ).build(normalizedRoot, pomFiles)
         } else null
         val mavenByRoot = mavenReactor?.modules.orEmpty()

@@ -262,6 +262,21 @@ of the beta baseline for documented methods.
 | `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |
 
+`project.open` accepts optional `mavenRuntime` metadata for a caller-selected
+standard Maven 3.9 runtime. Supply the absolute `coreJar` path to its
+`lib/maven-core-<version>.jar` and the independently expected lowercase
+`sha256` digest. The provider can then recover the default JAR lifecycle
+compiler binding for Maven Compiler Plugin 3.13.0 or 3.15.0 when a project
+declares `maven.compiler.source` and `maven.compiler.target` and the effective
+model has no compiler, toolchain or lifecycle override. Maven launch
+configuration files, conflicting build facts, and unverifiable runtime
+metadata leave compiler options incomplete. The caller selects the runtime
+for invocation with the standard Maven lifecycle and supplies the compiler
+JDK separately through `sdkHome`. Discovery reads metadata offline without
+executing the launcher, build, plugin or wrapper. The returned compiler
+option origin identifies the Maven version and metadata digest, and changes
+to the selected JAR invalidate the context.
+
 ### `server.capabilities` contract
 
 `server.capabilities` is available before project open and returns additive

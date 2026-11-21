@@ -388,7 +388,7 @@ class DaemonSession(
         workspaceIndex.clear()
         val root = params?.string("root") ?: missing("root")
         val resolveDependencies = params.string("resolveDependencies")?.toBooleanStrictOrNull() ?: false
-        val selection = try {
+        val (selection, mavenRuntime) = try {
             fun profiles(key: String): Set<String> {
                 val value = params[key] ?: return emptySet()
                 val entries = value as? JsonArray ?: throw IllegalArgumentException("$key must be an array")
@@ -398,9 +398,20 @@ class DaemonSession(
                     profile.content
                 }.toSet()
             }
-            org.refactorkit.core.BuildModelSelection(profiles("activeMavenProfiles"), profiles("inactiveMavenProfiles"))
+            val runtime = params["mavenRuntime"]?.let { value ->
+                require(value is JsonObject && value.keys == setOf("coreJar", "sha256")) {
+                    "mavenRuntime must contain coreJar and sha256"
+                }
+                fun field(name: String): String {
+                    val field = value[name]
+                    require(field is JsonPrimitive && field.isString) { "mavenRuntime.$name must be a string" }
+                    return field.content
+                }
+                org.refactorkit.java.MavenRuntimeSelection(Paths.get(field("coreJar")), field("sha256"))
+            }
+            org.refactorkit.core.BuildModelSelection(profiles("activeMavenProfiles"), profiles("inactiveMavenProfiles")) to runtime
         } catch (failure: IllegalArgumentException) {
-            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "Invalid Maven profile selection")
+            throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "Invalid Maven project selection")
         }
         gradleContextSession.clear()
         scanner = JavaProjectScanner(
@@ -411,6 +422,7 @@ class DaemonSession(
             inactiveMavenProfiles = selection.inactiveProfiles,
             effectiveGradleModelProvider = gradleContextSession::modelFor,
             effectiveGradleEvidenceProvider = gradleContextSession::evidenceFor,
+            mavenRuntime = mavenRuntime,
         )
         val path = Paths.get(root).toAbsolutePath().normalize()
         withSourceCaptureRefusal { OwnedSourceInventoryReader.requireOwnedRoot(path) }

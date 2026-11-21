@@ -16017,6 +16017,20 @@ Story changes accompany that maintenance.
 [[java-maven-source-target-sdk-api-2026-11-13]]
 === Maven source/target grammar and native SDK API profiles
 
+The `maven-source-target-context-distinguishes-compiler-facts-from-sdk-selection`
+Story also covers the caller-selected Maven JAR lifecycle under
+REQ-JAVA-PROJECT-CONTEXT-001. On a reactor declaring source and target 17,
+the packaged daemon agreed with native Maven 3.9.11 and 3.9.16 on Compiler
+Plugin 3.13.0 and 3.15.0 respectively. Both the main and test facts carry the
+Maven metadata digest as provenance. Refused runtime and project overrides,
+missing SDK authority, changed metadata, and source preservation are covered
+by the Story and packaged replay. The
+link:../integration-contracts.md[daemon integration contract] specifies the
+`project.open` selector. The provider reads the selected Maven Core JAR as
+data and retains existing compiler-fact refusals outside this qualified
+scope. Evidence is in
+`.refactorkit/runs/v080-ide-maven-qualified-lifecycle-compiler-binding-20261121-r001/`.
+
 REQ-JAVA-PROJECT-CONTEXT-001 now has the exact Story identity
 `maven-source-target-context-attests-native-sdk-apis-separately-from-release`.
 Its six native daemon cases observe List.of under source/target 8 with explicit
