@@ -1346,6 +1346,35 @@ as separate flows. Do not refresh S1 arbitrarily or use ordinary/force rollback 
 cross this boundary. Rollback after a changed classpath requires a distinct authority
 contract and is currently unsupported.
 
+### Add Parameter for a bound this reference
+
+Discover `changeSignature.addParameter` under
+`server.capabilities.javaContextRefactoring.operationCapabilities`.
+Its `features.thisMethodReferenceMigration` flag admits the bound receiver
+in an explicitly typed local SAM initializer. Pass the saved JDT `METHOD`
+selection and the matching SDK, context and snapshot to `refactor.preview`.
+
+```json
+{
+  "type": "int",
+  "name": "extra",
+  "default": "0",
+  "migrateFunctionalReferences": true
+}
+```
+
+The selected method is private and declared on the type of the unqualified
+`this` receiver. The default is a compiler-recognized literal. The new lambda
+keeps the SAM's arity and supplies the literal to the bound invocation.
+Managed Apply uses the retained selection and the existing rollback contract.
+
+An unsupported reference bound to the selected method refuses with `-32001`
+and `data.refusalCode = "java.changeSignature.functionalReferenceUnsupported"`
+before the daemon issues a plan. This covers other receiver expressions even
+when another overload could accept the remaining reference. The
+[ARC42 acceptance entry](arc42/appendix-requirements.adoc#java-add-parameter-this-reference)
+records the verified scope.
+
 ### Extract Delegate
 
 Discover `extractDelegate` in `server.capabilities.javaContextRefactoring.operationCapabilities`

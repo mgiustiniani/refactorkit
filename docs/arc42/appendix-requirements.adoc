@@ -9655,6 +9655,32 @@ The saved method selector, review, Apply, offline Maven test for
 `answer(2, 7) == 27`, and exact rollback all pass. Both runs exit with zero
 surviving processes.
 
+[[java-add-parameter-this-reference]]
+=== Add Parameter for a bound Java method reference — 2026-11-21
+
+The existing `REQ-JAVA-CHANGE-SIGNATURE-ADD-001` now admits a saved
+JDT-selected private method with an unqualified `this` reference in an
+explicitly typed local SAM initializer. With functional-reference migration
+enabled, the plan updates direct calls and converts each admitted reference
+to a lambda with the original arity and the new literal argument.
+JDT verifies the staged binding and call count. The daemon attaches
+the saved selector to the plan through Apply and exact rollback.
+
+The link:../../features/java-add-parameter-this-method-reference.feature[Story]
+exercises the managed lifecycle, the missing opt-in, an expressive receiver,
+and a mixed group where a surviving unsupported reference could bind to a
+different overload. Each refusal preserves the workspace and creates no journal.
+The link:../java-project-context-protocol.md#add-parameter-for-a-bound-this-reference[protocol]
+defines the discovery flag, required request fields and typed refusal code.
+
+The Linux archive `551e8ca0` passes four cases and twelve packaged steps.
+Maven 3.9.16 verifies the before, applied and rolled-back copies offline with
+JDK 21 and release 17. The Java 17 executable returns `16` in all three
+phases. Two existing regression tests cover static method and constructor
+references. Evidence is retained under
+`.refactorkit/runs/v080-ide-java-add-parameter-this-reference-20261121-r001/`.
+Native IDE qualification is pending.
+
 [[java-extract-delegate]]
 === Extract Delegate from a saved Java method — 2026-11-21
 

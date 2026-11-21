@@ -3252,7 +3252,10 @@
           "operation": "changeSignature.addParameter",
           "stability": "stable",
           "mutationAuthority": "managed-stable",
-          "evidence": "compiler"
+          "evidence": "compiler",
+          "features": {
+            "thisMethodReferenceMigration": true
+          }
         },
         {
           "operation": "changeSignature.changeParameterType",
