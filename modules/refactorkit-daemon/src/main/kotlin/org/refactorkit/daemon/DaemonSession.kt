@@ -2396,7 +2396,17 @@ class DaemonSession(
             }
         }
         val formatterProfile = parseJavaFormatterProfile(p["formatterProfile"], requestedLanguage, operation, allowBatchCleanup = true)
-        val args = (p["arguments"] as? JsonObject)?.let { obj ->
+        val args = if (operation == "introduceParameterObject") {
+            val arguments = p["arguments"] as? JsonObject
+            val typeName = (arguments?.get("typeName") as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)
+            val parameters = arguments?.get("parameters") as? JsonArray
+            if (arguments?.keys != setOf("typeName", "parameters") || typeName == null ||
+                parameters == null || parameters.size != 2 || parameters.any { it !is JsonPrimitive || !it.isString }) {
+                throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS,
+                    "introduceParameterObject requires a string typeName and an array of two parameter names")
+            }
+            mapOf("typeName" to typeName.content, "parameters" to parameters.toString())
+        } else (p["arguments"] as? JsonObject)?.let { obj ->
             obj.entries.associate { (k, v) ->
                 k to if (operation == "batchCleanup" && k == "actions") {
                     (v as? JsonArray)?.toString() ?: throw JsonRpcException(
@@ -2731,6 +2741,19 @@ class DaemonSession(
                         snap, Paths.get(file), startLine, endLine, methodName,
                     )
                 } else JavaExtractMethodPlanner().preview(snap, Paths.get(file), startLine, endLine, methodName)
+            }
+            "introduceParameterObject" -> {
+                if (requestedLanguage != "java") throw JsonRpcException(
+                    JsonRpcErrorCodes.INVALID_PARAMS, "introduceParameterObject requires languageId=java",
+                )
+                val selection = javaSelection ?: throw JsonRpcException(
+                    JsonRpcErrorCodes.PLAN_REFUSED, "Introduce Parameter Object requires an exact saved Java method selection",
+                    buildJsonObject { put("refusalCode", "java.introduceParameterObject.selectionRequired") },
+                )
+                adapter.applyRefactoring(RefactoringRequest(
+                    operation = operation, symbolId = SymbolId(selection.symbolId), snapshot = snap,
+                    arguments = args + mapOf("file" to ProtocolPath.serialize(selection.declaration.path), "bindingKey" to selection.bindingKey),
+                ))
             }
             "inlineMethod" -> {
                 if (requestedLanguage == "java") {

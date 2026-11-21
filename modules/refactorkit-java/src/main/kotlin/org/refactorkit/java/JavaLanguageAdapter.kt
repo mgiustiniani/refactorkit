@@ -1309,6 +1309,7 @@ class JavaLanguageAdapter(
         "inlineVariable" -> applyInlineVariable(request)
         "inlineConstant" -> applyInlineConstant(request)
         "inlineMethod" -> applyInlineMethod(request)
+        "introduceParameterObject" -> applyIntroduceParameterObject(request)
         "pullUpMember" -> applyPullUpMember(request)
         "pushDownMember" -> applyPushDownMember(request)
         "moveMember" -> applyMoveMember(request)
@@ -1736,6 +1737,24 @@ class JavaLanguageAdapter(
             return refused(request, "java.inlineConstant.invalidRequest", "inlineConstant received an invalid Java file path.")
         }
         return JavaInlineConstantPlanner(this).preview(request.snapshot, JavaInlineConstantRequest(path, name))
+    }
+
+    private fun applyIntroduceParameterObject(request: RefactoringRequest): PatchPlan {
+        val path = request.arguments["file"]?.let { runCatching { Path.of(it).normalize() }.getOrNull() }
+        val bindingKey = request.arguments["bindingKey"]?.takeIf(String::isNotBlank)
+        val typeName = request.arguments["typeName"]
+        val parameters = request.arguments["parameters"]?.let { encoded ->
+            (runCatching { Json.parseToJsonElement(encoded) }.getOrNull() as? JsonArray)?.map {
+                (it as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content ?: return@let null
+            }
+        }
+        if (path == null || bindingKey == null || typeName == null || parameters?.size != 2) {
+            return refused(request, "java.introduceParameterObject.invalidRequest",
+                "An exact Java method binding, type name and two parameter names are required.")
+        }
+        return JavaIntroduceParameterObjectPlanner(this).preview(
+            request.snapshot, JavaIntroduceParameterObjectRequest(path, bindingKey, typeName, parameters),
+        )
     }
 
     private fun applyInlineMethod(request: RefactoringRequest): PatchPlan {
