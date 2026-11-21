@@ -6,22 +6,51 @@ enum class GradleExportFailureCause(val code: String, val message: String) {
     CACHE_PERMISSION_DENIED("gradle.sync.cause.cachePermissionDenied", "Gradle reported denied filesystem access for its user-home cache."),
     FILESYSTEM_READ_ONLY("gradle.sync.cause.filesystemReadOnly", "Gradle reported a read-only filesystem; cache ownership could not be established."),
     FILESYSTEM_PERMISSION_DENIED("gradle.sync.cause.filesystemPermissionDenied", "Gradle reported denied filesystem access; cache ownership could not be established."),
+    OFFLINE_PLUGIN_RESOLUTION_FAILED("gradle.sync.cause.offlinePluginResolutionFailed", "Gradle reported a plugin artifact it could not resolve during the offline export."),
     OFFLINE_DEPENDENCY_UNAVAILABLE("gradle.sync.cause.offlineDependencyUnavailable", "Gradle reported a dependency or resource unavailable in its offline cache."),
     UNKNOWN("gradle.sync.cause.unknown", "Gradle output did not establish a recognized export failure cause."),
 }
 
 internal object GradleExportFailureClassifier {
     const val MAX_OUTPUT_BYTES = 1_048_576
+    private const val MAX_PLUGIN_SOURCE_LINES = 8
+    private val pluginNotFound = Regex(
+        """^(?:org\.gradle\.api\.plugins\.unknownpluginexception:\s+)?plugin \[id: '[^']+'(?:, [^\]]+)?\] was not found in any of the following sources:$""",
+    )
 
     fun classify(output: ByteArray, cacheRoots: Set<String>): GradleExportFailureCause {
         if (output.size > MAX_OUTPUT_BYTES) return GradleExportFailureCause.UNKNOWN
         var filesystemReadOnly = false
         var filesystemDenied = false
         var offlineMissing = false
+        var pluginResolutionFailed = false
+        var pluginSourceLinesRemaining = 0
         for (line in output.toString(Charsets.UTF_8).lineSequence()) {
             // Console output is untrusted; long lines do not establish complete diagnostic evidence.
-            if (line.length > 16_384) continue
+            if (line.length > 16_384) {
+                pluginSourceLinesRemaining = 0
+                continue
+            }
             val lower = line.lowercase(java.util.Locale.ROOT)
+            val trimmed = lower.trim()
+            when {
+                trimmed.startsWith("plugin [id:") ||
+                    trimmed.startsWith("org.gradle.api.plugins.unknownpluginexception:") -> {
+                    pluginSourceLinesRemaining = if (pluginNotFound.matches(trimmed)) MAX_PLUGIN_SOURCE_LINES else 0
+                }
+                pluginSourceLinesRemaining > 0 && trimmed.startsWith("- ") -> {
+                    if (trimmed.startsWith("- plugin repositories (could not resolve plugin artifact '") &&
+                        trimmed.endsWith("')")
+                    ) {
+                        pluginResolutionFailed = true
+                        pluginSourceLinesRemaining = 0
+                    } else {
+                        pluginSourceLinesRemaining--
+                    }
+                }
+                trimmed.isNotEmpty() -> pluginSourceLinesRemaining = 0
+                pluginSourceLinesRemaining > 0 -> pluginSourceLinesRemaining--
+            }
             val readOnly = "read-only file system" in lower || "readonlyfilesystemexception" in lower
             val denied = "permission denied" in lower || "accessdeniedexception" in lower
             val cachePath = cacheRoots.filter(String::isNotBlank).any { mentionsCachePath(line, it) }
@@ -35,6 +64,7 @@ internal object GradleExportFailureClassifier {
         return when {
             filesystemReadOnly -> GradleExportFailureCause.FILESYSTEM_READ_ONLY
             filesystemDenied -> GradleExportFailureCause.FILESYSTEM_PERMISSION_DENIED
+            pluginResolutionFailed -> GradleExportFailureCause.OFFLINE_PLUGIN_RESOLUTION_FAILED
             offlineMissing -> GradleExportFailureCause.OFFLINE_DEPENDENCY_UNAVAILABLE
             else -> GradleExportFailureCause.UNKNOWN
         }

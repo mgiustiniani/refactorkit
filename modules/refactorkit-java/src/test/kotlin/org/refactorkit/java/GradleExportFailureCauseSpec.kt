@@ -37,6 +37,21 @@ class GradleExportFailureCauseSpec : StringSpec({
     "offline resource cache failures use the same bounded resolution cause" {
         classify("No cached resource available for offline mode") shouldBe GradleExportFailureCause.OFFLINE_DEPENDENCY_UNAVAILABLE
     }
+    val pluginHeader = "Plugin [id: 'fixture.plugin', version: '1'] was not found in any of the following sources:"
+    val pluginRepository = "- Plugin Repositories (could not resolve plugin artifact 'fixture.plugin:fixture.plugin.gradle.plugin:1')"
+    "a plugin repository resolution failure belongs to its Gradle plugin-not-found section" {
+        classify("$pluginHeader\n\n- Gradle Core Plugins (not a core plugin)\n$pluginRepository") shouldBe
+            GradleExportFailureCause.OFFLINE_PLUGIN_RESOLUTION_FAILED
+    }
+    "a repository line after another section or beyond the evidence window stays unknown" {
+        val unrelatedSources = "- Unrelated source\n".repeat(8)
+        classify("$pluginHeader\n* Try:\n$pluginRepository") shouldBe GradleExportFailureCause.UNKNOWN
+        classify("$pluginHeader\n$unrelatedSources$pluginRepository") shouldBe GradleExportFailureCause.UNKNOWN
+    }
+    "a proven cache access failure takes precedence over plugin resolution evidence" {
+        classify("$pluginHeader\n$pluginRepository\n$home/native/file (Permission denied)") shouldBe
+            GradleExportFailureCause.CACHE_PERMISSION_DENIED
+    }
     "a generic resolution error does not manufacture offline dependency evidence" {
         classify("Could not resolve all files for configuration compileClasspath") shouldBe GradleExportFailureCause.UNKNOWN
     }

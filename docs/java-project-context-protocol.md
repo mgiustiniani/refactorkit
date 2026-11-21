@@ -1914,6 +1914,7 @@ The cause codes are:
 | `gradle.sync.cause.cachePermissionDenied` | A denied filesystem access marker on that cache path. |
 | `gradle.sync.cause.filesystemReadOnly` | Read-only filesystem evidence without established cache-path ownership. |
 | `gradle.sync.cause.filesystemPermissionDenied` | Denied access evidence without established cache-path ownership. |
+| `gradle.sync.cause.offlinePluginResolutionFailed` | A Gradle plugin-not-found section reports that the plugin repositories could not resolve a plugin artifact during offline export. |
 | `gradle.sync.cause.offlineDependencyUnavailable` | Gradle explicitly reports no cached version/resource available for offline mode. |
 | `gradle.sync.cause.unknown` | No recognized evidence establishes one of the above hints. |
 
@@ -1938,6 +1939,24 @@ Java 325/five recorded skips, daemon
 [existing M2 acceptance](arc42/appendix-requirements.adoc#JavaM2ProjectContextReconciliation),
 [diagnostic checkpoint](arc42/appendix-requirements.adoc#m2-gradle-export-diagnostic-2026-11-13).
 Evidence: `.refactorkit/runs/ide-gradle-export-diagnostic-r001/`.
+
+### First-use Gradle plugin resolution — 2026-11-21
+
+The plugin-specific hint belongs to the existing
+`REQ-JAVA-PROJECT-CONTEXT-001` Story. Both parts of the evidence must
+appear in one short diagnostics section emitted by the same offline export.
+The fixed response identifies neither the plugin nor the repositories. It does
+not establish whether a plugin is published, whether the coordinates are valid,
+or whether connecting to the network would resolve it.
+
+For first-use dependency bootstrap, the caller can deliberately run Gradle
+dependency resolution in a trusted workspace with the same wrapper, JVM, and
+Gradle user home, then retry the normal offline sync. A product-managed bootstrap
+would need a separate explicit authorization for build execution and network
+access scoped to that workspace and toolchain. Gradle's `--offline` governs
+Gradle dependency resolution. Network confinement of project build code, when
+required, needs a process-level control. `project.sync` has no automatic
+online retry. Only a successful offline export establishes a synchronized model.
 
 ### Actual cache-permission output and stack traces — 2026-11-13
 

@@ -48,13 +48,19 @@ private class GradleExportFailureFixture : AutoCloseable {
         userHome = Files.createDirectory(directory.resolve("cache"))
         Files.writeString(root.resolve("settings.gradle"), "rootProject.name='failure-fixture'\n")
         Files.writeString(root.resolve("gradle.properties"), "org.gradle.jvmargs=-Xmx256m\n")
-        Files.writeString(root.resolve("build.gradle"), "plugins { id 'java' }\nrepositories { mavenCentral() }\ndependencies { implementation 'org.refactorkit.unavailable:missing:0.0.0-fixture' }\n")
+        val build = if (kind == "real offline plugin resolution") {
+            "plugins { id 'org.refactorkit.unavailable.fixture' version '0.0.0-fixture' }\n"
+        } else {
+            "plugins { id 'java' }\nrepositories { mavenCentral() }\n" +
+                "dependencies { implementation 'org.refactorkit.unavailable:missing:0.0.0-fixture' }\n"
+        }
+        Files.writeString(root.resolve("build.gradle"), build)
         val source = root.resolve("src/main/java/Example.java")
         Files.createDirectories(source.parent)
         Files.writeString(source, "public class Example {}\n")
         baseline = listOf("settings.gradle", "gradle.properties", "build.gradle", "src/main/java/Example.java")
             .associate { Path.of(it) to Files.readAllBytes(root.resolve(it)) }
-        executable = if (kind in setOf("real offline dependency", "real cache permission denied", "real empty cache denied")) {
+        executable = if (kind in setOf("real offline dependency", "real offline plugin resolution", "real cache permission denied", "real empty cache denied")) {
             Path.of(requireNotNull(System.getenv("REFACTORKIT_GRADLE_EXECUTABLE")))
                 .also { assertTrue(Files.isExecutable(it)) }
         } else {
@@ -65,6 +71,9 @@ private class GradleExportFailureFixture : AutoCloseable {
                 "cache permission denied" -> "java.io.FileNotFoundException: $userHome/caches/journal-1/journal.lock (Permission denied)"
                 "unrelated path denied" -> "java.io.FileNotFoundException: ${userHome}-unrelated/native/file.lock (Permission denied)"
                 "unclassified secret log" -> "Build failed for an unclassified reason"
+                "plugin not found without source" -> "Plugin [id: 'fixture.plugin'] was not found in any of the following sources:\n" +
+                    "- Gradle Core Plugins (not a core plugin)"
+                "unrelated plugin repository" -> "- Plugin Repositories (could not resolve plugin artifact 'fixture:artifact:1')"
                 "fast oversized log" -> ""
                 else -> error("Unknown Gradle export fixture: $kind")
             }
@@ -143,7 +152,10 @@ private class GradleExportFailureFixture : AutoCloseable {
     fun verifyConfinement() {
         val serialized = result.toString()
         assertTrue(serialized.length < 1024, serialized)
-        for (forbidden in listOf("fixture-secret-never-return", "fixture-user", "fixture-password", "example.invalid", root.toString(), userHome.toString()))
+        for (forbidden in listOf(
+            "fixture-secret-never-return", "fixture-user", "fixture-password", "example.invalid",
+            "org.refactorkit.unavailable.fixture", "fixture:artifact:1", root.toString(), userHome.toString(),
+        ))
             assertFalse(serialized.contains(forbidden), "Raw process evidence escaped the refusal")
         assertNull(result["snapshotHash"])
         assertNull(result["providerId"])

@@ -1416,3 +1416,16 @@ Feature: Expose snapshot-bound Java effective project context to integration con
       | inactive profile            | test             | absent integration set |
       | competing direct plugin     | integration-test | partial configuration  |
       | unresolved profile argLine  | integration-test | partial configuration  |
+
+  @REQ-JAVA-PROJECT-CONTEXT-001#offline-gradle-plugin-resolution-reports-bounded-process-evidence
+  Scenario Outline: Offline Gradle plugin resolution reports bounded process evidence
+    Given an explicit Gradle export failure fixture "<fixture>"
+    When the failing exporter is synchronized through the public project API
+    Then the sync refusal retains "gradle.sync.exportFailed" and bounded cause "<cause>"
+    And the export refusal reveals no raw process secrets and publishes no model
+
+    Examples:
+      | fixture                         | cause                                               |
+      | real offline plugin resolution  | gradle.sync.cause.offlinePluginResolutionFailed     |
+      | plugin not found without source | gradle.sync.cause.unknown                           |
+      | unrelated plugin repository     | gradle.sync.cause.unknown                           |
