@@ -178,6 +178,7 @@ class CClangdLaunchConfigurationSteps {
 
         val parentRecord = records.resolve("parent.pid")
         val childRecord = records.resolve("child.pid")
+        val initializeSeen = records.resolve("initialize.seen")
         val fake = records.resolve("fake-clangd.sh")
         Files.writeString(fake, """
             #!/bin/sh
@@ -185,6 +186,11 @@ class CClangdLaunchConfigurationSteps {
             sleep 30 &
             child=${'$'}!
             printf '%s\n' "${'$'}child" > ${shellQuote(childRecord.toString())}
+            if IFS= read -r header; then
+                case "${'$'}header" in
+                    Content-Length:*) : > ${shellQuote(initializeSeen.toString())} ;;
+                esac
+            fi
             wait "${'$'}child"
         """.trimIndent() + "\n")
         check(fake.toFile().setExecutable(true))
@@ -289,19 +295,25 @@ class CClangdLaunchConfigurationSteps {
         val startup = executor.submit<Throwable?> { runCatching { client.start(workspace) }.exceptionOrNull() }
         val parentPath = records.resolve("parent.pid")
         val childPath = records.resolve("child.pid")
+        val initializeSeen = records.resolve("initialize.seen")
         val initialProcessIds = mutableListOf<Long>()
         try {
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-            while ((!Files.isRegularFile(parentPath) || !Files.isRegularFile(childPath)) && System.nanoTime() < deadline) {
+            while (!Files.isRegularFile(initializeSeen) && System.nanoTime() < deadline) {
                 Thread.sleep(10)
             }
+            check(Files.isRegularFile(initializeSeen)) { "fake clangd did not receive the initialize header" }
             pid = Files.readString(parentPath).trim().toLongOrNull()
             childPid = Files.readString(childPath).trim().toLongOrNull()
             initialProcessIds += listOfNotNull(pid, childPid)
             check(initialProcessIds.size == 2 && initialProcessIds.all { ProcessHandle.of(it).map(ProcessHandle::isAlive).orElse(false) }) {
                 "fake clangd and its child must both be alive before cancellation"
             }
-            firstClangdProcessId = manager.activeProvenance().singleOrNull()?.id
+            val initial = checkNotNull(manager.activeProvenance().singleOrNull()) {
+                "the server that received initialize must have registered provenance"
+            }
+            check(initial.pid == pid) { "initial provenance must identify the first server" }
+            firstClangdProcessId = initial.id
 
             client.close()
             launchFailure = startup.get(5, TimeUnit.SECONDS)
