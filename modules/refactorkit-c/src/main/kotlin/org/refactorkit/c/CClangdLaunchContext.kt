@@ -166,7 +166,7 @@ internal class CClangdLaunchContext private constructor(
                     argument.startsWith("--sysroot=") -> systemRoot(argument.substringAfter('='))
                     argument == "-target" -> admitted += "--target=" + operand()
                     argument.startsWith("--target=") -> admitted += argument
-                    argument in setOf("-Wall", "-Wextra", "-Werror", "-pedantic") -> admitted += argument
+                    argument in setOf("-Wall", "-Wextra", "-Werror", "-pedantic", "-pedantic-errors") -> admitted += argument
                     argument == "-c" -> Unit
                     argument == "-o" -> { operand(); Unit }
                     argument == "-x" -> {

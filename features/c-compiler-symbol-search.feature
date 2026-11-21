@@ -2,6 +2,18 @@ Feature: Compiler-backed C declaration search on managed query surfaces
   Search keeps captured compiler context and C lookup spaces. Unavailable
   analysis is an error, never a successful empty result.
 
+  @REQ-C04-QUERY-001#compiler-search-admits-strict-iso-diagnostics-in-captured-context
+  Scenario Outline: Compiler search admits strict ISO diagnostics in captured context
+    Given the "daemon" C search fixture captures "<standard>" and "strict ISO diagnostics"
+    When that surface searches the captured C declarations
+    Then the C symbol search response is "compiler declarations" with its declared evidence
+    And the C symbol search preserves all project inputs and has no transaction
+
+    Examples:
+      | standard |
+      | c11      |
+      | c17      |
+
   @REQ-C04-QUERY-001#daemon-and-mcp-search-captured-c-declarations-with-compiler-authority
   Scenario Outline: Daemon and MCP search captured C declarations with compiler authority
     Given the "<surface>" C search fixture captures "<standard>" and "<condition>"

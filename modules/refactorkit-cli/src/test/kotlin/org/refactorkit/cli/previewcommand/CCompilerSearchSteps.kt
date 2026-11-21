@@ -72,7 +72,8 @@ private class CCompilerSearchFixture : AutoCloseable {
         val scopedTypedef = variant in setOf("scope-typedef-block", "scope-typedef-shadow", "scope-typedef-nested",
             "scope-typedef-pointer-shadow", "scope-typedef-chain-shadow", "scope-typedef-repeated-alias", "scope-typedef-ordinary-shadow")
         val scoped = scopedTypedef || scopedEnum || variant in setOf("scope-block", "scope-shadow", "scope-forward-block")
-        require(sdkMode || scoped || forwardRecord || variant in setOf("captured", "database changed", "missing TU", "macro declaration", "wrong hash", "navigation drift", "navigation drift after refresh", "unknown symbol", "source type family", "source member family", "prototype tags", "header prototype tags", "function parameter tags", "ordinary values", "prototype composed at-cap", "prototype composed over-cap"))
+        val strictIsoDiagnostics = variant == "strict ISO diagnostics"
+        require(sdkMode || scoped || forwardRecord || strictIsoDiagnostics || variant in setOf("captured", "database changed", "missing TU", "macro declaration", "wrong hash", "navigation drift", "navigation drift after refresh", "unknown symbol", "source type family", "source member family", "prototype tags", "header prototype tags", "function parameter tags", "ordinary values", "prototype composed at-cap", "prototype composed over-cap"))
         cli = surface == "CLI"
         condition = variant
         val workspace = Files.createTempDirectory("rk-c-compiler-search-").also { root = it }
@@ -137,10 +138,11 @@ private class CCompilerSearchFixture : AutoCloseable {
         }
         images.forEach { (file, text) -> Files.createDirectories(workspace.resolve(file).parent); Files.writeString(workspace.resolve(file), text) }
         val units = listOf("src/api.c", "src/main.c").let { if (variant == "missing TU") it.take(1) else it }
+        val warningFlags = if (strictIsoDiagnostics) listOf("-pedantic-errors", "-Wall", "-Wextra", "-Werror") else emptyList()
         val database = JsonArray(units.map { file -> buildJsonObject {
             put("directory", workspace.toString()); put("file", file)
             put("arguments", JsonArray((listOf(sdk.resolve("usr/bin/clang-22").toString(), "-std=$standard", "-Iinclude") +
-                externalSdk?.let { listOf("--sysroot=$it") }.orEmpty() + listOf("-c", file)).map(::JsonPrimitive)))
+                warningFlags + externalSdk?.let { listOf("--sysroot=$it") }.orEmpty() + listOf("-c", file)).map(::JsonPrimitive)))
         } }).toString()
         images = images + (Path.of("compile_commands.json") to database)
         Files.writeString(workspace.resolve("compile_commands.json"), database)
@@ -191,7 +193,7 @@ private class CCompilerSearchFixture : AutoCloseable {
             return call("search", args)?.jsonArray
         }
         all = request("")
-        if (all != null && condition == "captured") values = request("value")
+        if (all != null && condition in setOf("captured", "strict ISO diagnostics")) values = request("value")
         if (all != null && condition == "prototype composed at-cap") values = request("opaque")
     }
 
