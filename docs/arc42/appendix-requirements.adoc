@@ -9578,11 +9578,22 @@ in `.refactorkit/runs/java-extract-variable-lsp-dirty-r001/`. This establishes
 one client-managed dirty-buffer preview only: there is no LSP Apply/rollback
 authority, and unsupported return shapes still refuse.
 
-This qualifies only direct-return subexpressions for the engine. Other statement
-contexts, broader dirty-buffer extraction shapes, packaged/native IDE acceptance,
-and the full IDE backlog remain open under the existing P1 Java refactoring work in
-link:../integration-contracts.md[the integration contracts]. C01-C17 acceptance
-and 0.8.0 release qualification remain open.
+==== Managed extractVariable in a local initializer
+
+The same requirement covers a subexpression in the initializer of a single
+local declaration directly inside an ordinary method. The patch adds a typed
+local immediately before the declaration and replaces only the selected
+expression. Its staged JDT proof preserves the initialized variable's binding
+and constant value, the other bindings in the initializer, and the bindings of
+the statements that follow. A changed evaluation order, conditional execution,
+a declaration with multiple variables, or a local name that shadows a field
+reference prevents Apply.
+
+The managed initializer Story exercises the daemon, including typed refusals
+before any transaction, exact Apply and byte-for-byte rollback. The LSP Story
+above qualifies the return-subexpression editor overlay. Other statement
+placements and additional consumer scenarios remain actionable in
+link:../integration-contracts.md[the integration contracts].
 
 [[java-extractconstant-bounded-operation]]
 === Java extractConstant bounded operation — 2026-10-22

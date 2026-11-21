@@ -43,6 +43,10 @@ class JavaExtractVariableManagedSteps {
     private lateinit var mcpApplyText: String
     private lateinit var mcpRollbackText: String
     private lateinit var mcpPartialText: String
+    private lateinit var initializerOriginal: String
+    private lateinit var initializerExpected: String
+    private var initializerPreview: JsonObject? = null
+    private var initializerRefusal: String? = null
 
     @Given("a Maven Java extraction fixture with a JDT-bound integer return and explicit SDK context")
     fun openExtractionFixture() {
@@ -68,6 +72,82 @@ class JavaExtractVariableManagedSteps {
         """.trimIndent() + "\n")
         session = DaemonSession()
         openCurrentJavaContext()
+    }
+
+    @When("the caller previews extracting a subexpression from the {string} local initializer")
+    fun previewLocalInitializer(initializer: String) {
+        val selected = if (initializer == "earlier local") "base * 7" else "6 * 7"
+        val declaration = when (initializer) {
+            "integer product", "earlier local", "later field read" -> "int result = $selected + 1;"
+            "effectful prefix" -> "int result = touch() + $selected;"
+            "conditional arm" -> "int result = enabled ? $selected : 1;"
+            "two declarators" -> "int first = touch(), result = $selected + 1;"
+            else -> error("Unknown local initializer fixture: $initializer")
+        }
+        val prefix = if (initializer == "earlier local") "int base = 6;\n        " else ""
+        val returned = if (initializer == "later field read") "result + doubled" else "result"
+        initializerOriginal = """
+            |package com.acme;
+            |public class Calculator {
+            |    private static int doubled = 1;
+            |    private int touch() { return 9; }
+            |    public int calculate(boolean enabled) {
+            |        $prefix$declaration
+            |        return $returned;
+            |    }
+            |}
+        """.trimMargin() + "\n"
+        initializerExpected = initializerOriginal.replace(declaration,
+            "int doubled = $selected;\n        " + declaration.replace(selected, "doubled"))
+        Files.writeString(calculatorPath, initializerOriginal)
+        openCurrentJavaContext()
+        val args = extractVariableArguments(initializerOriginal, declaration, selected, "doubled")
+        try {
+            initializerPreview = session.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "extractVariable")
+                put("languageId", "java")
+                put("expectedSnapshotHash", snapshotHash)
+                put("javaContext", javaContext())
+                put("arguments", args)
+            }).jsonObject
+        } catch (failure: JsonRpcException) {
+            initializerRefusal = failure.data?.jsonObject?.get("refusalCode")?.jsonPrimitive?.content
+        }
+        assertEquals(initializerOriginal, Files.readString(calculatorPath))
+        assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().isEmpty())
+    }
+
+    @Then("the initializer extraction {string} preserves exact source and binding authority")
+    fun verifyInitializerExtraction(outcome: String) {
+        if (outcome != "applied") {
+            assertEquals(outcome, initializerRefusal)
+            assertTrue(initializerPreview == null)
+            assertEquals(initializerOriginal, Files.readString(calculatorPath))
+            assertTrue(TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().isEmpty())
+            return
+        }
+        val preview = requireNotNull(initializerPreview) { "Expected a managed initializer preview; received $initializerRefusal" }
+        assertEquals("PREVIEW", preview.getValue("status").jsonPrimitive.content)
+        assertEquals("JDT_BINDING", preview.getValue("evidence").jsonPrimitive.content)
+        val applied = session.dispatch("refactor.apply", buildJsonObject {
+            put("planId", preview.getValue("planId"))
+            put("expectedSnapshotHash", snapshotHash)
+            put("javaContext", javaContext())
+        }).jsonObject
+        assertEquals("applied", applied.getValue("status").jsonPrimitive.content, applied.toString())
+        assertEquals(initializerExpected, Files.readString(calculatorPath))
+        assertTrue(applied.getValue("diagnostics").jsonArray.none { diagnostic ->
+            diagnostic.jsonObject["severity"]?.jsonPrimitive?.content?.equals("error", ignoreCase = true) == true
+        })
+        val restored = session.dispatch("patch.rollback", buildJsonObject {
+            put("transactionId", applied.getValue("transactionId"))
+            put("expectedSnapshotHash", applied.getValue("snapshotHash"))
+            put("javaContext", javaContext())
+        }).jsonObject
+        assertEquals("rolledBack", restored.getValue("status").jsonPrimitive.content)
+        assertEquals(snapshotHash, restored.getValue("snapshotHash").jsonPrimitive.content)
+        assertEquals(initializerOriginal, Files.readString(calculatorPath))
+        assertEquals(JournalState.ROLLED_BACK, TransactionLog(root.resolve(".refactorkit/transactions")).listRecords().single().state)
     }
 
     @When("I preview apply and roll back extractVariable for a bound return subexpression with safety refusals through daemon and MCP")

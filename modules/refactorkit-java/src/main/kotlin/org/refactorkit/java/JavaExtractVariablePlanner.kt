@@ -36,6 +36,7 @@ import org.eclipse.jdt.core.dom.ReturnStatement
 import org.eclipse.jdt.core.dom.SimpleName
 import org.eclipse.jdt.core.dom.SimplePropertyDescriptor
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration
+import org.eclipse.jdt.core.dom.Statement
 import org.eclipse.jdt.core.dom.StringLiteral
 import org.eclipse.jdt.core.dom.SuperMethodInvocation
 import org.eclipse.jdt.core.dom.Type
@@ -68,9 +69,9 @@ data class JavaExtractVariableRequest(
 
 /**
  * Binding-backed Java extract-variable cell. It accepts a complete, resolved
- * expression inside a direct method return when hoisting it before the return
- * preserves evaluation order and control flow. Unsupported or non-denotable
- * types refuse without an edit.
+ * expression inside a direct method return or single-fragment local initializer
+ * when hoisting it before the statement preserves evaluation order and bindings.
+ * Unsupported or non-denotable types refuse without an edit.
  */
 class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
     fun preview(snapshot: ProjectSnapshot, request: JavaExtractVariableRequest): PatchPlan {
@@ -134,21 +135,29 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         if (expression.flags and (ASTNode.MALFORMED or ASTNode.RECOVERED) != 0) {
             return refused(snapshot, "java.extractVariable.selectionMalformed", "The selected expression is malformed or recovered.")
         }
-        val returnStatement = generateSequence(expression.parent) { it.parent }
-            .filterIsInstance<ReturnStatement>().firstOrNull()
-            ?: return refused(snapshot, "java.extractVariable.selectionNotReturnExpression", "The selected expression must be inside a direct return statement.")
-        val returnExpression = returnStatement.expression
-            ?: return refused(snapshot, "java.extractVariable.selectionNotReturnExpression", "A return statement with a value is required.")
-        if (returnStatement.flags and (ASTNode.MALFORMED or ASTNode.RECOVERED) != 0 ||
-            !isDescendantOrSelf(expression, returnExpression)) {
-            return refused(snapshot, "java.extractVariable.selectionNotReturnExpression", "The selected expression is not inside a well-formed return value.")
+        val enclosing = generateSequence(expression.parent) { it.parent }
+            .firstOrNull { it is ReturnStatement || it is VariableDeclarationFragment }
+        val fragment = enclosing as? VariableDeclarationFragment
+        val statement = enclosing as? ReturnStatement ?: fragment?.parent as? VariableDeclarationStatement
+            ?: return refused(snapshot, "java.extractVariable.selectionNotReturnExpression",
+                "The selected expression must be inside a direct return statement or a local initializer.")
+        val shapeRefusal = if (fragment == null) "java.extractVariable.returnShapeUnsupported"
+        else "java.extractVariable.initializerShapeUnsupported"
+        val value = (statement as? ReturnStatement)?.expression ?: fragment?.initializer
+        if (value == null || statement.flags and (ASTNode.MALFORMED or ASTNode.RECOVERED) != 0 ||
+            !isDescendantOrSelf(expression, value)) {
+            val code = if (fragment == null) "java.extractVariable.selectionNotReturnExpression" else shapeRefusal
+            return refused(snapshot, code, "The selected expression must be inside a well-formed value.")
         }
-        val block = returnStatement.parent as? Block
-            ?: return refused(snapshot, "java.extractVariable.returnShapeUnsupported", "The return statement must be directly in a method body.")
+        if (statement is VariableDeclarationStatement && statement.fragments().size != 1) {
+            return refused(snapshot, shapeRefusal, "Extracting a local initializer requires one variable in the declaration.")
+        }
+        val block = statement.parent as? Block
+            ?: return refused(snapshot, shapeRefusal, "The containing statement must be directly in a method body.")
         val method = block.parent as? MethodDeclaration
-            ?: return refused(snapshot, "java.extractVariable.returnShapeUnsupported", "The return statement must be directly in an ordinary method body.")
+            ?: return refused(snapshot, shapeRefusal, "The containing statement must be directly in an ordinary method body.")
         if (method.body !== block || method.isConstructor || method.flags and (ASTNode.MALFORMED or ASTNode.RECOVERED) != 0) {
-            return refused(snapshot, "java.extractVariable.returnShapeUnsupported", "Only a direct return in a well-formed ordinary method body is supported.")
+            return refused(snapshot, shapeRefusal, "Only a direct statement in a well-formed ordinary method body is supported.")
         }
         val owner = method.parent as? org.eclipse.jdt.core.dom.TypeDeclaration
             ?: return refused(snapshot, "java.extractVariable.ownerUnsupported", "The method must be declared directly in an ordinary Java class.")
@@ -158,8 +167,13 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         val methodBinding = method.resolveBinding()
             ?: return refused(snapshot, "java.extractVariable.bindingIncomplete", "The containing method does not have a JDT binding.")
         if (methodBinding.isRecovered || methodBinding.key.isNullOrBlank() || methodBinding.returnType.isRecovered ||
-            methodBinding.returnType.isPrimitive && methodBinding.returnType.name == "void") {
-            return refused(snapshot, "java.extractVariable.bindingIncomplete", "The containing method does not have a complete value-returning binding.")
+            fragment == null && methodBinding.returnType.isPrimitive && methodBinding.returnType.name == "void") {
+            return refused(snapshot, "java.extractVariable.bindingIncomplete", "The containing method does not have a complete binding.")
+        }
+        val localBinding = fragment?.resolveBinding()
+        if (fragment != null && (localBinding == null || localBinding.isRecovered ||
+                localBinding.key.isNullOrBlank() || localBinding.type.isRecovered)) {
+            return refused(snapshot, "java.extractVariable.bindingIncomplete", "The initialized variable does not have a complete binding.")
         }
         val expressionType = expression.resolveTypeBinding()
             ?: return refused(snapshot, "java.extractVariable.bindingIncomplete", "The selected expression has no resolved JDT type.")
@@ -173,7 +187,7 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         }
         val typeSource = renderDenotableType(expressionType)
             ?: return refused(snapshot, "java.extractVariable.expressionTypeUnsupported", "The selected expression type cannot be written as a denotable local type.")
-        evaluationRefusal(expression, returnExpression)?.let { (code, message) ->
+        evaluationRefusal(expression, value)?.let { (code, message) ->
             return refused(snapshot, code, message)
         }
         var incompleteNameBinding = false
@@ -203,21 +217,33 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         if (nameCollision) {
             return refused(snapshot, "java.extractVariable.nameConflict", "A variable named '$name' is already declared in the containing method.")
         }
-        if (returnExpressionHasFieldName(returnExpression, name)) {
-            return refused(snapshot, "java.extractVariable.nameConflict", "The requested local name would shadow a field reference in the return expression.")
+        val followingStatements = if (fragment == null) null else
+            block.statements().filterIsInstance<Statement>().dropWhile { it !== statement }.drop(1)
+        if (hasFieldReference(value, name) || followingStatements?.any { hasFieldReference(it, name) } == true) {
+            return refused(snapshot, "java.extractVariable.nameConflict", "The requested local name would shadow a field reference.")
         }
 
-        val lineStart = file.content.lastIndexOf('\n', (returnStatement.startPosition - 1).coerceAtLeast(0)) + 1
-        val indentation = file.content.substring(lineStart, returnStatement.startPosition)
+        val lineStart = file.content.lastIndexOf('\n', (statement.startPosition - 1).coerceAtLeast(0)) + 1
+        val indentation = file.content.substring(lineStart, statement.startPosition)
         if (indentation.any { it != ' ' && it != '\t' }) {
-            return refused(snapshot, "java.extractVariable.returnPlacementUnsupported", "The return statement must begin on its own source line.")
+            val code = if (fragment == null) "java.extractVariable.returnPlacementUnsupported"
+            else "java.extractVariable.initializerPlacementUnsupported"
+            return refused(snapshot, code, "The containing statement must begin on its own source line.")
         }
         val lineEnding = if (file.content.contains("\r\n")) "\r\n" else "\n"
         val originalExpression = file.content.substring(startOffset, endOffset)
-        val originalExpressionFingerprint = bindingFingerprint(expression)
-        val originalReturnFingerprint = structuralFingerprint(returnExpression, expression, expressionType.key, null)
+        val proof = StagedExtractionProof(
+            methodBinding.key,
+            expressionType.key,
+            bindingFingerprint(expression),
+            structuralFingerprint(statement, expression, expressionType.key, null),
+            followingStatements?.map(::bindingFingerprint),
+            localBinding?.constantValue,
+        )
+        val modifier = if (proof.anchorConstantValue == null) "" else "final "
         val edits = listOf(
-            TextEdit(TextEdits.rangeForOffset(file.content, returnStatement.startPosition, 0), "$typeSource $name = $originalExpression;$lineEnding$indentation"),
+            TextEdit(TextEdits.rangeForOffset(file.content, statement.startPosition, 0),
+                "$modifier$typeSource $name = $originalExpression;$lineEnding$indentation"),
             TextEdit(TextEdits.rangeForOffset(file.content, startOffset, endOffset - startOffset), name),
         )
         val stagedContent = TextEdits.apply(file.content, edits)
@@ -225,17 +251,11 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
             if (source.path.normalize() == file.path.normalize()) source.copy(content = stagedContent) else source
         })
         val stagedStructure = withCompilationUnit(staged, file.path) { stagedUnit ->
-            validateStagedStructure(
-                stagedUnit,
-                name,
-                methodBinding.key,
-                expressionType.key,
-                originalExpressionFingerprint,
-                originalReturnFingerprint,
-            )
+            validateStagedStructure(stagedUnit, name, proof)
         }
         if (stagedStructure != true) {
-            return refused(snapshot, "java.extractVariable.stagedValidationFailed", "Staged JDT bindings do not preserve the extracted expression and return-context bindings.")
+            return refused(snapshot, "java.extractVariable.stagedValidationFailed",
+                "Staged JDT bindings do not preserve the extracted expression and its containing context.")
         }
         val afterDiagnostics = adapter.diagnostics(staged)
         val baselineErrors = beforeDiagnostics.filter { it.severity == Diagnostic.Severity.ERROR }.map(::diagnosticIdentity).toSet()
@@ -250,7 +270,8 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
             snapshotHash = snapshot.hash,
             confidence = 0.97,
             requiresUserApproval = true,
-            summary = "Extract the selected return subexpression into local '$name'.",
+            summary = if (fragment == null) "Extract the selected return subexpression into local '$name'."
+            else "Extract the selected initializer subexpression into local '$name'.",
             affectedFiles = setOf(file.path),
             workspaceEdit = WorkspaceEdit(listOf(FileEdit.Modify(file.path, edits))),
             diagnosticsBefore = beforeDiagnostics,
@@ -261,15 +282,17 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         )
     }
 
-    private fun validateStagedStructure(
-        unit: CompilationUnit,
-        name: String,
-        methodBindingKey: String,
-        expectedTypeKey: String,
-        expectedInitializerFingerprint: String,
-        expectedReturnFingerprint: String,
-    ): Boolean {
-        val method = findMethod(unit, methodBindingKey) ?: return false
+    private data class StagedExtractionProof(
+        val methodBindingKey: String,
+        val extractedTypeKey: String,
+        val initializerFingerprint: String,
+        val anchorFingerprint: String,
+        val followingStatementFingerprints: List<String>?,
+        val anchorConstantValue: Any?,
+    )
+
+    private fun validateStagedStructure(unit: CompilationUnit, name: String, proof: StagedExtractionProof): Boolean {
+        val method = findMethod(unit, proof.methodBindingKey) ?: return false
         val body = method.body ?: return false
         val declarations = body.statements().filterIsInstance<VariableDeclarationStatement>()
             .flatMap { statement -> statement.fragments().filterIsInstance<VariableDeclarationFragment>().map { statement to it } }
@@ -277,18 +300,31 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         val declaration = declarations.singleOrNull() ?: return false
         val fragment = declaration.second
         val variableBinding = fragment.resolveBinding() ?: return false
-        if (variableBinding.isRecovered || variableBinding.type.isRecovered || variableBinding.type.key != expectedTypeKey) return false
+        if (variableBinding.isRecovered || variableBinding.type.isRecovered || variableBinding.type.key != proof.extractedTypeKey) return false
         val initializer = fragment.initializer ?: return false
-        if (bindingFingerprint(initializer) != expectedInitializerFingerprint) return false
+        if (bindingFingerprint(initializer) != proof.initializerFingerprint) return false
 
-        val statements = body.statements()
+        val statements = body.statements().filterIsInstance<Statement>()
         val declarationIndex = statements.indexOf(declaration.first)
-        val returnStatement = statements.drop(declarationIndex + 1).filterIsInstance<ReturnStatement>().firstOrNull() ?: return false
-        if (declarationIndex < 0 || statements.getOrNull(declarationIndex + 1) !== returnStatement) return false
+        if (declarationIndex < 0) return false
+        val anchor = statements.getOrNull(declarationIndex + 1) ?: return false
+        val following = proof.followingStatementFingerprints
+        val value = when (anchor) {
+            is ReturnStatement -> if (following == null) anchor.expression else return false
+            is VariableDeclarationStatement -> {
+                if (following == null) return false
+                val initialized = anchor.fragments().singleOrNull() as? VariableDeclarationFragment ?: return false
+                val originalLocal = initialized.resolveBinding() ?: return false
+                if (originalLocal.isRecovered || originalLocal.constantValue != proof.anchorConstantValue) return false
+                if (statements.drop(declarationIndex + 2).map(::bindingFingerprint) != following) return false
+                initialized.initializer
+            }
+            else -> return false
+        } ?: return false
         val variableKey = variableBinding.variableDeclaration.key
         var references = 0
         var referenceValid = true
-        returnStatement.expression?.accept(object : ASTVisitor() {
+        value.accept(object : ASTVisitor() {
             override fun visit(node: SimpleName): Boolean {
                 val binding = node.resolveBinding() as? IVariableBinding
                 if (binding?.variableDeclaration?.key == variableKey) references++
@@ -296,9 +332,8 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
                 return true
             }
         })
-        val stagedReturnExpression = returnStatement.expression ?: return false
-        val actualReturnFingerprint = structuralFingerprint(stagedReturnExpression, null, expectedTypeKey, variableKey)
-        return references == 1 && referenceValid && actualReturnFingerprint == expectedReturnFingerprint
+        val actualAnchorFingerprint = structuralFingerprint(anchor, null, proof.extractedTypeKey, variableKey)
+        return references == 1 && referenceValid && actualAnchorFingerprint == proof.anchorFingerprint
     }
 
     private fun findMethod(unit: CompilationUnit, methodBindingKey: String): MethodDeclaration? {
@@ -330,11 +365,11 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         return current.takeIf { it.parent === parent }
     }
 
-    private fun evaluationRefusal(expression: Expression, returnExpression: Expression): Pair<String, String>? {
+    private fun evaluationRefusal(expression: Expression, containingValue: Expression): Pair<String, String>? {
         var child: ASTNode = expression
-        while (child !== returnExpression) {
+        while (child !== containingValue) {
             val parent = child.parent ?: return "java.extractVariable.evaluationPathUnsupported" to
-                "The selected expression is not on a supported evaluation path to the return value."
+                "The selected expression is not on a supported evaluation path through the containing value."
             if (parent is ConditionalExpression) {
                 return "java.extractVariable.conditionalEvaluationUnsupported" to
                     "Expressions inside conditional branches cannot be hoisted without changing when they execute."
@@ -415,9 +450,9 @@ class JavaExtractVariablePlanner(private val adapter: JavaLanguageAdapter) {
         }
     }
 
-    private fun returnExpressionHasFieldName(expression: Expression, name: String): Boolean {
+    private fun hasFieldReference(node: ASTNode, name: String): Boolean {
         var collision = false
-        expression.accept(object : ASTVisitor() {
+        node.accept(object : ASTVisitor() {
             override fun visit(node: SimpleName): Boolean {
                 if (node.identifier == name && (node.resolveBinding() as? IVariableBinding)?.isField == true) collision = true
                 return true
